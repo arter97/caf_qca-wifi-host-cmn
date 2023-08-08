@@ -173,6 +173,28 @@ void ucfg_mlo_mld_clear_mlo_cap(struct wlan_objmgr_vdev *vdev);
  */
 
 int8_t mlo_get_central_umac_id(uint8_t *psoc_ids);
+
+/**
+ * mlo_check_topology() - check topology of the psoc's in STA
+ * @pdev: pdev pointer
+ * @vdev: vdev pointer
+ * @aplinks: Number of active links on ap side
+ *
+ * Return: QDF_STATUS
+ */
+
+QDF_STATUS mlo_check_topology(struct wlan_objmgr_pdev *pdev,
+			      struct wlan_objmgr_vdev *vdev,
+			      uint8_t aplinks);
+
+/**
+ * mlo_get_total_links() - get total links supported by device
+ * @pdev: pdev pointer
+ *
+ * Return: Number of total links supported
+ */
+
+uint8_t mlo_get_total_links(struct wlan_objmgr_pdev *pdev);
 #endif
 
 /**
@@ -524,24 +546,6 @@ struct wlan_objmgr_vdev *
 mlo_get_ml_vdev_by_mac(struct wlan_objmgr_vdev *vdev,
 		       struct qdf_mac_addr *macaddr);
 #endif
-
-/**
- * mlo_set_keys_saved: set mlo keys saved bool for vdev
- * @vdev: vdev object
- * @mac_address: peer mac address
- * @value: bool true or false
- * Return: none
- */
-void mlo_set_keys_saved(struct wlan_objmgr_vdev *vdev,
-			struct qdf_mac_addr *mac_address, bool value);
-
-/**
- * mlo_get_keys_saved: get if mlo keys are saved for vdev
- * @vdev: vdev object
- * @mac_address: peer mac address
- * Return: boolean value true or false
- */
-bool mlo_get_keys_saved(struct wlan_objmgr_vdev *vdev, uint8_t *mac_address);
 
 /**
  * mlo_get_chan_freq_by_bssid - Get channel freq by bssid
@@ -909,19 +913,6 @@ mlo_sta_stop_reconfig_timer_by_vdev(struct wlan_objmgr_vdev *vdev)
 
 static inline void mlo_sta_stop_reconfig_timer(struct wlan_objmgr_vdev *vdev)
 {
-}
-
-static inline
-void mlo_set_keys_saved(struct wlan_objmgr_vdev *vdev,
-			struct qdf_mac_addr *mac_address, bool value)
-{
-}
-
-static inline
-bool mlo_get_keys_saved(struct wlan_objmgr_vdev *vdev,
-			uint8_t *mac_address)
-{
-	return false;
 }
 
 static inline

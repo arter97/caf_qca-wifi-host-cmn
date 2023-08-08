@@ -91,6 +91,37 @@ struct meta_rnr_channel *scm_get_chan_meta(struct wlan_objmgr_psoc *psoc,
 	return NULL;
 }
 
+static bool scm_is_rnr_present(struct meta_rnr_channel *chan,
+			       struct qdf_mac_addr *bssid,
+			       uint32_t short_ssid)
+{
+	qdf_list_node_t *cur_node = NULL, *next_node = NULL;
+	struct scan_rnr_node *rnr_node;
+	QDF_STATUS status;
+
+	if (!chan || qdf_list_empty(&chan->rnr_list))
+		return false;
+
+	qdf_list_peek_front(&chan->rnr_list, &cur_node);
+	while (cur_node) {
+		rnr_node = qdf_container_of(cur_node,
+					    struct scan_rnr_node,
+					    node);
+		if (qdf_is_macaddr_equal(&rnr_node->entry.bssid, bssid) &&
+		    rnr_node->entry.short_ssid == short_ssid)
+			return true;
+
+		status = qdf_list_peek_next(&chan->rnr_list, cur_node,
+					    &next_node);
+		if (QDF_IS_STATUS_ERROR(status))
+			break;
+		cur_node = next_node;
+		next_node = NULL;
+	}
+
+	return false;
+}
+
 static void scm_add_rnr_channel_db(struct wlan_objmgr_psoc *psoc,
 				   struct scan_cache_entry *entry)
 {
@@ -145,7 +176,14 @@ static void scm_add_rnr_channel_db(struct wlan_objmgr_psoc *psoc,
 			scm_debug("List is full");
 			return;
 		}
-
+		if (scm_is_rnr_present(channel, &rnr_bss->bssid,
+				       rnr_bss->short_ssid)) {
+			scm_debug("skip dup freq %d: "QDF_MAC_ADDR_FMT" short ssid %x",
+				  chan_freq,
+				  QDF_MAC_ADDR_REF(rnr_bss->bssid.bytes),
+				  rnr_bss->short_ssid);
+			continue;
+		}
 		rnr_node = qdf_mem_malloc(sizeof(struct scan_rnr_node));
 		if (!rnr_node)
 			return;
@@ -2237,7 +2275,7 @@ QDF_STATUS scm_get_mld_addr_by_link_addr(struct wlan_objmgr_pdev *pdev,
 	entry = scm_scan_get_entry_by_bssid(pdev, link_addr);
 	if (!entry) {
 		scm_err("scan entry not found for link addr: " QDF_MAC_ADDR_FMT,
-			QDF_MAC_ADDR_REF(link_addr));
+			QDF_MAC_ADDR_REF(link_addr->bytes));
 		return QDF_STATUS_E_FAILURE;
 	}
 

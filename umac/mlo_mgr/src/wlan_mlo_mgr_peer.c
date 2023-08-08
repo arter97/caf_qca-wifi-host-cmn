@@ -321,6 +321,56 @@ struct wlan_objmgr_peer *wlan_mlo_peer_get_bridge_peer(
 
 qdf_export_symbol(wlan_mlo_peer_get_bridge_peer);
 
+struct wlan_objmgr_vdev *
+wlan_mlo_peer_get_primary_link_vdev(struct wlan_mlo_peer_context *ml_peer)
+{
+	struct wlan_mlo_link_peer_entry *peer_entry = NULL;
+	struct wlan_objmgr_peer *link_peer;
+	struct wlan_objmgr_vdev *link_vdev;
+	uint8_t i;
+
+	if (!ml_peer) {
+		mlo_err("ml_peer is null");
+		return NULL;
+	}
+	mlo_peer_lock_acquire(ml_peer);
+
+	if ((ml_peer->mlpeer_state != ML_PEER_CREATED) &&
+	    (ml_peer->mlpeer_state != ML_PEER_ASSOC_DONE)) {
+		mlo_peer_lock_release(ml_peer);
+		mlo_err("ml_peer is not created and association is not done");
+		return NULL;
+	}
+
+	for (i = 0; i < MAX_MLO_LINK_PEERS; i++) {
+		peer_entry = &ml_peer->peer_list[i];
+		link_peer = peer_entry->link_peer;
+		if (!link_peer)
+			continue;
+
+		if (peer_entry->is_primary) {
+			link_vdev = wlan_peer_get_vdev(link_peer);
+			if (!link_vdev) {
+				mlo_peer_lock_release(ml_peer);
+				mlo_err("link vdev not found");
+				return NULL;
+			}
+			if (wlan_objmgr_vdev_try_get_ref(link_vdev, WLAN_MLO_MGR_ID) !=
+					QDF_STATUS_SUCCESS) {
+				mlo_peer_lock_release(ml_peer);
+				mlo_err("taking ref failed");
+				return NULL;
+			}
+			mlo_peer_lock_release(ml_peer);
+			return link_vdev;
+		}
+	}
+	mlo_peer_lock_release(ml_peer);
+	mlo_err("None of the peer is designated as primary");
+
+	return NULL;
+}
+
 bool mlo_peer_is_assoc_peer(struct wlan_mlo_peer_context *ml_peer,
 			    struct wlan_objmgr_peer *peer)
 {
@@ -1033,7 +1083,7 @@ wlan_mlo_peer_initialize_epcs_info(struct wlan_mlo_peer_context *ml_peer)
 #endif /* WLAN_FEATURE_11BE */
 
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
-static struct wlan_objmgr_vdev*
+struct wlan_objmgr_vdev*
 mlo_get_link_vdev_from_psoc_id(struct wlan_mlo_dev_context *ml_dev,
 			       uint8_t psoc_id)
 {
@@ -1869,6 +1919,7 @@ void wlan_mlo_peer_get_links_info(struct wlan_objmgr_peer *peer,
 		ml_links->link_info[ix].mlo_logical_link_index_valid = 1;
 		ml_links->link_info[ix].emlsr_support = ml_emlcap->emlsr_supp;
 		ml_links->link_info[ix].logical_link_index = idx - 1;
+		ml_links->link_info[ix].mlo_bridge_peer = link_peer->mlo_bridge_peer;
 		ml_links->num_partner_links++;
 	}
 	mlo_peer_lock_release(ml_peer);
@@ -1937,6 +1988,70 @@ uint8_t wlan_mlo_peer_get_primary_peer_link_id_by_ml_peer(
 }
 
 qdf_export_symbol(wlan_mlo_peer_get_primary_peer_link_id_by_ml_peer);
+
+#ifdef WLAN_MLO_MULTI_CHIP
+void wlan_mlo_peer_get_str_capability(struct wlan_objmgr_peer *peer,
+				      uint8_t *str_capability)
+{
+	struct wlan_mlo_peer_context *ml_peer;
+	uint8_t i;
+
+	if (!str_capability)
+		return;
+
+	*str_capability = 1;
+	if (!peer)
+		return;
+	ml_peer = peer->mlo_peer_ctx;
+	if (!ml_peer)
+		return;
+
+	mlo_peer_lock_acquire(ml_peer);
+	if ((ml_peer->mlpeer_state != ML_PEER_CREATED) &&
+	    (ml_peer->mlpeer_state != ML_PEER_ASSOC_DONE)) {
+		mlo_peer_lock_release(ml_peer);
+		return;
+	}
+
+	for (i = 0; i < WLAN_UMAC_MLO_MAX_VDEVS; i++) {
+		if (ml_peer->mlpeer_nstrinfo[i].link_id >= MAX_MLO_LINKS)
+			continue;
+		if (ml_peer->mlpeer_nstrinfo[i].nstr_lp_present) {
+			*str_capability = 0;
+			break;
+		}
+	}
+	mlo_peer_lock_release(ml_peer);
+}
+
+void wlan_mlo_peer_get_eml_capability(struct wlan_objmgr_peer *peer,
+				      uint8_t *is_emlsr_capable,
+				      uint8_t *is_emlmr_capable)
+{
+	struct wlan_mlo_peer_context *ml_peer;
+
+	if (!is_emlsr_capable || !is_emlmr_capable)
+		return;
+
+	*is_emlsr_capable = 0;
+	*is_emlmr_capable = 0;
+	if (!peer)
+		return;
+	ml_peer = peer->mlo_peer_ctx;
+	if (!ml_peer)
+		return;
+
+	mlo_peer_lock_acquire(ml_peer);
+	if ((ml_peer->mlpeer_state != ML_PEER_CREATED) &&
+	    (ml_peer->mlpeer_state != ML_PEER_ASSOC_DONE)) {
+		mlo_peer_lock_release(ml_peer);
+		return;
+	}
+	*is_emlsr_capable = ml_peer->mlpeer_emlcap.emlsr_supp;
+	*is_emlmr_capable = ml_peer->mlpeer_emlcap.emlmr_supp;
+	mlo_peer_lock_release(ml_peer);
+}
+#endif
 
 void wlan_mlo_peer_get_partner_links_info(struct wlan_objmgr_peer *peer,
 					  struct mlo_partner_info *ml_links)
@@ -2108,12 +2223,14 @@ bool wlan_mlo_partner_peer_delete_is_allowed(struct wlan_objmgr_peer *src_peer)
 		/* Single LINK MLO connection */
 		if (ml_peer->link_peer_cnt == 1)
 			return false;
+
 		/*
-		 * If this link is primary TQM, then delete MLO connection till
-		 * primary umac migration is implemented
+		 * If this link is primary TQM and there is no ongoing migration
+		 * from this link, then issue full disconnect.
 		 */
-		if (wlan_mlo_peer_get_primary_peer_link_id(src_peer) !=
-			wlan_vdev_get_link_id(vdev))
+		if ((wlan_mlo_peer_get_primary_peer_link_id(src_peer) !=
+		    wlan_vdev_get_link_id(vdev)) ||
+		    ml_peer->primary_umac_migration_in_progress)
 			return false;
 	}
 

@@ -499,6 +499,9 @@ struct hif_softc {
 	struct qdf_mem_multi_page_t dl_recv_pages;
 	int dl_recv_pipe_num;
 #endif
+#ifdef WLAN_FEATURE_CE_RX_BUFFER_REUSE
+	struct wbuff_mod_handle *wbuff_handle;
+#endif
 #ifdef FEATURE_HIF_DELAYED_REG_WRITE
 	/* queue(array) to hold register writes */
 	struct hif_reg_write_q_elem *reg_write_queue;

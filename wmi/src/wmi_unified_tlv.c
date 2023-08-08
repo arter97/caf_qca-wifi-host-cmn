@@ -725,6 +725,8 @@ static const uint32_t vdev_param_tlv[] = {
 		  VDEV_PARAM_SET_SAP_PS_WITH_TWT),
 	PARAM_MAP(vdev_param_rtt_11az_tb_max_session_expiry,
 		  VDEV_PARAM_RTT_11AZ_TB_MAX_SESSION_EXPIRY),
+	PARAM_MAP(vdev_param_wifi_standard_version,
+		  VDEV_PARAM_WIFI_STANDARD_VERSION),
 	PARAM_MAP(vdev_param_rtt_11az_ntb_max_time_bw_meas,
 		  VDEV_PARAM_RTT_11AZ_NTB_MAX_TIME_BW_MEAS),
 	PARAM_MAP(vdev_param_rtt_11az_ntb_min_time_bw_meas,
@@ -9832,6 +9834,8 @@ static inline void copy_feature_set_info(uint32_t *feature_set_bitmap,
 				    feature_set->feature_set_version);
 	WMI_SET_NUM_ANTENNAS(feature_set_bitmap, num_antennas);
 	WMI_SET_HOST_BAND_CAP(feature_set_bitmap, band_capability);
+	WMI_SET_STA_DUMP_SUPPORT(feature_set_bitmap,
+				 feature_set->sta_dump_support);
 }
 
 /**
@@ -14312,13 +14316,13 @@ static QDF_STATUS extract_service_ready_ext_tlv(wmi_unified_t wmi_handle,
 	if (!chain_mask_combo)
 		return QDF_STATUS_SUCCESS;
 
-	wmi_nofl_debug("Dumping chain mask combo data");
+	wmi_nofl_info_high("Dumping chain mask combo data");
 
 	for (i = 0; i < param->num_chainmask_tables; i++) {
 
-		wmi_nofl_debug("table_id : %d Num valid chainmasks: %d",
-			       chain_mask_combo->chainmask_table_id,
-			       chain_mask_combo->num_valid_chainmask);
+		wmi_nofl_info_high("table_id : %d Num valid chainmasks: %d",
+				   chain_mask_combo->chainmask_table_id,
+				   chain_mask_combo->num_valid_chainmask);
 
 		param->chainmask_table[i].table_id =
 			chain_mask_combo->chainmask_table_id;
@@ -14326,7 +14330,7 @@ static QDF_STATUS extract_service_ready_ext_tlv(wmi_unified_t wmi_handle,
 			chain_mask_combo->num_valid_chainmask;
 		chain_mask_combo++;
 	}
-	wmi_nofl_debug("chain mask combo end");
+	wmi_nofl_info_high("chain mask combo end");
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -14553,6 +14557,8 @@ extract_service_ready_ext2_tlv(wmi_unified_t wmi_handle, uint8_t *event,
 	extract_hw_bdf_status(ev);
 
 	extract_num_max_mlo_link(ev, param);
+
+	param->num_aux_dev_caps = param_buf->num_aux_dev_caps;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -15249,6 +15255,46 @@ static QDF_STATUS extract_sw_cal_ver_ext2_tlv(wmi_unified_t wmi_handle,
 	cal->bdf_cal_ver = fw_cap->bdf_cal_ver;
 	cal->ftm_cal_ver = fw_cap->ftm_cal_ver;
 	cal->status = fw_cap->status;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS extract_aux_dev_cap_service_ready_ext2_tlv(
+			wmi_unified_t wmi_handle,
+			uint8_t *event, uint8_t idx,
+			struct wlan_psoc_host_aux_dev_caps *param)
+
+{
+	WMI_SERVICE_READY_EXT2_EVENTID_param_tlvs *param_buf;
+	wmi_aux_dev_capabilities *aux_dev_caps;
+
+	param_buf = (WMI_SERVICE_READY_EXT2_EVENTID_param_tlvs *)event;
+
+	if (!param_buf->num_aux_dev_caps)
+		return QDF_STATUS_E_INVAL;
+
+	if (!param_buf->aux_dev_caps) {
+		wmi_err("aux_dev_caps is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (idx >= param_buf->num_aux_dev_caps)
+		return QDF_STATUS_E_INVAL;
+
+	aux_dev_caps = &param_buf->aux_dev_caps[idx];
+
+	param->aux_index = aux_dev_caps->aux_index;
+	param->hw_mode_id = aux_dev_caps->hw_mode_id;
+	param->supported_modes_bitmap = aux_dev_caps->supported_modes_bitmap;
+	param->listen_pdev_id_map = aux_dev_caps->listen_pdev_id_map;
+	param->emlsr_pdev_id_map = aux_dev_caps->emlsr_pdev_id_map;
+
+	wmi_info("idx %u aux_index %u, hw_mode_id %u, supported_modes_bitmap 0x%x, listen_pdev_id_map 0x%x, emlsr_pdev_id_map 0x%x",
+		 idx, aux_dev_caps->aux_index,
+		 aux_dev_caps->hw_mode_id,
+		 aux_dev_caps->supported_modes_bitmap,
+		 aux_dev_caps->listen_pdev_id_map,
+		 aux_dev_caps->emlsr_pdev_id_map);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -19460,7 +19506,9 @@ extract_roam_trigger_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 		if (periodic_data) {
 			trig->periodic_trig_data.periodic_timer_ms =
 				periodic_data->periodic_timer_ms;
-		}
+		} else if (src_data)
+			trig->rssi_trig_data.threshold =
+				src_data->roam_rssi_threshold;
 		return QDF_STATUS_SUCCESS;
 
 	case WMI_ROAM_TRIGGER_REASON_LOW_RSSI:
@@ -21121,6 +21169,8 @@ struct wmi_ops tlv_ops =  {
 	.extract_msdu_idx_qtype_map_service_ready_ext2 =
 			extract_msdu_idx_qtype_map_service_ready_ext2_tlv,
 	.extract_sw_cal_ver_ext2 = extract_sw_cal_ver_ext2_tlv,
+	.extract_aux_dev_cap_service_ready_ext2 =
+				extract_aux_dev_cap_service_ready_ext2_tlv,
 	.extract_sar_cap_service_ready_ext =
 				extract_sar_cap_service_ready_ext_tlv,
 	.extract_pdev_utf_event = extract_pdev_utf_event_tlv,
@@ -21402,6 +21452,10 @@ static void populate_tlv_events_id_mlo(WMI_EVT_ID *event_ids)
 			WMI_MLO_VDEV_LINK_INFO_EVENTID;
 	event_ids[wmi_mlo_link_disable_request_eventid] =
 			WMI_MLO_LINK_DISABLE_REQUEST_EVENTID;
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+	event_ids[wmi_mlo_link_switch_request_eventid] =
+			WMI_MLO_LINK_SWITCH_REQUEST_EVENTID;
+#endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
 }
 #else /* WLAN_FEATURE_11BE_MLO */
 static inline void populate_tlv_events_id_mlo(WMI_EVT_ID *event_ids)

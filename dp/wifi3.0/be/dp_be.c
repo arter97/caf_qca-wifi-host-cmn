@@ -403,7 +403,9 @@ dp_hw_cookie_conversion_attach(struct dp_soc_be *be_soc,
 	uint8_t chip_id;
 
 	/* estimate how many SPT DDR pages needed */
-	num_spt_pages = num_descs / DP_CC_SPT_PAGE_MAX_ENTRIES;
+	num_spt_pages = qdf_do_div(
+				num_descs + (DP_CC_SPT_PAGE_MAX_ENTRIES - 1),
+				DP_CC_SPT_PAGE_MAX_ENTRIES);
 	num_spt_pages = num_spt_pages <= DP_CC_PPT_MAX_ENTRIES ?
 					num_spt_pages : DP_CC_PPT_MAX_ENTRIES;
 	dp_info("num_spt_pages needed %d", num_spt_pages);
@@ -1654,6 +1656,7 @@ dp_rxdma_ring_sel_cfg_be(struct dp_soc *soc)
 		htt_tlv_filter.rx_header_offset,
 		htt_tlv_filter.rx_packet_offset);
 
+	dp_rxdma_ring_wmask_cfg_be(soc, &htt_tlv_filter);
 	for (i = 0; i < MAX_PDEV_CNT; i++) {
 		struct dp_pdev *pdev = soc->pdev_list[i];
 
@@ -2433,7 +2436,7 @@ static void dp_txrx_set_mlo_mcast_primary_vdev_param_be(
 
 		params.chip_id = be_soc->mlo_chip_id;
 		params.pdev_id = be_vdev->vdev.pdev->pdev_id;
-		params.osif_vdev = be_vdev->vdev.osif_vdev;
+		params.vdev_id = vdev->vdev_id;
 		dp_wdi_event_handler(
 				WDI_EVENT_MCAST_PRIMARY_UPDATE,
 				be_vdev->vdev.pdev->soc,
@@ -2478,7 +2481,7 @@ static void dp_txrx_set_mlo_mcast_primary_vdev_param_be(
 
 		params.chip_id = be_soc->mlo_chip_id;
 		params.pdev_id = vdev->pdev->pdev_id;
-		params.osif_vdev = vdev->osif_vdev;
+		params.vdev_id = vdev->vdev_id;
 		dp_wdi_event_handler(
 				WDI_EVENT_MCAST_PRIMARY_UPDATE,
 				vdev->pdev->soc,
@@ -2897,6 +2900,7 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 	dp_initialize_arch_ops_be_mlo(arch_ops);
 #ifdef WLAN_MLO_MULTI_CHIP
 	arch_ops->dp_get_soc_by_chip_id = dp_get_soc_by_chip_id_be;
+	arch_ops->dp_mlo_print_ptnr_info = dp_mlo_debug_print_ptnr_info;
 #endif
 	arch_ops->dp_soc_get_num_soc = dp_soc_get_num_soc_be;
 	arch_ops->dp_peer_rx_reorder_queue_setup =
@@ -3036,7 +3040,7 @@ dp_primary_link_migration(struct dp_soc *soc, void *cb_ctxt,
 			 DP_MOD_ID_CHILD);
 	mld_peer->txrx_peer->vdev = mld_peer->vdev;
 
-	params.osif_vdev = (void *)new_primary_peer->vdev->osif_vdev;
+	params.vdev_id = new_primary_peer->vdev->vdev_id;
 	params.peer_mac = mld_peer->mac_addr.raw;
 	params.chip_id = pr_peer_info->chip_id;
 	params.pdev_id = new_primary_peer->vdev->pdev->pdev_id;

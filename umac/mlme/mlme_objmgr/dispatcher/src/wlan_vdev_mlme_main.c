@@ -35,6 +35,7 @@
 #include <wlan_lmac_if_def.h>
 #include <target_if_vdev_mgr_tx_ops.h>
 #include "connection_mgr/core/src/wlan_cm_main.h"
+#include <wlan_mlo_mgr_public_api.h>
 
 static QDF_STATUS mlme_vdev_obj_create_handler(struct wlan_objmgr_vdev *vdev,
 					       void *arg)
@@ -326,5 +327,17 @@ QDF_STATUS wlan_vdev_mlme_send_set_mac_addr(struct qdf_mac_addr mac_addr,
 					    struct wlan_objmgr_vdev *vdev)
 {
 	return mlme_vdev_ops_send_set_mac_address(mac_addr, mld_addr, vdev);
+}
+
+void wlan_vdev_mlme_notify_set_mac_addr_response(struct wlan_objmgr_vdev *vdev,
+						 uint8_t resp_status)
+{
+	if (wlan_vdev_mlme_is_mlo_link_switch_in_progress(vdev)) {
+		wlan_mlo_mgr_link_switch_set_mac_addr_resp(vdev, resp_status);
+		return;
+	}
+
+	mlme_vdev_mgr_notify_set_mac_addr_response(wlan_vdev_get_id(vdev),
+						   resp_status);
 }
 #endif

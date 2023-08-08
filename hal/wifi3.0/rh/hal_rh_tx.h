@@ -20,6 +20,14 @@
 #ifndef _HAL_RH_TX_H_
 #define _HAL_RH_TX_H_
 
+enum hal_rh_tx_ret_buf_manager {
+	HAL_RH_WBM_SW0_BM_ID = 3,
+	HAL_RH_WBM_SW1_BM_ID = 4,
+	HAL_RH_WBM_SW2_BM_ID = 5,
+	HAL_RH_WBM_SW3_BM_ID = 6,
+	HAL_RH_WBM_SW4_BM_ID = 7,
+};
+
 /*---------------------------------------------------------------------------
  * Function declarations and documentation
  * ---------------------------------------------------------------------------
@@ -331,5 +339,20 @@ static inline void hal_tx_desc_sync(void *hal_tx_desc_cached,
 {
 	qdf_mem_copy((hw_desc + sizeof(struct tlv_32_hdr)),
 		     hal_tx_desc_cached, HAL_TX_DESC_LEN_BYTES);
+}
+
+/*---------------------------------------------------------------------------
+ * WBM Descriptor accessor APIs for Tx completions
+ *---------------------------------------------------------------------------
+ */
+
+/**
+ * hal_tx_get_wbm_sw0_bm_id() - Get the BM ID for first tx completion ring
+ *
+ * Return: BM ID for first tx completion ring
+ */
+static inline uint32_t hal_tx_get_wbm_sw0_bm_id(void)
+{
+	return HAL_RH_WBM_SW0_BM_ID;
 }
 #endif /* _HAL_RH_TX_H_ */

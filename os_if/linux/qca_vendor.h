@@ -91,10 +91,38 @@
  *	ap found
  * @QCA_NL80211_VENDOR_SUBCMD_EXTSCAN_RESET_SIGNIFICANT_CHANGE: Ext scan reset
  *	significant change
- * @QCA_NL80211_VENDOR_SUBCMD_TDLS_ENABLE: Ext tdls enable
- * @QCA_NL80211_VENDOR_SUBCMD_TDLS_DISABLE: Ext tdls disable
- * @QCA_NL80211_VENDOR_SUBCMD_TDLS_GET_STATUS: Ext tdls get status
- * @QCA_NL80211_VENDOR_SUBCMD_TDLS_STATE: Ext tdls state
+ * @QCA_NL80211_VENDOR_SUBCMD_TDLS_ENABLE: This command is used to enable TDLS
+ *	capability or to form a session with the specified peer.
+ *	If %NL80211_ATTR_VENDOR_DATA is sent as an empty nested attribute this
+ *	indicates to enable TDLS capability on the interface.
+ *	If %QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAC_ADDR is nested in
+ *	%NL80211_ATTR_VENDOR_DATA this indicates the userspace requests to
+ *	form a TDLS session with the specified peer MAC address.
+ *	The attributes used with this command are defined in
+ *	enum qca_wlan_vendor_attr_tdls_enable.
+ * @QCA_NL80211_VENDOR_SUBCMD_TDLS_DISABLE: This command is used to disable TDLS
+ *	capability or to terminate the session with the specified peer.
+ *	If %NL80211_ATTR_VENDOR_DATA is sent as an empty nested attribute this
+ *	indicates to disable TDLS capability on the interface.
+ *	If %QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_MAC_ADDR is nested in
+ *	%NL80211_ATTR_VENDOR_DATA this indicates the userspace requests to
+ *	terminate TDLS session with the specified peer MAC address.
+ *	The attributes used with this command are defined in
+ *	enum qca_wlan_vendor_attr_tdls_disable.
+ * @QCA_NL80211_VENDOR_SUBCMD_TDLS_GET_STATUS: This command is to get the TDLS
+ *	status at the interface level or with the specific peer.
+ *	If %NL80211_ATTR_VENDOR_DATA is sent as an empty nested attribute this
+ *	indicates the TDLS status query is at interface level.
+ *	If %QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_MAC_ADDR is nested in
+ *	%NL80211_ATTR_VENDOR_DATA this indicates the userspace requests to
+ *	get TDLS session status with the specified peer MAC address.
+ *	The attributes used with this command are defined in
+ *	enum qca_wlan_vendor_attr_tdls_get_status.
+ * @QCA_NL80211_VENDOR_SUBCMD_TDLS_STATE: This event is to indicate the result
+ *	of the TDLS session request with the peer sent by userspace in
+ *	%QCA_NL80211_VENDOR_SUBCMD_TDLS_ENABLE.
+ *	The attributes used with this command are defined in
+ *	enum qca_wlan_vendor_attr_tdls_state.
  * @QCA_NL80211_VENDOR_SUBCMD_GET_SUPPORTED_FEATURES: Get supported features
  * @QCA_NL80211_VENDOR_SUBCMD_SCANNING_MAC_OUI: Set scanning_mac_oui
  * @QCA_NL80211_VENDOR_SUBCMD_NO_DFS_FLAG: No DFS flag
@@ -1396,6 +1424,8 @@ enum qca_wlan_auth_type {
  *  the IEs when the peer station is still in connected state.
  * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_HE_OPERATION: Attribute type for
  * sending HE operation info.
+ * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_CH_WIDTH_V2: Attribute
+ * type for remote channel width greater than 160 MHz.
  * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_AFTER_LAST: After last
  *
  */
@@ -1440,55 +1470,12 @@ enum qca_wlan_vendor_attr_get_station_info {
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_DRIVER_DISCONNECT_REASON,
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_ASSOC_REQ_IES,
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_HE_OPERATION,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_CH_WIDTH_V2,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_MAX =
 		QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_AFTER_LAST - 1,
-};
-
-/**
- * enum qca_wlan_vendor_attr_tdls_enable - TDLS enable attribute
- *
- * @QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_INVALID: Invalid initial value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAC_ADDR: An array of 6 x Unsigned 8-bit
- *	value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_CHANNEL: Signed 32-bit value, but lets
- *	keep as unsigned for now
- * @QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_GLOBAL_OPERATING_CLASS: operating class
- * @QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAX_LATENCY_MS: Enable max latency in ms
- * @QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MIN_BANDWIDTH_KBPS: Enable min bandwidth
- *	in KBPS
- * @QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_AFTER_LAST: After last
- * @QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAX: Max value
- */
-enum qca_wlan_vendor_attr_tdls_enable {
-	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_INVALID = 0,
-	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAC_ADDR,
-	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_CHANNEL,
-	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_GLOBAL_OPERATING_CLASS,
-	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAX_LATENCY_MS,
-	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MIN_BANDWIDTH_KBPS,
-	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_AFTER_LAST,
-	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAX =
-		QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_AFTER_LAST - 1,
-};
-
-/**
- * enum qca_wlan_vendor_attr_tdls_disable: tdls disable attribute
- *
- * @QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_INVALID: Invalid initial value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_MAC_ADDR: An array of 6 x Unsigned
- *	8-bit value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_AFTER_LAST: After last
- * @QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_MAX: Max value
- */
-enum qca_wlan_vendor_attr_tdls_disable {
-	QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_INVALID = 0,
-	QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_MAC_ADDR,
-	QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_AFTER_LAST,
-	QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_MAX =
-		QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_AFTER_LAST - 1,
 };
 
 /**
@@ -1522,63 +1509,6 @@ enum qca_attr_chip_power_save_failure {
 	QCA_ATTR_CHIP_POWER_SAVE_FAILURE_LAST,
 	QCA_ATTR_CHIP_POWER_SAVE_FAILURE_MAX =
 		QCA_ATTR_CHIP_POWER_SAVE_FAILURE_LAST - 1,
-};
-
-
-/**
- * enum qca_wlan_vendor_attr_tdls_get_status - tdls get status attribute
- *
- * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_INVALID: Invalid initial value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_MAC_ADDR: An array of 6 x Unsigned
- *	8-bit value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_STATE: get status state,
- *	unsigned 32-bit value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_REASON: get status reason
- * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_CHANNEL: get status channel,
- *	unsigned 32-bit value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_GLOBAL_OPERATING_CLASS: get operating
- *	class, unsigned 32-bit value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_AFTER_LAST: After last
- * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_MAX: Max value
- */
-enum qca_wlan_vendor_attr_tdls_get_status {
-	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_INVALID = 0,
-	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_MAC_ADDR,
-	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_STATE,
-	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_REASON,
-	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_CHANNEL,
-	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_GLOBAL_OPERATING_CLASS,
-	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_AFTER_LAST,
-	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_MAX =
-		QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_AFTER_LAST - 1,
-};
-
-/**
- * enum qca_wlan_vendor_attr_tdls_state - tdls state attribute
- *
- * @QCA_WLAN_VENDOR_ATTR_TDLS_STATE_INVALID: Initial invalid value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_STATE_MAC_ADDR: An array of 6 x Unsigned
- *	8-bit value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_NEW_STATE: TDLS new state,
- *	unsigned 32-bit value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_STATE_REASON: TDLS state reason
- * @QCA_WLAN_VENDOR_ATTR_TDLS_STATE_CHANNEL: TDLS state channel,
- *	unsigned 32-bit value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_STATE_GLOBAL_OPERATING_CLASS: TDLS state
- *	operating class, unsigned 32-bit value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_STATE_AFTER_LAST: After last
- * @QCA_WLAN_VENDOR_ATTR_TDLS_STATE_MAX: Max value
- */
-enum qca_wlan_vendor_attr_tdls_state {
-	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_INVALID = 0,
-	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_MAC_ADDR,
-	QCA_WLAN_VENDOR_ATTR_TDLS_NEW_STATE,
-	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_REASON,
-	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_CHANNEL,
-	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_GLOBAL_OPERATING_CLASS,
-	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_AFTER_LAST,
-	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_MAX =
-		QCA_WLAN_VENDOR_ATTR_TDLS_STATE_AFTER_LAST - 1,
 };
 
 /* enum's to provide TDLS capabilities */
@@ -4740,6 +4670,21 @@ enum wifi_logger_supported_features {
 	WIFI_LOGGER_WATCHDOG_TIMER_SUPPORTED = (1 << (6)),
 	WIFI_LOGGER_DRIVER_DUMP_SUPPORTED = (1 << (7)),
 	WIFI_LOGGER_PACKET_FATE_SUPPORTED = (1 << (8))
+};
+
+/**
+ * enum qca_wlan_tdls_caps_features_supported - Values for TDLS get
+ * capabilities features
+ */
+enum qca_wlan_tdls_caps_features_supported {
+	WIFI_TDLS_SUPPORT = (1 << (0)),
+	WIFI_TDLS_EXTERNAL_CONTROL_SUPPORT = (1 << (1)),
+	WIFI_TDLS_OFFCHANNEL_SUPPORT = (1 << (2)),
+
+	/* Indicates if the TDLS session can be formed with the peer using
+	 * higher bandwidth than the bandwidth of the AP path.
+	 */
+	WIFI_TDLS_WIDER_BW_SUPPORT = (1 << (3)),
 };
 
 /**
@@ -16546,6 +16491,212 @@ enum qca_wlan_vendor_attr_tdls_disc_rsp_ext {
 	QCA_WLAN_VENDOR_ATTR_TDLS_DISC_RSP_EXT_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_TDLS_DISC_RSP_EXT_MAX =
 	QCA_WLAN_VENDOR_ATTR_TDLS_DISC_RSP_EXT_AFTER_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_tdls_state - Represents the possible TDLS states.
+ *
+ * @QCA_WLAN_VENDOR_TDLS_STATE_DISABLED: TDLS is not enabled, default status
+ * for all stations.
+ *
+ * @QCA_WLAN_VENDOR_TDLS_STATE_ENABLED: TDLS is enabled, but not yet tried to
+ * establish the session.
+ *
+ * @QCA_WLAN_VENDOR_TDLS_STATE_ESTABLISHED: Direct link TDLS session is
+ * established.
+ *
+ * @QCA_WLAN_VENDOR_TDLS_STATE_ESTABLISHED_OFF_CHANNEL: Direct link TDLS
+ * session is established using MCC.
+ *
+ * @QCA_WLAN_VENDOR_TDLS_STATE_DROPPED: Direct link TDLS session was
+ * established, but is temporarily dropped currently.
+ *
+ * @QCA_WLAN_VENDOR_TDLS_STATE_FAILED: TDLS session is failed to establish.
+ */
+enum qca_wlan_vendor_tdls_state {
+	QCA_WLAN_VENDOR_TDLS_STATE_DISABLED = 1,
+	QCA_WLAN_VENDOR_TDLS_STATE_ENABLED = 2,
+	QCA_WLAN_VENDOR_TDLS_STATE_ESTABLISHED = 3,
+	QCA_WLAN_VENDOR_TDLS_STATE_ESTABLISHED_OFF_CHANNEL = 4,
+	QCA_WLAN_VENDOR_TDLS_STATE_DROPPED = 5,
+	QCA_WLAN_VENDOR_TDLS_STATE_FAILED = 6,
+};
+
+/**
+ * enum qca_wlan_vendor_tdls_reason - Represents the possible TDLS reasons.
+ *
+ * @QCA_WLAN_TDLS_REASON_SUCCESS: TDLS session is successfully established.
+ *
+ * @QCA_WLAN_TDLS_REASON_UNSPECIFIED: Unspecified reason.
+ *
+ * @QCA_WLAN_TDLS_REASON_NOT_SUPPORTED: TDLS is not supported.
+ *
+ * @QCA_WLAN_TDLS_REASON_UNSUPPORTED_BAND: The specified band is not supported.
+ *
+ * @QCA_WLAN_TDLS_REASON_NOT_BENEFICIAL: Packets going through AP is better
+ * than through direct link.
+ *
+ * @QCA_WLAN_TDLS_REASON_DROPPED_BY_REMOTE: Peer station doesn't want the TDLS
+ * session anymore.
+ */
+
+enum qca_wlan_vendor_tdls_reason {
+	QCA_WLAN_TDLS_REASON_SUCCESS = 0,
+	QCA_WLAN_TDLS_REASON_UNSPECIFIED = -1,
+	QCA_WLAN_TDLS_REASON_NOT_SUPPORTED = -2,
+	QCA_WLAN_TDLS_REASON_UNSUPPORTED_BAND = -3,
+	QCA_WLAN_TDLS_REASON_NOT_BENEFICIAL = -4,
+	QCA_WLAN_TDLS_REASON_DROPPED_BY_REMOTE = -5,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_tdls_enable - Attributes used by
+ * %QCA_NL80211_VENDOR_SUBCMD_TDLS_ENABLE vendor command.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAC_ADDR: 6-byte MAC address of the peer
+ * station to enable the TDLS session. Optional attribute. The driver sends the
+ * TDLS session result as an asynchronous response using the command
+ * %QCA_NL80211_VENDOR_SUBCMD_TDLS_STATE when this peer MAC is provided in
+ * %QCA_NL80211_VENDOR_SUBCMD_TDLS_ENABLE command.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_CHANNEL: u32 attribute. Indicates the
+ * channel on which the TDLS session to be established. Required only when
+ * %QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAC_ADDR is present.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_GLOBAL_OPERATING_CLASS: u32 attribute.
+ * Indicates the global operating class of the TDLS session to be established.
+ * Required only when %QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAC_ADDR is present.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAX_LATENCY_MS: u32 attribute. Indicates
+ * the maximum latency of the WLAN packets to be transmitted/received in
+ * milliseconds on TDLS session. Required only when
+ * %QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAC_ADDR is present.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MIN_BANDWIDTH_KBPS: u32 attribute.
+ * Indicates the minimum bandwidth to be used to establish the TDLS session
+ * in kbps. Required only when %QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAC_ADDR is
+ * present.
+ */
+enum qca_wlan_vendor_attr_tdls_enable {
+	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAC_ADDR = 1,
+	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_CHANNEL = 2,
+	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_GLOBAL_OPERATING_CLASS = 3,
+	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAX_LATENCY_MS = 4,
+	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MIN_BANDWIDTH_KBPS = 5,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAX =
+	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_AFTER_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_tdls_disable - Attributes used by
+ * %QCA_NL80211_VENDOR_SUBCMD_TDLS_DISABLE vendor command.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_MAC_ADDR: 6-byte MAC address of the peer
+ * station to disable the TDLS session. Optional attribute.
+ */
+enum qca_wlan_vendor_attr_tdls_disable {
+	QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_MAC_ADDR = 1,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_MAX =
+	QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_AFTER_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_tdls_get_status - Attributes used by
+ * %QCA_NL80211_VENDOR_SUBCMD_TDLS_GET_STATUS vendor command.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_MAC_ADDR: 6-byte MAC address of the
+ * peer station. Optional attribute. Used in
+ * %QCA_NL80211_VENDOR_SUBCMD_TDLS_GET_STATUS request and response.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_STATE: u32 attribute. Indicates the
+ * TDLS session state with the peer specified in
+ * %QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_MAC_ADDR. Uses the values from
+ * enum qca_wlan_vendor_tdls_state. Used in
+ * %QCA_NL80211_VENDOR_SUBCMD_TDLS_GET_STATUS response.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_REASON: s32 attribute. Indicates the
+ * reason for the TDLS session state indicated in
+ * %QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_STATE. Uses the values from enum
+ * qca_wlan_vendor_tdls_reason. Used in
+ * %QCA_NL80211_VENDOR_SUBCMD_TDLS_GET_STATUS response.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_CHANNEL: u32 attribute. Indicates the
+ * channel of the TDLS session established with
+ * %QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_MAC_ADDR. Used in
+ * %QCA_NL80211_VENDOR_SUBCMD_TDLS_GET_STATUS response.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_GLOBAL_OPERATING_CLASS: u32 attribute.
+ * Indicates the global operating class of the TDLS session established with
+ * %QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_MAC_ADDR. Used in
+ * %QCA_NL80211_VENDOR_SUBCMD_TDLS_GET_STATUS response.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_NUM_SESSIONS: u32 attribute. Indicates
+ * the current number of active TDLS sessions. This is indicated in the response
+ * when %QCA_NL80211_VENDOR_SUBCMD_TDLS_GET_STATUS is requested with
+ * %NL80211_ATTR_VENDOR_DATA as an empty nested attribute.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_AVAILABLE: Flag attribute. Indicates
+ * whether the driver can initiate new TDLS session. This is indicated in the
+ * response when %QCA_NL80211_VENDOR_SUBCMD_TDLS_GET_STATUS is requested with
+ * %NL80211_ATTR_VENDOR_DATA as an empty nested attribute.
+ */
+enum qca_wlan_vendor_attr_tdls_get_status {
+	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_MAC_ADDR = 1,
+	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_STATE = 2,
+	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_REASON = 3,
+	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_CHANNEL = 4,
+	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_GLOBAL_OPERATING_CLASS = 5,
+	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_NUM_SESSIONS = 6,
+	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_AVAILABLE = 7,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_MAX =
+	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_AFTER_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_tdls_state - Attributes used by
+ * %QCA_NL80211_VENDOR_SUBCMD_TDLS_STATE vendor command.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_STATE_MAC_ADDR: 6-byte MAC address of the
+ * peer station. Required attribute.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_STATE_CURRENT_STATE: u32 attribute. Indicates
+ * the current TDLS state. Required attribute. Uses the values from
+ * enum qca_wlan_vendor_tdls_state.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_STATE_REASON: s32 attribute. Indicates the
+ * reason of the current TDLS session state. Required attribute. Uses the values
+ * from enum qca_wlan_vendor_tdls_reason.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_STATE_CHANNEL: u32 attribute. Indicates the
+ * TDLS session channel. Required attribute.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_STATE_GLOBAL_OPERATING_CLASS: u32 attribute.
+ * Indicates the TDLS session global operating class. Required attribute.
+ */
+enum qca_wlan_vendor_attr_tdls_state {
+	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_MAC_ADDR = 1,
+	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_NEW_STATE = 2,
+	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_REASON = 3,
+	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_CHANNEL = 4,
+	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_GLOBAL_OPERATING_CLASS = 5,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_MAX =
+	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_AFTER_LAST - 1,
 };
 
 #endif

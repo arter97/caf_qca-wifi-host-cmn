@@ -360,6 +360,9 @@ __qdf_nbuf_t __qdf_nbuf_alloc_ppe_ds(__qdf_device_t osdev, size_t size,
  * unaligned will result in an unaligned address.
  * It will call into kernel page fragment APIs, long time keeping for scattered
  * allocations should be considered for avoidance.
+ * This also brings in more probability of page frag allocation failures during
+ * low memory situation. In case of page frag allocation failure, fallback to
+ * non-frag slab allocations.
  *
  * Return: nbuf or %NULL if no memory
  */
@@ -382,6 +385,32 @@ __qdf_nbuf_frag_alloc(__qdf_device_t osdev, size_t size, int reserve, int align,
  */
 __qdf_nbuf_t __qdf_nbuf_alloc_no_recycler(size_t size, int reserve, int align,
 					  const char *func, uint32_t line);
+
+/**
+ * __qdf_nbuf_page_frag_alloc() - Allocate nbuf from @pf_cache page
+ *				  fragment cache
+ * @osdev: Device handle
+ * @size: Netbuf requested size
+ * @reserve: headroom to start with
+ * @align: Align
+ * @pf_cache: Reference to page fragment cache
+ * @func: Function name of the call site
+ * @line: line number of the call site
+ *
+ * This allocates a nbuf, aligns if needed and reserves some space in the front,
+ * since the reserve is done after alignment the reserve value if being
+ * unaligned will result in an unaligned address.
+ *
+ * It will call kernel page fragment APIs for allocation of skb->head, prefer
+ * this API for buffers that are allocated and freed only once i.e., for
+ * reusable buffers.
+ *
+ * Return: nbuf or %NULL if no memory
+ */
+__qdf_nbuf_t
+__qdf_nbuf_page_frag_alloc(__qdf_device_t osdev, size_t size, int reserve,
+			   int align, __qdf_frag_cache_t *pf_cache,
+			   const char *func, uint32_t line);
 
 /**
  * __qdf_nbuf_clone() - clone the nbuf (copy is readonly)
@@ -2809,6 +2838,19 @@ static inline unsigned int __qdf_nbuf_get_end_offset(__qdf_nbuf_t nbuf)
 static inline unsigned int __qdf_nbuf_get_truesize(struct sk_buff *skb)
 {
 	return skb->truesize;
+}
+
+/**
+ * __qdf_nbuf_get_allocsize() - Return the actual size of the skb->head
+ * excluding the header and variable data area
+ * @skb: sk buff
+ *
+ * Return: actual allocated size of network buffer
+ */
+static inline unsigned int __qdf_nbuf_get_allocsize(struct sk_buff *skb)
+{
+	return SKB_WITH_OVERHEAD(skb->truesize) -
+		SKB_DATA_ALIGN(sizeof(struct sk_buff));
 }
 
 #ifdef CONFIG_WLAN_SYSFS_MEM_STATS

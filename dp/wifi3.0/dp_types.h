@@ -2248,6 +2248,7 @@ enum dp_context_type {
  * @dp_update_ring_hptp: Update rings hptp during suspend/resume
  * @dp_get_fst_cmem_base: Get CMEM base address for FISA
  * @dp_flush_tx_ring: Flush TCL ring HP
+ * @dp_mlo_print_ptnr_info: print partner vdev info
  */
 struct dp_arch_ops {
 	/* INIT/DEINIT Arch Ops */
@@ -2508,6 +2509,7 @@ struct dp_arch_ops {
 	void (*dp_update_ring_hptp)(struct dp_soc *soc, bool force_flush_tx);
 	uint64_t (*dp_get_fst_cmem_base)(struct dp_soc *soc, uint64_t size);
 	int (*dp_flush_tx_ring)(struct dp_pdev *pdev, int ring_id);
+	void (*dp_mlo_print_ptnr_info)(struct dp_vdev *vdev);
 };
 
 /**

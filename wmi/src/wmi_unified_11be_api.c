@@ -81,6 +81,31 @@ QDF_STATUS wmi_send_mlo_vdev_tid_to_link_map_cmd(
 	return QDF_STATUS_E_FAILURE;
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+QDF_STATUS
+wmi_send_mlo_link_switch_req_cnf_cmd(wmi_unified_t wmi,
+				     struct wlan_mlo_link_switch_cnf *params)
+{
+	if (wmi->ops->send_mlo_link_switch_req_cnf_cmd)
+		return wmi->ops->send_mlo_link_switch_req_cnf_cmd(wmi, params);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+wmi_extract_mlo_link_switch_request_evt(struct wmi_unified *wmi,
+					void *buf,
+					struct wlan_mlo_link_switch_req *req)
+{
+	if (wmi->ops->extract_mlo_link_switch_request_event)
+		return wmi->ops->extract_mlo_link_switch_request_event(wmi,
+								       buf,
+								       req);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
+
 QDF_STATUS wmi_send_mlo_link_state_request_cmd(
 		wmi_unified_t wmi,
 		struct wmi_host_link_state_params *params)
@@ -140,7 +165,6 @@ QDF_STATUS wmi_extract_mlo_link_disable_request_evt(
 
 	return QDF_STATUS_E_FAILURE;
 }
-
 #endif /* WLAN_FEATURE_11BE */
 
 QDF_STATUS

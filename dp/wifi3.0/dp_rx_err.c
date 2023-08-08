@@ -1204,6 +1204,15 @@ more_msdu_link_desc:
 		}
 		head_nbuf = NULL;
 
+		dp_rx_nbuf_set_link_id_from_tlv(soc, qdf_nbuf_data(nbuf), nbuf);
+
+		if (pdev && pdev->link_peer_stats &&
+		    txrx_peer && txrx_peer->is_mld_peer) {
+			link_id = dp_rx_get_stats_arr_idx_from_link_id(
+								nbuf,
+								txrx_peer);
+		}
+
 		switch (err_code) {
 		case HAL_REO_ERR_REGULAR_FRAME_2K_JUMP:
 		case HAL_REO_ERR_2K_ERROR_HANDLING_FLAG_SET:

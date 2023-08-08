@@ -246,7 +246,8 @@ static bool new_hw_mode_preferred(uint32_t current_hw_mode,
 {
 	uint8_t hw_mode_id_precedence[WMI_HOST_HW_MODE_MAX + 1] = { 6, 2, 5,
 								    4, 1, 3,
-								    7, 0, 8};
+								    7, 8, 9,
+								    10, 0, 11};
 
 	if (current_hw_mode > WMI_HOST_HW_MODE_MAX ||
 	    new_hw_mode > WMI_HOST_HW_MODE_MAX)
@@ -607,6 +608,52 @@ exit:
 	return qdf_status_to_os_return(status);
 }
 
+int init_deinit_populate_aux_dev_cap_ext2(struct wlan_objmgr_psoc *psoc,
+					  wmi_unified_t handle, uint8_t *event,
+					  struct tgt_info *info)
+
+{
+	uint8_t cap_idx;
+	uint32_t num_aux_dev_caps;
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	struct wlan_psoc_host_aux_dev_caps *param;
+
+	num_aux_dev_caps = info->service_ext2_param.num_aux_dev_caps;
+	target_if_info("num_aux_dev_caps = %d", num_aux_dev_caps);
+
+	if (!num_aux_dev_caps)
+		return 0;
+
+	info->aux_dev_caps =
+		qdf_mem_malloc(sizeof(struct wlan_psoc_host_aux_dev_caps) *
+			       num_aux_dev_caps);
+
+	if (!info->aux_dev_caps)
+		return -EINVAL;
+
+	for (cap_idx = 0; cap_idx < num_aux_dev_caps; cap_idx++) {
+		param = &info->aux_dev_caps[cap_idx];
+		status = wmi_extract_aux_dev_cap_service_ready_ext2(handle,
+								    event,
+								    cap_idx,
+								    param);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			target_if_err("Extraction of aux dev cap failed");
+			goto free_and_return;
+		}
+	}
+
+	return 0;
+
+free_and_return:
+	qdf_mem_free(info->aux_dev_caps);
+	info->aux_dev_caps = NULL;
+	/* Set to 0 in case some code later rely on that */
+	info->service_ext2_param.num_aux_dev_caps = 0;
+
+	return qdf_status_to_os_return(status);
+}
+
 QDF_STATUS init_deinit_dbr_ring_cap_free(
 		struct target_psoc_info *tgt_psoc_info)
 {
@@ -636,6 +683,19 @@ QDF_STATUS init_deinit_spectral_scaling_params_free(
 }
 
 qdf_export_symbol(init_deinit_spectral_scaling_params_free);
+
+QDF_STATUS init_deinit_aux_dev_cap_free(
+		struct target_psoc_info *tgt_psoc_info)
+{
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+
+	if (tgt_psoc_info->info.aux_dev_caps) {
+		qdf_mem_free(tgt_psoc_info->info.aux_dev_caps);
+		tgt_psoc_info->info.aux_dev_caps = NULL;
+	}
+
+	return status;
+}
 
 #ifdef DBS_SBS_BAND_LIMITATION_WAR
 #define phy0               0

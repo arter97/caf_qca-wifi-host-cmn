@@ -1647,6 +1647,15 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 			return num_buf_reaped;
 		}
 
+		if (packet_info->dma_length >
+		    (DP_MON_DATA_BUFFER_SIZE - DP_RX_MON_PACKET_OFFSET)) {
+			/* WAR: Invalid DMA length is received for this MPDU */
+			mon_pdev->rx_mon_stats.invalid_dma_length++;
+			DP_STATS_INC(mon_soc, frag_free, 1);
+			qdf_frag_free(addr);
+			return num_buf_reaped;
+		}
+
 		nbuf = qdf_nbuf_queue_last(&ppdu_info->mpdu_q[user_id]);
 		if (qdf_unlikely(!nbuf)) {
 			dp_mon_debug("nbuf is NULL");
@@ -1955,12 +1964,12 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 			if ((rx_tlv - rx_tlv_start) >= (end_offset + 1))
 				break;
 
-	} while ((tlv_status == HAL_TLV_STATUS_PPDU_NOT_DONE) ||
-			(tlv_status == HAL_TLV_STATUS_HEADER) ||
-			(tlv_status == HAL_TLV_STATUS_MPDU_END) ||
-			(tlv_status == HAL_TLV_STATUS_MSDU_END) ||
-			(tlv_status == HAL_TLV_STATUS_MON_BUF_ADDR) ||
-			(tlv_status == HAL_TLV_STATUS_MPDU_START));
+		} while ((tlv_status == HAL_TLV_STATUS_PPDU_NOT_DONE) ||
+			 (tlv_status == HAL_TLV_STATUS_HEADER) ||
+			 (tlv_status == HAL_TLV_STATUS_MPDU_END) ||
+			 (tlv_status == HAL_TLV_STATUS_MSDU_END) ||
+			 (tlv_status == HAL_TLV_STATUS_MON_BUF_ADDR) ||
+			 (tlv_status == HAL_TLV_STATUS_MPDU_START));
 
 		/* set status buffer pointer to NULL */
 		mon_pdev_be->status[idx] = NULL;
@@ -2590,6 +2599,8 @@ void dp_mon_rx_print_advanced_stats_2_0(struct dp_soc *soc,
 		       mon_pdev->rx_mon_stats.tlv_drop_cnt);
 	DP_PRINT_STATS("rx_hdr_invalid_cnt = %d",
 		       rx_mon_stats->rx_hdr_invalid_cnt);
+	DP_PRINT_STATS("invalid_dma_length Received = %d",
+		       rx_mon_stats->invalid_dma_length);
 }
 #endif
 

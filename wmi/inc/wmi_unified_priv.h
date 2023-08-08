@@ -97,6 +97,7 @@
 #ifdef WLAN_FEATURE_11BE_MLO
 #include <wmi_unified_11be_param.h>
 #include "wlan_mlo_mgr_public_structs.h"
+#include <wlan_mlo_mgr_link_switch.h>
 #endif
 
 #if defined(WLAN_SUPPORT_TWT) && defined(WLAN_TWT_CONV_SUPPORTED)
@@ -166,6 +167,8 @@ struct wmi_ext_dbg_msg {
 	QDF_TRACE_WARN_NO_FL(QDF_MODULE_ID_WMI, ## params)
 #define wmi_nofl_info(params...) \
 	QDF_TRACE_INFO_NO_FL(QDF_MODULE_ID_WMI, ## params)
+#define wmi_nofl_info_high(params...) \
+	QDF_TRACE_DEBUG_NO_FL(QDF_MODULE_ID_WMI, ## params)
 #define wmi_nofl_debug(params...) \
 	QDF_TRACE_DEBUG_NO_FL(QDF_MODULE_ID_WMI, ## params)
 
@@ -3144,6 +3147,16 @@ QDF_STATUS (*extract_mlo_link_disable_request_evt_param)(
 		struct wmi_unified *wmi_handle,
 		void *buf,
 		struct mlo_link_disable_request_evt_params *params);
+
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+QDF_STATUS
+(*extract_mlo_link_switch_request_event)(struct wmi_unified *wmi_handle,
+					 void *buf,
+					 struct wlan_mlo_link_switch_req *req);
+QDF_STATUS
+(*send_mlo_link_switch_req_cnf_cmd)(wmi_unified_t wmi_handle,
+				    struct wlan_mlo_link_switch_cnf *params);
+#endif
 #endif
 
 #ifdef WLAN_FEATURE_SON
@@ -3335,6 +3348,12 @@ QDF_STATUS (*extract_peer_entry_ptqm_migrate_event)(
 		uint32_t index,
 		struct peer_entry_ptqm_migrate_event_params *entry);
 #endif /* QCA_SUPPORT_PRIMARY_LINK_MIGRATE */
+
+QDF_STATUS (*extract_aux_dev_cap_service_ready_ext2)(
+			wmi_unified_t wmi_handle,
+			uint8_t *evt_buf, uint8_t idx,
+			struct wlan_psoc_host_aux_dev_caps *param);
+
 };
 
 /* Forward declaration for psoc*/

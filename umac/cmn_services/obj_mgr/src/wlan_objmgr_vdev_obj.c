@@ -297,7 +297,7 @@ qdf_export_symbol(wlan_objmgr_vdev_obj_create);
 
 static QDF_STATUS wlan_objmgr_vdev_obj_destroy(struct wlan_objmgr_vdev *vdev)
 {
-	uint8_t id;
+	int8_t id;
 	wlan_objmgr_vdev_destroy_handler handler;
 	QDF_STATUS obj_status;
 	void *arg;
@@ -323,8 +323,8 @@ static QDF_STATUS wlan_objmgr_vdev_obj_destroy(struct wlan_objmgr_vdev *vdev)
 	wlan_minidump_remove(vdev, sizeof(*vdev), wlan_vdev_get_psoc(vdev),
 			     WLAN_MD_OBJMGR_VDEV, "wlan_objmgr_vdev");
 
-	/* Invoke registered destroy handlers */
-	for (id = 0; id < WLAN_UMAC_MAX_COMPONENTS; id++) {
+	/* Invoke registered destroy handlers in reverse order of creation */
+	for (id = WLAN_UMAC_COMP_ID_MAX - 1; id >= 0; id--) {
 		handler = g_umac_glb_obj->vdev_destroy_handler[id];
 		arg = g_umac_glb_obj->vdev_destroy_handler_arg[id];
 		if (handler &&
@@ -1529,6 +1529,16 @@ bool wlan_vdev_mlme_is_mlo_vdev(struct wlan_objmgr_vdev *vdev)
 
 qdf_export_symbol(wlan_vdev_mlme_is_mlo_vdev);
 
+#ifdef WLAN_MLO_MULTI_CHIP
+bool wlan_vdev_mlme_is_mlo_bridge_vdev(struct wlan_objmgr_vdev *vdev)
+{
+	if (!vdev)
+		return false;
+
+	return vdev->vdev_objmgr.mlo_bridge_vdev;
+}
+#endif
+
 void wlan_vdev_mlme_set_epcs_flag(struct wlan_objmgr_vdev *vdev, bool flag)
 {
 	if (!vdev) {
@@ -1547,6 +1557,27 @@ bool wlan_vdev_mlme_get_epcs_flag(struct wlan_objmgr_vdev *vdev)
 	}
 
 	return vdev->vdev_mlme.epcs_enable;
+}
+
+void wlan_vdev_mlme_set_user_dis_eht_flag(struct wlan_objmgr_vdev *vdev,
+					  bool flag)
+{
+	if (!vdev) {
+		obj_mgr_err("vdev is NULL");
+		return;
+	}
+
+	vdev->vdev_mlme.user_disable_eht = flag;
+}
+
+bool wlan_vdev_mlme_get_user_dis_eht_flag(struct wlan_objmgr_vdev *vdev)
+{
+	if (!vdev) {
+		obj_mgr_err("vdev is NULL");
+		return false;
+	}
+
+	return vdev->vdev_mlme.user_disable_eht;
 }
 
 void wlan_vdev_mlme_set_mlo_vdev(struct wlan_objmgr_vdev *vdev)

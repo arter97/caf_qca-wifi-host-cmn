@@ -598,7 +598,10 @@ QDF_STATUS dp_mon_soc_init_2_0(struct dp_soc *soc)
 	}
 
 	mon_soc_be->tx_mon_ring_fill_level = 0;
-	mon_soc_be->rx_mon_ring_fill_level = DP_MON_RING_FILL_LEVEL_DEFAULT;
+	if (soc->rxdma_mon_buf_ring[0].num_entries < DP_MON_RING_FILL_LEVEL_DEFAULT)
+		mon_soc_be->rx_mon_ring_fill_level = soc->rxdma_mon_buf_ring[0].num_entries;
+	else
+		mon_soc_be->rx_mon_ring_fill_level = DP_MON_RING_FILL_LEVEL_DEFAULT;
 
 	mon_soc_be->is_dp_mon_soc_initialized = true;
 	return QDF_STATUS_SUCCESS;

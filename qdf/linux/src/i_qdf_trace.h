@@ -251,6 +251,8 @@ static inline void __qdf_trace_hexdump_dummy(QDF_MODULE_ID module,
 	__QDF_TRACE_FL(QDF_TRACE_LEVEL_DEBUG, ## params)
 #define QDF_TRACE_DEBUG_NO_FL(params...) \
 	__QDF_TRACE_NO_FL(QDF_TRACE_LEVEL_DEBUG, ## params)
+#define QDF_TRACE_INFO_HIGH_NO_FL(params...) \
+	__QDF_TRACE_NO_FL(QDF_TRACE_LEVEL_INFO_HIGH, ## params)
 #define QDF_TRACE_DEBUG_RL(params...) \
 	__QDF_TRACE_RL(QDF_TRACE_LEVEL_DEBUG, ## params)
 #define QDF_TRACE_DEBUG_RL_NO_FL(params...) \

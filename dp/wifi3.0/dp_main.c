@@ -129,6 +129,7 @@ cdp_dump_flow_pool_info(struct cdp_soc_t *soc)
 #define DP_TX_TCL_METADATA_PDEV_ID_SET(_var, _val) \
 		HTT_TX_TCL_METADATA_PDEV_ID_SET(_var, _val)
 #endif
+#define MLD_MODE_INVALID 0xFF
 
 QDF_COMPILE_TIME_ASSERT(max_rx_rings_check,
 			MAX_REO_DEST_RINGS == CDP_MAX_RX_RINGS);
@@ -4590,12 +4591,14 @@ static QDF_STATUS dp_txrx_peer_detach(struct dp_soc *soc, struct dp_peer *peer)
 		peer->txrx_peer = NULL;
 		pdev = txrx_peer->vdev->pdev;
 
-		params.osif_vdev = (void *)peer->vdev->osif_vdev;
-		params.peer_mac = peer->mac_addr.raw;
+		if (!peer->bss_peer) {
+			params.vdev_id = peer->vdev->vdev_id;
+			params.peer_mac = peer->mac_addr.raw;
 
-		dp_wdi_event_handler(WDI_EVENT_PEER_DELETE, soc,
-				     (void *)&params, peer->peer_id,
-				     WDI_NO_VAL, pdev->pdev_id);
+			dp_wdi_event_handler(WDI_EVENT_PEER_DELETE, soc,
+					     (void *)&params, peer->peer_id,
+					     WDI_NO_VAL, pdev->pdev_id);
+		}
 
 		dp_peer_defrag_rx_tids_deinit(txrx_peer);
 		/*
@@ -4682,8 +4685,11 @@ static QDF_STATUS dp_txrx_peer_attach(struct dp_soc *soc, struct dp_peer *peer)
 
 	dp_txrx_peer_attach_add(soc, peer, txrx_peer);
 
+	if (peer->bss_peer)
+		return QDF_STATUS_SUCCESS;
+
 	params.peer_mac = peer->mac_addr.raw;
-	params.osif_vdev = (void *)peer->vdev->osif_vdev;
+	params.vdev_id = peer->vdev->vdev_id;
 	params.chip_id = dp_mlo_get_chip_id(soc);
 	params.pdev_id = peer->vdev->pdev->pdev_id;
 
@@ -5011,7 +5017,7 @@ QDF_STATUS dp_peer_mlo_setup(
 
 			params.chip_id = dp_mlo_get_chip_id(soc);
 			params.pdev_id = peer->vdev->pdev->pdev_id;
-			params.osif_vdev = peer->vdev->osif_vdev;
+			params.vdev_id = peer->vdev->vdev_id;
 
 			dp_wdi_event_handler(
 					WDI_EVENT_STA_PRIMARY_UMAC_UPDATE,
@@ -5045,7 +5051,7 @@ QDF_STATUS dp_peer_mlo_setup(
 
 		params.chip_id = dp_mlo_get_chip_id(soc);
 		params.pdev_id = peer->vdev->pdev->pdev_id;
-		params.osif_vdev = peer->vdev->osif_vdev;
+		params.vdev_id = peer->vdev->vdev_id;
 
 		dp_wdi_event_handler(
 				WDI_EVENT_STA_PRIMARY_UMAC_UPDATE,
@@ -5089,7 +5095,7 @@ QDF_STATUS dp_peer_mlo_setup(
 
 			dp_mld_peer_change_vdev(soc, mld_peer, vdev_id);
 
-			params.osif_vdev = (void *)peer->vdev->osif_vdev;
+			params.vdev_id = peer->vdev->vdev_id;
 			params.peer_mac = mld_peer->mac_addr.raw;
 			params.chip_id = dp_mlo_get_chip_id(soc);
 			params.pdev_id = peer->vdev->pdev->pdev_id;
@@ -6941,6 +6947,8 @@ dp_print_host_stats(struct dp_vdev *vdev,
 		dp_print_ast_stats(pdev->soc);
 		dp_print_mec_stats(pdev->soc);
 		dp_print_peer_table(vdev);
+		if (soc->arch_ops.dp_mlo_print_ptnr_info)
+			soc->arch_ops.dp_mlo_print_ptnr_info(vdev);
 		break;
 	case TXRX_SRNG_PTR_STATS:
 		dp_print_ring_stats(pdev);
@@ -8157,6 +8165,24 @@ dp_set_psoc_param(struct cdp_soc_t *cdp_soc,
 	return QDF_STATUS_SUCCESS;
 }
 
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+/**
+ * dp_get_mldev_mode: function to get mlo operation mode
+ * @soc: soc structure for data path
+ *
+ * Return: uint8_t
+ */
+static uint8_t dp_get_mldev_mode(struct dp_soc *soc)
+{
+	return soc->mld_mode_ap;
+}
+#else
+static uint8_t dp_get_mldev_mode(struct dp_soc *cdp_soc)
+{
+	return MLD_MODE_INVALID;
+}
+#endif
+
 /**
  * dp_get_psoc_param: function to get parameters in soc
  * @cdp_soc: DP soc handle
@@ -8233,6 +8259,9 @@ static QDF_STATUS dp_get_psoc_param(struct cdp_soc_t *cdp_soc,
 		break;
 	case CDP_RX_PKT_TLV_SIZE:
 		val->rx_pkt_tlv_size = soc->rx_pkt_tlv_size;
+		break;
+	case CDP_CFG_GET_MLO_OPER_MODE:
+		val->cdp_psoc_param_mlo_oper_mode = dp_get_mldev_mode(soc);
 		break;
 	default:
 		dp_warn("Invalid param: %u", param);
@@ -12597,6 +12626,9 @@ dp_soc_attach(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 	dp_soc_set_interrupt_mode(soc);
 	dp_soc_set_def_pdev(soc);
 	dp_soc_set_qref_debug_list(soc);
+
+	if (!ipa_config_is_opt_wifi_dp_enabled())
+		qdf_atomic_set(&soc->ipa_mapped, 1);
 
 	dp_info("Mem stats: DMA = %u HEAP = %u SKB = %u",
 		qdf_dma_mem_stats_read(),

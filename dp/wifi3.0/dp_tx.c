@@ -6300,7 +6300,7 @@ void dp_tx_desc_flush(struct dp_pdev *pdev, struct dp_vdev *vdev,
 {
 	uint8_t i, num_pool;
 	uint32_t j;
-	uint32_t num_desc, page_id, offset;
+	uint32_t num_desc, num_desc_t, page_id, offset;
 	uint16_t num_desc_per_page;
 	struct dp_soc *soc = pdev->soc;
 	struct dp_tx_desc_s *tx_desc = NULL;
@@ -6319,9 +6319,11 @@ void dp_tx_desc_flush(struct dp_pdev *pdev, struct dp_vdev *vdev,
 		if (!tx_desc_pool->desc_pages.cacheable_pages)
 			continue;
 
+		num_desc_t = dp_get_updated_tx_desc(soc->ctrl_psoc, i,
+						    num_desc);
 		num_desc_per_page =
 			tx_desc_pool->desc_pages.num_element_per_page;
-		for (j = 0; j < num_desc; j++) {
+		for (j = 0; j < num_desc_t; j++) {
 			page_id = j / num_desc_per_page;
 			offset = j % num_desc_per_page;
 			tx_desc = dp_tx_desc_find(soc, i, page_id, offset);
@@ -6467,24 +6469,26 @@ static void dp_tx_tso_cmn_desc_pool_free(struct dp_soc *soc, uint8_t num_pool)
 #ifndef WLAN_SOFTUMAC_SUPPORT
 void dp_soc_tx_desc_sw_pools_free(struct dp_soc *soc)
 {
-	uint8_t num_pool;
+	uint8_t num_pool, num_ext_pool;
 
 	num_pool = wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
+	num_ext_pool = dp_get_ext_tx_desc_pool_num(soc);
 
 	dp_tx_tso_cmn_desc_pool_free(soc, num_pool);
-	dp_tx_ext_desc_pool_free(soc, num_pool);
+	dp_tx_ext_desc_pool_free(soc, num_ext_pool);
 	dp_tx_delete_static_pools(soc, num_pool);
 }
 
 void dp_soc_tx_desc_sw_pools_deinit(struct dp_soc *soc)
 {
-	uint8_t num_pool;
+	uint8_t num_pool, num_ext_pool;
 
 	num_pool = wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
+	num_ext_pool = dp_get_ext_tx_desc_pool_num(soc);
 
 	dp_tx_flow_control_deinit(soc);
 	dp_tx_tso_cmn_desc_pool_deinit(soc, num_pool);
-	dp_tx_ext_desc_pool_deinit(soc, num_pool);
+	dp_tx_ext_desc_pool_deinit(soc, num_ext_pool);
 	dp_tx_deinit_static_pools(soc, num_pool);
 }
 #else
@@ -6568,36 +6572,38 @@ static QDF_STATUS dp_tx_tso_cmn_desc_pool_init(struct dp_soc *soc,
 #ifndef WLAN_SOFTUMAC_SUPPORT
 QDF_STATUS dp_soc_tx_desc_sw_pools_alloc(struct dp_soc *soc)
 {
-	uint8_t num_pool;
+	uint8_t num_pool, num_ext_pool;
 	uint32_t num_desc;
 	uint32_t num_ext_desc;
 
 	num_pool = wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
+	num_ext_pool = dp_get_ext_tx_desc_pool_num(soc);
 	num_desc = wlan_cfg_get_num_tx_desc(soc->wlan_cfg_ctx);
 	num_ext_desc = wlan_cfg_get_num_tx_ext_desc(soc->wlan_cfg_ctx);
 
 	dp_info("Tx Desc Alloc num_pool: %d descs: %d", num_pool, num_desc);
 
 	if ((num_pool > MAX_TXDESC_POOLS) ||
+	    (num_ext_pool > MAX_TXDESC_POOLS) ||
 	    (num_desc > WLAN_CFG_NUM_TX_DESC_MAX))
 		goto fail1;
 
 	if (dp_tx_alloc_static_pools(soc, num_pool, num_desc))
 		goto fail1;
 
-	if (dp_tx_ext_desc_pool_alloc(soc, num_pool, num_ext_desc))
+	if (dp_tx_ext_desc_pool_alloc(soc, num_ext_pool, num_ext_desc))
 		goto fail2;
 
 	if (wlan_cfg_is_tso_desc_attach_defer(soc->wlan_cfg_ctx))
 		return QDF_STATUS_SUCCESS;
 
-	if (dp_tx_tso_cmn_desc_pool_alloc(soc, num_pool, num_ext_desc))
+	if (dp_tx_tso_cmn_desc_pool_alloc(soc, num_ext_pool, num_ext_desc))
 		goto fail3;
 
 	return QDF_STATUS_SUCCESS;
 
 fail3:
-	dp_tx_ext_desc_pool_free(soc, num_pool);
+	dp_tx_ext_desc_pool_free(soc, num_ext_pool);
 fail2:
 	dp_tx_delete_static_pools(soc, num_pool);
 fail1:
@@ -6606,24 +6612,25 @@ fail1:
 
 QDF_STATUS dp_soc_tx_desc_sw_pools_init(struct dp_soc *soc)
 {
-	uint8_t num_pool;
+	uint8_t num_pool, num_ext_pool;
 	uint32_t num_desc;
 	uint32_t num_ext_desc;
 
 	num_pool = wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
+	num_ext_pool = dp_get_ext_tx_desc_pool_num(soc);
 	num_desc = wlan_cfg_get_num_tx_desc(soc->wlan_cfg_ctx);
 	num_ext_desc = wlan_cfg_get_num_tx_ext_desc(soc->wlan_cfg_ctx);
 
 	if (dp_tx_init_static_pools(soc, num_pool, num_desc))
 		goto fail1;
 
-	if (dp_tx_ext_desc_pool_init(soc, num_pool, num_ext_desc))
+	if (dp_tx_ext_desc_pool_init(soc, num_ext_pool, num_ext_desc))
 		goto fail2;
 
 	if (wlan_cfg_is_tso_desc_attach_defer(soc->wlan_cfg_ctx))
 		return QDF_STATUS_SUCCESS;
 
-	if (dp_tx_tso_cmn_desc_pool_init(soc, num_pool, num_ext_desc))
+	if (dp_tx_tso_cmn_desc_pool_init(soc, num_ext_pool, num_ext_desc))
 		goto fail3;
 
 	dp_tx_flow_control_init(soc);
@@ -6631,7 +6638,7 @@ QDF_STATUS dp_soc_tx_desc_sw_pools_init(struct dp_soc *soc)
 	return QDF_STATUS_SUCCESS;
 
 fail3:
-	dp_tx_ext_desc_pool_deinit(soc, num_pool);
+	dp_tx_ext_desc_pool_deinit(soc, num_ext_pool);
 fail2:
 	dp_tx_deinit_static_pools(soc, num_pool);
 fail1:
@@ -6681,16 +6688,16 @@ QDF_STATUS dp_soc_tx_desc_sw_pools_init(struct dp_soc *soc)
 QDF_STATUS dp_tso_soc_attach(struct cdp_soc_t *txrx_soc)
 {
 	struct dp_soc *soc = (struct dp_soc *)txrx_soc;
-	uint8_t num_pool;
+	uint8_t num_ext_desc_pool;
 	uint32_t num_ext_desc;
 
-	num_pool = wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
+	num_ext_desc_pool = dp_get_ext_tx_desc_pool_num(soc);
 	num_ext_desc = wlan_cfg_get_num_tx_ext_desc(soc->wlan_cfg_ctx);
 
-	if (dp_tx_tso_cmn_desc_pool_alloc(soc, num_pool, num_ext_desc))
+	if (dp_tx_tso_cmn_desc_pool_alloc(soc, num_ext_desc_pool, num_ext_desc))
 		return QDF_STATUS_E_FAILURE;
 
-	if (dp_tx_tso_cmn_desc_pool_init(soc, num_pool, num_ext_desc))
+	if (dp_tx_tso_cmn_desc_pool_init(soc, num_ext_desc_pool, num_ext_desc))
 		return QDF_STATUS_E_FAILURE;
 
 	return QDF_STATUS_SUCCESS;
@@ -6699,10 +6706,10 @@ QDF_STATUS dp_tso_soc_attach(struct cdp_soc_t *txrx_soc)
 QDF_STATUS dp_tso_soc_detach(struct cdp_soc_t *txrx_soc)
 {
 	struct dp_soc *soc = (struct dp_soc *)txrx_soc;
-	uint8_t num_pool = wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
+	uint8_t num_ext_desc_pool = dp_get_ext_tx_desc_pool_num(soc);
 
-	dp_tx_tso_cmn_desc_pool_deinit(soc, num_pool);
-	dp_tx_tso_cmn_desc_pool_free(soc, num_pool);
+	dp_tx_tso_cmn_desc_pool_deinit(soc, num_ext_desc_pool);
+	dp_tx_tso_cmn_desc_pool_free(soc, num_ext_desc_pool);
 
 	return QDF_STATUS_SUCCESS;
 }

@@ -314,7 +314,8 @@ QDF_STATUS osif_disconnect_handler(struct wlan_objmgr_vdev *vdev,
 		osif_cm_unlink_bss(vdev, &rsp->req.req.bssid);
 
 	status = osif_validate_disconnect_and_reset_src_id(osif_priv, rsp);
-	if (QDF_IS_STATUS_ERROR(status)) {
+	if (QDF_IS_STATUS_ERROR(status) ||
+	    rsp->req.req.source == CM_MLO_LINK_SWITCH_DISCONNECT) {
 		osif_cm_disconnect_comp_ind(vdev, rsp, OSIF_NOT_HANDLED);
 		return status;
 	}

@@ -854,6 +854,7 @@ struct peer_set_params {
  * @peer_type: peer type
  * @vdev_id: vdev id
  * @mlo_enabled: Indicates MLO is enabled
+ * @mlo_bridge_peer: Indicates bridge peer
  */
 struct peer_create_params {
 	const uint8_t *peer_addr;
@@ -861,6 +862,7 @@ struct peer_create_params {
 	uint32_t vdev_id;
 #ifdef WLAN_FEATURE_11BE_MLO
 	bool mlo_enabled;
+	bool mlo_bridge_peer;
 #endif
 };
 
@@ -1221,6 +1223,9 @@ struct wmi_host_link_state_params {
  * @nstr_bitmap_present: indicate if NSTR bitmap is present
  * @nstr_bitmap_size: Indicates size of NSTR bitmap,
  *                    as per the 802.11be specification
+ * @mlo_bridge_peer: indicate if it is bridge peer
+ * @link_switch_in_progress: Flag to indicate FW MLO peer assoc params are sent
+ *                           for the peer due to link switch
  * @unused: spare bits
  * @mld_mac: MLD mac address
  * @logical_link_index: Unique index for links of the mlo. Starts with Zero
@@ -1253,7 +1258,9 @@ struct peer_assoc_mlo_params {
 		 msd_cap_support:1,
 		 nstr_bitmap_present:1,
 		 nstr_bitmap_size:1,
-		 unused:21;
+		 mlo_bridge_peer:1,
+		 link_switch_in_progress:1,
+		 unused:19;
 	uint8_t mld_mac[QDF_MAC_ADDR_SIZE];
 	uint32_t logical_link_index;
 	uint32_t ml_peer_id;
@@ -1287,6 +1294,7 @@ struct peer_assoc_mlo_params {
  * @emlsr_support: indicate if eMLSR supported
  * @emlmr_support: indicate if eMLMR supported
  * @msd_cap_support: indicate if MSD supported
+ * @mlo_bridge_peer: indicate if peer is bridge peer
  * @unused: spare bits
  * @logical_link_index: Unique index for links of the mlo. Starts with Zero
  * @link_id: AP Link Id
@@ -1306,7 +1314,8 @@ struct ml_partner_info {
 		 emlsr_support:1,
 		 emlmr_support:1,
 		 msd_cap_support:1,
-		 unused:23;
+		 mlo_bridge_peer:1,
+		 unused:22;
 	uint32_t logical_link_index;
 	uint32_t link_id;
 	struct qdf_mac_addr bssid;
@@ -5276,6 +5285,9 @@ typedef enum {
 	wmi_mlo_link_set_active_resp_eventid,
 	wmi_mlo_link_removal_eventid,
 	wmi_mlo_link_disable_request_eventid,
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+	wmi_mlo_link_switch_request_eventid,
+#endif
 #endif
 	wmi_pdev_fips_extend_event_id,
 	wmi_roam_frame_event_id,
@@ -6032,10 +6044,14 @@ typedef enum {
 		   VDEV_PARAM_CHWIDTH_WITH_NOTIFY),
 	VDEV_PARAM(vdev_param_rtt_11az_tb_max_session_expiry,
 		   VDEV_PARAM_RTT_11AZ_TB_MAX_SESSION_EXPIRY),
+	VDEV_PARAM(vdev_param_wifi_standard_version,
+		   VDEV_PARAM_WIFI_STANDARD_VERSION),
 	VDEV_PARAM(vdev_param_rtt_11az_ntb_max_time_bw_meas,
 		   VDEV_PARAM_RTT_11AZ_NTB_MAX_TIME_BW_MEAS),
 	VDEV_PARAM(vdev_param_rtt_11az_ntb_min_time_bw_meas,
 		   VDEV_PARAM_RTT_11AZ_NTB_MIN_TIME_BW_MEAS),
+	VDEV_PARAM(vdev_param_disable_2g_twt,
+		   VDEV_PARAM_DISABLE_2G_TWT),
 	vdev_param_max,
 } wmi_conv_vdev_param_id;
 
@@ -6462,7 +6478,6 @@ struct wmi_host_fw_abi_ver {
 	uint32_t    abi_version;
 };
 
-#ifdef FEATURE_SET
 /**
  * enum WMI_HOST_WIFI_STANDARD - Supported wifi standard
  * @WMI_HOST_WIFI_STANDARD_4: Wifi standard 4
@@ -6479,6 +6494,7 @@ typedef enum {
 	WMI_HOST_WIFI_STANDARD_7 = 4,
 } WMI_HOST_WIFI_STANDARD;
 
+#ifdef FEATURE_SET
 /**
  * enum WMI_HOST_BAND_CONCURRENCY - Enum to represent supported concurrency
  * @WMI_HOST_BAND_CONCURRENCY_NONE: No concurrency is supported
@@ -6592,6 +6608,7 @@ typedef enum {
  * @peer_getstainfo_support: Indicates getstainfo support
  * @feature_set_version: Indicates feature set version info
  * @num_antennas: Indicates number of antennas supported
+ * @sta_dump_support: Indicates sta dump info support
  */
 struct target_feature_set {
 	WMI_HOST_WIFI_STANDARD wifi_standard;
@@ -6651,6 +6668,7 @@ struct target_feature_set {
 	bool peer_getstainfo_support;
 	uint16_t feature_set_version;
 	WMI_HOST_NUM_ANTENNAS num_antennas;
+	bool sta_dump_support;
 };
 #endif
 
@@ -8142,7 +8160,7 @@ enum wmi_userspace_log_level {
 
 /**
  * enum wmi_host_hw_mode_config_type - HW mode config type replicated from
- *                                     FW header
+ *                                     wmi_hw_mode_config_type in FW header
  * @WMI_HOST_HW_MODE_SINGLE: Only one PHY is active.
  * @WMI_HOST_HW_MODE_DBS: Both PHYs are active in different bands,
  *                        one in 2G and another in 5G.
@@ -8158,8 +8176,20 @@ enum wmi_userspace_log_level {
  *                           as in WMI_HW_MODE_SBS, and 3rd on the other band
  * @WMI_HOST_HW_MODE_DBS_OR_SBS: Two PHY with one PHY capabale of both 2G and
  *                        5G. It can support SBS (5G + 5G) OR DBS (5G + 2G).
- * @WMI_HOST_HW_MODE_FW_INTERNAL: FW specific internal mode
+ * @WMI_HOST_HW_MODE_DBS_2G_5G: Both PHYs are active in different bands.
+ *                              PhyA 2G and PhyB 5G
  * @WMI_HOST_HW_MODE_2G_PHYB: Only one phy is active. 2G mode on PhyB.
+ * @WMI_HOST_HW_MODE_EMLSR: Both PHYs are active in listen mode in 1x1
+ *                          and Tx/Rx trigger on any PHY will switch
+ *                          from 1x1 to 2x2 on that Phy
+ * @WMI_HOST_HW_MODE_AUX_EMLSR_SINGLE:  PHYA0 and AUX are active in listen mode
+ *                                      in 1x1 and Tx/Rx trigger on any.
+ *                                      PHY will switch from 1x1 to 2x2
+ *                                      on that Phy.
+ * @WMI_HOST_HW_MODE_AUX_EMLSR_SPLIT: PHYA1 and AUX are active in listen mode
+ *                                    in 1x1 and Tx/Rx trigger on any.
+ *                                    PHY will switch from 1x1 to 2x2
+ *                                    on that Phy.
  * @WMI_HOST_HW_MODE_MAX: Max hw_mode_id. Used to indicate invalid mode.
  * @WMI_HOST_HW_MODE_DETECT: Mode id used by host to choose mode from target
  *                        supported modes.
@@ -8171,8 +8201,11 @@ enum wmi_host_hw_mode_config_type {
 	WMI_HOST_HW_MODE_SBS          = 3,
 	WMI_HOST_HW_MODE_DBS_SBS      = 4,
 	WMI_HOST_HW_MODE_DBS_OR_SBS   = 5,
-	WMI_HOST_HW_MODE_FW_INTERNAL  = 6,
+	WMI_HOST_HW_MODE_DBS_2G_5G    = 6,
 	WMI_HOST_HW_MODE_2G_PHYB      = 7,
+	WMI_HOST_HW_MODE_EMLSR        = 8,
+	WMI_HOST_HW_MODE_AUX_EMLSR_SINGLE = 9,
+	WMI_HOST_HW_MODE_AUX_EMLSR_SPLIT  = 10,
 	WMI_HOST_HW_MODE_MAX,
 	WMI_HOST_HW_MODE_DETECT,
 };

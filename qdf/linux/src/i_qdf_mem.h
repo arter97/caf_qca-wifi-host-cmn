@@ -61,7 +61,7 @@
 #endif /* __KERNEL__ */
 #include <qdf_status.h>
 #if ((LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0)) && \
-		(IS_ENABLED(CONFIG_ARCH_MSM) || IS_ENABLED(CONFIG_ARCH_QCOM)))
+		(defined(MSM_PLATFORM) || defined(QCA_IPA_LL_TX_FLOW_CONTROL)))
 #include <linux/qcom-iommu-util.h>
 #endif
 

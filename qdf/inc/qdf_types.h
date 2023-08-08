@@ -978,17 +978,12 @@ QDF_STATUS qdf_uint64_parse(const char *int_str, uint64_t *out_int);
  * If the feature CONFIG_WLAN_TRACE_HIDE_MAC_ADDRESS is enabled,
  * then the requirement is to hide 2nd, 3rd and 4th octet of the
  * MAC address in the kernel logs and driver logs.
- * But other management interfaces like ioctl, debugfs, sysfs,
- * wext, unit test code or non-production simulator sw (iot_sim)
- * should continue to log the full mac address.
  *
- * Developers must use QDF_FULL_MAC_FMT instead of "%pM",
+ * Developers must use QDF_MAC_ADDR_FMT instead of "%pM",
  * as this macro helps avoid accidentally breaking the feature
  * CONFIG_WLAN_TRACE_HIDE_MAC_ADDRESS if enabled and code auditing
  * becomes easy.
  */
-#define QDF_FULL_MAC_FMT "%pM"
-#define QDF_FULL_MAC_REF(a) (a)
 
 #if defined(WLAN_TRACE_HIDE_MAC_ADDRESS)
 #define QDF_MAC_ADDR_FMT "%02x:**:**:**:%02x:%02x"
@@ -1602,6 +1597,8 @@ enum qdf_suspend_type {
  * @QDF_FLUSH_LOGS : Recovery needed when sending flush completion to userspace
  * @QDF_WMI_CMD_SENT_DURING_SUSPEND: WMI command is received when target is
  * suspended
+ * @QDF_VDEV_MAC_ADDR_UPDATE_RESPONSE_TIMED_OUT: VDEV MAC address update
+ * request for Link switch timedout.
  */
 enum qdf_hang_reason {
 	QDF_REASON_UNSPECIFIED,
@@ -1639,6 +1636,7 @@ enum qdf_hang_reason {
 	QDF_DEL_SELF_STA_FAILED,
 	QDF_FLUSH_LOGS,
 	QDF_WMI_CMD_SENT_DURING_SUSPEND,
+	QDF_VDEV_MAC_ADDR_UPDATE_RESPONSE_TIMED_OUT,
 };
 
 /**

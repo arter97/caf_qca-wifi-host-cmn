@@ -38,6 +38,13 @@
 #define WLAN_UMAC_MLO_MAX_VDEVS 2
 #endif
 
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+/* Max bridge vdevs supported */
+#define WLAN_UMAC_MLO_MAX_BRIDGE_VDEVS 2
+/* Max number of PSOC taking part in topology decision at a time*/
+#define WLAN_UMAC_MLO_MAX_PSOC_TOPOLOGY 3
+#endif
+
 #include <wlan_mlo_epcs.h>
 
 /* MAX instances of ML devices */
@@ -54,9 +61,11 @@
 #define MAX_MLO_PEER 512
 
 struct mlo_mlme_ext_ops;
+struct mlo_osif_ext_ops;
 struct vdev_mlme_obj;
 struct wlan_t2lm_context;
 struct mlo_link_switch_context;
+struct wlan_mlo_link_switch_req;
 
 /* Max LINK PEER support */
 #define MAX_MLO_LINK_PEERS WLAN_UMAC_MLO_MAX_VDEVS
@@ -123,6 +132,11 @@ enum MLO_SOC_LIST {
 #define MAX_MLO_LINKS 6
 #define MAX_MLO_CHIPS 5
 #define MAX_ADJ_CHIPS 2
+
+/* MLO Bridge link */
+#define MLO_NUM_CHIPS_FOR_BRIDGE_LINK 4
+#define MLO_MAX_BRIDGE_LINKS_PER_MLD 2
+#define MLO_MAX_BRIDGE_LINKS_PER_RADIO 8
 
 /**
  * struct mlo_chip_info: MLO chip info per link
@@ -194,6 +208,62 @@ struct mlo_state_params {
 
 #endif
 
+typedef QDF_STATUS
+(*mlo_mgr_link_switch_notifier_cb)(struct wlan_objmgr_vdev *vdev,
+				   struct wlan_mlo_link_switch_req *lswitch_req);
+
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+/*
+ * struct wlan_mlo_link_switch_notifier - Link switch notifier callbacks
+ * @in_use: Set to true on successful notifier callback registration
+ * @cb: Callback to notify link switch start
+ */
+struct wlan_mlo_link_switch_notifier {
+	bool in_use;
+	mlo_mgr_link_switch_notifier_cb cb;
+};
+
+/**
+ * mlo_mgr_register_link_switch_notifier() - API to register link switch
+ * start notifier callback
+ * @comp_id: Component requesting notification on link switch start
+ * @cb: Callback to register.
+ *
+ * The @cb will be triggered on start of link switch with params of the
+ * link switch.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+mlo_mgr_register_link_switch_notifier(enum wlan_umac_comp_id comp_id,
+				      mlo_mgr_link_switch_notifier_cb cb);
+
+/**
+ * mlo_mgr_unregister_link_switch_notifier() - API to unregister link switch
+ * notifier callback.
+ * @comp_id: Component to deregister.
+ *
+ * The API will cleanup the notification callback registered for link switch.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+mlo_mgr_unregister_link_switch_notifier(enum wlan_umac_comp_id comp_id);
+#else
+static inline QDF_STATUS
+mlo_mgr_register_link_switch_notifier(enum wlan_umac_comp_id comp_id,
+				      mlo_mgr_link_switch_notifier_cb cb)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline QDF_STATUS
+mlo_mgr_unregister_link_switch_notifier(enum wlan_umac_comp_id comp_id)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+#endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
+
 /*
  * struct mlo_mgr_context - MLO manager context
  * @ml_dev_list_lock: ML DEV list lock
@@ -206,6 +276,7 @@ struct mlo_state_params {
  * @setup_info: Pointer to MLO setup_info of all groups
  * @total_grp: Total number of MLO groups
  * @mlme_ops: MLO MLME callback function pointers
+ * @osif_ops: MLO to OSIF callback function pointers
  * @msgq_ctx: Context switch mgr
  * @mlo_is_force_primary_umac: Force Primary UMAC enable
  * @mlo_forced_primary_umac_id: Force Primary UMAC ID
@@ -213,6 +284,7 @@ struct mlo_state_params {
  *
  * NB: not using kernel-doc format since the kernel-doc script doesn't
  *     handle the qdf_bitmap() macro
+ * @lswitch_notifier: Holds callback functions to notify link switch start
  */
 struct mlo_mgr_context {
 #ifdef WLAN_MLO_USE_SPINLOCK
@@ -233,10 +305,16 @@ struct mlo_mgr_context {
 	uint8_t total_grp;
 #endif
 	struct mlo_mlme_ext_ops *mlme_ops;
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+	struct mlo_osif_ext_ops *osif_ops;
+#endif
 	struct ctxt_switch_mgr *msgq_ctx;
 	bool mlo_is_force_primary_umac;
 	uint8_t mlo_forced_primary_umac_id;
 	bool force_non_assoc_prim_umac;
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+	struct wlan_mlo_link_switch_notifier lswitch_notifier[WLAN_UMAC_COMP_ID_MAX];
+#endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
 };
 
 /*
@@ -307,7 +385,7 @@ struct ml_link_info {
 struct ml_link_state_info_event {
 	uint32_t status;
 	uint32_t hw_mode_index;
-	struct ml_link_info link_info[WLAN_MLO_MAX_VDEVS];
+	struct ml_link_info link_info[WLAN_MAX_ML_BSS_LINKS];
 	uint16_t num_mlo_vdev_link_info;
 	uint8_t vdev_id;
 	struct qdf_mac_addr mldaddr;
@@ -380,6 +458,9 @@ struct mlo_sta_quiet_status {
  * @force_active_num_bitmap: force active num link bitmap
  * @force_inactive_num: force inactive link num
  * @force_inactive_num_bitmap: force inactive num link bitmap
+ * @curr_dynamic_inactive_bitmap: dynamic inactive link bitmap
+ * @curr_active_bitmap: current active link bitmap
+ * @curr_inactive_bitmap: current inactive link bitmap
  */
 struct ml_link_force_state {
 	uint16_t force_active_bitmap;
@@ -388,6 +469,9 @@ struct ml_link_force_state {
 	uint16_t force_active_num_bitmap;
 	uint8_t force_inactive_num;
 	uint16_t force_inactive_num_bitmap;
+	uint16_t curr_dynamic_inactive_bitmap;
+	uint16_t curr_active_bitmap;
+	uint16_t curr_inactive_bitmap;
 };
 
 /**
@@ -397,6 +481,85 @@ struct ml_link_force_state {
  */
 struct wlan_link_force_context {
 	struct ml_link_force_state force_state;
+};
+
+#if defined(UMAC_SUPPORT_MLNAWDS) || defined(MESH_MODE_SUPPORT)
+/**
+ * struct mlnawds_config - MLO NAWDS configuration
+ * @caps: Bandwidth & NSS capabilities to be configured on NAWDS peer
+ * @puncture_bitmap: puncture bitmap to be configured on NAWDS peer
+ * @mac: MAC address of the NAWDS peer to which the caps & puncture bitmap is
+ * to be configured.
+ */
+struct mlnawds_config {
+	uint64_t caps;
+	uint16_t puncture_bitmap;
+	uint8_t  mac[QDF_MAC_ADDR_SIZE];
+};
+#endif
+
+/**
+ * struct mlo_link_info - ML link info
+ * @link_addr: link mac address
+ * @link_id: link index
+ * @is_bridge : Bridge peer or not
+ * @chan_freq: Operating channel frequency
+ * @nawds_config: peer's NAWDS configurarion
+ * @vdev_id: VDEV ID
+ * @mesh_config: peer's MESH configurarion
+ * @link_status_flags: Current status of link
+ * @ap_link_addr: Associated link BSSID
+ * @link_chan_info: Associated link channel info
+ */
+struct mlo_link_info {
+	struct qdf_mac_addr link_addr;
+	uint8_t link_id;
+	bool is_bridge;
+	uint16_t chan_freq;
+#ifdef UMAC_SUPPORT_MLNAWDS
+	struct mlnawds_config nawds_config;
+#endif
+	uint8_t vdev_id;
+#ifdef MESH_MODE_SUPPORT
+	struct mlnawds_config mesh_config;
+#endif
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+	uint8_t link_status_flags;
+	struct qdf_mac_addr ap_link_addr;
+	struct wlan_channel *link_chan_info;
+#endif
+};
+
+/**
+ * struct mlo_nstr_info - MLO NSTR capability info
+ * @link_id: Lind Id
+ * @nstr_lp_present: Flag for NSTR link pair presence
+ * @nstr_bmp_size: NSTR Bitmap Size
+ * @nstr_lp_bitmap: NSTR link pair bitmap of link_id
+ */
+struct mlo_nstr_info {
+	uint8_t link_id;
+	bool nstr_lp_present;
+	uint8_t nstr_bmp_size;
+	uint16_t nstr_lp_bitmap;
+};
+
+/**
+ * struct mlo_partner_info - mlo partner link info
+ * @num_partner_links: no. of partner links
+ * @partner_link_info: per partner link info
+ * @t2lm_enable_val: enum wlan_t2lm_enable
+ * @nstr_info: NSTR Capability info
+ * @num_nstr_info_links: No. of links for which NSTR info is present
+ */
+struct mlo_partner_info {
+	uint8_t num_partner_links;
+	struct mlo_link_info partner_link_info[WLAN_UMAC_MLO_MAX_VDEVS];
+#ifdef WLAN_FEATURE_11BE
+	enum wlan_t2lm_enable t2lm_enable_val;
+	struct mlo_nstr_info nstr_info[WLAN_UMAC_MLO_MAX_VDEVS];
+	uint8_t num_nstr_info_links;
+#endif
 };
 
 /*
@@ -443,6 +606,7 @@ struct wlan_mlo_sta {
 #ifdef WLAN_FEATURE_11BE_MLO
 	struct ml_link_state_cmd_info ml_link_state;
 	struct wlan_t2lm_context copied_t2lm_ie_assoc_rsp;
+	struct mlo_partner_info ml_partner_info;
 #endif
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 	struct wlan_link_force_context link_force_ctx;
@@ -496,53 +660,6 @@ struct mlo_vdev_link_mac_info {
 	struct qdf_mac_addr link_mac_addr;
 };
 
-#if defined(UMAC_SUPPORT_MLNAWDS) || defined(MESH_MODE_SUPPORT)
-/**
- * struct mlnawds_config - MLO NAWDS configuration
- * @caps: Bandwidth & NSS capabilities to be configured on NAWDS peer
- * @puncture_bitmap: puncture bitmap to be configured on NAWDS peer
- * @mac: MAC address of the NAWDS peer to which the caps & puncture bitmap is
- * to be configured.
- */
-struct mlnawds_config {
-	uint64_t caps;
-	uint16_t puncture_bitmap;
-	uint8_t  mac[QDF_MAC_ADDR_SIZE];
-};
-#endif
-
-/**
- * struct mlo_link_info - ML link info
- * @link_addr: link mac address
- * @link_id: link index
- * @is_bridge : Bridge peer or not
- * @chan_freq: Operating channel frequency
- * @nawds_config: peer's NAWDS configurarion
- * @vdev_id: VDEV ID
- * @mesh_config: peer's MESH configurarion
- * @link_status_flags: Current status of link
- * @ap_link_addr: Associated link BSSID
- * @link_chan_info: Associated link channel info
- */
-struct mlo_link_info {
-	struct qdf_mac_addr link_addr;
-	uint8_t link_id;
-	bool is_bridge;
-	uint16_t chan_freq;
-#ifdef UMAC_SUPPORT_MLNAWDS
-	struct mlnawds_config nawds_config;
-#endif
-	uint8_t vdev_id;
-#ifdef MESH_MODE_SUPPORT
-	struct mlnawds_config mesh_config;
-#endif
-#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
-	uint8_t link_status_flags;
-	struct qdf_mac_addr ap_link_addr;
-	struct wlan_channel *link_chan_info;
-#endif
-};
-
 /**
  * struct wlan_mlo_link_mac_update: VDEV to link MAC address list
  * @num_mac_update: Number of mac address
@@ -559,6 +676,8 @@ struct wlan_mlo_link_mac_update {
  * @mld_id: MLD id
  * @mld_addr: MLO device MAC address
  * @wlan_vdev_list: list of vdevs associated with this MLO connection
+ * @wlan_bridge_vdev_list: list of bridge vdevs associated with this MLO
+ * @bridge_sta_ctx: bridge sta context
  * @wlan_vdev_count: number of elements in the vdev list
  * @mlo_peer_list: list peers in this MLO connection
  * @wlan_max_mlo_peer_count: peer count across the links of specific MLO
@@ -583,6 +702,10 @@ struct wlan_mlo_dev_context {
 	uint8_t mld_id;
 	struct qdf_mac_addr mld_addr;
 	struct wlan_objmgr_vdev *wlan_vdev_list[WLAN_UMAC_MLO_MAX_VDEVS];
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+	struct wlan_objmgr_vdev *wlan_bridge_vdev_list[WLAN_UMAC_MLO_MAX_BRIDGE_VDEVS];
+	struct wlan_mlo_bridge_sta *bridge_sta_ctx;
+#endif
 	uint16_t wlan_vdev_count;
 	struct wlan_mlo_peer_list mlo_peer_list;
 	uint16_t wlan_max_mlo_peer_count;
@@ -604,6 +727,20 @@ struct wlan_mlo_dev_context {
 	qdf_bitmap(mlo_peer_id_bmap, MAX_MLO_PEER_ID);
 #endif
 	struct mlo_link_switch_context *link_ctx;
+};
+
+/**
+ * struct wlan_mlo_bridge_sta - MLO bridge sta context
+ * @bridge_umac_id: umac id for bridge
+ * @bridge_link_id: link id used by bridge vdev
+ * @is_force_central_primary: Flag to tell if bridge should be primary umac
+ * @bridge_vap_exists: If there is bridge vap
+ */
+struct wlan_mlo_bridge_sta {
+	uint8_t bridge_umac_id;
+	uint8_t bridge_link_id;
+	bool is_force_central_primary;
+	bool bridge_vap_exists;
 };
 
 /**
@@ -718,20 +855,6 @@ struct wlan_mlo_mld_cap {
 };
 
 /**
- * struct mlo_nstr_info - MLO NSTR capability info
- * @link_id: Lind Id
- * @nstr_lp_present: Flag for NSTR link pair presence
- * @nstr_bmp_size: NSTR Bitmap Size
- * @nstr_lp_bitmap: NSTR link pair bitmap of link_id
- */
-struct mlo_nstr_info {
-	uint8_t link_id;
-	bool nstr_lp_present;
-	uint8_t nstr_bmp_size;
-	uint16_t nstr_lp_bitmap;
-};
-
-/**
  * struct wlan_mlo_peer_context - MLO peer context
  *
  * @peer_node:     peer list node for ml_dev qdf list
@@ -811,24 +934,6 @@ struct wlan_mlo_peer_context {
 };
 
 /**
- * struct mlo_partner_info - mlo partner link info
- * @num_partner_links: no. of partner links
- * @partner_link_info: per partner link info
- * @t2lm_enable_val: enum wlan_t2lm_enable
- * @nstr_info: NSTR Capability info
- * @num_nstr_info_links: No. of links for which NSTR info is present
- */
-struct mlo_partner_info {
-	uint8_t num_partner_links;
-	struct mlo_link_info partner_link_info[WLAN_UMAC_MLO_MAX_VDEVS];
-#ifdef WLAN_FEATURE_11BE
-	enum wlan_t2lm_enable t2lm_enable_val;
-	struct mlo_nstr_info nstr_info[WLAN_UMAC_MLO_MAX_VDEVS];
-	uint8_t num_nstr_info_links;
-#endif
-};
-
-/**
  * struct mlo_probereq_info - mlo probe req link info
  * @mlid: MLID requested in the probe req
  * @num_links: no. of link info in probe req
@@ -884,6 +989,7 @@ struct ml_rv_info {
  * @emlsr_support: indicate if eMLSR supported
  * @emlmr_support: indicate if eMLMR supported
  * @msd_cap_support: indicate if MSD supported
+ * @mlo_bridge_peer: indicate if it is bridge peer
  * @unused: spare bits
  * @logical_link_index: Unique index for links of the mlo. Starts with Zero
  */
@@ -899,7 +1005,8 @@ struct mlo_tgt_link_info {
 		 emlsr_support:1,
 		 emlmr_support:1,
 		 msd_cap_support:1,
-		 unused:23;
+		 mlo_bridge_peer:1,
+		 unused:22;
 	uint32_t logical_link_index;
 
 };
@@ -972,6 +1079,28 @@ struct mlo_mlme_ext_ops {
 					qdf_nbuf_t frm_buf);
 };
 
+/*
+ * struct mlo_osif_ext_ops - MLO manager to OSIF callback functions
+ * @mlo_mgr_osif_update_bss_info: Callback to update each link connection info.
+ * @mlo_mgr_osif_update_mac_addr: Callback to notify MAC addr update complete
+ *                                from old link id to new link id for the vdev.
+ * @mlo_mgr_osif_link_switch_notification: Notify OSIF on start of link switch
+ */
+struct mlo_osif_ext_ops {
+	QDF_STATUS
+	(*mlo_mgr_osif_update_bss_info)(struct qdf_mac_addr *self_mac,
+					struct qdf_mac_addr *bssid,
+					int32_t link_id);
+
+	QDF_STATUS (*mlo_mgr_osif_update_mac_addr)(int32_t ieee_old_link_id,
+						   int32_t ieee_new_link_id,
+						   uint8_t vdev_id);
+
+	QDF_STATUS
+	(*mlo_mgr_osif_link_switch_notification)(struct wlan_objmgr_vdev *vdev,
+						 uint8_t non_trans_vdev_id);
+};
+
 /* maximum size of vdev bitmap array for MLO link set active command */
 #define MLO_VDEV_BITMAP_SZ 2
 
@@ -1023,6 +1152,7 @@ enum mlo_link_force_reason {
 /**
  * struct mlo_link_set_active_resp: MLO link set active response structure
  * @status: Return status, 0 for success, non-zero otherwise
+ * @evt_handled: response event is handled
  * @active_sz: size of current active vdev bitmap array
  * @active: current active vdev bitmap array
  * @inactive_sz: size of current inactive vdev bitmap array
@@ -1030,11 +1160,14 @@ enum mlo_link_force_reason {
  * @use_ieee_link_id: link id is valid in active_linkid_bitmap or
  *	inactive_linkid_bitmap
  * @ap_mld_mac_addr: AP MLD mac address
- * @active_linkid_bitmap: current active link id bitmap
- * @inactive_linkid_bitmap: current inactive link id bitmap
+ * @active_linkid_bitmap: current forced active link id bitmap
+ * @inactive_linkid_bitmap: current forced inactive link id bitmap
+ * @curr_inactive_linkid_bitmap: current inactive link id bitmap
+ * @curr_active_linkid_bitmap: current active link id bitmap
  */
 struct mlo_link_set_active_resp {
 	uint32_t status;
+	bool evt_handled;
 	uint32_t active_sz;
 	uint32_t active[MLO_VDEV_BITMAP_SZ];
 	uint32_t inactive_sz;
@@ -1043,6 +1176,8 @@ struct mlo_link_set_active_resp {
 	struct qdf_mac_addr  ap_mld_mac_addr;
 	uint32_t active_linkid_bitmap;
 	uint32_t inactive_linkid_bitmap;
+	uint32_t curr_inactive_linkid_bitmap;
+	uint32_t curr_active_linkid_bitmap;
 };
 
 /**
@@ -1068,11 +1203,14 @@ struct mlo_link_num_param {
  * force_inactive bitmaps
  * @dynamic_force_link_num: indicate fw to use force link number instead of
  * force link bitmaps
+ * @post_re_evaluate: run link state check again after command response event
+ * handled
  */
 struct mlo_control_flags {
 	bool overwrite_force_active_bitmap;
 	bool overwrite_force_inactive_bitmap;
 	bool dynamic_force_link_num;
+	bool post_re_evaluate;
 };
 
 /* struct ml_link_force_cmd - force command for links

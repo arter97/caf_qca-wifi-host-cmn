@@ -127,8 +127,9 @@
 
 /* EEPROM setting is a country code */
 #define    COUNTRY_ERD_FLAG     0x8000
-#define MIN_6GHZ_OPER_CLASS 131
-#define MAX_6GHZ_OPER_CLASS 137
+#define MIN_6GHZ_OPER_CLASS     131
+#define MAX_6GHZ_OPER_CLASS     137
+#define GLOBAL_6G_OPCLASS_80P80 135
 
 #ifdef CONFIG_AFC_SUPPORT
 #define DEFAULT_REQ_ID 11235813
@@ -3076,4 +3077,21 @@ QDF_STATUS reg_process_r2p_table_update_response(struct wlan_objmgr_psoc *psoc,
 qdf_freq_t
 reg_get_endchan_cen_from_bandstart(qdf_freq_t band_start,
 				   uint16_t bw);
+
+#ifndef CONFIG_REG_CLIENT
+/**
+ * reg_is_dev_supports_80p80() - Fetch if the device supports 80p80
+ * (discontinuous 160MHz) channel.
+ * @pdev: PDEV object
+ *
+ * Return: True, if the device supports 80p80, else, false.
+ */
+bool reg_is_dev_supports_80p80(struct wlan_objmgr_pdev *pdev);
+#else
+static inline
+bool reg_is_dev_supports_80p80(struct wlan_objmgr_pdev *pdev)
+{
+	return false;
+}
+#endif
 #endif

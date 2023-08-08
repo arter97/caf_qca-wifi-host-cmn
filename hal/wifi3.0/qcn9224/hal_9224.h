@@ -328,14 +328,14 @@ void hal_rx_proc_phyrx_other_receive_info_tlv_9224(void *rx_tlv_hdr,
 	void *rx_tlv;
 	struct hal_rx_ppdu_info *ppdu_info  = ppdu_info_hdl;
 
-	tlv_len = HAL_RX_GET_USER_TLV64_LEN(rx_tlv_hdr);
+	tlv_len = HAL_RX_GET_USER_TLV32_LEN(rx_tlv_hdr);
 	rx_tlv = (uint8_t *)rx_tlv_hdr + HAL_RX_TLV64_HDR_SIZE;
 
 	if (!tlv_len)
 		return;
 
-	tlv_tag = HAL_RX_GET_USER_TLV64_TYPE(rx_tlv);
-	tlv_len = HAL_RX_GET_USER_TLV64_LEN(rx_tlv);
+	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(rx_tlv);
+	tlv_len = HAL_RX_GET_USER_TLV32_LEN(rx_tlv);
 
 	if (!tlv_len)
 		return;

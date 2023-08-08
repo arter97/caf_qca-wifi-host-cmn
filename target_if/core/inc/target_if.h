@@ -209,6 +209,7 @@ struct target_version_info {
  * @device_mode: Global Device mode
  * @sbs_lower_band_end_freq: sbs lower band end frequency
  * @health_mon_param: health monitor params
+ * @aux_dev_caps: aux device capability
  */
 struct tgt_info {
 	struct host_fw_ver version;
@@ -248,6 +249,7 @@ struct tgt_info {
 #ifdef HEALTH_MON_SUPPORT
 	struct wmi_health_mon_params health_mon_param;
 #endif /* HEALTH_MON_SUPPORT */
+	struct wlan_psoc_host_aux_dev_caps *aux_dev_caps;
 };
 
 /**
@@ -598,6 +600,17 @@ bool target_is_tgt_type_qcn6432(uint32_t target_type);
  * Return: true if the target_type is QCN7605, else false.
  */
 bool target_is_tgt_type_qcn7605(uint32_t target_type);
+
+/**
+ * target_if_is_vdev_valid - vdev id is valid or not
+ * @vdev_id: vdev id
+ *
+ * Return: true or false
+ */
+static inline bool target_if_is_vdev_valid(uint8_t vdev_id)
+{
+	return (vdev_id < WLAN_UMAC_PSOC_MAX_VDEVS ? true : false);
+}
 
 /**
  * target_psoc_set_wlan_init_status() - set info wlan_init_status

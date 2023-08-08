@@ -429,6 +429,84 @@ dp_ppeds_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc)
 	return NULL;
 }
 #endif
+
+/**
+ * dp_get_updated_tx_desc() - get updated tx_desc value
+ * @psoc: psoc object
+ * @pool_num: Tx desc pool Id
+ * @current_desc: Current Tx Desc value
+ *
+ * In Lowmem profiles the number of Tx desc in 4th pool is reduced to quarter
+ * for memory optimizations via this flag DP_TX_DESC_POOL_OPTIMIZE
+ *
+ * Return: Updated Tx Desc value
+ */
+#ifdef DP_TX_DESC_POOL_OPTIMIZE
+static inline uint32_t dp_get_updated_tx_desc(struct cdp_ctrl_objmgr_psoc *psoc,
+					      uint8_t pool_num,
+					      uint32_t current_desc)
+{
+	if (pool_num == 3)
+		return cfg_get(psoc, CFG_DP_TX_DESC_POOL_3);
+	else
+		return current_desc;
+}
+#else
+static inline uint32_t dp_get_updated_tx_desc(struct cdp_ctrl_objmgr_psoc *psoc,
+					      uint8_t pool_num,
+					      uint32_t current_desc)
+{
+	return current_desc;
+}
+#endif
+
+#ifdef DP_TX_EXT_DESC_POOL_OPTIMIZE
+/**
+ * dp_tx_ext_desc_pool_override() - Override tx ext desc pool Id
+ * @desc_pool_id: Desc pool Id
+ *
+ * For low mem profiles the number of ext_tx_desc_pool is reduced to 1.
+ * Since in Tx path the desc_pool_id is filled based on CPU core,
+ * dp_tx_ext_desc_pool_override will return the desc_pool_id as 0 for lowmem
+ * profiles.
+ *
+ * Return: updated tx_ext_desc_pool Id
+ */
+static inline uint8_t dp_tx_ext_desc_pool_override(uint8_t desc_pool_id)
+{
+	return 0;
+}
+
+/**
+ * dp_get_ext_tx_desc_pool_num() - get the number of ext_tx_desc pool
+ * @soc: core txrx main context
+ *
+ * For lowmem profiles the number of ext_tx_desc pool is reduced to 1 for
+ * memory optimizations.
+ * Based on this flag DP_TX_EXT_DESC_POOL_OPTIMIZE dp_get_ext_tx_desc_pool_num
+ * will return reduced desc_pool value 1 for low mem profile and for the other
+ * profiles it will return the same value as tx_desc pool.
+ *
+ * Return: number of ext_tx_desc pool
+ */
+
+static inline uint8_t dp_get_ext_tx_desc_pool_num(struct dp_soc *soc)
+{
+	return 1;
+}
+
+#else
+static inline uint8_t dp_tx_ext_desc_pool_override(uint8_t desc_pool_id)
+{
+	return desc_pool_id;
+}
+
+static inline uint8_t dp_get_ext_tx_desc_pool_num(struct dp_soc *soc)
+{
+	return wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
+}
+#endif
+
 #ifndef QCA_HOST_MODE_WIFI_DISABLED
 /**
  * dp_tso_soc_attach() - TSO Attach handler
