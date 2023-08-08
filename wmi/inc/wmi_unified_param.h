@@ -5347,6 +5347,9 @@ typedef enum {
 	wmi_peer_ptqm_migration_response_eventid,
 #endif
 	wmi_pdev_set_rf_path_resp_eventid,
+#ifdef WLAN_RCC_ENHANCED_AOA_SUPPORT
+	wmi_pdev_enhanced_aoa_phasedelta_eventid,
+#endif
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -9607,6 +9610,20 @@ struct wmi_cfr_phase_delta_param {
 	uint32_t phase_delta[WMI_MAX_CHAINS_PHASE][WMI_MAX_AOA_PHASE_DELTA];
 	uint32_t ibf_cal_val[WMI_MAX_CHAINS_PHASE];
 };
+
+#ifdef WLAN_RCC_ENHANCED_AOA_SUPPORT
+struct wmi_cfr_enh_phase_delta_param {
+	uint32_t pdev_id;
+	uint32_t freq;
+	uint32_t max_chains;
+	uint32_t data_for_chainmask;
+	uint32_t xbar_config;
+	uint32_t ibf_cal_val[WMI_HOST_MAX_NUM_CHAINS];
+	uint32_t array_size;
+	uint32_t *gain_stop_index_array;
+	uint32_t *enh_phase_delta_array;
+};
+#endif /* WLAN_RCC_ENHANCED_AOA_SUPPORT */
 
 /**
  * struct wmi_host_oem_indirect_data - Indirect OEM data

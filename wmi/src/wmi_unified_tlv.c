@@ -22148,6 +22148,10 @@ static void populate_tlv_events_id(WMI_EVT_ID *event_ids)
 #endif
 	event_ids[wmi_pdev_set_rf_path_resp_eventid] =
 		WMI_PDEV_SET_RF_PATH_RESP_EVENTID;
+#ifdef WLAN_RCC_ENHANCED_AOA_SUPPORT
+	event_ids[wmi_pdev_enhanced_aoa_phasedelta_eventid] =
+			WMI_PDEV_ENHANCED_AOA_PHASEDELTA_EVENTID;
+#endif
 }
 
 #ifdef WLAN_FEATURE_LINK_LAYER_STATS
