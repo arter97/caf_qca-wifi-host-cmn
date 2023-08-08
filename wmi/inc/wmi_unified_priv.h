@@ -168,7 +168,7 @@ struct wmi_ext_dbg_msg {
 #define wmi_nofl_info(params...) \
 	QDF_TRACE_INFO_NO_FL(QDF_MODULE_ID_WMI, ## params)
 #define wmi_nofl_info_high(params...) \
-	QDF_TRACE_DEBUG_NO_FL(QDF_MODULE_ID_WMI, ## params)
+	QDF_TRACE_INFO_HIGH_NO_FL(QDF_MODULE_ID_WMI, ## params)
 #define wmi_nofl_debug(params...) \
 	QDF_TRACE_DEBUG_NO_FL(QDF_MODULE_ID_WMI, ## params)
 
