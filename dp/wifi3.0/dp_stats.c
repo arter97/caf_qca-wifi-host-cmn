@@ -8182,6 +8182,17 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 	dp_monitor_print_pdev_tx_capture_stats(pdev);
 }
 
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MCAST_MLO)
+void dp_print_vdev_mlo_mcast_tx_stats(struct dp_vdev *vdev)
+{
+	DP_PRINT_STATS("MLO MCAST TX stats:");
+	DP_PRINT_STATS("	send packet count = %u",
+		       vdev->stats.tx_i.mlo_mcast.send_pkt_count);
+	DP_PRINT_STATS("	failed packet count = %u",
+		       vdev->stats.tx_i.mlo_mcast.fail_pkt_count);
+}
+#endif
+
 #ifdef WLAN_SUPPORT_RX_FLOW_TAG
 static inline void dp_rx_basic_fst_stats(struct dp_pdev *pdev)
 {
