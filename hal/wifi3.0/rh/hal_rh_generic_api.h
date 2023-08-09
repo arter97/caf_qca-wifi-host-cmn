@@ -2366,14 +2366,34 @@ hal_tx_comp_get_buffer_timestamp_rh(void *desc,
 }
 #endif /* WLAN_FEATURE_TSF_UPLINK_DELAY || WLAN_CONFIG_TX_DELAY */
 
-/* TODO: revalidate the assignments below after HTT interfaces
- * changes are in.
- */
+static inline uint8_t hal_tx_get_compl_status_rh(uint8_t tx_status)
+{
+	switch (tx_status) {
+	case HTT_TX_MSDU_RELEASE_REASON_FRAME_ACKED:
+		return HAL_TX_TQM_RR_FRAME_ACKED;
+	case HTT_TX_MSDU_RELEASE_REASON_REMOVE_CMD_TX:
+		return HAL_TX_TQM_RR_REM_CMD_TX;
+	case HTT_TX_MSDU_RELEASE_REASON_REMOVE_CMD_NOTX:
+		return HAL_TX_TQM_RR_REM_CMD_NOTX;
+	case HTT_TX_MSDU_RELEASE_REASON_REMOVE_CMD_AGED:
+		return HAL_TX_TQM_RR_REM_CMD_AGED;
+	case HTT_TX_MSDU_RELEASE_FW_REASON1:
+		return HAL_TX_TQM_RR_FW_REASON1;
+	case HTT_TX_MSDU_RELEASE_FW_REASON2:
+		return HAL_TX_TQM_RR_FW_REASON2;
+	case HTT_TX_MSDU_RELEASE_FW_REASON3:
+		return HAL_TX_TQM_RR_FW_REASON3;
+	case HTT_TX_MSDU_RELEASE_REASON_REMOVE_CMD_DISABLEQ:
+		return HAL_TX_TQM_RR_REM_CMD_DISABLE_QUEUE;
+	default:
+		return HAL_TX_TQM_RR_REM_CMD_REM;
+	}
+}
+
 static inline void
 hal_tx_comp_get_status_generic_rh(void *desc, void *ts1, struct hal_soc *hal)
 {
 	uint8_t tx_status;
-	uint8_t rate_stats_valid = 0;
 	struct hal_tx_completion_status *ts =
 		(struct hal_tx_completion_status *)ts1;
 	uint32_t *msg_word = (uint32_t *)desc;
@@ -2394,8 +2414,8 @@ hal_tx_comp_get_status_generic_rh(void *desc, void *ts1, struct hal_soc *hal)
 	ts->transmit_cnt = HTT_TX_MSDU_INFO_TRANSMIT_CNT_GET(*(msg_word + 2));
 
 	tx_status = HTT_TX_MSDU_INFO_RELEASE_REASON_GET(*(msg_word + 3));
-	ts->status = (tx_status == HTT_TX_MSDU_RELEASE_REASON_FRAME_ACKED ?
-		      HAL_TX_TQM_RR_FRAME_ACKED : HAL_TX_TQM_RR_REM_CMD_REM);
+	ts->status = hal_tx_get_compl_status_rh(tx_status);
+
 	ts->ppdu_id = HTT_TX_MSDU_INFO_TQM_STATUS_NUMBER_GET(*(msg_word + 3));
 
 	ts->ack_frame_rssi =
@@ -2405,10 +2425,9 @@ hal_tx_comp_get_status_generic_rh(void *desc, void *ts1, struct hal_soc *hal)
 	ts->msdu_part_of_amsdu =
 		HTT_TX_MSDU_INFO_MSDU_PART_OF_AMSDU_GET(*(msg_word + 4));
 
-	rate_stats_valid = HTT_TX_RATE_STATS_INFO_VALID_GET(*(msg_word + 5));
-	ts->valid = rate_stats_valid;
+	ts->valid = HTT_TX_RATE_STATS_INFO_VALID_GET(*(msg_word + 5));
 
-	if (rate_stats_valid) {
+	if (ts->valid) {
 		ts->bw = HTT_TX_RATE_STATS_INFO_TRANSMIT_BW_GET(*(msg_word + 5));
 		ts->pkt_type =
 			HTT_TX_RATE_STATS_INFO_TRANSMIT_PKT_TYPE_GET(*(msg_word + 5));
