@@ -102,7 +102,7 @@ void dp_tx_desc_pool_cleanup(struct dp_soc *soc, qdf_nbuf_t *nbuf_list)
 	uint32_t num_pool = wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
 
 	for (i = 0; i < num_pool; i++) {
-		tx_desc_pool = &soc->tx_desc[i];
+		tx_desc_pool = dp_get_tx_desc_pool(soc, i);
 
 		if (tx_desc_pool)
 			qdf_tx_desc_pool_free_bufs(soc,
@@ -124,7 +124,9 @@ QDF_STATUS dp_tx_desc_pool_alloc(struct dp_soc *soc, uint8_t pool_id,
 
 	num_elem_t = dp_get_updated_tx_desc(soc->ctrl_psoc, pool_id, num_elem);
 	desc_size = DP_TX_DESC_SIZE(sizeof(struct dp_tx_desc_s));
-	tx_desc_pool = &((soc)->tx_desc[(pool_id)]);
+
+	tx_desc_pool = dp_get_tx_desc_pool(soc, pool_id);
+
 	tx_desc_pool->desc_pages.page_size = DP_BLOCKMEM_SIZE;
 	dp_desc_multi_pages_mem_alloc(soc, QDF_DP_TX_DESC_TYPE,
 				      &tx_desc_pool->desc_pages,
@@ -150,7 +152,7 @@ void dp_tx_desc_pool_free(struct dp_soc *soc, uint8_t pool_id)
 {
 	struct dp_tx_desc_pool_s *tx_desc_pool;
 
-	tx_desc_pool = &((soc)->tx_desc[pool_id]);
+	tx_desc_pool = dp_get_tx_desc_pool(soc, pool_id);
 
 	if (tx_desc_pool->desc_pages.num_pages)
 		dp_desc_multi_pages_mem_free(soc, QDF_DP_TX_DESC_TYPE,
@@ -164,13 +166,13 @@ void dp_tx_desc_pool_free(struct dp_soc *soc, uint8_t pool_id)
 QDF_STATUS dp_tx_desc_pool_init(struct dp_soc *soc, uint8_t pool_id,
 				uint32_t num_elem)
 {
-	struct dp_tx_desc_pool_s *tx_desc_pool;
+	struct dp_tx_desc_pool_s *tx_desc_pool = NULL;
 	uint32_t desc_size, num_elem_t;
 
 	desc_size = DP_TX_DESC_SIZE(sizeof(struct dp_tx_desc_s));
 
 	num_elem_t = dp_get_updated_tx_desc(soc->ctrl_psoc, pool_id, num_elem);
-	tx_desc_pool = &soc->tx_desc[pool_id];
+	tx_desc_pool = dp_get_tx_desc_pool(soc, pool_id);
 	if (qdf_mem_multi_page_link(soc->osdev,
 				    &tx_desc_pool->desc_pages,
 				    desc_size, num_elem_t, true)) {
@@ -199,7 +201,7 @@ void dp_tx_desc_pool_deinit(struct dp_soc *soc, uint8_t pool_id)
 {
 	struct dp_tx_desc_pool_s *tx_desc_pool;
 
-	tx_desc_pool = &soc->tx_desc[pool_id];
+	tx_desc_pool = dp_get_tx_desc_pool(soc, pool_id);
 	soc->arch_ops.dp_tx_desc_pool_deinit(soc, tx_desc_pool, pool_id);
 	TX_DESC_POOL_MEMBER_CLEAN(tx_desc_pool);
 	TX_DESC_LOCK_DESTROY(&tx_desc_pool->lock);
