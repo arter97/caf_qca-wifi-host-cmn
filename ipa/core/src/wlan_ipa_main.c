@@ -969,3 +969,42 @@ QDF_STATUS ipa_get_alt_pipe(struct wlan_objmgr_pdev *pdev,
 	return wlan_ipa_get_alt_pipe(ipa_obj, vdev_id, alt_pipe);
 }
 
+bool ipa_set_perf_level_bw_enabled(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_ipa_priv *ipa_obj;
+
+	if (!ipa_config_is_enabled())
+		return false;
+
+	if (!ipa_cb_is_ready())
+		return false;
+
+	ipa_obj = ipa_pdev_get_priv_obj(pdev);
+	if (!ipa_obj) {
+		ipa_err("IPA object is NULL");
+		return false;
+	}
+
+	return wlan_ipa_set_perf_level_bw_enabled(ipa_obj);
+}
+
+void ipa_set_perf_level_bw(struct wlan_objmgr_pdev *pdev,
+			   enum wlan_ipa_bw_level lvl)
+{
+	struct wlan_ipa_priv *ipa_obj;
+
+	if (!ipa_config_is_enabled())
+		return;
+
+	if (!ipa_cb_is_ready())
+		return;
+
+	ipa_obj = ipa_pdev_get_priv_obj(pdev);
+	if (!ipa_obj) {
+		ipa_err("IPA object is NULL");
+		return;
+	}
+
+	wlan_ipa_set_perf_level_bw(ipa_obj, lvl);
+}
+
