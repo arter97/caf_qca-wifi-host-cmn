@@ -910,13 +910,15 @@ wmi_unified_extract_roam_result_stats(wmi_unified_t wmi, void *evt_buf,
  * @dst:       Pointer to destination structure to fill data
  * @idx:       TLV id
  * @rpt_idx:   index of the current channel
+ * @band: Band of the link on which packet was transmitted/received.
  *
  * Return: QDF_STATUS
  */
 QDF_STATUS
 wmi_unified_extract_roam_11kv_stats(wmi_unified_t wmi, void *evt_buf,
 				    struct wmi_neighbor_report_data *dst,
-				    uint8_t idx, uint8_t rpt_idx);
+				    uint8_t idx, uint8_t rpt_idx,
+				    uint8_t band);
 
 /**
  * wmi_unified_vdev_create_send() - send VDEV create command to fw

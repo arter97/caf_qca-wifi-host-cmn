@@ -9151,6 +9151,8 @@ struct wmi_roam_trigger_background_data {
  * milli seconds
  * @token: BTM request dialog token
  * @btm_cand: BTM request candidate information
+ * @is_mlo: Flag to check whether the existing connection a MLO connection
+ * @band: indicates the link involved in MLO conenection.
  */
 struct wmi_roam_btm_trigger_data {
 	uint32_t timestamp;
@@ -9163,6 +9165,8 @@ struct wmi_roam_btm_trigger_data {
 	uint32_t btm_mbo_assoc_retry_timeout;
 	uint16_t token;
 	struct wmi_btm_req_candidate_info btm_cand[WLAN_MAX_BTM_CANDIDATE];
+	bool is_mlo;
+	uint8_t band;
 };
 
 /**
@@ -9364,6 +9368,8 @@ struct wmi_roam_result {
  *  @req_token: Request token
  *  @resp_token: Response Token
  *  @num_rpt: Number of report element
+ *  @is_mlo: Flag to check if the current connection is MLO connection
+ *  @band: indicates the link involved in MLO conenection.
  */
 struct wmi_neighbor_report_data {
 	bool present;
@@ -9378,6 +9384,8 @@ struct wmi_neighbor_report_data {
 	uint8_t req_token;
 	uint8_t resp_token;
 	uint8_t num_rpt;
+	bool is_mlo;
+	uint8_t band;
 };
 
 /**

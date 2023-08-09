@@ -2568,7 +2568,7 @@ QDF_STATUS
 (*extract_roam_11kv_stats)(wmi_unified_t wmi_handle,
 			   void *evt_buf,
 			   struct wmi_neighbor_report_data *dst,
-			   uint8_t idx, uint8_t rpt_idx);
+			   uint8_t idx, uint8_t rpt_idx, uint8_t band);
 
 void (*wmi_pdev_id_conversion_enable)(wmi_unified_t wmi_handle,
 				      uint32_t *pdev_map,

@@ -19697,6 +19697,10 @@ extract_roam_trigger_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 				btm_data->btm_mbo_assoc_retry_timeout;
 			trig->btm_trig_data.token =
 				(uint16_t)btm_data->btm_req_dialog_token;
+			trig->btm_trig_data.band =
+				WMI_GET_MLO_BAND(scan_info->flags);
+			if (trig->btm_trig_data.band != WMI_MLO_BAND_NO_MLO)
+				trig->btm_trig_data.is_mlo = true;
 		} else if (src_data) {
 			trig->btm_trig_data.btm_request_mode =
 					src_data->btm_request_mode;
@@ -19714,6 +19718,10 @@ extract_roam_trigger_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 					src_data->btm_mbo_assoc_retry_timeout;
 			trig->btm_trig_data.token =
 				src_data->btm_req_dialog_token;
+			trig->btm_trig_data.band =
+				WMI_GET_MLO_BAND(scan_info->flags);
+			if (trig->btm_trig_data.band != WMI_MLO_BAND_NO_MLO)
+				trig->btm_trig_data.is_mlo = true;
 			if ((btm_idx +
 				trig->btm_trig_data.candidate_list_count) <=
 			    param_buf->num_roam_btm_request_candidate_info)
@@ -19998,11 +20006,12 @@ extract_roam_result_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
  * @dst:        Pointer to destination structure to fill data
  * @idx:        TLV id
  * @rpt_idx:    Neighbor report Channel index
+ * @band: Band of the link on which packet is transmitted or received
  */
 static QDF_STATUS
 extract_roam_11kv_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 			    struct wmi_neighbor_report_data *dst,
-			    uint8_t idx, uint8_t rpt_idx)
+			    uint8_t idx, uint8_t rpt_idx, uint8_t band)
 {
 	WMI_ROAM_STATS_EVENTID_param_tlvs *param_buf;
 	wmi_roam_neighbor_report_info *src_data = NULL;
@@ -20032,6 +20041,11 @@ extract_roam_11kv_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 		WMI_ROAM_NEIGHBOR_REPORT_INFO_RESPONSE_TOKEN_GET(src_data->neighbor_report_detail);
 	dst->num_rpt =
 		WMI_ROAM_NEIGHBOR_REPORT_INFO_NUM_OF_NRIE_GET(src_data->neighbor_report_detail);
+
+	dst->band = band;
+
+	if (dst->band != WMI_MLO_BAND_NO_MLO)
+		dst->is_mlo = true;
 
 	if (!dst->num_freq || !param_buf->num_roam_neighbor_report_chan_info ||
 	    rpt_idx >= param_buf->num_roam_neighbor_report_chan_info)
@@ -20127,7 +20141,7 @@ extract_roam_result_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 static QDF_STATUS
 extract_roam_11kv_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 			    struct wmi_neighbor_report_data *dst,
-			    uint8_t idx, uint8_t rpt_idx)
+			    uint8_t idx, uint8_t rpt_idx, uint8_t band)
 {
 	return QDF_STATUS_E_NOSUPPORT;
 }
