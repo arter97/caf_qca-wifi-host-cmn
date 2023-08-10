@@ -5554,6 +5554,11 @@ typedef enum {
 #ifdef WLAN_RCC_ENHANCED_AOA_SUPPORT
 	wmi_pdev_enhanced_aoa_phasedelta_eventid,
 #endif
+#ifdef WLAN_VENDOR_EXTN
+	wmi_vendor_peer_event_id,
+	wmi_vendor_vdev_event_id,
+	wmi_vendor_pdev_event_id,
+#endif
 	wmi_peer_oper_mode_change_event_id,
 
 #ifdef WLAN_FEATURE_LL_LT_SAP
@@ -10352,4 +10357,103 @@ struct wmi_led_blink_params {
 	const led_blink_rate *led_blink_rate_table;
 };
 #endif /* OL_ATH_SUPPORT_LED */
+
+#ifdef WLAN_VENDOR_EXTN
+enum wmi_peer_vendor_cmd_subtypes {
+	WMI_PEER_VENDOR_CMD_NUM_SUBTYPES
+};
+
+enum wmi_vdev_vendor_cmd_subtypes {
+	WMI_VDEV_VENDOR_CMD_NUM_SUBTYPES
+};
+
+enum wmi_pdev_vendor_cmd_subtypes {
+	WMI_PDEV_VENDOR_CMD_NUM_SUBTYPES
+};
+
+enum wmi_peer_vendor_evt_subtypes {
+	WMI_PEER_VENDOR_EVT_NUM_SUBTYPES
+};
+
+enum wmi_vdev_vendor_evt_subtypes {
+	WMI_VDEV_VENDOR_EVT_NUM_SUBTYPES
+};
+
+enum wmi_pdev_vendor_evt_subtypes {
+	WMI_PDEV_VENDOR_EVT_NUM_SUBTYPES
+};
+
+union wmi_host_peer_vendor_val {
+	uint32_t peer_cmd1;
+	uint32_t peer_cmd2;
+};
+
+union wmi_host_vdev_vendor_val {
+	uint32_t vdev_cmd1;
+	uint32_t vdev_cmd2;
+};
+
+union wmi_host_pdev_vendor_val {
+	uint32_t pdev_cmd1;
+	uint32_t pdev_cmd2;
+};
+
+union wmi_host_peer_vendor_event_val {
+	uint32_t peer_sample1_event;
+	uint32_t peer_sample2_event;
+};
+
+union wmi_host_vdev_vendor_event_val {
+	uint32_t vdev_sample1_event;
+	uint32_t vdev_sample2_event;
+};
+
+union wmi_host_pdev_vendor_event_val {
+	uint32_t pdev_sample1_event;
+	uint32_t pdev_sample2_event;
+};
+
+struct wmi_vendor_peer_cmd_params {
+	uint8_t pdev_id;
+	uint8_t vdev_id;
+	enum wmi_peer_vendor_cmd_subtypes sub_type;
+	struct qdf_mac_addr peer_macaddr;
+	union wmi_host_peer_vendor_val cmd_val;
+};
+
+struct wmi_vendor_vdev_cmd_params {
+	uint8_t pdev_id;
+	uint8_t vdev_id;
+	enum wmi_vdev_vendor_cmd_subtypes sub_type;
+	union wmi_host_vdev_vendor_val cmd_val;
+};
+
+struct wmi_vendor_pdev_cmd_params {
+	uint8_t pdev_id;
+	enum wmi_pdev_vendor_cmd_subtypes sub_type;
+	union wmi_host_pdev_vendor_val cmd_val;
+};
+
+struct wmi_vendor_peer_event {
+	uint8_t pdev_id;
+	uint8_t vdev_id;
+	struct qdf_mac_addr peer_mac_addr;
+	enum wmi_peer_vendor_evt_subtypes sub_type;
+	union wmi_host_peer_vendor_event_val val;
+};
+
+struct wmi_vendor_vdev_event {
+	uint8_t pdev_id;
+	uint8_t vdev_id;
+	enum wmi_vdev_vendor_evt_subtypes sub_type;
+	union wmi_host_vdev_vendor_event_val val;
+};
+
+struct wmi_vendor_pdev_event {
+	uint8_t pdev_id;
+	enum wmi_pdev_vendor_evt_subtypes sub_type;
+	union wmi_host_pdev_vendor_event_val val;
+};
+#endif /* WLAN_VENDOR_EXTN */
+
 #endif /* _WMI_UNIFIED_PARAM_H_ */

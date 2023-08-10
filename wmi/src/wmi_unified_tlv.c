@@ -21782,6 +21782,123 @@ static QDF_STATUS extract_tgtr2p_table_event_tlv(wmi_unified_t wmi_handle,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef WLAN_VENDOR_EXTN
+static QDF_STATUS
+send_vendor_peer_cmd_tlv(wmi_unified_t wmi_handle,
+			 enum wmi_peer_vendor_cmd_subtypes subtype,
+			 void *param)
+{
+	/*
+	 * Add vendor callback here.
+	 */
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS
+send_vendor_vdev_cmd_tlv(wmi_unified_t wmi_handle,
+			 enum wmi_vdev_vendor_cmd_subtypes subtype,
+			 void *param)
+{
+	/*
+	 * Add vendor callback here.
+	 */
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS
+send_vendor_pdev_cmd_tlv(wmi_unified_t wmi_handle,
+			 enum wmi_pdev_vendor_cmd_subtypes subtype,
+			 void *param)
+{
+	/*
+	 * Add vendor callback here.
+	 */
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS
+extract_vendor_peer_event_tlv(wmi_unified_t wmi_handle,
+			      uint8_t *evt_buf,
+			      struct wmi_vendor_peer_event *param)
+{
+	WMI_VENDOR_PEER_EVENTID_param_tlvs *param_buf;
+	wmi_vendor_peer_event_fixed_param *evt_fixed_hdr;
+
+	param_buf = (WMI_VENDOR_PEER_EVENTID_param_tlvs *)evt_buf;
+	if (!param_buf) {
+		wmi_err("Invalid vendor peer event buf");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	evt_fixed_hdr = param_buf->fixed_param;
+	param->vdev_id = evt_fixed_hdr->vdev_id;
+	param->pdev_id = evt_fixed_hdr->pdev_id;
+	WMI_MAC_ADDR_TO_CHAR_ARRAY(&evt_fixed_hdr->peer_macaddr,
+				   param->peer_mac_addr.bytes);
+	param->sub_type = evt_fixed_hdr->sub_type;
+	param->val.peer_sample1_event =
+			evt_fixed_hdr->evt.peer_sample1_event;
+	param->val.peer_sample2_event =
+			evt_fixed_hdr->evt.peer_sample2_event;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS
+extract_vendor_vdev_event_tlv(wmi_unified_t wmi_handle,
+			      uint8_t *evt_buf,
+			      struct wmi_vendor_vdev_event *param)
+{
+	WMI_VENDOR_VDEV_EVENTID_param_tlvs *param_buf;
+	wmi_vendor_vdev_event_fixed_param *evt_fixed_hdr;
+
+	param_buf = (WMI_VENDOR_VDEV_EVENTID_param_tlvs *)evt_buf;
+	if (!param_buf) {
+		wmi_err("Invalid vendor peer event buf");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	evt_fixed_hdr = param_buf->fixed_param;
+	param->pdev_id = evt_fixed_hdr->pdev_id;
+	param->vdev_id = evt_fixed_hdr->vdev_id;
+	param->sub_type = evt_fixed_hdr->sub_type;
+	param->val.vdev_sample1_event =
+		evt_fixed_hdr->evt.vdev_sample1_event;
+	param->val.vdev_sample2_event =
+		evt_fixed_hdr->evt.vdev_sample2_event;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS
+extract_vendor_pdev_event_tlv(wmi_unified_t wmi_handle,
+			      uint8_t *evt_buf,
+			      struct wmi_vendor_pdev_event *param)
+{
+	WMI_VENDOR_PDEV_EVENTID_param_tlvs *param_buf;
+	wmi_vendor_pdev_event_fixed_param *evt_fixed_hdr;
+
+	param_buf = (WMI_VENDOR_PDEV_EVENTID_param_tlvs *)evt_buf;
+	if (!param_buf) {
+		wmi_err("Invalid vendor pdev event buf");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	evt_fixed_hdr = param_buf->fixed_param;
+	param->pdev_id = evt_fixed_hdr->pdev_id;
+	param->sub_type = evt_fixed_hdr->sub_type;
+	param->val.pdev_sample1_event =
+		evt_fixed_hdr->evt.pdev_sample1_event;
+	param->val.pdev_sample2_event =
+		evt_fixed_hdr->evt.pdev_sample2_event;
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* WLAN_VENDOR_EXTN */
+
 struct wmi_ops tlv_ops =  {
 	.send_vdev_create_cmd = send_vdev_create_cmd_tlv,
 	.send_vdev_delete_cmd = send_vdev_delete_cmd_tlv,
@@ -22287,6 +22404,14 @@ struct wmi_ops tlv_ops =  {
 #endif /* WLAN_RCC_ENHANCED_AOA_SUPPORT */
 #if defined(OL_ATH_SUPPORT_LED) && (OL_ATH_SUPPORT_LED == 1)
 	.send_led_blink_rate_table_cmd = send_led_blink_rate_table_cmd_tlv,
+#endif
+#ifdef WLAN_VENDOR_EXTN
+	.send_vendor_peer_cmd = send_vendor_peer_cmd_tlv,
+	.send_vendor_vdev_cmd = send_vendor_vdev_cmd_tlv,
+	.send_vendor_pdev_cmd = send_vendor_pdev_cmd_tlv,
+	.extract_vendor_peer_event = extract_vendor_peer_event_tlv,
+	.extract_vendor_vdev_event = extract_vendor_vdev_event_tlv,
+	.extract_vendor_pdev_event = extract_vendor_pdev_event_tlv,
 #endif
 };
 

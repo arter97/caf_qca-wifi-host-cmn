@@ -4158,3 +4158,79 @@ QDF_STATUS wmi_extract_aux_dev_cap_service_ready_ext2(
 	return QDF_STATUS_E_FAILURE;
 }
 
+#ifdef WLAN_VENDOR_EXTN
+QDF_STATUS
+wmi_unified_send_vendor_peer_cmd(wmi_unified_t wmi_handle,
+				 enum wmi_peer_vendor_cmd_subtypes subtype,
+				 void *param)
+{
+	if (wmi_handle->ops->send_vendor_peer_cmd)
+		return wmi_handle->ops->send_vendor_peer_cmd(wmi_handle,
+							     subtype, param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+wmi_unified_send_vendor_vdev_cmd(wmi_unified_t wmi_handle,
+				 enum wmi_vdev_vendor_cmd_subtypes subtype,
+				 void *param)
+{
+	if (wmi_handle->ops->send_vendor_vdev_cmd)
+		return wmi_handle->ops->send_vendor_vdev_cmd(wmi_handle,
+							     subtype, param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+wmi_unified_send_vendor_pdev_cmd(wmi_unified_t wmi_handle,
+				 enum wmi_pdev_vendor_cmd_subtypes subtype,
+				 void *param)
+{
+	if (wmi_handle->ops->send_vendor_pdev_cmd)
+		return wmi_handle->ops->send_vendor_pdev_cmd(wmi_handle,
+							     subtype, param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+wmi_extract_vendor_peer_event(wmi_unified_t wmi_handle,
+			      void *evt_buf,
+			      struct wmi_vendor_peer_event *param)
+{
+	if (wmi_handle->ops->extract_vendor_peer_event)
+		return wmi_handle->ops->extract_vendor_peer_event(
+				wmi_handle,
+				evt_buf, param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+wmi_extract_vendor_vdev_event(wmi_unified_t wmi_handle,
+			      void *evt_buf,
+			      struct wmi_vendor_vdev_event *param)
+{
+	if (wmi_handle->ops->extract_vendor_vdev_event)
+		return wmi_handle->ops->extract_vendor_vdev_event(
+				wmi_handle,
+				evt_buf, param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+wmi_extract_vendor_pdev_event(wmi_unified_t wmi_handle,
+			      void *evt_buf,
+			      struct wmi_vendor_pdev_event *param)
+{
+	if (wmi_handle->ops->extract_vendor_pdev_event)
+		return wmi_handle->ops->extract_vendor_pdev_event(
+				wmi_handle,
+				evt_buf, param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif /* WLAN_VENDOR_EXTN */

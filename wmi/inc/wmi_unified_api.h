@@ -5286,4 +5286,32 @@ QDF_STATUS
 wmi_unified_led_blink_rate_table_cmd_send(wmi_unified_t wmi_handle,
 					struct wmi_led_blink_params *params);
 #endif
+
+#ifdef WLAN_VENDOR_EXTN
+QDF_STATUS
+wmi_unified_send_vendor_peer_cmd(wmi_unified_t wmi_handle,
+				 enum wmi_peer_vendor_cmd_subtypes subtype,
+				 void *param);
+QDF_STATUS
+wmi_unified_send_vendor_vdev_cmd(wmi_unified_t wmi_handle,
+				 enum wmi_vdev_vendor_cmd_subtypes subtype,
+				 void *param);
+QDF_STATUS
+wmi_unified_send_vendor_pdev_cmd(wmi_unified_t wmi_handle,
+				 enum wmi_pdev_vendor_cmd_subtypes subtype,
+				 void *param);
+QDF_STATUS
+wmi_extract_vendor_peer_event(wmi_unified_t wmi_hdl,
+			      void *evt_buf,
+			      struct wmi_vendor_peer_event *param);
+QDF_STATUS
+wmi_extract_vendor_vdev_event(wmi_unified_t wmi_hdl,
+			      void *evt_buf,
+			      struct wmi_vendor_vdev_event *param);
+QDF_STATUS
+wmi_extract_vendor_pdev_event(wmi_unified_t wmi_hdl,
+			      void *evt_buf,
+			      struct wmi_vendor_pdev_event *param);
+#endif /* WLAN_VENDOR_EXTN */
+
 #endif /* _WMI_UNIFIED_API_H_ */
