@@ -3511,6 +3511,13 @@ static inline void dp_rx_wbm_sg_list_reset(struct dp_soc *soc)
 static inline void dp_rx_wbm_sg_list_deinit(struct dp_soc *soc)
 {
 }
+
+static inline uint32_t
+dp_rxdma_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
+		     uint32_t mac_id, uint32_t quota)
+{
+	return 0;
+}
 #endif /* WLAN_SOFTUMAC_SUPPORT */
 
 #ifndef CONFIG_NBUF_AP_PLATFORM

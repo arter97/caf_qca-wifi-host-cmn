@@ -1926,6 +1926,26 @@ QDF_STATUS dp_srng_init_be(struct dp_soc *soc, struct dp_srng *srng,
 	return dp_srng_init_idx(soc, srng, ring_type, ring_num, mac_id, 0);
 }
 
+static QDF_STATUS dp_soc_interrupt_attach_be(struct cdp_soc_t *txrx_soc)
+{
+	return dp_soc_interrupt_attach(txrx_soc);
+}
+
+static QDF_STATUS dp_soc_attach_poll_be(struct cdp_soc_t *txrx_soc)
+{
+	return dp_soc_attach_poll(txrx_soc);
+}
+
+static void dp_soc_interrupt_detach_be(struct cdp_soc_t *txrx_soc)
+{
+	return dp_soc_interrupt_detach(txrx_soc);
+}
+
+static uint32_t dp_service_srngs_be(void *dp_ctx, uint32_t dp_budget, int cpu)
+{
+	return dp_service_srngs(dp_ctx, dp_budget, cpu);
+}
+
 #ifdef WLAN_SUPPORT_PPEDS
 static void dp_soc_ppeds_srng_deinit(struct dp_soc *soc)
 {
@@ -3451,6 +3471,10 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_update_ring_hptp = dp_update_ring_hptp;
 #endif
 	arch_ops->dp_flush_tx_ring = dp_flush_tcl_ring;
+	arch_ops->dp_soc_interrupt_attach = dp_soc_interrupt_attach_be;
+	arch_ops->dp_soc_attach_poll = dp_soc_attach_poll_be;
+	arch_ops->dp_soc_interrupt_detach = dp_soc_interrupt_detach_be;
+	arch_ops->dp_service_srngs = dp_service_srngs_be;
 	dp_initialize_arch_ops_be_ipa(arch_ops);
 	dp_initialize_arch_ops_be_single_dev(arch_ops);
 	dp_initialize_arch_ops_be_fisa(arch_ops);

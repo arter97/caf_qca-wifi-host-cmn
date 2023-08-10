@@ -108,7 +108,20 @@ void dp_enable_verbose_debug(struct dp_soc *soc);
 
 QDF_STATUS dp_peer_legacy_setup(struct dp_soc *soc, struct dp_peer *peer);
 
-#ifndef WLAN_SOFTUMAC_SUPPORT
+uint32_t dp_service_srngs_wrapper(void *dp_ctx, uint32_t dp_budget, int cpu);
+
+void dp_soc_interrupt_map_calculate(struct dp_soc *soc, int intr_ctx_num,
+				    int *irq_id_map, int *num_irq);
+void dp_srng_msi_setup(struct dp_soc *soc, struct dp_srng *srng,
+		       struct hal_srng_params *ring_params,
+		       int ring_type, int ring_num);
+void
+dp_srng_configure_interrupt_thresholds(struct dp_soc *soc,
+				       struct hal_srng_params *ring_params,
+				       int ring_type, int ring_num,
+				       int num_entries);
+
+int dp_process_lmac_rings(struct dp_intr *int_ctx, int total_budget);
 
 /**
  * dp_service_lmac_rings()- timer to reap lmac rings
@@ -129,6 +142,177 @@ void dp_service_lmac_rings(void *arg);
  */
 uint32_t dp_service_srngs(void *dp_ctx, uint32_t dp_budget, int cpu);
 
+/**
+ * dp_soc_set_interrupt_mode() - Set the interrupt mode in soc
+ * @soc: DP soc handle
+ *
+ * Set the appropriate interrupt mode flag in the soc
+ */
+void dp_soc_set_interrupt_mode(struct dp_soc *soc);
+
+/**
+ * dp_srng_find_ring_in_mask() - find which ext_group a ring belongs
+ * @ring_num: ring num of the ring being queried
+ * @grp_mask: the grp_mask array for the ring type in question.
+ *
+ * The grp_mask array is indexed by group number and the bit fields correspond
+ * to ring numbers.  We are finding which interrupt group a ring belongs to.
+ *
+ * Return: the index in the grp_mask array with the ring number.
+ * -QDF_STATUS_E_NOENT if no entry is found
+ */
+static inline int dp_srng_find_ring_in_mask(int ring_num, uint8_t *grp_mask)
+{
+	int ext_group_num;
+	uint8_t mask = 1 << ring_num;
+
+	for (ext_group_num = 0; ext_group_num < WLAN_CFG_INT_NUM_CONTEXTS;
+	     ext_group_num++) {
+		if (mask & grp_mask[ext_group_num])
+			return ext_group_num;
+	}
+
+	return -QDF_STATUS_E_NOENT;
+}
+
+/* MCL specific functions */
+#if defined(DP_CON_MON)
+
+#ifdef DP_CON_MON_MSI_ENABLED
+/**
+ * dp_soc_get_mon_mask_for_interrupt_mode() - get mon mode mask for intr mode
+ * @soc: pointer to dp_soc handle
+ * @intr_ctx_num: interrupt context number for which mon mask is needed
+ *
+ * For MCL, monitor mode rings are being processed in timer contexts (polled).
+ * This function is returning 0, since in interrupt mode(softirq based RX),
+ * we donot want to process monitor mode rings in a softirq.
+ *
+ * So, in case packet log is enabled for SAP/STA/P2P modes,
+ * regular interrupt processing will not process monitor mode rings. It would be
+ * done in a separate timer context.
+ *
+ * Return: 0
+ */
+static inline uint32_t
+dp_soc_get_mon_mask_for_interrupt_mode(struct dp_soc *soc, int intr_ctx_num)
+{
+	return wlan_cfg_get_rx_mon_ring_mask(soc->wlan_cfg_ctx, intr_ctx_num);
+}
+#else
+/**
+ * dp_soc_get_mon_mask_for_interrupt_mode() - get mon mode mask for intr mode
+ * @soc: pointer to dp_soc handle
+ * @intr_ctx_num: interrupt context number for which mon mask is needed
+ *
+ * For MCL, monitor mode rings are being processed in timer contexts (polled).
+ * This function is returning 0, since in interrupt mode(softirq based RX),
+ * we donot want to process monitor mode rings in a softirq.
+ *
+ * So, in case packet log is enabled for SAP/STA/P2P modes,
+ * regular interrupt processing will not process monitor mode rings. It would be
+ * done in a separate timer context.
+ *
+ * Return: 0
+ */
+static inline uint32_t
+dp_soc_get_mon_mask_for_interrupt_mode(struct dp_soc *soc, int intr_ctx_num)
+{
+	return 0;
+}
+#endif
+
+#else
+
+/**
+ * dp_soc_get_mon_mask_for_interrupt_mode() - get mon mode mask for intr mode
+ * @soc: pointer to dp_soc handle
+ * @intr_ctx_num: interrupt context number for which mon mask is needed
+ *
+ * Return: mon mask value
+ */
+static inline
+uint32_t dp_soc_get_mon_mask_for_interrupt_mode(struct dp_soc *soc,
+						int intr_ctx_num)
+{
+	return wlan_cfg_get_rx_mon_ring_mask(soc->wlan_cfg_ctx, intr_ctx_num);
+}
+#endif
+
+#ifdef DISABLE_MON_RING_MSI_CFG
+/**
+ * dp_skip_msi_cfg() - Check if msi cfg has to be skipped for ring_type
+ * @soc: DP SoC context
+ * @ring_type: sring type
+ *
+ * Return: True if msi cfg should be skipped for srng type else false
+ */
+static inline bool dp_skip_msi_cfg(struct dp_soc *soc, int ring_type)
+{
+	if (ring_type == RXDMA_MONITOR_STATUS)
+		return true;
+
+	return false;
+}
+#else
+#ifdef DP_CON_MON_MSI_ENABLED
+#ifdef WLAN_SOFTUMAC_SUPPORT
+static inline bool dp_skip_msi_cfg(struct dp_soc *soc, int ring_type)
+{
+	if (soc->cdp_soc.ol_ops->get_con_mode &&
+	    soc->cdp_soc.ol_ops->get_con_mode() == QDF_GLOBAL_MONITOR_MODE) {
+		if (ring_type != RXDMA_MONITOR_STATUS)
+			return true;
+	} else if (ring_type == RXDMA_MONITOR_STATUS &&
+		   !wlan_cfg_get_local_pkt_capture(soc->wlan_cfg_ctx)) {
+		return true;
+	}
+
+	return false;
+}
+#else
+static inline bool dp_skip_msi_cfg(struct dp_soc *soc, int ring_type)
+{
+	if (soc->cdp_soc.ol_ops->get_con_mode &&
+	    soc->cdp_soc.ol_ops->get_con_mode() == QDF_GLOBAL_MONITOR_MODE) {
+		if (ring_type == REO_DST || ring_type == RXDMA_DST)
+			return true;
+	} else if (ring_type == RXDMA_MONITOR_STATUS &&
+		  !wlan_cfg_get_local_pkt_capture(soc->wlan_cfg_ctx)) {
+		return true;
+	}
+
+	return false;
+}
+#endif
+#else
+static inline bool dp_skip_msi_cfg(struct dp_soc *soc, int ring_type)
+{
+	return false;
+}
+#endif /* DP_CON_MON_MSI_ENABLED */
+#endif /* DISABLE_MON_RING_MSI_CFG */
+
+/**
+ * dp_is_msi_group_number_invalid() - check msi_group_number valid or not
+ * @soc: dp_soc
+ * @msi_group_number: MSI group number.
+ * @msi_data_count: MSI data count.
+ *
+ * Return: true if msi_group_number is invalid.
+ */
+static inline bool dp_is_msi_group_number_invalid(struct dp_soc *soc,
+						  int msi_group_number,
+						  int msi_data_count)
+{
+	if (soc && soc->osdev && soc->osdev->dev &&
+	    pld_is_one_msi(soc->osdev->dev))
+		return false;
+
+	return msi_group_number > msi_data_count;
+}
+
+#ifndef WLAN_SOFTUMAC_SUPPORT
 /**
  * dp_soc_attach_poll() - Register handlers for DP interrupts
  * @txrx_soc: DP SOC handle
@@ -479,58 +663,7 @@ QDF_STATUS dp_soc_srng_alloc(struct dp_soc *soc);
  */
 void dp_soc_cfg_attach(struct dp_soc *soc);
 
-/**
- * dp_soc_set_interrupt_mode() - Set the interrupt mode in soc
- * @soc: DP soc handle
- *
- * Set the appropriate interrupt mode flag in the soc
- */
-void dp_soc_set_interrupt_mode(struct dp_soc *soc);
-
 #else /* WLAN_SOFTUMAC_SUPPORT */
-static inline void dp_service_lmac_rings(void *arg)
-{
-}
-
-static inline
-uint32_t dp_service_srngs(void *dp_ctx, uint32_t dp_budget, int cpu)
-{
-	return 0;
-}
-
-static inline void dp_soc_interrupt_detach(struct cdp_soc_t *txrx_soc)
-{
-	struct dp_soc *soc = (struct dp_soc *)txrx_soc;
-
-	if (soc->intr_mode == DP_INTR_POLL)
-		qdf_timer_free(&soc->int_timer);
-
-	qdf_mem_set(&soc->mon_intr_id_lmac_map,
-		    sizeof(soc->mon_intr_id_lmac_map),
-		    DP_MON_INVALID_LMAC_ID);
-}
-
-/*
- * dp_soc_interrupt_attach() - Register handlers for DP interrupts
- * @txrx_soc: DP SOC handle
- *
- * Host driver will register for “DP_NUM_INTERRUPT_CONTEXTS” number of NAPI
- * contexts. Each NAPI context will have a tx_ring_mask , rx_ring_mask ,and
- * rx_monitor_ring mask to indicate the rings that are processed by the handler.
- *
- * Return: 0 for success. nonzero for failure.
- */
-static inline QDF_STATUS dp_soc_interrupt_attach(struct cdp_soc_t *txrx_soc)
-{
-	struct dp_soc *soc = (struct dp_soc *)txrx_soc;
-
-	qdf_mem_set(&soc->mon_intr_id_lmac_map,
-		    sizeof(soc->mon_intr_id_lmac_map),
-		    DP_MON_INVALID_LMAC_ID);
-
-	return QDF_STATUS_SUCCESS;
-}
-
 static inline void dp_hw_link_desc_ring_free(struct dp_soc *soc)
 {
 }
@@ -664,58 +797,6 @@ static inline QDF_STATUS dp_soc_srng_alloc(struct dp_soc *soc)
 	return QDF_STATUS_SUCCESS;
 }
 
-/*
- * dp_soc_attach_poll() - Register handlers for DP interrupts
- * @txrx_soc: DP SOC handle
- *
- * Host driver will register for “DP_NUM_INTERRUPT_CONTEXTS” number of NAPI
- * contexts. Each NAPI context will have a tx_ring_mask , rx_ring_mask ,and
- * rx_monitor_ring mask to indicate the rings that are processed by the handler.
- *
- * Return: 0 for success, nonzero for failure.
- */
-static inline QDF_STATUS dp_soc_attach_poll(struct cdp_soc_t *txrx_soc)
-{
-	struct dp_soc *soc = (struct dp_soc *)txrx_soc;
-	uint32_t lmac_id = 0;
-	int i;
-
-	qdf_mem_set(&soc->mon_intr_id_lmac_map,
-		    sizeof(soc->mon_intr_id_lmac_map), DP_MON_INVALID_LMAC_ID);
-	soc->intr_mode = DP_INTR_POLL;
-
-	for (i = 0; i < wlan_cfg_get_num_contexts(soc->wlan_cfg_ctx); i++) {
-		soc->intr_ctx[i].rx_mon_ring_mask =
-				wlan_cfg_get_rx_mon_ring_mask(soc->wlan_cfg_ctx, i);
-
-		if (dp_is_mon_mask_valid(soc, &soc->intr_ctx[i])) {
-			hif_event_history_init(soc->hif_handle, i);
-			soc->mon_intr_id_lmac_map[lmac_id] = i;
-			lmac_id++;
-		}
-	}
-
-	qdf_timer_init(soc->osdev, &soc->int_timer,
-		       dp_interrupt_timer, (void *)soc,
-		       QDF_TIMER_TYPE_WAKE_APPS);
-
-	return QDF_STATUS_SUCCESS;
-}
-
-static inline void dp_soc_set_interrupt_mode(struct dp_soc *soc)
-{
-	soc->intr_mode = DP_INTR_INTEGRATED;
-
-	if (!(soc->wlan_cfg_ctx->napi_enabled) ||
-	    (dp_is_monitor_mode_using_poll(soc) &&
-	     soc->cdp_soc.ol_ops->get_con_mode &&
-	     soc->cdp_soc.ol_ops->get_con_mode() == QDF_GLOBAL_MONITOR_MODE)) {
-		soc->intr_mode = DP_INTR_POLL;
-	} else {
-		soc->intr_mode = DP_INTR_MSI;
-	}
-}
-
 /**
  * dp_display_srng_info() - Dump the ring Read/Write idx info
  * @soc_hdl: CDP Soc handle
@@ -736,4 +817,50 @@ static inline void dp_drain_txrx(struct cdp_soc_t *soc_handle)
 #endif
 #endif /* WLAN_SOFTUMAC_SUPPORT */
 
+#if defined(WLAN_FEATURE_NEAR_FULL_IRQ) && !defined(WLAN_SOFTUMAC_SUPPORT)
+void dp_srng_msi2_setup(struct dp_soc *soc,
+			struct hal_srng_params *ring_params,
+			int ring_type, int ring_num, int nf_msi_grp_num);
+void dp_srng_set_msi2_ring_params(struct dp_soc *soc,
+				  struct hal_srng_params *ring_params,
+				  qdf_dma_addr_t msi2_addr,
+				  uint32_t msi2_data);
+uint8_t *dp_srng_get_near_full_irq_mask(struct dp_soc *soc,
+					enum hal_ring_type ring_type,
+					int ring_num);
+void
+dp_srng_configure_nf_interrupt_thresholds(struct dp_soc *soc,
+					  struct hal_srng_params *ring_params,
+					  int ring_type);
+#else
+static inline void
+dp_srng_msi2_setup(struct dp_soc *soc,
+		   struct hal_srng_params *ring_params,
+		   int ring_type, int ring_num, int nf_msi_grp_num)
+{
+}
+
+static inline void
+dp_srng_set_msi2_ring_params(struct dp_soc *soc,
+			     struct hal_srng_params *ring_params,
+			     qdf_dma_addr_t msi2_addr,
+			     uint32_t msi2_data)
+{
+}
+
+static inline
+uint8_t *dp_srng_get_near_full_irq_mask(struct dp_soc *soc,
+					enum hal_ring_type ring_type,
+					int ring_num)
+{
+	return NULL;
+}
+
+static inline void
+dp_srng_configure_nf_interrupt_thresholds(struct dp_soc *soc,
+					  struct hal_srng_params *ring_params,
+					  int ring_type)
+{
+}
+#endif
 #endif /* _DP_RINGS_H_ */

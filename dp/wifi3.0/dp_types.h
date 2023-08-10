@@ -2261,6 +2261,10 @@ enum dp_context_type {
  * @dp_get_fst_cmem_base: Get CMEM base address for FISA
  * @dp_flush_tx_ring: Flush TCL ring HP
  * @dp_mlo_print_ptnr_info: print partner vdev info
+ * @dp_soc_interrupt_attach: DP interrupt attach
+ * @dp_soc_attach_poll: DP poll attach
+ * @dp_soc_interrupt_detach: DP interrupt detach
+ * @dp_service_srngs: Service DP interrupts
  */
 struct dp_arch_ops {
 	/* INIT/DEINIT Arch Ops */
@@ -2532,6 +2536,10 @@ struct dp_arch_ops {
 	uint64_t (*dp_get_fst_cmem_base)(struct dp_soc *soc, uint64_t size);
 	int (*dp_flush_tx_ring)(struct dp_pdev *pdev, int ring_id);
 	void (*dp_mlo_print_ptnr_info)(struct dp_vdev *vdev);
+	QDF_STATUS (*dp_soc_interrupt_attach)(struct cdp_soc_t *txrx_soc);
+	QDF_STATUS (*dp_soc_attach_poll)(struct cdp_soc_t *txrx_soc);
+	void (*dp_soc_interrupt_detach)(struct cdp_soc_t *txrx_soc);
+	uint32_t (*dp_service_srngs)(void *dp_ctx, uint32_t dp_budget, int cpu);
 };
 
 /**
