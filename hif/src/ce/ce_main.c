@@ -3031,7 +3031,7 @@ void hif_get_target_ce_config(struct hif_softc *scn,
 static void hif_print_hal_shadow_register_cfg(struct pld_wlan_enable_cfg *cfg)
 {
 	int i;
-	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_INFO,
 		  "%s: num_config %d", __func__, cfg->num_shadow_reg_v2_cfg);
 
 	for (i = 0; i < cfg->num_shadow_reg_v2_cfg; i++) {
@@ -3044,7 +3044,7 @@ static void hif_print_hal_shadow_register_cfg(struct pld_wlan_enable_cfg *cfg)
 #else
 static void hif_print_hal_shadow_register_cfg(struct pld_wlan_enable_cfg *cfg)
 {
-	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_INFO,
 		  "%s: CONFIG_SHADOW_V2 not defined", __func__);
 }
 #endif

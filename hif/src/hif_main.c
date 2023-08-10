@@ -460,7 +460,7 @@ void hif_get_cfg_from_psoc(struct hif_softc *scn,
 			cfg_get(psoc, CFG_CE_POLL_BITMAP);
 		scn->ini_cfg.ce_poll_timeout =
 			cfg_get(psoc, CFG_CE_POLL_TIMEOUT);
-		qdf_err("poll_bitmap %x  poll_timeout %d", scn->ini_cfg.ce_poll_bitmap, scn->ini_cfg.ce_poll_timeout);
+		qdf_info("poll_bitmap %x  poll_timeout %d", scn->ini_cfg.ce_poll_bitmap, scn->ini_cfg.ce_poll_timeout);
 
 	}
 }
@@ -474,7 +474,7 @@ void hif_get_cfg_from_psoc(struct hif_softc *scn,
 			cfg_get(psoc, CFG_CE_POLL_BITMAP);
 		scn->ini_cfg.ce_poll_timeout =
 			cfg_get(psoc, CFG_CE_POLL_TIMEOUT);
-		qdf_err("poll_bitmap %x  poll_timeout %d", scn->ini_cfg.ce_poll_bitmap, scn->ini_cfg.ce_poll_timeout);
+		qdf_info("poll_bitmap %x  poll_timeout %d", scn->ini_cfg.ce_poll_bitmap, scn->ini_cfg.ce_poll_timeout);
 
 	}
 }
