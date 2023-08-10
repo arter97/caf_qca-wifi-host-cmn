@@ -484,7 +484,8 @@ static QDF_STATUS cm_update_vdev_mlme_macaddr(struct cnx_mgr *cm_ctx,
 
 	if (req->cur_candidate->entry->ie_list.multi_link_bv &&
 	    !qdf_is_macaddr_zero(mac) &&
-	    cm_is_eht_allowed_for_current_security(req->cur_candidate->entry)) {
+	    wlan_cm_is_eht_allowed_for_current_security(
+					req->cur_candidate->entry)) {
 		wlan_vdev_obj_lock(cm_ctx->vdev);
 		/* Use link address for ML connection */
 		wlan_vdev_mlme_set_macaddr(cm_ctx->vdev,
@@ -635,7 +636,8 @@ static void cm_create_bss_peer(struct cnx_mgr *cm_ctx,
 	wlan_psoc_mlme_get_11be_capab(wlan_vdev_get_psoc(cm_ctx->vdev),
 				      &eht_capab);
 	if (eht_capab && wlan_vdev_mlme_is_mlo_vdev(cm_ctx->vdev) &&
-	    cm_is_eht_allowed_for_current_security(req->cur_candidate->entry)) {
+	    wlan_cm_is_eht_allowed_for_current_security(
+					req->cur_candidate->entry)) {
 		cm_set_vdev_link_id(cm_ctx, req);
 		wlan_mlo_init_cu_bpcc(cm_ctx->vdev);
 		mld_mac = cm_get_bss_peer_mld_addr(req);
@@ -1925,12 +1927,22 @@ cm_connect_req_update_ml_partner_info(struct cnx_mgr *cm_ctx,
 {
 	bool eht_capable = false;
 	struct cm_connect_req *conn_req = &cm_req->connect_req;
+	struct wlan_objmgr_pdev *pdev;
+	uint8_t cur_vdev_id = wlan_vdev_get_id(cm_ctx->vdev);
+
+	pdev = wlan_vdev_get_pdev(cm_ctx->vdev);
+	if (!pdev) {
+		mlme_err(CM_PREFIX_FMT "Failed to find pdev",
+			 CM_PREFIX_REF(cur_vdev_id, cm_req->cm_id));
+		return;
+	}
 
 	wlan_psoc_mlme_get_11be_capab(wlan_vdev_get_psoc(cm_ctx->vdev),
 				      &eht_capable);
 	if (!same_candidate_used && eht_capable &&
 	    cm_bss_peer_is_assoc_peer(conn_req)) {
-		cm_get_ml_partner_info(conn_req->cur_candidate->entry,
+		cm_get_ml_partner_info(pdev,
+				       conn_req->cur_candidate->entry,
 				       &conn_req->req.ml_parnter_info);
 		cm_modify_partner_info_based_on_dbs_or_sbs_mode(
 						cm_ctx->vdev, cm_req->cm_id,
