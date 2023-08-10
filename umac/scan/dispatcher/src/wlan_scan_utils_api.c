@@ -2168,7 +2168,7 @@ util_get_ml_bv_partner_link_info(struct wlan_objmgr_pdev *pdev,
 	uint8_t rnr_idx = 0;
 	struct rnr_bss_info *rnr = NULL;
 	uint16_t freq;
-	struct scan_cache_entry tmp_entry = {0};
+	struct scan_cache_entry *tmp_entry;
 	struct qdf_mac_addr bcast_addr = QDF_MAC_ADDR_BCAST_INIT;
 	struct scan_mbssid_info *mbssid;
 	qdf_size_t ml_ie_len = ml_ie[TAG_LEN_POS] + sizeof(struct ie_header);
@@ -2187,13 +2187,14 @@ util_get_ml_bv_partner_link_info(struct wlan_objmgr_pdev *pdev,
 
 			if ((!scan_entry->mbssid_info.profile_count) &&
 			    !(rnr->bss_params & TBTT_BSS_PARAM_TRANS_BSSID_BIT)) {
+				tmp_entry =
 				       scm_scan_get_scan_entry_by_mac_freq(pdev,
-							     &rnr->bssid, freq,
-							     &tmp_entry);
-				if (tmp_entry.frm_subtype) {
+							     &rnr->bssid, freq);
+				if (tmp_entry) {
 					qdf_mem_copy(mbssid,
-						     &tmp_entry.mbssid_info,
+						     &tmp_entry->mbssid_info,
 						     sizeof(*mbssid));
+					util_scan_free_cache_entry(tmp_entry);
 				} else {
 					qdf_mem_copy(mbssid->non_trans_bssid,
 						     rnr->bssid.bytes,
