@@ -1819,13 +1819,6 @@ util_find_bvmlie_persta_prof_for_linkid(uint8_t req_link_id,
 	return QDF_STATUS_E_PROTO;
 }
 
-#define MLO_LINKSPECIFIC_ASSOC_REQ_FC0  0x00
-#define MLO_LINKSPECIFIC_ASSOC_REQ_FC1  0x00
-#define MLO_LINKSPECIFIC_ASSOC_RESP_FC0 0x10
-#define MLO_LINKSPECIFIC_ASSOC_RESP_FC1 0x00
-#define MLO_LINKSPECIFIC_PROBE_RESP_FC0 0x50
-#define MLO_LINKSPECIFIC_PROBE_RESP_FC1 0x00
-
 static
 QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 				    uint8_t subtype,
