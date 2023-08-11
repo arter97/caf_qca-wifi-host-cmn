@@ -1280,7 +1280,6 @@ static inline QDF_STATUS dp_peer_sawf_ctx_free(struct dp_soc *soc,
 {
 	return QDF_STATUS_SUCCESS;
 }
-
 #endif
 
 #ifndef CONFIG_SAWF
