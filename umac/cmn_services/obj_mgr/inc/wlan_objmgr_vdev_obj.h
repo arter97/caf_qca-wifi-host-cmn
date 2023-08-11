@@ -2396,6 +2396,12 @@ wlan_objmgr_vdev_init_ml_peer_count(struct wlan_objmgr_vdev *vdev)
 {
 }
 
+static inline
+bool wlan_vdev_mlme_is_tdls_vdev(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
+
 #endif
 
 /**
