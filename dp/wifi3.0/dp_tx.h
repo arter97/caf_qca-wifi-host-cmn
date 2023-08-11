@@ -35,6 +35,9 @@
 #ifdef CONFIG_SAWF
 #include "dp_sawf.h"
 #endif
+#ifdef WLAN_SUPPORT_LAPB
+#include "wlan_dp_lapb_flow.h"
+#endif
 #include <qdf_pkt_add_timestamp.h>
 #include "dp_ipa.h"
 #ifdef IPA_OFFLOAD
@@ -230,7 +233,7 @@ struct dp_tx_msdu_info_s {
 	uint8_t vdev_id;
 #endif
 #endif
-#ifdef WLAN_DP_FEATURE_SW_LATENCY_MGR
+#if defined(WLAN_DP_FEATURE_SW_LATENCY_MGR) || defined(WLAN_SUPPORT_LAPB)
 	uint8_t skip_hp_update;
 #endif
 #ifdef QCA_DP_TX_RMNET_OPTIMIZATION
@@ -592,6 +595,24 @@ static inline void dp_tx_get_queue(struct dp_vdev *vdev,
 		queue->ring_id = (qdf_nbuf_get_queue_mapping(nbuf) %
 					vdev->pdev->soc->num_tcl_data_rings);
 }
+#elif defined(WLAN_SUPPORT_LAPB)
+static inline void dp_tx_get_queue(struct dp_vdev *vdev,
+				   qdf_nbuf_t nbuf, struct dp_tx_queue *queue)
+{
+	/* get flow id */
+	queue->desc_pool_id = DP_TX_GET_DESC_POOL_ID(vdev);
+
+	if (wlan_cfg_is_lapb_enabled(vdev->pdev->soc->wlan_cfg_ctx)) {
+		if (wlan_dp_is_lapb_frame(vdev->pdev->soc, nbuf))
+			queue->ring_id =
+				    vdev->pdev->soc->num_tcl_data_rings - 1;
+		else
+			queue->ring_id = (qdf_nbuf_get_queue_mapping(nbuf) %
+				    (vdev->pdev->soc->num_tcl_data_rings - 1));
+	} else
+		queue->ring_id = (qdf_nbuf_get_queue_mapping(nbuf) %
+				  vdev->pdev->soc->num_tcl_data_rings);
+}
 #else
 static inline void dp_tx_get_queue(struct dp_vdev *vdev,
 				   qdf_nbuf_t nbuf, struct dp_tx_queue *queue)
@@ -812,7 +833,7 @@ dp_send_completion_to_pkt_capture(struct dp_soc *soc,
 #endif
 
 #ifndef QCA_HOST_MODE_WIFI_DISABLED
-#ifdef WLAN_DP_FEATURE_SW_LATENCY_MGR
+#if defined WLAN_DP_FEATURE_SW_LATENCY_MGR || defined WLAN_SUPPORT_LAPB
 /**
  * dp_tx_update_stats() - Update soc level tx stats
  * @soc: DP soc handle

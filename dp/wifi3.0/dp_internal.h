@@ -4698,4 +4698,51 @@ static inline bool wlan_dp_fpm_is_tid_override(qdf_nbuf_t nbuf, uint8_t *tid)
 	return false;
 }
 #endif
+
+#ifndef WLAN_SUPPORT_LAPB
+/**
+ * wlan_dp_lapb_flow_attach() - Attach LAPB flow
+ * @soc: Datapath global soc handle
+ *
+ * Returns: QDF_STATUS
+ */
+static inline QDF_STATUS wlan_dp_lapb_flow_attach(struct dp_soc *soc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * wlan_dp_lapb_flow_detach() - Detach LAPB flow
+ * @soc: Datapath global soc handle
+ *
+ * Returns: QDF_STATUS
+ */
+static inline QDF_STATUS wlan_dp_lapb_flow_detach(struct dp_soc *soc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * wlan_dp_lapb_display_stats() - Get LAPB flow stats
+ * @soc: Datapath global soc handle
+ *
+ * Returns: QDF_STATUS
+ */
+static inline QDF_STATUS wlan_dp_lapb_display_stats(struct dp_soc *soc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * wlan_dp_lapb_clear_stats() - Clear LAPB flow stats
+ * @soc: Datapath global soc handle
+ *
+ * Returns: QDF_STATUS
+ */
+static inline void wlan_dp_lapb_clear_stats(struct dp_soc *soc)
+{
+}
+
+#endif
+
 #endif /* #ifndef _DP_INTERNAL_H_ */

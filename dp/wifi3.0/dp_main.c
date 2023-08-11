@@ -57,7 +57,6 @@
 #ifdef QCA_MULTIPASS_SUPPORT
 #include <enet.h>
 #endif
-
 #ifdef QCA_LL_TX_FLOW_CONTROL_V2
 #include "cdp_txrx_flow_ctrl_v2.h"
 #else
@@ -104,6 +103,9 @@ cdp_dump_flow_pool_info(struct cdp_soc_t *soc)
 #endif
 #ifdef WLAN_FEATURE_PEER_TXQ_FLUSH_CONF
 #include <target_if_dp.h>
+#endif
+#ifdef WLAN_SUPPORT_LAPB
+#include <wlan_dp_lapb_flow.h>
 #endif
 
 #ifdef WLAN_FEATURE_STATS_EXT
@@ -6631,6 +6633,7 @@ static void dp_soc_detach(struct cdp_soc_t *txrx_soc)
 	dp_runtime_deinit();
 
 	dp_sysfs_deinitialize_stats(soc);
+	wlan_dp_lapb_flow_detach(soc);
 	dp_soc_swlm_detach(soc);
 	dp_soc_tx_desc_sw_pools_free(soc);
 	dp_soc_srng_free(soc);
@@ -15892,6 +15895,7 @@ dp_soc_attach(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 		dp_sysfs_deinitialize_stats(soc);
 	}
 
+	wlan_dp_lapb_flow_attach(soc);
 	dp_soc_swlm_attach(soc);
 	dp_soc_set_interrupt_mode(soc);
 	dp_soc_set_def_pdev(soc);
