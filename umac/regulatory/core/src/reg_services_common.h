@@ -3088,4 +3088,22 @@ bool reg_is_dev_supports_80p80(struct wlan_objmgr_pdev *pdev)
 	return false;
 }
 #endif
+
+/**
+ * reg_get_pdev_from_phy_id() - Get pdev from phy id.
+ * @psoc: Psoc object.
+ * @phy_id: Phy id of the pdev.
+ * @reg_tx_ops: Regulatory tx ops to get pdev id.
+ * @is_reg_offload: Is offloaded regulatory or not.
+ * @dbg_id: Debug id used to get pdev and used to release reference in the
+ * caller.
+ *
+ * Note: The caller should release reference to the pdev.
+ * Return: Pdev object.
+ */
+struct wlan_objmgr_pdev *
+reg_get_pdev_from_phy_id(struct wlan_objmgr_psoc *psoc, uint8_t phy_id,
+			 struct wlan_lmac_if_reg_tx_ops *reg_tx_ops,
+			 bool is_reg_offload,
+			 wlan_objmgr_ref_dbgid *dbg_id);
 #endif

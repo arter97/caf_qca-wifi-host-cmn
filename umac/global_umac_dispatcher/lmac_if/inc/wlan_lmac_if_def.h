@@ -1106,13 +1106,14 @@ struct wlan_lmac_if_ftm_rx_ops {
  * @unregister_master_ext_handler: pointer to unregister ext event handler
  * @set_country_code:
  * @fill_umac_legacy_chanlist:
+ * @set_wait_for_init_cc_response_event: Wake up the thread that is waiting for
+ * the init cc response event.
  * @register_11d_new_cc_handler: pointer to register 11d cc event handler
  * @unregister_11d_new_cc_handler:  pointer to unregister 11d cc event handler
  * @start_11d_scan:
  * @stop_11d_scan:
  * @is_there_serv_ready_extn:
  * @set_user_country_code:
- * @set_country_failed:
  * @register_ch_avoid_event_handler:
  * @unregister_ch_avoid_event_handler:
  * @send_ctl_info: call-back function to send CTL info to firmware
@@ -1145,6 +1146,8 @@ struct wlan_lmac_if_reg_tx_ops {
 						  void *arg);
 	QDF_STATUS (*unregister_master_ext_handler)
 				(struct wlan_objmgr_psoc *psoc, void *arg);
+	void (*set_wait_for_init_cc_response_event)
+			(struct wlan_objmgr_pdev *pdev, QDF_STATUS status);
 	QDF_STATUS (*set_country_code)(struct wlan_objmgr_psoc *psoc,
 						void *arg);
 	QDF_STATUS (*fill_umac_legacy_chanlist)(struct wlan_objmgr_pdev *pdev,
@@ -1161,7 +1164,6 @@ struct wlan_lmac_if_reg_tx_ops {
 	QDF_STATUS (*set_user_country_code)(struct wlan_objmgr_psoc *psoc,
 					    uint8_t pdev_id,
 					    struct cc_regdmn_s *rd);
-	QDF_STATUS (*set_country_failed)(struct wlan_objmgr_pdev *pdev);
 	QDF_STATUS (*register_ch_avoid_event_handler)(
 			struct wlan_objmgr_psoc *psoc, void *arg);
 	QDF_STATUS (*unregister_ch_avoid_event_handler)(
