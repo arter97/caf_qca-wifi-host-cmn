@@ -1384,7 +1384,7 @@ struct mlo_link_removal_cmd_params {
 /**
  * struct mlo_link_removal_tbtt_info - MLO link removal TBTT info. This
  * information will be in correspondence with an outgoing beacon instance.
- * @tbtt_count: Delete timer TBTT count in the reported beacon
+ * @tbtt_count: AP removal timer TBTT count in the reported beacon
  * @qtimer_reading: Q-timer reading when the reported beacon is sent out
  * @tsf: TSF of the reported beacon
  */
@@ -1409,7 +1409,7 @@ struct mlo_link_removal_evt_params {
  * a link undergoing removal from its MLD
  * @vdev_id: Vdev ID of the link undergoing removal
  * @hw_link_id: HW link ID of the link undergoing removal
- * @tbtt_count: Delete timer TBTT count of the link undergoing removal
+ * @tbtt_count: AP removal timer TBTT count of the link undergoing removal
  */
 struct mgmt_rx_mlo_link_removal_info {
 	uint8_t vdev_id;

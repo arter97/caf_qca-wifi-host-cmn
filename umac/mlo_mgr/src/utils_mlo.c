@@ -4257,8 +4257,8 @@ util_parse_rvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
 	 * payloads of all subsequent fragments (if any) but not the headers of
 	 * those fragments.
 	 *
-	 * Currently, the helper returns the link ID, MAC address, Delete timer
-	 * and STA profile. More (sub)fields can be added when required.
+	 * Currently, the helper returns the link ID, MAC address, AP removal
+	 * timer and STA profile. More (sub)fields can be added when required.
 	 */
 	if (!subelempayload) {
 		mlo_err("Pointer to subelement payload is NULL");
@@ -4541,7 +4541,7 @@ util_parse_rv_info_from_linkinfo(uint8_t *linkinfo,
 			if (is_ap_removal_timer_valid)
 				link_info->ap_removal_timer = ap_removal_timer;
 			else
-				mlo_warn_rl("Delete timer not found in STA Info field of per-STA profile with link ID %u",
+				mlo_warn_rl("AP removal timer not found in STA Info field of per-STA profile with link ID %u",
 					    linkid);
 
 			mlo_debug("Per-STA Profile Link ID: %u AP removal timer present: %d AP removal timer: %u",
