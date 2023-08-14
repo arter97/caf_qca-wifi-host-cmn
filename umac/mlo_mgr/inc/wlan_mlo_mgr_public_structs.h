@@ -208,9 +208,29 @@ struct mlo_state_params {
 
 #endif
 
+/**
+ * enum wlan_mlo_link_switch_notify_reason - Enum for link switch notifier
+ *                                           callback trigger reason.
+ * @MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_PRE_SER: Prior to start of
+ *                                                   link switch and prior to
+ *                                                   serializing link switch.
+ * @MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_POST_SER: Prior to link switch start
+ *                                                    but link switch is
+ *                                                    serialized
+ * @MLO_LINK_SWITCH_NOTIFY_REASON_STOP_FAILURE: Link switch failure notify
+ * @MLO_LINK_SWITCH_NOTIFY_REASON_STOP_SUCCESS: Link switch success notify
+ */
+enum wlan_mlo_link_switch_notify_reason {
+	MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_PRE_SER,
+	MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_POST_SER,
+	MLO_LINK_SWITCH_NOTIFY_REASON_STOP_FAILURE,
+	MLO_LINK_SWITCH_NOTIFY_REASON_STOP_SUCCESS,
+};
+
 typedef QDF_STATUS
 (*mlo_mgr_link_switch_notifier_cb)(struct wlan_objmgr_vdev *vdev,
-				   struct wlan_mlo_link_switch_req *lswitch_req);
+				   struct wlan_mlo_link_switch_req *lswitch_req,
+				   enum wlan_mlo_link_switch_notify_reason notify_reason);
 
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 /*

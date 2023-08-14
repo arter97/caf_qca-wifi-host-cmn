@@ -96,6 +96,7 @@ enum wlan_mlo_link_switch_reason {
  * enum mlo_link_switch_req_state - Enum to maintain the current state of
  * link switch request.
  * @MLO_LINK_SWITCH_STATE_IDLE: The last link switch request is inactive
+ * @MLO_LINK_SWITCH_STATE_INIT: Link switch is in pre-start state.
  * @MLO_LINK_SWITCH_STATE_DISCONNECT_CURR_LINK: Current link disconnect
  *                                              in progress.
  * @MLO_LINK_SWITCH_STATE_SET_MAC_ADDR: MAC address update in progress
@@ -107,6 +108,7 @@ enum wlan_mlo_link_switch_reason {
  */
 enum mlo_link_switch_req_state {
 	MLO_LINK_SWITCH_STATE_IDLE,
+	MLO_LINK_SWITCH_STATE_INIT,
 	MLO_LINK_SWITCH_STATE_DISCONNECT_CURR_LINK,
 	MLO_LINK_SWITCH_STATE_SET_MAC_ADDR,
 	MLO_LINK_SWITCH_STATE_CONNECT_NEW_LINK,
@@ -117,7 +119,6 @@ enum mlo_link_switch_req_state {
 /**
  * struct wlan_mlo_link_switch_req - Data Structure because of link switch
  * request
- * @restore_vdev_flag: VDEV Flag to be restored post link switch.
  * @vdev_id: VDEV Id of the link which is under link switch
  * @curr_ieee_link_id: Current link id of the ML link
  * @new_ieee_link_id: Link id of the link to which going to link switched
@@ -126,10 +127,10 @@ enum mlo_link_switch_req_state {
  * @new_phymode: Phy mode of link switch link
  * @state: Current state of link switch
  * @reason: Link switch reason
+ * @restore_vdev_flag: VDEV Flag to be restored post link switch.
  * @link_switch_ts: Link switch timestamp
  */
 struct wlan_mlo_link_switch_req {
-	bool restore_vdev_flag;
 	uint8_t vdev_id;
 	uint8_t curr_ieee_link_id;
 	uint8_t new_ieee_link_id;
@@ -138,6 +139,7 @@ struct wlan_mlo_link_switch_req {
 	uint32_t new_phymode;
 	enum mlo_link_switch_req_state state;
 	enum wlan_mlo_link_switch_reason reason;
+	bool restore_vdev_flag;
 	qdf_time_t link_switch_ts;
 };
 
@@ -402,6 +404,7 @@ bool mlo_mgr_is_link_switch_in_progress(struct wlan_objmgr_vdev *vdev);
  * of link switch
  * @vdev: VDEV object manager
  * @lswitch_req: Link switch request params from FW
+ * @notify_reason: Reason for link switch notification
  *
  * The link switch notifier callback to MLO manager invoked before starting
  * link switch disconnect
@@ -409,7 +412,8 @@ bool mlo_mgr_is_link_switch_in_progress(struct wlan_objmgr_vdev *vdev);
  * Return: QDF_STATUS
  */
 QDF_STATUS mlo_mgr_link_switch_notification(struct wlan_objmgr_vdev *vdev,
-					    struct wlan_mlo_link_switch_req *lswitch_req);
+					    struct wlan_mlo_link_switch_req *lswitch_req,
+					    enum wlan_mlo_link_switch_notify_reason notify_reason);
 
 /**
  * mlo_mgr_is_link_switch_on_assoc_vdev() - API to query whether link switch
@@ -458,6 +462,23 @@ QDF_STATUS mlo_mgr_ser_link_switch_cmd(struct wlan_objmgr_vdev *vdev,
  * Return: void
  */
 void mlo_mgr_remove_link_switch_cmd(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * mlo_mgr_link_switch_notify() - API to notify registered link switch notify
+ * callbacks.
+ * @vdev: VDEV object manager
+ * @req: Link switch request params from FW.
+ *
+ * The API calls all the registered link switch notifiers with appropriate
+ * reason for notifications. Callback handlers to take necessary action based
+ * on the reason.
+ * If any callback returns error API will return error or else success.
+ *
+ * Return: QDF_STATUS.
+ */
+QDF_STATUS
+mlo_mgr_link_switch_notify(struct wlan_objmgr_vdev *vdev,
+			   struct wlan_mlo_link_switch_req *req);
 
 /**
  * mlo_mgr_link_switch_validate_request() - Validate link switch request
@@ -623,7 +644,8 @@ mlo_mgr_is_link_switch_in_progress(struct wlan_objmgr_vdev *vdev)
 
 static inline QDF_STATUS
 mlo_mgr_link_switch_notification(struct wlan_objmgr_vdev *vdev,
-				 struct wlan_mlo_link_switch_req *lswitch_req)
+				 struct wlan_mlo_link_switch_req *lswitch_req,
+				 enum wlan_mlo_link_switch_notify_reason notify_reason)
 {
 	return QDF_STATUS_E_NOSUPPORT;
 }
@@ -650,6 +672,13 @@ mlo_mgr_ser_link_switch_cmd(struct wlan_objmgr_vdev *vdev,
 static inline void
 mlo_mgr_remove_link_switch_cmd(struct wlan_objmgr_vdev *vdev)
 {
+}
+
+static inline QDF_STATUS
+mlo_mgr_link_switch_notify(struct wlan_objmgr_vdev *vdev,
+			   struct wlan_mlo_link_switch_req *req)
+{
+	return QDF_STATUS_E_NOSUPPORT;
 }
 
 static inline QDF_STATUS
