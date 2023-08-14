@@ -1806,6 +1806,7 @@ enum qdf_iommu_attr {
 /**
  * enum qdf_dp_desc_type - source type for multiple pages allocation
  * @QDF_DP_TX_DESC_TYPE: DP SW TX descriptor
+ * @QDF_DP_TX_SPCL_DESC_TYPE: DP SW TX special descriptor
  * @QDF_DP_TX_PPEDS_DESC_TYPE: DP PPE-DS Tx descriptor
  * @QDF_DP_TX_EXT_DESC_TYPE: DP TX msdu extension descriptor
  * @QDF_DP_TX_EXT_DESC_LINK_TYPE: DP link descriptor for msdu ext_desc
@@ -1824,6 +1825,7 @@ enum qdf_iommu_attr {
  */
 enum qdf_dp_desc_type {
 	QDF_DP_TX_DESC_TYPE,
+	QDF_DP_TX_SPCL_DESC_TYPE,
 	QDF_DP_TX_PPEDS_DESC_TYPE,
 	QDF_DP_TX_EXT_DESC_TYPE,
 	QDF_DP_TX_EXT_DESC_LINK_TYPE,

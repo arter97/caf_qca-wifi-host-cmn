@@ -2334,11 +2334,13 @@ struct dp_arch_ops {
 
 	QDF_STATUS (*dp_tx_desc_pool_init)(struct dp_soc *soc,
 					   uint32_t num_elem,
-					   uint8_t pool_id);
+					   uint8_t pool_id,
+					   bool spcl_tx_desc);
 	void (*dp_tx_desc_pool_deinit)(
 				struct dp_soc *soc,
 				struct dp_tx_desc_pool_s *tx_desc_pool,
-				uint8_t pool_id);
+				uint8_t pool_id,
+				bool spcl_tx_desc);
 
 	QDF_STATUS (*dp_rx_desc_pool_init)(struct dp_soc *soc,
 					   struct rx_desc_pool *rx_desc_pool,
