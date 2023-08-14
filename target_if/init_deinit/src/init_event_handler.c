@@ -612,6 +612,12 @@ static int init_deinit_service_ext2_ready_event_handler(ol_scn_t scn_handle,
 			target_if_err("Legacy callback return error!");
 			goto exit;
 		}
+
+	if (wmi_service_enabled(wmi_handle, wmi_service_radar_flags_support)) {
+		target_if_debug("Full bw nol supported");
+		info->wlan_res_cfg.is_full_bw_nol_supported = true;
+	}
+
 	target_if_regulatory_set_ext_tpc(psoc);
 
 	target_if_reg_set_lower_6g_edge_ch_info(psoc);

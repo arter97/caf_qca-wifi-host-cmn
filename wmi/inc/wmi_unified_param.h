@@ -6437,6 +6437,7 @@ typedef enum {
 	wmi_service_atf_max_client_512_support,
 #endif
 	wmi_service_fisa_dynamic_msdu_aggr_size_support,
+	wmi_service_radar_flags_support,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -6817,6 +6818,7 @@ struct target_feature_set {
  * @tx_ilp_enable: capability to support TX ILP from host
  * @rf_path: Indicates RF path 0 primary, 1 secondary
  * @fw_ast_indication_disable: Disable AST indication
+ * @is_full_bw_nol_supported: Is full bandwidth needed to put to NOL
  */
 typedef struct {
 	uint32_t num_vdevs;
@@ -6951,6 +6953,7 @@ typedef struct {
 #endif
 	bool rf_path;
 	bool fw_ast_indication_disable;
+	bool is_full_bw_nol_supported;
 } target_resource_config;
 
 /**
