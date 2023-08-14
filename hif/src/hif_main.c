@@ -777,7 +777,8 @@ QDF_STATUS hif_unregister_recovery_notifier(struct hif_softc *hif_handle)
 }
 #endif
 
-#ifdef HIF_CPU_PERF_AFFINE_MASK
+#if defined(HIF_CPU_PERF_AFFINE_MASK) || \
+	defined(FEATURE_ENABLE_CE_DP_IRQ_AFFINE)
 /**
  * __hif_cpu_hotplug_notify() - CPU hotplug event handler
  * @context: HIF context
@@ -3349,4 +3350,17 @@ hif_affinity_mgr_init_grp_irq(struct hif_softc *scn, int grp_id,
 	cfg->last_affined_away = 0;
 	cfg->update_requested = false;
 }
+#endif
+
+#if defined(HIF_CPU_PERF_AFFINE_MASK) || \
+	defined(FEATURE_ENABLE_CE_DP_IRQ_AFFINE)
+void hif_config_irq_set_perf_affinity_hint(
+	struct hif_opaque_softc *hif_ctx)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
+
+	hif_config_irq_affinity(scn);
+}
+
+qdf_export_symbol(hif_config_irq_set_perf_affinity_hint);
 #endif
