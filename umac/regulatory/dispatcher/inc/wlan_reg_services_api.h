@@ -311,6 +311,16 @@ QDF_STATUS wlan_reg_get_superchan_entry(
 		struct wlan_objmgr_pdev *pdev,
 		enum channel_enum chan_enum,
 		const struct super_chan_info **p_sup_chan_entry);
+/**
+ * wlan_reg_is_6ghz_unii5_chan_freq() - Check if the given 6GHz channel freq
+ * is UNII-5 band or not.
+ * @freq: Channel frequency
+ *
+ * Return: true if given 6GHz channel frequency is UNII-5 band, else false
+ */
+bool wlan_reg_is_6ghz_unii5_chan_freq(qdf_freq_t freq);
+#define WLAN_REG_IS_6GHZ_UNII5_CHAN_FREQ(freq) \
+	wlan_reg_is_6ghz_unii5_chan_freq(freq)
 #else
 
 #define WLAN_REG_IS_6GHZ_CHAN_FREQ(freq) (false)
@@ -389,6 +399,12 @@ static inline
 const char *wlan_reg_get_power_string(enum reg_6g_ap_type power_type)
 {
 	return "INVALID";
+}
+
+#define WLAN_REG_IS_6GHZ_UNII5_CHAN_FREQ(freq) (false)
+static inline bool wlan_reg_is_6ghz_unii5_chan_freq(qdf_freq_t freq)
+{
+	return false;
 }
 #endif /* CONFIG_BAND_6GHZ */
 
@@ -608,13 +624,16 @@ QDF_STATUS wlan_reg_read_current_country(struct wlan_objmgr_psoc *psoc,
  * @pdev: pointer to pdev
  * @pwr_type_6g: pointer to 6G power type
  * @ap_pwr_type: AP's power type for 6G as advertised in HE ops IE
+ * @chan_freq: Connection channel frequency
+ *
  * Return: QDF_STATUS
  */
 QDF_STATUS
 wlan_reg_get_best_6g_power_type(struct wlan_objmgr_psoc *psoc,
 				struct wlan_objmgr_pdev *pdev,
 				enum reg_6g_ap_type *pwr_type_6g,
-				enum reg_6g_ap_type ap_pwr_type);
+				enum reg_6g_ap_type ap_pwr_type,
+				uint32_t chan_freq);
 #endif
 
 #ifdef CONFIG_CHAN_FREQ_API
@@ -1764,7 +1783,7 @@ uint16_t wlan_reg_find_nearest_puncture_pattern(enum phy_ch_width bw,
 
 #ifdef CONFIG_REG_6G_PWRMODE
 /**
- * wlan_reg_set_channel_params_for_pwrmode() - Sets channel parameteres for
+ * wlan_reg_set_channel_params_for_pwrmode() - Sets channel parameters for
  * given bandwidth
  * @pdev: The physical dev to program country code or regdomain
  * @freq: channel center frequency.
@@ -2678,12 +2697,12 @@ wlan_reg_get_best_pwr_mode(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
  *
  * Return: EIRP power
  */
-uint8_t wlan_reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
-			      qdf_freq_t cen320, uint16_t bw,
-			      enum reg_6g_ap_type ap_pwr_type,
-			      uint16_t in_punc_pattern,
-			      bool is_client_list_lookup_needed,
-			      enum reg_6g_client_type client_type);
+int8_t wlan_reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
+			     qdf_freq_t cen320, uint16_t bw,
+			     enum reg_6g_ap_type ap_pwr_type,
+			     uint16_t in_punc_pattern,
+			     bool is_client_list_lookup_needed,
+			     enum reg_6g_client_type client_type);
 #else
 static inline
 qdf_freq_t wlan_reg_get_thresh_priority_freq(struct wlan_objmgr_pdev *pdev)
@@ -2716,7 +2735,7 @@ static inline QDF_STATUS wlan_reg_eirp_2_psd(struct wlan_objmgr_pdev *pdev,
 	return QDF_STATUS_E_FAILURE;
 }
 
-static inline uint8_t
+static inline int8_t
 wlan_reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev,
 		      qdf_freq_t freq,
 		      qdf_freq_t cen320, uint16_t bw,

@@ -30,6 +30,20 @@
 #define NUM_WORDS_PER_DSCP_TID_TABLE (DSCP_TID_TABLE_SIZE / 4)
 #define HAL_TX_NUM_DSCP_REGISTER_SIZE 32
 #define HAL_PPE_VP_ENTRIES_MAX 32
+#define HAL_PPE_VP_SEARCH_IDX_REG_MAX 8
+
+/**
+ * hal_tx_get_num_ppe_vp_search_idx_reg_entries_6432() - get number of PPE VP
+ *                                                       search index registers
+ * @hal_soc_hdl: HAL SoC handle
+ *
+ * Return: Number of PPE VP search index registers
+ */
+static uint32_t
+hal_tx_get_num_ppe_vp_search_idx_reg_entries_6432(hal_soc_handle_t hal_soc_hdl)
+{
+	return HAL_PPE_VP_SEARCH_IDX_REG_MAX;
+}
 
 /**
  * hal_tx_set_dscp_tid_map_6432() - Configure default DSCP to TID map table
@@ -92,7 +106,7 @@ static void hal_tx_set_dscp_tid_map_6432(struct hal_soc *hal_soc, uint8_t *map,
 		addr += 4;
 	}
 
-	/* Diasble read/write access */
+	/* Disable read/write access */
 	regval = HAL_REG_READ(soc, cmn_reg_addr);
 	regval &=
 		~(HWIO_TCL_R0_CONS_RING_CMN_CTRL_REG_DSCP_TID_MAP_PROGRAM_EN_BMSK);
@@ -173,7 +187,7 @@ static void hal_tx_update_dscp_tid_6432(struct hal_soc *soc, uint8_t tid,
 					HWIO_TCL_R0_DSCP_TID_MAP_n_RMSK));
 	}
 
-	/* Diasble read/write access */
+	/* Disable read/write access */
 	regval = HAL_REG_READ(soc, cmn_reg_addr);
 	regval &=
 		~(HWIO_TCL_R0_CONS_RING_CMN_CTRL_REG_DSCP_TID_MAP_PROGRAM_EN_BMSK);
@@ -215,7 +229,9 @@ hal_tx_config_rbm_mapping_be_6432(hal_soc_handle_t hal_soc_hdl,
 
 	reg_addr = HWIO_TCL_R0_RBM_MAPPING0_ADDR(MAC_TCL_REG_REG_BASE);
 
-	if (ring_type == TCL_CMD_CREDIT)
+	if (ring_type == PPE2TCL)
+		ring_num = ring_num + RBM_PPE2TCL_OFFSET;
+	else if (ring_type == TCL_CMD_CREDIT)
 		ring_num = ring_num + RBM_TCL_CMD_CREDIT_OFFSET;
 
 	/* get current value stored in register address */
@@ -253,7 +269,7 @@ hal_tx_init_cmd_credit_ring_6432(hal_soc_handle_t hal_soc_hdl,
 }
 
 /* TX MONITOR */
-#if defined(QCA_MONITOR_2_0_SUPPORT) && defined(TX_MONITOR_WORD_MASK)
+#if defined(WLAN_PKT_CAPTURE_TX_2_0) && defined(TX_MONITOR_WORD_MASK)
 
 #define TX_FES_SETUP_MASK 0x3
 typedef struct tx_fes_setup_compact_6432 hal_tx_fes_setup_t;

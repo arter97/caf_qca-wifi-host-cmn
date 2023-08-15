@@ -205,6 +205,7 @@ struct mlo_state_params {
  * @msgq_ctx: Context switch mgr
  * @mlo_is_force_primary_umac: Force Primary UMAC enable
  * @mlo_forced_primary_umac_id: Force Primary UMAC ID
+ * @force_non_assoc_prim_umac: Force non-assoc link to be primary umac
  *
  * NB: not using kernel-doc format since the kernel-doc script doesn't
  *     handle the qdf_bitmap() macro
@@ -231,6 +232,7 @@ struct mlo_mgr_context {
 	struct ctxt_switch_mgr *msgq_ctx;
 	bool mlo_is_force_primary_umac;
 	uint8_t mlo_forced_primary_umac_id;
+	bool force_non_assoc_prim_umac;
 };
 
 /*
@@ -465,6 +467,7 @@ struct wlan_mlo_peer_list {
  * @sta_ctx: MLO STA related information
  * @ap_ctx: AP related information
  * @t2lm_ctx: T2LM related information
+ * @epcs_ctx: EPCS related information
  */
 struct wlan_mlo_dev_context {
 	qdf_list_node_t node;
@@ -486,6 +489,7 @@ struct wlan_mlo_dev_context {
 	struct wlan_mlo_sta *sta_ctx;
 	struct wlan_mlo_ap *ap_ctx;
 	struct wlan_t2lm_context t2lm_ctx;
+	struct wlan_epcs_context epcs_ctx;
 };
 
 /**

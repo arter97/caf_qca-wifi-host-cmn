@@ -2205,7 +2205,7 @@ enum dp_context_type {
  * @dp_peer_rx_reorder_queue_setup: Dp peer reorder queue setup
  * @dp_find_peer_by_destmac:
  * @dp_bank_reconfig:
- * @dp_rx_replenish_soc_get:
+ * @dp_get_soc_by_chip_id: Get soc by chip id
  * @dp_soc_get_num_soc:
  * @dp_reconfig_tx_vdev_mcast_ctrl:
  * @dp_cc_reg_cfg_init:
@@ -2217,6 +2217,7 @@ enum dp_context_type {
  * @ipa_get_wdi_ver: Get WDI version
  * @dp_txrx_ppeds_rings_status:
  * @dp_tx_ppeds_inuse_desc:
+ * @dp_ppeds_clear_stats: Clear ppeds related stats
  * @dp_tx_ppeds_cfg_astidx_cache_mapping:
  * @txrx_soc_ppeds_start:
  * @txrx_soc_ppeds_stop:
@@ -2414,8 +2415,8 @@ struct dp_arch_ops {
 						   uint8_t vdev_id);
 	void (*dp_bank_reconfig)(struct dp_soc *soc, struct dp_vdev *vdev);
 
-	struct dp_soc * (*dp_rx_replenish_soc_get)(struct dp_soc *soc,
-						   uint8_t chip_id);
+	struct dp_soc * (*dp_get_soc_by_chip_id)(struct dp_soc *soc,
+						 uint8_t chip_id);
 
 	uint8_t (*dp_soc_get_num_soc)(struct dp_soc *soc);
 	void (*dp_reconfig_tx_vdev_mcast_ctrl)(struct dp_soc *soc,
@@ -2442,6 +2443,7 @@ struct dp_arch_ops {
 #ifdef WLAN_SUPPORT_PPEDS
 	void (*dp_txrx_ppeds_rings_status)(struct dp_soc *soc);
 	void (*dp_tx_ppeds_inuse_desc)(struct dp_soc *soc);
+	void (*dp_ppeds_clear_stats)(struct dp_soc *soc);
 	void (*dp_tx_ppeds_cfg_astidx_cache_mapping)(struct dp_soc *soc,
 						     struct dp_vdev *vdev,
 						     bool peer_map);
@@ -2556,6 +2558,25 @@ struct sysfs_stats_config {
 };
 #endif
 
+struct test_mem_free {
+	unsigned long ts_qdesc_mem_hdl;
+	qdf_dma_addr_t hw_qdesc_paddr;
+	void *hw_qdesc_vaddr_align;
+	void *hw_qdesc_vaddr_unalign;
+	uint32_t peer_id;
+	uint32_t tid;
+	uint8_t chip_id;
+	unsigned long ts_hw_flush_back;
+};
+
+struct test_qaddr_del {
+	unsigned long ts_qaddr_del;
+	uint32_t peer_id;
+	uint32_t paddr;
+	uint32_t tid;
+	uint8_t chip_id;
+};
+
 /* SOC level structure for data path */
 struct dp_soc {
 	/**
@@ -2605,6 +2626,9 @@ struct dp_soc {
 
 	/* RXDMA monitor status ring. TBD: Check format of this ring */
 	struct dp_srng rxdma_mon_status_ring[MAX_NUM_LMAC_HW];
+
+	/* Ring to handover links to hw in monitor mode for SOFTUMAC arch */
+	struct dp_srng sw2rxdma_link_ring[MAX_NUM_LMAC_HW];
 
 	/* Number of PDEVs */
 	uint8_t pdev_count;
@@ -3070,7 +3094,8 @@ struct dp_soc {
 	uint8_t rxdma2sw_rings_not_supported:1,
 		wbm_sg_last_msdu_war:1,
 		mec_fw_offload:1,
-		multi_peer_grp_cmd_supported:1;
+		multi_peer_grp_cmd_supported:1,
+		umac_reset_supported:1;
 
 	/* Number of Rx refill rings */
 	uint8_t num_rx_refill_buf_rings;
@@ -3112,6 +3137,14 @@ struct dp_soc {
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 	uint8_t mld_mode_ap;
 #endif
+	struct test_qaddr_del *list_shared_qaddr_del;
+	struct test_qaddr_del *reo_write_list;
+	struct test_mem_free *list_qdesc_addr_free;
+	struct test_mem_free *list_qdesc_addr_alloc;
+	uint64_t free_addr_list_idx;
+	uint64_t alloc_addr_list_idx;
+	uint64_t shared_qaddr_del_idx;
+	uint64_t write_paddr_list_idx;
 };
 
 #ifdef IPA_OFFLOAD
@@ -4064,6 +4097,8 @@ struct dp_vdev {
 	/* Flag to indicate if to_fw should be set for tx pkts on this vdev */
 	bool to_fw;
 #endif
+	/* QDF VDEV operating mode  */
+	enum QDF_OPMODE qdf_opmode;
 };
 
 enum {
@@ -5142,15 +5177,6 @@ void dp_hw_link_desc_pool_banks_free(struct dp_soc *soc, uint32_t mac_id);
  */
 QDF_STATUS dp_hw_link_desc_pool_banks_alloc(struct dp_soc *soc,
 					    uint32_t mac_id);
-
-/**
- * dp_link_desc_ring_replenish() - Replenish hw link desc rings
- * @soc: DP SOC handle
- * @mac_id: mac id
- *
- * Return: None
- */
-void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id);
 #else
 static inline void dp_hw_link_desc_pool_banks_free(struct dp_soc *soc,
 						   uint32_t mac_id)
@@ -5162,12 +5188,16 @@ static inline QDF_STATUS dp_hw_link_desc_pool_banks_alloc(struct dp_soc *soc,
 {
 	return QDF_STATUS_SUCCESS;
 }
-
-static inline void dp_link_desc_ring_replenish(struct dp_soc *soc,
-					       uint32_t mac_id)
-{
-}
 #endif
+
+/**
+ * dp_link_desc_ring_replenish() - Replenish hw link desc rings
+ * @soc: DP SOC handle
+ * @mac_id: mac id
+ *
+ * Return: None
+ */
+void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id);
 
 #ifdef WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL
 void dp_rx_refill_buff_pool_enqueue(struct dp_soc *soc);

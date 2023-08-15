@@ -748,6 +748,7 @@ enum wlan_op_subtype {
  * @vdev_stats_id: Stats ID of the vdev
  * @op_mode: Operation mode of the vdev
  * @subtype: subtype of the vdev
+ * @qdf_opmode: Operation mode of the vdev
  * @mld_mac_addr: MLD mac addr of the current vdev.
  */
 struct cdp_vdev_info {
@@ -756,6 +757,7 @@ struct cdp_vdev_info {
 	uint8_t vdev_stats_id;
 	enum wlan_op_mode op_mode;
 	enum wlan_op_subtype subtype;
+	enum QDF_OPMODE qdf_opmode;
 #ifdef WLAN_FEATURE_11BE_MLO
 	uint8_t *mld_mac_addr;
 #endif
@@ -1290,12 +1292,14 @@ struct cdp_soc_t {
  * @CDP_CONFIG_NAC: Enable nac
  * @CDP_CONFIG_ISOLATION: Enable isolation
  * @CDP_CONFIG_IN_TWT: In TWT session or not
+ * @CDP_CONFIG_MLD_PEER_VDEV: Change MLD peer's vdev
  */
 enum cdp_peer_param_type {
 	CDP_CONFIG_NAWDS,
 	CDP_CONFIG_NAC,
 	CDP_CONFIG_ISOLATION,
 	CDP_CONFIG_IN_TWT,
+	CDP_CONFIG_MLD_PEER_VDEV,
 };
 
 /**
@@ -1460,6 +1464,8 @@ enum cdp_pdev_param_type {
  * @cdp_rxdma_refill_ring_size: RXDMA refill ring size config
  * @cdp_rx_refill_buf_pool_size: RX refill ring size config
  * @cdp_rxdma_buf_ring_size: RXDMA buf ring size config
+ * @mac_addr: vdev mac address
+ * @new_vdev_id: New vdev id to which MLD peer is to be moved
  */
 typedef union cdp_config_param_t {
 	/* peer params */
@@ -1562,6 +1568,9 @@ typedef union cdp_config_param_t {
 	int cdp_rxdma_refill_ring_size;
 	int cdp_rx_refill_buf_pool_size;
 	int cdp_rxdma_buf_ring_size;
+
+	uint8_t mac_addr[QDF_MAC_ADDR_SIZE];
+	uint8_t new_vdev_id;
 } cdp_config_param_type;
 
 /**
@@ -1652,6 +1661,7 @@ enum cdp_pdev_bpr_param {
  * @CDP_ENABLE_WRAP: qwrap ap
  * @CDP_ENABLE_TRAFFIC_END_INDICATION: enable/disable traffic end indication
  * @CDP_VDEV_TX_TO_FW: Set to_fw bit for tx packets for the vdev
+ * @CDP_VDEV_SET_MAC_ADDR: Set mac address for vdev
  */
 enum cdp_vdev_param_type {
 	CDP_ENABLE_NAWDS,
@@ -1702,6 +1712,7 @@ enum cdp_vdev_param_type {
 #ifdef FEATURE_DIRECT_LINK
 	CDP_VDEV_TX_TO_FW,
 #endif
+	CDP_VDEV_SET_MAC_ADDR,
 };
 
 /**

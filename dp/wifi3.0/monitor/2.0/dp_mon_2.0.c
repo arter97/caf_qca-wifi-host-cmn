@@ -275,7 +275,7 @@ void
 dp_mon_tx_stats_update_2_0(struct dp_mon_peer *mon_peer,
 			   struct cdp_tx_completion_ppdu_user *ppdu)
 {
-	uint8_t preamble, mcs, punc_mode;
+	uint8_t preamble, mcs, punc_mode, res_mcs;
 
 	preamble = ppdu->preamble;
 	mcs = ppdu->mcs;
@@ -285,42 +285,23 @@ dp_mon_tx_stats_update_2_0(struct dp_mon_peer *mon_peer,
 	ppdu->punc_mode = punc_mode;
 
 	DP_STATS_INC(mon_peer, tx.punc_bw[punc_mode], ppdu->num_msdu);
-	DP_STATS_INCC(mon_peer,
-		      tx.pkt_type[preamble].mcs_count[MAX_MCS - 1],
-		      ppdu->num_msdu,
-		      ((mcs >= MAX_MCS_11BE) && (preamble == DOT11_BE)));
-	DP_STATS_INCC(mon_peer,
-		      tx.pkt_type[preamble].mcs_count[mcs],
-		      ppdu->num_msdu,
-		      ((mcs < MAX_MCS_11BE) && (preamble == DOT11_BE)));
-	DP_STATS_INCC(mon_peer,
-		      tx.su_be_ppdu_cnt.mcs_count[MAX_MCS - 1], 1,
-		      ((mcs >= MAX_MCS_11BE) && (preamble == DOT11_BE) &&
-		      (ppdu->ppdu_type == HTT_PPDU_STATS_PPDU_TYPE_SU)));
-	DP_STATS_INCC(mon_peer,
-		      tx.su_be_ppdu_cnt.mcs_count[mcs], 1,
-		      ((mcs < MAX_MCS_11BE) && (preamble == DOT11_BE) &&
-		      (ppdu->ppdu_type == HTT_PPDU_STATS_PPDU_TYPE_SU)));
-	DP_STATS_INCC(mon_peer,
-		      tx.mu_be_ppdu_cnt[TXRX_TYPE_MU_OFDMA].mcs_count[MAX_MCS - 1],
-		      1, ((mcs >= MAX_MCS_11BE) &&
-		      (preamble == DOT11_BE) &&
-		      (ppdu->ppdu_type == HTT_PPDU_STATS_PPDU_TYPE_MU_OFDMA)));
-	DP_STATS_INCC(mon_peer,
-		      tx.mu_be_ppdu_cnt[TXRX_TYPE_MU_OFDMA].mcs_count[mcs],
-		      1, ((mcs < MAX_MCS_11BE) &&
-		      (preamble == DOT11_BE) &&
-		      (ppdu->ppdu_type == HTT_PPDU_STATS_PPDU_TYPE_MU_OFDMA)));
-	DP_STATS_INCC(mon_peer,
-		      tx.mu_be_ppdu_cnt[TXRX_TYPE_MU_MIMO].mcs_count[MAX_MCS - 1],
-		      1, ((mcs >= MAX_MCS_11BE) &&
-		      (preamble == DOT11_BE) &&
-		      (ppdu->ppdu_type == HTT_PPDU_STATS_PPDU_TYPE_MU_MIMO)));
-	DP_STATS_INCC(mon_peer,
-		      tx.mu_be_ppdu_cnt[TXRX_TYPE_MU_MIMO].mcs_count[mcs],
-		      1, ((mcs < MAX_MCS_11BE) &&
-		      (preamble == DOT11_BE) &&
-		      (ppdu->ppdu_type == HTT_PPDU_STATS_PPDU_TYPE_MU_MIMO)));
+
+	if (preamble == DOT11_BE) {
+		res_mcs = (mcs < MAX_MCS_11BE) ? mcs : (MAX_MCS - 1);
+
+		DP_STATS_INC(mon_peer,
+			     tx.pkt_type[preamble].mcs_count[res_mcs],
+			     ppdu->num_msdu);
+		DP_STATS_INCC(mon_peer,
+			      tx.su_be_ppdu_cnt.mcs_count[res_mcs], 1,
+			      (ppdu->ppdu_type == HTT_PPDU_STATS_PPDU_TYPE_SU));
+		DP_STATS_INCC(mon_peer,
+			      tx.mu_be_ppdu_cnt[TXRX_TYPE_MU_OFDMA].mcs_count[res_mcs],
+			      1, (ppdu->ppdu_type == HTT_PPDU_STATS_PPDU_TYPE_MU_OFDMA));
+		DP_STATS_INCC(mon_peer,
+			      tx.mu_be_ppdu_cnt[TXRX_TYPE_MU_MIMO].mcs_count[res_mcs],
+			      1, (ppdu->ppdu_type == HTT_PPDU_STATS_PPDU_TYPE_MU_MIMO));
+	}
 }
 
 enum cdp_punctured_modes
@@ -1045,7 +1026,8 @@ QDF_STATUS dp_vdev_set_monitor_mode_buf_rings_tx_2_0(struct dp_pdev *pdev,
 }
 
 #if defined(WDI_EVENT_ENABLE) &&\
-	(defined(QCA_ENHANCED_STATS_SUPPORT) || !defined(REMOVE_PKT_LOG))
+	(defined(QCA_ENHANCED_STATS_SUPPORT) || !defined(REMOVE_PKT_LOG) ||\
+	 defined(WLAN_FEATURE_PKT_CAPTURE_V2))
 static inline
 void dp_mon_ppdu_stats_handler_register(struct dp_mon_soc *mon_soc)
 {
@@ -1479,8 +1461,8 @@ struct cdp_mon_ops dp_ops_mon_2_0 = {
 	.get_mon_pdev_rx_stats = dp_pdev_get_rx_mon_stats,
 	.txrx_enable_mon_reap_timer = NULL,
 #ifdef QCA_ENHANCED_STATS_SUPPORT
-	.txrx_enable_enhanced_stats = dp_enable_enhanced_stats_2_0,
-	.txrx_disable_enhanced_stats = dp_disable_enhanced_stats_2_0,
+	.txrx_enable_enhanced_stats = dp_enable_enhanced_stats,
+	.txrx_disable_enhanced_stats = dp_disable_enhanced_stats,
 #endif /* QCA_ENHANCED_STATS_SUPPORT */
 #if defined(ATH_SUPPORT_NAC_RSSI) || defined(ATH_SUPPORT_NAC)
 	.txrx_update_filter_neighbour_peers = dp_lite_mon_config_nac_peer,
@@ -1618,6 +1600,12 @@ dp_enable_enhanced_stats_2_0(struct cdp_soc_t *soc, uint8_t pdev_id)
 
 	be_soc = dp_get_be_soc_from_dp_soc(dp_soc);
 
+	/* enable only on one soc if MLD is disabled */
+	if (!be_soc->mlo_enabled || !be_soc->ml_ctxt) {
+		dp_enable_enhanced_stats(soc, pdev_id);
+		return QDF_STATUS_SUCCESS;
+	}
+
 	dp_mlo_iter_ptnr_soc(be_soc,
 			     dp_enable_enhanced_stats_for_each_pdev,
 			     NULL);
@@ -1640,6 +1628,12 @@ dp_disable_enhanced_stats_2_0(struct cdp_soc_t *soc, uint8_t pdev_id)
 	struct dp_soc_be *be_soc = NULL;
 
 	be_soc = dp_get_be_soc_from_dp_soc(dp_soc);
+
+	/* enable only on one soc if MLD is disabled */
+	if (!be_soc->mlo_enabled || !be_soc->ml_ctxt) {
+		dp_disable_enhanced_stats(soc, pdev_id);
+		return QDF_STATUS_SUCCESS;
+	}
 
 	dp_mlo_iter_ptnr_soc(be_soc,
 			     dp_disable_enhanced_stats_for_each_pdev,

@@ -3226,7 +3226,7 @@ struct smart_ant_enable_tx_feedback_params {
  * @rssi_rpt_mode: RSSI report mode
  * @rssi_thr: RSSI threshold
  * @pwr_format: Power format
- * @rpt_mode: Report mdoe
+ * @rpt_mode: Report mode
  * @bin_scale: BIN scale
  * @dbm_adj: DBM adjust
  * @chn_mask: chain mask
@@ -3644,7 +3644,7 @@ struct macaddr_params {
  * struct acparams_params - acparams config structure
  * @ac: AC to configure
  * @use_rts: Use rts for this AC
- * @aggrsize_scaling: Aggregrate size scaling for the AC
+ * @aggrsize_scaling: Aggregate size scaling for the AC
  * @min_kbps: min kbps req
  */
 struct acparams_params {
@@ -5675,6 +5675,10 @@ typedef enum {
 	PDEV_PARAM(pdev_param_rtt_11az_rsid_range,
 		   PDEV_PARAM_RTT_11AZ_RSID_RANGE),
 	PDEV_PARAM(pdev_param_pcie_config, PDEV_PARAM_PCIE_CONFIG),
+	PDEV_PARAM(pdev_param_probe_resp_retry_limit,
+		   PDEV_PARAM_PROBE_RESP_RETRY_LIMIT),
+	PDEV_PARAM(pdev_param_cts_timeout, PDEV_PARAM_CTS_TIMEOUT),
+	PDEV_PARAM(pdev_param_slot_time, PDEV_PARAM_SLOT_TIME),
 	pdev_param_max,
 } wmi_conv_pdev_params_id;
 
@@ -6366,6 +6370,7 @@ typedef enum {
 #ifdef WLAN_FEATURE_11BE_MLO
 	wmi_service_mlo_tsf_sync,
 	wmi_service_n_link_mlo_support,
+	wmi_service_per_link_stats_support,
 #endif
 	wmi_services_max,
 } wmi_conv_service_ids;
@@ -8366,7 +8371,7 @@ struct wmi_host_proxy_ast_reserve_param {
 
 /**
  * struct wmi_host_pdev_band_to_mac - freq range for mac
- * @pdev_id: PDEV ID to identifiy mac
+ * @pdev_id: PDEV ID to identify mac
  * @start_freq: start frequency value
  * @end_freq: end frequency value
  */

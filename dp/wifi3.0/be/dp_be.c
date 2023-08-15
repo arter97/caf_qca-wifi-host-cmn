@@ -97,6 +97,16 @@ static void dp_ppeds_inuse_desc(struct dp_soc *soc)
 	DP_PRINT_STATS("PPE-DS Tx Descriptors in Use = %u num_free %u",
 		       be_soc->ppeds_tx_desc.num_allocated,
 		       be_soc->ppeds_tx_desc.num_free);
+
+	DP_PRINT_STATS("PPE-DS Tx desc alloc failed %u",
+		       be_soc->ppeds_stats.tx.desc_alloc_failed);
+}
+
+static void dp_ppeds_clear_stats(struct dp_soc *soc)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+
+	be_soc->ppeds_stats.tx.desc_alloc_failed = 0;
 }
 #endif
 
@@ -1315,6 +1325,7 @@ void dp_free_ppeds_interrupts(struct dp_soc *soc, struct dp_srng *srng,
 			      int ring_type, int ring_num)
 {
 	if (srng->irq >= 0) {
+		qdf_dev_clear_irq_status_flags(srng->irq, IRQ_DISABLE_UNLAZY);
 		if (ring_type == WBM2SW_RELEASE &&
 		    ring_num == WBM2_SW_PPE_REL_RING_ID)
 			pld_pfrm_free_irq(soc->osdev->dev, srng->irq, soc);
@@ -1334,6 +1345,7 @@ int dp_register_ppeds_interrupts(struct dp_soc *soc, struct dp_srng *srng,
 
 	srng->irq = -1;
 	irq = pld_get_msi_irq(soc->osdev->dev, vector);
+	qdf_dev_set_irq_status_flags(irq, IRQ_DISABLE_UNLAZY);
 
 	if (ring_type == WBM2SW_RELEASE &&
 	    ring_num == WBM2_SW_PPE_REL_RING_ID) {
@@ -1383,6 +1395,7 @@ int dp_register_ppeds_interrupts(struct dp_soc *soc, struct dp_srng *srng,
 fail:
 	dp_err("Unable to config irq : ring type %d irq %d vector %d",
 	       ring_type, irq, vector);
+	qdf_dev_clear_irq_status_flags(irq, IRQ_DISABLE_UNLAZY);
 
 	return ret;
 }
@@ -2372,6 +2385,11 @@ static void dp_txrx_set_mlo_mcast_primary_vdev_param_be(
 	if (be_vdev->mcast_primary) {
 		struct cdp_txrx_peer_params_update params = {0};
 
+		dp_mlo_iter_ptnr_vdev(be_soc, be_vdev,
+				      dp_mlo_mcast_reset_pri_mcast,
+				      (void *)&be_vdev->mcast_primary,
+				      DP_MOD_ID_TX_MCAST);
+
 		params.chip_id = be_soc->mlo_chip_id;
 		params.pdev_id = be_vdev->vdev.pdev->pdev_id;
 		params.osif_vdev = be_vdev->vdev.osif_vdev;
@@ -2876,7 +2894,9 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 	arch_ops->tx_implicit_rbm_set = dp_tx_implicit_rbm_set_be;
 	arch_ops->txrx_set_vdev_param = dp_txrx_set_vdev_param_be;
 	dp_initialize_arch_ops_be_mlo(arch_ops);
-	arch_ops->dp_rx_replenish_soc_get = dp_rx_replensih_soc_get;
+#ifdef WLAN_MLO_MULTI_CHIP
+	arch_ops->dp_get_soc_by_chip_id = dp_get_soc_by_chip_id_be;
+#endif
 	arch_ops->dp_soc_get_num_soc = dp_soc_get_num_soc_be;
 	arch_ops->dp_peer_rx_reorder_queue_setup =
 					dp_peer_rx_reorder_queue_setup_be;
@@ -2898,6 +2918,7 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_register_ppeds_interrupts = dp_register_ppeds_interrupts;
 	arch_ops->dp_free_ppeds_interrupts = dp_free_ppeds_interrupts;
 	arch_ops->dp_tx_ppeds_inuse_desc = dp_ppeds_inuse_desc;
+	arch_ops->dp_ppeds_clear_stats = dp_ppeds_clear_stats;
 	arch_ops->dp_tx_ppeds_cfg_astidx_cache_mapping =
 				dp_tx_ppeds_cfg_astidx_cache_mapping;
 #ifdef DP_UMAC_HW_RESET_SUPPORT

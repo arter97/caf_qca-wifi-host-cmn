@@ -129,11 +129,11 @@ mld_get_best_primary_umac_w_rssi(struct wlan_mlo_peer_context *ml_peer,
 	bool mld_sta_links[WLAN_OBJMGR_MAX_DEVICES] = {0};
 	bool mld_no_sta[WLAN_OBJMGR_MAX_DEVICES] = {0};
 	struct wlan_objmgr_peer *assoc_peer = NULL;
-	uint8_t prim_link, id;
+	uint8_t prim_link, id, prim_link_hi;
 	uint8_t num_psocs;
 	struct mlpeer_data *tqm_params = NULL;
 	struct wlan_channel *channel;
-	enum phy_ch_width chwidth;
+	enum phy_ch_width sec_hi_bw, hi_bw;
 	uint8_t cong = ML_PRIMARY_TQM_CONGESTION;
 	uint16_t mld_ml_sta_count[WLAN_OBJMGR_MAX_DEVICES] = {0};
 	enum phy_ch_width mld_ch_width[WLAN_OBJMGR_MAX_DEVICES];
@@ -226,30 +226,42 @@ mld_get_best_primary_umac_w_rssi(struct wlan_mlo_peer_context *ml_peer,
 			}
 		}
 	} else if (psoc_w_nosta > 1) {
-		chwidth = CH_WIDTH_INVALID;
+		hi_bw = CH_WIDTH_INVALID;
+		sec_hi_bw = CH_WIDTH_INVALID;
 		for (i = 0; i < WLAN_OBJMGR_MAX_DEVICES; i++) {
 			if (!mld_no_sta[i])
 				continue;
 
-			if (chwidth == CH_WIDTH_INVALID) {
-				prim_link = i;
-				chwidth = mld_ch_width[i];
+			if (hi_bw == CH_WIDTH_INVALID) {
+				prim_link_hi = i;
+				hi_bw = mld_ch_width[i];
 				continue;
 			}
-			/* if bw is 320MHZ mark that link as primary link */
+			/* if bw is 320MHZ mark it as highest ch width */
 			if (mld_ch_width[i] == CH_WIDTH_320MHZ) {
-				prim_link = i;
-				chwidth = mld_ch_width[i];
-				break;
+				prim_link = prim_link_hi;
+				sec_hi_bw = hi_bw;
+				hi_bw = mld_ch_width[i];
+				prim_link_hi = i;
 			}
 			/* If bw is less than or equal to 160 MHZ
 			 * and chwidth is greater than than other link
 			 * Mark this link as primary link
 			 */
-			if ((mld_ch_width[i] <= CH_WIDTH_160MHZ) &&
-			    (chwidth < mld_ch_width[i])) {
-				prim_link = i;
-				chwidth = mld_ch_width[i];
+			if (mld_ch_width[i] <= CH_WIDTH_160MHZ) {
+				if (hi_bw < mld_ch_width[i]) {
+					/* move high bw to second high bw */
+					prim_link = prim_link_hi;
+					sec_hi_bw = hi_bw;
+
+					hi_bw = mld_ch_width[i];
+					prim_link_hi = i;
+				} else if ((sec_hi_bw == CH_WIDTH_INVALID) ||
+					   (sec_hi_bw < mld_ch_width[i])) {
+					/* update sec high bw */
+					sec_hi_bw = mld_ch_width[i];
+					prim_link = i;
+				}
 			}
 		}
 	} else {
@@ -573,11 +585,33 @@ QDF_STATUS mlo_peer_allocate_primary_umac(
 	 * 1) for single link MLO connection
 	 * 2) if MLD is single chip MLO
 	 */
+	if ((mlo_ctx->force_non_assoc_prim_umac) &&
+	    (ml_peer->max_links >= 1)) {
+		for (i = 0; i < WLAN_UMAC_MLO_MAX_VDEVS; i++) {
+			if (!link_vdevs[i])
+				continue;
+
+			if (wlan_peer_get_vdev(assoc_peer) == link_vdevs[i])
+				continue;
+			psoc_id = wlan_vdev_get_psoc_id(link_vdevs[i]);
+			ml_peer->primary_umac_psoc_id = psoc_id;
+			break;
+		}
+
+		mlo_peer_assign_primary_umac(ml_peer, peer_entry);
+		mlo_info("MLD ID %d ML Peer " QDF_MAC_ADDR_FMT
+			 " primary umac soc %d ", ml_dev->mld_id,
+			 QDF_MAC_ADDR_REF(ml_peer->peer_mld_addr.bytes),
+			 ml_peer->primary_umac_psoc_id);
+
+		return QDF_STATUS_SUCCESS;
+	}
+
 	if ((ml_peer->max_links == 1) ||
 	    (mlo_vdevs_check_single_soc(link_vdevs, ml_peer->max_links))) {
 		mlo_peer_assign_primary_umac(ml_peer, peer_entry);
-		mlo_info("MLD ID %d Assoc peer " QDF_MAC_ADDR_FMT " primary umac soc %d ",
-			 ml_dev->mld_id,
+		mlo_info("MLD ID %d Assoc peer " QDF_MAC_ADDR_FMT
+			 " primary umac soc %d ", ml_dev->mld_id,
 			 QDF_MAC_ADDR_REF(ml_peer->peer_mld_addr.bytes),
 			 ml_peer->primary_umac_psoc_id);
 

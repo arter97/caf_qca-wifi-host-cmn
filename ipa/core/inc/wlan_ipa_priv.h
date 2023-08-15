@@ -64,7 +64,7 @@
 #define WLAN_IPA_CLIENT_MAX_IFACE           MAX_IPA_IFACE
 #define WLAN_IPA_MAX_SYSBAM_PIPE            4
 
-#ifdef IPA_WDS_EASYMESH_FEATURE
+#if defined(IPA_WDS_EASYMESH_FEATURE) || defined(QCA_WIFI_QCN9224)
 #define WLAN_IPA_MAX_SESSION                MAX_IPA_IFACE //7
 #else
 #define WLAN_IPA_MAX_SESSION                5
@@ -121,6 +121,8 @@
  * @WLAN_IPA_UC_OPCODE_QUOTA_RSP: IPA UC quota response
  * @WLAN_IPA_UC_OPCODE_QUOTA_IND: IPA UC quota indication
  * @WLAN_IPA_UC_OPCODE_UC_READY: IPA UC ready indication
+ * @WLAN_IPA_FILTER_RSV_NOTIFY: OPT WIFI DP filter reserve notification
+ * @WLAN_IPA_FILTER_REL_NOTIFY: OPT WIFI DP filter release notification
  * @WLAN_IPA_UC_OPCODE_MAX: IPA UC max operation code
  */
 enum wlan_ipa_uc_op_code {
@@ -135,6 +137,8 @@ enum wlan_ipa_uc_op_code {
 	WLAN_IPA_UC_OPCODE_QUOTA_IND = 7,
 #endif
 	WLAN_IPA_UC_OPCODE_UC_READY = 8,
+	WLAN_IPA_FILTER_RSV_NOTIFY = 9,
+	WLAN_IPA_FILTER_REL_NOTIFY = 10,
 	/* keep this last */
 	WLAN_IPA_UC_OPCODE_MAX
 };
@@ -780,6 +784,7 @@ struct wlan_ipa_priv {
 #ifdef IPA_OPT_WIFI_DP
 	struct wifi_dp_flt_setup dp_cce_super_rule_flt_param;
 	qdf_event_t ipa_flt_evnt;
+	qdf_wake_lock_t opt_dp_wake_lock;
 #endif
 };
 

@@ -1133,6 +1133,7 @@ void qdf_nbuf_unmap_nbytes_single_paddr_debug(qdf_device_t osdev,
 					      const char *func, uint32_t line)
 {
 	qdf_nbuf_untrack_map(buf, func, line);
+	__qdf_record_nbuf_nbytes(__qdf_nbuf_get_end_offset(buf), dir, false);
 	__qdf_mem_unmap_nbytes_single(osdev, phy_addr, dir, nbytes);
 	qdf_net_buf_debug_update_unmap_node(buf, func, line);
 }
@@ -2669,13 +2670,29 @@ bool qdf_nbuf_fast_xmit(qdf_nbuf_t nbuf)
 {
 	return nbuf->fast_xmit;
 }
+
+qdf_export_symbol(qdf_nbuf_fast_xmit);
+
+void qdf_nbuf_set_fast_xmit(qdf_nbuf_t nbuf, int value)
+{
+	nbuf->fast_xmit = value;
+}
+
+qdf_export_symbol(qdf_nbuf_set_fast_xmit);
 #else
 bool qdf_nbuf_fast_xmit(qdf_nbuf_t nbuf)
 {
 	return false;
 }
-#endif
+
 qdf_export_symbol(qdf_nbuf_fast_xmit);
+
+void qdf_nbuf_set_fast_xmit(qdf_nbuf_t nbuf, int value)
+{
+}
+
+qdf_export_symbol(qdf_nbuf_set_fast_xmit);
+#endif
 
 #ifdef NBUF_MEMORY_DEBUG
 

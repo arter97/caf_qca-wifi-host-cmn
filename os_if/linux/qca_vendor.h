@@ -698,6 +698,16 @@
  *	CU = %NL80211_SURVEY_INFO_TIME_BUSY * 100 / %NL80211_SURVEY_INFO_TIME.
  *	This command is only used for STA mode.
  *
+ * @QCA_NL80211_VENDOR_SUBCMD_TID_TO_LINK_MAP: This vendor subcommand is
+ *	used as an event to notify the userspace of TID-to-link map changes
+ *	negotiated by the driver or updated by associated AP MLD with Beacon,
+ *	Probe Response, or Action frames. The attributes used with this command
+ *	are defined in enum qca_wlan_vendor_attr_tid_to_link_map.
+ *
+ *	Note that the attribute
+ *	%QCA_WLAN_VENDOR_ATTR_TID_TO_LINK_MAP_AP_MLD_ADDR may not correspond to
+ *	the current connected AP MLD address.
+ *
  * @QCA_NL80211_VENDOR_SUBCMD_LINK_RECONFIG: Notify userspace about the removal
  *	of STA MLD setup links due to AP MLD removing the corresponding
  *	affiliated APs with Multi-Link reconfiguration. If all the STA MLD setup
@@ -708,6 +718,24 @@
  *	Note that the attribute
  *	%QCA_WLAN_VENDOR_ATTR_LINK_RECONFIG_AP_MLD_ADDR may not correspond to
  *	the current connected AP MLD address.
+ *
+ * @QCA_NL80211_VENDOR_SUBCMD_TDLS_DISC_RSP_EXT: Vendor command to configure
+ *	the driver with MLO link id information on which to transmit the TDLS
+ *	discovery response frame on the configured MLO BSS link when the
+ *	local station is connected in MLO mode. This command is sent to the
+ *	driver prior to the TDLS discovery response management transmit
+ *	operation and is followed immediately by the TDLS discovery response
+ *	management frame transmit command.
+ *
+ *	The driver saves the configured MLO link id information and uses it for
+ *	the following TDLS discovery response frame transmission on the
+ *	configured MLO BSS link and the link id information is cleared in the
+ *	driver after the TDLS discovery response frame is successfully
+ *	transmitted. This behavior is independent of the TDLS peer STA connection
+ *	mode (MLO or non-MLO).
+ *
+ *	Uses the attributes defined in
+ *	enum qca_wlan_vendor_attr_tdls_disc_rsp_ext.
  */
 
 enum qca_nl80211_vendor_subcmds {
@@ -966,7 +994,9 @@ enum qca_nl80211_vendor_subcmds {
 	QCA_NL80211_VENDOR_SUBCMD_ROAM_STATS = 226,
 	QCA_NL80211_VENDOR_SUBCMD_MLO_LINK_STATE = 227,
 	QCA_NL80211_VENDOR_SUBCMD_CONNECTED_CHANNEL_STATS = 228,
+	QCA_NL80211_VENDOR_SUBCMD_TID_TO_LINK_MAP = 229,
 	QCA_NL80211_VENDOR_SUBCMD_LINK_RECONFIG = 230,
+	QCA_NL80211_VENDOR_SUBCMD_TDLS_DISC_RSP_EXT = 231,
 };
 
 enum qca_wlan_vendor_tos {
@@ -1279,7 +1309,7 @@ enum qca_wlan_auth_type {
  *  NL80211_ATTR_STA_INFO
  * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_AP_STANDARD_NL80211_ATTR:
  *  Get the standard NL attributes Nested with this attribute.
- *  Ex : Query HT/VHT Capability advertized by the AP.
+ *  Ex : Query HT/VHT Capability advertised by the AP.
  *  NL80211_ATTR_VHT_CAPABILITY / NL80211_ATTR_HT_CAPABILITY
  * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_ROAM_COUNT:
  *  Number of successful Roam attempts before a
@@ -4608,6 +4638,8 @@ enum qca_wlan_vendor_attr_nd_offload {
  * @QCA_WLAN_VENDOR_FEATURE_AP_ALLOWED_FREQ_LIST: Flag indicates that the device
  *	in AP mode supports configuring allowed frequency list for AP operation
  *	with %QCA_WLAN_VENDOR_ATTR_CONFIG_AP_ALLOWED_FREQ_LIST.
+ * @QCA_WLAN_VENDOR_FEATURE_ENHANCED_AUDIO_EXPERIENCE_OVER_WLAN: Flag indicates
+ *	 that the device supports enhanced audio experience over WLAN feature.
  * @NUM_QCA_WLAN_VENDOR_FEATURES: Number of assigned feature bits
  */
 enum qca_wlan_vendor_features {
@@ -4634,6 +4666,7 @@ enum qca_wlan_vendor_features {
 	QCA_WLAN_VENDOR_FEATURE_PROT_RANGE_NEGO_AND_MEASURE_STA = 20,
 	QCA_WLAN_VENDOR_FEATURE_PROT_RANGE_NEGO_AND_MEASURE_AP = 21,
 	QCA_WLAN_VENDOR_FEATURE_AP_ALLOWED_FREQ_LIST = 22,
+	QCA_WLAN_VENDOR_FEATURE_ENHANCED_AUDIO_EXPERIENCE_OVER_WLAN = 23,
 	NUM_QCA_WLAN_VENDOR_FEATURES /* keep last */
 };
 
@@ -4967,12 +5000,12 @@ enum qca_wlan_vendor_attr_config {
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_RX_MPDU_AGGREGATION = 9,
 	/*
-	 * 8-bit unsigned value to configure the Non aggregrate/11g sw
+	 * 8-bit unsigned value to configure the Non aggregate/11g sw
 	 * retry threshold (0 disable, 31 max).
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_NON_AGG_RETRY = 10,
 	/*
-	 * 8-bit unsigned value to configure the aggregrate sw
+	 * 8-bit unsigned value to configure the aggregate sw
 	 * retry threshold (0 disable, 31 max).
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_AGG_RETRY = 11,
@@ -5866,7 +5899,7 @@ enum qca_wlan_vendor_attr_ndp_params {
 };
 
 /**
- * enum qca_wlan_ndp_sub_cmd - NDP sub comands types for
+ * enum qca_wlan_ndp_sub_cmd - NDP sub commands types for
  * QCA_NL80211_VENDOR_SUBCMD_NDP.
  * @QCA_WLAN_VENDOR_ATTR_NDP_INVALID: invalid value
  * @QCA_WLAN_VENDOR_ATTR_NDP_INTERFACE_CREATE: Command to create a NAN
@@ -16292,6 +16325,62 @@ enum qca_wlan_vendor_attr_mlo_link_state {
 };
 
 /**
+ * enum qca_wlan_vendor_attr_tid_link_map_status - Definition of attributes used
+ * inside nested attribute %QCA_WLAN_VENDOR_ATTR_TID_TO_LINK_MAP_STATUS.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_LINK_TID_MAP_STATUS_UPLINK: Required u16 attribute
+ * within nested attribute %QCA_WLAN_VENDOR_ATTR_TID_TO_LINK_MAP_STATUS.
+ * Indicates the link mapping bitmap of a TID for uplink traffic. It is a
+ * bitmask of the link IDs in which a bit set means that the TID is mapped with
+ * that link ID in uplink traffic. Otherwise, the TID is not mapped to uplink
+ * traffic for that link.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_LINK_TID_MAP_STATUS_DOWNLINK: Required u16 attribute
+ * within nested attribute %QCA_WLAN_VENDOR_ATTR_TID_TO_LINK_MAP_STATUS.
+ * Indicates the link mapping bitmap of a TID for downlink traffic. It is a
+ * bitmask of the link IDs in which a bit set means that the TID is mapped with
+ * that link ID in downlink traffic. Otherwise, the TID is not mapped to
+ * downlink traffic for that link.
+ */
+enum qca_wlan_vendor_attr_tid_link_map_status {
+	QCA_WLAN_VENDOR_ATTR_LINK_TID_MAP_STATUS_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_LINK_TID_MAP_STATUS_UPLINK = 1,
+	QCA_WLAN_VENDOR_ATTR_LINK_TID_MAP_STATUS_DOWNLINK = 2,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_LINK_TID_MAP_STATUS_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_LINK_TID_MAP_STATUS_MAX =
+	QCA_WLAN_VENDOR_ATTR_LINK_TID_MAP_STATUS_AFTER_LAST - 1,
+};
+
+/*
+ * enum qca_wlan_vendor_attr_tid_to_link_map: Definition of attributes used with
+ * %QCA_NL80211_VENDOR_SUBCMD_TID_TO_LINK_MAP event.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TID_TO_LINK_MAP_AP_MLD_ADDR: Required attribute. 6-byte
+ * AP MLD address with which this TID-to-link negotiation mapping is
+ * established/updated.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TID_TO_LINK_MAP_STATUS: Optional attribute. Array of
+ * nested attributes containing TID-to-links mapping information. This will have
+ * TID-to-link mapping for TID0 to TID7, each containing the uplink and downlink
+ * map information. If this attribute is not present the default TID-to-link
+ * mapping is in use, i.e., all TIDs are mapped to all links for both uplink and
+ * downlink traffic.
+ * See enum qca_wlan_vendor_attr_tid_link_map_status for the nested attributes.
+ */
+enum qca_wlan_vendor_attr_tid_to_link_map {
+	QCA_WLAN_VENDOR_ATTR_TID_TO_LINK_MAP_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_TID_TO_LINK_MAP_AP_MLD_ADDR = 1,
+	QCA_WLAN_VENDOR_ATTR_TID_TO_LINK_MAP_STATUS = 2,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_TID_TO_LINK_MAP_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_TID_TO_LINK_MAP_MAX =
+	QCA_WLAN_VENDOR_ATTR_TID_TO_LINK_MAP_AFTER_LAST - 1,
+};
+
+/**
  * enum qca_wlan_vendor_attr_link_reconfig: Definition of attributes used
  * with %QCA_NL80211_VENDOR_SUBCMD_LINK_RECONFIG event.
  *
@@ -16311,4 +16400,23 @@ enum qca_wlan_vendor_attr_link_reconfig {
 	QCA_WLAN_VENDOR_ATTR_LINK_RECONFIG_MAX =
 	QCA_WLAN_VENDOR_ATTR_LINK_RECONFIG_AFTER_LAST - 1,
 };
+
+/**
+ * enum qca_wlan_vendor_attr_tdls_disc_rsp_ext - Attributes used by
+ * %QCA_NL80211_VENDOR_SUBCMD_TDLS_DISC_RSP_EXT vendor command.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_DISC_RSP_EXT_TX_LINK: u8 attribute.
+ * Indicates the MLO link id on which the TDLS discovery response
+ * frame is to be transmitted.
+ */
+enum qca_wlan_vendor_attr_tdls_disc_rsp_ext {
+	QCA_WLAN_VENDOR_ATTR_TDLS_DISC_RSP_EXT_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_TDLS_DISC_RSP_EXT_TX_LINK = 1,
+
+	/* Keep last */
+	QCA_WLAN_VENDOR_ATTR_TDLS_DISC_RSP_EXT_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_TDLS_DISC_RSP_EXT_MAX =
+	QCA_WLAN_VENDOR_ATTR_TDLS_DISC_RSP_EXT_AFTER_LAST - 1,
+};
+
 #endif

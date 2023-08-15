@@ -176,6 +176,7 @@ struct wlan_srng_cfg {
  * @int_timer_threshold_mon:
  * @tx_ring_size:
  * @time_control_bp:
+ * @qref_control_size: list size for memory history arrays
  * @tx_comp_ring_size:
  * @tx_comp_ring_size_nss:
  * @int_rx_mon_ring_mask: Bitmap of Rx monitor ring interrupts mapped to each
@@ -376,6 +377,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	int int_timer_threshold_mon;
 	int tx_ring_size;
 	int time_control_bp;
+	int qref_control_size;
 	int tx_comp_ring_size;
 	int tx_comp_ring_size_nss;
 	uint8_t int_tx_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS];
@@ -562,6 +564,7 @@ struct wlan_cfg_dp_soc_ctxt {
  * @num_mac_rings: Number of mac rings
  * @nss_enabled: 1 - NSS enabled, 0 - NSS disabled
  * @dma_tx_mon_buf_ring_size: Tx monitor BUF Ring size
+ * @sw2rxdma_link_ring_size: SW2RXDMA link ring size
  */
 struct wlan_cfg_dp_pdev_ctxt {
 	int rx_dma_buf_ring_size;
@@ -573,6 +576,7 @@ struct wlan_cfg_dp_pdev_ctxt {
 	int num_mac_rings;
 	int nss_enabled;
 	int dma_tx_mon_buf_ring_size;
+	int sw2rxdma_link_ring_size;
 };
 
 /**
@@ -584,6 +588,7 @@ struct wlan_cfg_dp_pdev_ctxt {
  * @num_reo_exception_ring_entries: num of rx exception ring entries
  * @num_tx_desc: num of tx descriptors
  * @num_tx_ext_desc: num of tx ext descriptors
+ * @num_rx_sw_desc: number of rx sw descriptors
  * @num_reo_dst_ring_entries: Number of entries in REO destination ring
  * @num_rxdma_buf_ring_entries: Number of entries in rxdma buf ring
  * @num_rxdma_refill_ring_entries: Number of entries in rxdma refill ring
@@ -601,6 +606,7 @@ struct wlan_dp_prealloc_cfg {
 	int num_reo_exception_ring_entries;
 	int num_tx_desc;
 	int num_tx_ext_desc;
+	int num_rx_sw_desc;
 	int num_reo_dst_ring_entries;
 	int num_rxdma_buf_ring_entries;
 	int num_rxdma_refill_ring_entries;
@@ -1579,6 +1585,14 @@ void wlan_cfg_set_tx_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg,
 int wlan_cfg_time_control_bp(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
+ * wlan_cfg_qref_control_size - Get debug array size
+ * @cfg: soc configuration context
+ *
+ * Return: array size
+ */
+int wlan_cfg_qref_control_size(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
  * wlan_cfg_tx_comp_ring_size - Get Tx completion ring size (WBM Ring)
  * @cfg: soc configuration context
  *
@@ -1954,12 +1968,14 @@ wlan_cfg_is_tx_per_pkt_vdev_id_check_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
  * @interrupt_mode: Type of interrupt
  * @is_monitor_mode: is monitor mode enabled
  * @ppeds_attached: is ppeds attached
+ * @umac_reset_support: Umac reset support
  *
  * Return: void
  */
 void wlan_cfg_fill_interrupt_mask(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
 				  int num_dp_msi, int interrupt_mode,
-				  bool is_monitor_mode, bool ppeds_attached);
+				  bool is_monitor_mode, bool ppeds_attached,
+				  bool umac_reset_support);
 
 /**
  * wlan_cfg_is_rx_fisa_enabled() - Get Rx FISA enabled flag
@@ -2391,6 +2407,14 @@ wlan_cfg_get_dp_soc_tx_mon_buf_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg);
  * Return: Size of Rx MON dest ring size
  */
 int wlan_cfg_get_dma_rx_mon_dest_ring_size(struct wlan_cfg_dp_pdev_ctxt *cfg);
+
+/**
+ * wlan_cfg_get_dma_sw2rxdma_link_ring_size() - SW2RXDMA link ring size
+ * @cfg:  Configuration Handle
+ *
+ * Return: Size of SW2RXDMA link ring size
+ */
+int wlan_cfg_get_dma_sw2rxdma_link_ring_size(struct wlan_cfg_dp_pdev_ctxt *cfg);
 
 /**
  * wlan_cfg_get_dma_tx_mon_dest_ring_size() - Tx MON dest ring size

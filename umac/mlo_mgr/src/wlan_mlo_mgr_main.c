@@ -30,6 +30,7 @@
 #include "wlan_mlo_mgr_msgq.h"
 #include <target_if_mlo_mgr.h>
 #include <wlan_mlo_t2lm.h>
+#include <wlan_cm_api.h>
 
 static void mlo_global_ctx_deinit(void)
 {
@@ -77,6 +78,7 @@ static void mlo_global_ctx_init(void)
 	ml_link_lock_create(mlo_mgr_ctx);
 	ml_aid_lock_create(mlo_mgr_ctx);
 	mlo_mgr_ctx->mlo_is_force_primary_umac = 0;
+	mlo_mgr_ctx->force_non_assoc_prim_umac = 0;
 	mlo_msgq_init();
 }
 
@@ -669,6 +671,21 @@ static inline void mlo_t2lm_ctx_init(struct wlan_mlo_dev_context *ml_dev,
 	wlan_mlo_t2lm_timer_init(vdev);
 }
 
+/**
+ * mlo_epcs_ctx_init() - API to initialize the epcs context with the
+ * default values.
+ * @ml_dev: Pointer to ML Dev context
+ *
+ * Return: None
+ */
+static inline void mlo_epcs_ctx_init(struct wlan_mlo_dev_context *ml_dev)
+{
+	struct wlan_epcs_context *epcs_ctx;
+
+	epcs_ctx = &ml_dev->epcs_ctx;
+	qdf_mem_zero(epcs_ctx, sizeof(struct wlan_epcs_context));
+}
+
 static QDF_STATUS mlo_dev_ctx_init(struct wlan_objmgr_vdev *vdev)
 {
 	struct wlan_mlo_dev_context *ml_dev;
@@ -745,6 +762,7 @@ static QDF_STATUS mlo_dev_ctx_init(struct wlan_objmgr_vdev *vdev)
 	ml_link_lock_release(g_mlo_ctx);
 
 	mlo_t2lm_ctx_init(ml_dev, vdev);
+	mlo_epcs_ctx_init(ml_dev);
 
 	return status;
 }
@@ -760,6 +778,18 @@ static inline void mlo_t2lm_ctx_deinit(struct wlan_objmgr_vdev *vdev)
 {
 	wlan_mlo_t2lm_timer_deinit(vdev);
 }
+
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+static void ml_free_copied_reassoc_rsp(struct wlan_mlo_sta *sta_ctx)
+{
+	wlan_cm_free_connect_resp(sta_ctx->copied_reassoc_rsp);
+}
+#else
+static void ml_free_copied_reassoc_rsp(struct wlan_mlo_sta *sta_ctx)
+{
+	return;
+}
+#endif
 
 static QDF_STATUS mlo_dev_ctx_deinit(struct wlan_objmgr_vdev *vdev)
 {
@@ -810,24 +840,15 @@ static QDF_STATUS mlo_dev_ctx_deinit(struct wlan_objmgr_vdev *vdev)
 				     &ml_dev->node);
 		if (wlan_vdev_mlme_get_opmode(vdev) == QDF_STA_MODE) {
 			connect_req = ml_dev->sta_ctx->connect_req;
-			if (connect_req) {
-				if (connect_req->scan_ie.ptr) {
-					qdf_mem_free(connect_req->scan_ie.ptr);
-					connect_req->scan_ie.ptr = NULL;
-				}
-
-				if (connect_req->assoc_ie.ptr) {
-					qdf_mem_free(connect_req->assoc_ie.ptr);
-					connect_req->assoc_ie.ptr = NULL;
-				}
-				qdf_mem_free(ml_dev->sta_ctx->connect_req);
-			}
+			wlan_cm_free_connect_req(connect_req);
 
 			if (ml_dev->sta_ctx->disconn_req)
 				qdf_mem_free(ml_dev->sta_ctx->disconn_req);
 
 			if (ml_dev->sta_ctx->assoc_rsp.ptr)
 				qdf_mem_free(ml_dev->sta_ctx->assoc_rsp.ptr);
+
+			ml_free_copied_reassoc_rsp(ml_dev->sta_ctx);
 
 			copied_conn_req_lock_destroy(ml_dev->sta_ctx);
 
