@@ -891,6 +891,7 @@ QDF_STATUS mlo_mgr_link_switch_request_params(struct wlan_objmgr_psoc *psoc,
 					      void *evt_params)
 {
 	QDF_STATUS status;
+	struct wlan_mlo_link_switch_cnf cnf_params = {0};
 	struct wlan_mlo_link_switch_req *req;
 	struct wlan_objmgr_vdev *vdev;
 
@@ -905,14 +906,19 @@ QDF_STATUS mlo_mgr_link_switch_request_params(struct wlan_objmgr_psoc *psoc,
 	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, req->vdev_id,
 						    WLAN_MLO_MGR_ID);
 	if (!vdev) {
-		mlo_err("Invalid VDEV for link switch");
+		mlo_err("Invalid link switch VDEV %d", req->vdev_id);
+
+		/* Fill reject params here and send to FW as VDEV is invalid */
+		cnf_params.vdev_id = req->vdev_id;
+		cnf_params.status = MLO_LINK_SWITCH_CNF_STATUS_REJECT;
+		mlo_mgr_link_switch_send_cnf_cmd(psoc, &cnf_params);
 		return QDF_STATUS_E_INVAL;
 	}
 
 	status = mlo_mgr_link_switch_validate_request(vdev, req);
 	if (QDF_IS_STATUS_ERROR(status)) {
-		wlan_objmgr_vdev_release_ref(vdev, WLAN_MLO_MGR_ID);
 		mlo_debug("Link switch params/request invalid");
+		mlo_mgr_link_switch_complete(vdev);
 		return QDF_STATUS_E_INVAL;
 	}
 
@@ -922,9 +928,8 @@ QDF_STATUS mlo_mgr_link_switch_request_params(struct wlan_objmgr_psoc *psoc,
 
 	status = mlo_mgr_ser_link_switch_cmd(vdev, req);
 	if (QDF_IS_STATUS_ERROR(status)) {
-		/* Release ref as link switch is not serialized */
-		wlan_objmgr_vdev_release_ref(vdev, WLAN_MLO_MGR_ID);
 		mlo_err("Failed to serialize link switch command");
+		mlo_mgr_link_switch_complete(vdev);
 	}
 
 	return status;
@@ -932,9 +937,7 @@ QDF_STATUS mlo_mgr_link_switch_request_params(struct wlan_objmgr_psoc *psoc,
 
 QDF_STATUS mlo_mgr_link_switch_complete(struct wlan_objmgr_vdev *vdev)
 {
-	QDF_STATUS status;
 	enum mlo_link_switch_req_state state;
-	struct wlan_lmac_if_mlo_tx_ops *mlo_tx_ops;
 	struct wlan_mlo_link_switch_cnf params = {0};
 	struct mlo_link_switch_context *link_ctx;
 	struct wlan_mlo_link_switch_req *req;
@@ -946,13 +949,6 @@ QDF_STATUS mlo_mgr_link_switch_complete(struct wlan_objmgr_vdev *vdev)
 	link_ctx = vdev->mlo_dev_ctx->link_ctx;
 	req = &link_ctx->last_req;
 
-	mlo_tx_ops = &psoc->soc_cb.tx_ops->mlo_ops;
-	if (!mlo_tx_ops || !mlo_tx_ops->send_mlo_link_switch_cnf_cmd) {
-		mlo_err("handler is not registered");
-		status = QDF_STATUS_E_NULL_VALUE;
-		goto release_ref;
-	}
-
 	state = mlo_mgr_link_switch_get_curr_state(vdev->mlo_dev_ctx);
 	if (state != MLO_LINK_SWITCH_STATE_COMPLETE_SUCCESS)
 		params.status = MLO_LINK_SWITCH_CNF_STATUS_REJECT;
@@ -962,13 +958,35 @@ QDF_STATUS mlo_mgr_link_switch_complete(struct wlan_objmgr_vdev *vdev)
 	params.vdev_id = wlan_vdev_get_id(vdev);
 	params.reason = MLO_LINK_SWITCH_CNF_REASON_BSS_PARAMS_CHANGED;
 
-	status = mlo_tx_ops->send_mlo_link_switch_cnf_cmd(psoc, &params);
-	mlo_debug("VDEV %d link switch completed", params.vdev_id);
+	mlo_mgr_link_switch_send_cnf_cmd(psoc, &params);
 
-release_ref:
 	mlo_mgr_link_switch_init_state(vdev->mlo_dev_ctx);
 	wlan_vdev_mlme_clear_mlo_link_switch_in_progress(vdev);
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLO_MGR_ID);
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS
+mlo_mgr_link_switch_send_cnf_cmd(struct wlan_objmgr_psoc *psoc,
+				 struct wlan_mlo_link_switch_cnf *cnf_params)
+{
+	QDF_STATUS status;
+	struct wlan_lmac_if_mlo_tx_ops *mlo_tx_ops;
+
+	mlo_debug("VDEV %d link switch completed, %s", cnf_params->vdev_id,
+		  (cnf_params->status == MLO_LINK_SWITCH_CNF_STATUS_ACCEPT) ?
+		  "success" : "fail");
+
+	mlo_tx_ops = &psoc->soc_cb.tx_ops->mlo_ops;
+	if (!mlo_tx_ops || !mlo_tx_ops->send_mlo_link_switch_cnf_cmd) {
+		mlo_err("handler is not registered");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	status = mlo_tx_ops->send_mlo_link_switch_cnf_cmd(psoc, cnf_params);
+	if (QDF_IS_STATUS_ERROR(status))
+		mlo_err("Link switch status update to FW failed");
+
 	return status;
 }
 #endif

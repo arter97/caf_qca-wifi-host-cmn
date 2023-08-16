@@ -491,6 +491,20 @@ QDF_STATUS mlo_mgr_link_switch_request_params(struct wlan_objmgr_psoc *psoc,
 QDF_STATUS mlo_mgr_link_switch_complete(struct wlan_objmgr_vdev *vdev);
 
 /**
+ * mlo_mgr_link_switch_send_cnf_cmd() - Send status of link switch request to FW
+ * @psoc: PSOC object manager
+ * @cnf_params: Link switch confirm params to send to FW
+ *
+ * The API sends the link switch confirm params received to FW.
+ * Returns error incase it failed to notify FW.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+mlo_mgr_link_switch_send_cnf_cmd(struct wlan_objmgr_psoc *psoc,
+				 struct wlan_mlo_link_switch_cnf *cnf_params);
+
+/**
  * mlo_mgr_link_switch_init() - API to initialize link switch
  * @ml_dev: MLO dev context
  *
@@ -624,6 +638,13 @@ mlo_mgr_link_switch_request_params(struct wlan_objmgr_psoc *psoc,
 
 static inline QDF_STATUS
 mlo_mgr_link_switch_complete(struct wlan_objmgr_vdev *vdev)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline QDF_STATUS
+mlo_mgr_link_switch_send_cnf_cmd(struct wlan_objmgr_psoc *psoc,
+				 struct wlan_mlo_link_switch_cnf *cnf_params)
 {
 	return QDF_STATUS_E_NOSUPPORT;
 }
