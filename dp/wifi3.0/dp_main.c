@@ -7993,6 +7993,61 @@ static QDF_STATUS dp_get_peer_param(struct cdp_soc_t *cdp_soc,  uint8_t vdev_id,
 	return QDF_STATUS_SUCCESS;
 }
 
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
+static inline void
+dp_check_map_link_id_band(struct dp_peer *peer)
+{
+	if (peer->link_id_valid)
+		dp_map_link_id_band(peer);
+}
+#else
+static inline void
+dp_check_map_link_id_band(struct dp_peer *peer)
+{
+}
+#endif
+
+/**
+ * dp_set_peer_freq() - Set peer frequency
+ * @cdp_soc: DP soc handle
+ * @vdev_id: id of vdev handle
+ * @peer_mac: peer mac address
+ * @param: parameter type to be set
+ * @val: value of parameter to be set
+ *
+ * Return: QDF_STATUS_SUCCESS for success. error code for failure.
+ */
+static inline QDF_STATUS
+dp_set_peer_freq(struct cdp_soc_t *cdp_soc,  uint8_t vdev_id,
+		 uint8_t *peer_mac, enum cdp_peer_param_type param,
+		 cdp_config_param_type val)
+{
+	struct dp_peer *peer = NULL;
+	struct cdp_peer_info peer_info = { 0 };
+
+	DP_PEER_INFO_PARAMS_INIT(&peer_info, vdev_id, peer_mac,
+				 false, CDP_LINK_PEER_TYPE);
+
+	peer = dp_peer_hash_find_wrapper((struct dp_soc *)cdp_soc,
+					 &peer_info, DP_MOD_ID_CDP);
+	if (!peer) {
+		dp_err("peer NULL,MAC " QDF_MAC_ADDR_FMT ", vdev_id %u",
+		       QDF_MAC_ADDR_REF(peer_mac), vdev_id);
+
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	peer->freq = val.cdp_peer_param_freq;
+	dp_check_map_link_id_band(peer);
+	dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
+
+	dp_info("Peer " QDF_MAC_ADDR_FMT " vdev_id %u, frequency %u",
+		QDF_MAC_ADDR_REF(peer_mac), vdev_id,
+		peer->freq);
+
+	return QDF_STATUS_SUCCESS;
+}
+
 /**
  * dp_set_peer_param: function to set parameters in peer
  * @cdp_soc: DP soc handle
@@ -8035,6 +8090,10 @@ static QDF_STATUS dp_set_peer_param(struct cdp_soc_t *cdp_soc,  uint8_t vdev_id,
 		break;
 	case CDP_CONFIG_IN_TWT:
 		txrx_peer->in_twt = !!(val.cdp_peer_param_in_twt);
+		break;
+	case CDP_CONFIG_PEER_FREQ:
+		return dp_set_peer_freq(cdp_soc, vdev_id,
+					peer_mac, param, val);
 		break;
 	default:
 		break;

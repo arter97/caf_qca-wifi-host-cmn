@@ -48,6 +48,25 @@
 	__QDF_TRACE_FL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_DP_PEER, ## params)
 #define dp_peer_debug(params...) QDF_TRACE_DEBUG(QDF_MODULE_ID_DP_PEER, params)
 
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
+/**
+ * enum dp_bands - WiFi Band
+ *
+ * @DP_BAND_INVALID: Invalid band
+ * @DP_BAND_2GHZ: 2GHz link
+ * @DP_BAND_5GHZ: 5GHz link
+ * @DP_BAND_6GHZ: 6GHz link
+ * @DP_BAND_UNKNOWN: Unknown band
+ */
+enum dp_bands {
+	DP_BAND_INVALID = 0,
+	DP_BAND_2GHZ = 1,
+	DP_BAND_5GHZ = 2,
+	DP_BAND_6GHZ = 3,
+	DP_BAND_UNKNOWN = 4,
+};
+#endif
+
 void check_free_list_for_invalid_flush(struct dp_soc *soc);
 
 static inline
@@ -2537,5 +2556,20 @@ QDF_STATUS dp_peer_host_add_map_ast(struct dp_soc *soc, uint16_t peer_id,
 				    uint8_t *mac_addr, uint16_t hw_peer_id,
 				    uint8_t vdev_id, uint16_t ast_hash,
 				    uint8_t is_wds);
+#endif
+
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
+/**
+ * dp_map_link_id_band: Set link id to band mapping in txrx_peer
+ * @peer: dp peer pointer
+ *
+ * Return: None
+ */
+void dp_map_link_id_band(struct dp_peer *peer);
+#else
+static inline
+void dp_map_link_id_band(struct dp_peer *peer)
+{
+}
 #endif
 #endif /* _DP_PEER_H_ */

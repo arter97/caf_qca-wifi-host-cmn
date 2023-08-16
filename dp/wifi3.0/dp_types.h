@@ -4974,6 +4974,9 @@ struct dp_peer {
 
 	/* AST hash value for peer in HW */
 	uint16_t ast_hash;
+
+	/* Peer Frequency */
+	uint32_t freq;
 };
 
 /**
