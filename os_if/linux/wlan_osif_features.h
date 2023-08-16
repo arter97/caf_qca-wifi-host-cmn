@@ -302,9 +302,7 @@
  * https://android-review.googlesource.com/c/kernel/common/+/2470891
  */
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0) || \
-	(defined(__ANDROID_COMMON_KERNEL__) && \
-	(LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)) && \
-	(defined CFG80211_MLD_AP_STA_CONNECT_UPSTREAM_SUPPORT)))
+	(defined CFG80211_MLD_AP_STA_CONNECT_UPSTREAM_SUPPORT))
 #define WLAN_MLD_AP_STA_CONNECT_UPSTREAM_SUPPORT 1
 #endif
 
