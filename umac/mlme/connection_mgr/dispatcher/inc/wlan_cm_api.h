@@ -609,4 +609,17 @@ wlan_cm_check_mlo_roam_auth_status(struct wlan_objmgr_vdev *vdev)
 	return false;
 }
 #endif
+
+/**
+ * wlan_cm_bss_mlo_type() - Check if the scan entry is of MLO type
+ * @psoc: Pointer to psoc
+ * @entry: scan cache entry
+ * @scan_list: list of scan entries to look for if @entry is of ML type
+ *
+ * Return: MLO AP type: SLO, MLMR or EMLSR.
+ */
+enum MLO_TYPE
+wlan_cm_bss_mlo_type(struct wlan_objmgr_psoc *psoc,
+		     struct scan_cache_entry *entry,
+		     qdf_list_t *scan_list);
 #endif /* __WLAN_CM_UCFG_API_H */

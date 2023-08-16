@@ -33,6 +33,8 @@
 #include "wlan_mlme_api.h"
 #include "wlan_wfa_tgt_if_tx_api.h"
 #endif
+#include "wlan_cm_main_api.h"
+#include "wlan_cm_public_struct.h"
 
 #define CM_PCL_RSSI_THRESHOLD -75
 
@@ -130,14 +132,6 @@ static int32_t
 SNR_DB_TO_BIT_PER_TONE_LUT[DB_NUM] = {0, 171, 212, 262, 323, 396, 484,
 586, 706, 844, 1000, 1176, 1370, 1583, 1812, 2058, 2317, 2588, 2870, 3161};
 #endif
-
-/* MLO link types */
-enum MLO_TYPE {
-	SLO,
-	MLSR,
-	MLMR,
-	MLO_TYPE_MAX
-};
 
 static bool cm_is_better_bss(struct scan_cache_entry *bss1,
 			     struct scan_cache_entry *bss2)
@@ -1763,9 +1757,9 @@ static inline bool is_freq_dbs_or_sbs(struct wlan_objmgr_psoc *psoc,
  *
  * Return: MLO AP type: SLO, MLMR or EMLSR.
  */
-static enum MLO_TYPE  cm_bss_mlo_type(struct wlan_objmgr_psoc *psoc,
-				      struct scan_cache_entry *entry,
-				      qdf_list_t *scan_list)
+enum MLO_TYPE cm_bss_mlo_type(struct wlan_objmgr_psoc *psoc,
+			      struct scan_cache_entry *entry,
+			      qdf_list_t *scan_list)
 {
 	uint8_t mlo_link_num;
 	uint8_t i;
@@ -2089,13 +2083,6 @@ static int cm_calculate_mlo_bss_score(struct wlan_objmgr_psoc *psoc,
 static inline int cm_calculate_emlsr_score(struct weight_cfg *weight_config)
 {
 	return 0;
-}
-
-static enum MLO_TYPE cm_bss_mlo_type(struct wlan_objmgr_psoc *psoc,
-				     struct scan_cache_entry *entry,
-				     qdf_list_t *scan_list)
-{
-	return SLO;
 }
 
 static int cm_calculate_mlo_bss_score(struct wlan_objmgr_psoc *psoc,

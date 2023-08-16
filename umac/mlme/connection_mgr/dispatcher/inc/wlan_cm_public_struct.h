@@ -679,4 +679,18 @@ enum wlan_cm_active_request_type {
 	CM_ROAM_ACTIVE,
 };
 
+/*
+ * enum MLO_TYPE: ML type of bss
+ * @SLO: Non-ML or Single link ML
+ * @MLSR: Multi link Single Radio, indicates that both links
+ *        have to be on one mac
+ * @MLMR: Multi link Multi Radio, indicates that both links
+ *        can be on different macs
+ */
+enum MLO_TYPE {
+	SLO,
+	MLSR,
+	MLMR,
+	MLO_TYPE_MAX
+};
 #endif /* __WLAN_CM_PUBLIC_STRUCT_H__ */
