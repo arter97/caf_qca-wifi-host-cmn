@@ -4799,6 +4799,7 @@ struct dp_peer_stats {
  * @sawf_stats:
  * @bw: bandwidth of peer connection
  * @mpdu_retry_threshold: MPDU retry threshold to increment tx bad count
+ * @band: Link ID to band mapping
  * @stats_arr_size: peer stats array size
  * @stats: Peer link and mld statistics
  */
@@ -4848,6 +4849,10 @@ struct dp_txrx_peer {
 #ifdef DP_PEER_EXTENDED_API
 	enum cdp_peer_bw bw;
 	uint8_t mpdu_retry_threshold;
+#endif
+#if defined WLAN_FEATURE_11BE_MLO && defined DP_MLO_LINK_STATS_SUPPORT
+	/* Link ID to band mapping, (1 MLD + DP_MAX_MLO_LINKS) */
+	uint8_t band[DP_MAX_MLO_LINKS + 1];
 #endif
 	uint8_t stats_arr_size;
 

@@ -2203,4 +2203,26 @@ static inline int dp_get_rtpm_tput_policy_requirement(struct dp_soc *soc)
 	return 0;
 }
 #endif
+#if defined WLAN_FEATURE_11BE_MLO && defined DP_MLO_LINK_STATS_SUPPORT
+/**
+ * dp_tx_set_nbuf_band() - Set band info in nbuf cb
+ * @nbuf: nbuf pointer
+ * @txrx_peer: txrx_peer pointer
+ * @link_id: Peer Link ID
+ *
+ * Returen: None
+ */
+static inline void
+dp_tx_set_nbuf_band(qdf_nbuf_t nbuf, struct dp_txrx_peer *txrx_peer,
+		    uint8_t link_id)
+{
+	qdf_nbuf_tx_set_band(nbuf, txrx_peer->band[link_id]);
+}
+#else
+static inline void
+dp_tx_set_nbuf_band(qdf_nbuf_t nbuf, struct dp_txrx_peer *txrx_peer,
+		    uint8_t link_id)
+{
+}
+#endif
 #endif

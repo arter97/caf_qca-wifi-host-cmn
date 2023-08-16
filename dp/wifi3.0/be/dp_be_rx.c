@@ -585,6 +585,8 @@ done:
 			link_id = 0;
 		}
 
+		dp_rx_set_nbuf_band(nbuf, txrx_peer, link_id);
+
 		/* when hlos tid override is enabled, save tid in
 		 * skb->priority
 		 */

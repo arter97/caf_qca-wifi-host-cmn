@@ -5357,6 +5357,8 @@ void dp_tx_comp_process_tx_status(struct dp_soc *soc,
 
 	link_id = dp_tx_get_link_id_from_ppdu_id(soc, ts, txrx_peer, vdev);
 
+	dp_tx_set_nbuf_band(nbuf, txrx_peer, link_id);
+
 	op_mode = vdev->qdf_opmode;
 	dp_tx_update_connectivity_stats(soc, vdev, tx_desc, ts->status);
 	dp_tx_update_uplink_delay(soc, vdev, ts);

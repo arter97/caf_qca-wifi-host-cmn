@@ -2438,10 +2438,31 @@ dp_rx_nbuf_set_link_id_from_tlv(struct dp_soc *soc, uint8_t *tlv_hdr,
 	if (soc->arch_ops.dp_rx_peer_set_link_id)
 		soc->arch_ops.dp_rx_peer_set_link_id(nbuf, peer_metadata);
 }
+
+/**
+ * dp_rx_set_nbuf_band() - Set band info in nbuf cb
+ * @nbuf: nbuf pointer
+ * @txrx_peer: txrx_peer pointer
+ * @link_id: Peer Link ID
+ *
+ * Returen: None
+ */
+static inline void
+dp_rx_set_nbuf_band(qdf_nbuf_t nbuf, struct dp_txrx_peer *txrx_peer,
+		    uint8_t link_id)
+{
+	qdf_nbuf_rx_set_band(nbuf, txrx_peer->band[link_id]);
+}
 #else
 static inline void
 dp_rx_nbuf_set_link_id_from_tlv(struct dp_soc *soc, uint8_t *tlv_hdr,
 				qdf_nbuf_t nbuf)
+{
+}
+
+static inline void
+dp_rx_set_nbuf_band(qdf_nbuf_t nbuf, struct dp_txrx_peer *txrx_peer,
+		    uint8_t link_id)
 {
 }
 #endif

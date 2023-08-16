@@ -1217,6 +1217,9 @@ more_msdu_link_desc:
 								txrx_peer);
 		}
 
+		if (txrx_peer)
+			dp_rx_set_nbuf_band(nbuf, txrx_peer, link_id);
+
 		switch (err_code) {
 		case HAL_REO_ERR_REGULAR_FRAME_2K_JUMP:
 		case HAL_REO_ERR_2K_ERROR_HANDLING_FLAG_SET:
