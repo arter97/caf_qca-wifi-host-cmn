@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021,2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -373,6 +373,10 @@ QDF_STATUS wbuff_module_deregister(struct wbuff_mod_handle *hdl)
 		return QDF_STATUS_E_INVAL;
 
 	module_id = handle->id;
+
+	if (module_id >= WBUFF_MAX_MODULES)
+		return QDF_STATUS_E_INVAL;
+
 	mod = &wbuff.mod[module_id];
 
 	qdf_spin_lock_bh(&mod->lock);
@@ -417,6 +421,10 @@ wbuff_buff_get(struct wbuff_mod_handle *hdl, uint8_t pool_id, uint32_t len,
 		return NULL;
 
 	module_id = handle->id;
+
+	if (module_id >= WBUFF_MAX_MODULES)
+		return NULL;
+
 	mod = &wbuff.mod[module_id];
 
 	if (pool_id == WBUFF_MAX_POOL_ID && len)
