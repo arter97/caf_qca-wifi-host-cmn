@@ -280,11 +280,11 @@ static inline void __qdf_mdelay(uint32_t msecs)
  * @b: Time stamp value b
  *
  * Return:
- * true if a < b else false
+ * true if a > b else false
  */
 static inline bool __qdf_system_time_after(__qdf_time_t a, __qdf_time_t b)
 {
-	return (long)(b) - (long)(a) < 0;
+	return (long)((b) - (a)) < 0;
 }
 
 /**
@@ -311,7 +311,7 @@ static inline bool __qdf_system_time_before(__qdf_time_t a, __qdf_time_t b)
  */
 static inline bool __qdf_system_time_after_eq(__qdf_time_t a, __qdf_time_t b)
 {
-	return (long)(a) - (long)(b) >= 0;
+	return (long)((a) - (b)) >= 0;
 }
 
 /**
