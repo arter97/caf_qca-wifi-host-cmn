@@ -1531,6 +1531,7 @@ struct wlan_lmac_if_son_rx_ops {
  * @send_vdev_pause: function to send MLO vdev pause to FW
  * @peer_ptqm_migrate_send: API to send peer ptqm migration request to FW
  * @send_mlo_link_switch_cnf_cmd: Send link switch status to FW
+ * @send_wsi_link_info_cmd: send WSI link stats to FW
  */
 struct wlan_lmac_if_mlo_tx_ops {
 	QDF_STATUS (*register_events)(struct wlan_objmgr_psoc *psoc);
@@ -1561,6 +1562,9 @@ struct wlan_lmac_if_mlo_tx_ops {
 	(*send_mlo_link_switch_cnf_cmd)(struct wlan_objmgr_psoc *psoc,
 					struct wlan_mlo_link_switch_cnf *params);
 #endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
+	QDF_STATUS (*send_wsi_link_info_cmd)(
+				struct wlan_objmgr_pdev *pdev,
+				struct mlo_wsi_link_stats *param);
 };
 
 /**

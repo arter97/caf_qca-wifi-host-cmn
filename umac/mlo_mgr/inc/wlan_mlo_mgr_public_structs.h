@@ -284,6 +284,45 @@ mlo_mgr_unregister_link_switch_notifier(enum wlan_umac_comp_id comp_id)
 }
 #endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
 
+/*
+ * struct mlo_wsi_link_stats - MLO ingress/egress counters of PSOC
+ * @ingress_cnt:  Ingress counter
+ * @egress_cnt:  Egress counter
+ * @send_wmi_cmd: To indicate whether WMI command to be sent or not
+ */
+struct mlo_wsi_link_stats {
+	uint32_t ingress_cnt;
+	uint32_t egress_cnt;
+	bool  send_wmi_cmd;
+};
+
+/*
+ * struct mlo_wsi_psoc_grp - MLO WSI PSOC group
+ * @psoc_order:  PSOC list in WSI loop order
+ * @num_psoc: num psoc in the group
+ */
+struct mlo_wsi_psoc_grp {
+	uint32_t psoc_order[WLAN_OBJMGR_MAX_DEVICES];
+	uint32_t num_psoc;
+};
+
+#define MLO_WSI_MAX_MLO_GRPS 2
+#define MLO_WSI_PSOC_ID_MAX 0xFF
+
+/*
+ * struct mlo_wsi_info - MLO ingress/egress link context per-PSOC
+ * @mlo_psoc_grp: PSOC IDs for different MLO groups
+ * @num_psoc: Total num psoc
+ * @link_stats: Ingress and Egress counts for PSOCs
+ * @block_wmi_cmd: Blocks WMI command
+ */
+struct mlo_wsi_info {
+	struct mlo_wsi_psoc_grp mlo_psoc_grp[MLO_WSI_MAX_MLO_GRPS];
+	uint32_t num_psoc;
+	struct mlo_wsi_link_stats link_stats[WLAN_OBJMGR_MAX_DEVICES];
+	uint8_t block_wmi_cmd;
+};
+
 /**
  * struct mlo_mgr_context - MLO manager context
  * @ml_dev_list_lock: ML DEV list lock
@@ -302,6 +341,7 @@ mlo_mgr_unregister_link_switch_notifier(enum wlan_umac_comp_id comp_id)
  * @mlo_forced_primary_umac_id: Force Primary UMAC ID
  * @force_non_assoc_prim_umac: Force non-assoc link to be primary umac
  * @lswitch_notifier: Link switch notifier callbacks
+ * @wsi_info: WSI stats info
  */
 struct mlo_mgr_context {
 #ifdef WLAN_MLO_USE_SPINLOCK
@@ -332,6 +372,7 @@ struct mlo_mgr_context {
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 	struct wlan_mlo_link_switch_notifier lswitch_notifier[WLAN_UMAC_COMP_ID_MAX];
 #endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
+	struct mlo_wsi_info *wsi_info;
 };
 
 /**

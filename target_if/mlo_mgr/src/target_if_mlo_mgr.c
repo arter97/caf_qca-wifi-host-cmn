@@ -790,6 +790,43 @@ target_if_request_ml_link_state_info(struct wlan_objmgr_psoc *psoc,
 	return status;
 }
 
+#ifdef WLAN_WSI_STATS_SUPPORT
+static QDF_STATUS
+target_if_mlo_send_wsi_link_info_cmd(struct wlan_objmgr_pdev *pdev,
+				     struct mlo_wsi_link_stats *param)
+{
+	struct wmi_unified *wmi_handle;
+	struct wmi_wsi_stats_info_params params = {0};
+
+	if (!pdev) {
+		target_if_err("null pdev");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+	wmi_handle = get_wmi_unified_hdl_from_pdev(pdev);
+	if (!wmi_handle) {
+		target_if_err("null handle");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	params.pdev_id = pdev->pdev_objmgr.wlan_pdev_id;
+	params.wsi_ingress_load_info = param->ingress_cnt;
+	params.wsi_egress_load_info = param->egress_cnt;
+
+	target_if_debug("pdev id %d, ingress %d, egress %d", params.pdev_id,
+			params.wsi_ingress_load_info,
+			params.wsi_egress_load_info);
+
+	return wmi_unified_config_wsi_stats_info_cmd_send(wmi_handle, &params);
+}
+#else
+static QDF_STATUS
+target_if_mlo_send_wsi_link_info_cmd(struct wlan_objmgr_pdev *pdev,
+				     struct mlo_wsi_link_stats *param)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 QDF_STATUS target_if_mlo_send_link_removal_cmd(
 		struct wlan_objmgr_psoc *psoc,
 		const struct mlo_link_removal_cmd_params *param)
@@ -911,6 +948,9 @@ target_if_mlo_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 	mlo_tx_ops->send_vdev_pause = target_if_mlo_send_vdev_pause;
 
 	target_if_mlo_register_link_switch_cnf_handler(mlo_tx_ops);
+
+	mlo_tx_ops->send_wsi_link_info_cmd =
+		target_if_mlo_send_wsi_link_info_cmd;
 
 	target_if_mlo_register_peer_ptqm_migrate_send(mlo_tx_ops);
 	return QDF_STATUS_SUCCESS;
