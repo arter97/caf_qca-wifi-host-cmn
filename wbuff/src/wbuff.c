@@ -374,8 +374,8 @@ QDF_STATUS wbuff_module_deregister(struct wbuff_mod_handle *hdl)
 
 	module_id = handle->id;
 
-	if (module_id > WBUFF_MAX_MODULES)
-		return -EINVAL;
+	if (module_id >= WBUFF_MAX_MODULES)
+		return QDF_STATUS_E_INVAL;
 
 	mod = &wbuff.mod[module_id];
 
@@ -422,7 +422,7 @@ wbuff_buff_get(struct wbuff_mod_handle *hdl, uint8_t pool_id, uint32_t len,
 
 	module_id = handle->id;
 
-	if (module_id > WBUFF_MAX_MODULES)
+	if (module_id >= WBUFF_MAX_MODULES)
 		return NULL;
 
 	mod = &wbuff.mod[module_id];
