@@ -1293,8 +1293,10 @@ mlo_send_link_disconnect_sync(struct wlan_mlo_dev_context *mlo_dev_ctx,
 		mlo_get_assoc_link_vdev(mlo_dev_ctx);
 
 	for (i = 0; i < WLAN_UMAC_MLO_MAX_VDEVS; i++) {
-		if (!mlo_dev_ctx->wlan_vdev_list[i])
+		if (!mlo_dev_ctx->wlan_vdev_list[i] ||
+		    mlo_dev_ctx->wlan_vdev_list[i] == sync_vdev) {
 			continue;
+		}
 
 		/**
 		 * If the assoc vdev isn't present, use the first link dev as
@@ -2141,8 +2143,7 @@ void mlo_internal_disconnect_links(struct wlan_objmgr_vdev *vdev)
 	for (i =  0; i < vdev_count; i++) {
 		if (wlan_vdev_list[i] != assoc_vdev &&
 		    (wlan_cm_is_vdev_connected(wlan_vdev_list[i]) ||
-		     wlan_cm_is_vdev_connecting(wlan_vdev_list[i]) ||
-		     wlan_vdev_mlme_is_mlo_link_switch_in_progress(wlan_vdev_list[i])))
+		     wlan_cm_is_vdev_connecting(wlan_vdev_list[i])))
 			wlan_cm_disconnect(wlan_vdev_list[i],
 					   CM_MLO_LINK_VDEV_DISCONNECT,
 					   REASON_UNSPEC_FAILURE,

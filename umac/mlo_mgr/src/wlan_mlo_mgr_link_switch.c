@@ -320,9 +320,10 @@ void mlo_mgr_link_switch_init_state(struct wlan_mlo_dev_context *mlo_dev_ctx)
 	mlo_dev_lock_release(mlo_dev_ctx);
 }
 
-void
+QDF_STATUS
 mlo_mgr_link_switch_trans_next_state(struct wlan_mlo_dev_context *mlo_dev_ctx)
 {
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	enum mlo_link_switch_req_state cur_state, next_state;
 
 	mlo_dev_lock_acquire(mlo_dev_ctx);
@@ -343,10 +344,28 @@ mlo_mgr_link_switch_trans_next_state(struct wlan_mlo_dev_context *mlo_dev_ctx)
 	case MLO_LINK_SWITCH_STATE_COMPLETE_SUCCESS:
 		next_state = MLO_LINK_SWITCH_STATE_IDLE;
 		break;
+	case MLO_LINK_SWITCH_STATE_ABORT_TRANS:
+		next_state = MLO_LINK_SWITCH_STATE_ABORT_TRANS;
+		status = QDF_STATUS_E_PERM;
+		mlo_debug("State transition not allowed");
+		break;
 	default:
 		QDF_ASSERT(0);
 		break;
 	}
+	mlo_dev_ctx->link_ctx->last_req.state = next_state;
+	mlo_dev_lock_release(mlo_dev_ctx);
+
+	return status;
+}
+
+void
+mlo_mgr_link_switch_trans_abort_state(struct wlan_mlo_dev_context *mlo_dev_ctx)
+{
+	enum mlo_link_switch_req_state next_state =
+					MLO_LINK_SWITCH_STATE_ABORT_TRANS;
+
+	mlo_dev_lock_acquire(mlo_dev_ctx);
 	mlo_dev_ctx->link_ctx->last_req.state = next_state;
 	mlo_dev_lock_release(mlo_dev_ctx);
 }
@@ -500,22 +519,28 @@ mlo_mgr_osif_update_connect_info(struct wlan_objmgr_vdev *vdev, int32_t link_id)
 }
 
 QDF_STATUS mlo_mgr_link_switch_disconnect_done(struct wlan_objmgr_vdev *vdev,
-					       QDF_STATUS status)
+					       QDF_STATUS discon_status,
+					       bool is_link_switch_resp)
 {
-	QDF_STATUS qdf_status;
+	QDF_STATUS status;
 	enum mlo_link_switch_req_state cur_state;
 	struct mlo_link_info *new_link_info;
 	struct qdf_mac_addr mac_addr, mld_addr;
 	struct wlan_mlo_dev_context *mlo_dev_ctx = vdev->mlo_dev_ctx;
 	struct wlan_mlo_link_switch_req *req = &mlo_dev_ctx->link_ctx->last_req;
 
+	if (!is_link_switch_resp) {
+		mlo_mgr_link_switch_trans_abort_state(mlo_dev_ctx);
+		return QDF_STATUS_SUCCESS;
+	}
+
 	cur_state = mlo_mgr_link_switch_get_curr_state(mlo_dev_ctx);
-	if (QDF_IS_STATUS_ERROR(status) ||
+	if (QDF_IS_STATUS_ERROR(discon_status) ||
 	    cur_state != MLO_LINK_SWITCH_STATE_DISCONNECT_CURR_LINK) {
 		mlo_err("VDEV %d link switch disconnect req failed",
 			req->vdev_id);
 		mlo_mgr_remove_link_switch_cmd(vdev);
-		return status;
+		return QDF_STATUS_SUCCESS;
 	}
 
 	mlo_debug("VDEV %d link switch disconnect complete",
@@ -532,13 +557,17 @@ QDF_STATUS mlo_mgr_link_switch_disconnect_done(struct wlan_objmgr_vdev *vdev,
 	qdf_copy_macaddr(&mld_addr, &mlo_dev_ctx->mld_addr);
 	qdf_copy_macaddr(&mac_addr, &new_link_info->link_addr);
 
-	mlo_mgr_link_switch_trans_next_state(mlo_dev_ctx);
+	status = mlo_mgr_link_switch_trans_next_state(mlo_dev_ctx);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mlo_mgr_remove_link_switch_cmd(vdev);
+		return status;
+	}
 
-	qdf_status = wlan_vdev_mlme_send_set_mac_addr(mac_addr, mld_addr, vdev);
-	if (QDF_IS_STATUS_ERROR(qdf_status))
+	status = wlan_vdev_mlme_send_set_mac_addr(mac_addr, mld_addr, vdev);
+	if (QDF_IS_STATUS_ERROR(status))
 		mlo_mgr_remove_link_switch_cmd(vdev);
 
-	return qdf_status;
+	return status;
 }
 
 QDF_STATUS mlo_mgr_link_switch_set_mac_addr_resp(struct wlan_objmgr_vdev *vdev,
@@ -586,7 +615,12 @@ QDF_STATUS mlo_mgr_link_switch_set_mac_addr_resp(struct wlan_objmgr_vdev *vdev,
 							req->new_ieee_link_id,
 							req->vdev_id);
 
-	mlo_mgr_link_switch_trans_next_state(vdev->mlo_dev_ctx);
+	status = mlo_mgr_link_switch_trans_next_state(vdev->mlo_dev_ctx);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mlo_mgr_remove_link_switch_cmd(vdev);
+		return status;
+	}
+
 	status = mlo_mgr_link_switch_start_connect(vdev);
 
 	return status;
@@ -722,7 +756,9 @@ mlo_mgr_start_link_switch(struct wlan_objmgr_vdev *vdev,
 	}
 
 	wlan_vdev_mlme_set_mlo_link_switch_in_progress(vdev);
-	mlo_mgr_link_switch_trans_next_state(vdev->mlo_dev_ctx);
+	status = mlo_mgr_link_switch_trans_next_state(vdev->mlo_dev_ctx);
+	if (QDF_IS_STATUS_ERROR(status))
+		return status;
 
 	status = wlan_cm_disconnect(vdev, CM_MLO_LINK_SWITCH_DISCONNECT,
 				    REASON_FW_TRIGGERED_LINK_SWITCH, &bssid);

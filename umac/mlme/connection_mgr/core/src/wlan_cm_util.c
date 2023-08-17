@@ -640,7 +640,8 @@ cm_handle_disconnect_flush(struct cnx_mgr *cm_ctx, struct cm_req *cm_req)
 	if (resp.req.cm_id & CM_ID_LSWITCH_BIT) {
 		cm_reset_active_cm_id(cm_ctx->vdev, resp.req.cm_id);
 		mlo_mgr_link_switch_disconnect_done(cm_ctx->vdev,
-						    QDF_STATUS_E_ABORTED);
+						    QDF_STATUS_E_ABORTED,
+						    true);
 	}
 }
 

@@ -1682,7 +1682,7 @@ cm_handle_connect_req_in_non_init_state(struct cnx_mgr *cm_ctx,
 
 	/* Reject any link switch connect request while in non-init state */
 	if (cm_req->req.source == CM_MLO_LINK_SWITCH_CONNECT) {
-		mlme_info(CM_PREFIX_FMT "Ignore disconnect req from source %d state %d",
+		mlme_info(CM_PREFIX_FMT "Ignore connect req from source %d state %d",
 			  CM_PREFIX_REF(vdev_id, cm_req->cm_id),
 			  cm_req->req.source, cm_state_substate);
 		return QDF_STATUS_E_INVAL;

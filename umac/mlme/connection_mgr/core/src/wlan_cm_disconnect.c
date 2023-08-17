@@ -639,7 +639,8 @@ QDF_STATUS cm_disconnect_complete(struct cnx_mgr *cm_ctx,
 	if (is_link_switch_cmd) {
 		cm_reset_active_cm_id(cm_ctx->vdev, resp->req.cm_id);
 		mlo_mgr_link_switch_disconnect_done(cm_ctx->vdev,
-						    link_switch_status);
+						    link_switch_status,
+						    is_link_switch_cmd);
 	}
 
 	return QDF_STATUS_SUCCESS;
@@ -760,13 +761,27 @@ cm_handle_discon_req_in_non_connected_state(struct cnx_mgr *cm_ctx,
 		 *
 		 * So no need to do anything here, just return failure and drop
 		 * disconnect.
+		 *
+		 * Notification to userspace is done on non-LINK VDEV in case of
+		 * MLO connection, and if assoc VDEV is in INIT state due to
+		 * link switch disconnect and dropping userspace disconnect here
+		 * might lead to not notifying kernel and any further connect
+		 * requests from supplicant will be dropped by kernel saying
+		 * already connected and supplicant will immediately attempt
+		 * disconnect which will again gets dropped.
+		 * Notify MLO manager to terminate link switch operation and
+		 * instead of dropping the disconnect forcefully move VDEV state
+		 * to disconnecting and add disconnect request to queue so that
+		 * kernel and driver will be in sync.
 		 */
 		if (cm_req->req.source != CM_MLO_LINK_SWITCH_DISCONNECT &&
 		    wlan_vdev_mlme_is_mlo_link_switch_in_progress(cm_ctx->vdev)) {
 			mlme_info(CM_PREFIX_FMT "Notfiy MLO MGR to abort link switch",
 				  CM_PREFIX_REF(vdev_id, cm_req->cm_id));
 			mlo_mgr_link_switch_disconnect_done(cm_ctx->vdev,
-							    QDF_STATUS_E_ABORTED);
+							    QDF_STATUS_E_ABORTED,
+							    false);
+			break;
 
 		} else {
 			mlme_info(CM_PREFIX_FMT "dropping disconnect req from source %d in INIT state",

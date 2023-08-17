@@ -101,6 +101,9 @@ enum wlan_mlo_link_switch_reason {
  * @MLO_LINK_SWITCH_STATE_SET_MAC_ADDR: MAC address update in progress
  * @MLO_LINK_SWITCH_STATE_CONNECT_NEW_LINK: New link connect in progress.
  * @MLO_LINK_SWITCH_STATE_COMPLETE_SUCCESS: Link switch completed successfully
+ * @MLO_LINK_SWITCH_STATE_ABORT_TRANS: Do not allow any further state
+ *                                     transition, only allowed to move to
+ *                                     MLO_LINK_SWITCH_STATE_IDLE state.
  */
 enum mlo_link_switch_req_state {
 	MLO_LINK_SWITCH_STATE_IDLE,
@@ -108,6 +111,7 @@ enum mlo_link_switch_req_state {
 	MLO_LINK_SWITCH_STATE_SET_MAC_ADDR,
 	MLO_LINK_SWITCH_STATE_CONNECT_NEW_LINK,
 	MLO_LINK_SWITCH_STATE_COMPLETE_SUCCESS,
+	MLO_LINK_SWITCH_STATE_ABORT_TRANS,
 };
 
 /**
@@ -286,15 +290,23 @@ void mlo_mgr_osif_update_connect_info(struct wlan_objmgr_vdev *vdev,
  * disconnect complete.
  * @vdev: VDEV object manager
  * @status: Status of disconnect
+ * @is_link_switch_resp: Set to true is disconnect response is for link switch
+ * disconnect request else false.
  *
  * The API to decide on next sequence of tasks based on status on disconnect
  * request send as part of link switch. If the status is error, then abort
  * link switch or else continue.
  *
+ * If API is called with @is_link_switch_resp argument as false, then some
+ * other thread initiated disconnect, in this scenario change the state of
+ * link switch to abort further state transition and return, in actual link
+ * switch flow check this state to abort link switch.
+ *
  * Return: QDF_STATUS
  */
 QDF_STATUS mlo_mgr_link_switch_disconnect_done(struct wlan_objmgr_vdev *vdev,
-					       QDF_STATUS status);
+					       QDF_STATUS status,
+					       bool is_link_switch_resp);
 
 /**
  * mlo_mgr_link_switch_set_mac_addr_resp() - Handle response of set MAC addr
@@ -360,8 +372,21 @@ void mlo_mgr_link_switch_init_state(struct wlan_mlo_dev_context *mlo_dev_ctx);
  *
  * Return: void
  */
-void
+QDF_STATUS
 mlo_mgr_link_switch_trans_next_state(struct wlan_mlo_dev_context *mlo_dev_ctx);
+
+/**
+ * mlo_mgr_link_switch_trans_abort_state() - Transition to abort trans state.
+ * @mlo_dev_ctx: ML dev context pointer of VDEV
+ *
+ * Transition the current link switch state to MLO_LINK_SWITCH_STATE_ABORT_TRANS
+ * state, no further state transitions are allowed in the ongoing link switch
+ * request.
+ *
+ * Return: void
+ */
+void
+mlo_mgr_link_switch_trans_abort_state(struct wlan_mlo_dev_context *mlo_dev_ctx);
 
 /**
  * mlo_mgr_link_switch_get_curr_state() - Get the current state of link switch.
@@ -533,7 +558,8 @@ mlo_mgr_osif_update_connect_info(struct wlan_objmgr_vdev *vdev, int32_t link_id)
 
 static inline QDF_STATUS
 mlo_mgr_link_switch_disconnect_done(struct wlan_objmgr_vdev *vdev,
-				    QDF_STATUS status)
+				    QDF_STATUS status,
+				    bool is_link_switch_resp)
 {
 	return QDF_STATUS_SUCCESS;
 }
@@ -574,8 +600,14 @@ mlo_mgr_link_switch_init_state(struct wlan_mlo_dev_context *mlo_dev_ctx)
 {
 }
 
-static inline void
+static inline QDF_STATUS
 mlo_mgr_link_switch_trans_next_state(struct wlan_mlo_dev_context *mlo_dev_ctx)
+{
+	return QDF_STATUS_E_INVAL;
+}
+
+static inline void
+mlo_mgr_link_switch_trans_abort_state(struct wlan_mlo_dev_context *mlo_dev_ctx)
 {
 }
 
