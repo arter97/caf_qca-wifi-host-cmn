@@ -3167,6 +3167,12 @@ dp_initialize_arch_ops_be_mlo_multi_chip(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_partner_chips_map = dp_mlo_partner_chips_map;
 	arch_ops->dp_partner_chips_unmap = dp_mlo_partner_chips_unmap;
 	arch_ops->dp_soc_get_by_idle_bm_id = dp_soc_get_by_idle_bm_id;
+	arch_ops->dp_get_soc_by_chip_id = dp_get_soc_by_chip_id_be;
+	arch_ops->dp_mlo_print_ptnr_info = dp_mlo_debug_print_ptnr_info;
+	arch_ops->dp_get_interface_stats = dp_get_interface_stats_be;
+	arch_ops->mlo_get_chip_id = dp_mlo_get_chip_id;
+	arch_ops->mlo_link_peer_find_hash_find_by_chip_id =
+				dp_mlo_link_peer_hash_find_by_chip_id;
 }
 #else
 static inline void
@@ -3392,10 +3398,6 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 	arch_ops->tx_implicit_rbm_set = dp_tx_implicit_rbm_set_be;
 	arch_ops->txrx_set_vdev_param = dp_txrx_set_vdev_param_be;
 	dp_initialize_arch_ops_be_mlo(arch_ops);
-#ifdef WLAN_MLO_MULTI_CHIP
-	arch_ops->dp_get_soc_by_chip_id = dp_get_soc_by_chip_id_be;
-	arch_ops->dp_mlo_print_ptnr_info = dp_mlo_debug_print_ptnr_info;
-#endif
 	arch_ops->dp_soc_get_num_soc = dp_soc_get_num_soc_be;
 	arch_ops->dp_peer_rx_reorder_queue_setup =
 					dp_peer_rx_reorder_queue_setup_be;
@@ -3445,9 +3447,6 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 	arch_ops->txrx_srng_init = dp_srng_init_be;
 	arch_ops->dp_get_vdev_stats_for_unmap_peer =
 					dp_get_vdev_stats_for_unmap_peer_be;
-#ifdef WLAN_MLO_MULTI_CHIP
-	arch_ops->dp_get_interface_stats = dp_get_interface_stats_be;
-#endif
 #if defined(DP_POWER_SAVE) || defined(FEATURE_RUNTIME_PM)
 	arch_ops->dp_update_ring_hptp = dp_update_ring_hptp;
 #endif

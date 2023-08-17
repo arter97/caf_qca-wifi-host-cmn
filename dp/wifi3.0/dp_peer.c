@@ -2671,7 +2671,7 @@ dp_rx_mlo_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 	 * on chip ID obtained from mlo peer_map event
 	 */
 	for (i = 0; i < DP_MAX_MLO_LINKS; i++) {
-		if (mlo_link_info[i].peer_chip_id == dp_mlo_get_chip_id(soc)) {
+		if (mlo_link_info[i].peer_chip_id == dp_get_chip_id(soc)) {
 			vdev_id = mlo_link_info[i].vdev_id;
 			break;
 		}
@@ -2965,7 +2965,7 @@ dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 
 		params.vdev_id = vdev->vdev_id;
 		params.peer_mac = peer->mac_addr.raw;
-		params.chip_id = dp_mlo_get_chip_id(soc);
+		params.chip_id = dp_get_chip_id(soc);
 		params.pdev_id = vdev->pdev->pdev_id;
 
 		dp_wdi_event_handler(WDI_EVENT_PEER_UNMAP, soc,

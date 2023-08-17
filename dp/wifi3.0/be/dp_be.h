@@ -984,6 +984,11 @@ static inline
 void dp_mlo_update_link_to_pdev_unmap(struct dp_soc *soc, struct dp_pdev *pdev)
 {
 }
+
+static inline uint8_t dp_mlo_get_chip_id(struct dp_soc *soc)
+{
+	return 0;
+}
 #endif
 
 /**

@@ -2211,6 +2211,8 @@ enum dp_context_type {
  * @mlo_peer_find_hash_add:
  * @mlo_peer_find_hash_remove:
  * @mlo_peer_find_hash_find:
+ * @mlo_get_chip_id: get the MLO chip id
+ * @mlo_link_peer_find_hash_find_by_chip_id: return the link peer on the chip
  * @get_hw_link_id:
  * @dp_rx_peer_set_link_id: set link id in nbuf cb
  * @get_reo_qdesc_addr:
@@ -2412,6 +2414,16 @@ struct dp_arch_ops {
 						   int mac_addr_is_aligned,
 						   enum dp_mod_id mod_id,
 						   uint8_t vdev_id);
+#ifdef WLAN_MLO_MULTI_CHIP
+	uint8_t (*mlo_get_chip_id)(struct dp_soc *soc);
+	struct dp_peer *(*mlo_link_peer_find_hash_find_by_chip_id)
+						(struct dp_soc *soc,
+						 uint8_t *peer_mac_addr,
+						 int mac_addr_is_aligned,
+						 uint8_t vdev_id,
+						 uint8_t chip_id,
+						 enum dp_mod_id mod_id);
+#endif
 #endif
 	uint8_t (*get_hw_link_id)(struct dp_pdev *pdev);
 	void (*dp_rx_peer_set_link_id)(qdf_nbuf_t nbuf, uint32_t peer_mdata);

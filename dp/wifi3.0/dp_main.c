@@ -3749,7 +3749,7 @@ dp_vdev_update_bridge_vdev_param(struct dp_vdev *vdev,
 
 	dp_info("is_bridge_link = %d vdev id = %d chip id = %d",
 		vdev->is_bridge_vdev, vdev->vdev_id,
-		dp_mlo_get_chip_id(vdev->pdev->soc));
+		dp_get_chip_id(vdev->pdev->soc));
 }
 #else
 static inline void
@@ -4692,7 +4692,7 @@ static QDF_STATUS dp_txrx_peer_attach(struct dp_soc *soc, struct dp_peer *peer)
 
 	params.peer_mac = peer->mac_addr.raw;
 	params.vdev_id = peer->vdev->vdev_id;
-	params.chip_id = dp_mlo_get_chip_id(soc);
+	params.chip_id = dp_get_chip_id(soc);
 	params.pdev_id = peer->vdev->pdev->pdev_id;
 
 	dp_wdi_event_handler(WDI_EVENT_TXRX_PEER_CREATE, soc,
@@ -5018,7 +5018,7 @@ QDF_STATUS dp_peer_mlo_setup(
 		if (peer->vdev->opmode == wlan_op_mode_sta) {
 			struct cdp_txrx_peer_params_update params = {0};
 
-			params.chip_id = dp_mlo_get_chip_id(soc);
+			params.chip_id = dp_get_chip_id(soc);
 			params.pdev_id = peer->vdev->pdev->pdev_id;
 			params.vdev_id = peer->vdev->vdev_id;
 
@@ -5052,7 +5052,7 @@ QDF_STATUS dp_peer_mlo_setup(
 	    setup_info->is_primary_link) {
 		struct cdp_txrx_peer_params_update params = {0};
 
-		params.chip_id = dp_mlo_get_chip_id(soc);
+		params.chip_id = dp_get_chip_id(soc);
 		params.pdev_id = peer->vdev->pdev->pdev_id;
 		params.vdev_id = peer->vdev->vdev_id;
 
@@ -5100,7 +5100,7 @@ QDF_STATUS dp_peer_mlo_setup(
 
 			params.vdev_id = peer->vdev->vdev_id;
 			params.peer_mac = mld_peer->mac_addr.raw;
-			params.chip_id = dp_mlo_get_chip_id(soc);
+			params.chip_id = dp_get_chip_id(soc);
 			params.pdev_id = peer->vdev->pdev->pdev_id;
 
 			dp_wdi_event_handler(
