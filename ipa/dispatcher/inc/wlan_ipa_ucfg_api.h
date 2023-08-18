@@ -472,6 +472,20 @@ void ucfg_ipa_flush_pending_vdev_events(struct wlan_objmgr_pdev *pdev,
  *         false - WDS is not enabled
  */
 bool ucfg_ipa_is_wds_enabled(void);
+
+/**
+ * ucfg_ipa_get_alt_pipe() - Get alt_pipe for vdev_id
+ * @pdev: pdev obj
+ * @vdev_id: vdev_id of the target interface
+ * @alt_pipe: Boolean output to indicate if interface with @vdev_id
+ *	      is using alternate TX pipe or not.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS ucfg_ipa_get_alt_pipe(struct wlan_objmgr_pdev *pdev,
+				 uint8_t vdev_id,
+				 bool *alt_pipe);
+
 #else
 static inline void ucfg_ipa_set_pld_enable(bool flag)
 {
@@ -734,6 +748,14 @@ static inline
 bool ucfg_ipa_is_wds_enabled(void)
 {
 	return false;
+}
+
+static inline
+QDF_STATUS ucfg_ipa_get_alt_pipe(struct wlan_objmgr_pdev *pdev,
+				 uint8_t vdev_id,
+				 bool *alt_pipe)
+{
+	return QDF_STATUS_SUCCESS;
 }
 #endif /* IPA_OFFLOAD */
 #endif /* _WLAN_IPA_UCFG_API_H_ */

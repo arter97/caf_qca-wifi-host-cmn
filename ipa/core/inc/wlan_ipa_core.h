@@ -939,5 +939,29 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_rel_cb(void *ipa_ctx);
 void wlan_ipa_wdi_opt_dpath_notify_flt_rlsd(int result0, int result1);
 
 #endif /* IPA_OPT_WIFI_DP */
+
+#ifdef IPA_WDI3_TX_TWO_PIPES
+/**
+ * wlan_ipa_get_alt_pipe() - Get alt_pipe for vdev_id
+ * @ipa_ctx: IPA context
+ * @vdev_id: vdev_id of the target interface
+ * @alt_pipe: Boolean output to indicate if interface with @vdev_id
+ *	      is using alternate TX pipe or not.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_ipa_get_alt_pipe(struct wlan_ipa_priv *ipa_ctx,
+				 uint8_t vdev_id,
+				 bool *alt_pipe);
+#else /* !IPA_WDI3_TX_TWO_PIPES */
+static inline
+QDF_STATUS wlan_ipa_get_alt_pipe(struct wlan_ipa_priv *ipa_ctx,
+				 uint8_t vdev_id,
+				 bool *alt_pipe)
+{
+	return QDF_STATUS_E_INVAL;
+}
+#endif /* IPA_WDI3_TX_TWO_PIPES */
+
 #endif /* IPA_OFFLOAD */
 #endif /* _WLAN_IPA_CORE_H_ */

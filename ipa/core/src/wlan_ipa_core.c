@@ -5631,3 +5631,36 @@ void wlan_ipa_wdi_opt_dpath_notify_flt_add_rem_cb(int flt0_rslt, int flt1_rslt)
 	qdf_event_set(&ipa_obj->ipa_flt_evnt);
 }
 #endif /* IPA_OPT_WIFI_DP */
+
+#ifdef IPA_WDI3_TX_TWO_PIPES
+QDF_STATUS wlan_ipa_get_alt_pipe(struct wlan_ipa_priv *ipa_ctx,
+				 uint8_t vdev_id,
+				 bool *alt_pipe)
+{
+	struct wlan_ipa_iface_context *ctxt;
+	uint8_t iface_id;
+
+	if (qdf_unlikely(!ipa_ctx || !alt_pipe))
+		return QDF_STATUS_E_INVAL;
+
+	iface_id = ipa_ctx->vdev_to_iface[vdev_id];
+	if (qdf_unlikely(iface_id >= WLAN_IPA_MAX_IFACE)) {
+		ipa_err("Invalid iface_id %u from vdev_id %d", iface_id,
+			vdev_id);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	ctxt = &ipa_ctx->iface_context[iface_id];
+	if (qdf_unlikely(ctxt->session_id >= WLAN_IPA_MAX_SESSION)) {
+		ipa_err("Invalid session_id %u from iface_id %d",
+			ctxt->session_id, iface_id);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	*alt_pipe = ctxt->alt_pipe;
+	ipa_info("vdev_id %d alt_pipe %d", vdev_id, *alt_pipe);
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* IPA_WDI3_TX_TWO_PIPES */
+
