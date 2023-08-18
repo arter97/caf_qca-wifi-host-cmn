@@ -2077,6 +2077,45 @@ static int wlan_ipa_get_ifaceid(struct wlan_ipa_priv *ipa_ctx,
 	return i;
 }
 
+#ifdef IPA_WDI3_TX_TWO_PIPES
+#define WLAN_IPA_SESSION_ID_SHIFT 1
+static uint8_t wlan_ipa_set_session_id(uint8_t session_id, bool is_2g_iface)
+{
+	return (session_id << WLAN_IPA_SESSION_ID_SHIFT) | is_2g_iface;
+}
+
+static void
+wlan_ipa_setup_iface_alt_pipe(struct wlan_ipa_iface_context *iface_context,
+			      bool alt_pipe)
+{
+	iface_context->alt_pipe = alt_pipe;
+}
+
+static void
+wlan_ipa_cleanup_iface_alt_pipe(struct wlan_ipa_iface_context *iface_context)
+{
+	iface_context->alt_pipe = false;
+}
+
+#else
+static uint8_t wlan_ipa_set_session_id(uint8_t session_id, bool is_2g_iface)
+{
+	return session_id;
+}
+
+static void
+wlan_ipa_setup_iface_alt_pipe(struct wlan_ipa_iface_context *iface_context,
+			      bool alt_pipe)
+{
+}
+
+static void
+wlan_ipa_cleanup_iface_alt_pipe(struct wlan_ipa_iface_context *iface_context)
+{
+}
+
+#endif
+
 /**
  * wlan_ipa_cleanup_iface() - Cleanup IPA on a given interface
  * @iface_context: interface-specific IPA context
@@ -2128,6 +2167,7 @@ static void wlan_ipa_cleanup_iface(struct wlan_ipa_iface_context *iface_context,
 	iface_context->device_mode = QDF_MAX_NO_OF_MODE;
 	iface_context->session_id = WLAN_IPA_MAX_SESSION;
 	qdf_mem_set(iface_context->mac_addr, QDF_MAC_ADDR_SIZE, 0);
+	wlan_ipa_cleanup_iface_alt_pipe(iface_context);
 	qdf_spin_unlock_bh(&iface_context->interface_lock);
 	iface_context->ifa_address = 0;
 	qdf_zero_macaddr(&iface_context->bssid);
@@ -2217,19 +2257,6 @@ static void wlan_ipa_nbuf_cb(qdf_nbuf_t skb)
 }
 
 #endif /* QCA_LL_TX_FLOW_CONTROL_V2 */
-
-#ifdef IPA_WDI3_TX_TWO_PIPES
-#define WLAN_IPA_SESSION_ID_SHIFT 1
-static uint8_t wlan_ipa_set_session_id(uint8_t session_id, bool is_2g_iface)
-{
-	return (session_id << WLAN_IPA_SESSION_ID_SHIFT) | is_2g_iface;
-}
-#else
-static uint8_t wlan_ipa_set_session_id(uint8_t session_id, bool is_2g_iface)
-{
-	return session_id;
-}
-#endif
 
 /**
  * wlan_ipa_setup_iface() - Setup IPA on a given interface
@@ -2328,6 +2355,7 @@ static QDF_STATUS wlan_ipa_setup_iface(struct wlan_ipa_priv *ipa_ctx,
 	iface_context->device_mode = device_mode;
 	iface_context->session_id = session_id;
 	qdf_mem_copy(iface_context->mac_addr, mac_addr, QDF_MAC_ADDR_SIZE);
+	wlan_ipa_setup_iface_alt_pipe(iface_context, is_2g_iface);
 	qdf_spin_unlock_bh(&iface_context->interface_lock);
 
 	status = cdp_ipa_setup_iface(ipa_ctx->dp_soc, net_dev->name,

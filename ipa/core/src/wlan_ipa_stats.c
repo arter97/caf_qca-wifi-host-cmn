@@ -406,6 +406,19 @@ static void wlan_ipa_dump_sys_pipe(struct wlan_ipa_priv *ipa_ctx)
 	}
 }
 
+#ifdef IPA_WDI3_TX_TWO_PIPES
+static void
+wlan_ipa_dump_iface_context_alt_pipe(struct wlan_ipa_iface_context *iface)
+{
+	ipa_info("\talt_pipe: %d\n", iface->alt_pipe);
+}
+#else
+static void
+wlan_ipa_dump_iface_context_alt_pipe(struct wlan_ipa_iface_context *iface)
+{
+}
+#endif
+
 /**
  * wlan_ipa_dump_iface_context() - Dump IPA interface context structure
  * @ipa_ctx: IPA private context structure
@@ -442,6 +455,7 @@ static void wlan_ipa_dump_iface_context(struct wlan_ipa_priv *ipa_ctx)
 			iface_context->iface_id,
 			&iface_context->interface_lock,
 			iface_context->ifa_address);
+		wlan_ipa_dump_iface_context_alt_pipe(iface_context);
 	}
 }
 

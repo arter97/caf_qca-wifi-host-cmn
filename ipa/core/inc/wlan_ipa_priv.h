@@ -378,6 +378,7 @@ struct wlan_ipa_priv;
  * @stats: Interface stats
  * @bssid: BSSID. valid only for sta iface ctx
  * @is_authenticated: is peer authenticated
+ * @alt_pipe: Indicate whether the interface uses alternate TX pipe
  */
 struct wlan_ipa_iface_context {
 	struct wlan_ipa_priv *ipa_ctx;
@@ -397,6 +398,9 @@ struct wlan_ipa_iface_context {
 	struct wlan_ipa_iface_stats stats;
 	struct qdf_mac_addr bssid;
 	uint8_t is_authenticated;
+#ifdef IPA_WDI3_TX_TWO_PIPES
+	bool alt_pipe;
+#endif
 };
 
 /**
