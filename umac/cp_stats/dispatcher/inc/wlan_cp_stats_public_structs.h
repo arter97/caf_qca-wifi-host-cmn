@@ -203,11 +203,11 @@ struct group_id_1 {
 };
 
 /**
- * union group_id_stats : stats for group provided group id
+ * struct group_id_stats : stats for group provided group id
  * @counter_stats: stats for group id 0
  * @mac_stats: stats for group id 1
  */
-union group_id_stats {
+struct group_id_stats {
 	struct group_id_0 counter_stats;
 	struct group_id_1 mac_stats;
 };
@@ -219,7 +219,7 @@ union group_id_stats {
  */
 struct cp_sta_stats {
 	uint8_t sta_stats_group_id;
-	union group_id_stats group;
+	struct group_id_stats group;
 };
 
 /**
