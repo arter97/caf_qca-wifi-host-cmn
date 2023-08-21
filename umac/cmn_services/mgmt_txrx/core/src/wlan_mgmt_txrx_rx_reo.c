@@ -3792,8 +3792,10 @@ mgmt_rx_reo_update_ingress_list(struct mgmt_rx_reo_ingress_list *ingress_list,
 	}
 
 	if (!(frame_desc->type == MGMT_RX_REO_FRAME_DESC_HOST_CONSUMED_FRAME &&
-	      frame_desc->reo_required) != !new)
-		qdf_assert_always(0);
+	      frame_desc->reo_required) != !new) {
+		mgmt_rx_reo_err("Invalid input");
+		return QDF_STATUS_E_INVAL;
+	}
 
 	if (!is_queued) {
 		mgmt_rx_reo_err("Pointer to queued indication is null");
@@ -3987,8 +3989,10 @@ mgmt_rx_reo_update_egress_list(struct mgmt_rx_reo_egress_list *egress_list,
 	}
 
 	if (!(frame_desc->type == MGMT_RX_REO_FRAME_DESC_HOST_CONSUMED_FRAME &&
-	      frame_desc->reo_required) != !new)
-		qdf_assert_always(0);
+	      frame_desc->reo_required) != !new) {
+		mgmt_rx_reo_err("Invalid input");
+		return QDF_STATUS_E_INVAL;
+	}
 
 	if (!is_queued) {
 		mgmt_rx_reo_err("Pointer to queued indication is null");
@@ -4033,7 +4037,6 @@ mgmt_rx_reo_update_egress_list(struct mgmt_rx_reo_egress_list *egress_list,
 
 	last = qdf_list_last_entry(&reo_egress_list->list,
 				   struct mgmt_rx_reo_list_entry, node);
-	qdf_assert_always(last);
 
 	ts_last = mgmt_rx_reo_get_global_ts(last->rx_params);
 
@@ -4054,7 +4057,6 @@ mgmt_rx_reo_update_egress_list(struct mgmt_rx_reo_egress_list *egress_list,
 
 		list_insertion_pos++;
 	}
-	qdf_assert_always(least_greater_entry_found);
 
 	ret = mgmt_rx_reo_update_wait_count(&new->wait_count,
 					    &least_greater->wait_count);
@@ -4082,7 +4084,6 @@ mgmt_rx_reo_update_egress_list(struct mgmt_rx_reo_egress_list *egress_list,
 		ret = mgmt_rx_reo_handle_egress_overflow(reo_egress_list);
 		if (QDF_IS_STATUS_ERROR(ret)) {
 			mgmt_rx_reo_err("Failed to handle egress overflow");
-			qdf_assert_always(0);
 		}
 	}
 
@@ -4150,13 +4151,15 @@ mgmt_rx_reo_update_lists(struct mgmt_rx_reo_ingress_list *ingress_list,
 	status = mgmt_rx_reo_update_egress_list(egress_list, frame_desc,
 						new_entry,
 						&is_queued_to_egress_list);
-	if (QDF_IS_STATUS_ERROR(status))
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mgmt_rx_reo_err("Egress list update failed");
 		goto exit_release_egress_list_lock;
+	}
 
 	status = mgmt_rx_reo_check_sanity_list(reo_egress_list);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		mgmt_rx_reo_err("Sanity check of egress list failed");
-		qdf_assert_always(0);
+		goto exit_release_egress_list_lock;
 	}
 
 	qdf_spin_unlock_bh(&reo_egress_list->list_lock);
@@ -4164,13 +4167,15 @@ mgmt_rx_reo_update_lists(struct mgmt_rx_reo_ingress_list *ingress_list,
 	status = mgmt_rx_reo_update_ingress_list(ingress_list, frame_desc,
 						 new_entry,
 						 &is_queued_to_ingress_list);
-	if (QDF_IS_STATUS_ERROR(status))
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mgmt_rx_reo_err("Ingress list update failed");
 		goto exit_release_ingress_list_lock;
+	}
 
 	status = mgmt_rx_reo_check_sanity_list(reo_ingress_list);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		mgmt_rx_reo_err("Sanity check of ingress list failed");
-		qdf_assert_always(0);
+		goto exit_release_ingress_list_lock;
 	}
 
 	status = QDF_STATUS_SUCCESS;
@@ -4181,16 +4186,17 @@ exit_release_egress_list_lock:
 exit_release_ingress_list_lock:
 	qdf_spin_unlock_bh(&reo_ingress_list->list_lock);
 
-	qdf_assert_always(!is_queued_to_ingress_list ||
-			  !is_queued_to_egress_list);
+	if (is_queued_to_ingress_list && is_queued_to_egress_list)
+		mgmt_rx_reo_err("Frame is queued to ingress and egress lists");
 
 	*is_queued = is_queued_to_ingress_list || is_queued_to_egress_list;
 
 	queued_list = frame_desc->queued_list;
-	qdf_assert_always(!(*is_queued &&
-			    queued_list == MGMT_RX_REO_LIST_TYPE_INVALID));
+	if (*is_queued && queued_list == MGMT_RX_REO_LIST_TYPE_INVALID)
+		mgmt_rx_reo_err("Invalid queued list type %d", queued_list);
 
-	qdf_assert_always(new_entry || !*is_queued);
+	if (!new_entry && *is_queued)
+		mgmt_rx_reo_err("Queued an invalid frame");
 
 	/* Cleanup the entry if it is not queued */
 	if (new_entry && !*is_queued) {
@@ -4986,9 +4992,6 @@ mgmt_rx_reo_debug_print_ingress_frame_info(struct mgmt_rx_reo_context *reo_ctx,
 			       num_entries_to_print +
 			       ingress_frame_debug_info->frame_list_size)
 			      % ingress_frame_debug_info->frame_list_size;
-
-		qdf_assert_always(start_index >= 0 &&
-				  start_index < ingress_frame_debug_info->frame_list_size);
 	}
 
 	mgmt_rx_reo_alert_no_fl("Ingress Frame Info:-");
@@ -5336,7 +5339,8 @@ wlan_mgmt_rx_reo_algo_entry(struct wlan_objmgr_pdev *pdev,
 	qdf_spin_lock(&reo_ctx->reo_algo_entry_lock);
 
 	cur_link = mgmt_rx_reo_get_link_id(desc->rx_params);
-	qdf_assert_always(desc->frame_type == IEEE80211_FC0_TYPE_MGT);
+	if (desc->frame_type != IEEE80211_FC0_TYPE_MGT)
+		goto failure;
 
 	ret = log_ingress_frame_entry(reo_ctx, desc);
 	if (QDF_IS_STATUS_ERROR(ret))
