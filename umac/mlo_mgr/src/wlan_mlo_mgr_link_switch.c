@@ -55,34 +55,6 @@ void mlo_mgr_update_link_info_mac_addr(struct wlan_objmgr_vdev *vdev,
 	}
 }
 
-void mlo_mgr_roam_update_ap_link_info(struct wlan_objmgr_vdev *vdev,
-				      uint8_t link_id, uint8_t *ap_link_addr,
-				      struct wlan_channel channel)
-{
-	struct mlo_link_info *link_info;
-	uint8_t iter;
-
-	if (!vdev || !vdev->mlo_dev_ctx || !vdev->mlo_dev_ctx->link_ctx ||
-	    !ap_link_addr)
-		return;
-
-	for (iter = 0; iter < WLAN_MAX_ML_BSS_LINKS; iter++) {
-		link_info = &vdev->mlo_dev_ctx->link_ctx->links_info[iter];
-		if (link_id == link_info->link_id)
-			break;
-	}
-
-	if (iter == WLAN_MAX_ML_BSS_LINKS)
-		return;
-
-	qdf_mem_copy(&link_info->ap_link_addr, ap_link_addr, QDF_MAC_ADDR_SIZE);
-	qdf_mem_copy(link_info->link_chan_info, &channel, sizeof(channel));
-
-	mlo_debug("Update AP Link info for link_id: %d, vdev_id:%d, link_addr:" QDF_MAC_ADDR_FMT,
-		  link_info->link_id, link_info->vdev_id,
-		  QDF_MAC_ADDR_REF(link_info->ap_link_addr.bytes));
-}
-
 void mlo_mgr_update_ap_link_info(struct wlan_objmgr_vdev *vdev, uint8_t link_id,
 				 uint8_t *ap_link_addr,
 				 struct wlan_channel channel)

@@ -193,21 +193,6 @@ mlo_mgr_update_link_info_mac_addr(struct wlan_objmgr_vdev *vdev,
 void mlo_mgr_update_link_info_reset(struct wlan_mlo_dev_context *ml_dev);
 
 /**
- * mlo_mgr_roam_update_ap_link_info() - Update AP links information
- * @vdev: Object Manager vdev
- * @link_id: Link id of the AP MLD link
- * @ap_link_addr: AP link addresses
- * @channel: wlan channel information of the link
- *
- * Update AP link information for each link of AP MLD
- * Return: void
- */
-void mlo_mgr_roam_update_ap_link_info(struct wlan_objmgr_vdev *vdev,
-				      uint8_t link_id,
-				      uint8_t *ap_link_addr,
-				      struct wlan_channel channel);
-
-/**
  * mlo_mgr_update_ap_link_info() - Update AP links information
  * @vdev: Object Manager vdev
  * @link_id: Link id of the AP MLD link
