@@ -2656,6 +2656,7 @@ void dp_rx_nbuf_unmap(struct dp_soc *soc,
 	qdf_nbuf_unmap_nbytes_single(soc->osdev, rx_desc->nbuf,
 				     QDF_DMA_FROM_DEVICE,
 				     rx_desc_pool->buf_size);
+	rx_desc->unmapped = 1;
 
 	dp_ipa_reo_ctx_buf_mapping_unlock(soc, reo_ring_num);
 }
