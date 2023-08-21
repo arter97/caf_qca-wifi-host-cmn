@@ -1454,5 +1454,7 @@ QDF_STATUS target_if_register_regulatory_tx_ops(
 
 	reg_ops->end_r2p_table_update_wait = NULL;
 
+	reg_ops->is_80p80_supported = NULL;
+
 	return QDF_STATUS_SUCCESS;
 }

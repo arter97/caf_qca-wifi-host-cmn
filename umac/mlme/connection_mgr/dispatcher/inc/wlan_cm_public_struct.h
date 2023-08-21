@@ -32,6 +32,8 @@
 #endif
 
 #define CM_ID_INVALID 0xFFFFFFFF
+#define CM_ID_LSWITCH_BIT 0x10000000
+
 typedef uint32_t wlan_cm_id;
 
 /* Diconnect active timeout */
@@ -154,6 +156,8 @@ struct wlan_fils_con_info {
  * @CM_MLO_LINK_VDEV_DISCONNECT: Disconnect req for ML link
  * @CM_MLO_LINK_VDEV_CONNECT: Connect req for ML link
  * @CM_MLO_ROAM_INTERNAL_DISCONNECT: Disconnect req triggered for mlo roaming
+ * @CM_MLO_LINK_SWITCH_CONNECT: Connect req triggered for mlo link switch
+ * @CM_MLO_LINK_SWITCH_DISCONNECT: Disconnect req triggered for mlo link switch
  * @CM_SOURCE_MAX: max value of connection manager source
  * @CM_SOURCE_INVALID: Invalid connection manager req source
  */
@@ -174,6 +178,8 @@ enum wlan_cm_source {
 	CM_MLO_LINK_VDEV_DISCONNECT,
 	CM_MLO_LINK_VDEV_CONNECT,
 	CM_MLO_ROAM_INTERNAL_DISCONNECT,
+	CM_MLO_LINK_SWITCH_CONNECT,
+	CM_MLO_LINK_SWITCH_DISCONNECT,
 	CM_SOURCE_MAX,
 	CM_SOURCE_INVALID = CM_SOURCE_MAX,
 };

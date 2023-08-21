@@ -127,8 +127,9 @@
 
 /* EEPROM setting is a country code */
 #define    COUNTRY_ERD_FLAG     0x8000
-#define MIN_6GHZ_OPER_CLASS 131
-#define MAX_6GHZ_OPER_CLASS 137
+#define MIN_6GHZ_OPER_CLASS     131
+#define MAX_6GHZ_OPER_CLASS     137
+#define GLOBAL_6G_OPCLASS_80P80 135
 
 #ifdef CONFIG_AFC_SUPPORT
 #define DEFAULT_REQ_ID 11235813
@@ -434,6 +435,17 @@ void reg_set_afc_noaction(struct wlan_objmgr_psoc *psoc, bool value);
 #endif
 
 /**
+ * reg_update_hal_cap_wireless_modes() - update wireless modes
+ * @psoc: psoc ptr
+ * @modes: modes to set to
+ * @phy_id: phy id
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS reg_update_hal_cap_wireless_modes(struct wlan_objmgr_psoc *psoc,
+					  uint64_t modes, uint8_t phy_id);
+
+/**
  * reg_get_hal_reg_cap() - Get HAL REG capabilities
  * @psoc: psoc for country information
  *
@@ -456,15 +468,22 @@ QDF_STATUS reg_set_hal_reg_cap(
 		uint16_t phy_cnt);
 
 /**
- * reg_update_hal_reg_cap() - Update HAL REG capabilities
+ * reg_update_hal_reg_range_caps() - Update HAL REG frequency ranges
  * @psoc: psoc pointer
- * @wireless_modes: 11AX wireless modes
+ * @lo_2g_chan: low 2g channel
+ * @hi_2g_chan: high 2g channel
+ * @lo_5g_chan: low 5g channel
+ * @hi_5g_chan: high 2g channel
  * @phy_id: phy id
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS reg_update_hal_reg_cap(struct wlan_objmgr_psoc *psoc,
-				  uint64_t wireless_modes, uint8_t phy_id);
+QDF_STATUS reg_update_hal_reg_range_caps(struct wlan_objmgr_psoc *psoc,
+					 uint32_t lo_2g_chan,
+					 uint32_t hi_2g_chan,
+					 uint32_t lo_5g_chan,
+					 uint32_t hi_5g_chan,
+					 uint8_t phy_id);
 
 /**
  * reg_chan_in_range() - Check if the given channel is in pdev's channel range
@@ -3076,4 +3095,21 @@ QDF_STATUS reg_process_r2p_table_update_response(struct wlan_objmgr_psoc *psoc,
 qdf_freq_t
 reg_get_endchan_cen_from_bandstart(qdf_freq_t band_start,
 				   uint16_t bw);
+
+#ifndef CONFIG_REG_CLIENT
+/**
+ * reg_is_dev_supports_80p80() - Fetch if the device supports 80p80
+ * (discontinuous 160MHz) channel.
+ * @pdev: PDEV object
+ *
+ * Return: True, if the device supports 80p80, else, false.
+ */
+bool reg_is_dev_supports_80p80(struct wlan_objmgr_pdev *pdev);
+#else
+static inline
+bool reg_is_dev_supports_80p80(struct wlan_objmgr_pdev *pdev)
+{
+	return false;
+}
+#endif
 #endif

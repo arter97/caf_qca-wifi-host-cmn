@@ -3858,8 +3858,30 @@ wlan_soc_vdev_hw_stats_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
 static void wlan_soc_tx_capt_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
 				struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
 {
+	int i = 0;
+	uint8_t rbm_id = 0;
+
 	wlan_cfg_ctx->tx_capt_max_mem_allowed =
 		cfg_get(psoc, CFG_DP_TX_CAPT_MAX_MEM_MB) * 1024 * 1024;
+
+	for (i = 0; i < MAX_PDEV_CNT; i++) {
+		switch (i) {
+		case 0:
+			rbm_id = cfg_get(psoc, CFG_DP_TX_CAPT_RADIO_0_RBM_ID);
+		break;
+		case 1:
+			rbm_id = cfg_get(psoc, CFG_DP_TX_CAPT_RADIO_1_RBM_ID);
+		break;
+		case 2:
+			rbm_id = cfg_get(psoc, CFG_DP_TX_CAPT_RADIO_2_RBM_ID);
+		break;
+		default:
+			rbm_id = cfg_get(psoc, CFG_DP_TX_CAPT_RADIO_3_RBM_ID);
+		break;
+		}
+
+		wlan_cfg_ctx->tx_capt_rbm_id[i] = rbm_id;
+	}
 }
 #else
 static void wlan_soc_tx_capt_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
@@ -4024,6 +4046,10 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 		cfg_get(psoc, CFG_DP_INT_BATCH_THRESHOLD_OTHER);
 	wlan_cfg_ctx->int_timer_threshold_other =
 		cfg_get(psoc, CFG_DP_INT_TIMER_THRESHOLD_OTHER);
+	wlan_cfg_ctx->int_batch_threshold_mon_dest =
+		cfg_get(psoc, CFG_DP_INT_BATCH_THRESHOLD_MON_DEST);
+	wlan_cfg_ctx->int_timer_threshold_mon_dest =
+		cfg_get(psoc, CFG_DP_INT_TIMER_THRESHOLD_MON_DEST);
 	wlan_cfg_ctx->pktlog_buffer_size =
 		cfg_get(psoc, CFG_DP_PKTLOG_BUFFER_SIZE);
 
@@ -4117,6 +4143,8 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 			cfg_get(psoc, CFG_DP_RX_BUFF_POOL_ENABLE);
 	wlan_cfg_ctx->is_rx_refill_buff_pool_enabled =
 			cfg_get(psoc, CFG_DP_RX_REFILL_BUFF_POOL_ENABLE);
+	wlan_cfg_ctx->enable_dp_buf_page_frag_alloc =
+			cfg_get(psoc, CFG_DP_BUFS_PAGE_FRAG_ALLOCS);
 	wlan_cfg_ctx->rx_pending_high_threshold =
 			cfg_get(psoc, CFG_DP_RX_PENDING_HL_THRESHOLD);
 	wlan_cfg_ctx->rx_pending_low_threshold =
@@ -4222,6 +4250,10 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 		cfg_get(psoc, CFG_DP_INT_BATCH_THRESHOLD_OTHER);
 	wlan_cfg_ctx->int_timer_threshold_other =
 		cfg_get(psoc, CFG_DP_INT_TIMER_THRESHOLD_OTHER);
+	wlan_cfg_ctx->int_batch_threshold_mon_dest =
+		cfg_get(psoc, CFG_DP_INT_BATCH_THRESHOLD_MON_DEST);
+	wlan_cfg_ctx->int_timer_threshold_mon_dest =
+		cfg_get(psoc, CFG_DP_INT_TIMER_THRESHOLD_MON_DEST);
 	wlan_cfg_ctx->int_batch_threshold_ppe2tcl =
 			cfg_get(psoc, CFG_DP_INT_BATCH_THRESHOLD_PPE2TCL);
 	wlan_cfg_ctx->int_timer_threshold_ppe2tcl =
@@ -4342,6 +4374,8 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 			cfg_get(psoc, CFG_DP_RX_BUFF_POOL_ENABLE);
 	wlan_cfg_ctx->is_rx_refill_buff_pool_enabled =
 			cfg_get(psoc, CFG_DP_RX_REFILL_BUFF_POOL_ENABLE);
+	wlan_cfg_ctx->enable_dp_buf_page_frag_alloc =
+			cfg_get(psoc, CFG_DP_BUFS_PAGE_FRAG_ALLOCS);
 #ifdef WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL
 	wlan_cfg_ctx->rx_refill_buff_pool_size =
 		DP_RX_REFILL_BUFF_POOL_SIZE;
@@ -4769,7 +4803,7 @@ int wlan_cfg_num_nss_tcl_data_rings(struct wlan_cfg_dp_soc_ctxt *cfg)
 #if defined(IPA_OFFLOAD) && defined(TX_MULTI_TCL)
 int wlan_cfg_num_tcl_data_rings(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
-	if (!cfg->ipa_enabled)
+	if (!cfg->ipa_enabled || ipa_config_is_opt_wifi_dp_enabled())
 		return cfg->num_tcl_data_rings;
 
 	return 1;
@@ -5110,9 +5144,14 @@ int wlan_cfg_get_int_timer_threshold_other(struct wlan_cfg_dp_soc_ctxt *cfg)
 	return cfg->int_timer_threshold_other;
 }
 
-int wlan_cfg_get_int_timer_threshold_mon(struct wlan_cfg_dp_soc_ctxt *cfg)
+int wlan_cfg_get_int_batch_threshold_mon_dest(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
-	return cfg->int_timer_threshold_mon;
+	return cfg->int_batch_threshold_mon_dest;
+}
+
+int wlan_cfg_get_int_timer_threshold_mon_dest(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->int_timer_threshold_mon_dest;
 }
 
 int wlan_cfg_get_p2p_checksum_offload(struct wlan_cfg_dp_soc_ctxt *cfg)
@@ -5479,6 +5518,11 @@ bool wlan_cfg_is_peer_link_stats_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
 }
 
 qdf_export_symbol(wlan_cfg_is_peer_link_stats_enabled);
+
+bool wlan_cfg_is_dp_buf_page_frag_alloc_enable(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->enable_dp_buf_page_frag_alloc;
+}
 
 #ifdef WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL
 bool wlan_cfg_is_rx_buffer_pool_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
@@ -5854,4 +5898,15 @@ wlan_cfg_get_pointer_num_threshold_rx(struct wlan_cfg_dp_soc_ctxt *cfg)
 uint32_t wlan_cfg_get_special_frame_cfg(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return  cfg->special_frame_msk;
+}
+
+void wlan_cfg_set_ast_indication_disable(struct wlan_cfg_dp_soc_ctxt *cfg,
+					 bool val)
+{
+	cfg->fw_ast_indication_disable = val;
+}
+
+bool wlan_cfg_get_ast_indication_disable(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->fw_ast_indication_disable;
 }

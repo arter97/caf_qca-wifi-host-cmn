@@ -430,8 +430,9 @@ dp_txrx_peer_wds_tx_policy_update(struct cdp_soc_t *soc,  uint8_t vdev_id,
 						       DP_MOD_ID_AST);
 	if (!peer) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("peer is NULL for mac %pM vdev_id %d"),
-			  peer_mac, vdev_id);
+			  FL("peer is NULL for mac" QDF_MAC_ADDR_FMT
+			     " vdev_id %d"), QDF_MAC_ADDR_REF(peer_mac),
+			     vdev_id);
 		return QDF_STATUS_E_INVAL;
 	}
 

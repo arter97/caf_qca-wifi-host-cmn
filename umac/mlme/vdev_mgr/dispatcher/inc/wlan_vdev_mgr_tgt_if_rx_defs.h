@@ -43,6 +43,7 @@
  * @DELETE_RESPONSE_BIT:  vdev delete response bit
  * @PEER_DELETE_ALL_RESPONSE_BIT: vdev peer delete all response bit
  * @RSO_STOP_RESPONSE_BIT: RSO stop response bit
+ * @UPDATE_MAC_ADDR_RESPONSE_BIT: MAC address update response bit
  * @RESPONSE_BIT_MAX: Max enumeration
  */
 enum wlan_vdev_mgr_tgt_if_rsp_bit {
@@ -52,6 +53,7 @@ enum wlan_vdev_mgr_tgt_if_rsp_bit {
 	DELETE_RESPONSE_BIT = 3,
 	PEER_DELETE_ALL_RESPONSE_BIT = 4,
 	RSO_STOP_RESPONSE_BIT = 5,
+	UPDATE_MAC_ADDR_RESPONSE_BIT = 6,
 	RESPONSE_BIT_MAX,
 };
 
@@ -70,6 +72,7 @@ static inline char *string_from_rsp_bit(enum wlan_vdev_mgr_tgt_if_rsp_bit bit)
 					"DELETE",
 					"PEER DELETE ALL",
 					"RSO STOP",
+					"UPDATE_MAC_ADDR",
 					"RESPONE MAX"};
 	return (char *)strings[bit];
 }

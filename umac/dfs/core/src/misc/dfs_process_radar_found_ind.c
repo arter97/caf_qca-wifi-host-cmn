@@ -798,6 +798,11 @@ void dfs_translate_radar_params(struct wlan_dfs *dfs,
 	if (!dfs_is_true_160mhz_supported(dfs))
 		return;
 
+	if (dfs->dfs_is_radar_found_chan_freq_eq_center_freq) {
+		dfs_debug(dfs, WLAN_DEBUG_DFS, "There is no radar translation required for chips where HALPHY reports the exact radar found chan's center freq\n");
+		return;
+	}
+
 	if (radar_found->detector_id == dfs_get_agile_detector_id(dfs)) {
 		dfs_translate_radar_params_for_agile_chan(dfs, radar_found);
 		return;

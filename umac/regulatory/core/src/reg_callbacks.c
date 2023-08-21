@@ -480,7 +480,7 @@ void reg_unregister_ctry_change_callback(struct wlan_objmgr_psoc *psoc,
 
 void
 reg_register_is_chan_connected_callback(struct wlan_objmgr_psoc *psoc,
-					reg_is_chan_connected_callback cbk)
+				reg_get_connected_chan_for_mode_callback cbk)
 {
 	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
 
@@ -498,7 +498,7 @@ reg_register_is_chan_connected_callback(struct wlan_objmgr_psoc *psoc,
 
 void
 reg_unregister_is_chan_connected_callback(struct wlan_objmgr_psoc *psoc,
-					  reg_is_chan_connected_callback cbk)
+				reg_get_connected_chan_for_mode_callback cbk)
 {
 	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
 

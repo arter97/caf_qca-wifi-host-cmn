@@ -39,7 +39,7 @@
 
 #define CM_ID_MASK                  0x0000FFFF
 
-#define CM_ID_GET_PREFIX(cm_id)     cm_id & 0xFF000000
+#define CM_ID_GET_PREFIX(cm_id)     cm_id & 0x0F000000
 #define CM_VDEV_ID_SHIFT            16
 #define CM_VDEV_ID_MASK             0x00FF0000
 #define CM_ID_GET_VDEV_ID(cm_id) (cm_id & CM_VDEV_ID_MASK) >> CM_VDEV_ID_SHIFT
@@ -255,6 +255,7 @@ QDF_STATUS cm_connect_rsp(struct wlan_objmgr_vdev *vdev,
 QDF_STATUS cm_notify_connect_complete(struct cnx_mgr *cm_ctx,
 				      struct wlan_cm_connect_resp *resp,
 				      bool acquire_lock);
+
 /**
  * cm_connect_complete() - This API would be called after connect complete
  * request from the serialization.
@@ -1134,6 +1135,28 @@ cm_connect_rsp_get_mld_addr_or_bssid(struct wlan_cm_connect_resp *resp,
 }
 #endif
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+/**
+ * cm_standby_link_update_mlme_by_bssid() - update the scan mlme info for
+ * standby_link
+ * @vdev: Object manager vdev
+ * @assoc_state: association state
+ * @ssid: SSID of the connection
+ *
+ * Return: void
+ */
+void cm_standby_link_update_mlme_by_bssid(struct wlan_objmgr_vdev *vdev,
+					  uint32_t assoc_state,
+					  struct wlan_ssid ssid);
+#else
+static inline void
+cm_standby_link_update_mlme_by_bssid(struct wlan_objmgr_vdev *vdev,
+				     uint32_t assoc_state,
+				     struct wlan_ssid ssid)
+{
+}
+#endif
+
 /**
  * cm_get_cm_id_by_scan_id() - Get cm id by matching the scan id
  * @cm_ctx: connection manager context
@@ -1343,6 +1366,27 @@ void cm_free_connect_req(struct wlan_cm_connect_req *connect_req);
  * Return: void
  */
 void cm_free_connect_rsp(struct wlan_cm_connect_resp *connect_rsp);
+
+/**
+ * cm_free_connect_req_param() - Function to free up connect request sub memory.
+ * @req: pointer to connect req
+ *
+ * Function to free up connect request sub memory parameters.
+ *
+ * Return: void
+ */
+void cm_free_connect_req_param(struct wlan_cm_connect_req *req);
+
+/**
+ * cm_free_wep_key_params() - Function to free up connect request wep key params
+ * sub memory
+ * @req: pointer to connect req
+ *
+ * Function to free up connect request wep key params sub memory.
+ *
+ * Return: void
+ */
+void cm_free_wep_key_params(struct wlan_cm_connect_req *req);
 
 #ifdef CONN_MGR_ADV_FEATURE
 /**

@@ -110,6 +110,7 @@ enum wlan_mlme_host_sta_ps_param_uapsd {
  * @WLAN_MLME_HOST_VDEV_START_CHAN_INVALID_REGDOMAIN:
  * @WLAN_MLME_HOST_VDEV_START_CHAN_INVALID_BAND:
  * @WLAN_MLME_HOST_VDEV_START_TIMEOUT:
+ * @WLAN_MLME_HOST_VDEV_START_TX_VAP_CFG_INVALID:
  * @WLAN_MLME_HOST_VDEV_START_MAX_REASON: Max enumeration
  */
 enum wlan_mlme_host_vdev_start_status {
@@ -120,6 +121,7 @@ enum wlan_mlme_host_vdev_start_status {
 	WLAN_MLME_HOST_VDEV_START_CHAN_INVALID_REGDOMAIN,
 	WLAN_MLME_HOST_VDEV_START_CHAN_INVALID_BAND,
 	WLAN_MLME_HOST_VDEV_START_TIMEOUT,
+	WLAN_MLME_HOST_VDEV_START_TX_VAP_CFG_INVALID,
 	/* Add new response status code from here */
 	WLAN_MLME_HOST_VDEV_START_MAX_REASON,
 };
@@ -141,6 +143,7 @@ static inline char *string_from_start_rsp_status(
 					"CHAN_INVALID_REGDOMAIN",
 					"CHAN_INVALID_BAND",
 					"START_RESPONSE_TIMEOUT",
+					"TX_VAP_CONFIG_INVALID",
 					"START_RESPONSE_UNKNOWN"};
 
 	if (start_rsp >= WLAN_MLME_HOST_VDEV_START_MAX_REASON)
@@ -650,7 +653,11 @@ struct ml_vdev_start_partner_info {
  */
 struct mlo_vdev_start_partner_links {
 	uint8_t num_links;
+#ifdef WLAN_MLO_MULTI_CHIP
+	struct ml_vdev_start_partner_info partner_info[WLAN_UMAC_MLO_MAX_VDEVS + WLAN_UMAC_MLO_MAX_BRIDGE_VDEVS];
+#else
 	struct ml_vdev_start_partner_info partner_info[WLAN_UMAC_MLO_MAX_VDEVS];
+#endif
 };
 #endif
 /**

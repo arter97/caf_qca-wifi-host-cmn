@@ -252,6 +252,7 @@ void dp_tx_process_htt_completion_be(struct dp_soc *soc,
 	struct cdp_tid_tx_stats *tid_stats = NULL;
 	struct htt_soc *htt_handle;
 	uint8_t vdev_id;
+	uint16_t peer_id;
 
 	tx_status = HTT_TX_WBM_COMPLETION_V3_TX_STATUS_GET(htt_desc[0]);
 	htt_handle = (struct htt_soc *)soc->htt_handle;
@@ -354,7 +355,8 @@ void dp_tx_process_htt_completion_be(struct dp_soc *soc,
 		if (tx_status < CDP_MAX_TX_HTT_STATUS)
 			tid_stats->htt_status_cnt[tx_status]++;
 
-		txrx_peer = dp_txrx_peer_get_ref_by_id(soc, ts.peer_id,
+		peer_id = dp_tx_comp_adjust_peer_id_be(soc, ts.peer_id);
+		txrx_peer = dp_txrx_peer_get_ref_by_id(soc, peer_id,
 						       &txrx_ref_handle,
 						       DP_MOD_ID_HTT_COMP);
 		if (qdf_likely(txrx_peer))
@@ -661,7 +663,8 @@ dp_tx_mlo_mcast_multipass_handler(struct dp_soc *soc,
 	if (mpass_buf.vlan_id == INVALID_VLAN_ID) {
 		dp_mlo_iter_ptnr_vdev(be_soc, be_vdev,
 				      dp_tx_mlo_mcast_multipass_lookup,
-				      &mpass_buf, DP_MOD_ID_TX);
+				      &mpass_buf, DP_MOD_ID_TX,
+				      DP_ALL_VDEV_ITER);
 		/*
 		 * Do not drop the frame when vlan_id doesn't match.
 		 * Send the frame as it is.
@@ -696,7 +699,8 @@ dp_tx_mlo_mcast_multipass_handler(struct dp_soc *soc,
 		/* send frame on partner vdevs */
 		dp_mlo_iter_ptnr_vdev(be_soc, be_vdev,
 				      dp_tx_mlo_mcast_multipass_send,
-				      &mpass_buf_copy, DP_MOD_ID_TX);
+				      &mpass_buf_copy, DP_MOD_ID_TX,
+				      DP_LINK_VDEV_ITER);
 
 		/* send frame on mcast primary vdev */
 		dp_tx_mlo_mcast_multipass_send(be_vdev, vdev, &mpass_buf_copy);
@@ -709,7 +713,7 @@ dp_tx_mlo_mcast_multipass_handler(struct dp_soc *soc,
 
 	dp_mlo_iter_ptnr_vdev(be_soc, be_vdev,
 			      dp_tx_mlo_mcast_multipass_send,
-			      &mpass_buf, DP_MOD_ID_TX);
+			      &mpass_buf, DP_MOD_ID_TX, DP_LINK_VDEV_ITER);
 	dp_tx_mlo_mcast_multipass_send(be_vdev, vdev, &mpass_buf);
 
 	if (qdf_unlikely(be_vdev->seq_num > MAX_GSN_NUM))
@@ -804,7 +808,7 @@ void dp_tx_mlo_mcast_handler_be(struct dp_soc *soc,
 	/* send frame on partner vdevs */
 	dp_mlo_iter_ptnr_vdev(be_soc, be_vdev,
 			      dp_tx_mlo_mcast_pkt_send,
-			      nbuf, DP_MOD_ID_REINJECT);
+			      nbuf, DP_MOD_ID_REINJECT, DP_LINK_VDEV_ITER);
 
 	/* send frame on mcast primary vdev */
 	dp_tx_mlo_mcast_pkt_send(be_vdev, vdev, nbuf);
@@ -887,7 +891,8 @@ dp_tx_mlo_mcast_send_be(struct dp_soc *soc, struct dp_vdev *vdev,
 		if (qdf_unlikely(!dp_tx_mcast_enhance(vdev, nbuf))) {
 			dp_mlo_iter_ptnr_vdev(be_soc, be_vdev,
 					      dp_tx_mlo_mcast_enhance_be,
-					      nbuf, DP_MOD_ID_TX);
+					      nbuf, DP_MOD_ID_TX,
+					      DP_ALL_VDEV_ITER);
 			qdf_nbuf_free(nbuf);
 			return NULL;
 		}
@@ -1823,7 +1828,6 @@ qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 
 	/* Initialize the SW tx descriptor */
 	tx_desc->nbuf = nbuf;
-	tx_desc->shinfo_addr = skb_end_pointer(nbuf);
 	tx_desc->frm_type = dp_tx_frm_std;
 	tx_desc->tx_encap_type = vdev->tx_encap_type;
 	tx_desc->vdev_id = vdev_id;
@@ -1831,6 +1835,8 @@ qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	tx_desc->pkt_offset = 0;
 	tx_desc->length = pkt_len;
 	tx_desc->flags |= DP_TX_DESC_FLAG_SIMPLE;
+	if (soc->hw_txrx_stats_en)
+		tx_desc->flags |= DP_TX_DESC_FLAG_FASTPATH_SIMPLE;
 	tx_desc->nbuf->fast_recycled = 1;
 
 	if (nbuf->is_from_recycler && nbuf->fast_xmit)

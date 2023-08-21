@@ -817,6 +817,20 @@ QDF_STATUS wmi_unified_soc_set_hw_mode_cmd(wmi_unified_t wmi_handle,
 					   uint32_t hw_mode_index);
 
 /**
+ * wmi_unified_soc_set_rf_path_cmd() - WMI_PDEV_SET_RF_PATH_CMDID to FW
+ * @wmi_handle: wmi handle
+ * @rf_path_index: RF path index to switch to
+ * @pdev_id: pdev id
+ *
+ * Request RF path change to WLAN firmware
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_soc_set_rf_path_cmd(wmi_unified_t wmi_handle,
+					   uint32_t rf_path_index,
+					   uint8_t pdev_id);
+
+/**
  * wmi_unified_extract_hw_mode_resp() - Extract HW mode change response
  * @wmi: WMI handle
  * @evt_buf: Buffer holding event data
@@ -826,6 +840,19 @@ QDF_STATUS wmi_unified_soc_set_hw_mode_cmd(wmi_unified_t wmi_handle,
  */
 QDF_STATUS
 wmi_unified_extract_hw_mode_resp(wmi_unified_t wmi,
+				 void *evt_buf,
+				 uint32_t *cmd_status);
+
+/**
+ * wmi_unified_extract_rf_path_resp() - Extract RF path change response
+ * @wmi: WMI handle
+ * @evt_buf: Buffer holding event data
+ * @cmd_status: command status
+ *
+ * Return: QDF_STATUS_SUCCESS if success, else returns proper error code.
+ */
+QDF_STATUS
+wmi_unified_extract_rf_path_resp(wmi_unified_t wmi,
 				 void *evt_buf,
 				 uint32_t *cmd_status);
 
@@ -3931,6 +3958,21 @@ QDF_STATUS wmi_extract_spectral_scaling_params_service_ready_ext(
 			uint8_t *evt_buf, uint8_t idx,
 			struct wlan_psoc_host_spectral_scaling_params *param);
 
+#ifdef WLAN_RCC_ENHANCED_AOA_SUPPORT
+/**
+ * wmi_extract_aoa_caps_service_ready_ext2: Extract AoA capabilities received
+ *                                          through extended service ready event
+ * @wmi_handle: WMI handle
+ * @evt_buf: Event buffer
+ * @aoa_cap: Pointer to aoa cap
+ *
+ * Return: QDF status of operation
+ */
+QDF_STATUS wmi_extract_aoa_caps_service_ready_ext2(
+			wmi_unified_t wmi_handle, uint8_t *evt_buf,
+			struct wlan_psoc_host_rcc_enh_aoa_caps_ext2 *aoa_cap);
+#endif /* WLAN_RCC_ENHANCED_AOA_SUPPORT */
+
 /**
  * wmi_extract_pdev_utf_event() -
  *       extract UTF data from pdev utf event
@@ -5162,6 +5204,20 @@ QDF_STATUS wmi_extract_sap_coex_cap_service_ready_ext2(
 			wmi_unified_t wmi_handle,
 			uint8_t *evt_buf,
 			struct wmi_host_coex_fix_chan_cap *cap);
+
+/**
+ * wmi_extract_aux_dev_cap_service_ready_ext2() - extract aux dev capability
+ * @wmi_handle: wmi handle
+ * @evt_buf: pointer to event buffer
+ * @idx: capability index
+ * @param: psoc aux dev capability struct
+ *
+ * Return: QDF_STATUS_SUCCESS on success, QDF_STATUS_E_** on error
+ */
+QDF_STATUS wmi_extract_aux_dev_cap_service_ready_ext2(
+		wmi_unified_t wmi_handle,
+		uint8_t *evt_buf, uint8_t idx,
+		struct wlan_psoc_host_aux_dev_caps *param);
 
 /**
  * wmi_extract_csa_ie_received_event() - extract csa IE received event

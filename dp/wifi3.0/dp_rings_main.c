@@ -980,6 +980,12 @@ dp_srng_configure_interrupt_thresholds(struct dp_soc *soc,
 		ring_params->intr_batch_cntr_thres_entries =
 			wlan_cfg_get_int_batch_threshold_ppe2tcl(soc->wlan_cfg_ctx);
 		break;
+	case RXDMA_MONITOR_DST:
+		ring_params->intr_timer_thres_us =
+		  wlan_cfg_get_int_timer_threshold_mon_dest(soc->wlan_cfg_ctx);
+		ring_params->intr_batch_cntr_thres_entries =
+		  wlan_cfg_get_int_batch_threshold_mon_dest(soc->wlan_cfg_ctx);
+		break;
 	}
 
 	/* Enable low threshold interrupts for rx buffer rings (regular and
@@ -3904,6 +3910,45 @@ void dp_update_ring_hptp(struct dp_soc *soc, bool force_flush_tx)
 }
 #endif
 
+#ifdef WLAN_DP_FEATURE_SW_LATENCY_MGR
+/*
+ * dp_flush_tcl_ring() - flush TCL ring hp
+ * @pdev: dp pdev
+ * @ring_id: TCL ring id
+ *
+ * Return: 0 on success and error code on failure
+ */
+int dp_flush_tcl_ring(struct dp_pdev *pdev, int ring_id)
+{
+	struct dp_soc *soc = pdev->soc;
+	hal_ring_handle_t hal_ring_hdl =
+			soc->tcl_data_ring[ring_id].hal_srng;
+	int ret;
+
+	ret = hal_srng_try_access_start(soc->hal_soc, hal_ring_hdl);
+	if (ret)
+		return ret;
+
+	ret = hif_rtpm_get(HIF_RTPM_GET_ASYNC, HIF_RTPM_ID_DP);
+	if (ret) {
+		hal_srng_access_end_reap(soc->hal_soc, hal_ring_hdl);
+		hal_srng_set_event(hal_ring_hdl, HAL_SRNG_FLUSH_EVENT);
+		hal_srng_inc_flush_cnt(hal_ring_hdl);
+		return ret;
+	}
+
+	hal_srng_access_end(soc->hal_soc, hal_ring_hdl);
+	hif_rtpm_put(HIF_RTPM_PUT_ASYNC, HIF_RTPM_ID_DP);
+
+	return ret;
+}
+#else
+int dp_flush_tcl_ring(struct dp_pdev *pdev, int ring_id)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 #ifdef WLAN_FEATURE_STATS_EXT
 /* rx hw stats event wait timeout in ms */
 #define DP_REO_STATUS_STATS_TIMEOUT 100
@@ -4243,12 +4288,33 @@ static inline void dp_soc_get_ap_mld_mode(struct dp_soc *soc)
 		soc->cdp_soc.ol_ops->get_dp_cfg_param(soc->ctrl_psoc,
 					CDP_CFG_MLD_NETDEV_MODE_AP);
 	}
-	qdf_info("DP mld_mode_ap-%u\n", soc->mld_mode_ap);
+	dp_info("DP mld_mode_ap-%u\n", soc->mld_mode_ap);
 }
 #else
 static inline void dp_soc_get_ap_mld_mode(struct dp_soc *soc)
 {
 	(void)soc;
+}
+#endif
+
+#ifdef QCA_VDEV_STATS_HW_OFFLOAD_SUPPORT
+/**
+ * dp_soc_hw_txrx_stats_init() - Initialize hw_txrx_stats_en in dp_soc
+ * @soc: Datapath soc handle
+ *
+ * Return: none
+ */
+static inline
+void dp_soc_hw_txrx_stats_init(struct dp_soc *soc)
+{
+	soc->hw_txrx_stats_en =
+		wlan_cfg_get_vdev_stats_hw_offload_config(soc->wlan_cfg_ctx);
+}
+#else
+static inline
+void dp_soc_hw_txrx_stats_init(struct dp_soc *soc)
+{
+	soc->hw_txrx_stats_en = 0;
 }
 #endif
 
@@ -4439,6 +4505,8 @@ void *dp_soc_init(struct dp_soc *soc, HTC_HANDLE htc_handle,
 		qdf_skb_total_mem_stats_read());
 
 	soc->vdev_stats_id_map = 0;
+
+	dp_soc_hw_txrx_stats_init(soc);
 
 	dp_soc_get_ap_mld_mode(soc);
 

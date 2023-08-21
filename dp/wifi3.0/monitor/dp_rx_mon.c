@@ -1960,7 +1960,7 @@ QDF_STATUS dp_rx_mon_deliver(struct dp_soc *soc, uint32_t mac_id,
 	if (mon_pdev->mcopy_mode)
 		return dp_send_mgmt_packet_to_stack(soc, mon_mpdu, pdev);
 
-	if (mon_mpdu && mon_pdev->mvdev &&
+	if (mon_pdev->mvdev &&
 	    mon_pdev->mvdev->osif_vdev &&
 	    mon_pdev->mvdev->monitor_vdev &&
 	    mon_pdev->mvdev->monitor_vdev->osif_rx_mon) {
@@ -1977,7 +1977,8 @@ QDF_STATUS dp_rx_mon_deliver(struct dp_soc *soc, uint32_t mac_id,
 					      mon_mpdu,
 					      qdf_nbuf_headroom(mon_mpdu))) {
 			DP_STATS_INC(pdev, dropped.mon_radiotap_update_err, 1);
-			goto mon_deliver_fail;
+			qdf_nbuf_free(mon_mpdu);
+			return QDF_STATUS_E_INVAL;
 		}
 
 		dp_rx_mon_update_pf_tag_to_buf_headroom(soc, mon_mpdu);
@@ -1989,7 +1990,8 @@ QDF_STATUS dp_rx_mon_deliver(struct dp_soc *soc, uint32_t mac_id,
 				     , soc, mon_mpdu, mon_pdev->mvdev,
 				     (mon_pdev->mvdev ? mon_pdev->mvdev->osif_vdev
 				     : NULL));
-		goto mon_deliver_fail;
+		qdf_nbuf_free(mon_mpdu);
+		return QDF_STATUS_E_INVAL;
 	}
 
 	return QDF_STATUS_SUCCESS;

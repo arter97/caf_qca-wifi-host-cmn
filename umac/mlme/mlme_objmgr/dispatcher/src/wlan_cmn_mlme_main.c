@@ -523,13 +523,14 @@ QDF_STATUS mlme_cm_osif_disconnect_complete(struct wlan_objmgr_vdev *vdev,
 	return ret;
 }
 
-QDF_STATUS mlme_cm_osif_disconnect_start_ind(struct wlan_objmgr_vdev *vdev)
+QDF_STATUS mlme_cm_osif_disconnect_start_ind(struct wlan_objmgr_vdev *vdev,
+					     enum wlan_cm_source source)
 {
 	QDF_STATUS ret = QDF_STATUS_SUCCESS;
 
 	if (glbl_cm_ops &&
 	    glbl_cm_ops->mlme_cm_disconnect_start_cb)
-		ret = glbl_cm_ops->mlme_cm_disconnect_start_cb(vdev);
+		ret = glbl_cm_ops->mlme_cm_disconnect_start_cb(vdev, source);
 
 	return ret;
 }

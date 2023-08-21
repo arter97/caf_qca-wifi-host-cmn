@@ -72,6 +72,47 @@ target_if_send_rso_stop_failure_rsp(struct wlan_objmgr_psoc *psoc,
 }
 #endif
 
+#ifdef WLAN_FEATURE_DYNAMIC_MAC_ADDR_UPDATE
+static void
+target_if_vdev_mgr_mac_addr_rsp_timeout(struct wlan_objmgr_psoc *psoc,
+					struct vdev_response_timer *vdev_rsp,
+					uint8_t vdev_id)
+{
+	uint16_t rsp_pos;
+	struct wlan_objmgr_vdev *vdev;
+	enum qdf_hang_reason recovery_reason;
+	struct wlan_lmac_if_mlme_rx_ops *rx_ops;
+
+	rx_ops = target_if_vdev_mgr_get_rx_ops(psoc);
+	if (!rx_ops) {
+		mlme_err("No Rx Ops");
+		return;
+	}
+
+	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, vdev_id,
+						    WLAN_VDEV_TARGET_IF_ID);
+	if (!vdev) {
+		mlme_err("Invalid vdev %d", vdev_id);
+		return;
+	}
+
+	rsp_pos = UPDATE_MAC_ADDR_RESPONSE_BIT;
+	recovery_reason = QDF_VDEV_MAC_ADDR_UPDATE_RESPONSE_TIMED_OUT;
+	target_if_vdev_mgr_rsp_timer_stop(psoc, vdev_rsp, rsp_pos);
+	target_if_vdev_mgr_handle_recovery(psoc, vdev_id,
+					   recovery_reason, rsp_pos);
+	rx_ops->vdev_mgr_set_mac_addr_response(vdev, -EAGAIN);
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_VDEV_TARGET_IF_ID);
+}
+#else
+static inline void
+target_if_vdev_mgr_mac_addr_rsp_timeout(struct wlan_objmgr_psoc *psoc,
+					struct vdev_response_timer *vdev_rsp,
+					uint8_t vdev_id)
+{
+}
+#endif
+
 #ifdef DP_UMAC_HW_RESET_SUPPORT
 /**
  * target_if_check_and_restart_vdev_mgr_rsp_timer - Check and restart the vdev
@@ -147,6 +188,8 @@ void target_if_vdev_mgr_rsp_timer_cb(void *arg)
 	    !qdf_atomic_test_bit(PEER_DELETE_ALL_RESPONSE_BIT,
 				 &vdev_rsp->rsp_status) &&
 	    !qdf_atomic_test_bit(RSO_STOP_RESPONSE_BIT,
+				 &vdev_rsp->rsp_status) &&
+	    !qdf_atomic_test_bit(UPDATE_MAC_ADDR_RESPONSE_BIT,
 				 &vdev_rsp->rsp_status)) {
 		mlme_debug("No response bit is set, ignoring actions :%d",
 			   vdev_rsp->vdev_id);
@@ -238,6 +281,11 @@ void target_if_vdev_mgr_rsp_timer_cb(void *arg)
 		 */
 		mlme_debug("No rsp from FW received , continue with disconnect");
 		target_if_send_rso_stop_failure_rsp(psoc, vdev_id);
+	} else if (qdf_atomic_test_bit(UPDATE_MAC_ADDR_RESPONSE_BIT,
+				       &vdev_rsp->rsp_status)) {
+		mlme_debug("VDEV %d MAC addr update resp timeout", vdev_id);
+		target_if_vdev_mgr_mac_addr_rsp_timeout(psoc,
+							vdev_rsp, vdev_id);
 	} else {
 		mlme_err("PSOC_%d VDEV_%d: Unknown error",
 			 wlan_psoc_get_id(psoc), vdev_id);
@@ -1013,11 +1061,14 @@ static int target_if_update_macaddr_conf_evt_handler(ol_scn_t scn,
 						     uint8_t *event_buff,
 						     uint32_t len)
 {
+	int8_t ret;
 	struct wlan_objmgr_psoc *psoc;
+	struct wlan_objmgr_vdev *vdev;
 	struct wmi_unified *wmi_handle;
 	uint8_t vdev_id, resp_status;
 	QDF_STATUS status;
 	struct wlan_lmac_if_mlme_rx_ops *rx_ops;
+	struct vdev_response_timer *vdev_rsp;
 
 	if (!event_buff) {
 		mlme_err("Received NULL event ptr from FW");
@@ -1049,9 +1100,43 @@ static int target_if_update_macaddr_conf_evt_handler(ol_scn_t scn,
 		return -EINVAL;
 	}
 
-	rx_ops->vdev_mgr_set_mac_addr_response(vdev_id, resp_status);
+	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, vdev_id,
+						    WLAN_VDEV_TARGET_IF_ID);
+	if (!vdev) {
+		mlme_err("VDEV NULL");
+		return -EINVAL;
+	}
 
-	return 0;
+	if (!wlan_vdev_mlme_is_mlo_link_switch_in_progress(vdev)) {
+		ret = 0;
+		goto send_rsp;
+	}
+
+	/* This is for LinkSwitch request case */
+	vdev_rsp = rx_ops->psoc_get_vdev_response_timer_info(psoc, vdev_id);
+	if (!vdev_rsp) {
+		mlme_err("vdev response timer is null VDEV_%d PSOC_%d",
+			 vdev_id, wlan_psoc_get_id(psoc));
+		ret = -EINVAL;
+		goto out;
+	}
+
+	status =
+		target_if_vdev_mgr_rsp_timer_stop(psoc, vdev_rsp,
+						  UPDATE_MAC_ADDR_RESPONSE_BIT);
+
+	ret = qdf_status_to_os_return(status);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mlme_err("PSOC_%d VDEV_%d: VDE MGR RSP Timer stop failed",
+			 wlan_psoc_get_id(psoc), vdev_id);
+		goto out;
+	}
+
+send_rsp:
+	rx_ops->vdev_mgr_set_mac_addr_response(vdev, resp_status);
+out:
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_VDEV_TARGET_IF_ID);
+	return ret;
 }
 
 static inline void

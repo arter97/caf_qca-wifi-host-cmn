@@ -665,6 +665,20 @@ struct hif_event_history {
 };
 
 /**
+ * hif_desc_history_log_register() - Register hif_event_desc_history buffers
+ *
+ * Return: None
+ */
+void hif_desc_history_log_register(void);
+
+/**
+ * hif_desc_history_log_unregister() - Unregister hif_event_desc_history
+ *
+ * Return: None
+ */
+void hif_desc_history_log_unregister(void);
+
+/**
  * hif_hist_record_event() - Record one datapath event in history
  * @hif_ctx: HIF opaque context
  * @event: DP event entry
@@ -725,6 +739,13 @@ static inline void hif_record_event(struct hif_opaque_softc *hif_ctx,
 }
 
 #else
+static inline void hif_desc_history_log_register(void)
+{
+}
+
+static inline void hif_desc_history_log_unregister(void)
+{
+}
 
 static inline void hif_record_event(struct hif_opaque_softc *hif_ctx,
 				    uint8_t intr_grp_id,
@@ -1740,6 +1761,15 @@ void hif_rtpm_display_last_busy_hist(struct hif_opaque_softc *hif_ctx);
  */
 void hif_rtpm_record_ce_last_busy_evt(struct hif_softc *scn,
 				      unsigned long ce_id);
+
+/**
+ * hif_set_enable_rpm() - Set enable_rpm value
+ * @hif_hdl: hif opaque handle
+ *
+ *  Return: None
+ */
+void hif_set_enable_rpm(struct hif_opaque_softc *hif_hdl);
+
 #else
 
 /**
@@ -1848,6 +1878,11 @@ void hif_rtpm_set_monitor_wake_intr(int val)
 static inline
 void hif_rtpm_mark_last_busy(uint32_t id)
 {}
+
+static inline
+void hif_set_enable_rpm(struct hif_opaque_softc *hif_hdl)
+{
+}
 #endif
 
 void hif_enable_power_management(struct hif_opaque_softc *hif_ctx,
@@ -2163,7 +2198,8 @@ int hif_force_wake_release(struct hif_opaque_softc *handle)
 }
 #endif /* FORCE_WAKE */
 
-#ifdef FEATURE_HAL_DELAYED_REG_WRITE
+#if defined(FEATURE_HAL_DELAYED_REG_WRITE) || \
+	defined(FEATURE_HIF_DELAYED_REG_WRITE)
 /**
  * hif_prevent_link_low_power_states() - Prevent from going to low power states
  * @hif: HIF opaque context
@@ -2934,4 +2970,19 @@ void hif_affinity_mgr_affine_irq(struct hif_softc *scn)
  * Return: None
  */
 void hif_affinity_mgr_set_affinity(struct hif_opaque_softc *scn);
+
+#ifdef FEATURE_HIF_DELAYED_REG_WRITE
+/**
+ * hif_print_reg_write_stats() - Print hif delayed reg write stats
+ * @hif_ctx: hif opaque handle
+ *
+ * Return: None
+ */
+void hif_print_reg_write_stats(struct hif_opaque_softc *hif_ctx);
+#else
+static inline void hif_print_reg_write_stats(struct hif_opaque_softc *hif_ctx)
+{
+}
+#endif
+void hif_ce_print_ring_stats(struct hif_opaque_softc *hif_ctx);
 #endif /* _HIF_H_ */

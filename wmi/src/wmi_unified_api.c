@@ -75,6 +75,19 @@ QDF_STATUS wmi_unified_soc_set_hw_mode_cmd(wmi_unified_t wmi_handle,
 	return QDF_STATUS_E_FAILURE;
 }
 
+QDF_STATUS wmi_unified_soc_set_rf_path_cmd(wmi_unified_t wmi_handle,
+					   uint32_t rf_path_index,
+					   uint8_t pdev_id)
+{
+	if (wmi_handle->ops->send_pdev_set_rf_path_cmd)
+		return wmi_handle->ops->send_pdev_set_rf_path_cmd(
+								wmi_handle,
+								rf_path_index,
+								pdev_id);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
 QDF_STATUS wmi_unified_vdev_create_send(wmi_unified_t wmi_handle,
 					uint8_t macaddr[QDF_MAC_ADDR_SIZE],
 					struct vdev_create_params *param)
@@ -2871,6 +2884,19 @@ QDF_STATUS wmi_extract_spectral_scaling_params_service_ready_ext(
 	return QDF_STATUS_E_FAILURE;
 }
 
+#ifdef WLAN_RCC_ENHANCED_AOA_SUPPORT
+QDF_STATUS wmi_extract_aoa_caps_service_ready_ext2(
+			wmi_unified_t wmi_handle, uint8_t *evt_buf,
+			struct wlan_psoc_host_rcc_enh_aoa_caps_ext2 *aoa_cap)
+{
+	if (wmi_handle->ops->extract_aoa_caps_service_ready_ext2)
+		return wmi_handle->ops->extract_aoa_caps_service_ready_ext2
+				(wmi_handle, evt_buf, aoa_cap);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif /* WLAN_RCC_ENHANCED_AOA_SUPPORT */
+
 QDF_STATUS wmi_extract_pdev_utf_event(wmi_unified_t wmi_handle,
 				      uint8_t *evt_buf,
 				      struct wmi_host_pdev_utf_event *param)
@@ -3582,6 +3608,18 @@ QDF_STATUS wmi_unified_extract_hw_mode_resp(wmi_unified_t wmi,
 	return QDF_STATUS_E_FAILURE;
 }
 
+QDF_STATUS wmi_unified_extract_rf_path_resp(wmi_unified_t wmi,
+					    void *evt_buf,
+					    uint32_t *cmd_status)
+{
+	if (wmi->ops->extract_rf_path_resp)
+		return wmi->ops->extract_rf_path_resp(wmi,
+						      evt_buf,
+						      cmd_status);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
 #ifdef FEATURE_ANI_LEVEL_REQUEST
 QDF_STATUS wmi_unified_ani_level_cmd_send(wmi_unified_t wmi_handle,
 					  uint32_t *freqs,
@@ -4059,3 +4097,17 @@ wmi_extract_csa_ie_received_event(wmi_unified_t wmi_handle,
 
 	return QDF_STATUS_E_FAILURE;
 }
+
+QDF_STATUS wmi_extract_aux_dev_cap_service_ready_ext2(
+		wmi_unified_t wmi_handle,
+		uint8_t *evt_buf, uint8_t idx,
+		struct wlan_psoc_host_aux_dev_caps *param)
+{
+	if (wmi_handle->ops->extract_aux_dev_cap_service_ready_ext2)
+		return wmi_handle->ops->extract_aux_dev_cap_service_ready_ext2(
+				wmi_handle,
+				evt_buf, idx, param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+

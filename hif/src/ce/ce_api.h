@@ -438,10 +438,11 @@ struct CE_handle *ce_init(struct hif_softc *scn,
 /*
  * hif_ce_desc_history_log_register() - Register hif_ce_desc_history buffers
  * to SSR driver dump.
+ * @scn: HIF context
  *
  * Return: None
  */
-void hif_ce_desc_history_log_register(void);
+void hif_ce_desc_history_log_register(struct hif_softc *scn);
 
 /*==================CE Engine Shutdown=======================================*/
 /*
@@ -520,8 +521,7 @@ void war_ce_src_ring_write_idx_set(struct hif_softc *scn,
  * @priority:      TBD
  * @src_nentries:  #entries in source ring - Must be a power of 2
  * @src_sz_max:    Max source send size for this CE. This is also the minimum
- *                 size of a destination buffer. This should be a factor of 4
- *                 for alignment during nbuf alloc.
+ *                 size of a destination buffer
  * @dest_nentries: #entries in destination ring - Must be a power of 2
  * @reserved:      Future Use
  */
@@ -709,7 +709,7 @@ void ce_engine_service_reg(struct hif_softc *scn, int CE_id);
 void ce_per_engine_service_fast(struct hif_softc *scn, int ce_id);
 
 void ce_tx_ring_write_idx_update_wrapper(struct CE_handle *ce_tx_hdl,
-					 bool flush);
+					int coalesce);
 
 /*
  * ce_ring_flush_write_idx() - CE handler to flush write index

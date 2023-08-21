@@ -468,7 +468,7 @@ util_parse_bvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
 				     QDF_MAC_ADDR_SIZE);
 
 			mlo_nofl_debug("Copied MAC address: " QDF_MAC_ADDR_FMT,
-				       subelempayload + parsed_payload_len);
+				       QDF_MAC_ADDR_REF(macaddr->bytes));
 
 			if (is_macaddr_valid)
 				*is_macaddr_valid = true;
@@ -4333,7 +4333,7 @@ util_parse_rvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
 				     subelempayload + parsed_payload_len,
 				     QDF_MAC_ADDR_SIZE);
 			mlo_nofl_debug("Copied MAC address: " QDF_MAC_ADDR_FMT,
-				       subelempayload + parsed_payload_len);
+				       QDF_MAC_ADDR_REF(macaddr->bytes));
 
 			if (is_macaddr_valid)
 				*is_macaddr_valid = true;
@@ -4848,16 +4848,6 @@ util_parse_pamlie_perstaprofile_stactrl(uint8_t *subelempayload,
 		QDF_GET_BITS(stacontrol,
 			     WLAN_ML_PAV_LINFO_PERSTAPROF_STACTRL_LINKID_IDX,
 			     WLAN_ML_PAV_LINFO_PERSTAPROF_STACTRL_LINKID_BITS);
-
-	if (subelempayloadlen <
-		(parsed_payload_len +
-			WLAN_ML_PAV_LINFO_STAPROF_MAXSIZE)) {
-		mlo_err_rl("Length of subelement payload %zu octets not sufficient to contain edca params of size %zu octets after parsed payload length of %zu octets.",
-			   subelempayloadlen,
-			   WLAN_ML_PAV_LINFO_STAPROF_MAXSIZE,
-			   parsed_payload_len);
-		return QDF_STATUS_E_PROTO;
-	}
 
 	pa_link_info->edca_ie_present = false;
 	pa_link_info->ven_wme_ie_present = false;

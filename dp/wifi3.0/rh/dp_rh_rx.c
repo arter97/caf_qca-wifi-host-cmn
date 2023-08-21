@@ -900,13 +900,10 @@ dp_rx_data_indication_handler(struct dp_soc *soc, qdf_nbuf_t data_ind,
 		qdf_nbuf_set_tid_val(rx_desc->nbuf,
 			HTT_RX_DATA_MSDU_INFO_TID_INFO_GET(*(msg_word + 2)));
 
-		/*
-		 * TODO add REO destination indication value in HTT
-		 * set reo dest indication
-		 * qdf_nbuf_set_rx_reo_dest_ind_or_sw_excpt(
-		 * rx_desc->nbuf,
-		 * HAL_RX_REO_MSDU_REO_DST_IND_GET(ring_desc));
-		 */
+		/* set whether packet took offloads path */
+		 qdf_nbuf_set_rx_reo_dest_ind_or_sw_excpt(
+		 rx_desc->nbuf,
+		 HTT_RX_DATA_MSDU_INFO_FW_OFFLOADS_INSPECTED_GET(*(msg_word + 1)));
 
 		QDF_NBUF_CB_RX_PKT_LEN(rx_desc->nbuf) = msdu_len;
 

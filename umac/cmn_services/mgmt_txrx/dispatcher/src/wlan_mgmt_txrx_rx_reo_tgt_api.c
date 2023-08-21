@@ -135,12 +135,6 @@ tgt_mgmt_rx_reo_enter_algo_without_buffer(
 		return QDF_STATUS_E_INVAL;
 	}
 
-	if (!reo_params->valid) {
-		mgmt_rx_reo_err_rl("Invalid MGMT rx REO param for link %u",
-				   link_id);
-		return QDF_STATUS_E_INVAL;
-	}
-
 	ml_grp_id = wlan_get_mlo_grp_id_from_pdev(pdev);
 	if (ml_grp_id > WLAN_MAX_MLO_GROUPS) {
 		mgmt_rx_reo_err("Invalid MLO Group  %d for the pdev",
@@ -165,6 +159,8 @@ tgt_mgmt_rx_reo_enter_algo_without_buffer(
 	desc.frame_subtype = 0xFF;
 	desc.reo_required = is_mgmt_rx_reo_required(pdev, &desc);
 	desc.queued_list = MGMT_RX_REO_LIST_TYPE_INVALID;
+	desc.drop = false;
+	desc.drop_reason = MGMT_RX_REO_INGRESS_DROP_REASON_INVALID;
 
 	/* Enter the REO algorithm */
 	status = wlan_mgmt_rx_reo_algo_entry(pdev, &desc, &is_frm_queued);
@@ -343,13 +339,6 @@ QDF_STATUS tgt_mgmt_rx_reo_frame_handler(
 		goto cleanup;
 	}
 
-	if (!mgmt_rx_params->reo_params->valid) {
-		mgmt_rx_reo_err_rl("Invalid MGMT rx REO param for link %u",
-				   link_id);
-		status = QDF_STATUS_E_INVAL;
-		goto cleanup;
-	}
-
 	ml_grp_id = wlan_get_mlo_grp_id_from_pdev(pdev);
 	if (ml_grp_id > WLAN_MAX_MLO_GROUPS) {
 		mgmt_rx_reo_err("Invalid MGMT rx reo Group id");
@@ -371,6 +360,8 @@ QDF_STATUS tgt_mgmt_rx_reo_frame_handler(
 	desc.egress_list_size_rx = -1;
 	desc.egress_list_insertion_pos = -1;
 	desc.queued_list = MGMT_RX_REO_LIST_TYPE_INVALID;
+	desc.drop = false;
+	desc.drop_reason = MGMT_RX_REO_INGRESS_DROP_REASON_INVALID;
 
 	wh = (struct ieee80211_frame *)qdf_nbuf_data(buf);
 	frame_type = wh->i_fc[0] & IEEE80211_FC0_TYPE_MASK;
@@ -385,7 +376,7 @@ QDF_STATUS tgt_mgmt_rx_reo_frame_handler(
 		status = wlan_mgmt_rx_reo_algo_entry(pdev, &desc, &is_queued);
 
 		if (QDF_IS_STATUS_ERROR(status)) {
-			mgmt_rx_reo_err_rl("Failed to execute REO algorithm");
+			mgmt_rx_reo_warn_rl("Failed to execute REO algorithm");
 			goto cleanup;
 		}
 
@@ -398,7 +389,7 @@ QDF_STATUS tgt_mgmt_rx_reo_frame_handler(
 		status = wlan_mgmt_rx_reo_algo_entry(pdev, &desc, &is_queued);
 
 		if (QDF_IS_STATUS_ERROR(status))
-			mgmt_rx_reo_err_rl("Failed to execute REO algorithm");
+			mgmt_rx_reo_warn_rl("Failed to execute REO algorithm");
 
 		/**
 		 *  If frame is queued, we shouldn't free up params and
