@@ -914,7 +914,6 @@ dp_rx_data_indication_handler(struct dp_soc *soc, qdf_nbuf_t data_ind,
 		 * in case double skb unmap happened.
 		 */
 		dp_rx_nbuf_unmap(soc, rx_desc, rx_ctx_id);
-		rx_desc->unmapped = 1;
 
 		error = HTT_RX_DATA_MSDU_INFO_ERROR_VALID_GET(*(msg_word + 3));
 		if (qdf_unlikely(error)) {
@@ -1571,7 +1570,6 @@ dp_rx_frag_indication_handler(struct dp_soc *soc, qdf_nbuf_t data_ind,
 
 	dp_rx_nbuf_unmap(soc, rx_desc, rx_ctx_id);
 
-	rx_desc->unmapped = 1;
 	dp_rx_add_to_free_desc_list(&head, &tail, rx_desc);
 
 	dp_rx_buffers_replenish_simple(soc, rx_desc->pool_id,
