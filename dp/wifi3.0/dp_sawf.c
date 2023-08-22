@@ -324,7 +324,7 @@ dp_sawf_def_queues_get_map_report(struct cdp_soc_t *soc_hdl,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	dp_sawf_info("Peer ", QDF_MAC_ADDR_FMT,
+	dp_sawf_info("Peer " QDF_MAC_ADDR_FMT,
 		     QDF_MAC_ADDR_REF(mac_addr));
 	dp_sawf_nofl_err("TID    Active    Service Class ID");
 	for (tid = 0; tid < DP_SAWF_TID_MAX; ++tid) {
@@ -492,7 +492,8 @@ uint16_t dp_sawf_get_peerid(struct dp_soc *soc, uint8_t *dest_mac,
 
 	if (!ast_entry) {
 		qdf_spin_unlock_bh(&soc->ast_lock);
-		qdf_warn("%s NULL ast entry");
+		qdf_warn("NULL ast entry for dest mac addr: " QDF_MAC_ADDR_FMT,
+			 QDF_MAC_ADDR_REF(dest_mac));
 		return HTT_INVALID_PEER;
 	}
 
@@ -582,17 +583,58 @@ static struct dp_peer *dp_sawf_get_peer_from_wds_ext_dev(
 }
 #endif
 
+static struct dp_peer *dp_find_peer_by_destmac(struct dp_soc *soc,
+		uint8_t *dest_mac,
+		uint8_t vdev_id)
+{
+	bool ast_ind_disable = wlan_cfg_get_ast_indication_disable(
+							soc->wlan_cfg_ctx);
+
+	if ((!soc->ast_offload_support) || (!ast_ind_disable)) {
+		struct dp_ast_entry *ast_entry = NULL;
+		uint16_t peer_id;
+
+		qdf_spin_lock_bh(&soc->ast_lock);
+		if (vdev_id == DP_VDEV_ALL)
+			ast_entry = dp_peer_ast_hash_find_soc(soc, dest_mac);
+		else
+			ast_entry = dp_peer_ast_hash_find_by_vdevid
+					(soc, dest_mac, vdev_id);
+
+		if (!ast_entry) {
+			qdf_spin_unlock_bh(&soc->ast_lock);
+			dp_err("NULL ast entry");
+			return NULL;
+		}
+
+		peer_id = ast_entry->peer_id;
+		qdf_spin_unlock_bh(&soc->ast_lock);
+
+		if (peer_id == HTT_INVALID_PEER)
+			return NULL;
+
+		return dp_peer_get_ref_by_id(soc, peer_id, DP_MOD_ID_SAWF);
+	} else {
+		struct cdp_peer_info peer_info = {0};
+
+		DP_PEER_INFO_PARAMS_INIT(&peer_info, vdev_id, dest_mac, false,
+					 CDP_WILD_PEER_TYPE);
+
+		return dp_peer_hash_find_wrapper(soc, &peer_info,
+						 DP_MOD_ID_SAWF);
+	}
+}
+
 QDF_STATUS
 dp_sawf_peer_flow_count(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr,
 			uint8_t svc_id, uint8_t direction,
-			uint8_t start_or_stop, uint8_t *peer_mac)
+			uint8_t start_or_stop, uint8_t *peer_mac,
+			uint16_t peer_id)
 {
 	struct dp_soc *dpsoc = cdp_soc_t_to_dp_soc(soc_hdl);
 	struct dp_peer *peer, *mld_peer, *primary_link_peer;
-	struct dp_ast_entry *ast_entry;
 	struct dp_peer_sawf *sawf_ctx;
 	struct dp_sawf_msduq *msduq;
-	uint16_t peer_id;
 	bool match_found = false;
 	int q_idx;
 
@@ -601,17 +643,11 @@ dp_sawf_peer_flow_count(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr,
 		     QDF_MAC_ADDR_REF(mac_addr), svc_id, direction,
 		     start_or_stop);
 
-	qdf_spin_lock_bh(&dpsoc->ast_lock);
-	ast_entry = dp_peer_ast_hash_find_soc(dpsoc, mac_addr);
-	if (!ast_entry) {
-		qdf_spin_unlock_bh(&dpsoc->ast_lock);
-		return QDF_STATUS_E_FAILURE;
-	}
+	if (peer_id != HTT_INVALID_PEER)
+		peer = dp_peer_get_ref_by_id(dpsoc, peer_id, DP_MOD_ID_SAWF);
+	else
+		peer = dp_find_peer_by_destmac(dpsoc, mac_addr, DP_VDEV_ALL);
 
-	peer_id = ast_entry->peer_id;
-	qdf_spin_unlock_bh(&dpsoc->ast_lock);
-
-	peer = dp_peer_get_ref_by_id(dpsoc, peer_id, DP_MOD_ID_SAWF);
 	if (!peer)
 		return QDF_STATUS_E_FAILURE;
 
@@ -677,26 +713,18 @@ QDF_STATUS
 dp_sawf_peer_config_ul(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr,
 		       uint8_t tid, uint32_t service_interval,
 		       uint32_t burst_size, uint32_t min_tput,
-		       uint32_t max_latency, uint8_t add_or_sub)
+		       uint32_t max_latency, uint8_t add_or_sub,
+		       uint16_t peer_id)
 {
 	struct dp_soc *dpsoc = cdp_soc_t_to_dp_soc(soc_hdl);
 	struct dp_vdev *vdev;
 	struct dp_peer *peer;
-	struct dp_ast_entry *ast_entry;
-	uint16_t peer_id;
 	QDF_STATUS status;
 
-	qdf_spin_lock_bh(&dpsoc->ast_lock);
-	ast_entry = dp_peer_ast_hash_find_soc(dpsoc, mac_addr);
-	if (!ast_entry) {
-		qdf_spin_unlock_bh(&dpsoc->ast_lock);
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	peer_id = ast_entry->peer_id;
-	qdf_spin_unlock_bh(&dpsoc->ast_lock);
-
-	peer = dp_peer_get_ref_by_id(dpsoc, peer_id, DP_MOD_ID_SAWF);
+	if (peer_id != HTT_INVALID_PEER)
+		peer = dp_peer_get_ref_by_id(dpsoc, peer_id, DP_MOD_ID_SAWF);
+	else
+		peer = dp_find_peer_by_destmac(dpsoc, mac_addr, DP_VDEV_ALL);
 
 	if (!peer)
 		return QDF_STATUS_E_FAILURE;
@@ -759,8 +787,8 @@ uint16_t dp_sawf_get_msduq(struct net_device *netdev, uint8_t *dest_mac,
 
 	vdev_id = wlan_vdev_get_id(vdev);
 
-	peer = soc->arch_ops.dp_find_peer_by_destmac(soc,
-					dest_mac, vdev_id);
+	peer = dp_find_peer_by_destmac(soc, dest_mac, vdev_id);
+
 	if (!peer) {
 		qdf_warn("NULL peer");
 		return DP_SAWF_PEER_Q_INVALID;
@@ -1538,15 +1566,15 @@ static void dp_sawf_dump_delay_stats(struct sawf_delay_stats *stats)
 
 static void dp_sawf_dump_tx_stats(struct sawf_tx_stats *tx_stats)
 {
-	dp_sawf_print_stats("tx_success: num = %u bytes = %lu",
-		       tx_stats->tx_success.num,
-		       tx_stats->tx_success.bytes);
+	dp_sawf_print_stats("tx_success: num = %u bytes = %llu",
+			    tx_stats->tx_success.num,
+			    tx_stats->tx_success.bytes);
 	dp_sawf_print_stats("tx_ingress: num = %u bytes = %lu",
 			    tx_stats->tx_ingress.num,
 			    tx_stats->tx_ingress.bytes);
-	dp_sawf_print_stats("dropped: fw_rem num = %u bytes = %lu",
-		       tx_stats->dropped.fw_rem.num,
-		       tx_stats->dropped.fw_rem.bytes);
+	dp_sawf_print_stats("dropped: fw_rem num = %u bytes = %llu",
+			    tx_stats->dropped.fw_rem.num,
+			    tx_stats->dropped.fw_rem.bytes);
 	dp_sawf_print_stats("dropped: fw_rem_notx = %u",
 		       tx_stats->dropped.fw_rem_notx);
 	dp_sawf_print_stats("dropped: fw_rem_tx = %u",

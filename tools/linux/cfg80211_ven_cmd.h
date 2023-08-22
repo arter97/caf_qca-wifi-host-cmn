@@ -858,6 +858,10 @@ enum {
 #ifdef WLAN_FEATURE_11BE_MLO
 	IEEE80211_PARAM_WLAN_PEER_MESH_OVERRIDE = 813, /* Vendor Flags for WMI Interface */
 #endif
+	IEEE80211_PARAM_RSNXCAPS = 814, /*RSNXE Capabilities*/
+	IEEE80211_PARAM_RTT_11AZ_TB_MAX_SESSION_EXPIRY = 815,
+	IEEE80211_PARAM_RTT_11AZ_NTB_MAX_TIME_BW_MEAS = 816,
+	IEEE80211_PARAM_RTT_11AZ_NTB_MIN_TIME_BW_MEAS = 817,
 };
 
 enum {
@@ -1453,6 +1457,9 @@ enum _ol_ath_param_t {
 #ifdef WLAN_FEATURE_11BE_MLO
 	OL_ATH_PARAM_FORCE_NON_ASSOC_PRIMARY_UMAC = 528,
 #endif
+	OL_ATH_PARAM_PROBE_RESP_RETRY_LIMIT = 529,
+	OL_ATH_PARAM_CTS_TIMEOUT = 530,
+	OL_ATH_PARAM_SLOT_TIME = 531,
 };
 
 #ifdef CONFIG_SUPPORT_VENCMDTABLE
@@ -2562,6 +2569,12 @@ struct vendor_commands vap_vendor_cmds[] = {
 	{"get_vendor_peer_mesh_override_flag",
 		IEEE80211_PARAM_WLAN_PEER_MESH_OVERRIDE, GET_PARAM, 0},
 #endif
+	{"tb_max_sess_expiry", IEEE80211_PARAM_RTT_11AZ_TB_MAX_SESSION_EXPIRY,
+	 SET_PARAM, 1},
+	{"ntb_max_time_bw_meas", IEEE80211_PARAM_RTT_11AZ_NTB_MAX_TIME_BW_MEAS,
+	 SET_PARAM, 1},
+	{"ntb_min_time_bw_meas", IEEE80211_PARAM_RTT_11AZ_NTB_MIN_TIME_BW_MEAS,
+	 SET_PARAM, 1},
 };
 
 struct vendor_commands radio_vendor_cmds[] = {
@@ -3150,6 +3163,18 @@ struct vendor_commands radio_vendor_cmds[] = {
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_MGMT_PDEV_STATS_TIMER, SET_PARAM, 1},
 	{"g_p_stats_tmr",
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_MGMT_PDEV_STATS_TIMER, GET_PARAM, 0},
+	{"presp_ret_lim",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_PROBE_RESP_RETRY_LIMIT, SET_PARAM, 1},
+	{"g_presp_ret_lim",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_PROBE_RESP_RETRY_LIMIT, GET_PARAM, 0},
+	{"cts_timeout",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_CTS_TIMEOUT, SET_PARAM, 1},
+	{"g_cts_timeout",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_CTS_TIMEOUT, GET_PARAM, 0},
+	{"slot_time",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_SLOT_TIME, SET_PARAM, 1},
+	{"g_slot_time",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_SLOT_TIME, GET_PARAM, 0},
 	{"acktimeout",
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_TXACKTIMEOUT, SET_PARAM, 1},
 	{"get_acktimeout",

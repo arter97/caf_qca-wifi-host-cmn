@@ -81,6 +81,23 @@
 #define dp_sawf(peer, msduq_num, field) ((peer)->sawf->msduq[msduq_num].field)
 #define DP_SAWF_DEFAULT_Q_INVALID 0xff
 #define DP_SAWF_PEER_Q_INVALID 0xffff
+#define DP_SAWF_TAG_SHIFT 24
+#define DP_SAWF_SERVICE_CLASS_SHIFT 16
+#define DP_SAWF_QUEUE_ID_SHIFT 0
+#define DP_SAWF_VALID_TAG 0xAA
+#define DP_SAWF_SERVICE_CLASS_MASK 0xff
+#define DP_SAWF_META_DATA_INVALID 0xffffffff
+#define DP_SAWF_TAG_SET(tag) (tag << DP_SAWF_TAG_SHIFT)
+#define DP_SAWF_SERVICE_CLASS_SET(srvc_id) \
+		((srvc_id & DP_SAWF_SERVICE_CLASS_MASK) << \
+					DP_SAWF_SERVICE_CLASS_SHIFT)
+#define DP_SAWF_QUEUE_ID_SET(queue_id) (queue_id << DP_SAWF_QUEUE_ID_SHIFT)
+
+#define DP_SAWF_METADATA_SET(metadata, srvc_id, queue_id) \
+	(metadata = DP_SAWF_TAG_SET(DP_SAWF_VALID_TAG) | \
+	 DP_SAWF_SERVICE_CLASS_SET(srvc_id) | \
+	 DP_SAWF_QUEUE_ID_SET(queue_id));
+
 #define DP_SAWF_INVALID_AST_IDX 0xffff
 #define DP_SAWF_MAX_DYNAMIC_AST 2
 
@@ -504,6 +521,7 @@ QDF_STATUS dp_sawf_init_telemetry_params(void);
  * @min_tput: min throughput
  * @max_latency: max latency
  * @add_or_sub: Add or Sub
+ * @peer_id: peer id
  *
  * Return: QDF_STATUS
  */
@@ -511,7 +529,8 @@ QDF_STATUS
 dp_sawf_peer_config_ul(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr,
 		       uint8_t tid, uint32_t service_interval,
 		       uint32_t burst_size, uint32_t min_tput,
-		       uint32_t max_latency, uint8_t add_or_sub);
+		       uint32_t max_latency, uint8_t add_or_sub,
+		       uint16_t peer_id);
 
 /**
  * dp_sawf_peer_flow_count - Increment or decrement flow count per MSDU queue
@@ -521,13 +540,15 @@ dp_sawf_peer_config_ul(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr,
  * @direction: Indication of forward and reverse service class match
  * @start_or_stop: Indication of start of stop
  * @peer_mac: Pointer to hold peer MAC address
+ * @peer_id: peer id
  *
  * Return: QDF_STATUS
  */
 QDF_STATUS
 dp_sawf_peer_flow_count(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr,
 			uint8_t svc_id, uint8_t direction,
-			uint8_t start_or_stop, uint8_t *peer_mac);
+			uint8_t start_or_stop, uint8_t *peer_mac,
+			uint16_t peer_id);
 
 /*
  * dp_swaf_peer_sla_configuration() - Get sla configuration for a peer
