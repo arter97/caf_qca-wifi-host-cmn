@@ -3440,7 +3440,10 @@ void wmi_unified_detach(struct wmi_unified *wmi_handle)
 						&soc->wmi_pdev[i]->event_queue);
 			}
 
-			qdf_flush_work(&soc->wmi_pdev[i]->rx_diag_event_work);
+			qdf_flush_workqueue(0,
+				soc->wmi_pdev[i]->wmi_rx_diag_work_queue);
+			qdf_destroy_workqueue(0,
+				soc->wmi_pdev[i]->wmi_rx_diag_work_queue);
 			buf = qdf_nbuf_queue_remove(
 					&soc->wmi_pdev[i]->diag_event_queue);
 			while (buf) {
