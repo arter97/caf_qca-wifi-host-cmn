@@ -3931,6 +3931,34 @@ static inline QDF_STATUS reg_set_psoc_fcc_rules(
 }
 #endif
 
+struct wlan_objmgr_pdev *
+reg_get_pdev_from_phy_id(struct wlan_objmgr_psoc *psoc, uint8_t phy_id,
+			 struct wlan_lmac_if_reg_tx_ops *reg_tx_ops,
+			 bool is_reg_offload,
+			 wlan_objmgr_ref_dbgid *dbg_id)
+{
+	uint8_t pdev_id;
+	struct wlan_objmgr_pdev *pdev;
+	enum direction dir;
+
+	if (reg_tx_ops->get_pdev_id_from_phy_id)
+		reg_tx_ops->get_pdev_id_from_phy_id(psoc, phy_id, &pdev_id);
+	else
+		pdev_id = phy_id;
+
+	if (is_reg_offload) {
+		*dbg_id = WLAN_REGULATORY_NB_ID;
+		dir = NORTHBOUND;
+	} else {
+		*dbg_id = WLAN_REGULATORY_SB_ID;
+		dir = SOUTHBOUND;
+	}
+
+	pdev = wlan_objmgr_get_pdev_by_id(psoc, pdev_id, *dbg_id);
+
+	return pdev;
+}
+
 static QDF_STATUS
 reg_propagate_mas_chan_list_and_fill_legacy_list(struct wlan_objmgr_psoc *psoc,
 						 struct wlan_objmgr_pdev *pdev,
@@ -4633,34 +4661,6 @@ __reg_process_master_chan_list_ext(struct cur_regulatory_info *regulat_info)
 	}
 
 	return QDF_STATUS_SUCCESS;
-}
-
-struct wlan_objmgr_pdev *
-reg_get_pdev_from_phy_id(struct wlan_objmgr_psoc *psoc, uint8_t phy_id,
-			 struct wlan_lmac_if_reg_tx_ops *reg_tx_ops,
-			 bool is_reg_offload,
-			 wlan_objmgr_ref_dbgid *dbg_id)
-{
-	uint8_t pdev_id;
-	struct wlan_objmgr_pdev *pdev;
-	enum direction dir;
-
-	if (reg_tx_ops->get_pdev_id_from_phy_id)
-		reg_tx_ops->get_pdev_id_from_phy_id(psoc, phy_id, &pdev_id);
-	else
-		pdev_id = phy_id;
-
-	if (is_reg_offload) {
-		*dbg_id = WLAN_REGULATORY_NB_ID;
-		dir = NORTHBOUND;
-	} else {
-		*dbg_id = WLAN_REGULATORY_SB_ID;
-		dir = SOUTHBOUND;
-	}
-
-	pdev = wlan_objmgr_get_pdev_by_id(psoc, pdev_id, *dbg_id);
-
-	return pdev;
 }
 
 QDF_STATUS reg_process_master_chan_list_ext(
