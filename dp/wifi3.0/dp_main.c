@@ -111,6 +111,10 @@ cdp_dump_flow_pool_info(struct cdp_soc_t *soc)
 #endif
 #include "qdf_ssr_driver_dump.h"
 
+#ifdef WLAN_SUPPORT_DPDK
+#include <dp_dpdk.h>
+#endif
+
 #ifdef QCA_DP_ENABLE_TX_COMP_RING4
 #define TXCOMP_RING4_NUM 3
 #else
@@ -12201,166 +12205,6 @@ update_tx_ilp:
 }
 #endif
 
-#ifdef WLAN_SUPPORT_DPDK
-static char *tcl_ring_name[] = {
-	"tcl_data_ring1",
-	"tcl_data_ring2",
-	"tcl_data_ring3",
-	"tcl_data_ring4",
-	"tcl_data_ring5",
-};
-
-static char *tcl_comp_ring_name[] = {
-	"tcl_comp_ring1",
-	"tcl_comp_ring2",
-	"tcl_comp_ring3",
-	"tcl_comp_ring4",
-	"tcl_comp_ring5",
-};
-
-static char *reo_dest_ring_name[] = {
-	"reo_dest_ring1",
-	"reo_dest_ring2",
-	"reo_dest_ring3",
-	"reo_dest_ring4",
-	"reo_dest_ring5",
-	"reo_dest_ring6",
-	"reo_dest_ring7",
-	"reo_dest_ring8",
-};
-
-static void dp_dpdk_get_ring_info(struct cdp_soc_t *soc_hdl,
-				  qdf_uio_info_t *uio_info)
-{
-	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
-	struct hal_soc *hal_soc = (struct hal_soc *)soc->hal_soc;
-	struct hal_srng *hal_srng;
-	uint8_t idx = 1, i;
-
-	/* WBM Desc Release Ring */
-	hal_srng = (struct hal_srng *)
-			soc->tcl_data_ring[0].hal_srng;
-
-	hal_srng = (struct hal_srng *)
-			soc->wbm_desc_rel_ring.hal_srng;
-	uio_info->mem[idx].name = "wbm_desc_rel_ring";
-	uio_info->mem[idx].addr = (unsigned long)hal_srng->ring_base_paddr;
-	uio_info->mem[idx].size =
-			(hal_srng->num_entries * hal_srng->entry_size) << 2;
-	uio_info->mem[idx].memtype = UIO_MEM_PHYS;
-	idx++;
-
-	/* WBM Idle Link Ring */
-	hal_srng = (struct hal_srng *)
-			soc->wbm_idle_link_ring.hal_srng;
-	uio_info->mem[idx].name = "wbm_idle_link_ring";
-	uio_info->mem[idx].addr = (unsigned long)hal_srng->ring_base_paddr;
-	uio_info->mem[idx].size =
-			(hal_srng->num_entries * hal_srng->entry_size) << 2;
-	uio_info->mem[idx].memtype = UIO_MEM_PHYS;
-	idx++;
-
-	/* TCL Data Rings */
-	for (i = 0; i < soc->num_tcl_data_rings; i++) {
-		hal_srng = (struct hal_srng *)
-					soc->tcl_data_ring[i].hal_srng;
-		uio_info->mem[idx].name = tcl_ring_name[i];
-		uio_info->mem[idx].addr =
-			(unsigned long)hal_srng->ring_base_paddr;
-		uio_info->mem[idx].size =
-			(hal_srng->num_entries * hal_srng->entry_size) << 2;
-		uio_info->mem[idx].memtype = UIO_MEM_PHYS;
-		idx++;
-	}
-
-	/* TCL Completion Rings */
-	for (i = 0; i < soc->num_tcl_data_rings; i++) {
-		hal_srng = (struct hal_srng *)
-					soc->tx_comp_ring[i].hal_srng;
-		uio_info->mem[idx].name = tcl_comp_ring_name[i];
-		uio_info->mem[idx].addr =
-			(unsigned long)hal_srng->ring_base_paddr;
-		uio_info->mem[idx].size =
-			(hal_srng->num_entries * hal_srng->entry_size) << 2;
-		uio_info->mem[idx].memtype = UIO_MEM_PHYS;
-		idx++;
-	}
-
-	/* Reo Dest Rings */
-	for (i = 0; i < soc->num_reo_dest_rings; i++) {
-		hal_srng = (struct hal_srng *)
-					soc->reo_dest_ring[i].hal_srng;
-		uio_info->mem[idx].name = reo_dest_ring_name[i];
-		uio_info->mem[idx].addr =
-			(unsigned long)hal_srng->ring_base_paddr;
-		uio_info->mem[idx].size =
-			(hal_srng->num_entries * hal_srng->entry_size) << 2;
-		uio_info->mem[idx].memtype = UIO_MEM_PHYS;
-		idx++;
-	}
-
-	/* RXDMA Refill Ring */
-	hal_srng = (struct hal_srng *)
-			soc->rx_refill_buf_ring[0].hal_srng;
-	uio_info->mem[idx].name = "rxdma_buf_ring";
-	uio_info->mem[idx].addr = (unsigned long)hal_srng->ring_base_paddr;
-	uio_info->mem[idx].size =
-		(hal_srng->num_entries * hal_srng->entry_size) << 2;
-	uio_info->mem[idx].memtype = UIO_MEM_PHYS;
-	idx++;
-
-	/* REO Exception Ring */
-	hal_srng = (struct hal_srng *)
-			soc->reo_exception_ring.hal_srng;
-	uio_info->mem[idx].name = "reo_exception_ring";
-	uio_info->mem[idx].addr =
-		(unsigned long)hal_srng->ring_base_paddr;
-	uio_info->mem[idx].size =
-		(hal_srng->num_entries * hal_srng->entry_size) << 2;
-	uio_info->mem[idx].memtype = UIO_MEM_PHYS;
-	idx++;
-
-	/* RX Release Ring */
-	hal_srng = (struct hal_srng *)
-			soc->rx_rel_ring.hal_srng;
-	uio_info->mem[idx].name = "rx_release_ring";
-	uio_info->mem[idx].addr = (unsigned long)hal_srng->ring_base_paddr;
-	uio_info->mem[idx].size =
-		(hal_srng->num_entries * hal_srng->entry_size) << 2;
-	uio_info->mem[idx].memtype = UIO_MEM_PHYS;
-	idx++;
-
-	/* Reo Reinject Ring */
-	hal_srng = (struct hal_srng *)
-			soc->reo_reinject_ring.hal_srng;
-	uio_info->mem[idx].name = "reo_reinject_ring";
-	uio_info->mem[idx].addr =
-		(unsigned long)hal_srng->ring_base_paddr;
-	uio_info->mem[idx].size =
-		(hal_srng->num_entries * hal_srng->entry_size) << 2;
-	uio_info->mem[idx].memtype = UIO_MEM_PHYS;
-	idx++;
-
-	/* Shadow Write Pointer for LMAC Ring */
-	uio_info->mem[idx].name = "lmac_shadow_wrptr";
-        uio_info->mem[idx].addr =
-		(unsigned long)hal_soc->shadow_wrptr_mem_paddr;
-	uio_info->mem[idx].size =
-		sizeof(*(hal_soc->shadow_wrptr_mem_vaddr)) * HAL_MAX_LMAC_RINGS;
-	uio_info->mem[idx].memtype = UIO_MEM_PHYS;
-	idx++;
-
-	/* Shadow Write Pointer for LMAC Ring */
-	uio_info->mem[idx].name = "lmac_shadow_rdptr";
-        uio_info->mem[idx].addr =
-		(unsigned long)hal_soc->shadow_rdptr_mem_paddr;
-	uio_info->mem[idx].size =
-		sizeof(*(hal_soc->shadow_rdptr_mem_vaddr)) * HAL_SRNG_ID_MAX;
-	uio_info->mem[idx].memtype = UIO_MEM_PHYS;
-
-}
-#endif
-
 static struct cdp_cmn_ops dp_ops_cmn = {
 	.txrx_soc_attach_target = dp_soc_attach_target_wifi3,
 	.txrx_vdev_attach = dp_vdev_attach_wifi3,
@@ -12499,6 +12343,9 @@ static struct cdp_cmn_ops dp_ops_cmn = {
 #endif
 #ifdef WLAN_SUPPORT_DPDK
 	.dpdk_get_ring_info = dp_dpdk_get_ring_info,
+	.cfgmgr_get_soc_info = dp_cfgmgr_get_soc_info,
+	.cfgmgr_get_vdev_info = dp_cfgmgr_get_vdev_info,
+	.cfgmgr_get_peer_info = dp_cfgmgr_get_peer_info,
 #endif
 };
 

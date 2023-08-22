@@ -32,6 +32,11 @@
 #include "cdp_txrx_cmn_struct.h"
 #include "wlan_objmgr_global_obj.h"
 
+#ifdef WLAN_SUPPORT_DPDK
+#include <cfgmgr_api_if.h>
+#include <dpdk_wlan_msg_types.h>
+#endif
+
 #ifdef ENABLE_VERBOSE_DEBUG
 extern bool is_dp_verbose_debug_enabled;
 #endif
@@ -3383,21 +3388,93 @@ QDF_STATUS cdp_mlo_dev_ctxt_detach(ol_txrx_soc_handle soc,
  * @soc: soc handle
  * @uio_info: pointer to fill dp ring info
  *
- * Return: none
+ * Return: no. of mappings filled
  */
-static inline void cdp_dpdk_get_ring_info(ol_txrx_soc_handle soc,
-					  qdf_uio_info_t *uio_info)
+static inline uint8_t cdp_dpdk_get_ring_info(ol_txrx_soc_handle soc,
+					     qdf_uio_info_t *uio_info)
 {
 	if (!soc) {
 		dp_cdp_debug("Invalid Instance");
-		return;
+		return 0;
 	}
 
 	if (!soc->ops->cmn_drv_ops ||
 	    !soc->ops->cmn_drv_ops->dpdk_get_ring_info)
-		return;
+		return 0;
 
-	soc->ops->cmn_drv_ops->dpdk_get_ring_info(soc, uio_info);
+	return soc->ops->cmn_drv_ops->dpdk_get_ring_info(soc, uio_info);
+}
+
+/*
+ * cdp_cfgmgr_get_soc_info - get soc info for dpdk
+ * @soc: soc handle
+ * @soc_id: soc id
+ * @ev_buf: pointer to fill soc info
+ *
+ * Return: 0 if info filled successful, error otherwise
+ */
+static inline
+int cdp_cfgmgr_get_soc_info(struct cdp_soc_t *soc, uint8_t soc_id,
+			    struct dpdk_wlan_soc_info_event *ev_buf)
+{
+	if (!soc) {
+		dp_cdp_debug("Invalid Instance");
+		return -EINVAL;
+	}
+
+	if (!soc->ops->cmn_drv_ops ||
+	    !soc->ops->cmn_drv_ops->cfgmgr_get_soc_info)
+		return -EINVAL;
+
+	return soc->ops->cmn_drv_ops->cfgmgr_get_soc_info(soc, soc_id, ev_buf);
+}
+
+/*
+ * cdp_cfgmgr_get_vdev_info - get vdev info of a soc for dpdk
+ * @soc: soc handle
+ * @soc_id: soc id
+ * @ev_buf: pointer to fill vdev info
+ *
+ * Return: 0 if info filled successful, error otherwise
+ */
+static inline
+int cdp_cfgmgr_get_vdev_info(struct cdp_soc_t *soc, uint8_t soc_id,
+			     struct dpdk_wlan_vdev_info_event *ev_buf)
+{
+	if (!soc) {
+		dp_cdp_debug("Invalid Instance");
+		return -EINVAL;
+	}
+
+	if (!soc->ops->cmn_drv_ops ||
+	    !soc->ops->cmn_drv_ops->cfgmgr_get_vdev_info)
+		return -EINVAL;
+
+	return soc->ops->cmn_drv_ops->cfgmgr_get_vdev_info(soc, soc_id, ev_buf);
+}
+
+/*
+ * cdp_cfgmgr_get_peer_info - get peer info of a soc for dpdk
+ * @soc: soc handle
+ * @soc_id: soc id
+ * @ev_buf: pointer to fill peer info
+ *
+ * Return: 0 if info filled successful, error otherwise
+ */
+static inline
+int cdp_cfgmgr_get_peer_info(struct cdp_soc_t *soc, uint8_t soc_id,
+			     struct dpdk_wlan_peer_info *ev_buf)
+{
+	if (!soc) {
+		dp_cdp_debug("Invalid Instance");
+		return -EINVAL;
+	}
+
+	if (!soc->ops->cmn_drv_ops ||
+	    !soc->ops->cmn_drv_ops->cfgmgr_get_peer_info)
+		return -EINVAL;
+
+	return soc->ops->cmn_drv_ops->cfgmgr_get_peer_info(soc, soc_id, ev_buf);
 }
 #endif
 #endif /* _CDP_TXRX_CMN_H_ */
