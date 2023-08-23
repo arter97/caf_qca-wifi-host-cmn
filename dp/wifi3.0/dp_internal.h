@@ -3697,6 +3697,13 @@ static inline QDF_STATUS dp_soc_swlm_detach(struct dp_soc *soc)
 }
 #endif /* !WLAN_DP_FEATURE_SW_LATENCY_MGR */
 
+#ifndef WLAN_DP_PROFILE_SUPPORT
+static inline void wlan_dp_soc_cfg_sync_profile(struct cdp_soc_t *cdp_soc) {}
+
+static inline void wlan_dp_pdev_cfg_sync_profile(struct cdp_soc_t *cdp_soc,
+						 uint8_t pdev_id) {}
+#endif
+
 /**
  * dp_get_peer_id(): function to get peer id by mac
  * @soc: Datapath soc handle
@@ -3769,7 +3776,7 @@ void dp_context_free_mem(struct dp_soc *soc, enum dp_ctxt_type ctxt_type,
  * Return: None
  */
 void dp_desc_multi_pages_mem_alloc(struct dp_soc *soc,
-				   enum dp_desc_type desc_type,
+				   enum qdf_dp_desc_type desc_type,
 				   struct qdf_mem_multi_page_t *pages,
 				   size_t element_size,
 				   uint32_t element_num,
@@ -3791,7 +3798,7 @@ void dp_desc_multi_pages_mem_alloc(struct dp_soc *soc,
  * Return: None
  */
 void dp_desc_multi_pages_mem_free(struct dp_soc *soc,
-				  enum dp_desc_type desc_type,
+				  enum qdf_dp_desc_type desc_type,
 				  struct qdf_mem_multi_page_t *pages,
 				  qdf_dma_context_t memctxt,
 				  bool cacheable);
@@ -3813,7 +3820,7 @@ void dp_context_free_mem(struct dp_soc *soc, enum dp_ctxt_type ctxt_type,
 
 static inline
 void dp_desc_multi_pages_mem_alloc(struct dp_soc *soc,
-				   enum dp_desc_type desc_type,
+				   enum qdf_dp_desc_type desc_type,
 				   struct qdf_mem_multi_page_t *pages,
 				   size_t element_size,
 				   uint32_t element_num,
@@ -3826,7 +3833,7 @@ void dp_desc_multi_pages_mem_alloc(struct dp_soc *soc,
 
 static inline
 void dp_desc_multi_pages_mem_free(struct dp_soc *soc,
-				  enum dp_desc_type desc_type,
+				  enum qdf_dp_desc_type desc_type,
 				  struct qdf_mem_multi_page_t *pages,
 				  qdf_dma_context_t memctxt,
 				  bool cacheable)

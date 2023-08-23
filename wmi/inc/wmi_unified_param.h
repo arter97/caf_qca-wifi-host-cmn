@@ -4690,6 +4690,8 @@ typedef struct {
  * @fd_fail_cnt: Toatl number of Fils discovery failed count
  * @unsolicited_prb_succ_cnt: Successful unsolicited probe response frames cnt
  * @unsolicited_prb_fail_cnt: Failed unsolictied probe response frames cnt
+ * @is_mlo_vdev_active: is the mlo vdev currently active
+ * @vdev_tx_power: Tx power for vdev
  */
 struct wmi_host_vdev_prb_fils_stats {
 	uint32_t vdev_id;
@@ -4697,6 +4699,8 @@ struct wmi_host_vdev_prb_fils_stats {
 	uint32_t fd_fail_cnt;
 	uint32_t unsolicited_prb_succ_cnt;
 	uint32_t unsolicited_prb_fail_cnt;
+	bool is_mlo_vdev_active;
+	uint32_t vdev_tx_power;
 };
 
 /**
@@ -5586,6 +5590,7 @@ typedef enum {
 	PDEV_PARAM(pdev_param_btcoex_cfg, UNAVAILABLE_PARAM),
 	PDEV_PARAM(pdev_param_soft_tx_chain_mask, PDEV_PARAM_TX_CHAIN_MASK),
 	PDEV_PARAM(pdev_param_enable_peer_retry_stats, UNAVAILABLE_PARAM),
+	PDEV_PARAM(pdev_param_pcie_config, PDEV_PARAM_PCIE_CONFIG),
 	pdev_param_max,
 } wmi_conv_pdev_params_id;
 
@@ -9120,6 +9125,36 @@ struct vap_tidmap_prec_params {
 };
 
 #endif
+
+/**
+ * struct peer_vlan_config_param - peer vlan parameter
+ * @tx_cmd: Tx command
+ * @rx_cmd: Rx Command
+ * @tx_strip_insert: Strip or Insert vlan in Tx[0:Strip, 1: Insert]
+ * @tx_strip_insert_inner: Enable tx_strip_insert operation for inner vlan tag.
+ * @tx_strip_insert_outer: Enable tx_strip_insert operation for outer vlan tag.
+ * @rx_strip_c_tag: Strip c_tag
+ * @rx_strip_s_tag: Strip s_tag
+ * @rx_insert_c_tag: Insert c_tag
+ * @rx_insert_s_tag: Insert s_tag
+ * @insert_vlan_inner_tci: Vlan inner tci
+ * @insert_vlan_outer_tci: Vlan outer tci
+ * @vdev_id: vdev id corresponding to peer.
+ */
+struct peer_vlan_config_param {
+	uint16_t tx_cmd:1;
+	uint16_t rx_cmd:1;
+	uint16_t tx_strip_insert:1;
+	uint16_t tx_strip_insert_inner:1;
+	uint16_t tx_strip_insert_outer:1;
+	uint16_t rx_strip_c_tag:1;
+	uint16_t rx_strip_s_tag:1;
+	uint16_t rx_insert_c_tag:1;
+	uint16_t rx_insert_s_tag:1;
+	uint16_t insert_vlan_inner_tci;
+	uint16_t insert_vlan_outer_tci;
+	uint8_t vdev_id;
+};
 
 /**
  * struct wmi_cfr_peer_tx_event_param - CFR peer tx_event params

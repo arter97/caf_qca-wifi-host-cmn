@@ -1029,6 +1029,11 @@ scm_update_channel_list(struct scan_start_request *req,
 		uint32_t freq;
 
 		freq = req->scan_req.chan_list.chan[i].freq;
+		if ((wlan_reg_is_6ghz_chan_freq(freq) &&
+		     !wlan_reg_is_6ghz_band_set(pdev))) {
+			scm_nofl_debug("Skip 6 GHz freq = %d", freq);
+			continue;
+		}
 		if (skip_dfs_ch &&
 		    wlan_reg_chan_has_dfs_attribute_for_freq(pdev, freq)) {
 			scm_nofl_debug("Skip DFS freq %d", freq);
@@ -1198,9 +1203,12 @@ scm_scan_req_update_params(struct wlan_objmgr_vdev *vdev,
 	 */
 	pdev = wlan_vdev_get_pdev(vdev);
 	pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
-	/* Trigger wide band scan also if pause_home_channel scan flag is set */
+	/*
+	 * Trigger wide band scan also if
+	 * scan_f_report_cca_busy_for_each_20mhz flag is set
+	 */
 	if (ucfg_scan_get_wide_band_scan(pdev) ||
-	    req->scan_req.scan_f_pause_home_channel)
+	    req->scan_req.scan_f_report_cca_busy_for_each_20mhz)
 		req->scan_req.scan_f_wide_band = true;
 	else
 		req->scan_req.scan_f_wide_band = false;
@@ -1238,6 +1246,11 @@ static inline void scm_print_scan_req_info(struct scan_req_params *req)
 		       req->scan_ctrl_flags_ext, req->scan_events,
 		       req->scan_policy_type, req->scan_f_wide_band,
 		       req->scan_priority);
+	scm_nofl_debug("Scan Type %d rest time: min %d max %d probe spacing %d idle %d probe delay %d scan offset %d burst duration %d adaptive dwell mode %d",
+		       req->scan_type, req->min_rest_time, req->max_rest_time,
+		       req->probe_spacing_time, req->idle_time,
+		       req->probe_delay, req->scan_offset_time,
+		       req->burst_duration, req->adaptive_dwell_time_mode);
 
 	for (idx = 0; idx < req->num_ssids; idx++)
 		scm_nofl_debug("SSID[%d]: " QDF_SSID_FMT, idx,
