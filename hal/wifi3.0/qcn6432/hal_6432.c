@@ -1628,8 +1628,7 @@ static void hal_hw_txrx_ops_attach_qcn6432(struct hal_soc *hal_soc)
 		hal_rx_msdu_get_flow_params_be;
 	hal_soc->ops->hal_rx_tlv_get_tcp_chksum = hal_rx_tlv_get_tcp_chksum_be;
 	hal_soc->ops->hal_rx_get_rx_sequence = hal_rx_get_rx_sequence_be;
-#if defined(QCA_WIFI_QCA6432) && defined(WLAN_CFR_ENABLE) && \
-	defined(WLAN_ENH_CFR_ENABLE)
+#if defined(WLAN_CFR_ENABLE) && defined(WLAN_ENH_CFR_ENABLE)
 	hal_soc->ops->hal_rx_get_bb_info = hal_rx_get_bb_info_6432;
 	hal_soc->ops->hal_rx_get_rtt_info = hal_rx_get_rtt_info_6432;
 #else
