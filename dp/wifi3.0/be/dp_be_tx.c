@@ -664,7 +664,8 @@ dp_tx_mlo_mcast_multipass_handler(struct dp_soc *soc,
 		dp_mlo_iter_ptnr_vdev(be_soc, be_vdev,
 				      dp_tx_mlo_mcast_multipass_lookup,
 				      &mpass_buf, DP_MOD_ID_TX,
-				      DP_ALL_VDEV_ITER);
+				      DP_ALL_VDEV_ITER,
+				      DP_VDEV_ITERATE_SKIP_SELF);
 		/*
 		 * Do not drop the frame when vlan_id doesn't match.
 		 * Send the frame as it is.
@@ -700,7 +701,8 @@ dp_tx_mlo_mcast_multipass_handler(struct dp_soc *soc,
 		dp_mlo_iter_ptnr_vdev(be_soc, be_vdev,
 				      dp_tx_mlo_mcast_multipass_send,
 				      &mpass_buf_copy, DP_MOD_ID_TX,
-				      DP_LINK_VDEV_ITER);
+				      DP_LINK_VDEV_ITER,
+				      DP_VDEV_ITERATE_SKIP_SELF);
 
 		/* send frame on mcast primary vdev */
 		dp_tx_mlo_mcast_multipass_send(be_vdev, vdev, &mpass_buf_copy);
@@ -713,7 +715,8 @@ dp_tx_mlo_mcast_multipass_handler(struct dp_soc *soc,
 
 	dp_mlo_iter_ptnr_vdev(be_soc, be_vdev,
 			      dp_tx_mlo_mcast_multipass_send,
-			      &mpass_buf, DP_MOD_ID_TX, DP_LINK_VDEV_ITER);
+			      &mpass_buf, DP_MOD_ID_TX, DP_LINK_VDEV_ITER,
+			      DP_VDEV_ITERATE_SKIP_SELF);
 	dp_tx_mlo_mcast_multipass_send(be_vdev, vdev, &mpass_buf);
 
 	if (qdf_unlikely(be_vdev->mlo_dev_ctxt->seq_num > MAX_GSN_NUM))
@@ -809,7 +812,8 @@ void dp_tx_mlo_mcast_handler_be(struct dp_soc *soc,
 	/* send frame on partner vdevs */
 	dp_mlo_iter_ptnr_vdev(be_soc, be_vdev,
 			      dp_tx_mlo_mcast_pkt_send,
-			      nbuf, DP_MOD_ID_REINJECT, DP_LINK_VDEV_ITER);
+			      nbuf, DP_MOD_ID_REINJECT, DP_LINK_VDEV_ITER,
+			      DP_VDEV_ITERATE_SKIP_SELF);
 
 	/* send frame on mcast primary vdev */
 	dp_tx_mlo_mcast_pkt_send(be_vdev, vdev, nbuf);
@@ -893,7 +897,8 @@ dp_tx_mlo_mcast_send_be(struct dp_soc *soc, struct dp_vdev *vdev,
 			dp_mlo_iter_ptnr_vdev(be_soc, be_vdev,
 					      dp_tx_mlo_mcast_enhance_be,
 					      nbuf, DP_MOD_ID_TX,
-					      DP_ALL_VDEV_ITER);
+					      DP_ALL_VDEV_ITER,
+					      DP_VDEV_ITERATE_SKIP_SELF);
 			qdf_nbuf_free(nbuf);
 			return NULL;
 		}
