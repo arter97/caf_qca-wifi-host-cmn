@@ -168,7 +168,7 @@ struct wmi_ext_dbg_msg {
 #define wmi_nofl_info(params...) \
 	QDF_TRACE_INFO_NO_FL(QDF_MODULE_ID_WMI, ## params)
 #define wmi_nofl_info_high(params...) \
-	QDF_TRACE_DEBUG_NO_FL(QDF_MODULE_ID_WMI, ## params)
+	QDF_TRACE_INFO_HIGH_NO_FL(QDF_MODULE_ID_WMI, ## params)
 #define wmi_nofl_debug(params...) \
 	QDF_TRACE_DEBUG_NO_FL(QDF_MODULE_ID_WMI, ## params)
 
@@ -402,6 +402,7 @@ QDF_STATUS
 (*extract_roam_event)(wmi_unified_t wmi_handle, void *evt_buf, uint32_t len,
 		      struct roam_offload_roam_event *roam_event);
 #endif
+
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 QDF_STATUS
 (*extract_roam_btm_response_stats)(wmi_unified_t wmi_handle, void *evt_buf,
@@ -487,7 +488,28 @@ QDF_STATUS
 		uint8_t *event, uint32_t data_len,
 		struct roam_vendor_handoff_params **vendor_handoff_params);
 #endif
+
+#ifdef WLAN_FEATURE_11BE_MLO
+/**
+ * extract_roam_synch_key_event() - Extract Roam synch key event
+ * @wmi_handle: WMI Handle
+ * @event: Event buffer
+ * @data_len: Event data length
+ * @keys: Destination buffer to fill the keys
+ * @num_keys: Number of keys
+ * @mld_addr: Peer MLD address
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+(*extract_roam_synch_key_event) (wmi_unified_t wmi_handle, uint8_t *event,
+				 uint32_t data_len,
+				 struct wlan_crypto_key_entry **keys,
+				 uint8_t *num_keys,
+				 struct qdf_mac_addr *mld_addr);
 #endif
+#endif
+
 #ifdef FEATURE_MEC_OFFLOAD
 QDF_STATUS
 (*send_pdev_set_mec_timer_cmd)(struct wmi_unified *wmi_handle,
@@ -580,6 +602,10 @@ QDF_STATUS
 QDF_STATUS
 (*send_pdev_set_hw_mode_cmd)(wmi_unified_t wmi_handle,
 			     uint32_t hw_mode_index);
+
+QDF_STATUS
+(*send_pdev_set_rf_path_cmd)(wmi_unified_t wmi_handle,
+			     uint32_t hw_mode_index, uint8_t pdev_id);
 
 QDF_STATUS (*send_suspend_cmd)(wmi_unified_t wmi_handle,
 				struct suspend_params *param,
@@ -2859,6 +2885,9 @@ QDF_STATUS (*send_rtt_pasn_deauth_cmd)(wmi_unified_t wmi_handle,
 QDF_STATUS (*extract_hw_mode_resp_event)(wmi_unified_t wmi_handle,
 					 void *evt_buf, uint32_t *cmd_status);
 
+QDF_STATUS (*extract_rf_path_resp)(wmi_unified_t wmi_handle,
+				   void *evt_buf, uint32_t *cmd_status);
+
 #ifdef WLAN_FEATURE_ELNA
 QDF_STATUS (*send_set_elna_bypass_cmd)(wmi_unified_t wmi_handle,
 				       struct set_elna_bypass_request *req);
@@ -3062,6 +3091,17 @@ QDF_STATUS
 (*extract_cfr_phase_param)(wmi_unified_t wmi_handle,
 			   void *evt_buf,
 			   struct wmi_cfr_phase_delta_param *param);
+#ifdef WLAN_RCC_ENHANCED_AOA_SUPPORT
+QDF_STATUS
+(*extract_cfr_enh_phase_data)(wmi_unified_t wmi_handle,
+			      void *evt_buf,
+			      struct wmi_cfr_enh_phase_delta_param *param);
+QDF_STATUS
+(*extract_cfr_enh_phase_fixed_param)(
+				wmi_unified_t wmi_handle,
+				void *evt_buf,
+				struct wmi_cfr_enh_phase_delta_param *param);
+#endif /* WLAN_RCC_ENHANCED_AOA_SUPPORT */
 #endif
 
 QDF_STATUS (*send_set_halphy_cal)(wmi_unified_t wmi_handle,
@@ -3354,6 +3394,11 @@ QDF_STATUS (*extract_aux_dev_cap_service_ready_ext2)(
 			uint8_t *evt_buf, uint8_t idx,
 			struct wlan_psoc_host_aux_dev_caps *param);
 
+#ifdef WLAN_RCC_ENHANCED_AOA_SUPPORT
+QDF_STATUS (*extract_aoa_caps_service_ready_ext2)
+		(struct wmi_unified *wmi_handle, uint8_t *buf,
+		 struct wlan_psoc_host_rcc_enh_aoa_caps_ext2 *aoa_cap);
+#endif /* WLAN_RCC_ENHANCED_AOA_SUPPORT */
 };
 
 /* Forward declaration for psoc*/

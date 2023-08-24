@@ -1830,6 +1830,69 @@ connect_err:
 
 #if defined(CONN_MGR_ADV_FEATURE) && defined(WLAN_FEATURE_11BE_MLO)
 static void
+cm_modify_partner_info_based_on_dbs_or_sbs_mode(struct wlan_objmgr_vdev *vdev,
+						wlan_cm_id cm_id,
+						struct scan_cache_entry *scan_entry,
+						struct mlo_partner_info *partner_info)
+{
+	struct wlan_objmgr_psoc *psoc = NULL;
+	uint16_t i;
+	qdf_freq_t assoc_freq, partner_freq;
+	struct mlo_link_info tmp_link_info;
+	uint8_t best_partner_idx, best_partner_idx_2g, best_partner_idx_5g;
+
+	psoc = wlan_vdev_get_psoc(vdev);
+	if (!psoc)
+		return;
+
+	assoc_freq = scan_entry->channel.chan_freq;
+	best_partner_idx_2g = partner_info->num_partner_links;
+	best_partner_idx_5g = partner_info->num_partner_links;
+
+	for (i = 0; i < partner_info->num_partner_links; i++) {
+		partner_freq = partner_info->partner_link_info[i].chan_freq;
+		if (!policy_mgr_2_freq_always_on_same_mac(psoc, assoc_freq,
+							  partner_freq)) {
+			if (wlan_reg_is_24ghz_ch_freq(partner_freq))
+				best_partner_idx_2g = i;
+			else
+				best_partner_idx_5g = i;
+		}
+	}
+
+	if (best_partner_idx_5g == partner_info->num_partner_links &&
+	    best_partner_idx_2g == partner_info->num_partner_links)
+		return;
+
+	if (best_partner_idx_5g != partner_info->num_partner_links)
+		best_partner_idx = best_partner_idx_5g;
+	else if (best_partner_idx_2g != partner_info->num_partner_links)
+		best_partner_idx = best_partner_idx_2g;
+	else
+		return;
+
+	if (best_partner_idx == 0)
+		return;
+
+	/* Based on DBS or SBS mode, reorder the partner_link_info */
+	tmp_link_info = partner_info->partner_link_info[0];
+	partner_info->partner_link_info[0] =
+		partner_info->partner_link_info[best_partner_idx];
+	partner_info->partner_link_info[best_partner_idx] = tmp_link_info;
+
+	mlme_debug(CM_PREFIX_FMT "Updated no. of partner links: %d",
+		   CM_PREFIX_REF(wlan_vdev_get_id(vdev), cm_id),
+		   partner_info->num_partner_links);
+
+	for (i = 0; i < partner_info->num_partner_links; i++)
+		mlme_debug(CM_PREFIX_FMT "Partner link id: %d mac:" QDF_MAC_ADDR_FMT " freq: %d",
+			   CM_PREFIX_REF(wlan_vdev_get_id(vdev), cm_id),
+			   partner_info->partner_link_info[i].link_id,
+			   QDF_MAC_ADDR_REF(partner_info->partner_link_info[i].link_addr.bytes),
+			   partner_info->partner_link_info[i].chan_freq);
+}
+
+static void
 cm_connect_req_update_ml_partner_info(struct cnx_mgr *cm_ctx,
 				      struct cm_req *cm_req,
 				      bool same_candidate_used)
@@ -1840,9 +1903,14 @@ cm_connect_req_update_ml_partner_info(struct cnx_mgr *cm_ctx,
 	wlan_psoc_mlme_get_11be_capab(wlan_vdev_get_psoc(cm_ctx->vdev),
 				      &eht_capable);
 	if (!same_candidate_used && eht_capable &&
-	    cm_bss_peer_is_assoc_peer(conn_req))
+	    cm_bss_peer_is_assoc_peer(conn_req)) {
 		cm_get_ml_partner_info(conn_req->cur_candidate->entry,
 				       &conn_req->req.ml_parnter_info);
+		cm_modify_partner_info_based_on_dbs_or_sbs_mode(
+						cm_ctx->vdev, cm_req->cm_id,
+						conn_req->cur_candidate->entry,
+						&conn_req->req.ml_parnter_info);
+	}
 }
 #else
 static void

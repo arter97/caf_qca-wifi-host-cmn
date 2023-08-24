@@ -361,7 +361,7 @@ struct mlo_link_state_cmd_params {
  * struct ml_link_info - ml link information
  * @vdev_id: vdev id for this link
  * @link_id: link id defined as in 802.11 BE spec.
- * @link_status: active 0, inactive 1
+ * @link_status: inactive 0, active 1
  * @reserved: reserved bits
  * @chan_freq: Channel frequency in MHz
  */
@@ -498,6 +498,11 @@ struct mlnawds_config {
 };
 #endif
 
+/* AP removed link flag bit position for link_status_flags in
+ * struct mlo_link_info
+ */
+#define LS_F_AP_REMOVAL_BIT 0
+
 /**
  * struct mlo_link_info - ML link info
  * @link_addr: link mac address
@@ -524,7 +529,7 @@ struct mlo_link_info {
 	struct mlnawds_config mesh_config;
 #endif
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
-	uint8_t link_status_flags;
+	unsigned long link_status_flags;
 	struct qdf_mac_addr ap_link_addr;
 	struct wlan_channel *link_chan_info;
 #endif
@@ -544,6 +549,10 @@ struct mlo_nstr_info {
 	uint16_t nstr_lp_bitmap;
 };
 
+#ifndef WLAN_MAX_ML_BSS_LINKS
+#define WLAN_MAX_ML_BSS_LINKS WLAN_UMAC_MLO_MAX_VDEVS
+#endif
+
 /**
  * struct mlo_partner_info - mlo partner link info
  * @num_partner_links: no. of partner links
@@ -554,13 +563,25 @@ struct mlo_nstr_info {
  */
 struct mlo_partner_info {
 	uint8_t num_partner_links;
-	struct mlo_link_info partner_link_info[WLAN_UMAC_MLO_MAX_VDEVS];
+	struct mlo_link_info partner_link_info[WLAN_MAX_ML_BSS_LINKS];
 #ifdef WLAN_FEATURE_11BE
 	enum wlan_t2lm_enable t2lm_enable_val;
 	struct mlo_nstr_info nstr_info[WLAN_UMAC_MLO_MAX_VDEVS];
 	uint8_t num_nstr_info_links;
 #endif
 };
+
+#ifdef WLAN_FEATURE_11BE_MLO
+/**
+ * struct emlsr_capability - EMLSR capabilities info
+ * @emlsr_supp: EMLSR support is present or not.
+ * @trans_timeout: transition timeout
+ */
+struct emlsr_capability {
+	bool emlsr_supp;
+	uint8_t trans_timeout;
+};
+#endif
 
 /*
  * struct wlan_mlo_sta - MLO sta additional info
@@ -607,6 +628,7 @@ struct wlan_mlo_sta {
 	struct ml_link_state_cmd_info ml_link_state;
 	struct wlan_t2lm_context copied_t2lm_ie_assoc_rsp;
 	struct mlo_partner_info ml_partner_info;
+	struct emlsr_capability emlsr_cap;
 #endif
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 	struct wlan_link_force_context link_force_ctx;
@@ -727,20 +749,6 @@ struct wlan_mlo_dev_context {
 	qdf_bitmap(mlo_peer_id_bmap, MAX_MLO_PEER_ID);
 #endif
 	struct mlo_link_switch_context *link_ctx;
-};
-
-/**
- * struct wlan_mlo_bridge_sta - MLO bridge sta context
- * @bridge_umac_id: umac id for bridge
- * @bridge_link_id: link id used by bridge vdev
- * @is_force_central_primary: Flag to tell if bridge should be primary umac
- * @bridge_vap_exists: If there is bridge vap
- */
-struct wlan_mlo_bridge_sta {
-	uint8_t bridge_umac_id;
-	uint8_t bridge_link_id;
-	bool is_force_central_primary;
-	bool bridge_vap_exists;
 };
 
 /**
@@ -1019,6 +1027,26 @@ struct mlo_tgt_link_info {
 struct mlo_tgt_partner_info {
 	uint8_t num_partner_links;
 	struct mlo_tgt_link_info link_info[WLAN_UMAC_MLO_MAX_VDEVS];
+};
+
+/**
+ * struct wlan_mlo_bridge_sta - MLO bridge sta context
+ * @bridge_partners: mlo_partner_info of partners of a bridge
+ * @bridge_ml_links: mlo_tgt_partner_info of partners of bridge
+ * @bridge_umac_id: umac id for bridge
+ * @bridge_link_id: link id used by bridge vdev
+ * @is_force_central_primary: Flag to tell if bridge should be primary umac
+ * @bridge_vap_exists: If there is bridge vap
+ * @bridge_node_auth: Is bridge node auth done
+ */
+struct wlan_mlo_bridge_sta {
+	struct mlo_partner_info bridge_partners;
+	struct mlo_tgt_partner_info bridge_ml_links;
+	uint8_t bridge_umac_id;
+	uint8_t bridge_link_id;
+	bool is_force_central_primary;
+	bool bridge_vap_exists;
+	bool bridge_node_auth;
 };
 
 /**

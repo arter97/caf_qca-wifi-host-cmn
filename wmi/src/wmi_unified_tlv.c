@@ -731,6 +731,8 @@ static const uint32_t vdev_param_tlv[] = {
 		  VDEV_PARAM_RTT_11AZ_NTB_MAX_TIME_BW_MEAS),
 	PARAM_MAP(vdev_param_rtt_11az_ntb_min_time_bw_meas,
 		  VDEV_PARAM_RTT_11AZ_NTB_MIN_TIME_BW_MEAS),
+	PARAM_MAP(vdev_param_11az_security_config,
+		  VDEV_PARAM_11AZ_SECURITY_CONFIG),
 };
 #endif
 
@@ -959,7 +961,7 @@ QDF_STATUS wmi_unified_cmd_send_pm_chk(struct wmi_unified *wmi_handle,
 	if (!wmi_is_qmi_stats_enabled(wmi_handle))
 		goto send_over_wmi;
 
-	if (wmi_is_target_suspend_acked(wmi_handle)) {
+	if (wmi_is_target_suspended(wmi_handle)) {
 		if (QDF_IS_STATUS_SUCCESS(
 		    wmi_unified_cmd_send_over_qmi(wmi_handle, buf,
 						  buflen, cmd_id)))
@@ -2526,6 +2528,54 @@ static QDF_STATUS send_pdev_set_hw_mode_cmd_tlv(wmi_unified_t wmi_handle,
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_PDEV_SET_HW_MODE_CMDID)) {
 		wmi_err("Failed to send WMI_PDEV_SET_HW_MODE_CMDID");
+		wmi_buf_free(buf);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * send_pdev_set_rf_path_cmd_tlv() - Send WMI_PDEV_SET_RF_PATH_CMDID to FW
+ * @wmi_handle: wmi handle
+ * @rf_path_index: the rf path mode to be selected
+ * @pdev_id: pdev id
+ *
+ * Provides notification to the WLAN firmware that host driver is requesting a
+ * rf path change.
+ *
+ * Return: Success if the cmd is sent successfully to the firmware
+ */
+static QDF_STATUS send_pdev_set_rf_path_cmd_tlv(wmi_unified_t wmi_handle,
+						uint32_t rf_path_index,
+						uint8_t pdev_id)
+{
+	wmi_pdev_set_rf_path_cmd_fixed_param *cmd;
+	wmi_buf_t buf;
+	uint32_t len;
+
+	len = sizeof(*cmd);
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf)
+		return QDF_STATUS_E_NOMEM;
+
+	cmd = (wmi_pdev_set_rf_path_cmd_fixed_param *)wmi_buf_data(buf);
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		       WMITLV_TAG_STRUC_wmi_pdev_set_rf_path_cmd_fixed_param,
+		       WMITLV_GET_STRUCT_TLVLEN(
+				wmi_pdev_set_rf_path_cmd_fixed_param));
+
+	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(
+							wmi_handle,
+							pdev_id);
+	cmd->rf_path = rf_path_index;
+	wmi_debug("HW mode index:%d", cmd->rf_path);
+
+	wmi_mtrace(WMI_PDEV_SET_RF_PATH_CMDID, NO_SESSION, 0);
+	if (wmi_unified_cmd_send(wmi_handle, buf, len,
+				 WMI_PDEV_SET_RF_PATH_CMDID)) {
+		wmi_err("Failed to send WMI_PDEV_SET_RF_PATH_CMDID");
 		wmi_buf_free(buf);
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -5612,6 +5662,99 @@ extract_csa_ie_received_ev_params_tlv(wmi_unified_t wmi_handle,
 
 	return QDF_STATUS_SUCCESS;
 }
+
+#ifdef WLAN_RCC_ENHANCED_AOA_SUPPORT
+static void
+populate_per_band_aoa_caps(struct wlan_psoc_host_rcc_enh_aoa_caps_ext2 *aoa_cap,
+			   wmi_enhanced_aoa_per_band_caps_param per_band_cap)
+{
+	uint8_t tbl_idx;
+	uint16_t *gain_array = NULL;
+
+	if (per_band_cap.band_info == WMI_AOA_2G)
+		gain_array = aoa_cap->max_agc_gain_per_tbl_2g;
+	else if (per_band_cap.band_info == WMI_AOA_5G)
+		gain_array = aoa_cap->max_agc_gain_per_tbl_5g;
+	else if (per_band_cap.band_info == WMI_AOA_6G)
+		gain_array = aoa_cap->max_agc_gain_per_tbl_6g;
+
+	if (!gain_array) {
+		wmi_debug("unhandled AOA BAND TYPE!! fix it");
+		return;
+	}
+
+	for (tbl_idx = 0; tbl_idx < aoa_cap->max_agc_gain_tbls; tbl_idx++)
+		WMI_AOA_MAX_AGC_GAIN_GET(per_band_cap.max_agc_gain,
+					 tbl_idx,
+					 gain_array[tbl_idx]);
+}
+
+static void
+populate_aoa_caps(struct wmi_unified *wmi_handle,
+		  struct wlan_psoc_host_rcc_enh_aoa_caps_ext2 *aoa_cap,
+		  wmi_enhanced_aoa_caps_param *aoa_caps_param)
+{
+	uint8_t tbl_idx;
+
+	aoa_cap->max_agc_gain_tbls = aoa_caps_param->max_agc_gain_tbls;
+	if (aoa_cap->max_agc_gain_tbls > PSOC_MAX_NUM_AGC_GAIN_TBLS) {
+		wmi_err("Num gain table > PSOC_MAX_NUM_AGC_GAIN_TBLS cap");
+		aoa_cap->max_agc_gain_tbls = PSOC_MAX_NUM_AGC_GAIN_TBLS;
+	}
+
+	if (aoa_cap->max_agc_gain_tbls > WMI_AGC_MAX_GAIN_TABLE_IDX) {
+		wmi_err("num gain table > WMI_AGC_MAX_GAIN_TABLE_IDX cap");
+		aoa_cap->max_agc_gain_tbls = WMI_AGC_MAX_GAIN_TABLE_IDX;
+	}
+
+	for (tbl_idx = 0; tbl_idx < aoa_cap->max_agc_gain_tbls; tbl_idx++) {
+		WMI_AOA_MAX_BDF_ENTRIES_GET
+			(aoa_caps_param->max_bdf_gain_entries,
+			 tbl_idx, aoa_cap->max_bdf_entries_per_tbl[tbl_idx]);
+	}
+}
+
+/**
+ * extract_aoa_caps_tlv() - extract aoa cap tlv
+ * @wmi_handle: wmi handle
+ * @event: pointer to event buffer
+ * @aoa_cap: pointer to structure where capability needs to extracted
+ *
+ * Return: QDF_STATUS_SUCCESS on success, QDF_STATUS_E_** on error
+ */
+static QDF_STATUS
+extract_aoa_caps_tlv(struct wmi_unified *wmi_handle, uint8_t *event,
+		     struct wlan_psoc_host_rcc_enh_aoa_caps_ext2 *aoa_cap)
+{
+	int8_t band;
+
+	WMI_SERVICE_READY_EXT2_EVENTID_param_tlvs *param_buf;
+
+	param_buf = (WMI_SERVICE_READY_EXT2_EVENTID_param_tlvs *)event;
+	if (!param_buf) {
+		wmi_err("NULL param buf");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (!param_buf->aoa_caps_param) {
+		wmi_debug("NULL aoa_caps_param");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (!param_buf->num_aoa_per_band_caps_param ||
+	    !param_buf->aoa_per_band_caps_param) {
+		wmi_debug("No aoa_per_band_caps_param");
+		return QDF_STATUS_E_INVAL;
+	}
+	populate_aoa_caps(wmi_handle, aoa_cap, param_buf->aoa_caps_param);
+
+	for (band = 0; band < param_buf->num_aoa_per_band_caps_param; band++)
+		populate_per_band_aoa_caps
+			(aoa_cap, param_buf->aoa_per_band_caps_param[band]);
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* WLAN_RCC_ENHANCED_AOA_SUPPORT */
 
 /**
  * send_probe_rsp_tmpl_send_cmd_tlv() - send probe response template to fw
@@ -9550,6 +9693,12 @@ void wmi_copy_resource_config(wmi_resource_config *resource_cfg,
 		WMI_RSRC_CFG_FLAGS2_RF_PATH_MODE_SET(
 			resource_cfg->flags2, tgt_res_cfg->rf_path);
 
+	if (tgt_res_cfg->fw_ast_indication_disable) {
+		WMI_RSRC_CFG_FLAGS2_DISABLE_WDS_PEER_MAP_UNMAP_EVENT_SET
+			(resource_cfg->flags2,
+			 tgt_res_cfg->fw_ast_indication_disable);
+	}
+
 	wmi_copy_latency_flowq_support(resource_cfg, tgt_res_cfg);
 }
 
@@ -12897,6 +13046,10 @@ static QDF_STATUS extract_hal_reg_cap_ext2_tlv(
 	param->phy_id = reg_caps->phy_id;
 	param->wireless_modes_ext = convert_wireless_modes_ext_tlv(
 			reg_caps->wireless_modes_ext);
+	param->low_2ghz_chan_ext = reg_caps->low_2ghz_chan_ext;
+	param->high_2ghz_chan_ext = reg_caps->high_2ghz_chan_ext;
+	param->low_5ghz_chan_ext = reg_caps->low_5ghz_chan_ext;
+	param->high_5ghz_chan_ext = reg_caps->high_5ghz_chan_ext;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -18783,6 +18936,37 @@ extract_hw_mode_resp_event_status_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	return QDF_STATUS_SUCCESS;
 }
 
+/**
+ * extract_rf_path_resp_tlv() - Extract RF path change status
+ * @wmi_handle: wmi handle
+ * @evt_buf: pointer to event buffer
+ * @cmd_status: status of RF path change request
+ *
+ * Return: QDF_STATUS_SUCCESS on success or proper error code.
+ */
+static QDF_STATUS
+extract_rf_path_resp_tlv(wmi_unified_t wmi_handle, void *evt_buf,
+			 uint32_t *cmd_status)
+{
+	WMI_PDEV_SET_RF_PATH_RESP_EVENTID_param_tlvs *param_buf;
+	wmi_pdev_set_rf_path_event_fixed_param *fixed_param;
+
+	param_buf = (WMI_PDEV_SET_RF_PATH_RESP_EVENTID_param_tlvs *)evt_buf;
+	if (!param_buf) {
+		wmi_err("Invalid RF path event buffer");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	fixed_param = param_buf->fixed_param;
+	if (!fixed_param) {
+		wmi_err("Invalid fixed param");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	*cmd_status = fixed_param->status;
+	return QDF_STATUS_SUCCESS;
+}
+
 #ifdef FEATURE_ANI_LEVEL_REQUEST
 static QDF_STATUS send_ani_level_cmd_tlv(wmi_unified_t wmi_handle,
 					 uint32_t *freqs,
@@ -20960,6 +21144,7 @@ struct wmi_ops tlv_ops =  {
 	.send_pdev_param_cmd = send_pdev_param_cmd_tlv,
 	.send_multiple_pdev_param_cmd = send_multiple_pdev_param_cmd_tlv,
 	.send_pdev_set_hw_mode_cmd = send_pdev_set_hw_mode_cmd_tlv,
+	.send_pdev_set_rf_path_cmd = send_pdev_set_rf_path_cmd_tlv,
 	.send_suspend_cmd = send_suspend_cmd_tlv,
 	.send_resume_cmd = send_resume_cmd_tlv,
 	.send_wow_enable_cmd = send_wow_enable_cmd_tlv,
@@ -21431,6 +21616,11 @@ struct wmi_ops tlv_ops =  {
 	.send_egid_info_cmd = send_egid_info_cmd_tlv,
 	.extract_csa_ie_received_ev_params =
 			extract_csa_ie_received_ev_params_tlv,
+	.extract_rf_path_resp = extract_rf_path_resp_tlv,
+#ifdef WLAN_RCC_ENHANCED_AOA_SUPPORT
+	.extract_aoa_caps_service_ready_ext2 =
+			extract_aoa_caps_tlv,
+#endif /* WLAN_RCC_ENHANCED_AOA_SUPPORT */
 };
 
 #ifdef WLAN_FEATURE_11BE_MLO
@@ -21953,12 +22143,19 @@ static void populate_tlv_events_id(WMI_EVT_ID *event_ids)
 	event_ids[wmi_vdev_standalone_sound_complete_eventid] =
 		WMI_VDEV_STANDALONE_SOUND_COMPLETE_EVENTID;
 #endif
-	event_ids[wmi_csa_ie_received_event_id] =
-		WMI_CSA_IE_RECEIVED_EVENTID;
-
+	event_ids[wmi_csa_ie_received_event_id] = WMI_CSA_IE_RECEIVED_EVENTID;
+#if defined(WLAN_FEATURE_ROAM_OFFLOAD) && defined(WLAN_FEATURE_11BE_MLO)
+	event_ids[wmi_roam_synch_key_event_id] = WMI_ROAM_SYNCH_KEY_EVENTID;
+#endif
 #ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
 	event_ids[wmi_peer_ptqm_migration_response_eventid] =
 			WMI_MLO_PRIMARY_LINK_PEER_MIGRATION_EVENTID;
+#endif
+	event_ids[wmi_pdev_set_rf_path_resp_eventid] =
+		WMI_PDEV_SET_RF_PATH_RESP_EVENTID;
+#ifdef WLAN_RCC_ENHANCED_AOA_SUPPORT
+	event_ids[wmi_pdev_enhanced_aoa_phasedelta_eventid] =
+			WMI_PDEV_ENHANCED_AOA_PHASEDELTA_EVENTID;
 #endif
 }
 

@@ -140,6 +140,17 @@ wlan_cp_stats_infra_cp_register_resp_cb(struct wlan_objmgr_psoc *psoc,
 					struct infra_cp_stats_cmd_info *req);
 
 /**
+ * wlan_cp_stats_infra_cp_deregister_resp_cb() - Deregister the response callback
+ * and cookie in the psoc mc_stats object
+ * @psoc: pointer to psoc object
+ *
+ * Return: QDF_STATUS_SUCCESS on Success, other QDF_STATUS error codes on
+ * failure
+ */
+QDF_STATUS
+wlan_cp_stats_infra_cp_deregister_resp_cb(struct wlan_objmgr_psoc *psoc);
+
+/**
  * wlan_cp_stats_infra_cp_get_context() - get the context and callback
  * for sending response
  * @psoc: pointer to psoc object

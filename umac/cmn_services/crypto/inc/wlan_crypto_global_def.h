@@ -477,6 +477,64 @@ struct wlan_crypto_key {
 };
 
 /**
+ * struct wlan_crypto_keys - crypto keys structure
+ * @key:              key buffers for this peer
+ * @igtk_key:         igtk key buffer for this peer
+ * @bigtk_key:        bigtk key buffer for this peer
+ * @ltf_key_seed:     LTF Key Seed buffer
+ * @igtk_key_type:    igtk key type
+ * @def_tx_keyid:     default key used for this peer
+ * @def_igtk_tx_keyid: default igtk key used for this peer
+ * @def_bigtk_tx_keyid: default bigtk key used for this peer
+ */
+struct wlan_crypto_keys {
+	struct wlan_crypto_key *key[WLAN_CRYPTO_MAX_VLANKEYIX];
+	struct wlan_crypto_key *igtk_key[WLAN_CRYPTO_MAXIGTKKEYIDX];
+	struct wlan_crypto_key *bigtk_key[WLAN_CRYPTO_MAXBIGTKKEYIDX];
+	struct wlan_crypto_ltf_keyseed_data ltf_key_seed;
+	enum wlan_crypto_cipher_type igtk_key_type;
+	uint8_t def_tx_keyid;
+	uint8_t def_igtk_tx_keyid;
+	uint8_t def_bigtk_tx_keyid;
+};
+
+union crypto_align_mac_addr {
+	uint8_t raw[QDF_MAC_ADDR_SIZE];
+	struct {
+		uint16_t bytes_ab;
+		uint16_t bytes_cd;
+		uint16_t bytes_ef;
+	} align2;
+	struct {
+		uint32_t bytes_abcd;
+		uint16_t bytes_ef;
+	} align4;
+	struct __packed {
+		uint16_t bytes_ab;
+		uint32_t bytes_cdef;
+	} align4_2;
+};
+
+/**
+ * struct wlan_crypto_key_entry - crypto key entry structure
+ * @mac_addr: mac addr
+ * @is_active: active key entry
+ * @link_id: link id
+ * @vdev_id: vdev id
+ * @keys: crypto keys
+ * @hash_list_elem: hash list element
+ */
+struct wlan_crypto_key_entry {
+	union crypto_align_mac_addr mac_addr;
+	bool is_active;
+	uint8_t link_id;
+	uint8_t vdev_id;
+	struct wlan_crypto_keys keys;
+
+	TAILQ_ENTRY(wlan_crypto_key_entry) hash_list_elem;
+};
+
+/**
  * struct wlan_crypto_req_key - key request structure
  * @type:                       key/cipher type
  * @pad:                        padding member

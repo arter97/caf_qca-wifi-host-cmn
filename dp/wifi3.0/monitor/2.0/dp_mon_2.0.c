@@ -1455,8 +1455,10 @@ struct dp_mon_ops monitor_ops_2_0 = {
 	.mon_lite_mon_vdev_delete = dp_lite_mon_vdev_delete,
 	.mon_lite_mon_disable_rx = dp_lite_mon_disable_rx,
 	.mon_lite_mon_is_rx_adv_filter_enable = dp_lite_mon_is_rx_adv_filter_enable,
+#ifdef QCA_KMEM_CACHE_SUPPORT
 	.mon_rx_ppdu_info_cache_create = dp_rx_mon_ppdu_info_cache_create,
 	.mon_rx_ppdu_info_cache_destroy = dp_rx_mon_ppdu_info_cache_destroy,
+#endif
 	.mon_rx_pdev_tlv_logger_init = dp_mon_pdev_tlv_logger_init,
 	.mon_rx_pdev_tlv_logger_deinit = dp_mon_pdev_tlv_logger_deinit,
 };

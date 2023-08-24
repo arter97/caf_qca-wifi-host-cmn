@@ -6093,14 +6093,15 @@ QDF_STATUS dp_mon_pdev_deinit(struct dp_pdev *pdev)
 	/* detach monitor function */
 	dp_monitor_tx_ppdu_stats_detach(pdev);
 
+	if (mon_ops->mon_lite_mon_dealloc)
+		mon_ops->mon_lite_mon_dealloc(pdev);
+
 	if (mon_ops->rx_mon_buffers_free)
 		mon_ops->rx_mon_buffers_free(pdev);
 	if (mon_ops->rx_mon_desc_pool_deinit)
 		mon_ops->rx_mon_desc_pool_deinit(pdev);
 	dp_mon_rings_deinit(pdev);
 	dp_cal_client_detach(&mon_pdev->cal_client_ctx);
-	if (mon_ops->mon_lite_mon_dealloc)
-		mon_ops->mon_lite_mon_dealloc(pdev);
 	dp_htt_ppdu_stats_detach(pdev);
 	qdf_spinlock_destroy(&mon_pdev->ppdu_stats_lock);
 	dp_neighbour_peers_detach(pdev);

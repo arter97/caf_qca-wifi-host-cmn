@@ -1061,5 +1061,13 @@ enum twt_traffic_ac {
 	TWT_AC_MAX = 4,
 };
 
+/**
+ * enum twt_disable_reason - twt disable/enable reason
+ * @REASON_PMO_SUSPEND: reason is suspended
+ */
+enum twt_disable_reason {
+	REASON_PMO_SUSPEND  = 0x1,
+};
+
 #endif /* _WLAN_TWT_PUBLIC_STRUCTS_H_ */
 
