@@ -1340,7 +1340,7 @@ wlan_mlo_get_bridge_peer_psoc_id(struct wlan_objmgr_vdev *vdev,
 			ml_vdev = ml_dev->wlan_bridge_vdev_list[i];
 		else
 			ml_vdev = ml_dev->wlan_vdev_list[i];
-		if (!ml_vdev || (wlan_vdev_is_up(ml_vdev) != QDF_STATUS_SUCCESS))
+		if (!ml_vdev)
 			continue;
 		comp_psoc_id = wlan_vdev_get_psoc_id(ml_vdev);
 		if ((comp_psoc_id != psoc_ids[0]) &&
