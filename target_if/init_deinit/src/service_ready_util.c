@@ -246,8 +246,8 @@ static bool new_hw_mode_preferred(uint32_t current_hw_mode,
 {
 	uint8_t hw_mode_id_precedence[WMI_HOST_HW_MODE_MAX + 1] = { 6, 2, 5,
 								    4, 1, 3,
-								    7, 8, 9,
-								    10, 0, 11};
+								    7, 0, 8,
+								    9, 10, 11};
 
 	if (current_hw_mode > WMI_HOST_HW_MODE_MAX ||
 	    new_hw_mode > WMI_HOST_HW_MODE_MAX)
