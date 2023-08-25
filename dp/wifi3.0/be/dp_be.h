@@ -250,6 +250,7 @@ struct dp_ppe_vp_search_idx_tbl_entry {
  * @drop_prec_enable: Drop precedance enable
  * @to_fw: To FW exception enable/disable.
  * @use_ppe_int_pri: Use PPE INT_PRI to TID mapping table
+ * @vdev_id: Vdev ID
  */
 struct dp_ppe_vp_profile {
 	bool is_configured;
@@ -259,6 +260,7 @@ struct dp_ppe_vp_profile {
 	uint8_t drop_prec_enable;
 	uint8_t to_fw;
 	uint8_t use_ppe_int_pri;
+	uint8_t vdev_id;
 };
 
 /**
