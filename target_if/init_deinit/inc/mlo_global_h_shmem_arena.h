@@ -88,9 +88,7 @@ struct wlan_host_mlo_glb_per_chip_crash_info {
 	void *recovery_mode;
 };
 
-/*
- * NB: intentionally not using kernel-doc comment because the kernel-doc
- *     script does not handle the qdf_bitmap() macro
+/**
  * struct wlan_host_mlo_glb_chip_crash_info - chip crash information in MLO
  *                                            global shared memory
  * @no_of_chips: No of partner chip to which crash information is shared
