@@ -430,11 +430,16 @@ void hif_rtpm_close(struct hif_softc *scn)
 	hif_info_high("Runtime PM context detached");
 }
 
+void hif_set_enable_rpm(struct hif_opaque_softc *hif_hdl)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_hdl);
+
+	gp_hif_rtpm_ctx->enable_rpm = scn->hif_config.enable_runtime_pm;
+}
+
 void hif_rtpm_start(struct hif_softc *scn)
 {
 	uint32_t mode = hif_get_conparam(scn);
-
-	gp_hif_rtpm_ctx->enable_rpm = scn->hif_config.enable_runtime_pm;
 
 	if (!gp_hif_rtpm_ctx->enable_rpm) {
 		hif_info_high("RUNTIME PM is disabled in ini");

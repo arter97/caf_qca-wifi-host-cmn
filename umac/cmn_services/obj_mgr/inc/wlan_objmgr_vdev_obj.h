@@ -245,6 +245,8 @@
   * from non-DFS channel
   */
 #define WLAN_VDEV_OP_MLME_LEGACY_PEER_DISCON_TRIG 0x02000000
+  /* for mlo reconfig link removal functionality */
+#define WLAN_VDEV_OP_MLO_REMOVE_LINK_VDEV      0x04000000
 
  /* CAPABILITY: IBSS available */
 #define WLAN_VDEV_C_IBSS                    0x00000001
@@ -893,6 +895,22 @@ static inline void wlan_vdev_mlme_set_mldaddr(struct wlan_objmgr_vdev *vdev,
 {
 	/* This API is invoked with lock acquired, do not add log prints */
 	WLAN_ADDR_COPY(vdev->vdev_mlme.mldaddr, mldaddr);
+}
+
+/**
+ * wlan_vdev_mlme_reset_mldaddr() - clear vdev mldaddr
+ * @vdev: VDEV object
+ *
+ * API to clear MLD addr in vdev object
+ *
+ * Caller need to acquire lock with wlan_vdev_obj_lock()
+ *
+ * Return: void
+ */
+static inline void wlan_vdev_mlme_reset_mldaddr(struct wlan_objmgr_vdev *vdev)
+{
+	/* This API is invoked with lock acquired, do not add log prints */
+	qdf_zero_macaddr((struct qdf_mac_addr *)vdev->vdev_mlme.mldaddr);
 }
 
 /**
@@ -2376,6 +2394,12 @@ QDF_STATUS wlan_vdev_get_bss_peer_mld_mac(struct wlan_objmgr_vdev *vdev,
 static inline void
 wlan_objmgr_vdev_init_ml_peer_count(struct wlan_objmgr_vdev *vdev)
 {
+}
+
+static inline
+bool wlan_vdev_mlme_is_tdls_vdev(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
 }
 
 #endif

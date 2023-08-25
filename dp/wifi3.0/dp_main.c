@@ -4279,7 +4279,8 @@ static void dp_vdev_flush_peers(struct cdp_vdev *vdev_handle,
 						 vdev->vdev_id,
 						 peer->mac_addr.raw, 0,
 						 DP_PEER_WDS_COUNT_INVALID);
-			SET_PEER_REF_CNT_ONE(peer);
+			if (!IS_MLO_DP_MLD_PEER(peer))
+				SET_PEER_REF_CNT_ONE(peer);
 		} else if (IS_MLO_DP_LINK_PEER(peer) ||
 			   IS_MLO_DP_MLD_PEER(peer)) {
 			dp_info("peer: " QDF_MAC_ADDR_FMT " is getting unmap",
@@ -4591,7 +4592,8 @@ static QDF_STATUS dp_txrx_peer_detach(struct dp_soc *soc, struct dp_peer *peer)
 		peer->txrx_peer = NULL;
 		pdev = txrx_peer->vdev->pdev;
 
-		if (!peer->bss_peer) {
+		if ((peer->vdev->opmode != wlan_op_mode_sta) &&
+		    !peer->bss_peer) {
 			params.vdev_id = peer->vdev->vdev_id;
 			params.peer_mac = peer->mac_addr.raw;
 
@@ -4685,7 +4687,7 @@ static QDF_STATUS dp_txrx_peer_attach(struct dp_soc *soc, struct dp_peer *peer)
 
 	dp_txrx_peer_attach_add(soc, peer, txrx_peer);
 
-	if (peer->bss_peer)
+	if ((peer->vdev->opmode == wlan_op_mode_sta) || peer->bss_peer)
 		return QDF_STATUS_SUCCESS;
 
 	params.peer_mac = peer->mac_addr.raw;
@@ -4866,8 +4868,9 @@ dp_peer_create_wifi3(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 			goto fail; /* failure */
 
 		dp_mld_peer_init_link_peers_info(peer);
-	} else if (dp_monitor_peer_attach(soc, peer) !=
-				QDF_STATUS_SUCCESS)
+	}
+
+	if (dp_monitor_peer_attach(soc, peer) != QDF_STATUS_SUCCESS)
 		dp_warn("peer monitor ctx alloc failed");
 
 	TAILQ_INIT(&peer->ast_entry_list);
@@ -5561,8 +5564,7 @@ void dp_peer_unref_delete(struct dp_peer *peer, enum dp_mod_id mod_id)
 		/* cleanup the peer data */
 		dp_peer_cleanup(vdev, peer);
 
-		if (!IS_MLO_DP_MLD_PEER(peer))
-			dp_monitor_peer_detach(soc, peer);
+		dp_monitor_peer_detach(soc, peer);
 
 		qdf_spinlock_destroy(&peer->peer_state_lock);
 

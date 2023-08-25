@@ -5351,9 +5351,13 @@ enum qca_wlan_vendor_attr_config {
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_NSS = 70,
 
-	/*
-	 * 8-bit unsigned value to trigger Optimized Power Management:
-	 * 1-Enable, 0-Disable
+	/* 8-bit unsigned value to configure Optimized Power Management mode:
+	 * Modes are defined by enum qca_wlan_vendor_opm_mode.
+	 *
+	 * This attribute shall be configured along with
+	 * %QCA_WLAN_VENDOR_ATTR_CONFIG_OPM_ITO and
+	 * %QCA_WLAN_VENDOR_ATTR_CONFIG_OPM_SPEC_WAKE_INTERVAL attributes
+	 * when its value is set to %QCA_WLAN_VENDOR_OPM_MODE_USER_DEFINED.
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_OPTIMIZED_POWER_MANAGEMENT = 71,
 
@@ -5696,6 +5700,34 @@ enum qca_wlan_vendor_attr_config {
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_MLO_LINKS = 100,
 
+	/* 16-bit unsigned value to configure power save inactivity timeout in
+	 * milliseconds.
+	 *
+	 * STA enters into power save mode (PM=1) after TX/RX inactivity of time
+	 * duration specified by %QCA_WLAN_VENDOR_ATTR_CONFIG_OPM_ITO.
+	 *
+	 * This attribute shall be configured along with
+	 * %QCA_WLAN_VENDOR_ATTR_CONFIG_OPM_SPEC_WAKE_INTERVAL when
+	 * %QCA_WLAN_VENDOR_ATTR_CONFIG_OPTIMIZED_POWER_MANAGEMENT
+	 * is set to %QCA_WLAN_VENDOR_OPM_MODE_USER_DEFINED mode.
+	 */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_OPM_ITO = 101,
+
+	/* 16-bit unsigned value to configure speculative wake interval in
+	 * milliseconds.
+	 *
+	 * STA speculatively wakes up to look for buffered data by AP at
+	 * %QCA_WLAN_VENDOR_ATTR_CONFIG_OPM_SPEC_WAKE_INTERVAL interval after
+	 * entering into power save. If configured zero, STA wakes up at
+	 * upcoming DTIM beacon.
+	 *
+	 * This attribute shall be configured along with
+	 * %QCA_WLAN_VENDOR_ATTR_CONFIG_OPM_ITO and
+	 * %QCA_WLAN_VENDOR_ATTR_CONFIG_OPTIMIZED_POWER_MANAGEMENT
+	 * to %QCA_WLAN_VENDOR_OPM_MODE_USER_DEFINED mode.
+	 */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_OPM_SPEC_WAKE_INTERVAL = 102,
+
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_CONFIG_MAX =
@@ -5915,22 +5947,41 @@ enum qca_wlan_vendor_attr_rssi_monitoring {
  *     2:80 MHz,
  *     3:160 MHz
  * @QCA_WLAN_VENDOR_ATTR_NDP_CHANNEL_INFO: Array of channel/band width
- * @QCA_WLAN_VENDOR_ATTR_NDP_PARAMS_AFTER_LAST: id after last valid attribute
- * @QCA_WLAN_VENDOR_ATTR_NDP_PARAMS_MAX: max value of this enum type
  * @QCA_WLAN_VENDOR_ATTR_NDP_IPV6_ADDR: IPv6 address used by NDP, 16 bytes array
  * @QCA_WLAN_VENDOR_ATTR_NDP_TRANSPORT_PORT: Unsigned 16-bit value indicating
  * transport port used by NDP.
- * QCA_WLAN_VENDOR_ATTR_NDP_TRANSPORT_PROTOCOL: Unsigned 8-bit value indicating
+ * @QCA_WLAN_VENDOR_ATTR_NDP_TRANSPORT_PROTOCOL: Unsigned 8-bit value indicating
  * protocol used by NDP and assigned by the Internet Assigned Numbers Authority
  * as per: www.iana.org/assignments/protocol-numbers/protocol-numbers.xhtml
- * QCA_WLAN_VENDOR_ATTR_PEER_NDPE_SUPPORT: Unsigned 8-bit value indicating if
+ * @QCA_WLAN_VENDOR_ATTR_PEER_NDPE_SUPPORT: Unsigned 8-bit value indicating if
  * NDP remote peer supports NAN NDPE. 1:support 0:not support
- * QCA_WLAN_VENDOR_ATTR_NDP_SERVICE_ID: As per Wi-Fi Aware Specification v3.2
+ * @QCA_WLAN_VENDOR_ATTR_NDP_SERVICE_ID: As per Wi-Fi Aware Specification v3.2
  * Service Id is the first 48 bits of the SHA-256 hash of the Service Name.
  * A lower-case representation of the Service Name shall be used to
  * calculate the Service ID.
  * Array of u8: length is 6 bytes
  * This attribute is used and optional for ndp indication.
+ * @QCA_WLAN_VENDOR_ATTR_NDP_CSIA_CAPABILITIES: Unsigned 8-bit value for Cipher
+ * Suite
+ * This attribute is used and optional in ndp request, ndp response, ndp
+ * indication, and ndp confirm.
+ * This attribute is used to indicate the Capabilities field of Cipher Suite
+ * Information attribute (CSIA) of NDP frames as defined in Wi-Fi Aware
+ * Specification v4.0, 9.5.21.2, Table 122.
+ * Firmware can accept or ignore any of the capability bits.
+ * @QCA_WLAN_VENDOR_ATTR_NDP_GTK_REQUIRED: Indicate if the GTK protection is
+ * required for NDP. NLA_FLAG attribute.
+ * This attribute can be used in ndp request, ndp response, ndp indication, and
+ * ndp confirm.
+ * GTK protection required is indicated in the NDPE attribute of NAN action
+ * frame (NAF) during NDP negotiation as defined in Wi-Fi Aware Specification
+ * v4.0, 9.5.16.2.
+ * If the device and peer supports GTKSA and if GTK protection required bit is
+ * set in NDPE IE, devices will share GTK to each other in SKDA of Data Path
+ * Security Confirm and Data Path Security Install frames of NDP negotiation to
+ * send and receive protected group addressed data frames from each other.
+ * @QCA_WLAN_VENDOR_ATTR_NDP_PARAMS_AFTER_LAST: id after last valid attribute
+ * @QCA_WLAN_VENDOR_ATTR_NDP_PARAMS_MAX: max value of this enum type
 */
 enum qca_wlan_vendor_attr_ndp_params {
 	QCA_WLAN_VENDOR_ATTR_NDP_PARAM_INVALID = 0,
@@ -5965,6 +6016,8 @@ enum qca_wlan_vendor_attr_ndp_params {
 	QCA_WLAN_VENDOR_ATTR_NDP_TRANSPORT_PROTOCOL = 29,
 	QCA_WLAN_VENDOR_ATTR_PEER_NDPE_SUPPORT = 30,
 	QCA_WLAN_VENDOR_ATTR_NDP_SERVICE_ID = 31,
+	QCA_WLAN_VENDOR_ATTR_NDP_CSIA_CAPABILITIES = 32,
+	QCA_WLAN_VENDOR_ATTR_NDP_GTK_REQUIRED = 33,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_NDP_PARAMS_AFTER_LAST,
@@ -16697,6 +16750,24 @@ enum qca_wlan_vendor_attr_tdls_state {
 	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_MAX =
 	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_AFTER_LAST - 1,
+};
+
+/*
+ * enum qca_wlan_vendor_opm_mode - Modes supported by
+ * %QCA_WLAN_VENDOR_ATTR_CONFIG_OPTIMIZED_POWER_MANAGEMENT vendor attribute.
+ *
+ * @QCA_WLAN_VENDOR_OPM_MODE_DISABLE: OPM Disabled
+ * @QCA_WLAN_VENDOR_OPM_MODE_ENABLE: OPM Enabled
+ * @QCA_WLAN_VENDOR_OPM_MODE_USER_DEFINED: User defined mode which allows user
+ * 	to configure power save inactivity timeout and speculative wake up
+ * 	interval through %QCA_WLAN_VENDOR_ATTR_CONFIG_OPM_ITO and
+ * 	%QCA_WLAN_VENDOR_ATTR_CONFIG_OPM_SPEC_WAKE_INTERVAL attributes.
+ */
+
+enum qca_wlan_vendor_opm_mode {
+	QCA_WLAN_VENDOR_OPM_MODE_DISABLE = 0,
+	QCA_WLAN_VENDOR_OPM_MODE_ENABLE = 1,
+	QCA_WLAN_VENDOR_OPM_MODE_USER_DEFINED = 2,
 };
 
 #endif

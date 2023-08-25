@@ -1707,6 +1707,7 @@ static void hif_reg_write_work(void *arg)
 		if (!q_elem->valid)
 			break;
 
+		qdf_rmb();
 		q_elem->dequeue_time = qdf_get_log_timestamp();
 		ring_id = q_elem->ce_state->id;
 		offset = q_elem->offset;

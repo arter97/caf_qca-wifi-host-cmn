@@ -4288,12 +4288,33 @@ static inline void dp_soc_get_ap_mld_mode(struct dp_soc *soc)
 		soc->cdp_soc.ol_ops->get_dp_cfg_param(soc->ctrl_psoc,
 					CDP_CFG_MLD_NETDEV_MODE_AP);
 	}
-	qdf_info("DP mld_mode_ap-%u\n", soc->mld_mode_ap);
+	dp_info("DP mld_mode_ap-%u\n", soc->mld_mode_ap);
 }
 #else
 static inline void dp_soc_get_ap_mld_mode(struct dp_soc *soc)
 {
 	(void)soc;
+}
+#endif
+
+#ifdef QCA_VDEV_STATS_HW_OFFLOAD_SUPPORT
+/**
+ * dp_soc_hw_txrx_stats_init() - Initialize hw_txrx_stats_en in dp_soc
+ * @soc: Datapath soc handle
+ *
+ * Return: none
+ */
+static inline
+void dp_soc_hw_txrx_stats_init(struct dp_soc *soc)
+{
+	soc->hw_txrx_stats_en =
+		wlan_cfg_get_vdev_stats_hw_offload_config(soc->wlan_cfg_ctx);
+}
+#else
+static inline
+void dp_soc_hw_txrx_stats_init(struct dp_soc *soc)
+{
+	soc->hw_txrx_stats_en = 0;
 }
 #endif
 
@@ -4484,6 +4505,8 @@ void *dp_soc_init(struct dp_soc *soc, HTC_HANDLE htc_handle,
 		qdf_skb_total_mem_stats_read());
 
 	soc->vdev_stats_id_map = 0;
+
+	dp_soc_hw_txrx_stats_init(soc);
 
 	dp_soc_get_ap_mld_mode(soc);
 

@@ -77,9 +77,13 @@ static QDF_STATUS mlme_vdev_obj_create_handler(struct wlan_objmgr_vdev *vdev,
 
 	status = txops->psoc_vdev_rsp_timer_inuse(psoc, wlan_vdev_get_id(vdev));
 	if (QDF_IS_STATUS_ERROR(status)) {
-		mlme_err("The vdev response is pending for VDEV_%d status:%d",
-			 wlan_vdev_get_id(vdev), status);
-		return QDF_STATUS_E_FAILURE;
+		if (status == QDF_STATUS_E_ALREADY) {
+			mlme_err("Go through, since timer initializes later.");
+		} else {
+			mlme_err("The vdev response is pending for VDEV_%d status:%d",
+				 wlan_vdev_get_id(vdev), status);
+			return QDF_STATUS_E_FAILURE;
+		}
 	}
 
 	pdev_mlme = wlan_pdev_mlme_get_cmpt_obj(pdev);

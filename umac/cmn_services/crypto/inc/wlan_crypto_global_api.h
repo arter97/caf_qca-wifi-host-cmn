@@ -978,6 +978,16 @@ QDF_STATUS wlan_crypto_set_key_req(struct wlan_objmgr_vdev *vdev,
 				   enum wlan_crypto_key_type key_type);
 
 /**
+ * wlan_crypto_free_key() - Free the given key
+ * @crypto_key: pointer to the key
+ *
+ * This function frees keys stored in vdev crypto object.
+ *
+ * Return: None
+ */
+void wlan_crypto_free_key(struct wlan_crypto_keys *crypto_key);
+
+/**
  * wlan_crypto_free_vdev_key() - Free keys for vdev
  * @vdev: vdev object
  *

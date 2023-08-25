@@ -2234,8 +2234,8 @@ QDF_STATUS reg_set_hal_reg_cap(
 	return QDF_STATUS_SUCCESS;
 }
 
-QDF_STATUS reg_update_hal_reg_cap(struct wlan_objmgr_psoc *psoc,
-				  uint64_t wireless_modes, uint8_t phy_id)
+QDF_STATUS reg_update_hal_cap_wireless_modes(struct wlan_objmgr_psoc *psoc,
+					uint64_t wireless_modes, uint8_t phy_id)
 {
 	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
 
@@ -2252,6 +2252,37 @@ QDF_STATUS reg_update_hal_reg_cap(struct wlan_objmgr_psoc *psoc,
 	}
 
 	psoc_priv_obj->reg_cap[phy_id].wireless_modes |= wireless_modes;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS reg_update_hal_reg_range_caps(struct wlan_objmgr_psoc *psoc,
+					 uint32_t low_2g_chan,
+					 uint32_t high_2g_chan,
+					 uint32_t low_5g_chan,
+					 uint32_t high_5g_chan,
+					 uint8_t phy_id)
+{
+	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
+	struct wlan_psoc_host_hal_reg_capabilities_ext *reg_cap;
+
+	if (!psoc) {
+		reg_err("psoc is null");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	psoc_priv_obj = reg_get_psoc_obj(psoc);
+
+	if (!IS_VALID_PSOC_REG_OBJ(psoc_priv_obj)) {
+		reg_err("psoc reg component is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	reg_cap = &psoc_priv_obj->reg_cap[phy_id];
+	reg_cap->low_2ghz_chan = low_2g_chan;
+	reg_cap->high_2ghz_chan = high_2g_chan;
+	reg_cap->low_5ghz_chan = low_5g_chan;
+	reg_cap->high_5ghz_chan = high_5g_chan;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -5190,6 +5221,25 @@ reg_get_chan_state_for_320(struct wlan_objmgr_pdev *pdev,
 #endif
 
 #ifdef WLAN_FEATURE_11BE
+#ifdef CONFIG_REG_CLIENT
+static void
+reg_verify_punc_for_320_and_set_channel_state(uint16_t punc_bitmap,
+					      enum channel_state *chan_state,
+					      enum channel_state update_state)
+{
+	if (reg_is_punc_bitmap_valid(CH_WIDTH_320MHZ, punc_bitmap)) {
+		*chan_state = update_state;
+	}
+}
+#else /* CONFIG_REG_CLIENT */
+static inline void
+reg_verify_punc_for_320_and_set_channel_state(uint16_t punc_bitmap,
+					      enum channel_state *chan_state,
+					      enum channel_state update_state)
+{
+}
+#endif /* CONFIG_REG_CLIENT */
+
 enum channel_state
 reg_get_320_bonded_channel_state_for_pwrmode(struct wlan_objmgr_pdev *pdev,
 					     qdf_freq_t freq,
@@ -5244,9 +5294,9 @@ reg_get_320_bonded_channel_state_for_pwrmode(struct wlan_objmgr_pdev *pdev,
 	}
 
 	/* Validate puncture bitmap. Update channel state. */
-	if (reg_is_punc_bitmap_valid(CH_WIDTH_320MHZ, *out_punc_bitmap)) {
-		chan_state = update_state;
-	}
+	reg_verify_punc_for_320_and_set_channel_state(*out_punc_bitmap,
+						      &chan_state,
+						      update_state);
 
 	prim_chan_state =
 		reg_get_20mhz_channel_state_based_on_nol(pdev, freq,

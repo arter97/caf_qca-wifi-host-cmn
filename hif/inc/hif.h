@@ -1761,6 +1761,15 @@ void hif_rtpm_display_last_busy_hist(struct hif_opaque_softc *hif_ctx);
  */
 void hif_rtpm_record_ce_last_busy_evt(struct hif_softc *scn,
 				      unsigned long ce_id);
+
+/**
+ * hif_set_enable_rpm() - Set enable_rpm value
+ * @hif_hdl: hif opaque handle
+ *
+ *  Return: None
+ */
+void hif_set_enable_rpm(struct hif_opaque_softc *hif_hdl);
+
 #else
 
 /**
@@ -1869,6 +1878,11 @@ void hif_rtpm_set_monitor_wake_intr(int val)
 static inline
 void hif_rtpm_mark_last_busy(uint32_t id)
 {}
+
+static inline
+void hif_set_enable_rpm(struct hif_opaque_softc *hif_hdl)
+{
+}
 #endif
 
 void hif_enable_power_management(struct hif_opaque_softc *hif_ctx,

@@ -907,12 +907,12 @@ irqreturn_t ce_dispatch_interrupt(int ce_id,
 		return IRQ_NONE;
 	}
 
-	hif_irq_disable(scn, ce_id);
-
 	if (!TARGET_REGISTER_ACCESS_ALLOWED(scn)) {
 		ce_interrupt_unlock(ce_state);
 		return IRQ_HANDLED;
 	}
+
+	hif_irq_disable(scn, ce_id);
 
 	hif_record_ce_desc_event(scn, ce_id, HIF_IRQ_EVENT,
 				NULL, NULL, 0, 0);

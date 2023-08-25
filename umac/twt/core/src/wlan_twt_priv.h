@@ -62,12 +62,14 @@ struct twt_tgt_caps {
  * @twt_caps: twt caps
  * @enable_context: enable context
  * @disable_context: disable context
+ * @twt_pmo_disabled: twt pmo disabled
  */
 struct twt_psoc_priv_obj {
 	psoc_twt_ext_cfg_params_t cfg_params;
 	struct twt_tgt_caps twt_caps;
 	struct twt_en_dis_context enable_context;
 	struct twt_en_dis_context disable_context;
+	uint32_t twt_pmo_disabled;
 };
 
 /**
