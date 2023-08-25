@@ -2049,6 +2049,29 @@ dp_rx_deliver_to_stack_ext(struct dp_soc *soc, struct dp_vdev *vdev,
 #endif
 
 #ifdef PEER_CACHE_RX_PKTS
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
+/**
+ * dp_set_nbuf_band() - Set band in nbuf cb
+ * @peer: dp_peer
+ * @nbuf: nbuf
+ *
+ * Return: None
+ */
+static inline void
+dp_set_nbuf_band(struct dp_peer *peer, qdf_nbuf_t nbuf)
+{
+	uint8_t link_id = 0;
+
+	link_id = dp_rx_get_stats_arr_idx_from_link_id(nbuf, peer->txrx_peer);
+	dp_rx_set_nbuf_band(nbuf, peer->txrx_peer, link_id);
+}
+#else
+static inline void
+dp_set_nbuf_band(struct dp_peer *peer, qdf_nbuf_t nbuf)
+{
+}
+#endif
+
 void dp_rx_flush_rx_cached(struct dp_peer *peer, bool drop)
 {
 	struct dp_peer_cached_bufq *bufqi;
@@ -2096,6 +2119,7 @@ void dp_rx_flush_rx_cached(struct dp_peer *peer, bool drop)
 			bufqi->dropped = dp_rx_drop_nbuf_list(peer->vdev->pdev,
 							      cache_buf->buf);
 		} else {
+			dp_set_nbuf_band(peer, cache_buf->buf);
 			/* Flush the cached frames to OSIF DEV */
 			status = data_rx(peer->vdev->osif_vdev, cache_buf->buf);
 			if (status != QDF_STATUS_SUCCESS)
