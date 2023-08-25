@@ -273,7 +273,7 @@ qdf_cpumask_equal(const qdf_cpu_mask *src1p, const qdf_cpu_mask *src2p);
 void
 qdf_cpumask_complement(qdf_cpu_mask *dstp, const qdf_cpu_mask *srcp);
 
-#ifdef WALT_GET_CPU_TAKEN_SUPPORT
+#if defined(WALT_GET_CPU_TAKEN_SUPPORT) && IS_ENABLED(CONFIG_SCHED_WALT)
 /**
  * qdf_walt_get_cpus_taken - Get taken CPUs
  *

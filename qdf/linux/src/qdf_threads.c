@@ -357,7 +357,7 @@ qdf_cpumask_complement(qdf_cpu_mask *dstp, const qdf_cpu_mask *srcp)
 
 qdf_export_symbol(qdf_cpumask_complement);
 
-#ifdef WALT_GET_CPU_TAKEN_SUPPORT
+#if defined(WALT_GET_CPU_TAKEN_SUPPORT) && IS_ENABLED(CONFIG_SCHED_WALT)
 qdf_cpu_mask qdf_walt_get_cpus_taken(void)
 {
 	return walt_get_cpus_taken();
