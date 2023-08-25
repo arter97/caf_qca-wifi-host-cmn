@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -523,6 +523,11 @@ static void dp_tx_flow_pool_vdev_map(struct dp_pdev *pdev,
 	pool->pool_owner_ctx = soc;
 	pool->flow_pool_id = vdev_id;
 	qdf_spin_unlock_bh(&pool->flow_pool_lock);
+
+	/* need do pool refcnt++ for itself after created */
+	soc->arch_ops.dp_mlo_tx_pool_map(soc, vdev->vdev_id,
+					 DP_MOD_ID_MLO_DEV);
+
 	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
 }
 
@@ -582,6 +587,13 @@ QDF_STATUS dp_tx_flow_pool_map_handler(struct dp_pdev *pdev, uint8_t flow_id,
 	}
 	soc->pool_stats.pool_map_count++;
 
+	/*
+	 * check if need reuse other's tx desc pool ?
+	 * return true if reuse, otherwise create new.
+	 */
+	if (soc->arch_ops.dp_mlo_tx_pool_map(soc, flow_id, DP_MOD_ID_MLO_DEV))
+		return QDF_STATUS_SUCCESS;
+
 	pool = dp_tx_create_flow_pool(soc, flow_pool_id,
 			flow_pool_size);
 	if (!pool) {
@@ -621,6 +633,7 @@ void dp_tx_flow_pool_unmap_handler(struct dp_pdev *pdev, uint8_t flow_id,
 	struct dp_soc *soc = pdev->soc;
 	struct dp_tx_desc_pool_s *pool;
 	enum htt_flow_type type = flow_type;
+	uint8_t new_flow_id = MAX_TXDESC_POOLS;
 
 	dp_info("flow_id %d flow_type %d flow_pool_id %d", flow_id, flow_type,
 		flow_pool_id);
@@ -630,6 +643,20 @@ void dp_tx_flow_pool_unmap_handler(struct dp_pdev *pdev, uint8_t flow_id,
 		return;
 	}
 	soc->pool_stats.pool_unmap_count++;
+	/*
+	 * check if reuse other's tx desc pool ?
+	 * return true if reuse and set to null, otherwise free later.
+	 */
+
+	if (soc->arch_ops.dp_mlo_tx_pool_unmap(soc, flow_id,
+					       &new_flow_id,
+					       DP_MOD_ID_MLO_DEV))
+		return;
+
+	if (new_flow_id < MAX_TXDESC_POOLS) {
+		flow_pool_id = new_flow_id;
+		flow_id = new_flow_id;
+	}
 
 	pool = &soc->tx_desc[flow_pool_id];
 	dp_info("pool status: %d", pool->status);

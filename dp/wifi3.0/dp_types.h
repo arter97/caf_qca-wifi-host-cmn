@@ -47,6 +47,8 @@
 #include "hal_rx.h"
 #include <qdf_hrtimer.h>
 
+struct dp_tx_queue;
+
 #define dp_init_alert(params...) QDF_TRACE_FATAL(QDF_MODULE_ID_DP_INIT, params)
 #define dp_init_err(params...) QDF_TRACE_ERROR(QDF_MODULE_ID_DP_INIT, params)
 #define dp_init_warn(params...) QDF_TRACE_WARN(QDF_MODULE_ID_DP_INIT, params)
@@ -873,6 +875,7 @@ struct dp_tx_tso_num_seg_pool_s {
  * @flow_pool_lock:
  * @pool_create_cnt:
  * @pool_owner_ctx:
+ * @ref_cnt: reference count of the pool
  * @elem_count:
  * @num_free: Number of free descriptors
  * @lock: Lock for descriptor allocation/free from/to the pool
@@ -902,6 +905,7 @@ struct dp_tx_desc_pool_s {
 	qdf_spinlock_t flow_pool_lock;
 	uint8_t pool_create_cnt;
 	void *pool_owner_ctx;
+	qdf_atomic_t ref_cnt;
 #else
 	uint16_t elem_count;
 	uint32_t num_free;
@@ -2392,6 +2396,9 @@ enum dp_context_type {
  * @dp_soc_attach_poll: DP poll attach
  * @dp_soc_interrupt_detach: DP interrupt detach
  * @dp_service_srngs: Service DP interrupts
+ * @dp_mlo_tx_pool_map: TX desc pool map
+ * @dp_mlo_tx_pool_unmap: TX desc pool unmap
+ * @dp_tx_override_flow_pool_id: flow pool id override
  */
 struct dp_arch_ops {
 	/* INIT/DEINIT Arch Ops */
@@ -2672,6 +2679,13 @@ struct dp_arch_ops {
 	QDF_STATUS (*dp_soc_attach_poll)(struct cdp_soc_t *txrx_soc);
 	void (*dp_soc_interrupt_detach)(struct cdp_soc_t *txrx_soc);
 	uint32_t (*dp_service_srngs)(void *dp_ctx, uint32_t dp_budget, int cpu);
+	bool (*dp_mlo_tx_pool_map)(struct dp_soc *soc, uint8_t vdev_id,
+				   enum dp_mod_id mod_id);
+	bool (*dp_mlo_tx_pool_unmap)(struct dp_soc *soc, uint8_t vdev_id,
+				     uint8_t *new_id,
+				     enum dp_mod_id mod_id);
+	void (*dp_tx_override_flow_pool_id)(struct dp_vdev *vdev,
+					    struct dp_tx_queue *queue);
 };
 
 /**

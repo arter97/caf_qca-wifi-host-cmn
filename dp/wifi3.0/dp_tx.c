@@ -4160,6 +4160,9 @@ dp_tx_send_exception(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	 *  to minimize lock contention for these resources.
 	 */
 	dp_tx_get_queue(vdev, nbuf, &msdu_info.tx_queue);
+
+	dp_tx_override_flow_pool_id(soc, vdev, &msdu_info);
+
 	DP_STATS_INC(vdev,
 		     tx_i[xmit_type].rcvd_per_core[msdu_info.tx_queue.desc_pool_id],
 		     1);
@@ -4439,6 +4442,9 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	 *  to minimize lock contention for these resources.
 	 */
 	dp_tx_get_queue(vdev, nbuf, &msdu_info.tx_queue);
+
+	dp_tx_override_flow_pool_id(soc, vdev, &msdu_info);
+
 	DP_STATS_INC(vdev,
 		     tx_i[xmit_type].rcvd_per_core[msdu_info.tx_queue.desc_pool_id],
 		     1);
@@ -8105,3 +8111,19 @@ bool dp_tx_multipass_process(struct dp_soc *soc, struct dp_vdev *vdev,
 	return true;
 }
 #endif /* QCA_MULTIPASS_SUPPORT */
+
+#ifdef WLAN_DP_TXPOOL_SHARE
+void dp_tx_override_flow_pool_id(struct dp_soc *soc,
+				 struct dp_vdev *vdev,
+				 struct dp_tx_msdu_info_s *msdu_info)
+{
+	soc->arch_ops.dp_tx_override_flow_pool_id(vdev,
+						  &msdu_info->tx_queue);
+}
+#else
+void dp_tx_override_flow_pool_id(struct dp_soc *soc,
+				 struct dp_vdev *vdev,
+				 struct dp_tx_msdu_info_s *msdu_info)
+{
+}
+#endif

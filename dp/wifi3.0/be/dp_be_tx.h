@@ -385,4 +385,46 @@ void dp_tx_desc_pool_free_be(struct dp_soc *soc, uint8_t pool_id);
 uint32_t dp_tx_comp_handler_be(struct dp_intr *int_ctx, struct dp_soc *soc,
 			       hal_ring_handle_t hal_ring_hdl,
 			       uint8_t ring_id, uint32_t quota);
+
+/**
+ * dp_mlo_tx_pool_map_be() - Check whether need to remap tx desc pool
+ * for mlo case.
+ *
+ * @soc: dp soc handle
+ * @vdev_id: dp vdev id
+ * @mod_id: module id which is requesting the reference
+ *
+ * Return: true if pool already remap and not need create,
+ *         otherwise return false.
+ */
+bool dp_mlo_tx_pool_map_be(struct dp_soc *soc,
+			   uint8_t vdev_id,
+			   enum dp_mod_id mod_id);
+
+/**
+ * dp_mlo_tx_pool_unmap_be() - Check whether need to unmap tx desc pool
+ * for mlo case.
+ *
+ * @soc: dp soc handle
+ * @vdev_id: dp vdev id
+ * @new_id: output the new pool id that will be deleted
+ * @mod_id: module id which is requesting the reference
+ *
+ * Return: true if pool not need unmap, otherwise return false.
+ */
+bool dp_mlo_tx_pool_unmap_be(struct dp_soc *soc,
+			     uint8_t vdev_id,
+			     uint8_t *new_id,
+			     enum dp_mod_id mod_id);
+
+/**
+ * dp_tx_override_flow_pool_id_be() - Override the pool id of the tx desc pool
+ * @vdev: dp vdev
+ * @queue: queue ids container for nbuf
+ *
+ * Return: None
+ */
+void
+dp_tx_override_flow_pool_id_be(struct dp_vdev *vdev,
+			       struct dp_tx_queue *queue);
 #endif

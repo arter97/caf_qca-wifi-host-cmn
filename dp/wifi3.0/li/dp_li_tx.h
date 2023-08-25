@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -130,4 +130,45 @@ QDF_STATUS dp_tx_desc_pool_alloc_li(struct dp_soc *soc, uint32_t num_elem,
  * Return: none
  */
 void dp_tx_desc_pool_free_li(struct dp_soc *soc, uint8_t pool_id);
+
+/**
+ * dp_mlo_tx_pool_map_li() - Check whether need to remap tx desc pool
+ * for mlo case.
+ *
+ * @soc: dp soc handle
+ * @vdev_id: dp vdev id
+ * @mod_id: module id which is requesting the reference
+ *
+ * Return: true if pool already remap and not need create,
+ *         otherwise return false.
+ */
+bool dp_mlo_tx_pool_map_li(struct dp_soc *soc,
+			   uint8_t vdev_id,
+			   enum dp_mod_id mod_id);
+
+/**
+ * dp_mlo_tx_pool_unmap_li() - Check whether need to unmap tx desc pool
+ * for mlo case.
+ *
+ * @soc: dp soc handle
+ * @vdev_id: dp vdev id
+ * @new_id: output the new pool id that will be deleted
+ * @mod_id: module id which is requesting the reference
+ *
+ * Return: true if pool not need unmap, otherwise return false.
+ */
+bool dp_mlo_tx_pool_unmap_li(struct dp_soc *soc, uint8_t vdev_id,
+			     uint8_t *new_id,
+			     enum dp_mod_id mod_id);
+
+/**
+ * dp_tx_override_flow_pool_id_li() - Override the pool id of the tx desc pool
+ * @vdev: dp vdev
+ * @queue: queue ids container for nbuf
+ *
+ * Return: None
+ */
+void
+dp_tx_override_flow_pool_id_li(struct dp_vdev *vdev,
+			       struct dp_tx_queue *queue);
 #endif

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -724,6 +724,10 @@ void dp_initialize_arch_ops_li(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_soc_attach_poll = dp_soc_attach_poll_li;
 	arch_ops->dp_soc_interrupt_detach = dp_soc_interrupt_detach_li;
 	arch_ops->dp_service_srngs = dp_service_srngs_li;
+
+	arch_ops->dp_mlo_tx_pool_map = dp_mlo_tx_pool_map_li;
+	arch_ops->dp_mlo_tx_pool_unmap = dp_mlo_tx_pool_unmap_li;
+	arch_ops->dp_tx_override_flow_pool_id = dp_tx_override_flow_pool_id_li;
 }
 
 #ifdef QCA_DP_TX_HW_SW_NBUF_DESC_PREFETCH

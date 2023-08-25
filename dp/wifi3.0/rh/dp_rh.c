@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -998,4 +998,8 @@ void dp_initialize_arch_ops_rh(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_soc_attach_poll = dp_soc_attach_poll_rh;
 	arch_ops->dp_soc_interrupt_detach = dp_soc_interrupt_detach_rh;
 	arch_ops->dp_service_srngs = dp_service_srngs_rh;
+
+	arch_ops->dp_mlo_tx_pool_map = dp_mlo_tx_pool_map_rh;
+	arch_ops->dp_mlo_tx_pool_unmap = dp_mlo_tx_pool_unmap_rh;
+	arch_ops->dp_tx_override_flow_pool_id = dp_tx_override_flow_pool_id_rh;
 }

@@ -2418,3 +2418,264 @@ next_desc:
 
 	return num_processed;
 }
+
+#if defined(QCA_LL_TX_FLOW_CONTROL_V2) && \
+defined(WLAN_FEATURE_MULTI_LINK_SAP) && \
+defined(WLAN_DP_MLO_DEV_CTX) && defined(WLAN_DP_TXPOOL_SHARE)
+/**
+ * dp_tx_init_inc_pool_ref_be() - initialize and increment pool ref count
+ * @pool: flow pool pointer
+ *
+ * Initialize and increments pool's ref count while creat the pool.
+ *
+ * Return: QDF_STATUS_SUCCESS - in case of success
+ */
+static
+QDF_STATUS dp_tx_init_inc_pool_ref_be(struct dp_tx_desc_pool_s *pool)
+{
+	if (!pool) {
+		dp_debug("flow pool is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	qdf_atomic_init(&pool->ref_cnt);
+	qdf_atomic_inc(&pool->ref_cnt);
+	dp_debug("pool %pK, ref_cnt %x",
+		 pool, qdf_atomic_read(&pool->ref_cnt));
+	return  QDF_STATUS_SUCCESS;
+}
+
+/**
+ * dp_tx_inc_pool_ref_be() - increment pool ref count
+ * @pool: flow pool pointer
+ *
+ * Increments pool's ref count, used to make sure that no one is using
+ * pool when it is being deleted.
+ * As this function is taking pool->flow_pool_lock inside it, it should
+ * always be called outside this spinlock.
+ *
+ * Return: QDF_STATUS_SUCCESS - in case of success
+ */
+static
+QDF_STATUS dp_tx_inc_pool_ref_be(struct dp_tx_desc_pool_s *pool)
+{
+	if (!pool) {
+		dp_debug("flow pool is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	qdf_atomic_inc(&pool->ref_cnt);
+	dp_debug("pool %pK, ref_cnt %x",
+		 pool, qdf_atomic_read(&pool->ref_cnt));
+	return  QDF_STATUS_SUCCESS;
+}
+
+/**
+ * dp_tx_dec_pool_ref_be() - decrement pool ref count
+ * @pool: flow pool pointer
+ *
+ * Decrements pool's ref count and deletes the pool if ref count gets 0.
+ * As this function is taking pdev->tx_desc.flow_pool_list_lock and
+ * pool->flow_pool_lock inside it, it should always be called outside
+ * these two spinlocks.
+ *
+ * Return: QDF_STATUS_SUCCESS - in case of success
+ */
+static
+QDF_STATUS dp_tx_dec_pool_ref_be(struct dp_tx_desc_pool_s *pool)
+{
+	if (!pool) {
+		dp_debug("flow pool is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	qdf_atomic_dec(&pool->ref_cnt);
+	dp_debug("pool %pK, ref_cnt %x",
+		 pool, qdf_atomic_read(&pool->ref_cnt));
+	return  QDF_STATUS_SUCCESS;
+}
+
+bool dp_mlo_tx_pool_map_be(struct dp_soc *soc,
+			   uint8_t vdev_id,
+			   enum dp_mod_id mod_id)
+{
+	int i = 0;
+	int j = 0;
+	struct dp_vdev_be *be_vdev = NULL;
+	struct dp_vdev *self_vdev = dp_vdev_get_ref_by_id(soc, vdev_id,
+							  mod_id);
+	bool remap = false;
+
+	if (!self_vdev) {
+		dp_err("invalid vdev_id %d", vdev_id);
+		return remap;
+	}
+
+	if (self_vdev->opmode != wlan_op_mode_ap) {
+		dp_vdev_unref_delete(soc, self_vdev, mod_id);
+		return remap;
+	}
+	be_vdev = dp_get_be_vdev_from_dp_vdev(self_vdev);
+
+	/* legacy sap if mlo_dev_ctxt is null */
+	if (!be_vdev || !be_vdev->mlo_dev_ctxt) {
+		dp_vdev_unref_delete(soc, self_vdev, mod_id);
+		return remap;
+	}
+
+	/* since WLAN_MAX_MLO_CHIPS is 1, so "i" will be always 0*/
+	for (j = 0 ; j < WLAN_MAX_MLO_LINKS_PER_SOC ; j++) {
+		struct dp_vdev *ptnr_vdev;
+
+		ptnr_vdev = dp_vdev_get_ref_by_id(soc,
+						  be_vdev->mlo_dev_ctxt->vdev_list[i][j],
+			mod_id);
+		if (!ptnr_vdev)
+			continue;
+
+		if (ptnr_vdev == self_vdev) {
+			if (self_vdev->pool) {
+				/* refcnt ++ for itself */
+				dp_tx_init_inc_pool_ref_be(self_vdev->pool);
+				dp_debug("vdev id %d pool id %d refcnt %d",
+					 self_vdev->vdev_id,
+					 self_vdev->pool->flow_pool_id,
+					 qdf_atomic_read(&self_vdev->pool->ref_cnt));
+			}
+			dp_vdev_unref_delete(soc,
+					     ptnr_vdev,
+					     mod_id);
+			continue;
+		}
+		/*
+		 * The partner link is the first link,
+		 * and it should have tx pool alloced.
+		 * Then point to the fist tx pool.
+		 */
+		if (ptnr_vdev->pool) {
+			self_vdev->pool = ptnr_vdev->pool;
+			/* pool refcnt ++ */
+			dp_tx_inc_pool_ref_be(self_vdev->pool);
+			dp_debug("vdev id %d pool id %d refcnt %d",
+				 self_vdev->vdev_id,
+				 self_vdev->pool->flow_pool_id,
+				 qdf_atomic_read(&self_vdev->pool->ref_cnt));
+			dp_vdev_unref_delete(soc,
+					     ptnr_vdev,
+					     mod_id);
+			remap = true;
+			break;
+		}
+		dp_vdev_unref_delete(ptnr_vdev->pdev->soc,
+				     ptnr_vdev,
+				     mod_id);
+	}
+	dp_vdev_unref_delete(soc, self_vdev,
+			     mod_id);
+	return remap;
+}
+
+bool dp_mlo_tx_pool_unmap_be(struct dp_soc *soc,
+			     uint8_t vdev_id,
+			     uint8_t *new_id,
+			     enum dp_mod_id mod_id)
+{
+	struct dp_vdev_be *be_vdev = NULL;
+	struct dp_vdev *vdev = dp_vdev_get_ref_by_id(soc, vdev_id,
+						     mod_id);
+
+	int refcnt = 0;
+
+	if (!vdev)
+		return false;
+
+	if (vdev->opmode != wlan_op_mode_ap) {
+		dp_vdev_unref_delete(soc, vdev, mod_id);
+		return false;
+	}
+
+	be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
+	/* legacy sap if mlo_dev_ctxt is null */
+	if (!be_vdev || !be_vdev->mlo_dev_ctxt) {
+		dp_vdev_unref_delete(soc, vdev, mod_id);
+		return false;
+	}
+
+	if (vdev->pool) {
+		/* pool refcnt-- */
+		dp_tx_dec_pool_ref_be(vdev->pool);
+		*new_id = vdev->pool->flow_pool_id;
+		refcnt = qdf_atomic_read(&vdev->pool->ref_cnt);
+		/* pool owner, do nothing free later, otherwise, set to null */
+		if (vdev->pool->flow_pool_id != vdev_id)
+			vdev->pool = NULL;
+
+		/* last user ? */
+		if (!refcnt) {
+			/* expect pool can be free */
+			dp_vdev_unref_delete(soc, vdev, mod_id);
+			return false;
+		}
+
+		/* not last user, still in use */
+		dp_vdev_unref_delete(soc, vdev, mod_id);
+		return true;
+	}
+	dp_vdev_unref_delete(soc, vdev, mod_id);
+	return false;
+}
+
+/**
+ * dp_tx_override_flow_pool_id_be() - Override the pool id of the tx desc pool
+ * @vdev: dp vdev
+ * @queue: queue ids container for nbuf
+ *
+ * Return: None
+ */
+void
+dp_tx_override_flow_pool_id_be(struct dp_vdev *vdev,
+			       struct dp_tx_queue *queue)
+{
+	uint8_t pool_id = MAX_TXDESC_POOLS;
+	struct dp_vdev_be *be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
+
+	/* Not applicable for other mode */
+	if (vdev->opmode != wlan_op_mode_ap)
+		return;
+
+	/*
+	 * legacy sap if mlo_dev_ctxt is null,
+	 * and only applicable for mlo sap case.
+	 */
+	if (!be_vdev || !be_vdev->mlo_dev_ctxt)
+		return;
+
+	if (vdev->pool)
+		pool_id = vdev->pool->flow_pool_id;
+
+	/* only reuse other's pool, then id will be override */
+	if (pool_id < MAX_TXDESC_POOLS && pool_id != vdev->vdev_id)
+		queue->desc_pool_id = pool_id;
+}
+#else
+bool dp_mlo_tx_pool_map_be(struct dp_soc *soc,
+			   uint8_t vdev_id,
+			   enum dp_mod_id mod_id)
+{
+	return false;
+}
+
+bool dp_mlo_tx_pool_unmap_be(struct dp_soc *soc,
+			     uint8_t vdev_id,
+			     uint8_t *new_id,
+			     enum dp_mod_id mod_id)
+{
+	return false;
+}
+
+void
+dp_tx_override_flow_pool_id_be(struct dp_vdev *vdev,
+			       struct dp_tx_queue *queue)
+{
+}
+#endif

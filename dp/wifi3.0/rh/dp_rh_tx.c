@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -791,4 +791,25 @@ next_msdu:
 
 	DP_STATS_INC(soc, tx.tx_comp[ring_id], num_msdus);
 	DP_TX_HIST_STATS_PER_PDEV();
+}
+
+bool dp_mlo_tx_pool_map_rh(struct dp_soc *soc,
+			   uint8_t vdev_id,
+			   enum dp_mod_id mod_id)
+{
+	return false;
+}
+
+bool dp_mlo_tx_pool_unmap_rh(struct dp_soc *soc,
+			     uint8_t vdev_id,
+			     uint8_t *new_id,
+			     enum dp_mod_id mod_id)
+{
+	return false;
+}
+
+void
+dp_tx_override_flow_pool_id_rh(struct dp_vdev *vdev,
+			       struct dp_tx_queue *queue)
+{
 }

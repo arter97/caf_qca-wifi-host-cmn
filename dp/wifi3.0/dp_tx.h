@@ -957,6 +957,18 @@ static inline enum qdf_dp_tx_rx_status dp_tx_hw_to_qdf(uint16_t status)
 	}
 }
 
+/**
+ * dp_tx_override_flow_pool_id() - Override the pool id of the tx desc pool
+ * @soc: DP soc structure pointer
+ * @vdev: dp vdev
+ * @msdu_info: msdu information pointer
+ *
+ * Return: None
+ */
+void dp_tx_override_flow_pool_id(struct dp_soc *soc,
+				 struct dp_vdev *vdev,
+				 struct dp_tx_msdu_info_s *msdu_info);
+
 #ifndef QCA_HOST_MODE_WIFI_DISABLED
 /**
  * dp_tx_get_queue() - Returns Tx queue IDs to be used for this Tx frame
@@ -1100,33 +1112,6 @@ static inline hal_ring_handle_t dp_tx_get_hal_ring_hdl(struct dp_soc *soc,
 						       uint8_t ring_id)
 {
 	return soc->tcl_data_ring[ring_id].hal_srng;
-}
-#endif
-
-#if defined(TX_MULTI_TCL) && defined(WLAN_FEATURE_11BE_MLO) && \
-	defined(WLAN_DP_TXPOOL_SHARE)
-/**
- * dp_tx_override_flow_pool_id() - Override the pool id of the tx desc pool
- * @queue: queue ids container for nbuf
- * @pool_id: tx desc pool id
- * @override: indicate if need to overwrite the flow pool id or not
- *
- * Return: None
- */
-static inline void
-dp_tx_override_flow_pool_id(struct dp_tx_queue *queue,
-			    uint8_t pool_id,
-			    bool override)
-{
-	if (override)
-		queue->desc_pool_id = pool_id;
-}
-#else
-static inline void
-dp_tx_override_flow_pool_id(struct dp_tx_queue *queue,
-			    uint8_t pool_id,
-			    bool override)
-{
 }
 #endif
 
