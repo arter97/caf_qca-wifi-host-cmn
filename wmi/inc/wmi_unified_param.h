@@ -1261,6 +1261,7 @@ struct wmi_host_link_bss_params {
  * @bssid: AP link address
  * @chan: Wlan channel information
  * @mac_addr: Self mac addresses
+ * @rec_max_simultaneous_links: Max recommended simultaneous links
  */
 struct peer_assoc_mlo_params {
 	uint32_t mlo_enabled:1,
@@ -1294,6 +1295,7 @@ struct peer_assoc_mlo_params {
 	struct qdf_mac_addr bssid;
 	struct wlan_channel chan;
 	struct qdf_mac_addr mac_addr;
+	uint8_t rec_max_simultaneous_links;
 };
 
 /**
