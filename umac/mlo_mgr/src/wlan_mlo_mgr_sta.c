@@ -1892,7 +1892,6 @@ bool mlo_is_sta_csa_synced(struct wlan_mlo_dev_context *mlo_dev_ctx,
 		if (link_id == sta_ctx->mlo_csa_param[i].link_id &&
 		    (sta_ctx->mlo_csa_param[i].valid_csa_param ||
 		     sta_ctx->mlo_csa_param[i].mlo_csa_synced)) {
-			mlo_dev_lock_release(mlo_dev_ctx);
 			sta_csa_synced =
 				sta_ctx->mlo_csa_param[i].mlo_csa_synced;
 			break;
