@@ -598,6 +598,7 @@ struct emlsr_capability {
  * @ml_partner_info: mlo partner link info
  * @emlsr_cap: EMLSR capabilities info
  * @link_force_ctx: set link force mode context
+ * @ml_link_control_mode: link control mode configured via user space
  */
 struct wlan_mlo_sta {
 	qdf_bitmap(wlan_connect_req_links, WLAN_UMAC_MLO_MAX_VDEVS);
@@ -627,6 +628,7 @@ struct wlan_mlo_sta {
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 	struct wlan_link_force_context link_force_ctx;
 #endif
+	uint8_t ml_link_control_mode;
 };
 
 /**
