@@ -4484,8 +4484,7 @@ _target_if_set_spectral_config(struct target_if_spectral *spectral,
 
 	if (!err) {
 		spectral_err("Error code argument is null");
-		QDF_ASSERT(0);
-		return QDF_STATUS_E_FAILURE;
+		return QDF_STATUS_E_NULL_VALUE;
 	}
 	*err = SPECTRAL_SCAN_ERR_INVALID;
 
@@ -4812,8 +4811,7 @@ target_if_set_spectral_config(struct wlan_objmgr_pdev *pdev,
 
 	if (!err) {
 		spectral_err("Error code argument is null");
-		QDF_ASSERT(0);
-		return QDF_STATUS_E_FAILURE;
+		return QDF_STATUS_E_NULL_VALUE;
 	}
 	*err = SPECTRAL_SCAN_ERR_INVALID;
 
@@ -5822,7 +5820,11 @@ target_if_spectral_populate_session_report_info(
 						spectral->pdev_obj,
 						rpt_info->sscan_bw);
 
-	qdf_assert_always(rpt_info->num_spans != INVALID_SPAN_NUM);
+	if (rpt_info->num_spans == INVALID_SPAN_NUM) {
+		spectral_err_rl("Invalid number of spans: %u",
+				rpt_info->num_spans);
+		return QDF_STATUS_E_INVAL;
+	}
 	rpt_info->valid = true;
 
 	qdf_spin_unlock_bh(&spectral->session_report_info_lock);
@@ -6003,8 +6005,7 @@ target_if_start_spectral_scan(struct wlan_objmgr_pdev *pdev,
 
 	if (!err) {
 		spectral_err("Error code argument is null");
-		QDF_ASSERT(0);
-		return QDF_STATUS_E_FAILURE;
+		return QDF_STATUS_E_NULL_VALUE;
 	}
 	*err = SPECTRAL_SCAN_ERR_INVALID;
 
@@ -6260,8 +6261,7 @@ target_if_stop_spectral_scan(struct wlan_objmgr_pdev *pdev,
 
 	if (!err) {
 		spectral_err("Error code argument is null");
-		QDF_ASSERT(0);
-		return QDF_STATUS_E_FAILURE;
+		return QDF_STATUS_E_NULL_VALUE;
 	}
 	*err = SPECTRAL_SCAN_ERR_INVALID;
 
@@ -7627,7 +7627,11 @@ target_if_update_det_info_in_spectral_session(
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
-	qdf_assert_always(det_info->det_id < MAX_DETECTORS_PER_PDEV);
+	if (det_info->det_id >= MAX_DETECTORS_PER_PDEV) {
+		spectral_err_rl("Detector Id: %u exceeding Max detectors.",
+				det_info->det_id);
+		return QDF_STATUS_E_INVAL;
+	}
 
 	qdf_spin_lock_bh(&spectral->session_det_map_lock);
 
@@ -7688,7 +7692,11 @@ target_if_update_chan_info_in_spectral_session(
 	rpt_info->num_spans = target_if_spectral_get_num_spans(
 					spectral->pdev_obj,
 					rpt_info->sscan_bw);
-	qdf_assert_always(rpt_info->num_spans != INVALID_SPAN_NUM);
+	if (rpt_info->num_spans == INVALID_SPAN_NUM) {
+		spectral_err_rl("Invalid number of spans: %u",
+				rpt_info->num_spans);
+		return QDF_STATUS_E_INVAL;
+	}
 
 	rpt_info->valid = true;
 
