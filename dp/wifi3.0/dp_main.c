@@ -9272,23 +9272,19 @@ static QDF_STATUS dp_txrx_update_vdev_host_stats(struct cdp_soc_t *soc_hdl,
 }
 
 /**
- * dp_txrx_get_peer_stats() - will return cdp_peer_stats
+ * dp_txrx_get_peer_stats_wrapper() - will get cdp_peer_stats
  * @soc: soc handle
- * @vdev_id: id of vdev handle
- * @peer_mac: mac of DP_PEER handle
- * @peer_stats: buffer to copy to
+ * @peer_stats: destination buffer to copy to
+ * @peer_info: peer info
  *
  * Return: status success/failure
  */
 static QDF_STATUS
-dp_txrx_get_peer_stats(struct cdp_soc_t *soc, uint8_t vdev_id,
-		       uint8_t *peer_mac, struct cdp_peer_stats *peer_stats)
+dp_txrx_get_peer_stats_wrapper(struct cdp_soc_t *soc,
+			       struct cdp_peer_stats *peer_stats,
+			       struct cdp_peer_info peer_info)
 {
 	struct dp_peer *peer = NULL;
-	struct cdp_peer_info peer_info = { 0 };
-
-	DP_PEER_INFO_PARAMS_INIT(&peer_info, vdev_id, peer_mac, false,
-				 CDP_WILD_PEER_TYPE);
 
 	peer = dp_peer_hash_find_wrapper((struct dp_soc *)soc, &peer_info,
 					 DP_MOD_ID_CDP);
@@ -9303,6 +9299,52 @@ dp_txrx_get_peer_stats(struct cdp_soc_t *soc, uint8_t vdev_id,
 	dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
 
 	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * dp_txrx_get_peer_stats() - will get cdp_peer_stats
+ * @soc: soc handle
+ * @vdev_id: id of vdev handle
+ * @peer_mac: peer mac address of DP_PEER handle
+ * @peer_stats: destination buffer to copy to
+ *
+ * Return: status success/failure
+ */
+static QDF_STATUS
+dp_txrx_get_peer_stats(struct cdp_soc_t *soc, uint8_t vdev_id,
+		       uint8_t *peer_mac, struct cdp_peer_stats *peer_stats)
+{
+	struct cdp_peer_info peer_info = { 0 };
+
+	DP_PEER_INFO_PARAMS_INIT(&peer_info, vdev_id, peer_mac, false,
+				 CDP_WILD_PEER_TYPE);
+
+	return dp_txrx_get_peer_stats_wrapper(soc, peer_stats, peer_info);
+}
+
+/**
+ * dp_txrx_get_peer_stats_based_on_peer_type() - get peer stats based on the
+ * peer type
+ * @soc: soc handle
+ * @vdev_id: id of vdev handle
+ * @peer_mac: mac of DP_PEER handle
+ * @peer_stats: buffer to copy to
+ * @peer_type: type of peer
+ *
+ * Return: status success/failure
+ */
+static QDF_STATUS
+dp_txrx_get_peer_stats_based_on_peer_type(struct cdp_soc_t *soc, uint8_t vdev_id,
+					  uint8_t *peer_mac,
+					  struct cdp_peer_stats *peer_stats,
+					  enum cdp_peer_type peer_type)
+{
+	struct cdp_peer_info peer_info = { 0 };
+
+	DP_PEER_INFO_PARAMS_INIT(&peer_info, vdev_id, peer_mac, false,
+				 peer_type);
+
+	return dp_txrx_get_peer_stats_wrapper(soc, peer_stats, peer_info);
 }
 
 #if defined WLAN_FEATURE_11BE_MLO && defined DP_MLO_LINK_STATS_SUPPORT
@@ -12261,6 +12303,8 @@ static struct cdp_host_stats_ops dp_ops_host_stats = {
 	.txrx_stats_publish = dp_txrx_stats_publish,
 	.txrx_get_vdev_stats  = dp_txrx_get_vdev_stats,
 	.txrx_get_peer_stats = dp_txrx_get_peer_stats,
+	.txrx_get_peer_stats_based_on_peer_type =
+			dp_txrx_get_peer_stats_based_on_peer_type,
 	.txrx_get_soc_stats = dp_txrx_get_soc_stats,
 	.txrx_get_peer_stats_param = dp_txrx_get_peer_stats_param,
 	.txrx_get_per_link_stats = dp_txrx_get_per_link_peer_stats,
