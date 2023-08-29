@@ -41,7 +41,8 @@
 
 #define CRYPTO_MAX_HASH_IDX 16
 #define CRYPTO_MAX_HASH_ENTRY 1024
-qdf_mutex_t crypto_lock;
+
+static qdf_mutex_t crypto_lock;
 
 extern const struct wlan_crypto_cipher
 				*wlan_crypto_cipher_ops[WLAN_CRYPTO_CIPHER_MAX];
@@ -673,6 +674,16 @@ void wlan_crypto_free_vdev_key(struct wlan_objmgr_vdev *vdev)
 }
 #endif
 
+void wlan_crypto_aquire_lock(void)
+{
+	qdf_mutex_acquire(&crypto_lock);
+}
+
+void wlan_crypto_release_lock(void)
+{
+	qdf_mutex_release(&crypto_lock);
+}
+
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 void wlan_crypto_free_key_by_link_id(struct wlan_objmgr_psoc *psoc,
 				     struct qdf_mac_addr *link_addr,
@@ -902,6 +913,9 @@ QDF_STATUS __wlan_crypto_init(void)
 {
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 
+	/* Initialize crypto global lock*/
+	qdf_mutex_create(&crypto_lock);
+
 	status = register_psoc_create_handler();
 	if (QDF_IS_STATUS_ERROR(status)) {
 		crypto_err("psoc creation failure");
@@ -1018,5 +1032,9 @@ QDF_STATUS __wlan_crypto_deinit(void)
 			!= QDF_STATUS_SUCCESS) {
 		return QDF_STATUS_E_FAILURE;
 	}
+
+	/* Destroy crypto global lock */
+	qdf_mutex_destroy(&crypto_lock);
+
 	return QDF_STATUS_SUCCESS;
 }

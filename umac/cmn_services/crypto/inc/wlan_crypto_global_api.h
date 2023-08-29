@@ -1224,5 +1224,14 @@ wlan_crypto_set_ltf_keyseed(struct wlan_objmgr_psoc *psoc,
  */
 QDF_STATUS wlan_crypto_create_fils_rik(uint8_t *rrk, uint8_t rrk_len,
 				       uint8_t *rik, uint32_t *rik_len);
+/**
+ * wlan_crypto_aquire_lock() - Acquire the crypto lock before crypto set/get
+ */
+void wlan_crypto_aquire_lock(void);
+
+/**
+ * wlan_crypto_release_lock() - Release the crypto lock after crypto set/get
+ */
+void wlan_crypto_release_lock(void);
 #endif /* WLAN_FEATURE_FILS_SK */
 #endif /* end of _WLAN_CRYPTO_GLOBAL_API_H_ */
