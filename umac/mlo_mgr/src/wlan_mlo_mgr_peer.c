@@ -724,6 +724,14 @@ void wlan_mlo_partner_peer_disconnect_notify(struct wlan_objmgr_peer *src_peer)
 	if (!vdev)
 		return;
 
+	/* Do not change peer state to disconnect initiated for
+	 * link switch case, this can lead to not sending deauth frame
+	 * incase of actual disconnect and AP might drop the next connect
+	 * request as it might think STA is still in connected state.
+	 */
+	if (wlan_vdev_mlme_is_mlo_link_switch_in_progress(vdev))
+		return;
+
 	mlo_peer_lock_acquire(ml_peer);
 
 	if (ml_peer->mlpeer_state == ML_PEER_DISCONN_INITIATED) {
