@@ -268,7 +268,7 @@ mlo_send_link_disconnect(struct wlan_objmgr_vdev *vdev,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	if (!assoc_vdev) {
+	if (!assoc_vdev && mlo_mgr_is_link_switch_supported(vdev)) {
 		if (!wlan_mlo_mgr_is_link_switch_on_assoc_vdev(vdev))
 			return QDF_STATUS_E_FAILURE;
 

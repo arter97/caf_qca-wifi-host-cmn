@@ -535,7 +535,20 @@ QDF_STATUS mlo_mgr_link_switch_init(struct wlan_mlo_dev_context *ml_dev);
  * Return: QDF_STATUS
  */
 QDF_STATUS mlo_mgr_link_switch_deinit(struct wlan_mlo_dev_context *ml_dev);
+
+static inline bool
+mlo_mgr_is_link_switch_supported(struct wlan_objmgr_vdev *vdev)
+{
+	return true;
+}
+
 #else
+static inline bool
+mlo_mgr_is_link_switch_supported(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
+
 static inline void
 mlo_mgr_osif_update_connect_info(struct wlan_objmgr_vdev *vdev, int32_t link_id)
 {
