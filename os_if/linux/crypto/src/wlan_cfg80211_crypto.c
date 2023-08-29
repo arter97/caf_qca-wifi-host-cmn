@@ -148,12 +148,15 @@ int wlan_cfg80211_store_link_key(struct wlan_objmgr_psoc *psoc,
 	 * key may already exist at times and may be retrieved only to
 	 * update it.
 	 */
+	wlan_crypto_aquire_lock();
 	crypto_key = wlan_crypto_get_ml_sta_link_key(psoc, key_index,
 						     link_addr, link_id);
 	if (!crypto_key) {
+		wlan_crypto_release_lock();
 		crypto_key = qdf_mem_malloc(sizeof(*crypto_key));
 		if (!crypto_key)
 			return -EINVAL;
+		wlan_crypto_aquire_lock();
 	}
 
 	wlan_cfg80211_translate_ml_sta_key(key_index, key_type, mac_addr,
@@ -162,10 +165,12 @@ int wlan_cfg80211_store_link_key(struct wlan_objmgr_psoc *psoc,
 	status = wlan_crypto_save_ml_sta_key(psoc, key_index, crypto_key,
 					     link_addr, link_id);
 	if (QDF_IS_STATUS_ERROR(status)) {
+		wlan_crypto_release_lock();
 		osif_err("Failed to save key");
 		qdf_mem_free(crypto_key);
 		return -EINVAL;
 	}
+	wlan_crypto_release_lock();
 	return 0;
 }
 
@@ -213,11 +218,14 @@ int wlan_cfg80211_store_key(struct wlan_objmgr_vdev *vdev,
 	 * key may already exist at times and may be retrieved only to
 	 * update it.
 	 */
+	wlan_crypto_aquire_lock();
 	crypto_key = wlan_crypto_get_key(vdev, key_index);
 	if (!crypto_key) {
+		wlan_crypto_release_lock();
 		crypto_key = qdf_mem_malloc(sizeof(*crypto_key));
 		if (!crypto_key)
 			return -EINVAL;
+		wlan_crypto_aquire_lock();
 	}
 
 	wlan_cfg80211_translate_key(vdev, key_index, key_type, mac_addr,
@@ -225,10 +233,12 @@ int wlan_cfg80211_store_key(struct wlan_objmgr_vdev *vdev,
 
 	status = wlan_crypto_save_key(vdev, key_index, crypto_key);
 	if (QDF_IS_STATUS_ERROR(status)) {
+		wlan_crypto_release_lock();
 		osif_err("Failed to save key");
 		qdf_mem_free(crypto_key);
 		return -EINVAL;
 	}
+	wlan_crypto_release_lock();
 	return 0;
 }
 
@@ -268,11 +278,14 @@ int wlan_cfg80211_crypto_add_key(struct wlan_objmgr_vdev *vdev,
 		.timeout_ms = WLAN_WAIT_TIME_ADD_KEY,
 	};
 
+	wlan_crypto_aquire_lock();
 	crypto_key = wlan_crypto_get_key(vdev, key_index);
 	if (!crypto_key) {
+		wlan_crypto_release_lock();
 		osif_err("Crypto KEY is NULL");
 		return -EINVAL;
 	}
+	wlan_crypto_release_lock();
 
 	if (sync) {
 		priv = wlan_get_vdev_crypto_obj(vdev);
@@ -309,7 +322,6 @@ int wlan_cfg80211_crypto_add_key(struct wlan_objmgr_vdev *vdev,
 	} else {
 		status  = ucfg_crypto_set_key_req(vdev, crypto_key, key_type);
 	}
-
 	return qdf_status_to_os_return(status);
 }
 
