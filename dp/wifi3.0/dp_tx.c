@@ -5770,6 +5770,44 @@ dp_tx_comp_process_desc_list(struct dp_soc *soc,
 		dp_txrx_peer_unref_delete(txrx_ref_handle, DP_MOD_ID_TX_COMP);
 }
 
+#ifndef WLAN_SOFTUMAC_SUPPORT
+/**
+ * dp_tx_dump_tx_desc() - Dump tx desc for debugging
+ * @tx_desc: software descriptor head pointer
+ *
+ * This function will dump tx desc for further debugging
+ *
+ * Return: none
+ */
+static
+void dp_tx_dump_tx_desc(struct dp_tx_desc_s *tx_desc)
+{
+	if (tx_desc) {
+		dp_tx_comp_warn("tx_desc->nbuf: %pK", tx_desc->nbuf);
+		dp_tx_comp_warn("tx_desc->flags: 0x%x", tx_desc->flags);
+		dp_tx_comp_warn("tx_desc->id: %u", tx_desc->id);
+		dp_tx_comp_warn("tx_desc->dma_addr: 0x%x",
+				tx_desc->dma_addr);
+		dp_tx_comp_warn("tx_desc->vdev_id: %u",
+				tx_desc->vdev_id);
+		dp_tx_comp_warn("tx_desc->tx_status: %u",
+				tx_desc->tx_status);
+		dp_tx_comp_warn("tx_desc->pdev: %pK",
+				tx_desc->pdev);
+		dp_tx_comp_warn("tx_desc->tx_encap_type: %u",
+				tx_desc->tx_encap_type);
+		dp_tx_comp_warn("tx_desc->buffer_src: %u",
+				tx_desc->buffer_src);
+		dp_tx_comp_warn("tx_desc->frm_type: %u",
+				tx_desc->frm_type);
+		dp_tx_comp_warn("tx_desc->pkt_offset: %u",
+				tx_desc->pkt_offset);
+		dp_tx_comp_warn("tx_desc->pool_id: %u",
+				tx_desc->pool_id);
+	}
+}
+#endif
+
 #ifdef WLAN_FEATURE_RX_SOFTIRQ_TIME_LIMIT
 static inline
 bool dp_tx_comp_loop_pkt_limit_hit(struct dp_soc *soc, int num_reaped,
@@ -5991,6 +6029,9 @@ more_data:
 							tx_desc,
 							htt_tx_status,
 							ring_id);
+			if (qdf_unlikely(!tx_desc->pdev)) {
+				dp_tx_dump_tx_desc(tx_desc);
+			}
 		} else {
 			tx_desc->tx_status =
 				hal_tx_comp_get_tx_status(tx_comp_hal_desc);
@@ -6014,6 +6055,13 @@ more_data:
 						   tx_desc->id);
 				DP_STATS_INC(soc, tx.tx_comp_exception, 1);
 				dp_tx_desc_check_corruption(tx_desc);
+				continue;
+			}
+
+			if (qdf_unlikely(!tx_desc->pdev)) {
+				dp_tx_comp_warn("The pdev is NULL in TX desc, ignored.");
+				dp_tx_dump_tx_desc(tx_desc);
+				DP_STATS_INC(soc, tx.tx_comp_exception, 1);
 				continue;
 			}
 

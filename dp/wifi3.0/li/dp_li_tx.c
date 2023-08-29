@@ -130,6 +130,12 @@ void dp_tx_process_htt_completion_li(struct dp_soc *soc,
 	}
 
 	pdev = tx_desc->pdev;
+	if (qdf_unlikely(!pdev)) {
+		dp_tx_comp_warn("The pdev in TX desc is NULL, dropped.");
+		dp_tx_comp_warn("tx_status: %u", tx_status);
+		tx_desc->flags |= DP_TX_DESC_FLAG_TX_COMP_ERR;
+		goto release_tx_desc;
+	}
 
 	if (qdf_unlikely(tx_desc->pdev->is_pdev_down)) {
 		dp_tx_comp_info_rl("pdev in down state %d", tx_desc->id);
