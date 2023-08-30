@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -280,9 +280,10 @@ void dp_tx_mlo_mcast_handler_be(struct dp_soc *soc,
  */
 bool dp_tx_mlo_is_mcast_primary_be(struct dp_soc *soc,
 				   struct dp_vdev *vdev);
-#ifdef WLAN_MCAST_MLO
-#ifdef WLAN_MLO_MULTI_CHIP
-#ifdef CONFIG_MLO_SINGLE_DEV
+
+#if defined(WLAN_MCAST_MLO) && defined(WLAN_MLO_MULTI_CHIP) || \
+	defined(WLAN_MCAST_MLO_SAP)
+#if defined(CONFIG_MLO_SINGLE_DEV) || defined(WLAN_MCAST_MLO_SAP)
 /**
  * dp_tx_mlo_mcast_send_be() - Tx send handler for mlo mcast enhance
  * @soc: DP soc handle
@@ -310,7 +311,6 @@ qdf_nbuf_t dp_tx_mlo_mcast_send_be(struct dp_soc *soc, struct dp_vdev *vdev,
 void dp_tx_mlo_mcast_pkt_send(struct dp_vdev_be *be_vdev,
 			      struct dp_vdev *ptnr_vdev,
 			      void *arg);
-#endif
 #endif
 #endif
 

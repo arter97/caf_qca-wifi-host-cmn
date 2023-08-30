@@ -2340,10 +2340,10 @@ int dp_tx_frame_is_drop(struct dp_vdev *vdev, uint8_t *srcmac, uint8_t *dstmac)
 	return 0;
 }
 
-#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP) && \
-	defined(WLAN_MCAST_MLO)
+#if defined(WLAN_FEATURE_11BE_MLO) && ((defined(WLAN_MLO_MULTI_CHIP) && \
+	defined(WLAN_MCAST_MLO)) || defined(WLAN_MCAST_MLO_SAP))
 /* MLO peer id for reinject*/
-#define DP_MLO_MCAST_REINJECT_PEER_ID 0XFFFD
+#define DP_MLO_MCAST_REINJECT_PEER_ID 0x1fff
 /* MLO vdev id inc offset */
 #define DP_MLO_VDEV_ID_OFFSET 0x80
 
@@ -2364,6 +2364,13 @@ dp_tx_wds_ext_check(struct cdp_tx_exception_metadata *tx_exc_metadata)
 }
 #endif
 
+#if defined(WLAN_MCAST_MLO_SAP)
+static inline void
+dp_tx_bypass_reinjection(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
+			 struct cdp_tx_exception_metadata *tx_exc_metadata)
+{
+}
+#else
 static inline void
 dp_tx_bypass_reinjection(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 			 struct cdp_tx_exception_metadata *tx_exc_metadata)
@@ -2377,6 +2384,7 @@ dp_tx_bypass_reinjection(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 		qdf_atomic_inc(&soc->num_tx_exception);
 	}
 }
+#endif
 
 static inline void
 dp_tx_update_mcast_param(uint16_t peer_id,

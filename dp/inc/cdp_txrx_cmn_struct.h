@@ -719,7 +719,7 @@ struct cdp_tx_exception_metadata {
 #ifdef QCA_SUPPORT_WDS_EXTENDED
 	uint8_t is_wds_extended;
 #endif
-#ifdef WLAN_MCAST_MLO
+#if defined(WLAN_MCAST_MLO) || defined(WLAN_MCAST_MLO_SAP)
 	uint8_t is_mlo_mcast;
 #endif
 };

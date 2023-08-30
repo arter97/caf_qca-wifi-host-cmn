@@ -2021,7 +2021,8 @@ struct cdp_tx_ingress_stats {
 	uint32_t cce_classified_raw;
 	struct cdp_pkt_info sniffer_rcvd;
 	struct cdp_tso_stats tso_stats;
-#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MCAST_MLO)
+#if defined(WLAN_FEATURE_11BE_MLO) && (defined(WLAN_MCAST_MLO) || \
+defined(WLAN_MCAST_MLO_SAP))
 	struct {
 		uint32_t send_pkt_count;
 		uint32_t fail_pkt_count;

@@ -235,19 +235,23 @@
 typedef void dp_ptnr_soc_iter_func(struct dp_soc *ptnr_soc, void *arg,
 				   int chip_id);
 
+#if defined(WLAN_FEATURE_11BE_MLO)
+#define DP_LINK_VDEV_ITER 1
+#define DP_ALL_VDEV_ITER 3
+#define IS_LINK_VDEV_ITER_REQUIRED(type) (type & DP_LINK_VDEV_ITER)
+#define DP_VDEV_ITERATE_SKIP_SELF 0
+#endif
+
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 #define DP_MLD_MODE_UNIFIED_NONBOND 0
 #define DP_MLD_MODE_UNIFIED_BOND    1
 #define DP_MLD_MODE_HYBRID_NONBOND  2
 #define DP_MLD_MODE_MAX             DP_MLD_MODE_HYBRID_NONBOND
 
-#define DP_LINK_VDEV_ITER 1
 #define DP_BRIDGE_VDEV_ITER 2
-#define DP_ALL_VDEV_ITER 3
-#define IS_LINK_VDEV_ITER_REQUIRED(type) (type & DP_LINK_VDEV_ITER)
+
 #define IS_BRIDGE_VDEV_ITER_REQUIRED(type) (type & DP_BRIDGE_VDEV_ITER)
 #define DP_VDEV_ITERATE_ALL 1
-#define DP_VDEV_ITERATE_SKIP_SELF 0
 #endif
 
 /**

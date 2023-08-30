@@ -237,11 +237,10 @@ struct dp_tx_msdu_info_s {
 	uint32_t meta_data[DP_TX_MSDU_INFO_META_DATA_DWORDS];
 	uint16_t ppdu_cookie;
 	uint8_t xmit_type;
-#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
-#ifdef WLAN_MCAST_MLO
+#if defined(WLAN_FEATURE_11BE_MLO) && ((defined(WLAN_MLO_MULTI_CHIP) &&\
+	defined(WLAN_MCAST_MLO)) || defined(WLAN_MCAST_MLO_SAP))
 	uint16_t gsn;
 	uint8_t vdev_id;
-#endif
 #endif
 #if defined(WLAN_DP_FEATURE_SW_LATENCY_MGR) || defined(WLAN_SUPPORT_LAPB)
 	uint8_t skip_hp_update;

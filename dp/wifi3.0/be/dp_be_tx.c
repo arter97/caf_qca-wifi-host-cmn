@@ -43,11 +43,15 @@
 #define DP_TX_BANK_LOCK_RELEASE(lock) qdf_spin_unlock_bh(lock)
 #endif
 
+#if defined(WLAN_FEATURE_11BE_MLO) && ((defined(WLAN_MLO_MULTI_CHIP) && \
+	defined(WLAN_MCAST_MLO)) || defined(WLAN_MCAST_MLO_SAP))
+/* MLO peer id for reinject*/
+#define DP_MLO_MCAST_REINJECT_PEER_ID 0x1fff
+#define MAX_GSN_NUM 0x0FFF
+#endif
+
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 #ifdef WLAN_MCAST_MLO
-/* MLO peer id for reinject*/
-#define DP_MLO_MCAST_REINJECT_PEER_ID 0XFFFD
-#define MAX_GSN_NUM 0x0FFF
 
 #ifdef QCA_MULTIPASS_SUPPORT
 #define INVALID_VLAN_ID         0xFFFF
@@ -568,9 +572,9 @@ void dp_tx_set_particular_tx_queue(struct dp_soc *soc,
 }
 #endif
 
-#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP) && \
-	defined(WLAN_MCAST_MLO)
-#ifdef QCA_MULTIPASS_SUPPORT
+#if defined(WLAN_FEATURE_11BE_MLO) && ((defined(WLAN_MLO_MULTI_CHIP) && \
+	defined(WLAN_MCAST_MLO)) || defined(WLAN_MCAST_MLO_SAP))
+#if defined(QCA_MULTIPASS_SUPPORT) && !defined(WLAN_MCAST_MLO_SAP)
 /**
  * dp_tx_mlo_mcast_multipass_lookup() - lookup vlan_id in mpass peer list
  * @be_vdev: Handle to DP be_vdev structure
@@ -850,6 +854,78 @@ dp_tx_vdev_id_set_hal_tx_desc(uint32_t *hal_tx_desc_cached,
 	hal_tx_desc_set_vdev_id(hal_tx_desc_cached, msdu_info->vdev_id);
 }
 
+#if defined(WLAN_MCAST_MLO_SAP) && defined(WLAN_DP_MLO_DEV_CTX)
+typedef void dp_ptnr_vdev_iter_func(struct dp_vdev_be *be_vdev,
+					 struct dp_vdev *ptnr_vdev,
+					 void *arg);
+
+/**
+ * dp_mlo_iter_ptnr_vdev() - API to iterate through ptnr vdev list
+ * @be_soc: dp_soc_be pointer
+ * @be_vdev: dp_vdev_be pointer
+ * @func: function to be called for each peer
+ * @arg: argument need to be passed to func
+ * @mod_id: module id
+ * @type: iterate type
+ * @include_self_vdev: flag to include/exclude self vdev in iteration
+ *
+ * Return: None
+ */
+static void
+dp_mlo_iter_ptnr_vdev(struct dp_soc_be *be_soc,
+		      struct dp_vdev_be *be_vdev,
+		      dp_ptnr_vdev_iter_func func,
+		      void *arg,
+		      enum dp_mod_id mod_id,
+		      uint8_t type,
+		      bool include_self_vdev)
+{
+	int i = 0;
+	int j = 0;
+	struct dp_vdev *self_vdev = &be_vdev->vdev;
+
+	if (type < DP_LINK_VDEV_ITER || type > DP_ALL_VDEV_ITER) {
+		dp_err("invalid iterate type");
+		return;
+	}
+
+	if (!be_vdev->mlo_dev_ctxt) {
+		if (!include_self_vdev)
+			return;
+		(*func)(be_vdev, self_vdev, arg);
+	}
+
+	for (i = 0; (i < WLAN_MAX_MLO_CHIPS) &&
+	     IS_LINK_VDEV_ITER_REQUIRED(type); i++) {
+		struct dp_soc *ptnr_soc = DP_SOC_BE_GET_SOC(be_soc);
+
+		if (!ptnr_soc)
+			continue;
+		for (j = 0 ; j < WLAN_MAX_MLO_LINKS_PER_SOC ; j++) {
+			struct dp_vdev *ptnr_vdev;
+
+			ptnr_vdev = dp_vdev_get_ref_by_id(ptnr_soc,
+							  be_vdev->mlo_dev_ctxt->vdev_list[i][j],
+							  mod_id);
+			if (!ptnr_vdev)
+				continue;
+
+			if ((ptnr_vdev == self_vdev) && (!include_self_vdev)) {
+				dp_vdev_unref_delete(ptnr_vdev->pdev->soc,
+						     ptnr_vdev,
+						     mod_id);
+				continue;
+			}
+
+			(*func)(be_vdev, ptnr_vdev, arg);
+			dp_vdev_unref_delete(ptnr_vdev->pdev->soc,
+					     ptnr_vdev,
+					     mod_id);
+		}
+	}
+}
+#endif
+
 void dp_tx_mlo_mcast_handler_be(struct dp_soc *soc,
 				struct dp_vdev *vdev,
 				qdf_nbuf_t nbuf)
@@ -876,6 +952,14 @@ void dp_tx_mlo_mcast_handler_be(struct dp_soc *soc,
 		qdf_atomic_inc(&be_vdev->mlo_dev_ctxt->seq_num);
 }
 
+#if defined(WLAN_MCAST_MLO_SAP)
+bool dp_tx_mlo_is_mcast_primary_be(struct dp_soc *soc,
+				   struct dp_vdev *vdev)
+{
+	return true;
+}
+
+#else
 bool dp_tx_mlo_is_mcast_primary_be(struct dp_soc *soc,
 				   struct dp_vdev *vdev)
 {
@@ -886,7 +970,9 @@ bool dp_tx_mlo_is_mcast_primary_be(struct dp_soc *soc,
 
 	return false;
 }
+#endif
 
+#if defined(CONFIG_MLO_SINGLE_DEV) || defined(WLAN_MCAST_MLO_SAP)
 #if defined(CONFIG_MLO_SINGLE_DEV)
 static void
 dp_tx_mlo_mcast_enhance_be(struct dp_vdev_be *be_vdev,
@@ -912,6 +998,15 @@ dp_tx_mlo_mcast_enhance_be(struct dp_vdev_be *be_vdev,
 	qdf_nbuf_free(nbuf);
 }
 
+#else
+static void
+dp_tx_mlo_mcast_enhance_be(struct dp_vdev_be *be_vdev,
+			   struct dp_vdev *ptnr_vdev,
+			   void *arg)
+{
+}
+#endif
+
 qdf_nbuf_t
 dp_tx_mlo_mcast_send_be(struct dp_soc *soc, struct dp_vdev *vdev,
 			qdf_nbuf_t nbuf,
@@ -923,7 +1018,7 @@ dp_tx_mlo_mcast_send_be(struct dp_soc *soc, struct dp_vdev *vdev,
 	if (!tx_exc_metadata->is_mlo_mcast)
 		return nbuf;
 
-	if (!be_vdev->mcast_primary) {
+	if (!dp_tx_mlo_is_mcast_primary_be(soc, vdev)) {
 		qdf_nbuf_free(nbuf);
 		return NULL;
 	}
@@ -971,7 +1066,7 @@ dp_tx_vdev_id_set_hal_tx_desc(uint32_t *hal_tx_desc_cached,
 }
 #endif
 #if defined(WLAN_FEATURE_11BE_MLO) && !defined(WLAN_MLO_MULTI_CHIP) && \
-	!defined(WLAN_MCAST_MLO)
+	!defined(WLAN_MCAST_MLO) && !defined(WLAN_MCAST_MLO_SAP)
 void dp_tx_mlo_mcast_handler_be(struct dp_soc *soc,
 				struct dp_vdev *vdev,
 				qdf_nbuf_t nbuf)

@@ -3596,7 +3596,7 @@ static bool dp_reo_remap_config_be(struct dp_soc *soc,
 }
 #endif
 
-#ifdef CONFIG_MLO_SINGLE_DEV
+#if defined(CONFIG_MLO_SINGLE_DEV) || defined(WLAN_MCAST_MLO_SAP)
 static inline
 void dp_initialize_arch_ops_be_single_dev(struct dp_arch_ops *arch_ops)
 {
