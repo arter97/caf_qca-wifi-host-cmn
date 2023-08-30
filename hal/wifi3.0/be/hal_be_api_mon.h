@@ -19,7 +19,8 @@
 #define _HAL_BE_API_MON_H_
 
 #include "hal_be_hw_headers.h"
-#ifdef WLAN_PKT_CAPTURE_TX_2_0
+#if defined(WLAN_PKT_CAPTURE_TX_2_0) || \
+defined(WLAN_PKT_CAPTURE_RX_2_0)
 #include <mon_ingress_ring.h>
 #include <mon_destination_ring.h>
 #include <mon_drop.h>
@@ -31,6 +32,7 @@
 #include <hal_api_mon.h>
 
 #if defined(WLAN_PKT_CAPTURE_TX_2_0) || \
+defined(WLAN_PKT_CAPTURE_RX_2_0) || \
 defined(QCA_SINGLE_WIFI_3_0)
 #define HAL_MON_BUFFER_ADDR_INFO_0_BUFFER_ADDR_31_0_OFFSET 0x00000000
 #define HAL_MON_BUFFER_ADDR_INFO_0_BUFFER_ADDR_31_0_LSB 0
@@ -73,6 +75,7 @@ defined(QCA_SINGLE_WIFI_3_0)
 		(HAL_MON_MON_INGRESS_RING_BUFFER_VIRT_ADDR_63_32_OFFSET >> 2))) = \
 		((vaddr_hi) << HAL_MON_MON_INGRESS_RING_BUFFER_VIRT_ADDR_63_32_LSB) & \
 		HAL_MON_MON_INGRESS_RING_BUFFER_VIRT_ADDR_63_32_MASK)
+#endif
 
 #define UNIFIED_RXPCU_PPDU_END_INFO_8_RX_PPDU_DURATION_OFFSET \
 	RXPCU_PPDU_END_INFO_RX_PPDU_DURATION_OFFSET
@@ -102,7 +105,7 @@ defined(QCA_SINGLE_WIFI_3_0)
 	PHYRX_RSSI_LEGACY_PRE_RSSI_INFO_DETAILS_RSSI_PRI20_CHAIN0_OFFSET
 #define UNIFIED_PHYRX_RSSI_LEGACY_19_RECEIVE_RSSI_INFO_PREAMBLE_RSSI_INFO_DETAILS_OFFSET \
 	PHYRX_RSSI_LEGACY_PREAMBLE_RSSI_INFO_DETAILS_RSSI_PRI20_CHAIN0_OFFSET
-#endif
+
 
 #define RX_MON_MPDU_START_WMASK               0x07F0
 #define RX_MON_MSDU_END_WMASK                 0x0AE1
@@ -707,7 +710,9 @@ struct hal_mon_buf_addr_status {
 	uint32_t tlv64_padding;
 };
 
-#ifdef WLAN_PKT_CAPTURE_TX_2_0
+#if defined(WLAN_PKT_CAPTURE_TX_2_0) || \
+defined(WLAN_PKT_CAPTURE_RX_2_0)
+
 /**
  * hal_be_get_mon_dest_status() - Get monitor descriptor status
  * @hal_soc: HAL Soc handle
@@ -949,7 +954,8 @@ hal_update_frame_type_cnt(hal_rx_mon_mpdu_start_t *rx_mpdu_start,
 }
 #endif
 
-#ifdef WLAN_PKT_CAPTURE_TX_2_0
+#if defined(WLAN_PKT_CAPTURE_TX_2_0) || \
+defined(WLAN_PKT_CAPTURE_RX_2_0)
 /**
  * hal_mon_buff_addr_info_set() - set desc address in cookie
  * @hal_soc_hdl: HAL Soc handle
@@ -975,6 +981,9 @@ void hal_mon_buff_addr_info_set(hal_soc_handle_t hal_soc_hdl,
 	HAL_MON_VADDR_LO_SET(mon_entry, vaddr_lo);
 	HAL_MON_VADDR_HI_SET(mon_entry, vaddr_hi);
 }
+#endif
+
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 
 /* TX monitor */
 #define TX_MON_STATUS_BUF_SIZE 2048
@@ -1472,7 +1481,6 @@ hal_txmon_get_word_mask(hal_soc_handle_t hal_soc_hdl,
 
 	return false;
 }
-#endif
 
 /**
  * hal_txmon_is_mon_buf_addr_tlv() - api to find packet buffer addr tlv
@@ -1512,6 +1520,7 @@ hal_txmon_populate_packet_info(hal_soc_handle_t hal_soc_hdl,
 
 	hal_soc->ops->hal_txmon_populate_packet_info(tx_tlv_hdr, packet_info);
 }
+#endif
 
 static inline uint32_t
 hal_rx_parse_u_sig_cmn(struct hal_soc *hal_soc, void *rx_tlv,

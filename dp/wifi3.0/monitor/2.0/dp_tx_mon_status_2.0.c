@@ -30,6 +30,8 @@
 
 #define MAX_PPDU_INFO_LIST_DEPTH 64
 
+#if defined(WLAN_TX_PKT_CAPTURE_ENH_BE) || defined(WLAN_PKT_CAPTURE_TX_2_0) ||\
+	defined(WLAN_TX_MON_CORE_DEBUG)
 void
 dp_tx_mon_status_free_packet_buf(struct dp_pdev *pdev,
 				 qdf_frag_t status_frag, uint32_t end_offset,
@@ -110,6 +112,7 @@ dp_tx_mon_status_free_packet_buf(struct dp_pdev *pdev,
 						   mon_pdev->is_tlv_hdr_64_bit);
 	} while ((tx_tlv - tx_tlv_start) < end_offset);
 }
+#endif
 
 #if defined(WLAN_TX_PKT_CAPTURE_ENH_BE) && defined(WLAN_PKT_CAPTURE_TX_2_0)
 /**
@@ -1935,8 +1938,9 @@ free_status_buffer:
 	return QDF_STATUS_E_NOMEM;
 }
 
-#else
+#endif
 
+#ifdef WLAN_TX_MON_CORE_DEBUG
 QDF_STATUS
 dp_tx_mon_process_status_tlv(struct dp_soc *soc,
 			     struct dp_pdev *pdev,
@@ -2013,4 +2017,3 @@ dp_tx_process_pktlog_be(struct dp_soc *soc, struct dp_pdev *pdev,
 	return QDF_STATUS_SUCCESS;
 }
 #endif
-

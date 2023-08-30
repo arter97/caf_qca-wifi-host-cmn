@@ -416,6 +416,7 @@ dp_rx_mon_enable_fpmo(uint32_t *msg_word,
 	}
 }
 
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 static void
 htt_tx_tlv_filter_mask_set_in0(uint32_t *msg_word,
 			       struct htt_tx_ring_tlv_filter *htt_tlv_filter)
@@ -988,7 +989,9 @@ htt_tx_tlv_filter_mask_set_in3(uint32_t *msg_word,
 							 MACTX_PRE_PHY_DESC,
 							 tlv->mactx_pre_phy_desc);
 }
+#endif
 
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 /*
  * dp_htt_h2t_send_complete_free_netbuf() - Free completed buffer
  * @soc:	SOC handl
@@ -1319,6 +1322,7 @@ fail1:
 fail0:
 	return QDF_STATUS_E_FAILURE;
 }
+#endif
 
 #ifdef QCA_ENHANCED_STATS_SUPPORT
 void dp_mon_filter_setup_enhanced_stats_2_0(struct dp_pdev *pdev)
@@ -1391,6 +1395,7 @@ dp_mon_filter_reset_undecoded_metadata_capture_2_0(struct dp_pdev *pdev)
 }
 #endif
 
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 static void dp_tx_mon_filter_set_downstream_tlvs(struct htt_tx_ring_tlv_filter *filter)
 {
 	filter->dtlvs.tx_fes_setup = 1;
@@ -1584,6 +1589,7 @@ void dp_mon_filter_reset_tx_mon_mode_2_0(struct dp_pdev *pdev)
 
 	mon_pdev_be->filter_be[mode][srng_type] = filter;
 }
+#endif
 
 static void dp_mon_filter_set_mon_2_0(struct dp_mon_pdev *mon_pdev,
 				      struct dp_mon_filter *filter)
@@ -1793,6 +1799,7 @@ static void dp_rx_mon_filter_show_filter(struct dp_mon_filter_be *filter)
 			    rx_tlv_filter->ctrl_dma_length);
 }
 
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 static void dp_tx_mon_filter_show_filter(struct dp_mon_filter_be *filter)
 {
 	struct htt_tx_ring_tlv_filter *tlv_filter = &filter->tx_tlv_filter;
@@ -2046,6 +2053,18 @@ static void dp_tx_mon_filter_show_filter(struct dp_mon_filter_be *filter)
 			    tlv_filter->wmask.rxpcu_user_setup);
 }
 
+void dp_mon_filter_show_tx_filter_be(enum dp_mon_filter_mode mode,
+				     struct dp_mon_filter_be *filter)
+{
+	DP_MON_FILTER_PRINT("TX MON RING TLV FILTER CONFIG:");
+	DP_MON_FILTER_PRINT("[Mode %d]: Valid: %d", mode, filter->tx_valid);
+
+	if (filter->tx_valid)
+		dp_tx_mon_filter_show_filter(filter);
+}
+
+#endif
+
 void dp_mon_filter_show_rx_filter_be(enum dp_mon_filter_mode mode,
 				     struct dp_mon_filter_be *filter)
 {
@@ -2055,16 +2074,6 @@ void dp_mon_filter_show_rx_filter_be(enum dp_mon_filter_mode mode,
 
 	if (filter->rx_tlv_filter.valid)
 		dp_rx_mon_filter_show_filter(filter);
-}
-
-void dp_mon_filter_show_tx_filter_be(enum dp_mon_filter_mode mode,
-				     struct dp_mon_filter_be *filter)
-{
-	DP_MON_FILTER_PRINT("TX MON RING TLV FILTER CONFIG:");
-	DP_MON_FILTER_PRINT("[Mode %d]: Valid: %d", mode, filter->tx_valid);
-
-	if (filter->tx_valid)
-		dp_tx_mon_filter_show_filter(filter);
 }
 
 #ifdef WDI_EVENT_ENABLE
@@ -2301,7 +2310,8 @@ void dp_mon_filter_reset_rx_pktlog_cbf_2_0(struct dp_pdev *pdev)
 	mon_pdev_be->filter_be[mode][srng_type] = filter;
 }
 
-#ifdef BE_PKTLOG_SUPPORT
+#if defined(BE_PKTLOG_SUPPORT) && \
+defined(WLAN_PKT_CAPTURE_TX_2_0)
 void dp_mon_filter_setup_pktlog_hybrid_2_0(struct dp_pdev *pdev)
 {
 	struct dp_mon_filter_be filter = {0};
@@ -2618,6 +2628,7 @@ dp_rx_mon_filter_h2t_setup(struct dp_soc *soc, struct dp_pdev *pdev,
 	}
 }
 
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 static
 void dp_tx_mon_downstream_tlv_set(struct htt_tx_ring_tlv_filter *dst_filter,
 				  struct htt_tx_ring_tlv_filter *src_filter)
@@ -3004,6 +3015,7 @@ QDF_STATUS dp_tx_mon_filter_update_2_0(struct dp_pdev *pdev)
 
 	return QDF_STATUS_SUCCESS;
 }
+#endif
 
 QDF_STATUS dp_rx_mon_filter_update_2_0(struct dp_pdev *pdev)
 {
@@ -3197,6 +3209,7 @@ dp_mon_filter_setup_rx_lite_mon(struct dp_mon_pdev_be *be_mon_pdev)
 	be_mon_pdev->filter_be[filter_mode][srng_type] = filter;
 }
 
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 uint8_t tx_lite_mon_set_len(uint16_t len)
 {
 	switch (len) {
@@ -3322,6 +3335,7 @@ dp_mon_filter_setup_tx_lite_mon(struct dp_pdev *pdev)
 	dp_mon_filter_show_tx_filter_be(mode, &filter);
 	be_mon_pdev->filter_be[mode][srng_type] = filter;
 }
+#endif /* WLAN_PKT_CAPTURE_TX_2_0 */
 #endif /* QCA_SUPPORT_LITE_MONITOR */
 
 #if defined(WLAN_CFR_ENABLE) && defined(WLAN_ENH_CFR_ENABLE)
@@ -3413,7 +3427,8 @@ void dp_cfr_filter_register_2_0(struct cdp_ops *ops)
 	ops->mon_ops->txrx_cfr_filter = dp_cfr_filter_2_0;
 }
 
-#ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
+#if defined(WLAN_FEATURE_LOCAL_PKT_CAPTURE) && \
+defined(WLAN_PKT_CAPTURE_TX_2_0)
 void dp_mon_filter_setup_local_pkt_capture_tx(struct dp_pdev *pdev)
 {
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
@@ -3489,5 +3504,5 @@ void dp_mon_filter_reset_local_pkt_capture_tx(struct dp_pdev *pdev)
 	filter.tx_valid = true;
 	mon_pdev_be->filter_be[mode][srng_type] = filter;
 }
-#endif /* WLAN_FEATURE_LOCAL_PKT_CAPTURE */
+#endif /* WLAN_FEATURE_LOCAL_PKT_CAPTURE && WLAN_PKT_CAPTURE_TX_2_0 */
 #endif

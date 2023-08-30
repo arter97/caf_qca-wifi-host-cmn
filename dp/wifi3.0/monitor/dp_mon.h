@@ -555,7 +555,7 @@ bool dp_ppdu_stats_ind_handler(struct htt_soc *soc,
 			       qdf_nbuf_t htt_t2h_msg);
 #endif
 
-#if defined(QCA_ENHANCED_STATS_SUPPORT) && \
+#if defined(QCA_ENHANCED_STATS_SUPPORT) || \
 	(!defined(WLAN_TX_PKT_CAPTURE_ENH) || defined(WLAN_PKT_CAPTURE_TX_2_0))
 /**
  * dp_ppdu_desc_deliver(): Function to deliver Tx PPDU status descriptor
@@ -4401,7 +4401,15 @@ QDF_STATUS dp_pdev_mon_rings_alloc_2_0(struct dp_pdev *pdev);
  * return: void
  */
 void dp_mon_ops_register_tx_2_0(struct dp_mon_soc *mon_soc);
+#else
+static inline
+void dp_mon_ops_register_tx_2_0(struct dp_mon_soc *mon_soc)
+{
+}
+#endif /* WLAN_PKT_CAPTURE_TX_2_0 */
 
+#if defined(WLAN_PKT_CAPTURE_TX_2_0) || \
+defined(WLAN_PKT_CAPTURE_RX_2_0)
 /**
  * dp_mon_ops_register_2_0(): register monitor ops
  * @mon_soc: monitor soc handle
@@ -4427,12 +4435,23 @@ void dp_mon_cdp_ops_register_2_0(struct cdp_ops *ops);
  */
 void dp_cfr_filter_register_2_0(struct cdp_ops *ops);
 #endif
+void dp_mon_ops_register_cmn_2_0(struct dp_mon_soc *mon_soc);
 #else
-static inline
-void dp_mon_ops_register_tx_2_0(struct dp_mon_soc *mon_soc)
+static inline void
+dp_mon_ops_register_2_0(struct dp_mon_soc *mon_soc)
 {
 }
-#endif /* WLAN_PKT_CAPTURE_TX_2_0 */
+
+static inline void
+dp_mon_cdp_ops_register_2_0(struct cdp_ops *ops)
+{
+}
+
+static inline void
+dp_mon_ops_register_cmn_2_0(struct dp_mon_soc *mon_soc)
+{
+}
+#endif /* WLAN_PKT_CAPTURE_TX_2_0 OR WLAN_PKT_CAPTURE_RX_2_0 */
 
 #ifdef WLAN_PKT_CAPTURE_RX_2_0
 /**

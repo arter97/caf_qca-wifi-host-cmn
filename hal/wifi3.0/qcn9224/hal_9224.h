@@ -39,7 +39,8 @@
 #include <uniform_reo_status_header.h>
 #include <wbm_release_ring_tx.h>
 #include <phyrx_location.h>
-#ifdef WLAN_PKT_CAPTURE_TX_2_0
+#if defined(WLAN_PKT_CAPTURE_TX_2_0) || \
+defined(WLAN_PKT_CAPTURE_RX_2_0)
 #include <mon_ingress_ring.h>
 #include <mon_destination_ring.h>
 #endif

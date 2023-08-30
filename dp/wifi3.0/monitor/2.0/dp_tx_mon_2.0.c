@@ -1465,7 +1465,7 @@ void dp_tx_ppdu_stats_detach_2_0(struct dp_pdev *pdev)
 }
 #endif /* WLAN_TX_PKT_CAPTURE_ENH_BE */
 
-#if (defined(WIFI_MONITOR_SUPPORT) && !defined(WLAN_TX_PKT_CAPTURE_ENH_BE))
+#if (defined(WIFI_MONITOR_SUPPORT) && defined(WLAN_TX_MON_CORE_DEBUG))
 /*
  * dp_config_enh_tx_core_monitor_2_0()- API to validate core framework
  * @pdev_handle: DP_PDEV handle
