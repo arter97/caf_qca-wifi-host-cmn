@@ -575,6 +575,7 @@ union ce_srng_desc {
  * @HIF_IRQ_EVENT: event recorded in the irq before scheduling the bh
  * @HIF_CE_TASKLET_ENTRY: records the start of the ce_tasklet
  * @HIF_CE_TASKLET_RESCHEDULE: records the rescheduling of the wlan_tasklet
+ * @HIF_CE_TASKLET_REAP_REPOLL: records the repoll of the wlan_tasklet
  * @HIF_CE_TASKLET_EXIT: records the exit of the wlan tasklet without reschedule
  * @HIF_CE_REAP_ENTRY: records when we process completion outside of a bh
  * @HIF_CE_REAP_EXIT:  records when we process completion outside of a bh
@@ -611,6 +612,7 @@ enum hif_ce_event_type {
 	HIF_IRQ_EVENT = 0x10,
 	HIF_CE_TASKLET_ENTRY,
 	HIF_CE_TASKLET_RESCHEDULE,
+	HIF_CE_TASKLET_REAP_REPOLL,
 	HIF_CE_TASKLET_EXIT,
 	HIF_CE_REAP_ENTRY,
 	HIF_CE_REAP_EXIT,
