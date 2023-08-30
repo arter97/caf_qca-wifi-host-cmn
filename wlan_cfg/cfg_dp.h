@@ -565,6 +565,10 @@
 #define WLAN_CFG_TX_CAPT_2_RBM_DEFAULT 2
 #define WLAN_CFG_TX_CAPT_3_RBM_DEFAULT 3
 
+#define WLAN_CFG_DP_AVG_RATE_FILTER_MIN 0
+#define WLAN_CFG_DP_AVG_RATE_FILTER_MAX 11000
+#define WLAN_CFG_DP_AVG_RATE_FILTER_DEFAULT 0
+
 /*
  * <ini>
  * "dp_tx_capt_max_mem_mb"- maximum memory used by Tx capture
@@ -1581,6 +1585,14 @@
 		WLAN_CFG_DP_NAPI_SCALE_FACTOR, \
 		CFG_VALUE_OR_DEFAULT, "NAPI scale factor for DP")
 
+#define CFG_DP_STATS_AVG_RATE_FILTER \
+		CFG_INI_UINT("dp_stats_avg_rate_filter_val", \
+		WLAN_CFG_DP_AVG_RATE_FILTER_MIN,\
+		WLAN_CFG_DP_AVG_RATE_FILTER_MAX, \
+		WLAN_CFG_DP_AVG_RATE_FILTER_DEFAULT, \
+		CFG_VALUE_OR_DEFAULT, \
+		"Average Rate filter for stats")
+
 /*
  * <ini>
  * legacy_mode_csum_disable - Disable csum offload for legacy 802.11abg modes
@@ -2190,5 +2202,6 @@
 		CFG(CFG_DP_TX_CAPT_RADIO_2_RBM_ID) \
 		CFG(CFG_DP_TX_CAPT_RADIO_3_RBM_ID) \
 		CFG_DP_UMAC_RESET_BUFFER_WINDOW_CFG \
-		CFG(CFG_DP_RX_BUFFER_SIZE)
+		CFG(CFG_DP_RX_BUFFER_SIZE) \
+		CFG(CFG_DP_STATS_AVG_RATE_FILTER)
 #endif /* _CFG_DP_H_ */
