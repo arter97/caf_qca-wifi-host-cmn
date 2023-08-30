@@ -522,6 +522,13 @@ struct wlan_lmac_if_reg_tx_ops *reg_get_psoc_tx_ops(
 	struct wlan_objmgr_psoc *psoc);
 
 /**
+ * afc_get_psoc_tx_ops() - Get AFC tx ops
+ * @psoc: Pointer to psoc structure
+ */
+struct wlan_lmac_if_afc_tx_ops *afc_get_psoc_tx_ops(
+	struct wlan_objmgr_psoc *psoc);
+
+/**
  * reg_is_24ghz_ch_freq() - Check if the given channel frequency is 2.4GHz
  * @freq: Channel frequency
  *

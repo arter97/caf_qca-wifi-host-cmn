@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -71,5 +71,15 @@ int wlan_cfg80211_afc_send_request(struct wlan_objmgr_pdev *pdev,
 int
 wlan_cfg80211_afc_send_update_complete(struct wlan_objmgr_pdev *pdev,
 				       struct reg_fw_afc_power_event *afc_evt);
+
+/**
+ * wlan_cfg80211_afc_payload_reset_update_complete() - To handle payload reset
+ * update event from regulatory AFC component.
+ * @pdev: Pointer to PDEV object
+ *
+ * Return: 0 on success, negative errno on failure
+ */
+int
+wlan_cfg80211_afc_payload_reset_update_complete(struct wlan_objmgr_pdev *pdev);
 #endif
 #endif

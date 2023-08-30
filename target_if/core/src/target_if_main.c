@@ -611,6 +611,7 @@ void target_if_twt_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
 static
 QDF_STATUS target_if_register_umac_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 {
+	target_if_register_afc_tx_ops(tx_ops);
 	/* call regulatory callback to register tx ops */
 	target_if_register_regulatory_tx_ops(tx_ops);
 

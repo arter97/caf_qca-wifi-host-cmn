@@ -34,6 +34,14 @@
 QDF_STATUS tgt_if_regulatory_modify_freq_range(struct wlan_objmgr_psoc *psoc);
 
 /**
+ * target_if_register_afc_tx_ops() - register afc tx ops
+ * @tx_ops: tx_ops pointer
+ *
+ * Return: Success or Failure
+ */
+QDF_STATUS target_if_register_afc_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops);
+
+/**
  * target_if_register_regulatory_tx_ops() - register regulatory tx ops
  * @tx_ops: tx_ops pointer
  *

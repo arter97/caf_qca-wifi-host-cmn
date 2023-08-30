@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -30,11 +30,13 @@
  * @afc_rsp_cp_func: AFC callback function to pass AFC response data to target
  * @afc_req_func: AFC callback function to send AFC request
  * @afc_updated_func: AFC callback function to send AFC update complete event
+ * @afc_payload_func: AFC callback function to send AFC payload reset event
  */
 struct wlan_afc_callbacks {
 	send_response_to_afcmem afc_rsp_cp_func;
 	osif_send_afc_request afc_req_func;
 	osif_send_afc_power_update_complete afc_updated_func;
+	osif_send_afc_payload_reset afc_payload_func;
 };
 
 /**

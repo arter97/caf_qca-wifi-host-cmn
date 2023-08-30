@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -97,6 +97,16 @@ typedef int
 typedef int
 (*osif_send_afc_power_update_complete)(struct wlan_objmgr_pdev *pdev,
 				       struct reg_fw_afc_power_event *afc_pwr_evt);
+
+/**
+ * typedef osif_send_afc_payload_reset() - Function prototype of sending
+ * AFC payload reset event to osif.
+ * @pdev: Pointer to PDEV object
+ *
+ * Return: 0 if success, otherwise failure
+ */
+typedef int
+(*osif_send_afc_payload_reset)(struct wlan_objmgr_pdev *pdev);
 
 /**
  * wlan_afc_data_send() - Function to send AFC response through platform

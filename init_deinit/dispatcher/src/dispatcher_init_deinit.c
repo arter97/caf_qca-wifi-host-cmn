@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -27,6 +27,7 @@
 #include <wlan_mgmt_txrx_utils_api.h>
 #include <wlan_serialization_api.h>
 #include "wlan_psoc_mlme_api.h"
+#include <wlan_afc_ucfg_api.h>
 #include <include/wlan_mlme_cmn.h>
 #include "cdp_txrx_cmn.h"
 #ifdef WLAN_ATF_ENABLE
@@ -368,6 +369,16 @@ static QDF_STATUS dispatcher_regulatory_init(void)
 static QDF_STATUS dispatcher_regulatory_deinit(void)
 {
 	return wlan_regulatory_deinit();
+}
+
+static QDF_STATUS dispatcher_afc_init(void)
+{
+	return ucfg_afc_init();
+}
+
+static QDF_STATUS dispatcher_afc_deinit(void)
+{
+	return ucfg_afc_deinit();
 }
 
 static QDF_STATUS dispatcher_regulatory_psoc_open(struct wlan_objmgr_psoc
@@ -1146,6 +1157,9 @@ QDF_STATUS dispatcher_init(void)
 	if (QDF_STATUS_SUCCESS != dispatcher_regulatory_init())
 		goto regulatory_init_fail;
 
+	if (QDF_STATUS_SUCCESS != dispatcher_afc_init())
+		goto afc_init_fail;
+
 	if (QDF_STATUS_SUCCESS != dispatcher_offchan_txrx_init())
 		goto offchan_init_fail;
 
@@ -1237,6 +1251,8 @@ splitmac_init_fail:
 son_init_fail:
 	dispatcher_offchan_txrx_deinit();
 offchan_init_fail:
+	dispatcher_afc_deinit();
+afc_init_fail:
 	dispatcher_regulatory_deinit();
 regulatory_init_fail:
 	dispatcher_deinit_dfs();
@@ -1308,6 +1324,8 @@ QDF_STATUS dispatcher_deinit(void)
 	QDF_BUG(QDF_STATUS_SUCCESS == dispatcher_deinit_son());
 
 	QDF_BUG(QDF_STATUS_SUCCESS == dispatcher_offchan_txrx_deinit());
+
+	QDF_BUG(QDF_STATUS_SUCCESS == dispatcher_afc_deinit());
 
 	QDF_BUG(QDF_STATUS_SUCCESS == dispatcher_regulatory_deinit());
 

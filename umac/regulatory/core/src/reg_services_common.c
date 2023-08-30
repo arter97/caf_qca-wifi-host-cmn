@@ -1437,6 +1437,20 @@ struct wlan_lmac_if_reg_tx_ops *reg_get_psoc_tx_ops(
 	return &tx_ops->reg_ops;
 }
 
+struct wlan_lmac_if_afc_tx_ops *afc_get_psoc_tx_ops(
+		struct wlan_objmgr_psoc *psoc)
+{
+	struct wlan_lmac_if_tx_ops *tx_ops;
+
+	tx_ops = wlan_psoc_get_lmac_if_txops(psoc);
+	if (!tx_ops) {
+		reg_err("tx_ops is NULL");
+		return NULL;
+	}
+
+	return &tx_ops->afc_ops;
+}
+
 /**
  * reg_combine_channel_states() - Get minimum of channel state1 and state2
  * @chan_state1: Channel state1

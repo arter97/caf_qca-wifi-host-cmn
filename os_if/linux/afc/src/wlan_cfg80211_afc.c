@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -26,6 +26,9 @@
 #include <wlan_objmgr_pdev_obj.h>
 #include <wlan_osif_priv.h>
 #include <wlan_afc_ucfg_api.h>
+#include <reg_services_common.h>
+#include <wlan_lmac_if_def.h>
+#include <qdf_types.h>
 
 /* Maximum AFC data length can pass to target limited by platform driver */
 #define IF_AFC_RESPONSE_MAX_LEN  4096
@@ -133,6 +136,32 @@ wlan_cfg80211_afc_response_policy[QCA_WLAN_VENDOR_ATTR_AFC_RESP_MAX + 1] = {
 	if ((skb) && (start))				\
 		nla_nest_end(skb, start);		\
 } while (0)
+
+/**
+* afc_get_wireless_dev() - Function to extract struct wireless_dev pointer from pdev
+* @pdev: pdev object
+*
+* Return: If pdev is valid, return the netdev.
+* If pdev is invalid, return null.
+*/
+static
+struct wireless_dev *afc_get_wireless_dev(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_lmac_if_afc_tx_ops *afc_tx_ops;
+	struct wlan_objmgr_psoc *psoc;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	afc_tx_ops = afc_get_psoc_tx_ops(psoc);
+	if (afc_tx_ops && afc_tx_ops->extract_netdev) {
+		qdf_netdev_t dev;
+
+		dev = afc_tx_ops->extract_netdev(pdev);
+		if (dev)
+			return dev->ieee80211_ptr;
+	}
+
+	return NULL;
+}
 
 /**
  * afc_expiry_event_update_or_get_len() - Function to fill vendor event buffer
@@ -555,10 +584,11 @@ int wlan_cfg80211_afc_send_request(struct wlan_objmgr_pdev *pdev,
 	vendor_buffer_len = afc_expiry_event_update_or_get_len(NULL, afc_req);
 
 	vendor_event = wlan_cfg80211_vendor_event_alloc(osif_priv->wiphy,
-							NULL,
+							afc_get_wireless_dev(pdev),
 							vendor_buffer_len,
 							QCA_NL80211_VENDOR_SUBCMD_AFC_EVENT_INDEX,
 							GFP_ATOMIC);
+
 	if (!vendor_event) {
 		osif_err("cfg80211 vendor event alloc failed");
 		return -ENOMEM;
@@ -572,6 +602,65 @@ int wlan_cfg80211_afc_send_request(struct wlan_objmgr_pdev *pdev,
 	}
 
 	osif_debug("Sending AFC expiry event to user application");
+	wlan_cfg80211_vendor_event(vendor_event, GFP_ATOMIC);
+
+	return 0;
+
+fail:
+	wlan_cfg80211_vendor_free_skb(vendor_event);
+	return -EINVAL;
+}
+
+/**
+ *  afc_payload_reset_evt_get_data_len: Get the AFC payload resent event data
+ *  length.
+ *
+ *  Return: Data length.
+ */
+static int afc_payload_reset_evt_get_data_len(void)
+{
+	uint32_t len = NLMSG_HDRLEN;
+
+	len += nla_total_size(sizeof(u8));
+	len = nla_total_size(len);
+
+	return len;
+}
+
+int
+wlan_cfg80211_afc_payload_reset_update_complete(struct wlan_objmgr_pdev *pdev)
+{
+	struct sk_buff *vendor_event;
+	struct pdev_osif_priv *osif_priv;
+	int vendor_buffer_len;
+
+	osif_priv = wlan_pdev_get_ospriv(pdev);
+	if (!osif_priv) {
+		osif_err("PDEV OS private structure is NULL");
+		return -EINVAL;
+	}
+
+	vendor_buffer_len = afc_payload_reset_evt_get_data_len();
+
+	vendor_event = wlan_cfg80211_vendor_event_alloc(osif_priv->wiphy,
+							afc_get_wireless_dev(pdev),
+							vendor_buffer_len,
+							QCA_NL80211_VENDOR_SUBCMD_AFC_EVENT_INDEX,
+							GFP_ATOMIC);
+
+	if (!vendor_event) {
+		osif_err("cfg80211 vendor event alloc failed");
+		return -ENOMEM;
+	}
+
+	if (nla_put_u8(vendor_event,
+		       QCA_WLAN_VENDOR_ATTR_AFC_EVENT_TYPE,
+		       QCA_WLAN_VENDOR_AFC_EVENT_TYPE_PAYLOAD_RESET)) {
+		osif_err("AFC payload reset complete event type put fail");
+		goto fail;
+	}
+
+	osif_debug("Sending AFC payload reset complete event to user application");
 	wlan_cfg80211_vendor_event(vendor_event, GFP_ATOMIC);
 
 	return 0;
@@ -603,10 +692,11 @@ wlan_cfg80211_afc_send_update_complete(struct wlan_objmgr_pdev *pdev,
 	vendor_buffer_len = afc_power_event_update_or_get_len(NULL, afc_evt);
 
 	vendor_event = wlan_cfg80211_vendor_event_alloc(osif_priv->wiphy,
-							NULL,
+							afc_get_wireless_dev(pdev),
 							vendor_buffer_len,
 							QCA_NL80211_VENDOR_SUBCMD_AFC_EVENT_INDEX,
 							GFP_ATOMIC);
+
 	if (!vendor_event) {
 		osif_err("cfg80211 vendor event alloc failed");
 		return -ENOMEM;

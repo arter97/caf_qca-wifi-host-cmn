@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -81,6 +81,24 @@ wlan_send_afc_power_event(struct wlan_objmgr_pdev *pdev,
 		afc_priv->cbs.afc_updated_func(pdev, afc_pwr_evt);
 }
 
+static void
+wlan_send_afc_payload_reset(struct wlan_objmgr_pdev *pdev, void *arg)
+{
+	struct wlan_objmgr_psoc *psoc;
+	struct wlan_afc_psoc_priv *afc_priv;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+
+	afc_priv = afc_psoc_priv(psoc);
+	if (!afc_priv) {
+		afc_err("psoc AFC private null");
+		return;
+	}
+
+	if (afc_priv->cbs.afc_payload_func)
+		afc_priv->cbs.afc_payload_func(pdev);
+}
+
 int wlan_afc_data_send(struct wlan_objmgr_psoc *psoc,
 		       struct wlan_objmgr_pdev *pdev,
 		       struct wlan_afc_host_resp *data,
@@ -141,6 +159,7 @@ wlan_afc_psoc_created_notification(struct wlan_objmgr_psoc *psoc,
 	afc_priv->psoc = psoc;
 	afc_priv->cbs.afc_req_func = wlan_cfg80211_afc_send_request;
 	afc_priv->cbs.afc_updated_func = wlan_cfg80211_afc_send_update_complete;
+	afc_priv->cbs.afc_payload_func = wlan_cfg80211_afc_payload_reset_update_complete;
 
 	return status;
 }
@@ -193,6 +212,17 @@ wlan_afc_pdev_obj_create_handler(struct wlan_objmgr_pdev *pdev,
 		return status;
 	}
 
+	status = ucfg_reg_register_afc_payload_reset_event_callback(pdev,
+								    wlan_send_afc_payload_reset,
+								    NULL);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		afc_err("Failed to register AFC power callback");
+		ucfg_reg_unregister_afc_req_rx_callback(pdev,
+							wlan_send_afc_request);
+		ucfg_reg_unregister_afc_power_event_callback(pdev,
+							     wlan_send_afc_power_event);
+		return status;
+	}
 	return status;
 }
 
@@ -203,6 +233,8 @@ wlan_afc_pdev_obj_destroy_handler(struct wlan_objmgr_pdev *pdev, void *arg)
 						wlan_send_afc_request);
 	ucfg_reg_unregister_afc_power_event_callback(pdev,
 						     wlan_send_afc_power_event);
+	ucfg_reg_unregister_afc_payload_reset_event_callback(pdev,
+							     wlan_send_afc_payload_reset);
 
 	return QDF_STATUS_SUCCESS;
 }

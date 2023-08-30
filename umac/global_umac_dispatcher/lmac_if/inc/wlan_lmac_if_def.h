@@ -1245,6 +1245,15 @@ struct wlan_lmac_if_reg_tx_ops {
 };
 
 /**
+ * struct wlan_lmac_if_afc_tx_ops - structure of tx function
+ *                  pointers for AFC component
+ * @extract_netdev:  extract wireless dev from pdev object.
+ */
+struct wlan_lmac_if_afc_tx_ops {
+      qdf_netdev_t (*extract_netdev)(struct wlan_objmgr_pdev *pdev);
+};
+
+/**
  * struct wlan_lmac_if_dfs_tx_ops - Function pointer to call offload/lmac
  *                                  functions from DFS module.
  * @dfs_enable:                         Enable DFS.
@@ -1849,6 +1858,7 @@ struct wlan_lmac_if_sawf_tx_ops {
  * @crypto_tx_ops: Crypto tx ops
  * @wifi_pos_tx_ops: WiFi Positioning tx ops
  * @reg_ops: Regulatory tx ops
+ * @afc_ops: AFC tx ops
  * @dfs_tx_ops: dfs tx ops.
  * @tdls_tx_ops: TDLS tx ops
  * @fd_tx_ops: FILS tx ops
@@ -1917,6 +1927,7 @@ struct wlan_lmac_if_tx_ops {
 	struct wlan_lmac_if_wifi_pos_tx_ops wifi_pos_tx_ops;
 #endif
 	struct wlan_lmac_if_reg_tx_ops reg_ops;
+	struct wlan_lmac_if_afc_tx_ops afc_ops;
 	struct wlan_lmac_if_dfs_tx_ops dfs_tx_ops;
 
 #ifdef FEATURE_WLAN_TDLS
