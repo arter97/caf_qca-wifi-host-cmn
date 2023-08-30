@@ -1440,11 +1440,21 @@ bool wlan_cm_is_eht_allowed_for_current_security(
 		return false;
 	}
 
-	/* check AKM chosen for connection is PSK */
-	if (WLAN_CRYPTO_IS_AKM_WPA2_PSK(scan_entry->neg_sec_info.key_mgmt)) {
+	if (!(scan_entry->neg_sec_info.rsn_caps &
+	      WLAN_CRYPTO_RSN_CAP_MFP_ENABLED)) {
+		mlme_debug(QDF_MAC_ADDR_FMT " MFPC bit of RSN IE not present",
+			   QDF_MAC_ADDR_REF(scan_entry->bssid.bytes));
+		return false;
+	}
+
+	if (WLAN_CRYPTO_IS_AKM_ENTERPRISE(scan_entry->neg_sec_info.key_mgmt))
+		return true;
+
+	/* Return from here if none of AKM in list is WPA3 AKM */
+	if (!WLAN_CRYPTO_IS_WPA3(scan_entry->neg_sec_info.key_mgmt)) {
 		mlme_debug(QDF_MAC_ADDR_FMT ": AKM 0x%x not valid",
 			   QDF_MAC_ADDR_REF(scan_entry->bssid.bytes),
-					    scan_entry->neg_sec_info.key_mgmt);
+			   scan_entry->neg_sec_info.key_mgmt);
 		return false;
 	}
 
@@ -1457,7 +1467,7 @@ bool wlan_cm_is_eht_allowed_for_current_security(
 
 	rsnxe = util_scan_entry_rsnxe(scan_entry);
 	if (!rsnxe) {
-		mlme_debug(QDF_MAC_ADDR_FMT ": AKM 0x%x not valid",
+		mlme_debug(QDF_MAC_ADDR_FMT ":RSNXE not present, AKM 0x%x",
 			   QDF_MAC_ADDR_REF(scan_entry->bssid.bytes),
 					    scan_entry->neg_sec_info.key_mgmt);
 		return false;
