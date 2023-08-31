@@ -8191,7 +8191,7 @@ static QDF_STATUS dp_get_pdev_param(struct cdp_soc_t *cdp_soc, uint8_t pdev_id,
 	switch (param) {
 	case CDP_CONFIG_VOW:
 		val->cdp_pdev_param_cfg_vow =
-				((struct dp_pdev *)pdev)->delay_stats_flag;
+				((struct dp_pdev *)pdev)->vow_stats;
 		break;
 	case CDP_TX_PENDING:
 		val->cdp_pdev_param_tx_pending = dp_get_tx_pending(pdev);
@@ -8219,6 +8219,10 @@ static QDF_STATUS dp_get_pdev_param(struct cdp_soc_t *cdp_soc, uint8_t pdev_id,
 	case CDP_CONFIG_RXDMA_BUF_RING_SIZE:
 		val->cdp_rxdma_buf_ring_size =
 			wlan_cfg_get_rx_dma_buf_ring_size(((struct dp_pdev *)pdev)->wlan_cfg_ctx);
+		break;
+	case CDP_CONFIG_DELAY_STATS:
+		val->cdp_pdev_param_cfg_delay_stats =
+				((struct dp_pdev *)pdev)->delay_stats_flag;
 		break;
 	default:
 		return QDF_STATUS_E_FAILURE;
@@ -8356,6 +8360,9 @@ static QDF_STATUS dp_set_pdev_param(struct cdp_soc_t *cdp_soc, uint8_t pdev_id,
 	case CDP_CONFIG_RXDMA_BUF_RING_SIZE:
 		wlan_cfg_set_rx_dma_buf_ring_size(pdev->wlan_cfg_ctx,
 						  val.cdp_rxdma_buf_ring_size);
+		break;
+	case CDP_CONFIG_VOW:
+		pdev->vow_stats = val.cdp_pdev_param_cfg_vow;
 		break;
 	default:
 		return QDF_STATUS_E_INVAL;
@@ -9070,6 +9077,9 @@ static QDF_STATUS dp_get_psoc_param(struct cdp_soc_t *cdp_soc,
 	wlan_cfg_ctx = soc->wlan_cfg_ctx;
 
 	switch (param) {
+	case CDP_ENABLE_RATE_STATS:
+		val->cdp_psoc_param_en_rate_stats = soc->peerstats_enabled;
+		break;
 	case CDP_CFG_PEER_EXT_STATS:
 		val->cdp_psoc_param_pext_stats =
 			wlan_cfg_is_peer_ext_stats_enabled(wlan_cfg_ctx);
@@ -9128,6 +9138,10 @@ static QDF_STATUS dp_get_psoc_param(struct cdp_soc_t *cdp_soc,
 		break;
 	case CDP_CFG_GET_MLO_OPER_MODE:
 		val->cdp_psoc_param_mlo_oper_mode = dp_get_mldev_mode(soc);
+		break;
+	case CDP_CFG_PEER_JITTER_STATS:
+		val->cdp_psoc_param_jitter_stats =
+			wlan_cfg_is_peer_jitter_stats_enabled(soc->wlan_cfg_ctx);
 		break;
 	default:
 		dp_warn("Invalid param: %u", param);
@@ -14382,6 +14396,11 @@ static QDF_STATUS dp_pdev_init(struct cdp_soc_t *txrx_soc,
 
 	dp_init_tso_stats(pdev);
 	dp_init_link_peer_stats_enabled(pdev);
+
+	/* Initialize dp tx fast path flag */
+	pdev->tx_fast_flag = DP_TX_DESC_FLAG_SIMPLE;
+	if (soc->hw_txrx_stats_en)
+		pdev->tx_fast_flag |= DP_TX_DESC_FLAG_FASTPATH_SIMPLE;
 
 	pdev->rx_fast_flag = false;
 	dp_info("Mem stats: DMA = %u HEAP = %u SKB = %u",

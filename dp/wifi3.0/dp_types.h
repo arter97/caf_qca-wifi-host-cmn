@@ -3552,6 +3552,9 @@ struct dp_pdev {
 	uint8_t enhanced_stats_en:1,
 		link_peer_stats:1;
 
+	/* Flag to indicate fast path Tx flags */
+	uint32_t tx_fast_flag;
+
 	/* Flag to indicate fast RX */
 	bool rx_fast_flag;
 
@@ -3675,6 +3678,8 @@ struct dp_pdev {
 
 	/* enable calculation of delay stats*/
 	bool delay_stats_flag;
+	/* vow stats */
+	bool vow_stats;
 	void *dp_txrx_handle; /* Advanced data path handle */
 	uint32_t ppdu_id;
 	bool first_nbuf;
