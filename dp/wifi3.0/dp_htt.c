@@ -2970,8 +2970,10 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 				 REO_EXCEPTION,
 				 &soc_srngs_state->ring_state[j]);
 
-	if (status == QDF_STATUS_SUCCESS)
-		qdf_assert_always(++j < DP_MAX_SRNGS);
+	if (status == QDF_STATUS_SUCCESS) {
+		j++;
+		qdf_assert_always(j < DP_MAX_SRNGS);
+	}
 
 	status = dp_get_srng_ring_state_from_hal
 				(pdev->soc, pdev,
@@ -2979,8 +2981,10 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 				 REO_REINJECT,
 				 &soc_srngs_state->ring_state[j]);
 
-	if (status == QDF_STATUS_SUCCESS)
-		qdf_assert_always(++j < DP_MAX_SRNGS);
+	if (status == QDF_STATUS_SUCCESS) {
+		j++;
+		qdf_assert_always(j < DP_MAX_SRNGS);
+	}
 
 	status = dp_get_srng_ring_state_from_hal
 				(pdev->soc, pdev,
@@ -2988,8 +2992,10 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 				 REO_CMD,
 				 &soc_srngs_state->ring_state[j]);
 
-	if (status == QDF_STATUS_SUCCESS)
-		qdf_assert_always(++j < DP_MAX_SRNGS);
+	if (status == QDF_STATUS_SUCCESS) {
+		j++;
+		qdf_assert_always(j < DP_MAX_SRNGS);
+	}
 
 	status = dp_get_srng_ring_state_from_hal
 				(pdev->soc, pdev,
@@ -2997,8 +3003,10 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 				 REO_STATUS,
 				 &soc_srngs_state->ring_state[j]);
 
-	if (status == QDF_STATUS_SUCCESS)
-		qdf_assert_always(++j < DP_MAX_SRNGS);
+	if (status == QDF_STATUS_SUCCESS) {
+		j++;
+		qdf_assert_always(j < DP_MAX_SRNGS);
+	}
 
 	status = dp_get_srng_ring_state_from_hal
 				(pdev->soc, pdev,
@@ -3006,18 +3014,24 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 				 WBM2SW_RELEASE,
 				 &soc_srngs_state->ring_state[j]);
 
-	if (status == QDF_STATUS_SUCCESS)
-		qdf_assert_always(++j < DP_MAX_SRNGS);
+	if (status == QDF_STATUS_SUCCESS) {
+		j++;
+		qdf_assert_always(j < DP_MAX_SRNGS);
+	}
 
 	status = dp_get_tcl_cmd_cred_ring_state_from_hal
 				(pdev, &soc_srngs_state->ring_state[j]);
-	if (status == QDF_STATUS_SUCCESS)
-		qdf_assert_always(++j < DP_MAX_SRNGS);
+	if (status == QDF_STATUS_SUCCESS) {
+		j++;
+		qdf_assert_always(j < DP_MAX_SRNGS);
+	}
 
 	status = dp_get_tcl_status_ring_state_from_hal
 				(pdev, &soc_srngs_state->ring_state[j]);
-	if (status == QDF_STATUS_SUCCESS)
-		qdf_assert_always(++j < DP_MAX_SRNGS);
+	if (status == QDF_STATUS_SUCCESS) {
+		j++;
+		qdf_assert_always(j < DP_MAX_SRNGS);
+	}
 
 	status = dp_get_srng_ring_state_from_hal
 				(pdev->soc, pdev,
@@ -3025,8 +3039,10 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 				 SW2WBM_RELEASE,
 				 &soc_srngs_state->ring_state[j]);
 
-	if (status == QDF_STATUS_SUCCESS)
-		qdf_assert_always(++j < DP_MAX_SRNGS);
+	if (status == QDF_STATUS_SUCCESS) {
+		j++;
+		qdf_assert_always(j < DP_MAX_SRNGS);
+	}
 
 	for (i = 0; i < MAX_REO_DEST_RINGS; i++) {
 		status = dp_get_srng_ring_state_from_hal
@@ -3035,8 +3051,10 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 				 REO_DST,
 				 &soc_srngs_state->ring_state[j]);
 
-		if (status == QDF_STATUS_SUCCESS)
-			qdf_assert_always(++j < DP_MAX_SRNGS);
+		if (status == QDF_STATUS_SUCCESS) {
+			j++;
+			qdf_assert_always(j < DP_MAX_SRNGS);
+		}
 	}
 
 	for (i = 0; i < pdev->soc->num_tcl_data_rings; i++) {
@@ -3046,8 +3064,10 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 				 TCL_DATA,
 				 &soc_srngs_state->ring_state[j]);
 
-		if (status == QDF_STATUS_SUCCESS)
-			qdf_assert_always(++j < DP_MAX_SRNGS);
+		if (status == QDF_STATUS_SUCCESS) {
+			j++;
+			qdf_assert_always(j < DP_MAX_SRNGS);
+		}
 	}
 
 	for (i = 0; i < MAX_TCL_DATA_RINGS; i++) {
@@ -3057,8 +3077,10 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 				 WBM2SW_RELEASE,
 				 &soc_srngs_state->ring_state[j]);
 
-		if (status == QDF_STATUS_SUCCESS)
-			qdf_assert_always(++j < DP_MAX_SRNGS);
+		if (status == QDF_STATUS_SUCCESS) {
+			j++;
+			qdf_assert_always(j < DP_MAX_SRNGS);
+		}
 	}
 
 	lmac_id = dp_get_lmac_id_for_pdev_id(pdev->soc, 0, pdev->pdev_id);
@@ -3069,8 +3091,10 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 				 RXDMA_BUF,
 				 &soc_srngs_state->ring_state[j]);
 
-	if (status == QDF_STATUS_SUCCESS)
-		qdf_assert_always(++j < DP_MAX_SRNGS);
+	if (status == QDF_STATUS_SUCCESS) {
+		j++;
+		qdf_assert_always(j < DP_MAX_SRNGS);
+	}
 
 	status = dp_get_srng_ring_state_from_hal
 				(pdev->soc, pdev,
@@ -3078,8 +3102,10 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 				 RXDMA_BUF,
 				 &soc_srngs_state->ring_state[j]);
 
-	if (status == QDF_STATUS_SUCCESS)
-		qdf_assert_always(++j < DP_MAX_SRNGS);
+	if (status == QDF_STATUS_SUCCESS) {
+		j++;
+		qdf_assert_always(j < DP_MAX_SRNGS);
+	}
 
 
 	for (i = 0; i < MAX_RX_MAC_RINGS; i++) {
@@ -3089,8 +3115,10 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 				 RXDMA_BUF,
 				 &soc_srngs_state->ring_state[j]);
 
-		if (status == QDF_STATUS_SUCCESS)
-			qdf_assert_always(++j < DP_MAX_SRNGS);
+		if (status == QDF_STATUS_SUCCESS) {
+			j++;
+			qdf_assert_always(j < DP_MAX_SRNGS);
+		}
 	}
 
 	for (mac_id = 0;
@@ -3108,8 +3136,10 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 			 RXDMA_MONITOR_STATUS,
 			 &soc_srngs_state->ring_state[j]);
 
-		if (status == QDF_STATUS_SUCCESS)
-			qdf_assert_always(++j < DP_MAX_SRNGS);
+		if (status == QDF_STATUS_SUCCESS) {
+			j++;
+			qdf_assert_always(j < DP_MAX_SRNGS);
+		}
 	}
 
 	for (i = 0; i < soc->wlan_cfg_ctx->num_rxdma_dst_rings_per_pdev; i++) {
@@ -3123,8 +3153,10 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 				 RXDMA_DST,
 				 &soc_srngs_state->ring_state[j]);
 
-		if (status == QDF_STATUS_SUCCESS)
-			qdf_assert_always(++j < DP_MAX_SRNGS);
+		if (status == QDF_STATUS_SUCCESS) {
+			j++;
+			qdf_assert_always(j < DP_MAX_SRNGS);
+		}
 	}
 	soc_srngs_state->max_ring_id = j;
 
