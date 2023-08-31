@@ -6665,6 +6665,7 @@ void dp_soc_tx_desc_sw_pools_free(struct dp_soc *soc)
 	dp_tx_tso_cmn_desc_pool_free(soc, num_pool);
 	dp_tx_ext_desc_pool_free(soc, num_ext_pool);
 	dp_tx_delete_static_pools(soc, num_pool);
+	dp_tx_spcl_delete_static_pools(soc, num_pool);
 }
 
 void dp_soc_tx_desc_sw_pools_deinit(struct dp_soc *soc)
@@ -6678,6 +6679,7 @@ void dp_soc_tx_desc_sw_pools_deinit(struct dp_soc *soc)
 	dp_tx_tso_cmn_desc_pool_deinit(soc, num_pool);
 	dp_tx_ext_desc_pool_deinit(soc, num_ext_pool);
 	dp_tx_deinit_static_pools(soc, num_pool);
+	dp_tx_spcl_deinit_static_pools(soc, num_pool);
 }
 #else
 void dp_soc_tx_desc_sw_pools_free(struct dp_soc *soc)
@@ -6687,6 +6689,7 @@ void dp_soc_tx_desc_sw_pools_free(struct dp_soc *soc)
 	num_pool = wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
 
 	dp_tx_delete_static_pools(soc, num_pool);
+	dp_tx_spcl_delete_static_pools(soc, num_pool);
 }
 
 void dp_soc_tx_desc_sw_pools_deinit(struct dp_soc *soc)
@@ -6697,6 +6700,7 @@ void dp_soc_tx_desc_sw_pools_deinit(struct dp_soc *soc)
 
 	dp_tx_flow_control_deinit(soc);
 	dp_tx_deinit_static_pools(soc, num_pool);
+	dp_tx_spcl_deinit_static_pools(soc, num_pool);
 }
 #endif /*WLAN_SOFTUMAC_SUPPORT*/
 
@@ -6901,7 +6905,7 @@ QDF_STATUS dp_soc_tx_desc_sw_pools_init(struct dp_soc *soc)
 	soc->process_tx_status = CONFIG_PROCESS_TX_STATUS;
 	return QDF_STATUS_SUCCESS;
 fail1:
-	dp_tx_delete_static_pools(soc, num_pool);
+	dp_tx_deinit_static_pools(soc, num_pool);
 fail:
 	return QDF_STATUS_E_RESOURCES;
 }

@@ -893,6 +893,7 @@ dp_tx_desc_alloc(struct dp_soc *soc, uint8_t desc_pool_id)
 static inline struct dp_tx_desc_s *dp_tx_spcl_desc_alloc(struct dp_soc *soc,
 							 uint8_t desc_pool_id)
 {
+	return NULL;
 }
 /**
  * dp_tx_desc_free() - Free a tx descriptor and attach it to free list
