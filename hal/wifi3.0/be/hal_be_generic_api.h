@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -2916,9 +2916,9 @@ static void hal_reo_shared_qaddr_write_be(hal_soc_handle_t hal_soc_hdl,
  *
  * @hal_soc: HAL Soc handle
  *
- * Return: None
+ * Return: QDF_STATUS_SUCCESS on success else a QDF error.
  */
-static void hal_reo_shared_qaddr_setup_be(hal_soc_handle_t hal_soc_hdl)
+static QDF_STATUS hal_reo_shared_qaddr_setup_be(hal_soc_handle_t hal_soc_hdl)
 {
 	struct hal_soc *hal = (struct hal_soc *)hal_soc_hdl;
 
@@ -2929,11 +2929,23 @@ static void hal_reo_shared_qaddr_setup_be(hal_soc_handle_t hal_soc_hdl)
 				hal->qdf_dev, hal->qdf_dev->dev,
 				REO_QUEUE_REF_ML_TABLE_SIZE,
 				&hal->reo_qref.mlo_reo_qref_table_paddr);
+	if (!hal->reo_qref.mlo_reo_qref_table_vaddr)
+		return QDF_STATUS_E_NOMEM;
+
 	hal->reo_qref.non_mlo_reo_qref_table_vaddr =
 		(uint64_t *)qdf_mem_alloc_consistent(
 				hal->qdf_dev, hal->qdf_dev->dev,
 				REO_QUEUE_REF_NON_ML_TABLE_SIZE,
 				&hal->reo_qref.non_mlo_reo_qref_table_paddr);
+	if (!hal->reo_qref.non_mlo_reo_qref_table_vaddr) {
+		qdf_mem_free_consistent(
+				hal->qdf_dev, hal->qdf_dev->dev,
+				REO_QUEUE_REF_ML_TABLE_SIZE,
+				hal->reo_qref.mlo_reo_qref_table_vaddr,
+				hal->reo_qref.mlo_reo_qref_table_paddr,
+				0);
+		return QDF_STATUS_E_NOMEM;
+	}
 
 	hal_verbose_debug("MLO table start paddr:%pK,"
 			  "Non-MLO table start paddr:%pK,"
@@ -2943,6 +2955,8 @@ static void hal_reo_shared_qaddr_setup_be(hal_soc_handle_t hal_soc_hdl)
 			  (void *)hal->reo_qref.non_mlo_reo_qref_table_paddr,
 			  hal->reo_qref.mlo_reo_qref_table_vaddr,
 			  hal->reo_qref.non_mlo_reo_qref_table_vaddr);
+
+	return QDF_STATUS_SUCCESS;
 }
 
 /**

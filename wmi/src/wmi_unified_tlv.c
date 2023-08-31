@@ -20510,7 +20510,7 @@ struct wmi_ops tlv_ops =  {
 };
 
 #ifdef WLAN_FEATURE_11BE_MLO
-static void populate_tlv_events_id_mlo(uint32_t *event_ids)
+static void populate_tlv_events_id_mlo(WMI_EVT_ID *event_ids)
 {
 	event_ids[wmi_mlo_setup_complete_event_id] =
 			WMI_MLO_SETUP_COMPLETE_EVENTID;
@@ -20530,7 +20530,7 @@ static void populate_tlv_events_id_mlo(uint32_t *event_ids)
 			WMI_MLO_LINK_DISABLE_REQUEST_EVENTID;
 }
 #else /* WLAN_FEATURE_11BE_MLO */
-static inline void populate_tlv_events_id_mlo(uint32_t *event_ids)
+static inline void populate_tlv_events_id_mlo(WMI_EVT_ID *event_ids)
 {
 }
 #endif /* WLAN_FEATURE_11BE_MLO */
@@ -20541,7 +20541,7 @@ static inline void populate_tlv_events_id_mlo(uint32_t *event_ids)
  *
  * Return: None
  */
-static void populate_tlv_events_id(uint32_t *event_ids)
+static void populate_tlv_events_id(WMI_EVT_ID *event_ids)
 {
 	event_ids[wmi_service_ready_event_id] = WMI_SERVICE_READY_EVENTID;
 	event_ids[wmi_ready_event_id] = WMI_READY_EVENTID;
