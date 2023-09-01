@@ -466,6 +466,7 @@ struct dp_vdev_be {
  * @is_bridge_vdev_present: flag to check if bridge vdev is present
  * @vdev_list_lock: lock to protect vdev list
  * @vdev_count: number of elements in the vdev list
+ * @sn_lock: To protect seq_num before any write operation
  * @seq_num: DP MLO multicast sequence number
  * @ref_cnt: reference count
  * @mod_refs: module reference count
@@ -475,14 +476,13 @@ struct dp_vdev_be {
 struct dp_mlo_dev_ctxt {
 	TAILQ_ENTRY(dp_mlo_dev_ctxt) ml_dev_list_elem;
 	union dp_align_mac_addr mld_mac_addr;
-#ifdef WLAN_MLO_MULTI_CHIP
 	uint8_t vdev_list[WLAN_MAX_MLO_CHIPS][WLAN_MAX_MLO_LINKS_PER_SOC];
 	uint8_t bridge_vdev[WLAN_MAX_MLO_CHIPS][WLAN_MAX_MLO_LINKS_PER_SOC];
 	bool is_bridge_vdev_present;
 	qdf_spinlock_t vdev_list_lock;
 	uint16_t vdev_count;
+	qdf_spinlock_t sn_lock;
 	uint16_t seq_num;
-#endif
 	qdf_atomic_t ref_cnt;
 	qdf_atomic_t mod_refs[DP_MOD_ID_MAX];
 	uint8_t ref_delete_pending;

@@ -1260,18 +1260,73 @@ static void dp_get_rx_hash_key_be(struct dp_soc *soc,
 }
 
 #ifdef WLAN_DP_MLO_DEV_CTX
+
+/**
+ * dp_attach_vdev_list_in_mlo_dev_ctxt() - Attach vdev id to DP MLO dev context
+ * @be_soc: dp SOC handle
+ * @vdev: dp vdev, will not be null, checked by dp_mlo_dev_ctxt_vdev_attach()
+ * @mlo_dev_ctxt: mlo device context pointer, and it will not be null, which is
+ * checked by dp_mlo_dev_ctxt_vdev_attach()
+ *
+ * Return: None
+ */
 static inline void
 dp_attach_vdev_list_in_mlo_dev_ctxt(struct dp_soc_be *be_soc,
 				    struct dp_vdev *vdev,
 				    struct dp_mlo_dev_ctxt *mlo_dev_ctxt)
 {
+	uint8_t i, j;
+
+	qdf_spin_lock_bh(&mlo_dev_ctxt->vdev_list_lock);
+	for (i = 0; i < WLAN_MAX_MLO_CHIPS; i++)
+		for (j = 0; j < WLAN_MAX_MLO_LINKS_PER_SOC; j++)
+			if (mlo_dev_ctxt->vdev_list[i][j] ==
+			    CDP_INVALID_VDEV_ID) {
+				mlo_dev_ctxt->vdev_list[i][j] = vdev->vdev_id;
+				mlo_dev_ctxt->vdev_count++;
+				break;
+			}
+	qdf_spin_unlock_bh(&mlo_dev_ctxt->vdev_list_lock);
+
+	dp_info("Add vdevId %u in i %u j %u count: %u "
+		"mld_addr: " QDF_MAC_ADDR_FMT "",
+		vdev->vdev_id, i, j, mlo_dev_ctxt->vdev_count,
+		QDF_MAC_ADDR_REF(mlo_dev_ctxt->mld_mac_addr.raw));
 }
 
+/**
+ * dp_detach_vdev_list_in_mlo_dev_ctxt() - Detach vdev id from DP MLO dev
+ * context
+ * @be_soc: dp SOC handle
+ * @vdev: dp vdev, will not be null, checked by dp_mlo_dev_ctxt_vdev_attach()
+ * @mlo_dev_ctxt: mlo device context pointer, and it will not be null, which is
+ * checked by dp_mlo_dev_ctxt_vdev_detach()
+ *
+ * Return: QDF_STATUS
+ */
 static inline QDF_STATUS
 dp_detach_vdev_list_in_mlo_dev_ctxt(struct dp_soc_be *be_soc,
 				    struct dp_vdev *vdev,
 				    struct dp_mlo_dev_ctxt *mlo_dev_ctxt)
 {
+	uint8_t i, j;
+
+	qdf_spin_lock_bh(&mlo_dev_ctxt->vdev_list_lock);
+	for (i = 0; i < WLAN_MAX_MLO_CHIPS; i++)
+		for (j = 0; j < WLAN_MAX_MLO_LINKS_PER_SOC; j++)
+			if (mlo_dev_ctxt->vdev_list[i][j] == vdev->vdev_id) {
+				mlo_dev_ctxt->vdev_list[i][j] = CDP_INVALID_VDEV_ID;
+				mlo_dev_ctxt->vdev_count--;
+				break;
+			}
+	qdf_spin_unlock_bh(&mlo_dev_ctxt->vdev_list_lock);
+
+	dp_info("Remove vdevId %u in i %u j %u count: %u "
+		"mld_addr: " QDF_MAC_ADDR_FMT "",
+		vdev->vdev_id, i, j, mlo_dev_ctxt->vdev_count,
+		QDF_MAC_ADDR_REF(mlo_dev_ctxt->mld_mac_addr.raw));
+
+	return QDF_STATUS_SUCCESS;
 }
 #endif /* WLAN_DP_MLO_DEV_CTX */
 #endif
@@ -3093,6 +3148,7 @@ void dp_mlo_dev_ctxt_unref_delete(struct dp_mlo_dev_ctxt *mlo_dev_ctxt,
 
 	QDF_ASSERT(mlo_dev_ctxt->ref_delete_pending);
 	qdf_spinlock_destroy(&mlo_dev_ctxt->vdev_list_lock);
+	qdf_spinlock_destroy(&mlo_dev_ctxt->sn_lock);
 	qdf_mem_free(mlo_dev_ctxt);
 }
 
@@ -3204,6 +3260,7 @@ QDF_STATUS dp_mlo_dev_ctxt_create(struct cdp_soc_t *soc_hdl,
 
 	mlo_dev_ctxt->ref_delete_pending = 0;
 	qdf_spinlock_create(&mlo_dev_ctxt->vdev_list_lock);
+	qdf_spinlock_create(&mlo_dev_ctxt->sn_lock);
 	return QDF_STATUS_SUCCESS;
 }
 
