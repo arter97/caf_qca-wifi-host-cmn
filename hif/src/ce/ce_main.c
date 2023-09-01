@@ -66,6 +66,7 @@
 #ifdef QCA_WIFI_SUPPORT_SRNG
 #include <hal_api.h>
 #endif
+#include "qdf_ssr_driver_dump.h"
 
 /* Forward references */
 QDF_STATUS hif_post_recv_buffers_for_pipe(struct HIF_CE_pipe_info *pipe_info);
@@ -2507,6 +2508,116 @@ void ce_disable_polling(void *cestate)
 		CE_state->timer_inited = false;
 }
 
+#ifdef WLAN_FEATURE_SSR_DRIVER_DUMP
+#define MAX_CE_STR_LEN 50
+/**
+ * ce_ring_dump_register_region() - Register CE ring with SSR dump
+ * @CE_state: CE_state pointer
+ * @CE_id: CE id
+ *
+ * Return: None
+ */
+static inline
+void ce_ring_dump_register_region(struct CE_state *CE_state, unsigned int CE_id)
+{
+	struct CE_ring_state *ce_ring;
+	char ce[MAX_CE_STR_LEN];
+	char CE_ring_state[MAX_CE_STR_LEN];
+	char srng[MAX_CE_STR_LEN];
+
+	qdf_snprint(ce, MAX_CE_STR_LEN, "%s%d", "ce_", CE_id);
+	qdf_ssr_driver_dump_register_region(ce, CE_state, sizeof(*CE_state));
+
+	if (CE_state->status_ring) {
+		ce_ring = CE_state->status_ring;
+		qdf_snprint(CE_ring_state, MAX_CE_STR_LEN,
+			    "%s%s", ce, "_status_ring");
+		qdf_ssr_driver_dump_register_region(CE_ring_state, ce_ring,
+						    sizeof(struct CE_ring_state)
+						   );
+		qdf_snprint(srng, MAX_CE_STR_LEN,
+			    "%s%s", CE_ring_state, "_ctx");
+		qdf_ssr_driver_dump_register_region(srng, ce_ring->srng_ctx,
+						    sizeof(struct hal_srng));
+	}
+	if (CE_state->dest_ring) {
+		ce_ring = CE_state->dest_ring;
+		qdf_snprint(CE_ring_state, MAX_CE_STR_LEN,
+			    "%s%s", ce, "_dest_ring");
+		qdf_ssr_driver_dump_register_region(CE_ring_state, ce_ring,
+						    sizeof(struct CE_ring_state)
+						   );
+		qdf_snprint(srng, MAX_CE_STR_LEN,
+			    "%s%s", CE_ring_state, "_ctx");
+		qdf_ssr_driver_dump_register_region(srng, ce_ring->srng_ctx,
+						    sizeof(struct hal_srng));
+	}
+	if (CE_state->src_ring) {
+		ce_ring = CE_state->src_ring;
+		qdf_snprint(CE_ring_state, MAX_CE_STR_LEN,
+			    "%s%s", ce, "_src_ring");
+		qdf_ssr_driver_dump_register_region(CE_ring_state, ce_ring,
+						    sizeof(struct CE_ring_state)
+						   );
+		qdf_snprint(srng, MAX_CE_STR_LEN,
+			    "%s%s", CE_ring_state, "_ctx");
+		qdf_ssr_driver_dump_register_region(srng, ce_ring->srng_ctx,
+						    sizeof(struct hal_srng));
+	}
+}
+
+/**
+ * ce_ring_dump_unregister_region() - Unregister CE ring with SSR dump
+ * @CE_state: CE_state pointer
+ * @CE_id: CE id
+ *
+ * Return: None
+ */
+static inline void
+ce_ring_dump_unregister_region(struct CE_state *CE_state, unsigned int CE_id)
+{
+	char ce[MAX_CE_STR_LEN];
+	char CE_ring_state[MAX_CE_STR_LEN];
+	char srng[MAX_CE_STR_LEN];
+
+	qdf_snprint(ce, MAX_CE_STR_LEN, "%s%d", "ce_", CE_id);
+	qdf_ssr_driver_dump_unregister_region(ce);
+	if (CE_state->status_ring) {
+		qdf_snprint(CE_ring_state, MAX_CE_STR_LEN,
+			    "%s%s", ce, "_status_ring");
+		qdf_snprint(srng, MAX_CE_STR_LEN,
+			    "%s%s", CE_ring_state, "_ctx");
+		qdf_ssr_driver_dump_unregister_region(CE_ring_state);
+		qdf_ssr_driver_dump_unregister_region(srng);
+	}
+	if (CE_state->dest_ring) {
+		qdf_snprint(CE_ring_state, MAX_CE_STR_LEN,
+			    "%s%s", ce, "_dest_ring");
+		qdf_snprint(srng, MAX_CE_STR_LEN,
+			    "%s%s", CE_ring_state, "_ctx");
+		qdf_ssr_driver_dump_unregister_region(CE_ring_state);
+		qdf_ssr_driver_dump_unregister_region(srng);
+	}
+	if (CE_state->src_ring) {
+		qdf_snprint(CE_ring_state, MAX_CE_STR_LEN,
+			    "%s%s", ce, "_src_ring");
+		qdf_snprint(srng, MAX_CE_STR_LEN,
+			    "%s%s", CE_ring_state, "_ctx");
+		qdf_ssr_driver_dump_unregister_region(CE_ring_state);
+		qdf_ssr_driver_dump_unregister_region(srng);
+	}
+}
+#else
+static inline
+void ce_ring_dump_register_region(struct CE_state *CE_state, unsigned int CE_id)
+{
+}
+
+static inline void
+ce_ring_dump_unregister_region(struct CE_state *CE_state, unsigned int CE_id)
+{
+}
+#endif
 /*
  * Initialize a Copy Engine based on caller-supplied attributes.
  * This may be called once to initialize both source and destination
@@ -2726,6 +2837,8 @@ struct CE_handle *ce_init(struct hif_softc *scn,
 	/* update the htt_data attribute */
 	ce_mark_datapath(CE_state);
 	scn->ce_id_to_state[CE_id] = CE_state;
+
+	ce_ring_dump_register_region(CE_state, CE_id);
 
 	mem_status = alloc_mem_ce_debug_history(scn, CE_id, attr->src_nentries);
 	if (mem_status != QDF_STATUS_SUCCESS)
@@ -2981,6 +3094,8 @@ void ce_fini(struct CE_handle *copyeng)
 	ce_disable_polling(CE_state);
 
 	qdf_lro_deinit(CE_state->lro_data);
+
+	ce_ring_dump_unregister_region(CE_state, CE_id);
 
 	if (CE_state->src_ring) {
 		/* Cleanup the datapath Tx ring */
