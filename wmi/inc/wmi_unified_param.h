@@ -6440,6 +6440,7 @@ typedef enum {
 	wmi_service_mlo_tsf_sync,
 	wmi_service_n_link_mlo_support,
 	wmi_service_per_link_stats_support,
+	wmi_service_pdev_wsi_stats_info_support,
 #endif
 	wmi_service_aux_mac_support,
 #ifdef WLAN_ATF_INCREASED_STA
