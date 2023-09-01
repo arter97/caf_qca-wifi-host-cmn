@@ -574,7 +574,8 @@ void
 dp_ppdu_desc_user_stats_update(struct dp_pdev *pdev,
 			       struct ppdu_info *ppdu_info);
 
-#ifdef WDI_EVENT_ENABLE
+#if (defined(DP_CON_MON) || defined(WDI_EVENT_ENABLE)) &&\
+	(!defined(REMOVE_PKT_LOG))
 void dp_pkt_log_init(struct cdp_soc_t *soc_hdl, uint8_t pdev_id, void *scn);
 #else
 static inline void
