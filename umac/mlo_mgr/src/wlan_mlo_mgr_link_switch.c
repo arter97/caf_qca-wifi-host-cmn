@@ -800,7 +800,7 @@ mlo_mgr_ser_link_switch_cb(struct wlan_serialization_command *cmd,
 		status = mlo_mgr_start_link_switch(vdev, cmd);
 		if (QDF_IS_STATUS_ERROR(status)) {
 			mlo_mgr_link_switch_trans_abort_state(vdev->mlo_dev_ctx);
-			status = mlo_mgr_link_switch_notify(vdev, req);
+			mlo_mgr_link_switch_notify(vdev, req);
 		}
 		break;
 	case WLAN_SER_CB_RELEASE_MEM_CMD:
@@ -835,6 +835,12 @@ void mlo_mgr_remove_link_switch_cmd(struct wlan_objmgr_vdev *vdev)
 	req = &vdev->mlo_dev_ctx->link_ctx->last_req;
 	mlo_mgr_link_switch_notify(vdev, req);
 
+	if (req->reason == MLO_LINK_SWITCH_REASON_HOST_FORCE) {
+		mlo_debug("Link switch not serialized");
+		mlo_mgr_link_switch_complete(vdev);
+		return;
+	}
+
 	cmd_info.cmd_id = (vdev_id << 16) + (req->new_ieee_link_id << 8) +
 			  (req->curr_ieee_link_id);
 	cmd_info.req_type = WLAN_SER_CANCEL_NON_SCAN_CMD;
@@ -850,6 +856,7 @@ void mlo_mgr_remove_link_switch_cmd(struct wlan_objmgr_vdev *vdev)
 QDF_STATUS mlo_mgr_ser_link_switch_cmd(struct wlan_objmgr_vdev *vdev,
 				       struct wlan_mlo_link_switch_req *req)
 {
+	QDF_STATUS status;
 	enum wlan_serialization_status ser_cmd_status;
 	struct wlan_serialization_command cmd = {0};
 	uint8_t vdev_id = wlan_vdev_get_id(vdev);
@@ -872,6 +879,16 @@ QDF_STATUS mlo_mgr_ser_link_switch_cmd(struct wlan_objmgr_vdev *vdev,
 	cmd.cmd_timeout_duration = MLO_MGR_MAX_LSWITCH_TIMEOUT;
 	cmd.vdev = vdev;
 	cmd.is_blocking = true;
+
+	if (req->reason == MLO_LINK_SWITCH_REASON_HOST_FORCE) {
+		mlo_debug("Do not serialize link switch");
+		status = mlo_mgr_start_link_switch(vdev, &cmd);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			mlo_mgr_link_switch_trans_abort_state(vdev->mlo_dev_ctx);
+			mlo_mgr_link_switch_notify(vdev, req);
+		}
+		return status;
+	}
 
 	ser_cmd_status = wlan_serialization_request(&cmd);
 	switch (ser_cmd_status) {
@@ -1000,16 +1017,16 @@ QDF_STATUS mlo_mgr_link_switch_request_params(struct wlan_objmgr_psoc *psoc,
 		return QDF_STATUS_E_INVAL;
 	}
 
+	mlo_debug("VDEV %d, curr_link_id %d, new_link_id %d, new_freq %d, new_phymode: %d, reason %d",
+		  req->vdev_id, req->curr_ieee_link_id, req->new_ieee_link_id,
+		  req->new_primary_freq, req->new_phymode, req->reason);
+
 	status = mlo_mgr_link_switch_validate_request(vdev, req);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		mlo_debug("Link switch params/request invalid");
 		mlo_mgr_link_switch_complete(vdev);
 		return QDF_STATUS_E_INVAL;
 	}
-
-	mlo_debug("VDEV %d, curr_link_id %d, new_link_id %d, new_freq %d, new_phymode: %d, reason %d",
-		  req->vdev_id, req->curr_ieee_link_id, req->new_ieee_link_id,
-		  req->new_primary_freq, req->new_phymode, req->reason);
 
 	status = mlo_mgr_ser_link_switch_cmd(vdev, req);
 	if (QDF_IS_STATUS_ERROR(status)) {
