@@ -22830,6 +22830,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 					WMI_SERVICE_PER_LINK_STATS_SUPPORT;
 	wmi_service[wmi_service_pdev_wsi_stats_info_support] =
 			WMI_SERVICE_PDEV_WSI_STATS_INFO_SUPPORT;
+	wmi_service[wmi_service_mlo_tid_to_link_mapping_support] =
+		WMI_SERVICE_MLO_TID_TO_LINK_MAPPING_SUPPORT;
 #endif
 	wmi_service[wmi_service_aux_mac_support] = WMI_SERVICE_AUX_MAC_SUPPORT;
 #ifdef WLAN_ATF_INCREASED_STA
