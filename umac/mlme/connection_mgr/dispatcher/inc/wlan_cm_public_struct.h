@@ -78,6 +78,7 @@ struct wlan_cm_wep_key_params {
  *	MAX_WEP_KEYS WEP keys
  * @rsn_caps: rsn caps
  * @mgmt_ciphers: mgmt cipher bitmask
+ * @user_mfp: Management frame protection state configured by user
  */
 struct wlan_cm_connect_crypto_info {
 	uint32_t wpa_versions;
@@ -88,6 +89,7 @@ struct wlan_cm_connect_crypto_info {
 	struct wlan_cm_wep_key_params wep_keys;
 	uint16_t rsn_caps;
 	uint32_t mgmt_ciphers;
+	uint8_t user_mfp;
 };
 
 #ifdef WLAN_FEATURE_FILS_SK

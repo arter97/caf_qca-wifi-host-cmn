@@ -147,6 +147,19 @@ osif_cm_set_akm_params(struct wlan_cm_connect_req *connect_req,
 	}
 }
 
+static inline
+uint8_t osif_cm_get_rsn_cap_mfp(enum nl80211_mfp mfp_state)
+{
+	switch (mfp_state) {
+	case NL80211_MFP_REQUIRED:
+		return RSN_CAP_MFP_REQUIRED;
+	case NL80211_MFP_OPTIONAL:
+		return RSN_CAP_MFP_CAPABLE;
+	default:
+		return RSN_CAP_MFP_DISABLED;
+	}
+}
+
 static
 QDF_STATUS osif_cm_set_crypto_params(struct wlan_cm_connect_req *connect_req,
 				     const struct cfg80211_connect_params *req)
@@ -186,6 +199,9 @@ QDF_STATUS osif_cm_set_crypto_params(struct wlan_cm_connect_req *connect_req,
 	status = osif_cm_set_wep_key_params(connect_req, req);
 	if (QDF_IS_STATUS_ERROR(status))
 		osif_err("set wep key params failed");
+
+	/* Copy user configured MFP capability */
+	connect_req->crypto.user_mfp = osif_cm_get_rsn_cap_mfp(req->mfp);
 
 	return status;
 }
