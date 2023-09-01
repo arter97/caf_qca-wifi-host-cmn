@@ -52,6 +52,8 @@
 #define IPV4 0x0008
 #define IPV6 0xdd86
 #define IPV6ARRAY 4
+#define OPT_DP_TARGET_RESUME_WAIT_TIMEOUT_MS 50
+#define OPT_DP_TARGET_RESUME_WAIT_COUNT 10
 #endif
 
 static struct wlan_ipa_priv *gp_ipa;
@@ -5265,7 +5267,10 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_cb(
 	struct wlan_ipa_priv *ipa_obj = (struct wlan_ipa_priv *)ipa_ctx;
 	int i, pdev_id, param_val;
 	struct wlan_objmgr_pdev *pdev;
+	struct wlan_objmgr_psoc *psoc;
+	wmi_unified_t wmi_handle;
 	int response = 0;
+	int wait_cnt = 0;
 
 	if (ipa_obj->ipa_pipes_down || ipa_obj->pipes_down_in_progress) {
 		ipa_err("Pipes are going down. Reject flt rsrv request");
@@ -5274,12 +5279,29 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_cb(
 
 	pdev = ipa_obj->pdev;
 	pdev_id = ipa_obj->dp_pdev_id;
+	psoc = wlan_pdev_get_psoc(pdev);
+	wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
 
 	/* Hold wakelock */
 	qdf_wake_lock_acquire(&ipa_obj->opt_dp_wake_lock,
 			      WIFI_POWER_EVENT_WAKELOCK_OPT_WIFI_DP);
-	qdf_pm_system_wakeup();
 	ipa_info("opt_dp: Wakelock acquired");
+	qdf_pm_system_wakeup();
+
+	ipa_info("Target suspend state %d", qdf_atomic_read(&wmi_handle->is_target_suspended));
+	while (qdf_atomic_read(&wmi_handle->is_target_suspended) &&
+	       wait_cnt < OPT_DP_TARGET_RESUME_WAIT_COUNT) {
+		qdf_sleep(OPT_DP_TARGET_RESUME_WAIT_TIMEOUT_MS);
+		wait_cnt++;
+	}
+
+	if (qdf_atomic_read(&wmi_handle->is_target_suspended)) {
+		ipa_err("Wifi is suspended. Reject request");
+		goto error;
+	}
+
+	response = cdp_ipa_pcie_link_up(ipa_obj->dp_soc);
+	ipa_info("opt_dp: Pcie link up status %d", response);
 
 	/* Disable Low power features before filter reservation */
 	ipa_info("opt_dp: Disable low power features to reserve filter");
@@ -5291,9 +5313,6 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_cb(
 			response);
 		goto error;
 	}
-
-	response = cdp_ipa_pcie_link_up(ipa_obj->dp_soc);
-	ipa_info("opt_dp: Pcie link up status %d", response);
 
 	ipa_info("opt_dp: Send filter reserve req");
 	dp_flt_params = &(ipa_obj->dp_cce_super_rule_flt_param);
