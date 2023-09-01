@@ -2441,7 +2441,33 @@ qdf_nbuf_t
 qdf_nbuf_page_frag_alloc_debug(qdf_device_t osdev, qdf_size_t size, int reserve,
 			       int align, qdf_frag_cache_t *pf_cache,
 			       const char *func, uint32_t line);
+
+/**
+ * qdf_nbuf_ssr_register_region() - Register nbuf history with SSR dump
+ *
+ * Return: None
+ */
+void qdf_nbuf_ssr_register_region(void);
+
+/**
+ * qdf_nbuf_ssr_unregister_region() - Unregister nbuf history with SSR dump
+ *
+ * Return: None
+ */
+
+void qdf_nbuf_ssr_unregister_region(void);
+
 #else /* NBUF_MEMORY_DEBUG */
+
+static inline
+void qdf_nbuf_ssr_register_region(void)
+{
+}
+
+static inline
+void qdf_nbuf_ssr_unregister_region(void)
+{
+}
 
 static inline void qdf_net_buf_debug_init(void) {}
 static inline void qdf_net_buf_debug_exit(void) {}
