@@ -416,6 +416,8 @@ QDF_STATUS wlan_mlo_mgr_deinit(void)
 		return QDF_STATUS_E_FAILURE;
 	}
 
+	wlan_mlo_mgr_unregister_link_switch_notifier(WLAN_UMAC_COMP_MLO_MGR);
+
 	mlo_global_ctx_deinit();
 
 	status = wlan_objmgr_unregister_vdev_create_handler(
@@ -430,7 +432,6 @@ QDF_STATUS wlan_mlo_mgr_deinit(void)
 	if (status != QDF_STATUS_SUCCESS)
 		mlo_err("Failed to unregister vdev delete handler");
 
-	wlan_mlo_mgr_unregister_link_switch_notifier(WLAN_UMAC_COMP_MLO_MGR);
 	return status;
 }
 
