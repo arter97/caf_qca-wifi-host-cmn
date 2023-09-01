@@ -2302,6 +2302,7 @@ static void dp_soc_srng_deinit_be(struct dp_soc *soc)
 
 	if (soc->features.dmac_cmn_src_rxbuf_ring_enabled) {
 		for (i = 0; i < soc->num_rx_refill_buf_rings; i++) {
+			dp_ssr_dump_srng_unregister("rx_refill_buf_ring", i);
 			dp_srng_deinit(soc, &soc->rx_refill_buf_ring[i],
 				       RXDMA_BUF, 0);
 		}
@@ -2364,6 +2365,9 @@ static QDF_STATUS dp_soc_srng_init_be(struct dp_soc *soc)
 				       soc);
 				goto fail;
 			}
+			dp_ssr_dump_srng_register("rx_refill_buf_ring",
+						  &soc->rx_refill_buf_ring[i],
+						  i);
 		}
 	}
 

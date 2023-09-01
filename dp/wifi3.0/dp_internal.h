@@ -5550,4 +5550,70 @@ dp_tx_latency_stats_update_cca(struct dp_soc *soc, uint16_t peer_id,
  */
 void dp_tx_latency_stats_report(struct dp_soc *soc, struct dp_pdev *pdev);
 #endif
+#ifdef WLAN_FEATURE_SSR_DRIVER_DUMP
+/**
+ * dp_ssr_dump_srng_register() - Register DP ring with SSR dump.
+ * @region_name: ring name to register.
+ * @srng: dp srng handler.
+ * @num: Ring number
+ *
+ * num = -1. If there is only single ring
+ * num = ring number. If there are multiple rings pass ring number.
+ *	e.g. in case of REO pass reo number (0..n).
+ *
+ * Return: None.
+ */
+void
+dp_ssr_dump_srng_register(char *region_name, struct dp_srng *srng, int num);
+
+/**
+ * dp_ssr_dump_srng_unregister() - Unegister DP ring with SSR dump.
+ * @region_name: ring name to unregister.
+ * @num: Ring number
+ *
+ * num = -1. If there is only single ring
+ * num = ring number. If there are multiple rings pass ring number.
+ *      e.g. in case of REO pass reo number (0..n).
+ *
+ * Return: None.
+ */
+void dp_ssr_dump_srng_unregister(char *region_name, int num);
+
+/**
+ * dp_ssr_dump_pdev_register() - Register DP Pdev with SSR dump.
+ * @pdev: Pdev handle to register.
+ * @pdev_id: Pdev ID.
+ *
+ * Return: None.
+ */
+void dp_ssr_dump_pdev_register(struct dp_pdev *pdev, uint8_t pdev_id);
+
+/**
+ * dp_ssr_dump_pdev_unregister() - Unregister DP Pdev with SSR dump.
+ * @pdev_id: Pdev ID.
+ *
+ * Return: None.
+ */
+void dp_ssr_dump_pdev_unregister(uint8_t pdev_id);
+#else
+static inline
+void dp_ssr_dump_srng_register(char *region_name, struct dp_srng *srng, int num)
+{
+}
+
+static inline
+void dp_ssr_dump_srng_unregister(char *region_name, int num)
+{
+}
+
+static inline
+void dp_ssr_dump_pdev_register(struct dp_pdev *pdev, uint8_t pdev_id)
+{
+}
+
+static inline
+void dp_ssr_dump_pdev_unregister(uint8_t pdev_id)
+{
+}
+#endif
 #endif /* #ifndef _DP_INTERNAL_H_ */
