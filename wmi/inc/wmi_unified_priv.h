@@ -3292,6 +3292,10 @@ QDF_STATUS (*send_mlo_link_state_request)(
 			wmi_unified_t wmi_handle,
 			struct wmi_host_link_state_params *params);
 
+QDF_STATUS (*send_link_set_bss_params_cmd)(
+		wmi_unified_t wmi_handle,
+		struct wmi_host_link_bss_params *params);
+
 QDF_STATUS (*extract_mlo_vdev_tid_to_link_map_event)(
 		struct wmi_unified *wmi_handle,
 		uint8_t *buf,

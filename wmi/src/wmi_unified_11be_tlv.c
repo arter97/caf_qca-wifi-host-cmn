@@ -1599,6 +1599,77 @@ send_link_state_request_cmd_tlv(wmi_unified_t wmi_handle,
 }
 
 static QDF_STATUS
+send_link_set_bss_params_cmd_tlv(wmi_unified_t wmi_handle,
+				 struct wmi_host_link_bss_params *params)
+{
+	QDF_STATUS status;
+	wmi_buf_t buf;
+	wmi_mlo_set_link_bss_params_cmd_fixed_param *cmd;
+	uint8_t *buf_ptr;
+	wmi_mlo_link_bss_param *bss_param;
+		WMI_HOST_WLAN_PHY_MODE fw_phy_mode;
+
+	size_t len = sizeof(*cmd) +
+		     sizeof(wmi_mlo_link_bss_param) +
+		     WMI_TLV_HDR_SIZE;
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf) {
+		wmi_err("wmi_buf_alloc failed");
+		return QDF_STATUS_E_FAILURE;
+	}
+	buf_ptr = (uint8_t *)wmi_buf_data(buf);
+	cmd =
+	(wmi_mlo_set_link_bss_params_cmd_fixed_param *)buf_ptr;
+	WMITLV_SET_HDR(
+		&cmd->tlv_header,
+		WMITLV_TAG_STRUC_wmi_mlo_set_link_bss_params_cmd_fixed_param,
+		WMITLV_GET_STRUCT_TLVLEN(
+		wmi_mlo_set_link_bss_params_cmd_fixed_param));
+
+	WMI_CHAR_ARRAY_TO_MAC_ADDR(params->ap_mld_mac, &cmd->ap_mld_macaddr);
+
+	buf_ptr += sizeof(wmi_mlo_set_link_bss_params_cmd_fixed_param);
+
+	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC,
+		       (sizeof(wmi_mlo_link_bss_param)));
+	buf_ptr += WMI_TLV_HDR_SIZE;
+
+	bss_param =
+		(wmi_mlo_link_bss_param *)buf_ptr;
+
+	WMITLV_SET_HDR(&bss_param->tlv_header,
+		       WMITLV_TAG_STRUC_wmi_mlo_link_bss_param,
+		       WMITLV_GET_STRUCT_TLVLEN(wmi_mlo_link_bss_param));
+
+	bss_param->ieee_link_id = params->link_id;
+
+	bss_param->wmi_chan.mhz = params->chan.ch_freq;
+	bss_param->wmi_chan.band_center_freq1 = params->chan.ch_cfreq1;
+	bss_param->wmi_chan.band_center_freq2 = params->chan.ch_cfreq2;
+	fw_phy_mode = wmi_host_to_fw_phymode(params->chan.ch_phymode);
+	WMI_SET_CHANNEL_MODE(&bss_param->wmi_chan, fw_phy_mode);
+	wmi_debug("ap mld mac: " QDF_MAC_ADDR_FMT " link id %d chan freq %d cfreq1 %d cfreq2 %d fw phymode %d",
+		  QDF_MAC_ADDR_REF(params->ap_mld_mac), bss_param->ieee_link_id,
+		  bss_param->wmi_chan.mhz,
+		  bss_param->wmi_chan.band_center_freq1,
+		  bss_param->wmi_chan.band_center_freq2,
+		  fw_phy_mode);
+
+	buf_ptr += sizeof(wmi_mlo_link_bss_param);
+
+	wmi_mtrace(WMI_MLO_LINK_SET_BSS_PARAMS_CMDID, 0, 0);
+	status = wmi_unified_cmd_send(wmi_handle, buf, len,
+				      WMI_MLO_LINK_SET_BSS_PARAMS_CMDID);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		wmi_err("Failed to send link set bss command ret = %d", status);
+		wmi_buf_free(buf);
+	}
+
+	return status;
+}
+
+static QDF_STATUS
 extract_mlo_link_state_event_tlv(struct wmi_unified *wmi_handle,
 				 void *buf,
 				 struct  ml_link_state_info_event *params)
@@ -2486,6 +2557,8 @@ void wmi_11be_attach_tlv(wmi_unified_t wmi_handle)
 		send_mlo_vdev_tid_to_link_map_cmd_tlv;
 	ops->send_mlo_link_state_request =
 		send_link_state_request_cmd_tlv;
+	ops->send_link_set_bss_params_cmd =
+		send_link_set_bss_params_cmd_tlv;
 	ops->extract_mlo_vdev_tid_to_link_map_event =
 		extract_mlo_vdev_tid_to_link_map_event_tlv;
 	ops->extract_mlo_vdev_bcast_tid_to_link_map_event =

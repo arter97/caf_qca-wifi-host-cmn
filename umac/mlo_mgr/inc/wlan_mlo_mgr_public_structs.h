@@ -403,6 +403,18 @@ struct wlan_mlo_key_mgmt {
 	bool keys_saved;
 };
 
+/**
+ * struct mlo_link_bss_params - link bss param
+ * @link_id: link id
+ * @ap_mld_mac: mld mac address
+ * @chan: channel
+ */
+struct mlo_link_bss_params {
+	int8_t link_id;
+	int8_t ap_mld_mac[QDF_MAC_ADDR_SIZE];
+	struct wlan_channel *chan;
+};
+
 #ifdef WLAN_FEATURE_11BE_MLO
 /**
  * struct mlo_link_state_cmd_params - MLO link state params

@@ -1902,6 +1902,87 @@ bool mlo_is_sta_csa_synced(struct wlan_mlo_dev_context *mlo_dev_ctx,
 	return sta_csa_synced;
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+QDF_STATUS mlo_sta_handle_csa_standby_link(
+			struct wlan_mlo_dev_context *mlo_dev_ctx,
+			uint8_t link_id,
+			struct csa_offload_params *csa_param,
+			struct wlan_objmgr_vdev *vdev)
+{
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	struct wlan_lmac_if_mlo_tx_ops *mlo_tx_ops;
+	struct mlo_link_info *link_info;
+	struct mlo_link_bss_params params = {0};
+	struct wlan_objmgr_psoc *psoc;
+
+	if (!mlo_dev_ctx) {
+		mlo_err("invalid mlo_dev_ctx");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	psoc = wlan_vdev_get_psoc(vdev);
+	if (!psoc) {
+		mlo_err("null psoc");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	mlo_tx_ops = &psoc->soc_cb.tx_ops->mlo_ops;
+
+	link_info = mlo_mgr_get_ap_link_by_link_id(mlo_dev_ctx, link_id);
+	if (!link_info) {
+		mlo_err("link info null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (link_info->vdev_id != WLAN_INVALID_VDEV_ID) {
+		mlo_debug("vdev id %d link id %d ", link_info->vdev_id,
+			  link_id);
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	mlo_mgr_update_csa_link_info(mlo_dev_ctx, csa_param, link_id);
+
+	params.link_id = link_info->link_id;
+	params.chan = qdf_mem_malloc(sizeof(struct wlan_channel));
+	if (!params.chan) {
+		mlo_err("no mem allocated");
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	wlan_vdev_get_bss_peer_mld_mac(
+				vdev,
+				(struct qdf_mac_addr *)&params.ap_mld_mac[0]);
+
+	params.chan->ch_freq = link_info->link_chan_info->ch_freq;
+	params.chan->ch_cfreq1 = link_info->link_chan_info->ch_cfreq1;
+	params.chan->ch_cfreq2 = link_info->link_chan_info->ch_cfreq2;
+	params.chan->ch_phymode = link_info->link_chan_info->ch_phymode;
+
+	mlo_debug("link id %d chan freq %d cfreq1 %d cfreq2 %d host phymode %d ap mld mac " QDF_MAC_ADDR_FMT,
+		  link_info->link_id, link_info->link_chan_info->ch_freq,
+		  link_info->link_chan_info->ch_cfreq1,
+		  link_info->link_chan_info->ch_cfreq2,
+		  link_info->link_chan_info->ch_phymode,
+		  QDF_MAC_ADDR_REF(&params.ap_mld_mac[0]));
+
+	if (!mlo_tx_ops->send_link_set_bss_params_cmd) {
+		mlo_err("handler is not registered");
+		qdf_mem_free(params.chan);
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	status = mlo_tx_ops->send_link_set_bss_params_cmd(psoc, &params);
+
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mlo_err("failed to send link set bss request command to FW");
+		qdf_mem_free(params.chan);
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+	qdf_mem_free(params.chan);
+	return status;
+}
+#endif
+
 QDF_STATUS mlo_sta_csa_save_params(struct wlan_mlo_dev_context *mlo_dev_ctx,
 				   uint8_t link_id,
 				   struct csa_offload_params *csa_param)

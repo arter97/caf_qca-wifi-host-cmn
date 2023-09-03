@@ -162,6 +162,15 @@ QDF_STATUS wmi_send_mlo_link_state_request_cmd(
 		struct wmi_host_link_state_params *params);
 
 /**
+ * wmi_send_link_set_bss_params_cmd - send link set bss cmd
+ * @wmi: wmi handler
+ * @params: pointer to link bss param
+ */
+QDF_STATUS wmi_send_link_set_bss_params_cmd(
+		wmi_unified_t wmi,
+		struct wmi_host_link_bss_params *params);
+
+/**
  * wmi_extract_mlo_vdev_tid_to_link_map_event() - extract mlo t2lm info for vdev
  * @wmi: wmi handle
  * @evt_buf: pointer to event buffer

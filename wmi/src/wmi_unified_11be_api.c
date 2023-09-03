@@ -115,6 +115,15 @@ QDF_STATUS wmi_send_mlo_link_state_request_cmd(
 	return QDF_STATUS_E_FAILURE;
 }
 
+QDF_STATUS wmi_send_link_set_bss_params_cmd(
+		wmi_unified_t wmi,
+		struct wmi_host_link_bss_params *params)
+{
+	if (wmi->ops->send_link_set_bss_params_cmd)
+		return wmi->ops->send_link_set_bss_params_cmd(wmi, params);
+	return QDF_STATUS_E_FAILURE;
+}
+
 QDF_STATUS
 wmi_extract_mlo_vdev_tid_to_link_map_event(
 		wmi_unified_t wmi, void *evt_buf,

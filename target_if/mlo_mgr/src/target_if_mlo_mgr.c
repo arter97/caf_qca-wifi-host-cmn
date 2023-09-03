@@ -826,6 +826,41 @@ target_if_mlo_send_wsi_link_info_cmd(struct wlan_objmgr_pdev *pdev,
 	return QDF_STATUS_SUCCESS;
 }
 #endif
+static QDF_STATUS
+target_if_send_link_set_bss_params_cmd(struct wlan_objmgr_psoc *psoc,
+				       struct mlo_link_bss_params *cmd)
+{
+	QDF_STATUS status;
+	struct wmi_unified *wmi_handle = NULL;
+	struct wmi_host_link_bss_params params = {0};
+
+	if (!psoc) {
+		target_if_err("null pdev");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
+	if (!wmi_handle) {
+		target_if_err("null wmi handle");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+	if (!cmd) {
+		target_if_err("cmd is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+	params.link_id = cmd->link_id;
+	qdf_mem_copy(&params.ap_mld_mac[0], &cmd->ap_mld_mac[0],
+		     QDF_MAC_ADDR_SIZE);
+
+	params.chan.ch_freq = cmd->chan->ch_freq;
+	params.chan.ch_cfreq1 = cmd->chan->ch_cfreq1;
+	params.chan.ch_cfreq2 = cmd->chan->ch_cfreq2;
+	params.chan.ch_phymode  = cmd->chan->ch_phymode;
+
+	status = wmi_send_link_set_bss_params_cmd(wmi_handle, &params);
+
+	return status;
+}
 
 QDF_STATUS target_if_mlo_send_link_removal_cmd(
 		struct wlan_objmgr_psoc *psoc,
@@ -945,6 +980,8 @@ target_if_mlo_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 	mlo_tx_ops->send_link_removal_cmd = target_if_mlo_send_link_removal_cmd;
 	mlo_tx_ops->request_link_state_info_cmd =
 		target_if_request_ml_link_state_info;
+	mlo_tx_ops->send_link_set_bss_params_cmd =
+		target_if_send_link_set_bss_params_cmd;
 	mlo_tx_ops->send_vdev_pause = target_if_mlo_send_vdev_pause;
 
 	target_if_mlo_register_link_switch_cnf_handler(mlo_tx_ops);

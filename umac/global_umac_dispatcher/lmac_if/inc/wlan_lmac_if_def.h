@@ -1525,6 +1525,7 @@ struct wlan_lmac_if_son_rx_ops {
  * @unregister_events: function to de-register event handlers with FW
  * @link_set_active: function to send mlo link set active command to FW
  * @request_link_state_info_cmd: function pointer to send link state info
+ * @send_link_set_bss_params_cmd: function pointer to send link set bss cmd
  * @shmem_local_ops: operations specific to WLAN_MLO_GLOBAL_SHMEM_SUPPORT
  * @send_tid_to_link_mapping: function to send T2LM command to FW
  * @send_link_removal_cmd: function to send MLO link removal command to FW
@@ -1541,6 +1542,9 @@ struct wlan_lmac_if_mlo_tx_ops {
 	QDF_STATUS (*request_link_state_info_cmd)(
 		struct wlan_objmgr_psoc *psoc,
 		struct mlo_link_state_cmd_params *param);
+	QDF_STATUS (*send_link_set_bss_params_cmd)(
+			struct wlan_objmgr_psoc *psoc,
+			struct mlo_link_bss_params *param);
 
 #ifdef WLAN_MLO_GLOBAL_SHMEM_SUPPORT
 	struct wlan_lmac_if_global_shmem_local_ops shmem_local_ops;
