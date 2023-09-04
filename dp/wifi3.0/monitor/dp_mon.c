@@ -1259,7 +1259,7 @@ void dp_deliver_mgmt_frm(struct dp_pdev *pdev, qdf_nbuf_t nbuf)
  *
  * return:QDF_STATUS_SUCCESS if nbuf as to be freed in caller
  */
-QDF_STATUS
+static QDF_STATUS
 dp_process_ppdu_stats_tx_mgmtctrl_payload_tlv(struct dp_pdev *pdev,
 					      qdf_nbuf_t tag_buf,
 					      uint32_t ppdu_id)
@@ -4303,8 +4303,9 @@ static void dp_pktlogmod_exit(struct dp_pdev *handle) { }
 
 #ifdef WDI_EVENT_ENABLE
 #ifdef IPA_OFFLOAD
-void dp_peer_get_tx_rx_stats(struct dp_peer *peer,
-			     struct cdp_interface_peer_stats *peer_stats_intf)
+static void
+dp_peer_get_tx_rx_stats(struct dp_peer *peer,
+			struct cdp_interface_peer_stats *peer_stats_intf)
 {
 	struct dp_rx_tid *rx_tid = NULL;
 	uint8_t i = 0;
@@ -4322,8 +4323,9 @@ void dp_peer_get_tx_rx_stats(struct dp_peer *peer,
 		peer->stats.tx.tx_ucast_success.bytes;
 }
 #else
-void dp_peer_get_tx_rx_stats(struct dp_peer *peer,
-			     struct cdp_interface_peer_stats *peer_stats_intf)
+static void
+dp_peer_get_tx_rx_stats(struct dp_peer *peer,
+			struct cdp_interface_peer_stats *peer_stats_intf)
 {
 	struct cdp_peer_stats *peer_stats = &peer->stats;
 
