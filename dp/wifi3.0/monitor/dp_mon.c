@@ -1438,8 +1438,9 @@ void dp_pktlogmod_exit(struct dp_pdev *pdev)
 
 #if defined(WDI_EVENT_ENABLE) && defined(QCA_ENHANCED_STATS_SUPPORT)
 #ifdef IPA_OFFLOAD
-void dp_peer_get_tx_rx_stats(struct dp_peer *peer,
-			     struct cdp_interface_peer_stats *peer_stats_intf)
+static void
+dp_peer_get_tx_rx_stats(struct dp_peer *peer,
+			struct cdp_interface_peer_stats *peer_stats_intf)
 {
 	struct dp_rx_tid *rx_tid = NULL;
 	uint8_t i = 0;
@@ -1457,8 +1458,9 @@ void dp_peer_get_tx_rx_stats(struct dp_peer *peer,
 		peer->monitor_peer->stats.tx.tx_ucast_success.bytes;
 }
 #else
-void dp_peer_get_tx_rx_stats(struct dp_peer *peer,
-			     struct cdp_interface_peer_stats *peer_stats_intf)
+static void
+dp_peer_get_tx_rx_stats(struct dp_peer *peer,
+			struct cdp_interface_peer_stats *peer_stats_intf)
 {
 	struct dp_txrx_peer *txrx_peer = NULL;
 	struct dp_peer *tgt_peer = NULL;
