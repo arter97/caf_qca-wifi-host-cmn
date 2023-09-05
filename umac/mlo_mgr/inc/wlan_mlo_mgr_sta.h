@@ -284,6 +284,26 @@ struct qdf_mac_addr *mlo_get_sta_ctx_bss_mld_addr(struct wlan_objmgr_vdev *vdev)
 	return NULL;
 }
 
+/**
+ * mlo_clear_bridge_sta_ctx() - clear bridge_sta_ctx
+ * @vdev: vdev object
+ *
+ * Return: none
+ */
+static inline
+void mlo_clear_bridge_sta_ctx(struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_mlo_dev_context *ml_dev = NULL;
+
+	if (!vdev || !vdev->mlo_dev_ctx)
+		return;
+
+	ml_dev = vdev->mlo_dev_ctx;
+	if (ml_dev->bridge_sta_ctx)
+		qdf_mem_zero(ml_dev->bridge_sta_ctx,
+			     sizeof(ml_dev->bridge_sta_ctx));
+}
+
 #else
 static inline
 void mlo_set_sta_ctx_bss_mld_addr(struct wlan_objmgr_vdev *vdev,
@@ -313,6 +333,10 @@ bool mlo_is_force_central_primary(struct wlan_objmgr_vdev *vdev)
 {
 	return false;
 }
+
+static inline
+void mlo_clear_bridge_sta_ctx(struct wlan_objmgr_vdev *vdev)
+{ }
 #endif
 /**
  * wlan_mlo_get_tdls_link_vdev() - API to get tdls link vdev
@@ -871,6 +895,10 @@ mlo_get_link_state_context(struct wlan_objmgr_psoc *psoc,
 			   get_ml_link_state_cb *resp_cb,
 			   void **context, uint8_t vdev_id);
 #else
+static inline
+void mlo_clear_bridge_sta_ctx(struct wlan_objmgr_vdev *vdev)
+{ }
+
 static inline
 void mlo_set_sta_ctx_bss_mld_addr(struct wlan_objmgr_vdev *vdev,
 				  struct qdf_mac_addr *bss_mld_addr)
