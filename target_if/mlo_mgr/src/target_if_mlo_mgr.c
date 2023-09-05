@@ -218,6 +218,53 @@ target_if_send_mlo_link_switch_cnf_cmd(struct wlan_objmgr_psoc *psoc,
 }
 
 static int
+target_if_mlo_link_state_switch_event_handler(ol_scn_t scn, uint8_t *data,
+					      uint32_t datalen)
+{
+	struct wlan_objmgr_psoc *psoc;
+	struct wmi_unified *wmi_handle;
+	struct wlan_lmac_if_mlo_rx_ops *mlo_rx_ops;
+	struct mlo_link_switch_state_info evt_params;
+	QDF_STATUS status;
+
+	if (!scn || !data) {
+		target_if_err("scn: 0x%pK, data: 0x%pK", scn, data);
+		return -EINVAL;
+	}
+
+	psoc = target_if_get_psoc_from_scn_hdl(scn);
+	if (!psoc) {
+		target_if_err("null psoc");
+		return -EINVAL;
+	}
+
+	wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
+	if (!wmi_handle) {
+		target_if_err("wmi_handle is null");
+		return -EINVAL;
+	}
+
+	mlo_rx_ops = target_if_mlo_get_rx_ops(psoc);
+	if (!mlo_rx_ops || !mlo_rx_ops->mlo_link_state_switch_event_handler) {
+		target_if_err("callback not registered");
+		return -EINVAL;
+	}
+
+	status = wmi_extract_mlo_link_state_switch_evt(wmi_handle, data,
+						       datalen,
+						       &evt_params);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		target_if_err("Unable to extract link state switch params");
+		goto exit;
+	}
+
+	status = mlo_rx_ops->mlo_link_state_switch_event_handler(psoc,
+								 &evt_params);
+exit:
+	return qdf_status_to_os_return(status);
+}
+
+static int
 target_if_mlo_link_switch_request_event_handler(ol_scn_t scn, uint8_t *data,
 						uint32_t datalen)
 {
@@ -282,6 +329,17 @@ target_if_mlo_register_link_switch_event_handler(struct wmi_unified *wmi_handle)
 			wmi_mlo_link_switch_request_eventid,
 			target_if_mlo_link_switch_request_event_handler,
 			WMI_RX_SERIALIZER_CTX);
+	if (QDF_IS_STATUS_ERROR(status))
+		target_if_err("Register event:%d failed",
+			      wmi_mlo_link_switch_request_eventid);
+
+	status = wmi_unified_register_event_handler(
+			wmi_handle, wmi_mlo_link_state_switch_eventid,
+			target_if_mlo_link_state_switch_event_handler,
+			WMI_RX_SERIALIZER_CTX);
+	if (QDF_IS_STATUS_ERROR(status))
+		target_if_err("Register event:%d failed",
+			      wmi_mlo_link_state_switch_eventid);
 
 	return status;
 }

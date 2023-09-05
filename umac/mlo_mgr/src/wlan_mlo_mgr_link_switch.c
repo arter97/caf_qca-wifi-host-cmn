@@ -1083,6 +1083,19 @@ QDF_STATUS mlo_mgr_link_switch_request_params(struct wlan_objmgr_psoc *psoc,
 	return status;
 }
 
+QDF_STATUS
+mlo_mgr_link_state_switch_info_handler(struct wlan_objmgr_psoc *psoc,
+				       struct mlo_link_switch_state_info *info)
+{
+	uint8_t i;
+
+	for (i = 0; i < info->num_params; i++)
+		wlan_connectivity_mld_link_status_event(psoc,
+							&info->link_switch_param[i]);
+
+	return QDF_STATUS_SUCCESS;
+}
+
 QDF_STATUS mlo_mgr_link_switch_complete(struct wlan_objmgr_vdev *vdev)
 {
 	enum mlo_link_switch_req_state state;

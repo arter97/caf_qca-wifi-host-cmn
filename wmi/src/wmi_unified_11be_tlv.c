@@ -1277,6 +1277,72 @@ extract_mlo_link_disable_request_evt_param_tlv(
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+static QDF_STATUS
+extract_mlo_link_state_switch_event_tlv(struct wmi_unified *wmi_handle,
+					void *evt_buf, uint8_t len,
+					struct mlo_link_switch_state_info *info)
+{
+	WMI_MLO_LINK_STATE_SWITCH_EVENTID_param_tlvs *param_buf = evt_buf;
+	wmi_mlo_link_state_switch_req_evt_fixed_param *fixed_param;
+	wmi_mlo_link_state_switch_trigger_reason *lnk_switch_param;
+	uint8_t i, num_tlv, rem_len;
+
+	if (!param_buf) {
+		wmi_err("param buf is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	fixed_param = param_buf->fixed_param;
+	if (!fixed_param) {
+		wmi_err("fixed param is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	num_tlv = fixed_param->link_state_switch_count;
+	if (num_tlv > MAX_LINK_SWITCH_TLV)
+		num_tlv = MAX_LINK_SWITCH_TLV;
+
+	rem_len = len - sizeof(*fixed_param);
+	if (rem_len <
+	    num_tlv * sizeof(wmi_mlo_link_state_switch_trigger_reason)) {
+		wmi_err_rl("Invalid link state switch TLVs rem_len:%d num_tlv:%d",
+			   rem_len, num_tlv);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	lnk_switch_param = param_buf->switch_trigger_reason;
+	if (!lnk_switch_param) {
+		wmi_err_rl("No TLV is present");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	info->num_params = num_tlv;
+	for (i = 0; i < num_tlv; i++) {
+		WMI_MAC_ADDR_TO_CHAR_ARRAY(&lnk_switch_param->ml_bssid,
+					   info->link_switch_param[i].mld_addr.bytes);
+
+		info->link_switch_param[i].active_link_bitmap =
+			lnk_switch_param->cur_active_ieee_bitmap;
+		info->link_switch_param[i].prev_link_bitmap =
+			lnk_switch_param->prev_active_ieee_bitmap;
+		info->link_switch_param[i].fw_timestamp =
+			lnk_switch_param->host_ref_fw_timestamp_ms;
+		info->link_switch_param[i].reason_code =
+			lnk_switch_param->reason_code;
+		wmi_debug("i:%d active_link_bmap:0x%x prev_bmap:0x%x reason_code:%d MLD addr: "QDF_MAC_ADDR_FMT,
+			  i, info->link_switch_param[i].active_link_bitmap,
+			  info->link_switch_param[i].prev_link_bitmap,
+			  info->link_switch_param[i].reason_code,
+			  QDF_MAC_ADDR_REF(info->link_switch_param[i].mld_addr.bytes));
+
+		lnk_switch_param++;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 #ifdef WLAN_FEATURE_11BE
 size_t peer_assoc_t2lm_params_size(struct peer_assoc_params *req)
 {
@@ -2592,5 +2658,7 @@ void wmi_11be_attach_tlv(wmi_unified_t wmi_handle)
 			extract_mlo_link_switch_request_event_tlv;
 	ops->send_mlo_link_switch_req_cnf_cmd =
 			send_link_switch_request_cnf_cmd_tlv;
+	ops->extract_mlo_link_state_switch_evt =
+		extract_mlo_link_state_switch_event_tlv;
 #endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
 }

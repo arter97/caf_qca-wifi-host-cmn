@@ -267,6 +267,21 @@ QDF_STATUS wmi_extract_mlo_link_disable_request_evt(
 		struct wmi_unified *wmi,
 		void *buf,
 		struct mlo_link_disable_request_evt_params *params);
+
+/**
+ * wmi_extract_mlo_link_state_switch_evt() - Extract the MLO link switch state
+ * event parameters
+ * @wmi: wmi handle
+ * @buf: pointer to event buffer
+ * @len: event data length
+ * @info: Info on link switch state change event
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wmi_extract_mlo_link_state_switch_evt(struct wmi_unified *wmi, void *buf,
+				      uint8_t len,
+				      struct mlo_link_switch_state_info *info);
 #endif /* WLAN_FEATURE_11BE */
 
 #ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE

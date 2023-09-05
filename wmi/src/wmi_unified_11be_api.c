@@ -104,6 +104,18 @@ wmi_extract_mlo_link_switch_request_evt(struct wmi_unified *wmi,
 
 	return QDF_STATUS_E_FAILURE;
 }
+
+QDF_STATUS
+wmi_extract_mlo_link_state_switch_evt(struct wmi_unified *wmi,
+				      void *buf, uint8_t len,
+				      struct mlo_link_switch_state_info *info)
+{
+	if (wmi->ops->extract_mlo_link_state_switch_evt)
+		return wmi->ops->extract_mlo_link_state_switch_evt(
+							wmi, buf, len, info);
+
+	return QDF_STATUS_SUCCESS;
+}
 #endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
 
 QDF_STATUS wmi_send_mlo_link_state_request_cmd(

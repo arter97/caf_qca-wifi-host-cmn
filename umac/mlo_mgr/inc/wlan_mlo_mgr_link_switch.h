@@ -524,6 +524,18 @@ mlo_mgr_link_switch_validate_request(struct wlan_objmgr_vdev *vdev,
 QDF_STATUS mlo_mgr_link_switch_request_params(struct wlan_objmgr_psoc *psoc,
 					      void *evt_params);
 /**
+ * mlo_mgr_link_state_switch_info_handler() - Handle Link State change related
+ * information and generate corresponding connectivity logging event
+ * @psoc: Pointer to PSOC object
+ * @info: Source info to be sent for the logging event
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+mlo_mgr_link_state_switch_info_handler(struct wlan_objmgr_psoc *psoc,
+				       struct mlo_link_switch_state_info *info);
+
+/**
  * mlo_mgr_link_switch_complete() - Link switch complete notification to FW
  * @vdev: VDV object manager
  *

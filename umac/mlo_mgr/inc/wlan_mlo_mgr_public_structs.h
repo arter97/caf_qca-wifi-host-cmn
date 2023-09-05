@@ -1496,6 +1496,36 @@ struct mlo_link_disable_request_evt_params {
 	uint32_t link_id_bitmap;
 };
 
+#define MAX_LINK_SWITCH_TLV 5
+/**
+ * struct mlo_link_switch_params - Structure to hold link State switch
+ * related parameters
+ * @mld_addr: MLD address
+ * @active_link_bitmap: Bitmap of ieee link id for active links
+ * @prev_link_bitmap: Bitmap of ieee link id for previous active links
+ * @fw_timestamp: Firmware timestamp in milliseconds
+ * @reason_code: Reason code for the switch
+ */
+struct mlo_link_switch_params {
+	struct qdf_mac_addr mld_addr;
+	uint32_t active_link_bitmap;
+	uint32_t prev_link_bitmap;
+	uint32_t fw_timestamp;
+	uint32_t reason_code;
+};
+
+/**
+ * struct mlo_link_switch_state_info  - Structure to hold the link switch
+ * related parameters corresponding to all the TLV received in link state switch
+ * event.
+ * @num_params: Number of the link switch parameters
+ * @link_switch_param: Link switch parameters
+ */
+struct mlo_link_switch_state_info {
+	uint8_t num_params;
+	struct mlo_link_switch_params link_switch_param[MAX_LINK_SWITCH_TLV];
+};
+
 #ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
 /**
  * struct peer_ptqm_migrate_entry - peer ptqm migrate entry
