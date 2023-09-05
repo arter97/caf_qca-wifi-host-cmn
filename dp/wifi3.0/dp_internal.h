@@ -201,6 +201,34 @@ static const enum cdp_packet_type hal_2_dp_pkt_type_map[HAL_DOT11_MAX] = {
 	[HAL_DOT11N_GF] = DOT11_MAX,
 };
 
+#ifdef GLOBAL_ASSERT_AVOIDANCE
+#define dp_assert_always_internal_stat(_expr, _handle, _field) \
+	(qdf_unlikely(!(_expr)) ? ((_handle)->stats._field++, true) : false)
+
+#define dp_assert_always_internal_ds_stat(_expr, _handle, _field) \
+				((_handle)->ppeds_stats._field++)
+
+static inline bool dp_assert_always_internal(bool expr)
+{
+	return !expr;
+}
+#else
+static inline bool __dp_assert_always_internal(bool expr)
+{
+	qdf_assert_always(expr);
+
+	return false;
+}
+
+#define dp_assert_always_internal(_expr) __dp_assert_always_internal(_expr)
+
+#define dp_assert_always_internal_stat(_expr, _handle, _field) \
+				dp_assert_always_internal(_expr)
+
+#define dp_assert_always_internal_ds_stat(_expr, _handle, _field) \
+				dp_assert_always_internal(_expr)
+#endif
+
 #ifdef WLAN_FEATURE_11BE
 /**
  * dp_get_mcs_array_index_by_pkt_type_mcs() - get the destination mcs index
@@ -970,7 +998,8 @@ dp_mon_rx_enable_mpdu_logging(struct dp_soc *soc, uint32_t *msg_word,
 }
 
 static inline void
-dp_mon_rx_wmask_subscribe(struct dp_soc *soc, uint32_t *msg_word,
+dp_mon_rx_wmask_subscribe(struct dp_soc *soc,
+			  uint32_t *msg_word, int pdev_id,
 			  struct htt_rx_ring_tlv_filter *tlv_filter)
 {
 }
@@ -1979,6 +2008,8 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		\
 		_tgtobj->rx.multicast.num += _srcobj->rx.multicast.num; \
 		_tgtobj->rx.multicast.bytes += _srcobj->rx.multicast.bytes; \
+		_tgtobj->rx.rx_success.num += _srcobj->rx.rx_success.num;\
+		_tgtobj->rx.rx_success.bytes += _srcobj->rx.rx_success.bytes;\
 		_tgtobj->rx.bcast.num += _srcobj->rx.bcast.num; \
 		_tgtobj->rx.bcast.bytes += _srcobj->rx.bcast.bytes; \
 		_tgtobj->rx.unicast.num += _srcobj->rx.unicast.num; \
@@ -2356,6 +2387,13 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		_tgtobj->rx_i.routed_eapol_pkt.bytes += \
 					_srcobj->rx_i.routed_eapol_pkt.bytes; \
 	} while (0)
+
+#define DP_UPDATE_VDEV_STATS(_tgtobj, _srcobj) \
+	do { \
+		DP_UPDATE_INGRESS_STATS(_tgtobj, _srcobj); \
+		DP_UPDATE_VDEV_STATS_FOR_UNMAPPED_PEERS(_tgtobj, _srcobj); \
+	} while (0)
+
 /**
  * dp_peer_find_attach() - Allocates memory for peer objects
  * @soc: SoC handle
@@ -3169,6 +3207,28 @@ void dp_print_peer_stats(struct dp_peer *peer,
  */
 void
 dp_print_pdev_tx_stats(struct dp_pdev *pdev);
+
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MCAST_MLO)
+/**
+ * dp_print_vdev_mlo_mcast_tx_stats(): Print vdev level mlo mcast tx stats
+ * @vdev: DP_VDEV Handle
+ *
+ * Return:void
+ */
+void
+dp_print_vdev_mlo_mcast_tx_stats(struct dp_vdev *vdev);
+#else
+/**
+ * dp_print_vdev_mlo_mcast_tx_stats(): Print vdev level mlo mcast tx stats
+ * @vdev: DP_VDEV Handle
+ *
+ * Return:void
+ */
+static inline
+void dp_print_vdev_mlo_mcast_tx_stats(struct dp_vdev *vdev)
+{
+}
+#endif
 
 /**
  * dp_print_pdev_rx_stats(): Print Pdev level RX stats

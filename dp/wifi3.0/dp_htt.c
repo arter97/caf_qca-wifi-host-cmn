@@ -1763,7 +1763,8 @@ int htt_h2t_rx_ring_cfg(struct htt_soc *htt_soc, int pdev_id,
 						msg_word,
 						(void *)htt_tlv_filter);
 
-	dp_mon_rx_wmask_subscribe(soc->dp_soc, msg_word, htt_tlv_filter);
+	dp_mon_rx_wmask_subscribe(soc->dp_soc, msg_word,
+				  pdev_id, htt_tlv_filter);
 
 	if (mon_drop_th > 0)
 		HTT_RX_RING_SELECTION_CFG_RX_DROP_THRESHOLD_SET(*msg_word,
@@ -3476,20 +3477,20 @@ dp_rx_mlo_timestamp_ind_handler(struct dp_soc *soc,
 static void dp_htt_mlo_peer_map_handler(struct htt_soc *soc,
 					uint32_t *msg_word)
 {
-	qdf_assert_always(0);
+	dp_alert("Unexpected event");
 }
 
 static void dp_htt_mlo_peer_unmap_handler(struct htt_soc *soc,
 					 uint32_t *msg_word)
 {
-	qdf_assert_always(0);
+	dp_alert("Unexpected event");
 }
 
 static void
 dp_rx_mlo_timestamp_ind_handler(void *soc_handle,
 				uint32_t *msg_word)
 {
-	qdf_assert_always(0);
+	dp_alert("Unexpected event");
 }
 
 static void dp_htt_t2h_primary_link_migration(struct htt_soc *soc,

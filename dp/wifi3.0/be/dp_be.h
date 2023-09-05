@@ -354,6 +354,11 @@ struct dp_soc_be {
 	struct {
 		struct {
 			uint64_t desc_alloc_failed;
+#ifdef GLOBAL_ASSERT_AVOIDANCE
+			uint32_t tx_comp_buf_src;
+			uint32_t tx_comp_desc_null;
+			uint32_t tx_comp_invalid_flag;
+#endif
 		} tx;
 	} ppeds_stats;
 #endif
@@ -410,7 +415,6 @@ struct dp_pdev_be {
  * @partner_vdev_list: partner list used for Intra-BSS
  * @bridge_vdev_list: partner bridge vdev list
  * @mlo_stats: structure to hold stats for mlo unmapped peers
- * @seq_num: DP MLO seq number
  * @mcast_primary: MLO Mcast primary vdev
  * @mlo_dev_ctxt: MLO device context pointer
  */
@@ -424,7 +428,6 @@ struct dp_vdev_be {
 	struct cdp_vdev_stats mlo_stats;
 #ifdef WLAN_FEATURE_11BE_MLO
 #ifdef WLAN_MCAST_MLO
-	uint16_t seq_num;
 	bool mcast_primary;
 #endif
 #endif
@@ -446,6 +449,7 @@ struct dp_vdev_be {
  * @is_bridge_vdev_present: flag to check if bridge vdev is present
  * @vdev_list_lock: lock to protect vdev list
  * @vdev_count: number of elements in the vdev list
+ * @seq_num: DP MLO multicast sequence number
  * @ref_cnt: reference count
  * @mod_refs: module reference count
  * @ref_delete_pending: flag to monitor last ref delete
@@ -460,6 +464,7 @@ struct dp_mlo_dev_ctxt {
 	bool is_bridge_vdev_present;
 	qdf_spinlock_t vdev_list_lock;
 	uint16_t vdev_count;
+	uint16_t seq_num;
 #endif
 	qdf_atomic_t ref_cnt;
 	qdf_atomic_t mod_refs[DP_MOD_ID_MAX];
@@ -811,6 +816,22 @@ static inline uintptr_t dp_cc_desc_find(struct dp_soc *soc,
 				spt_va_id * DP_CC_HW_READ_BYTES)));
 }
 
+/**
+ * dp_update_mlo_ctxt_stats() - aggregate stats from mlo ctx
+ * @buf: vdev stats buf
+ * @mlo_ctxt_stats: mlo ctxt stats
+ *
+ * return: void
+ */
+static inline
+void dp_update_mlo_ctxt_stats(void *buf,
+			      struct cdp_vdev_stats *mlo_ctxt_stats)
+{
+	struct cdp_vdev_stats *tgt_vdev_stats = (struct cdp_vdev_stats *)buf;
+
+	DP_UPDATE_VDEV_STATS(tgt_vdev_stats, mlo_ctxt_stats);
+}
+
 #ifdef WLAN_FEATURE_NEAR_FULL_IRQ
 /**
  * enum dp_srng_near_full_levels - SRNG Near FULL levels
@@ -962,6 +983,11 @@ void dp_mlo_update_link_to_pdev_map(struct dp_soc *soc, struct dp_pdev *pdev)
 static inline
 void dp_mlo_update_link_to_pdev_unmap(struct dp_soc *soc, struct dp_pdev *pdev)
 {
+}
+
+static inline uint8_t dp_mlo_get_chip_id(struct dp_soc *soc)
+{
+	return 0;
 }
 #endif
 

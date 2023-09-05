@@ -115,6 +115,26 @@ static QDF_STATUS dp_soc_detach_li(struct dp_soc *soc)
 	return QDF_STATUS_SUCCESS;
 }
 
+static QDF_STATUS dp_soc_interrupt_attach_li(struct cdp_soc_t *txrx_soc)
+{
+	return dp_soc_interrupt_attach(txrx_soc);
+}
+
+static QDF_STATUS dp_soc_attach_poll_li(struct cdp_soc_t *txrx_soc)
+{
+	return dp_soc_attach_poll(txrx_soc);
+}
+
+static void dp_soc_interrupt_detach_li(struct cdp_soc_t *txrx_soc)
+{
+	return dp_soc_interrupt_detach(txrx_soc);
+}
+
+static uint32_t dp_service_srngs_li(void *dp_ctx, uint32_t dp_budget, int cpu)
+{
+	return dp_service_srngs(dp_ctx, dp_budget, cpu);
+}
+
 static void *dp_soc_init_li(struct dp_soc *soc, HTC_HANDLE htc_handle,
 			    struct hif_opaque_softc *hif_handle)
 {
@@ -694,6 +714,10 @@ void dp_initialize_arch_ops_li(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_update_ring_hptp = dp_update_ring_hptp;
 #endif
 	arch_ops->dp_flush_tx_ring = dp_flush_tcl_ring;
+	arch_ops->dp_soc_interrupt_attach = dp_soc_interrupt_attach_li;
+	arch_ops->dp_soc_attach_poll = dp_soc_attach_poll_li;
+	arch_ops->dp_soc_interrupt_detach = dp_soc_interrupt_detach_li;
+	arch_ops->dp_service_srngs = dp_service_srngs_li;
 }
 
 #ifdef QCA_DP_TX_HW_SW_NBUF_DESC_PREFETCH

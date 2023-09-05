@@ -7503,9 +7503,9 @@ void dp_print_peer_stats(struct dp_peer *peer,
 
 	DP_PRINT_STATS("Node Rx Stats:");
 	DP_PRINT_STATS("Packets Sent To Stack = %llu",
-		       peer_stats->rx.to_stack.num);
+		       peer_stats->rx.rx_success.num);
 	DP_PRINT_STATS("Bytes Sent To Stack = %llu",
-		       peer_stats->rx.to_stack.bytes);
+		       peer_stats->rx.rx_success.bytes);
 	for (i = 0; i <  CDP_MAX_RX_RINGS; i++) {
 		DP_PRINT_STATS("Ring Id = %d", i);
 		DP_PRINT_STATS("	Packets Received = %llu",
@@ -8182,6 +8182,17 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 	dp_monitor_print_pdev_tx_capture_stats(pdev);
 }
 
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MCAST_MLO)
+void dp_print_vdev_mlo_mcast_tx_stats(struct dp_vdev *vdev)
+{
+	DP_PRINT_STATS("MLO MCAST TX stats:");
+	DP_PRINT_STATS("	send packet count = %u",
+		       vdev->stats.tx_i.mlo_mcast.send_pkt_count);
+	DP_PRINT_STATS("	failed packet count = %u",
+		       vdev->stats.tx_i.mlo_mcast.fail_pkt_count);
+}
+#endif
+
 #ifdef WLAN_SUPPORT_RX_FLOW_TAG
 static inline void dp_rx_basic_fst_stats(struct dp_pdev *pdev)
 {
@@ -8348,6 +8359,20 @@ void dp_dump_srng_high_wm_stats(struct dp_soc *soc, uint64_t srng_mask)
 }
 #endif
 
+#ifdef GLOBAL_ASSERT_AVOIDANCE
+static void dp_print_assert_war_stats(struct dp_soc *soc)
+{
+	DP_PRINT_STATS("Rx WAR stats: [%d] [%d] [%d] [%d]",
+		       soc->stats.rx.err.rx_desc_null,
+		       soc->stats.rx.err.wbm_err_buf_rel_type,
+		       soc->stats.rx.err.reo_err_rx_desc_null,
+		       soc->stats.rx.err.intra_bss_bad_chipid);
+}
+#else
+static void dp_print_assert_war_stats(struct dp_soc *soc)
+{
+}
+#endif
 void
 dp_print_soc_rx_stats(struct dp_soc *soc)
 {
@@ -8489,6 +8514,7 @@ dp_print_soc_rx_stats(struct dp_soc *soc)
 		       soc->stats.rx.err.defrag_ad1_invalid);
 	DP_PRINT_STATS("Rx decrypt error frame for valid peer:%d",
 		       soc->stats.rx.err.decrypt_err_drop);
+	dp_print_assert_war_stats(soc);
 }
 
 #ifdef FEATURE_TSO_STATS

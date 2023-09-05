@@ -4174,7 +4174,7 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 #endif
 	wlan_cfg_ctx->num_rxdma_dst_rings_per_pdev = NUM_RXDMA_RINGS_PER_PDEV;
 	wlan_cfg_ctx->num_rxdma_status_rings_per_pdev =
-					NUM_RXDMA_RINGS_PER_PDEV;
+					NUM_RXDMA_STATUS_RINGS_PER_PDEV;
 	wlan_soc_tx_capt_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_cfg_ctx->mpdu_retry_threshold_1 =
 			cfg_get(psoc, CFG_DP_MPDU_RETRY_THRESHOLD_1);
@@ -4419,7 +4419,7 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 #endif
 	wlan_cfg_ctx->num_rxdma_dst_rings_per_pdev = NUM_RXDMA_RINGS_PER_PDEV;
 	wlan_cfg_ctx->num_rxdma_status_rings_per_pdev =
-					NUM_RXDMA_RINGS_PER_PDEV;
+					NUM_RXDMA_STATUS_RINGS_PER_PDEV;
 	wlan_soc_tx_capt_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_cfg_ctx->mpdu_retry_threshold_1 =
 			cfg_get(psoc, CFG_DP_MPDU_RETRY_THRESHOLD_1);

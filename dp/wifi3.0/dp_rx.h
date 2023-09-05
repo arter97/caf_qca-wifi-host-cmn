@@ -589,7 +589,7 @@ struct dp_rx_desc *dp_get_rx_mon_status_desc_from_cookie(struct dp_soc *soc,
 	struct rx_desc_pool *rx_desc_pool;
 	union dp_rx_desc_list_elem_t *rx_desc_elem;
 
-	if (qdf_unlikely(pool_id >= NUM_RXDMA_RINGS_PER_PDEV))
+	if (qdf_unlikely(pool_id >= NUM_RXDMA_STATUS_RINGS_PER_PDEV))
 		return NULL;
 
 	rx_desc_pool = &pool[pool_id];
@@ -2438,10 +2438,31 @@ dp_rx_nbuf_set_link_id_from_tlv(struct dp_soc *soc, uint8_t *tlv_hdr,
 	if (soc->arch_ops.dp_rx_peer_set_link_id)
 		soc->arch_ops.dp_rx_peer_set_link_id(nbuf, peer_metadata);
 }
+
+/**
+ * dp_rx_set_nbuf_band() - Set band info in nbuf cb
+ * @nbuf: nbuf pointer
+ * @txrx_peer: txrx_peer pointer
+ * @link_id: Peer Link ID
+ *
+ * Returen: None
+ */
+static inline void
+dp_rx_set_nbuf_band(qdf_nbuf_t nbuf, struct dp_txrx_peer *txrx_peer,
+		    uint8_t link_id)
+{
+	qdf_nbuf_rx_set_band(nbuf, txrx_peer->band[link_id]);
+}
 #else
 static inline void
 dp_rx_nbuf_set_link_id_from_tlv(struct dp_soc *soc, uint8_t *tlv_hdr,
 				qdf_nbuf_t nbuf)
+{
+}
+
+static inline void
+dp_rx_set_nbuf_band(qdf_nbuf_t nbuf, struct dp_txrx_peer *txrx_peer,
+		    uint8_t link_id)
 {
 }
 #endif
@@ -3510,6 +3531,13 @@ static inline void dp_rx_wbm_sg_list_reset(struct dp_soc *soc)
 
 static inline void dp_rx_wbm_sg_list_deinit(struct dp_soc *soc)
 {
+}
+
+static inline uint32_t
+dp_rxdma_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
+		     uint32_t mac_id, uint32_t quota)
+{
+	return 0;
 }
 #endif /* WLAN_SOFTUMAC_SUPPORT */
 

@@ -230,4 +230,33 @@ dp_get_interface_stats_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
  * Return: none
  */
 void dp_mlo_debug_print_ptnr_info(struct dp_vdev *vdev);
+
+/*
+ * dp_mlo_get_chip_id() - return MLO chip id
+ * @soc: DP soc
+ *
+ * Return: chip_id
+ */
+uint8_t dp_mlo_get_chip_id(struct dp_soc *soc);
+
+/*
+ * dp_mlo_link_peer_hash_find_by_chip_id() - returns mlo link peer on chip_id
+ *			      peer_hash_table matching vdev_id and mac_address
+ * @soc: partner soc handle in MLO
+ * @peer_mac_addr: peer mac address
+ * @mac_addr_is_aligned: is mac addr aligned
+ * @vdev_id: vdev_id
+ * @chip_id: mlo_chip_id
+ * @mod_id: id of module requesting reference
+ *
+ * return: peer in success
+ *         NULL in failure
+ */
+struct dp_peer *
+dp_mlo_link_peer_hash_find_by_chip_id(struct dp_soc *soc,
+				      uint8_t *peer_mac_addr,
+				      int mac_addr_is_aligned,
+				      uint8_t vdev_id,
+				      uint8_t chip_id,
+				      enum dp_mod_id mod_id);
 #endif /* __DP_MLO_H */

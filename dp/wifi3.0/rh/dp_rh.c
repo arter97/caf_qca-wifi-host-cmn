@@ -58,6 +58,28 @@ dp_srng_init_rh(struct dp_soc *soc, struct dp_srng *srng, int ring_type,
 		(void *)ring_params.ring_base_paddr,
 		ring_params.num_entries);
 
+	if (soc->cdp_soc.ol_ops->get_con_mode &&
+	    soc->cdp_soc.ol_ops->get_con_mode() ==
+	    QDF_GLOBAL_MONITOR_MODE) {
+		if (soc->intr_mode == DP_INTR_MSI &&
+		    !dp_skip_msi_cfg(soc, ring_type)) {
+			dp_srng_msi_setup(soc, srng, &ring_params,
+					  ring_type, ring_num);
+			dp_verbose_debug("Using MSI for ring_type: %d, ring_num %d",
+					 ring_type, ring_num);
+		} else {
+			ring_params.msi_data = 0;
+			ring_params.msi_addr = 0;
+			dp_srng_set_msi2_ring_params(soc, &ring_params, 0, 0);
+			dp_verbose_debug("Skipping MSI for ring_type: %d, ring_num %d",
+					 ring_type, ring_num);
+		}
+
+		dp_srng_configure_interrupt_thresholds(soc, &ring_params,
+						       ring_type, ring_num,
+						       srng->num_entries);
+	}
+
 	srng->hal_srng = hal_srng_setup(hal_soc, ring_type, ring_num,
 					mac_id, &ring_params, 0);
 
@@ -365,6 +387,10 @@ static void *dp_soc_init_rh(struct dp_soc *soc, HTC_HANDLE htc_handle,
 	    QDF_GLOBAL_MONITOR_MODE)
 		is_monitor_mode = true;
 
+	if (is_monitor_mode)
+		wlan_cfg_fill_interrupt_mask(soc->wlan_cfg_ctx, 0,
+					     soc->intr_mode, is_monitor_mode,
+					     false, soc->umac_reset_supported);
 	if (dp_soc_srng_init(soc)) {
 		dp_init_err("%pK: dp_soc_srng_init failed", soc);
 		goto fail3;
@@ -461,6 +487,155 @@ fail2:
 	htt_soc_detach(htt_soc);
 fail1:
 	return NULL;
+}
+
+static void dp_soc_interrupt_detach_rh(struct cdp_soc_t *txrx_soc)
+{
+	struct dp_soc *soc = (struct dp_soc *)txrx_soc;
+	int i;
+
+	if (soc->intr_mode == DP_INTR_POLL) {
+		qdf_timer_free(&soc->int_timer);
+	} else {
+		hif_deconfigure_ext_group_interrupts(soc->hif_handle);
+		hif_deregister_exec_group(soc->hif_handle, "dp_intr");
+	}
+
+	for (i = 0; i < wlan_cfg_get_num_contexts(soc->wlan_cfg_ctx); i++) {
+		soc->intr_ctx[i].rx_mon_ring_mask = 0;
+		soc->intr_ctx[i].rxdma2host_ring_mask = 0;
+
+		hif_event_history_deinit(soc->hif_handle, i);
+		qdf_lro_deinit(soc->intr_ctx[i].lro_ctx);
+	}
+
+	qdf_mem_set(&soc->mon_intr_id_lmac_map,
+		    sizeof(soc->mon_intr_id_lmac_map),
+		    DP_MON_INVALID_LMAC_ID);
+}
+
+static QDF_STATUS dp_soc_interrupt_attach_rh(struct cdp_soc_t *txrx_soc)
+{
+	struct dp_soc *soc = (struct dp_soc *)txrx_soc;
+	int i = 0;
+	int num_irq = 0;
+	int lmac_id = 0;
+	int napi_scale;
+
+	qdf_mem_set(&soc->mon_intr_id_lmac_map,
+		    sizeof(soc->mon_intr_id_lmac_map), DP_MON_INVALID_LMAC_ID);
+
+	if (soc->cdp_soc.ol_ops->get_con_mode &&
+	    soc->cdp_soc.ol_ops->get_con_mode() !=
+	    QDF_GLOBAL_MONITOR_MODE)
+		return QDF_STATUS_SUCCESS;
+
+	for (i = 0; i < wlan_cfg_get_num_contexts(soc->wlan_cfg_ctx); i++) {
+		int ret = 0;
+
+		/* Map of IRQ ids registered with one interrupt context */
+		int irq_id_map[HIF_MAX_GRP_IRQ];
+
+		int rx_mon_mask =
+			dp_soc_get_mon_mask_for_interrupt_mode(soc, i);
+		int rxdma2host_ring_mask =
+			wlan_cfg_get_rxdma2host_ring_mask(soc->wlan_cfg_ctx, i);
+
+		soc->intr_ctx[i].dp_intr_id = i;
+		soc->intr_ctx[i].rx_mon_ring_mask = rx_mon_mask;
+		soc->intr_ctx[i].rxdma2host_ring_mask = rxdma2host_ring_mask;
+		soc->intr_ctx[i].soc = soc;
+
+		num_irq = 0;
+
+		dp_soc_interrupt_map_calculate(soc, i, &irq_id_map[0],
+					       &num_irq);
+
+		napi_scale = wlan_cfg_get_napi_scale_factor(soc->wlan_cfg_ctx);
+		if (!napi_scale)
+			napi_scale = QCA_NAPI_DEF_SCALE_BIN_SHIFT;
+
+		ret = hif_register_ext_group(soc->hif_handle,
+					     num_irq, irq_id_map, dp_service_srngs_wrapper,
+					     &soc->intr_ctx[i], "dp_intr",
+					     HIF_EXEC_NAPI_TYPE, napi_scale);
+
+		dp_debug(" int ctx %u num_irq %u irq_id_map %u %u",
+			 i, num_irq, irq_id_map[0], irq_id_map[1]);
+
+		if (ret) {
+			dp_init_err("%pK: failed, ret = %d", soc, ret);
+			dp_soc_interrupt_detach_rh(txrx_soc);
+			return QDF_STATUS_E_FAILURE;
+		}
+
+		hif_event_history_init(soc->hif_handle, i);
+		soc->intr_ctx[i].lro_ctx = qdf_lro_init();
+
+		if (dp_is_mon_mask_valid(soc, &soc->intr_ctx[i])) {
+			soc->mon_intr_id_lmac_map[lmac_id] = i;
+			lmac_id++;
+		}
+	}
+
+	hif_configure_ext_group_interrupts(soc->hif_handle);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS dp_soc_attach_poll_rh(struct cdp_soc_t *txrx_soc)
+{
+	struct dp_soc *soc = (struct dp_soc *)txrx_soc;
+	uint32_t lmac_id = 0;
+	int i;
+
+	qdf_mem_set(&soc->mon_intr_id_lmac_map,
+		    sizeof(soc->mon_intr_id_lmac_map), DP_MON_INVALID_LMAC_ID);
+	soc->intr_mode = DP_INTR_POLL;
+
+	for (i = 0; i < wlan_cfg_get_num_contexts(soc->wlan_cfg_ctx); i++) {
+		soc->intr_ctx[i].rx_mon_ring_mask =
+				wlan_cfg_get_rx_mon_ring_mask(soc->wlan_cfg_ctx, i);
+
+		if (dp_is_mon_mask_valid(soc, &soc->intr_ctx[i])) {
+			hif_event_history_init(soc->hif_handle, i);
+			soc->mon_intr_id_lmac_map[lmac_id] = i;
+			lmac_id++;
+		}
+	}
+
+	qdf_timer_init(soc->osdev, &soc->int_timer,
+		       dp_interrupt_timer, (void *)soc,
+		       QDF_TIMER_TYPE_WAKE_APPS);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static uint32_t dp_service_srngs_rh(void *dp_ctx, uint32_t dp_budget, int cpu)
+{
+	struct dp_intr *int_ctx = (struct dp_intr *)dp_ctx;
+	struct dp_soc *soc = int_ctx->soc;
+	uint32_t work_done  = 0;
+	int budget = dp_budget;
+	uint32_t remaining_quota = dp_budget;
+
+	if (qdf_unlikely(!dp_monitor_is_vdev_timer_running(soc))) {
+		work_done = dp_process_lmac_rings(int_ctx, remaining_quota);
+		if (work_done) {
+			budget -=  work_done;
+			if (budget <= 0)
+				goto budget_done;
+			remaining_quota = budget;
+		}
+	}
+
+budget_done:
+	qdf_atomic_clear_bit(cpu, &soc->service_rings_running);
+
+	if (soc->notify_fw_callback)
+		soc->notify_fw_callback(soc);
+
+	return dp_budget - budget;
 }
 
 /**
@@ -809,4 +984,8 @@ void dp_initialize_arch_ops_rh(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_update_ring_hptp = dp_update_ring_hptp_rh;
 #endif
 	arch_ops->dp_flush_tx_ring = dp_flush_tx_ring_rh;
+	arch_ops->dp_soc_interrupt_attach = dp_soc_interrupt_attach_rh;
+	arch_ops->dp_soc_attach_poll = dp_soc_attach_poll_rh;
+	arch_ops->dp_soc_interrupt_detach = dp_soc_interrupt_detach_rh;
+	arch_ops->dp_service_srngs = dp_service_srngs_rh;
 }

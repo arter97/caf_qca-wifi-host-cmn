@@ -1444,17 +1444,25 @@ cm_get_band_score(uint32_t freq, struct scoring_cfg *score_config)
 
 #ifdef WLAN_FEATURE_11BE
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
-bool cm_is_eht_allowed_for_current_security(struct scan_cache_entry *scan_entry)
+bool wlan_cm_is_eht_allowed_for_current_security(
+			struct scan_cache_entry *scan_entry)
 {
 	const uint8_t *rsnxe, *rsnxe_caps;
 	uint8_t cap_len;
 
-	if (!scan_entry->ie_list.rsn)
+	if (!scan_entry->ie_list.rsn) {
+		mlme_debug(QDF_MAC_ADDR_FMT ": RSN IE not present",
+			   QDF_MAC_ADDR_REF(scan_entry->bssid.bytes));
 		return false;
+	}
 
 	/* check AKM chosen for connection is PSK */
-	if (WLAN_CRYPTO_IS_AKM_WPA2_PSK(scan_entry->neg_sec_info.key_mgmt))
+	if (WLAN_CRYPTO_IS_AKM_WPA2_PSK(scan_entry->neg_sec_info.key_mgmt)) {
+		mlme_debug(QDF_MAC_ADDR_FMT ": AKM 0x%x not valid",
+			   QDF_MAC_ADDR_REF(scan_entry->bssid.bytes),
+					    scan_entry->neg_sec_info.key_mgmt);
 		return false;
+	}
 
 	/*
 	 * check AKM chosen for connection is SAE or not
@@ -1462,9 +1470,14 @@ bool cm_is_eht_allowed_for_current_security(struct scan_cache_entry *scan_entry)
 	 */
 	if (!WLAN_CRYPTO_IS_AKM_SAE(scan_entry->neg_sec_info.key_mgmt))
 		return true;
+
 	rsnxe = util_scan_entry_rsnxe(scan_entry);
-	if (!rsnxe)
+	if (!rsnxe) {
+		mlme_debug(QDF_MAC_ADDR_FMT ": AKM 0x%x not valid",
+			   QDF_MAC_ADDR_REF(scan_entry->bssid.bytes),
+					    scan_entry->neg_sec_info.key_mgmt);
 		return false;
+	}
 	rsnxe_caps = wlan_crypto_parse_rsnxe_ie(rsnxe, &cap_len);
 	if (!rsnxe_caps) {
 		mlme_debug("RSNXE caps not present");
@@ -1473,6 +1486,9 @@ bool cm_is_eht_allowed_for_current_security(struct scan_cache_entry *scan_entry)
 	/* check if H2E bit is enabled in RSNXE */
 	if (*rsnxe_caps & WLAN_CRYPTO_RSNX_CAP_SAE_H2E)
 		return true;
+
+	mlme_debug(QDF_MAC_ADDR_FMT ": RSNXE caps (0x%x) dont have H2E support",
+		   QDF_MAC_ADDR_REF(scan_entry->bssid.bytes), *rsnxe_caps);
 	return false;
 }
 #endif
@@ -1488,7 +1504,7 @@ static int cm_calculate_eht_score(struct scan_cache_entry *entry,
 	if (!phy_config->eht_cap || !entry->ie_list.ehtcap)
 		return 0;
 
-	if (!cm_is_eht_allowed_for_current_security(entry))
+	if (!wlan_cm_is_eht_allowed_for_current_security(entry))
 		return 0;
 
 	weight_config = &score_config->weight_config;
@@ -2341,7 +2357,7 @@ static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 		return score;
 	}
 
-	if (cm_is_eht_allowed_for_current_security(entry))
+	if (wlan_cm_is_eht_allowed_for_current_security(entry))
 		score += cm_calculate_ml_scores(psoc, entry, score_config,
 						phy_config, scan_list,
 						is_link_score, bss_mlo_type,

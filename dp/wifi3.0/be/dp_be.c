@@ -100,6 +100,31 @@ static void dp_ppeds_rings_status(struct dp_soc *soc)
 				    WBM2SW_RELEASE);
 }
 
+#ifdef GLOBAL_ASSERT_AVOIDANCE
+void dp_ppeds_print_assert_war_stats(struct dp_soc_be *be_soc)
+{
+	DP_PRINT_STATS("PPE-DS Tx WAR stats: [%u] [%u] [%u]",
+		       be_soc->ppeds_stats.tx.tx_comp_buf_src,
+		       be_soc->ppeds_stats.tx.tx_comp_desc_null,
+		       be_soc->ppeds_stats.tx.tx_comp_invalid_flag);
+}
+
+static void dp_ppeds_clear_assert_war_stats(struct dp_soc_be *be_soc)
+{
+	be_soc->ppeds_stats.tx.tx_comp_buf_src = 0;
+	be_soc->ppeds_stats.tx.tx_comp_desc_null = 0;
+	be_soc->ppeds_stats.tx.tx_comp_invalid_flag = 0;
+}
+#else
+static void dp_ppeds_print_assert_war_stats(struct dp_soc_be *be_soc)
+{
+}
+
+static void dp_ppeds_clear_assert_war_stats(struct dp_soc_be *be_soc)
+{
+}
+#endif
+
 static void dp_ppeds_inuse_desc(struct dp_soc *soc)
 {
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
@@ -110,6 +135,8 @@ static void dp_ppeds_inuse_desc(struct dp_soc *soc)
 
 	DP_PRINT_STATS("PPE-DS Tx desc alloc failed %u",
 		       be_soc->ppeds_stats.tx.desc_alloc_failed);
+
+	dp_ppeds_print_assert_war_stats(be_soc);
 }
 
 static void dp_ppeds_clear_stats(struct dp_soc *soc)
@@ -117,6 +144,7 @@ static void dp_ppeds_clear_stats(struct dp_soc *soc)
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
 
 	be_soc->ppeds_stats.tx.desc_alloc_failed = 0;
+	dp_ppeds_clear_assert_war_stats(be_soc);
 }
 
 static void dp_ppeds_rings_stats(struct dp_soc *soc)
@@ -915,7 +943,6 @@ dp_mlo_mcast_init(struct dp_soc *soc, struct dp_vdev *vdev)
 	struct dp_vdev_be *be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
 
 	be_vdev->mcast_primary = false;
-	be_vdev->seq_num = 0;
 
 	hal_tx_mcast_mlo_reinject_routing_set(
 				soc->hal_soc,
@@ -933,7 +960,6 @@ dp_mlo_mcast_deinit(struct dp_soc *soc, struct dp_vdev *vdev)
 {
 	struct dp_vdev_be *be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
 
-	be_vdev->seq_num = 0;
 	be_vdev->mcast_primary = false;
 	vdev->mlo_vdev = 0;
 }
@@ -1900,6 +1926,26 @@ QDF_STATUS dp_srng_init_be(struct dp_soc *soc, struct dp_srng *srng,
 	return dp_srng_init_idx(soc, srng, ring_type, ring_num, mac_id, 0);
 }
 
+static QDF_STATUS dp_soc_interrupt_attach_be(struct cdp_soc_t *txrx_soc)
+{
+	return dp_soc_interrupt_attach(txrx_soc);
+}
+
+static QDF_STATUS dp_soc_attach_poll_be(struct cdp_soc_t *txrx_soc)
+{
+	return dp_soc_attach_poll(txrx_soc);
+}
+
+static void dp_soc_interrupt_detach_be(struct cdp_soc_t *txrx_soc)
+{
+	return dp_soc_interrupt_detach(txrx_soc);
+}
+
+static uint32_t dp_service_srngs_be(void *dp_ctx, uint32_t dp_budget, int cpu)
+{
+	return dp_service_srngs(dp_ctx, dp_budget, cpu);
+}
+
 #ifdef WLAN_SUPPORT_PPEDS
 static void dp_soc_ppeds_srng_deinit(struct dp_soc *soc)
 {
@@ -2449,8 +2495,15 @@ void dp_print_mlo_ast_stats_be(struct dp_soc *soc)
 	}
 	qdf_spin_unlock_bh(&mld_hash_obj->mld_peer_hash_lock);
 }
+#else /* WLAN_FEATURE_11BE_MLO */
+void dp_mlo_dev_ctxt_list_attach_wrapper(dp_mlo_dev_obj_t mlo_dev_obj)
+{
+}
 
-#endif
+void dp_mlo_dev_ctxt_list_detach_wrapper(dp_mlo_dev_obj_t mlo_dev_obj)
+{
+}
+#endif /* WLAN_FEATURE_11BE_MLO */
 
 #if defined(DP_UMAC_HW_HARD_RESET) && defined(DP_UMAC_HW_RESET_SUPPORT)
 static void dp_reconfig_tx_vdev_mcast_ctrl_be(struct dp_soc *soc,
@@ -2904,6 +2957,7 @@ QDF_STATUS dp_mlo_dev_ctxt_create(struct cdp_soc_t *soc_hdl,
 	qdf_mem_set(mlo_dev_ctxt->bridge_vdev,
 		    WLAN_MAX_MLO_CHIPS * WLAN_MAX_MLO_LINKS_PER_SOC,
 		    CDP_INVALID_VDEV_ID);
+	mlo_dev_ctxt->seq_num = 0;
 
 	/* Add mlo_dev_ctxt to the global DP MLO list */
 	qdf_spin_lock_bh(&mlo_dev_obj->mlo_dev_list_lock);
@@ -3005,6 +3059,11 @@ QDF_STATUS dp_mlo_dev_ctxt_vdev_attach(struct cdp_soc_t *soc_hdl,
 
 	/* ref for holding MLO ctxt in be_vdev */
 	dp_mlo_dev_get_ref(mlo_dev_ctxt, DP_MOD_ID_CHILD);
+	/* Save vdev stats in MLO dev ctx */
+	dp_update_mlo_ctxt_stats(&mlo_dev_ctxt->stats, &vdev->stats);
+
+	/* reset vdev stats to zero */
+	qdf_mem_set(&vdev->stats, sizeof(struct cdp_vdev_stats), 0);
 
 	/* unref for mlo ctxt taken at the start of this function */
 	dp_mlo_dev_ctxt_unref_delete(mlo_dev_ctxt, DP_MOD_ID_MLO_DEV);
@@ -3051,6 +3110,7 @@ QDF_STATUS dp_mlo_dev_ctxt_vdev_detach(struct cdp_soc_t *soc_hdl,
 			return QDF_STATUS_E_INVAL;
 		}
 		mlo_dev_ctxt = be_vdev->mlo_dev_ctxt;
+		dp_mlo_dev_get_ref(mlo_dev_ctxt, DP_MOD_ID_MLO_DEV);
 	}
 
 	dp_detach_vdev_list_in_mlo_dev_ctxt(be_soc, vdev, mlo_dev_ctxt);
@@ -3128,6 +3188,12 @@ dp_initialize_arch_ops_be_mlo_multi_chip(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_partner_chips_map = dp_mlo_partner_chips_map;
 	arch_ops->dp_partner_chips_unmap = dp_mlo_partner_chips_unmap;
 	arch_ops->dp_soc_get_by_idle_bm_id = dp_soc_get_by_idle_bm_id;
+	arch_ops->dp_get_soc_by_chip_id = dp_get_soc_by_chip_id_be;
+	arch_ops->dp_mlo_print_ptnr_info = dp_mlo_debug_print_ptnr_info;
+	arch_ops->dp_get_interface_stats = dp_get_interface_stats_be;
+	arch_ops->mlo_get_chip_id = dp_mlo_get_chip_id;
+	arch_ops->mlo_link_peer_find_hash_find_by_chip_id =
+				dp_mlo_link_peer_hash_find_by_chip_id;
 }
 #else
 static inline void
@@ -3150,12 +3216,6 @@ dp_initialize_arch_ops_be_mlo(struct dp_arch_ops *arch_ops)
 	arch_ops->mlo_peer_find_hash_find = dp_mlo_peer_find_hash_find_be;
 	arch_ops->get_hw_link_id = dp_get_hw_link_id_be;
 }
-#else /* WLAN_FEATURE_11BE_MLO */
-static inline void
-dp_initialize_arch_ops_be_mlo(struct dp_arch_ops *arch_ops)
-{
-}
-#endif /* WLAN_FEATURE_11BE_MLO */
 
 static struct cdp_cmn_mlo_ops dp_cmn_mlo_ops = {
 	.mlo_dev_ctxt_create = dp_mlo_dev_ctxt_create,
@@ -3168,6 +3228,16 @@ void dp_soc_initialize_cdp_cmn_mlo_ops(struct dp_soc *soc)
 {
 	soc->cdp_soc.ops->cmn_mlo_ops = &dp_cmn_mlo_ops;
 }
+#else /* WLAN_FEATURE_11BE_MLO */
+static inline void
+dp_initialize_arch_ops_be_mlo(struct dp_arch_ops *arch_ops)
+{
+}
+
+void dp_soc_initialize_cdp_cmn_mlo_ops(struct dp_soc *soc)
+{
+}
+#endif /* WLAN_FEATURE_11BE_MLO */
 
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 #define DP_LMAC_PEER_ID_MSB_LEGACY 2
@@ -3314,7 +3384,6 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_wbm_get_rx_desc_from_hal_desc =
 				dp_wbm_get_rx_desc_from_hal_desc_be;
 	arch_ops->dp_tx_compute_hw_delay = dp_tx_compute_tx_delay_be;
-	arch_ops->dp_rx_chain_msdus = dp_rx_chain_msdus_be;
 	arch_ops->dp_rx_wbm_err_reap_desc = dp_rx_wbm_err_reap_desc_be;
 	arch_ops->dp_rx_null_q_desc_handle = dp_rx_null_q_desc_handle_be;
 #endif
@@ -3350,10 +3419,6 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 	arch_ops->tx_implicit_rbm_set = dp_tx_implicit_rbm_set_be;
 	arch_ops->txrx_set_vdev_param = dp_txrx_set_vdev_param_be;
 	dp_initialize_arch_ops_be_mlo(arch_ops);
-#ifdef WLAN_MLO_MULTI_CHIP
-	arch_ops->dp_get_soc_by_chip_id = dp_get_soc_by_chip_id_be;
-	arch_ops->dp_mlo_print_ptnr_info = dp_mlo_debug_print_ptnr_info;
-#endif
 	arch_ops->dp_soc_get_num_soc = dp_soc_get_num_soc_be;
 	arch_ops->dp_peer_rx_reorder_queue_setup =
 					dp_peer_rx_reorder_queue_setup_be;
@@ -3403,13 +3468,14 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 	arch_ops->txrx_srng_init = dp_srng_init_be;
 	arch_ops->dp_get_vdev_stats_for_unmap_peer =
 					dp_get_vdev_stats_for_unmap_peer_be;
-#ifdef WLAN_MLO_MULTI_CHIP
-	arch_ops->dp_get_interface_stats = dp_get_interface_stats_be;
-#endif
 #if defined(DP_POWER_SAVE) || defined(FEATURE_RUNTIME_PM)
 	arch_ops->dp_update_ring_hptp = dp_update_ring_hptp;
 #endif
 	arch_ops->dp_flush_tx_ring = dp_flush_tcl_ring;
+	arch_ops->dp_soc_interrupt_attach = dp_soc_interrupt_attach_be;
+	arch_ops->dp_soc_attach_poll = dp_soc_attach_poll_be;
+	arch_ops->dp_soc_interrupt_detach = dp_soc_interrupt_detach_be;
+	arch_ops->dp_service_srngs = dp_service_srngs_be;
 	dp_initialize_arch_ops_be_ipa(arch_ops);
 	dp_initialize_arch_ops_be_single_dev(arch_ops);
 	dp_initialize_arch_ops_be_fisa(arch_ops);

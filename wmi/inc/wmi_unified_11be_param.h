@@ -78,10 +78,12 @@ enum wmi_mlo_setup_status {
 /** struct wmi_mlo_setup_complete_params - MLO setup complete event params
  * @pdev_id: pdev id of radio on which this event is received
  * @status: status code
+ * @max_ml_peer_ids: Maximum ML Peer ID's
  */
 struct wmi_mlo_setup_complete_params {
 	uint32_t pdev_id;
 	enum wmi_mlo_setup_status status;
+	uint32_t max_ml_peer_ids;
 };
 
 /** enum wmi_mlo_teardown_status - Status code in WMI MLO teardown completion

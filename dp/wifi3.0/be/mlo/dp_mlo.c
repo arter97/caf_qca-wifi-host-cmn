@@ -925,6 +925,9 @@ static QDF_STATUS dp_mlo_get_mld_vdev_stats(struct cdp_soc_t *soc_hdl,
 				      DP_LINK_VDEV_ITER);
 	}
 
+	/* Aggregate vdev stats from MLO ctx for detached MLO Links */
+	dp_update_mlo_ctxt_stats(buf, &vdev_be->mlo_dev_ctxt->stats);
+
 complete:
 	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_GENERIC_STATS);
 	return ret;
@@ -1135,12 +1138,12 @@ uint8_t dp_mlo_get_chip_id(struct dp_soc *soc)
 qdf_export_symbol(dp_mlo_get_chip_id);
 
 struct dp_peer *
-dp_link_peer_hash_find_by_chip_id(struct dp_soc *soc,
-				  uint8_t *peer_mac_addr,
-				  int mac_addr_is_aligned,
-				  uint8_t vdev_id,
-				  uint8_t chip_id,
-				  enum dp_mod_id mod_id)
+dp_mlo_link_peer_hash_find_by_chip_id(struct dp_soc *soc,
+				      uint8_t *peer_mac_addr,
+				      int mac_addr_is_aligned,
+				      uint8_t vdev_id,
+				      uint8_t chip_id,
+				      enum dp_mod_id mod_id)
 {
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
 	struct dp_mlo_ctxt *mlo_ctxt = be_soc->ml_ctxt;
@@ -1162,7 +1165,7 @@ dp_link_peer_hash_find_by_chip_id(struct dp_soc *soc,
 	return peer;
 }
 
-qdf_export_symbol(dp_link_peer_hash_find_by_chip_id);
+qdf_export_symbol(dp_mlo_link_peer_hash_find_by_chip_id);
 
 void dp_mlo_get_rx_hash_key(struct dp_soc *soc,
 			    struct cdp_lro_hash_config *lro_hash)

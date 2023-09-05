@@ -462,6 +462,7 @@ struct qca_napi_data {
  * @enable_runtime_pm: Enable Runtime PM
  * @runtime_pm_delay: Runtime PM Delay
  * @rx_softirq_max_yield_duration_ns: Max Yield time duration for RX Softirq
+ * @enable_ce_dp_irq_affine: Enable affinity for CE DP IRQs
  *
  * Structure for holding HIF ini parameters.
  */
@@ -472,6 +473,9 @@ struct hif_config_info {
 	u_int32_t runtime_pm_delay;
 #endif
 	uint64_t rx_softirq_max_yield_duration_ns;
+#ifdef FEATURE_ENABLE_CE_DP_IRQ_AFFINE
+	bool enable_ce_dp_irq_affine;
+#endif
 };
 
 /**
@@ -2469,7 +2473,8 @@ void hif_log_ce_info(struct hif_softc *scn, uint8_t *data,
 }
 #endif
 
-#ifdef HIF_CPU_PERF_AFFINE_MASK
+#if defined(HIF_CPU_PERF_AFFINE_MASK) || \
+	defined(FEATURE_ENABLE_CE_DP_IRQ_AFFINE)
 /**
  * hif_config_irq_set_perf_affinity_hint() - API to set affinity
  * @hif_ctx: hif opaque handle

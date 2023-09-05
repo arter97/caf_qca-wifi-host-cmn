@@ -116,13 +116,24 @@ static bool cm_state_init_event(void *ctx, uint16_t event,
 		cm_disconnect_complete(cm_ctx, data);
 		break;
 	case WLAN_CM_SM_EV_DISCONNECT_REQ:
-		cm_handle_discon_req_in_non_connected_state(cm_ctx, data,
-							    WLAN_CM_S_INIT);
+		status = cm_handle_discon_req_in_non_connected_state(cm_ctx, data,
+								     WLAN_CM_S_INIT);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			/*
+			 * Return not handled as this req need to be
+			 * dropped and return failure to the requester
+			 */
+			event_handled = false;
+			break;
+		}
+
 		/*
-		 * Return not handled as this req need to be dropped and return
-		 * failure to the requester
+		 * If status is success, then forcefully queue
+		 * disconnect req and move VDEV state to disconnecting.
 		 */
-		event_handled = false;
+		cm_sm_transition_to(cm_ctx, WLAN_CM_S_DISCONNECTING);
+		cm_sm_deliver_event_sync(cm_ctx, WLAN_CM_SM_EV_DISCONNECT_START,
+					 data_len, data);
 		break;
 	case WLAN_CM_SM_EV_ROAM_SYNC:
 		/**

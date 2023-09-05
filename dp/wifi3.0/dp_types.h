@@ -1369,6 +1369,16 @@ struct dp_soc_stats {
 			uint32_t defrag_ad1_invalid;
 			/* decrypt error drop */
 			uint32_t decrypt_err_drop;
+#ifdef GLOBAL_ASSERT_AVOIDANCE
+			/* rx_desc NULL war count*/
+			uint32_t rx_desc_null;
+			/* wbm err invalid release buffer type */
+			uint32_t wbm_err_buf_rel_type;
+			/* Reo entry rx desc null */
+			uint32_t reo_err_rx_desc_null;
+			/* Invalid chip id received in intrabss path */
+			uint64_t intra_bss_bad_chipid;
+#endif
 		} err;
 
 		/* packet count per core - per ring */
@@ -2201,6 +2211,8 @@ enum dp_context_type {
  * @mlo_peer_find_hash_add:
  * @mlo_peer_find_hash_remove:
  * @mlo_peer_find_hash_find:
+ * @mlo_get_chip_id: get the MLO chip id
+ * @mlo_link_peer_find_hash_find_by_chip_id: return the link peer on the chip
  * @get_hw_link_id:
  * @dp_rx_peer_set_link_id: set link id in nbuf cb
  * @get_reo_qdesc_addr:
@@ -2249,6 +2261,10 @@ enum dp_context_type {
  * @dp_get_fst_cmem_base: Get CMEM base address for FISA
  * @dp_flush_tx_ring: Flush TCL ring HP
  * @dp_mlo_print_ptnr_info: print partner vdev info
+ * @dp_soc_interrupt_attach: DP interrupt attach
+ * @dp_soc_attach_poll: DP poll attach
+ * @dp_soc_interrupt_detach: DP interrupt detach
+ * @dp_service_srngs: Service DP interrupts
  */
 struct dp_arch_ops {
 	/* INIT/DEINIT Arch Ops */
@@ -2402,6 +2418,16 @@ struct dp_arch_ops {
 						   int mac_addr_is_aligned,
 						   enum dp_mod_id mod_id,
 						   uint8_t vdev_id);
+#ifdef WLAN_MLO_MULTI_CHIP
+	uint8_t (*mlo_get_chip_id)(struct dp_soc *soc);
+	struct dp_peer *(*mlo_link_peer_find_hash_find_by_chip_id)
+						(struct dp_soc *soc,
+						 uint8_t *peer_mac_addr,
+						 int mac_addr_is_aligned,
+						 uint8_t vdev_id,
+						 uint8_t chip_id,
+						 enum dp_mod_id mod_id);
+#endif
 #endif
 	uint8_t (*get_hw_link_id)(struct dp_pdev *pdev);
 	void (*dp_rx_peer_set_link_id)(qdf_nbuf_t nbuf, uint32_t peer_mdata);
@@ -2510,6 +2536,10 @@ struct dp_arch_ops {
 	uint64_t (*dp_get_fst_cmem_base)(struct dp_soc *soc, uint64_t size);
 	int (*dp_flush_tx_ring)(struct dp_pdev *pdev, int ring_id);
 	void (*dp_mlo_print_ptnr_info)(struct dp_vdev *vdev);
+	QDF_STATUS (*dp_soc_interrupt_attach)(struct cdp_soc_t *txrx_soc);
+	QDF_STATUS (*dp_soc_attach_poll)(struct cdp_soc_t *txrx_soc);
+	void (*dp_soc_interrupt_detach)(struct cdp_soc_t *txrx_soc);
+	uint32_t (*dp_service_srngs)(void *dp_ctx, uint32_t dp_budget, int cpu);
 };
 
 /**
@@ -4560,6 +4590,7 @@ struct dp_peer_extd_tx_stats {
  * @peer_unauth_rx_pkt_drop: Unauth rx packet drops
  * @policy_check_drop: policy check drops
  * @to_stack_twt: Total packets sent up the stack in TWT session
+ * @rx_success: Total RX success count
  * @protocol_trace_cnt: per-peer protocol counters
  * @mcast_3addr_drop:
  * @rx_total: total rx count
@@ -4597,6 +4628,7 @@ struct dp_peer_per_pkt_rx_stats {
 	uint32_t peer_unauth_rx_pkt_drop;
 	uint32_t policy_check_drop;
 	struct cdp_pkt_info to_stack_twt;
+	struct cdp_pkt_info rx_success;
 #ifdef VDEV_PEER_PROTOCOL_COUNT
 	struct protocol_trace_count protocol_trace_cnt[CDP_TRACE_MAX];
 #endif
@@ -4767,6 +4799,7 @@ struct dp_peer_stats {
  * @sawf_stats:
  * @bw: bandwidth of peer connection
  * @mpdu_retry_threshold: MPDU retry threshold to increment tx bad count
+ * @band: Link ID to band mapping
  * @stats_arr_size: peer stats array size
  * @stats: Peer link and mld statistics
  */
@@ -4816,6 +4849,10 @@ struct dp_txrx_peer {
 #ifdef DP_PEER_EXTENDED_API
 	enum cdp_peer_bw bw;
 	uint8_t mpdu_retry_threshold;
+#endif
+#if defined WLAN_FEATURE_11BE_MLO && defined DP_MLO_LINK_STATS_SUPPORT
+	/* Link ID to band mapping, (1 MLD + DP_MAX_MLO_LINKS) */
+	uint8_t band[DP_MAX_MLO_LINKS + 1];
 #endif
 	uint8_t stats_arr_size;
 

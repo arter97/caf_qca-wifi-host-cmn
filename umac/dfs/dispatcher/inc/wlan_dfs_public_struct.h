@@ -39,6 +39,7 @@
  * @chan_freq:      channel frequency (Primary channel frequency).
  * @radar_freq:     radar frequency (Is it same as '@chan_freq'?).
  * @sidx:           sidx value (same as freq_offset).
+ * @is_full_bw_nol: Is full bandwidth needed to put to NOL.
  */
 struct radar_found_info {
 	uint32_t pdev_id;
@@ -52,6 +53,7 @@ struct radar_found_info {
 	uint32_t chan_freq;
 	uint32_t radar_freq;
 	int32_t  sidx;
+	uint8_t is_full_bw_nol;
 };
 
 /**

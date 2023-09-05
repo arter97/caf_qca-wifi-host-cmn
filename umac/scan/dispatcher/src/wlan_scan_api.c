@@ -178,12 +178,7 @@ void wlan_scan_update_pno_dwell_time(struct wlan_objmgr_vdev *vdev,
 	if (!psoc)
 		return;
 
-	sap_or_p2p_present = policy_mgr_mode_specific_connection_count
-			       (psoc,
-				PM_SAP_MODE, NULL) ||
-				policy_mgr_mode_specific_connection_count
-			       (psoc,
-				PM_P2P_GO_MODE, NULL) ||
+	sap_or_p2p_present = policy_mgr_get_beaconing_mode_count(psoc, NULL) ||
 				policy_mgr_mode_specific_connection_count
 			       (psoc,
 				PM_P2P_CLIENT_MODE, NULL);
@@ -884,13 +879,10 @@ wlan_scan_get_mld_addr_by_link_addr(struct wlan_objmgr_pdev *pdev,
 	return scm_get_mld_addr_by_link_addr(pdev, link_addr, mld_mac_addr);
 }
 
-QDF_STATUS
+struct scan_cache_entry *
 wlan_scan_get_scan_entry_by_mac_freq(struct wlan_objmgr_pdev *pdev,
 				     struct qdf_mac_addr *bssid,
-				     uint16_t freq,
-				     struct scan_cache_entry
-				     *cache_entry)
+				     uint16_t freq)
 {
-	return scm_scan_get_scan_entry_by_mac_freq(pdev, bssid, freq,
-						   cache_entry);
+	return scm_scan_get_scan_entry_by_mac_freq(pdev, bssid, freq);
 }

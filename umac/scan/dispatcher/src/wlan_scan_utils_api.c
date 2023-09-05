@@ -708,7 +708,9 @@ util_scan_get_phymode_5g(struct wlan_objmgr_pdev *pdev,
 	if (htcap)
 		ht_cap = le16toh(htcap->hc_cap);
 
-	if (ht_cap & WLAN_HTCAP_C_CHWIDTH40)
+	if ((ht_cap & WLAN_HTCAP_C_CHWIDTH40) &&
+	    (htinfo->hi_extchoff == WLAN_HTINFO_EXTOFFSET_ABOVE ||
+	     htinfo->hi_extchoff == WLAN_HTINFO_EXTOFFSET_BELOW))
 		phymode = WLAN_PHYMODE_11NA_HT40;
 	else
 		phymode = WLAN_PHYMODE_11NA_HT20;
@@ -720,7 +722,7 @@ util_scan_get_phymode_5g(struct wlan_objmgr_pdev *pdev,
 	if (util_scan_entry_vhtcap(scan_params) && vhtop) {
 		switch (vhtop->vht_op_chwidth) {
 		case WLAN_VHTOP_CHWIDTH_2040:
-			if (ht_cap & WLAN_HTCAP_C_CHWIDTH40)
+			if (phymode == WLAN_PHYMODE_11NA_HT40)
 				phymode = WLAN_PHYMODE_11AC_VHT40;
 			else
 				phymode = WLAN_PHYMODE_11AC_VHT20;
@@ -3072,8 +3074,9 @@ static uint32_t util_gen_new_ie(uint8_t *ie, uint32_t ielen,
 	 * copied to new ie, skip ssid, capability, bssid-index ie
 	 */
 	tmp_new = sub_copy;
-	while (((tmp_new + tmp_new[1] + MIN_IE_LEN) - sub_copy) <=
-	       (subie_len - 1)) {
+	while ((subie_len > 0) &&
+	       (((tmp_new + tmp_new[1] + MIN_IE_LEN) - sub_copy) <=
+		(subie_len - 1))) {
 		if (!(tmp_new[0] == WLAN_ELEMID_NONTX_BSSID_CAP ||
 		      tmp_new[0] == WLAN_ELEMID_SSID ||
 		      tmp_new[0] == WLAN_ELEMID_MULTI_BSSID_IDX ||
@@ -3460,6 +3463,7 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 				if (mbssid_info.split_prof_continue) {
 					qdf_mem_free(split_prof_start);
 					split_prof_start = NULL;
+					split_prof_end = NULL;
 				}
 				continue;
 			}
@@ -3529,6 +3533,7 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 				if (mbssid_info.split_prof_continue) {
 					qdf_mem_free(split_prof_start);
 					split_prof_start = NULL;
+					split_prof_end = NULL;
 					qdf_mem_zero(&mbssid_info,
 						     sizeof(mbssid_info));
 				}
@@ -3542,6 +3547,7 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 			if (mbssid_info.split_prof_continue) {
 				qdf_mem_free(split_prof_start);
 				split_prof_start = NULL;
+				split_prof_end = NULL;
 			}
 			qdf_mem_free(new_frame);
 		}

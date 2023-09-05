@@ -91,7 +91,7 @@ struct wlan_serialization_command_list {
 	unsigned long cmd_in_use;
 };
 
-/*
+/**
  * struct wlan_serialization_pdev_queue - queue data related to pdev
  * @active_list: list to hold the commands currently being executed
  * @pending_list: list to hold the commands currently pending
@@ -101,9 +101,6 @@ struct wlan_serialization_command_list {
  * @blocking_cmd_waiting: Indicate if a blocking cmd is in pending queue
  * @pdev_queue_lock: pdev lock to protect concurrent operations on the queues
  * @history: serialization history
- *
- * NB: not using kernel-doc format since the kernel-doc script doesn't
- *     handle the qdf_bitmap() macro
  */
 struct wlan_serialization_pdev_queue {
 	qdf_list_t active_list;

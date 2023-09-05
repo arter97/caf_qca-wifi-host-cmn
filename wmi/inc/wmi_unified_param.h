@@ -5729,6 +5729,10 @@ typedef enum {
 		   PDEV_PARAM_PROBE_RESP_RETRY_LIMIT),
 	PDEV_PARAM(pdev_param_cts_timeout, PDEV_PARAM_CTS_TIMEOUT),
 	PDEV_PARAM(pdev_param_slot_time, PDEV_PARAM_SLOT_TIME),
+	PDEV_PARAM(pdev_param_atf_vo_dedicated_time,
+		   PDEV_PARAM_ATF_VO_DEDICATED_TIME),
+	PDEV_PARAM(pdev_param_atf_vi_dedicated_time,
+		   PDEV_PARAM_ATF_VI_DEDICATED_TIME),
 	pdev_param_max,
 } wmi_conv_pdev_params_id;
 
@@ -6437,6 +6441,7 @@ typedef enum {
 	wmi_service_atf_max_client_512_support,
 #endif
 	wmi_service_fisa_dynamic_msdu_aggr_size_support,
+	wmi_service_radar_flags_support,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -6521,6 +6526,7 @@ typedef enum {
  * @WMI_HOST_VENDOR1_REQ1_VERSION_3_20: Major version 3, minor version 20
  * @WMI_HOST_VENDOR1_REQ1_VERSION_3_30: Major version 3, minor version 30
  * @WMI_HOST_VENDOR1_REQ1_VERSION_3_40: Major version 3, minor version 40
+ * @WMI_HOST_VENDOR1_REQ1_VERSION_4_00: Major version 4, minor version 00
  */
 typedef enum {
 	WMI_HOST_VENDOR1_REQ1_VERSION_3_00 = 0,
@@ -6528,6 +6534,7 @@ typedef enum {
 	WMI_HOST_VENDOR1_REQ1_VERSION_3_20 = 2,
 	WMI_HOST_VENDOR1_REQ1_VERSION_3_30 = 3,
 	WMI_HOST_VENDOR1_REQ1_VERSION_3_40 = 4,
+	WMI_HOST_VENDOR1_REQ1_VERSION_4_00 = 5,
 } WMI_HOST_VENDOR1_REQ1_VERSION;
 
 /**
@@ -6535,11 +6542,13 @@ typedef enum {
  * @WMI_HOST_VENDOR1_REQ2_VERSION_3_00: Major version 3, minor version 00
  * @WMI_HOST_VENDOR1_REQ2_VERSION_3_01: Major version 3, minor version 01
  * @WMI_HOST_VENDOR1_REQ2_VERSION_3_20: Major version 3, minor version 20
+ * @WMI_HOST_VENDOR1_REQ2_VERSION_3_50: Major version 3, minor version 50
  */
 typedef enum {
 	WMI_HOST_VENDOR1_REQ2_VERSION_3_00 = 0,
 	WMI_HOST_VENDOR1_REQ2_VERSION_3_01 = 1,
 	WMI_HOST_VENDOR1_REQ2_VERSION_3_20 = 2,
+	WMI_HOST_VENDOR1_REQ2_VERSION_3_50 = 3,
 } WMI_HOST_VENDOR1_REQ2_VERSION;
 
 /**
@@ -6813,6 +6822,7 @@ struct target_feature_set {
  * @tx_ilp_enable: capability to support TX ILP from host
  * @rf_path: Indicates RF path 0 primary, 1 secondary
  * @fw_ast_indication_disable: Disable AST indication
+ * @is_full_bw_nol_supported: Is full bandwidth needed to put to NOL
  */
 typedef struct {
 	uint32_t num_vdevs;
@@ -6947,6 +6957,7 @@ typedef struct {
 #endif
 	bool rf_path;
 	bool fw_ast_indication_disable;
+	bool is_full_bw_nol_supported;
 } target_resource_config;
 
 /**

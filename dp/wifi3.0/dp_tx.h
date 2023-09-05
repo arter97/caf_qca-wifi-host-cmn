@@ -37,6 +37,9 @@
 #endif
 #include <qdf_pkt_add_timestamp.h>
 #include "dp_ipa.h"
+#ifdef IPA_OFFLOAD
+#include <wlan_ipa_obj_mgmt_api.h>
+#endif
 
 #define DP_INVALID_VDEV_ID 0xFF
 
@@ -989,7 +992,8 @@ static inline void dp_tx_get_queue(struct dp_vdev *vdev,
 {
 	/* get flow id */
 	queue->desc_pool_id = DP_TX_GET_DESC_POOL_ID(vdev);
-	if (vdev->pdev->soc->wlan_cfg_ctx->ipa_enabled)
+	if (vdev->pdev->soc->wlan_cfg_ctx->ipa_enabled &&
+	    !ipa_config_is_opt_wifi_dp_enabled())
 		queue->ring_id = DP_TX_GET_RING_ID(vdev);
 	else
 		queue->ring_id = (qdf_nbuf_get_queue_mapping(nbuf) %
@@ -2197,6 +2201,28 @@ static inline int dp_get_rtpm_tput_policy_requirement(struct dp_soc *soc)
 static inline int dp_get_rtpm_tput_policy_requirement(struct dp_soc *soc)
 {
 	return 0;
+}
+#endif
+#if defined WLAN_FEATURE_11BE_MLO && defined DP_MLO_LINK_STATS_SUPPORT
+/**
+ * dp_tx_set_nbuf_band() - Set band info in nbuf cb
+ * @nbuf: nbuf pointer
+ * @txrx_peer: txrx_peer pointer
+ * @link_id: Peer Link ID
+ *
+ * Returen: None
+ */
+static inline void
+dp_tx_set_nbuf_band(qdf_nbuf_t nbuf, struct dp_txrx_peer *txrx_peer,
+		    uint8_t link_id)
+{
+	qdf_nbuf_tx_set_band(nbuf, txrx_peer->band[link_id]);
+}
+#else
+static inline void
+dp_tx_set_nbuf_band(qdf_nbuf_t nbuf, struct dp_txrx_peer *txrx_peer,
+		    uint8_t link_id)
+{
 }
 #endif
 #endif
