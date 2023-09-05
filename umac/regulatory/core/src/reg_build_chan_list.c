@@ -1362,11 +1362,12 @@ static void reg_propagate_6g_mas_channel_list(
 	reg_set_ap_pwr_type(pdev_priv_obj);
 }
 
-#if defined(CONFIG_AFC_SUPPORT) && !defined(CONFIG_REG_CLIENT)
+#ifndef CONFIG_REG_CLIENT
+#ifdef CONFIG_AFC_SUPPORT
 #ifdef CONFIG_6G_FREQ_OVERLAP
 void reg_set_ap_pwr_type(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
 {
-	uint8_t  *num_rules = pdev_priv_obj->reg_rules.num_of_6g_ap_reg_rules;
+	uint8_t  *num_rules;
 	bool is_6ghz_pdev;
 
 	is_6ghz_pdev = reg_is_range_overlap_6g(pdev_priv_obj->range_5g_low,
@@ -1377,6 +1378,7 @@ void reg_set_ap_pwr_type(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
 		return;
 	}
 
+	num_rules = pdev_priv_obj->reg_rules.num_of_6g_ap_reg_rules;
 	if (pdev_priv_obj->reg_afc_dev_deployment_type ==
 	    AFC_DEPLOYMENT_OUTDOOR) {
 		if (num_rules[REG_VERY_LOW_POWER_AP])
@@ -1408,6 +1410,32 @@ void reg_set_ap_pwr_type(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
 	pdev_priv_obj->reg_cur_6g_ap_pwr_type = REG_INDOOR_AP;
 }
 #endif /* CONFIG_AFC_SUPPORT */
+#else
+void reg_set_ap_pwr_type(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
+{
+	enum reg_6g_ap_type ap_pwr_type = REG_CURRENT_MAX_AP_TYPE;
+	uint8_t  *num_rules;
+
+	num_rules = pdev_priv_obj->reg_rules.num_of_6g_ap_reg_rules;
+
+	if (wlan_reg_is_afc_power_event_received(pdev_priv_obj->pdev_ptr) &&
+	    num_rules[REG_STANDARD_POWER_AP]) {
+		ap_pwr_type = REG_STANDARD_POWER_AP;
+	} else if (pdev_priv_obj->indoor_chan_enabled) {
+		if (num_rules[REG_INDOOR_AP])
+			ap_pwr_type = REG_INDOOR_AP;
+		else if (num_rules[REG_VERY_LOW_POWER_AP])
+			ap_pwr_type = REG_VERY_LOW_POWER_AP;
+	} else if (num_rules[REG_VERY_LOW_POWER_AP]) {
+		ap_pwr_type = REG_VERY_LOW_POWER_AP;
+	}
+
+	pdev_priv_obj->reg_cur_6g_ap_pwr_type = ap_pwr_type;
+
+	reg_debug("indoor_chan_enabled %d ap_pwr_type %d",
+		  pdev_priv_obj->indoor_chan_enabled, ap_pwr_type);
+}
+#endif /* CONFIG_REG_CLIENT */
 #else
 static inline void reg_propagate_6g_mas_channel_list(
 		struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj,
@@ -2067,6 +2095,7 @@ reg_populate_secondary_cur_chan_list(struct wlan_regulatory_pdev_priv_obj
 	struct wlan_regulatory_psoc_priv_obj *soc_reg;
 	struct regulatory_channel *chan_list;
 	uint32_t len_6ghz;
+	enum reg_6g_ap_type cur_ap_power_type = REG_CURRENT_MAX_AP_TYPE;
 
 	psoc = wlan_pdev_get_psoc(pdev_priv_obj->pdev_ptr);
 	if (!psoc) {
@@ -2100,14 +2129,14 @@ reg_populate_secondary_cur_chan_list(struct wlan_regulatory_pdev_priv_obj
 	if (!chan_list)
 		return;
 
-	if (pdev_priv_obj->indoor_chan_enabled &&
-	    pdev_priv_obj->reg_rules.num_of_6g_ap_reg_rules[REG_INDOOR_AP]) {
+	reg_get_cur_6g_ap_pwr_type(pdev_priv_obj->pdev_ptr, &cur_ap_power_type);
+
+	if (cur_ap_power_type == REG_INDOOR_AP) {
 		qdf_mem_copy(chan_list,
 			     pdev_priv_obj->mas_chan_list_6g_ap[REG_INDOOR_AP],
 			     len_6ghz);
 		/* has flag REGULATORY_CHAN_INDOOR_ONLY */
-	} else if (pdev_priv_obj->reg_rules.num_of_6g_ap_reg_rules
-		   [REG_VERY_LOW_POWER_AP]) {
+	} else if (cur_ap_power_type == REG_VERY_LOW_POWER_AP) {
 		qdf_mem_copy(chan_list,
 			     pdev_priv_obj->mas_chan_list_6g_ap
 			     [REG_VERY_LOW_POWER_AP],
@@ -3655,7 +3684,6 @@ void reg_propagate_mas_chan_list_to_pdev(struct wlan_objmgr_psoc *psoc,
 			&psoc_priv_obj->mas_chan_params[phy_id]);
 	psoc_reg_rules = &psoc_priv_obj->mas_chan_params[phy_id].reg_rules;
 	reg_save_reg_rules_to_pdev(psoc_reg_rules, pdev_priv_obj);
-	reg_set_ap_pwr_type(pdev_priv_obj);
 	reg_init_pdev_super_chan_list(pdev_priv_obj);
 	pdev_priv_obj->chan_list_recvd =
 		psoc_priv_obj->chan_list_recvd[phy_id];
