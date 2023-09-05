@@ -361,9 +361,13 @@ nla_fail:
 	.maxattr = __maxattr
 #define VENDOR_NLA_POLICY_NESTED(__policy) \
 	NLA_POLICY_NESTED(__policy)
+#define VENDOR_NLA_POLICY_NESTED_ARRAY(__policy) \
+	NLA_POLICY_NESTED_ARRAY(__policy)
 #else
 #define vendor_command_policy(__policy, __maxattr)
 #define VENDOR_NLA_POLICY_NESTED(__policy) {.type = NLA_NESTED}
+#define VENDOR_NLA_POLICY_NESTED_ARRAY(__policy) \
+	VENDOR_NLA_POLICY_NESTED(__policy)
 #endif /*End of (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 2, 0) */
 
 /* For kernel version <= 4.20, driver needs to provide policy */
