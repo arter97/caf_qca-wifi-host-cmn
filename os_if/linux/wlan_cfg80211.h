@@ -183,6 +183,8 @@
  * @QCA_NL80211_VENDOR_SUBCMD_LINK_RECONFIG_INDEX: link reconfig event index
  * @QCA_NL80211_VENDOR_SUBCMD_AUDIO_TRANSPORT_SWITCH_INDEX: Audio transport
  * switch event index
+ * @QCA_NL80211_VENDOR_SUBCMD_TX_LATENCY_INDEX: event index for transmit
+ *	latency stats
  */
 
 enum qca_nl80211_vendor_subcmds_index {
@@ -315,6 +317,9 @@ enum qca_nl80211_vendor_subcmds_index {
 #endif
 #endif
 	QCA_NL80211_VENDOR_SUBCMD_AUDIO_TRANSPORT_SWITCH_INDEX,
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+	QCA_NL80211_VENDOR_SUBCMD_TX_LATENCY_INDEX,
+#endif
 };
 
 #if !defined(SUPPORT_WDEV_CFG80211_VENDOR_EVENT_ALLOC) && \
