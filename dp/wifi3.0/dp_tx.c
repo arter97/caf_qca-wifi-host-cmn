@@ -5081,7 +5081,7 @@ void dp_tx_update_connectivity_stats(struct dp_soc *soc,
 }
 #endif
 
-#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(WLAN_CONFIG_TX_DELAY)
+#if defined(WLAN_FEATURE_TSF_AUTO_REPORT) || defined(WLAN_CONFIG_TX_DELAY)
 /* Mask for bit29 ~ bit31 */
 #define DP_TX_TS_BIT29_31_MASK 0xE0000000
 /* Timestamp value (unit us) if bit29 is set */

@@ -44,7 +44,7 @@ typedef struct tx_fes_status_prot hal_tx_fes_status_prot_t;
 typedef struct pcu_ppdu_setup_init hal_pcu_ppdu_setup_t;
 #endif
 
-#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(WLAN_CONFIG_TX_DELAY)
+#if defined(WLAN_FEATURE_TSF_AUTO_REPORT) || defined(WLAN_CONFIG_TX_DELAY)
 static inline void
 hal_tx_comp_get_buffer_timestamp_be(void *desc,
 				    struct hal_tx_completion_status *ts)
@@ -52,13 +52,13 @@ hal_tx_comp_get_buffer_timestamp_be(void *desc,
 	ts->buffer_timestamp = HAL_TX_DESC_GET(desc, WBM2SW_COMPLETION_RING_TX,
 					       BUFFER_TIMESTAMP);
 }
-#else /* !WLAN_FEATURE_TSF_UPLINK_DELAY || WLAN_CONFIG_TX_DELAY */
+#else /* !(WLAN_FEATURE_TSF_AUTO_REPORT || WLAN_CONFIG_TX_DELAY) */
 static inline void
 hal_tx_comp_get_buffer_timestamp_be(void *desc,
 				    struct hal_tx_completion_status *ts)
 {
 }
-#endif /* WLAN_FEATURE_TSF_UPLINK_DELAY || CONFIG_SAWF */
+#endif /* WLAN_FEATURE_TSF_AUTO_REPORT || WLAN_CONFIG_TX_DELAY */
 
 /**
  * hal_tx_comp_get_status_generic_be() - TQM Release reason
