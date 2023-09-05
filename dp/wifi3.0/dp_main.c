@@ -7420,24 +7420,6 @@ void dp_get_peer_extd_stats(struct dp_peer *peer,
 #endif
 #else
 #if defined WLAN_FEATURE_11BE_MLO && defined DP_MLO_LINK_STATS_SUPPORT
-/**
- * dp_get_peer_link_id() - Get Link peer Link ID
- * @peer: Datapath peer
- *
- * Return: Link peer Link ID
- */
-static inline
-uint8_t dp_get_peer_link_id(struct dp_peer *peer)
-{
-	uint8_t link_id;
-
-	link_id = IS_MLO_DP_LINK_PEER(peer) ? peer->link_id + 1 : 0;
-	if (link_id < 1 || link_id > DP_MAX_MLO_LINKS)
-		link_id = 0;
-
-	return link_id;
-}
-
 static inline
 void dp_get_peer_per_pkt_stats(struct dp_peer *peer,
 			       struct cdp_peer_stats *peer_stats)
@@ -12435,6 +12417,11 @@ static struct cdp_host_stats_ops dp_ops_host_stats = {
 	.get_pdev_obss_stats = dp_get_obss_stats,
 	.clear_pdev_obss_pd_stats = dp_clear_pdev_obss_pd_stats,
 	.txrx_get_interface_stats  = dp_txrx_get_interface_stats,
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+	.tx_latency_stats_fetch = dp_tx_latency_stats_fetch,
+	.tx_latency_stats_config = dp_tx_latency_stats_config,
+	.tx_latency_stats_register_cb = dp_tx_latency_stats_register_cb,
+#endif
 	/* TODO */
 };
 

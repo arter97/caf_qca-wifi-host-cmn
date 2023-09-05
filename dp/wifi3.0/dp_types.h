@@ -659,6 +659,8 @@ struct dp_tx_ext_desc_pool_s {
  * @pool_id: Pool ID - used when releasing the descriptor
  * @msdu_ext_desc: MSDU extension descriptor
  * @timestamp:
+ * @driver_egress_ts: driver egress timestamp
+ * @driver_ingress_ts: driver ingress timestamp
  * @comp:
  * @tcl_cmd_vaddr: VADDR of the TCL descriptor, valid for soft-umac arch
  * @tcl_cmd_paddr: PADDR of the TCL descriptor, valid for soft-umac arch
@@ -686,6 +688,10 @@ struct dp_tx_desc_s {
 	uint8_t  pool_id;
 	struct dp_tx_ext_desc_elem_s *msdu_ext_desc;
 	qdf_ktime_t timestamp;
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+	qdf_ktime_t driver_egress_ts;
+	qdf_ktime_t driver_ingress_ts;
+#endif
 	struct hal_tx_desc_comp_s comp;
 #ifdef WLAN_SOFTUMAC_SUPPORT
 	void *tcl_cmd_vaddr;
@@ -3178,6 +3184,11 @@ struct dp_soc {
 	uint64_t alloc_addr_list_idx;
 	uint64_t shared_qaddr_del_idx;
 	uint64_t write_paddr_list_idx;
+
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+	/* callback function for tx latency stats */
+	cdp_tx_latency_cb tx_latency_cb;
+#endif
 };
 
 #ifdef IPA_OFFLOAD
@@ -3814,6 +3825,45 @@ struct dp_peer;
 #define WLAN_ROAM_PEER_AUTH_STATUS_AUTHENTICATED 0x2
 #endif
 
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+/**
+ * struct dp_tx_latency_config - configuration for per-link transmit latency
+ * statistics
+ * @enabled: the feature is enabled or not
+ * @report: async report is enabled or not
+ * @granularity: granularity(in microseconds) of the distribution for the types
+ */
+struct dp_tx_latency_config {
+	qdf_atomic_t enabled;
+	qdf_atomic_t report;
+	qdf_atomic_t granularity[CDP_TX_LATENCY_TYPE_MAX];
+};
+
+/**
+ * struct dp_tx_latency_stats - transmit latency distribution for a type
+ * @latency_accum: accumulated latencies
+ * @msdus_accum: accumulated number of msdus
+ * @distribution: distribution of latencies
+ */
+struct dp_tx_latency_stats {
+	qdf_atomic_t latency_accum;
+	qdf_atomic_t msdus_accum;
+	qdf_atomic_t distribution[CDP_TX_LATENCY_DISTR_LV_MAX];
+};
+
+/**
+ * struct dp_tx_latency - transmit latency statistics for remote link peer
+ * @cur_idx: current row index of the 2D stats array
+ * @stats: two-dimensional array, to store the transmit latency statistics.
+ *  one row is used to store the stats of the current cycle, it's indicated
+ *  by cur_idx, the other is for the last cycle.
+ */
+struct dp_tx_latency {
+	uint8_t cur_idx;
+	struct dp_tx_latency_stats stats[2][CDP_TX_LATENCY_TYPE_MAX];
+};
+#endif
+
 /* VDEV structure for data path state */
 struct dp_vdev {
 	/* OS device abstraction */
@@ -4140,6 +4190,11 @@ struct dp_vdev {
 	bool is_override_rbm_id;
 	/* Return buffer manager ID */
 	uint8_t rbm_id;
+#endif
+
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+	/* configuration for tx latency stats */
+	struct dp_tx_latency_config tx_latency_cfg;
 #endif
 };
 
@@ -4766,11 +4821,15 @@ struct dp_peer_extd_stats {
  * struct dp_peer_stats - Peer stats
  * @per_pkt_stats: Per packet path stats
  * @extd_stats: Extended path stats
+ * @tx_latency: transmit latency stats
  */
 struct dp_peer_stats {
 	struct dp_peer_per_pkt_stats per_pkt_stats;
 #ifndef QCA_ENHANCED_STATS_SUPPORT
 	struct dp_peer_extd_stats extd_stats;
+#endif
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+	struct dp_tx_latency tx_latency;
 #endif
 };
 

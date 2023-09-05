@@ -3757,6 +3757,223 @@ static inline void dp_htt_rx_nbuf_free(qdf_nbuf_t nbuf)
 }
 #endif
 
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+#define TX_LATENCY_STATS_PERIOD_MAX_MS \
+	(HTT_H2T_TX_LATENCY_STATS_CFG_PERIODIC_INTERVAL_M >> \
+	 HTT_H2T_TX_LATENCY_STATS_CFG_PERIODIC_INTERVAL_S)
+
+#define TX_LATENCY_STATS_GRANULARITY_MAX_MS \
+	(HTT_H2T_TX_LATENCY_STATS_CFG_GRANULARITY_M >> \
+	 HTT_H2T_TX_LATENCY_STATS_CFG_GRANULARITY_S)
+
+/**
+ * dp_h2t_tx_latency_stats_cfg_msg_send(): send HTT message for tx latency
+ * stats config to FW
+ * @dp_soc: DP SOC handle
+ * @vdev_id: vdev id
+ * @enable: indicates enablement of the feature
+ * @period: statistical period for transmit latency in terms of ms
+ * @granularity: granularity for tx latency distribution in terms of ms
+ *
+ * return: QDF STATUS
+ */
+QDF_STATUS
+dp_h2t_tx_latency_stats_cfg_msg_send(struct dp_soc *dp_soc, uint16_t vdev_id,
+				     bool enable, uint32_t period,
+				     uint32_t granularity)
+{
+	struct htt_soc *soc = dp_soc->htt_handle;
+	struct dp_htt_htc_pkt *pkt;
+	uint8_t *htt_logger_bufp;
+	qdf_nbuf_t msg;
+	uint32_t *msg_word;
+	QDF_STATUS status;
+	qdf_size_t size;
+
+	if (period > TX_LATENCY_STATS_PERIOD_MAX_MS ||
+	    granularity > TX_LATENCY_STATS_GRANULARITY_MAX_MS)
+		return QDF_STATUS_E_INVAL;
+
+	size = sizeof(struct htt_h2t_tx_latency_stats_cfg);
+	msg = qdf_nbuf_alloc(soc->osdev, HTT_MSG_BUF_SIZE(size),
+			     HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING,
+			     4, TRUE);
+	if (!msg)
+		return QDF_STATUS_E_NOMEM;
+
+	/*
+	 * Set the length of the message.
+	 * The contribution from the HTC_HDR_ALIGNMENT_PADDING is added
+	 * separately during the below call to qdf_nbuf_push_head.
+	 * The contribution from the HTC header is added separately inside HTC.
+	 */
+	if (!qdf_nbuf_put_tail(msg, size)) {
+		dp_htt_err("Failed to expand head");
+		qdf_nbuf_free(msg);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	msg_word = (uint32_t *)qdf_nbuf_data(msg);
+	memset(msg_word, 0, size);
+
+	qdf_nbuf_push_head(msg, HTC_HDR_ALIGNMENT_PADDING);
+	htt_logger_bufp = (uint8_t *)msg_word;
+	HTT_H2T_MSG_TYPE_SET(*msg_word,
+			     HTT_H2T_MSG_TYPE_TX_LATENCY_STATS_CFG);
+	HTT_H2T_TX_LATENCY_STATS_CFG_VDEV_ID_SET(*msg_word, vdev_id);
+	HTT_H2T_TX_LATENCY_STATS_CFG_ENABLE_SET(*msg_word, enable);
+	HTT_H2T_TX_LATENCY_STATS_CFG_PERIODIC_INTERVAL_SET(*msg_word, period);
+	HTT_H2T_TX_LATENCY_STATS_CFG_GRANULARITY_SET(*msg_word, granularity);
+
+	pkt = htt_htc_pkt_alloc(soc);
+	if (!pkt) {
+		dp_htt_err("Fail to allocate dp_htt_htc_pkt buffer");
+		qdf_nbuf_free(msg);
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	pkt->soc_ctxt = NULL;
+
+	/* macro to set packet parameters for TX */
+	SET_HTC_PACKET_INFO_TX(
+			&pkt->htc_pkt,
+			dp_htt_h2t_send_complete_free_netbuf,
+			qdf_nbuf_data(msg),
+			qdf_nbuf_len(msg),
+			soc->htc_endpoint,
+			HTC_TX_PACKET_TAG_RUNTIME_PUT);
+
+	SET_HTC_PACKET_NET_BUF_CONTEXT(&pkt->htc_pkt, msg);
+
+	status = DP_HTT_SEND_HTC_PKT(
+			soc, pkt,
+			HTT_H2T_MSG_TYPE_TX_LATENCY_STATS_CFG,
+			htt_logger_bufp);
+
+	if (QDF_IS_STATUS_ERROR(status)) {
+		qdf_nbuf_free(msg);
+		htt_htc_pkt_free(soc, pkt);
+	}
+
+	dp_htt_debug("vdev id %u enable %u period %u granularity %u status %d",
+		     vdev_id, enable, period, granularity, status);
+	return status;
+}
+
+/**
+ * dp_htt_tx_latency_get_stats_elem(): get tx latency stats from HTT message
+ * @msg_buf: pointer to stats in HTT message
+ * @elem_size_msg: size of per peer stats which is reported in HTT message
+ * @local_buf: additional buffer to hold the stats
+ * @elem_size_local: size of per peer stats according to current host side
+ * htt definition
+ *
+ * This function is to handle htt version mismatch(between host and target)
+ * case. It compares elem_size_msg with elem_size_local, when elem_size_msg
+ * is greater than or equal to elem_size_local, return the pointer to stats
+ * in HTT message; otherwise, copy the stas(with size elem_size_msg) from
+ * HTT message to local buffer and leave the left as zero, then return pointer
+ * to this local buffer.
+ *
+ * return: pointer to tx latency stats
+ */
+static inline htt_t2h_peer_tx_latency_stats *
+dp_htt_tx_latency_get_stats_elem(uint8_t *msg_buf, uint32_t elem_size_msg,
+				 htt_t2h_peer_tx_latency_stats *local_buf,
+				 uint32_t elem_size_local) {
+	if (elem_size_msg >= elem_size_local)
+		return (htt_t2h_peer_tx_latency_stats *)msg_buf;
+
+	qdf_mem_zero(local_buf, sizeof(*local_buf));
+	qdf_mem_copy(local_buf, msg_buf, elem_size_msg);
+	return local_buf;
+}
+
+#define TX_LATENCY_STATS_GET_PAYLOAD_ELEM_SIZE \
+	HTT_T2H_TX_LATENCY_STATS_PERIODIC_IND_PAYLOAD_ELEM_SIZE_GET
+#define TX_LATENCY_STATS_GET_GRANULARITY \
+	HTT_T2H_TX_LATENCY_STATS_PERIODIC_IND_GRANULARITY_GET
+
+/**
+ * dp_htt_tx_latency_stats_handler - Handle tx latency stats received from FW
+ * @soc: htt soc handle
+ * @htt_t2h_msg: HTT message nbuf
+ *
+ * Return: void
+ */
+static void
+dp_htt_tx_latency_stats_handler(struct htt_soc *soc,
+				qdf_nbuf_t htt_t2h_msg)
+{
+	struct dp_soc *dpsoc = (struct dp_soc *)soc->dp_soc;
+	uint8_t pdev_id;
+	uint8_t target_pdev_id;
+	struct dp_pdev *pdev;
+	htt_t2h_peer_tx_latency_stats stats, *pstats;
+	uint32_t elem_size_msg, elem_size_local, granularity;
+	uint32_t *msg_word;
+	int32_t buf_len;
+	uint8_t *pbuf;
+
+	buf_len = qdf_nbuf_len(htt_t2h_msg);
+	if (buf_len <= HTT_T2H_TX_LATENCY_STATS_PERIODIC_IND_HDR_SIZE)
+		return;
+
+	pbuf = qdf_nbuf_data(htt_t2h_msg);
+	msg_word = (uint32_t *)pbuf;
+	target_pdev_id =
+		HTT_T2H_TX_LATENCY_STATS_PERIODIC_IND_PDEV_ID_GET(*msg_word);
+	pdev_id = dp_get_host_pdev_id_for_target_pdev_id(dpsoc,
+							 target_pdev_id);
+	if (pdev_id >= MAX_PDEV_CNT)
+		return;
+
+	pdev = dpsoc->pdev_list[pdev_id];
+	if (!pdev) {
+		dp_err("PDEV is NULL for pdev_id:%d", pdev_id);
+		return;
+	}
+
+	qdf_trace_hex_dump(QDF_MODULE_ID_DP_HTT, QDF_TRACE_LEVEL_INFO,
+			   (void *)pbuf, buf_len);
+
+	elem_size_msg = TX_LATENCY_STATS_GET_PAYLOAD_ELEM_SIZE(*msg_word);
+	elem_size_local = sizeof(stats);
+	granularity = TX_LATENCY_STATS_GET_GRANULARITY(*msg_word);
+
+	/* Adjust pbuf to point to the first stat in buffer */
+	pbuf += HTT_T2H_TX_LATENCY_STATS_PERIODIC_IND_HDR_SIZE;
+	buf_len -= HTT_T2H_TX_LATENCY_STATS_PERIODIC_IND_HDR_SIZE;
+
+	/* Parse the received buffer till payload size reaches 0 */
+	while (buf_len > 0) {
+		if (buf_len < elem_size_msg) {
+			dp_err_rl("invalid payload size left %d - %d",
+				  buf_len, elem_size_msg);
+			break;
+		}
+
+		pstats = dp_htt_tx_latency_get_stats_elem(pbuf, elem_size_msg,
+							  &stats,
+							  elem_size_local);
+		dp_tx_latency_stats_update_cca(dpsoc, pstats->peer_id,
+					       granularity,
+					       pstats->peer_tx_latency,
+					       pstats->avg_latency);
+		pbuf += elem_size_msg;
+		buf_len -= elem_size_msg;
+	}
+
+	dp_tx_latency_stats_report(dpsoc, pdev);
+}
+#else
+static inline void
+dp_htt_tx_latency_stats_handler(struct htt_soc *soc,
+				qdf_nbuf_t htt_t2h_msg)
+{
+}
+#endif
+
 void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 {
 	struct htt_soc *soc = (struct htt_soc *) context;
@@ -4214,6 +4431,11 @@ void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 	case HTT_T2H_MSG_TYPE_PEER_EXTENDED_EVENT:
 	{
 		dp_htt_peer_ext_evt(soc, msg_word);
+		break;
+	}
+	case HTT_T2H_MSG_TYPE_TX_LATENCY_STATS_PERIODIC_IND:
+	{
+		dp_htt_tx_latency_stats_handler(soc, htt_t2h_msg);
 		break;
 	}
 	default:

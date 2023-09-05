@@ -5505,4 +5505,47 @@ dp_get_ring_stats_from_hal(struct dp_soc *soc,  struct dp_srng *srng,
 	}
 }
 
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+/**
+ * dp_h2t_tx_latency_stats_cfg_msg_send(): send HTT message for tx latency
+ * stats config to FW
+ * @dp_soc: DP SOC handle
+ * @vdev_id: vdev id
+ * @enable: indicates enablement of the feature
+ * @period: statistical period for transmit latency in terms of ms
+ * @granularity: granularity for tx latency distribution
+ *
+ * return: QDF STATUS
+ */
+QDF_STATUS
+dp_h2t_tx_latency_stats_cfg_msg_send(struct dp_soc *dp_soc, uint16_t vdev_id,
+				     bool enable, uint32_t period,
+				     uint32_t granularity);
+
+/**
+ * dp_tx_latency_stats_update_cca() - update transmit latency statistics for
+ * CCA
+ * @soc: dp soc handle
+ * @peer_id: peer id
+ * @granularity: granularity of distribution
+ * @distribution: distribution of transmit latency statistics
+ * @avg: average of CCA latency(in microseconds) within a cycle
+ *
+ * Return: None
+ */
+void
+dp_tx_latency_stats_update_cca(struct dp_soc *soc, uint16_t peer_id,
+			       uint32_t granularity, uint32_t *distribution,
+			       uint32_t avg);
+
+/**
+ * dp_tx_latency_stats_report() - report transmit latency statistics for each
+ * vdev of specified pdev
+ * @soc: dp soc handle
+ * @pdev: dp pdev Handle
+ *
+ * Return: None
+ */
+void dp_tx_latency_stats_report(struct dp_soc *soc, struct dp_pdev *pdev);
+#endif
 #endif /* #ifndef _DP_INTERNAL_H_ */

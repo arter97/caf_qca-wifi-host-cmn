@@ -1303,4 +1303,88 @@ cdp_host_get_interface_stats(ol_txrx_soc_handle soc,
 								  buf,
 								  true);
 }
+
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+/**
+ * cdp_host_tx_latency_stats_config() - config transmit latency statistics for
+ * specified vdev
+ * @soc: Handle to struct dp_soc
+ * @vdev_id: vdev id
+ * @config: configuration for transmit latency statistics
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS
+cdp_host_tx_latency_stats_config(ol_txrx_soc_handle soc,
+				 uint8_t vdev_id,
+				 struct cdp_tx_latency_config *config)
+{
+	if (!soc || !soc->ops) {
+		QDF_BUG(0);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!soc->ops->host_stats_ops ||
+	    !soc->ops->host_stats_ops->tx_latency_stats_config)
+		return QDF_STATUS_E_FAILURE;
+
+	return soc->ops->host_stats_ops->tx_latency_stats_config(soc,
+								 vdev_id,
+								 config);
+}
+
+/**
+ * cdp_host_tx_latency_stats_fetch() - fetch transmit latency statistics for
+ * specified link mac address
+ * @soc: Handle to struct dp_soc
+ * @vdev_id: vdev id
+ * @mac: link mac address of remote peer
+ * @latency: buffer to hold per-link transmit latency statistics
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS
+cdp_host_tx_latency_stats_fetch(ol_txrx_soc_handle soc,
+				uint8_t vdev_id, uint8_t *mac,
+				struct cdp_tx_latency *latency)
+{
+	if (!soc || !soc->ops) {
+		QDF_BUG(0);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!soc->ops->host_stats_ops ||
+	    !soc->ops->host_stats_ops->tx_latency_stats_fetch)
+		return QDF_STATUS_E_FAILURE;
+
+	return soc->ops->host_stats_ops->tx_latency_stats_fetch(soc,
+								vdev_id,
+								mac,
+								latency);
+}
+
+/**
+ * cdp_host_tx_latency_stats_register_cb() - register transmit latency
+ * statistics callback
+ * @soc: Handle to struct dp_soc
+ * @cb: callback function for transmit latency statistics
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS
+cdp_host_tx_latency_stats_register_cb(ol_txrx_soc_handle soc,
+				      cdp_tx_latency_cb cb)
+{
+	if (!soc || !soc->ops) {
+		QDF_BUG(0);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!soc->ops->host_stats_ops ||
+	    !soc->ops->host_stats_ops->tx_latency_stats_register_cb)
+		return QDF_STATUS_E_FAILURE;
+
+	return soc->ops->host_stats_ops->tx_latency_stats_register_cb(soc, cb);
+}
+#endif
 #endif /* _CDP_TXRX_HOST_STATS_H_ */

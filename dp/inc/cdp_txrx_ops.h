@@ -1195,6 +1195,10 @@ struct cdp_mon_ops {
  * @get_pdev_obss_stats:
  * @clear_pdev_obss_pd_stats:
  * @txrx_get_interface_stats:
+ * @tx_latency_stats_config: config tx latency stats for specified vdev
+ * @tx_latency_stats_fetch: fetch tx latency stats for specified link
+ * mac address
+ * @tx_latency_stats_register_cb: register tx latency stats callback
  */
 struct cdp_host_stats_ops {
 	int (*txrx_host_stats_get)(struct cdp_soc_t *soc, uint8_t vdev_id,
@@ -1404,6 +1408,18 @@ struct cdp_host_stats_ops {
 					       uint8_t vdev_id,
 					       void *buf,
 					       bool is_aggregate);
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+	QDF_STATUS
+	(*tx_latency_stats_config)(struct cdp_soc_t *soc,
+				   uint8_t vdev_id,
+				   struct cdp_tx_latency_config *config);
+	QDF_STATUS (*tx_latency_stats_fetch)(struct cdp_soc_t *soc,
+					     uint8_t vdev_id,
+					     uint8_t *mac,
+					     struct cdp_tx_latency *latency);
+	QDF_STATUS (*tx_latency_stats_register_cb)(struct cdp_soc_t *soc,
+						   cdp_tx_latency_cb cb);
+#endif
 };
 
 /**

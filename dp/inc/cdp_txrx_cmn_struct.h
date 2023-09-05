@@ -3269,4 +3269,83 @@ enum cdp_umac_reset_state {
 	CDP_UMAC_RESET_IN_PROGRESS_DURING_BUFFER_WINDOW,
 	CDP_UMAC_RESET_INVALID_STATE
 };
+
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+/* the maximum distribution level of tx latency stats */
+#define CDP_TX_LATENCY_DISTR_LV_MAX 4
+
+/**
+ * enum cdp_tx_latency_type - transmit latency types
+ * @CDP_TX_LATENCY_TYPE_DRIVER: Per MSDU latency
+ *  from: A MSDU is presented to the driver
+ *  to: the MSDU is queued into TCL SRNG
+ * @CDP_TX_LATENCY_TYPE_RING_BUF: Per MSDU latency
+ *  from: the MSDU is queued into TCL SRNG
+ *  to: the MSDU is released by the driver
+ * @CDP_TX_LATENCY_TYPE_HW: Per MSDU latency
+ *  from: the MSDU is presented to the hardware
+ *  to: the MSDU is released by the hardware
+ * @CDP_TX_LATENCY_TYPE_CCA: Per PPDU latency
+ *  The time spent on Clear Channel Assessment, the maximum value is 50000(us)
+ *  from: A PPDU is presented to the hardware LMAC
+ *  to: over-the-air transmission is started for the PPDU
+ * @CDP_TX_LATENCY_TYPE_MAX: maximum number of types
+ */
+enum cdp_tx_latency_type {
+	CDP_TX_LATENCY_TYPE_DRIVER,
+	CDP_TX_LATENCY_TYPE_RING_BUF,
+	CDP_TX_LATENCY_TYPE_HW,
+	CDP_TX_LATENCY_TYPE_CCA,
+
+	/* keep last */
+	CDP_TX_LATENCY_TYPE_MAX,
+};
+
+/**
+ * struct cdp_tx_latency_config - configuration for per-link transmit latency
+ * statistics
+ * @enable: enable/disable the feature
+ * @report: enable/disable async report
+ * @period: statistical period(in ms)
+ * @granularity: granularity(in microseconds) of the distribution for the types
+ */
+struct cdp_tx_latency_config {
+	bool enable;
+	bool report;
+	uint32_t period;
+	uint32_t granularity[CDP_TX_LATENCY_TYPE_MAX];
+};
+
+/**
+ * struct cdp_tx_latency_stats - per-type transmit latency statistics
+ * @average: average of the latency(in us) for the type within a cycle
+ * @granularity: granularity(in us) of the distribution for the type
+ * @distribution: latency distribution for the type
+ */
+struct cdp_tx_latency_stats {
+	uint32_t average;
+	uint32_t granularity;
+	uint32_t distribution[CDP_TX_LATENCY_DISTR_LV_MAX];
+};
+
+/**
+ * struct cdp_tx_latency - per-link transmit latency statistics
+ * @node: list node for membership in the stats list
+ * @mac_remote: link mac address of remote peer
+ * @stats: transmit latency statistics for types
+ */
+struct cdp_tx_latency {
+	qdf_list_node_t node;
+	struct qdf_mac_addr mac_remote;
+	struct cdp_tx_latency_stats stats[CDP_TX_LATENCY_TYPE_MAX];
+};
+
+/**
+ * typedef cdp_tx_latency_cb() - callback for transmit latency
+ * @vdev_id: vdev id
+ * @stats_list: list of per-link transmit latency statistics
+ */
+typedef QDF_STATUS(*cdp_tx_latency_cb)(uint8_t vdev_id,
+				       qdf_list_t *stats_list);
+#endif
 #endif

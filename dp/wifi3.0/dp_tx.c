@@ -2370,6 +2370,631 @@ static void tx_sw_drop_stats_inc(struct dp_pdev *pdev,
 }
 #endif
 
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+/**
+ * dp_tx_latency_stats_enabled() - check enablement of transmit latency
+ * statistics
+ * @vdev: DP vdev handle
+ *
+ * Return: true if transmit latency statistics is enabled, false otherwise.
+ */
+static inline bool dp_tx_latency_stats_enabled(struct dp_vdev *vdev)
+{
+	return qdf_atomic_read(&vdev->tx_latency_cfg.enabled);
+}
+
+/**
+ * dp_tx_latency_stats_report_enabled() - check enablement of async report
+ * for transmit latency statistics
+ * @vdev: DP vdev handle
+ *
+ * Return: true if transmit latency statistics is enabled, false otherwise.
+ */
+static inline bool dp_tx_latency_stats_report_enabled(struct dp_vdev *vdev)
+{
+	return qdf_atomic_read(&vdev->tx_latency_cfg.report);
+}
+
+/**
+ * dp_tx_get_driver_ingress_ts() - get driver ingress timestamp from nbuf
+ * @vdev: DP vdev handle
+ * @msdu_info: pointer to MSDU Descriptor
+ * @nbuf: original buffer from network stack
+ *
+ * Return: None
+ */
+static inline void
+dp_tx_get_driver_ingress_ts(struct dp_vdev *vdev,
+			    struct dp_tx_msdu_info_s *msdu_info,
+			    qdf_nbuf_t nbuf)
+{
+	if (!dp_tx_latency_stats_enabled(vdev))
+		return;
+
+	msdu_info->driver_ingress_ts = qdf_nbuf_get_tx_ts(nbuf, true);
+}
+
+/**
+ * dp_tx_update_ts_on_enqueued() - set driver ingress/egress timestamp in
+ * tx descriptor
+ * @vdev: DP vdev handle
+ * @msdu_info: pointer to MSDU Descriptor
+ * @tx_desc: pointer to tx descriptor
+ *
+ * Return: None
+ */
+static inline void
+dp_tx_update_ts_on_enqueued(struct dp_vdev *vdev,
+			    struct dp_tx_msdu_info_s *msdu_info,
+			    struct dp_tx_desc_s *tx_desc)
+{
+	if (!dp_tx_latency_stats_enabled(vdev))
+		return;
+
+	tx_desc->driver_ingress_ts = msdu_info->driver_ingress_ts;
+	tx_desc->driver_egress_ts = qdf_ktime_real_get();
+}
+
+/**
+ * dp_tx_latency_stats_update_bucket() - update transmit latency statistics
+ * for specified type
+ * @vdev: DP vdev handle
+ * @tx_latency: pointer to transmit latency stats
+ * @idx: index of the statistics
+ * @type: transmit latency type
+ * @value: latency to be recorded
+ *
+ * Return: None
+ */
+static inline void
+dp_tx_latency_stats_update_bucket(struct dp_vdev *vdev,
+				  struct dp_tx_latency *tx_latency,
+				  int idx, enum cdp_tx_latency_type type,
+				  uint32_t value)
+{
+	int32_t granularity;
+	int lvl;
+
+	granularity =
+		qdf_atomic_read(&vdev->tx_latency_cfg.granularity[type]);
+	if (qdf_unlikely(!granularity))
+		return;
+
+	lvl = value / granularity;
+	if (lvl >= CDP_TX_LATENCY_DISTR_LV_MAX)
+		lvl = CDP_TX_LATENCY_DISTR_LV_MAX - 1;
+
+	qdf_atomic_inc(&tx_latency->stats[idx][type].msdus_accum);
+	qdf_atomic_add(value, &tx_latency->stats[idx][type].latency_accum);
+	qdf_atomic_inc(&tx_latency->stats[idx][type].distribution[lvl]);
+}
+
+/**
+ * dp_tx_latency_stats_update() - update transmit latency statistics on
+ * msdu transmit completed
+ * @soc: dp soc handle
+ * @txrx_peer: txrx peer handle
+ * @tx_desc: pointer to tx descriptor
+ * @ts: tx completion status
+ * @link_id: link id
+ *
+ * Return: None
+ */
+static inline void
+dp_tx_latency_stats_update(struct dp_soc *soc,
+			   struct dp_txrx_peer *txrx_peer,
+			   struct dp_tx_desc_s *tx_desc,
+			   struct hal_tx_completion_status *ts,
+			   uint8_t link_id)
+{
+	uint32_t driver_latency, ring_buf_latency, hw_latency;
+	QDF_STATUS status = QDF_STATUS_E_INVAL;
+	int64_t current_ts, ingress, egress;
+	struct dp_vdev *vdev = txrx_peer->vdev;
+	struct dp_tx_latency *tx_latency;
+	uint8_t idx;
+
+	if (!dp_tx_latency_stats_enabled(vdev))
+		return;
+
+	if (!tx_desc->driver_ingress_ts || !tx_desc->driver_egress_ts)
+		return;
+
+	status = dp_tx_compute_hw_delay_us(ts, vdev->delta_tsf, &hw_latency);
+	if (QDF_IS_STATUS_ERROR(status))
+		return;
+
+	ingress = qdf_ktime_to_us(tx_desc->driver_ingress_ts);
+	egress = qdf_ktime_to_us(tx_desc->driver_egress_ts);
+	driver_latency = (uint32_t)(egress - ingress);
+
+	current_ts = qdf_ktime_to_us(qdf_ktime_real_get());
+	ring_buf_latency = (uint32_t)(current_ts - egress);
+
+	tx_latency = &txrx_peer->stats[link_id].tx_latency;
+	idx = tx_latency->cur_idx;
+	dp_tx_latency_stats_update_bucket(txrx_peer->vdev, tx_latency, idx,
+					  CDP_TX_LATENCY_TYPE_DRIVER,
+					  driver_latency);
+	dp_tx_latency_stats_update_bucket(txrx_peer->vdev, tx_latency, idx,
+					  CDP_TX_LATENCY_TYPE_RING_BUF,
+					  ring_buf_latency);
+	dp_tx_latency_stats_update_bucket(txrx_peer->vdev, tx_latency, idx,
+					  CDP_TX_LATENCY_TYPE_HW, hw_latency);
+}
+
+/**
+ * dp_tx_latency_stats_clear_bucket() - clear specified transmit latency
+ * statistics for specified type
+ * @tx_latency: pointer to transmit latency stats
+ * @idx: index of the statistics
+ * @type: transmit latency type
+ *
+ * Return: None
+ */
+static inline void
+dp_tx_latency_stats_clear_bucket(struct dp_tx_latency *tx_latency,
+				 int idx, enum cdp_tx_latency_type type)
+{
+	int lvl;
+	struct dp_tx_latency_stats *stats;
+
+	stats = &tx_latency->stats[idx][type];
+	qdf_atomic_init(&stats->msdus_accum);
+	qdf_atomic_init(&stats->latency_accum);
+	for (lvl = 0; lvl < CDP_TX_LATENCY_DISTR_LV_MAX; lvl++)
+		qdf_atomic_init(&stats->distribution[lvl]);
+}
+
+/**
+ * dp_tx_latency_stats_clear_buckets() - clear specified transmit latency
+ * statistics
+ * @tx_latency: pointer to transmit latency stats
+ * @idx: index of the statistics
+ *
+ * Return: None
+ */
+static void
+dp_tx_latency_stats_clear_buckets(struct dp_tx_latency *tx_latency,
+				  int idx)
+{
+	int type;
+
+	for (type = 0; type < CDP_TX_LATENCY_TYPE_MAX; type++)
+		dp_tx_latency_stats_clear_bucket(tx_latency, idx, type);
+}
+
+/**
+ * dp_tx_latency_stats_update_cca() - update transmit latency statistics for
+ * CCA
+ * @soc: dp soc handle
+ * @peer_id: peer id
+ * @granularity: granularity of distribution
+ * @distribution: distribution of transmit latency statistics
+ * @avg: average of CCA latency(in microseconds) within a cycle
+ *
+ * Return: None
+ */
+void
+dp_tx_latency_stats_update_cca(struct dp_soc *soc, uint16_t peer_id,
+			       uint32_t granularity, uint32_t *distribution,
+			       uint32_t avg)
+{
+	int lvl, idx;
+	uint8_t link_id;
+	struct dp_tx_latency *tx_latency;
+	struct dp_tx_latency_stats *stats;
+	int32_t cur_granularity;
+	struct dp_vdev *vdev;
+	struct dp_tx_latency_config *cfg;
+	struct dp_txrx_peer *txrx_peer;
+	struct dp_peer *peer;
+
+	peer = dp_peer_get_ref_by_id(soc, peer_id, DP_MOD_ID_HTT);
+	if (!peer) {
+		dp_err_rl("Peer not found peer id %d", peer_id);
+		return;
+	}
+
+	if (IS_MLO_DP_MLD_PEER(peer))
+		goto out;
+
+	vdev = peer->vdev;
+	if (!dp_tx_latency_stats_enabled(vdev))
+		goto out;
+
+	cfg = &vdev->tx_latency_cfg;
+	cur_granularity =
+		qdf_atomic_read(&cfg->granularity[CDP_TX_LATENCY_TYPE_CCA]);
+
+	/* in unit of ms */
+	cur_granularity /= 1000;
+	if (cur_granularity != granularity) {
+		dp_info_rl("invalid granularity, cur %d report %d",
+			   cur_granularity, granularity);
+		goto out;
+	}
+
+	txrx_peer = dp_get_txrx_peer(peer);
+	if (qdf_unlikely(!txrx_peer)) {
+		dp_err_rl("txrx_peer NULL for MAC: " QDF_MAC_ADDR_FMT,
+			  QDF_MAC_ADDR_REF(peer->mac_addr.raw));
+		goto out;
+	}
+
+	link_id = dp_get_peer_link_id(peer);
+	if (link_id >= txrx_peer->stats_arr_size)
+		goto out;
+
+	tx_latency = &txrx_peer->stats[link_id].tx_latency;
+	idx = tx_latency->cur_idx;
+	stats = &tx_latency->stats[idx][CDP_TX_LATENCY_TYPE_CCA];
+	qdf_atomic_set(&stats->latency_accum, avg);
+	qdf_atomic_set(&stats->msdus_accum, (avg ? 1 : 0));
+	for (lvl = 0; lvl < CDP_TX_LATENCY_DISTR_LV_MAX; lvl++)
+		qdf_atomic_set(&stats->distribution[lvl],
+			       distribution[lvl]);
+
+	/* prepare for the next cycle */
+	tx_latency->cur_idx = 1 - idx;
+	dp_tx_latency_stats_clear_buckets(tx_latency, tx_latency->cur_idx);
+
+out:
+	dp_peer_unref_delete(peer, DP_MOD_ID_HTT);
+}
+
+/**
+ * dp_tx_latency_stats_get_per_peer() - get transmit latency statistics for a
+ * peer
+ * @soc: dp soc handle
+ * @peer: dp peer Handle
+ * @latency: buffer to hold transmit latency statistics
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS
+dp_tx_latency_stats_get_per_peer(struct dp_soc *soc, struct dp_peer *peer,
+				 struct cdp_tx_latency *latency)
+{
+	int lvl, type, link_id;
+	int32_t latency_accum, msdus_accum;
+	struct dp_vdev *vdev;
+	struct dp_txrx_peer *txrx_peer;
+	struct dp_tx_latency *tx_latency;
+	struct dp_tx_latency_config *cfg;
+	struct dp_tx_latency_stats *stats;
+	uint8_t last_idx;
+
+	if (unlikely(!latency))
+		return QDF_STATUS_E_INVAL;
+
+	/* Authenticated link/legacy peer only */
+	if (IS_MLO_DP_MLD_PEER(peer) || peer->state != OL_TXRX_PEER_STATE_AUTH)
+		return QDF_STATUS_E_INVAL;
+
+	vdev = peer->vdev;
+	if (peer->bss_peer && vdev->opmode == wlan_op_mode_ap)
+		return QDF_STATUS_E_INVAL;
+
+	txrx_peer = dp_get_txrx_peer(peer);
+	if (!txrx_peer)
+		return QDF_STATUS_E_INVAL;
+
+	link_id = dp_get_peer_link_id(peer);
+	if (link_id >= txrx_peer->stats_arr_size)
+		return QDF_STATUS_E_INVAL;
+
+	tx_latency = &txrx_peer->stats[link_id].tx_latency;
+	qdf_mem_zero(latency, sizeof(*latency));
+	qdf_mem_copy(latency->mac_remote.bytes,
+		     peer->mac_addr.raw, QDF_MAC_ADDR_SIZE);
+	last_idx = 1 - tx_latency->cur_idx;
+	cfg = &vdev->tx_latency_cfg;
+	for (type = 0; type < CDP_TX_LATENCY_TYPE_MAX; type++) {
+		latency->stats[type].granularity =
+			qdf_atomic_read(&cfg->granularity[type]);
+		stats = &tx_latency->stats[last_idx][type];
+		msdus_accum = qdf_atomic_read(&stats->msdus_accum);
+		if (!msdus_accum)
+			continue;
+
+		latency_accum = qdf_atomic_read(&stats->latency_accum);
+		latency->stats[type].average = latency_accum / msdus_accum;
+		for (lvl = 0; lvl < CDP_TX_LATENCY_DISTR_LV_MAX; lvl++) {
+			latency->stats[type].distribution[lvl] =
+				qdf_atomic_read(&stats->distribution[lvl]);
+		}
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * dp_tx_latency_stats_get_peer_iter() - iterator to get transmit latency
+ * statistics for specified peer
+ * @soc: dp soc handle
+ * @peer: dp peer Handle
+ * @arg: list to hold transmit latency statistics for peers
+ *
+ * Return: None
+ */
+static void
+dp_tx_latency_stats_get_peer_iter(struct dp_soc *soc,
+				  struct dp_peer *peer,
+				  void *arg)
+{
+	struct dp_vdev *vdev;
+	struct dp_txrx_peer *txrx_peer;
+	struct cdp_tx_latency *latency;
+	QDF_STATUS status;
+	qdf_list_t *stats_list = (qdf_list_t *)arg;
+
+	/* Authenticated link/legacy peer only */
+	if (IS_MLO_DP_MLD_PEER(peer) || peer->state != OL_TXRX_PEER_STATE_AUTH)
+		return;
+
+	txrx_peer = dp_get_txrx_peer(peer);
+	if (!txrx_peer)
+		return;
+
+	vdev = peer->vdev;
+	latency = qdf_mem_malloc(sizeof(*latency));
+	if (!latency)
+		return;
+
+	status = dp_tx_latency_stats_get_per_peer(soc, peer, latency);
+	if (QDF_IS_STATUS_ERROR(status))
+		goto out;
+
+	status = qdf_list_insert_back(stats_list, &latency->node);
+	if (QDF_IS_STATUS_ERROR(status))
+		goto out;
+
+	return;
+
+out:
+	qdf_mem_free(latency);
+}
+
+/**
+ * dp_tx_latency_stats_rpt_per_vdev() - report transmit latency statistics for
+ * specified vdev
+ * @soc: dp soc handle
+ * @vdev: dp vdev Handle
+ *
+ * Return: None
+ */
+static void
+dp_tx_latency_stats_rpt_per_vdev(struct dp_soc *soc, struct dp_vdev *vdev)
+{
+	qdf_list_t stats_list;
+	struct cdp_tx_latency *entry, *next;
+
+	if (!soc->tx_latency_cb || !dp_tx_latency_stats_report_enabled(vdev))
+		return;
+
+	qdf_list_create(&stats_list, 0);
+	dp_vdev_iterate_peer(vdev, dp_tx_latency_stats_get_peer_iter,
+			     &stats_list, DP_MOD_ID_CDP);
+	if (qdf_list_empty(&stats_list))
+		goto out;
+
+	soc->tx_latency_cb(vdev->vdev_id, &stats_list);
+
+	qdf_list_for_each_del(&stats_list, entry, next, node) {
+		qdf_list_remove_node(&stats_list, &entry->node);
+		qdf_mem_free(entry);
+	}
+
+out:
+	qdf_list_destroy(&stats_list);
+}
+
+/**
+ * dp_tx_latency_stats_report() - report transmit latency statistics for each
+ * vdev of specified pdev
+ * @soc: dp soc handle
+ * @pdev: dp pdev Handle
+ *
+ * Return: None
+ */
+void dp_tx_latency_stats_report(struct dp_soc *soc, struct dp_pdev *pdev)
+{
+	struct dp_vdev *vdev;
+
+	if (!soc->tx_latency_cb)
+		return;
+
+	qdf_spin_lock_bh(&pdev->vdev_list_lock);
+	DP_PDEV_ITERATE_VDEV_LIST(pdev, vdev) {
+		dp_tx_latency_stats_rpt_per_vdev(soc, vdev);
+	}
+
+	qdf_spin_unlock_bh(&pdev->vdev_list_lock);
+}
+
+/**
+ * dp_tx_latency_stats_clear_per_peer() - iterator to clear transmit latency
+ * statistics for specified peer
+ * @soc: dp soc handle
+ * @peer: dp pdev Handle
+ * @arg: argument from iterator
+ *
+ * Return: None
+ */
+static void
+dp_tx_latency_stats_clear_per_peer(struct dp_soc *soc, struct dp_peer *peer,
+				   void *arg)
+{
+	int link_id;
+	struct dp_tx_latency *tx_latency;
+	struct dp_txrx_peer *txrx_peer = dp_get_txrx_peer(peer);
+
+	if (!txrx_peer) {
+		dp_err("no txrx peer, skip");
+		return;
+	}
+
+	for (link_id = 0; link_id < txrx_peer->stats_arr_size; link_id++) {
+		tx_latency = &txrx_peer->stats[link_id].tx_latency;
+		dp_tx_latency_stats_clear_buckets(tx_latency, 0);
+		dp_tx_latency_stats_clear_buckets(tx_latency, 1);
+	}
+}
+
+/**
+ * dp_tx_latency_stats_clear_per_vdev() - clear transmit latency statistics
+ * for specified vdev
+ * @vdev: dp vdev handle
+ *
+ * Return: None
+ */
+static inline void dp_tx_latency_stats_clear_per_vdev(struct dp_vdev *vdev)
+{
+	dp_vdev_iterate_peer(vdev, dp_tx_latency_stats_clear_per_peer,
+			     NULL, DP_MOD_ID_CDP);
+}
+
+/**
+ * dp_tx_latency_stats_fetch() - fetch transmit latency statistics for
+ * specified link mac address
+ * @soc_hdl: Handle to struct dp_soc
+ * @vdev_id: vdev id
+ * @mac: link mac address of remote peer
+ * @latency: buffer to hold per-link transmit latency statistics
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+dp_tx_latency_stats_fetch(struct cdp_soc_t *soc_hdl,
+			  uint8_t vdev_id, uint8_t *mac,
+			  struct cdp_tx_latency *latency)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct cdp_peer_info peer_info = {0};
+	struct dp_peer *peer;
+	QDF_STATUS status;
+
+	/* MAC addr of link peer may be the same as MLD peer,
+	 * so specify the type as CDP_LINK_PEER_TYPE here to
+	 * get link peer explicitly.
+	 */
+	DP_PEER_INFO_PARAMS_INIT(&peer_info, vdev_id, mac, false,
+				 CDP_LINK_PEER_TYPE);
+	peer = dp_peer_hash_find_wrapper(soc, &peer_info, DP_MOD_ID_CDP);
+	if (!peer) {
+		dp_err_rl("peer(vdev id %d mac " QDF_MAC_ADDR_FMT ") not found",
+			  vdev_id, QDF_MAC_ADDR_REF(mac));
+		return QDF_STATUS_E_INVAL;
+	}
+
+	status = dp_tx_latency_stats_get_per_peer(soc, peer, latency);
+	dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
+	return status;
+}
+
+/**
+ * dp_tx_latency_stats_config() - config transmit latency statistics for
+ * specified vdev
+ * @soc_hdl: Handle to struct dp_soc
+ * @vdev_id: vdev id
+ * @cfg: configuration for transmit latency statistics
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+dp_tx_latency_stats_config(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+			   struct cdp_tx_latency_config *cfg)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct dp_vdev *vdev;
+	QDF_STATUS status = QDF_STATUS_E_INVAL;
+	uint32_t cca_granularity;
+	int type;
+
+	vdev = dp_vdev_get_ref_by_id(soc, vdev_id, DP_MOD_ID_CDP);
+	if (!vdev) {
+		dp_err_rl("vdev %d does not exist", vdev_id);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	/* disable to ignore upcoming updates */
+	qdf_atomic_set(&vdev->tx_latency_cfg.enabled, 0);
+	dp_tx_latency_stats_clear_per_vdev(vdev);
+
+	if (!cfg->enable)
+		goto send_htt;
+
+	qdf_atomic_set(&vdev->tx_latency_cfg.report, (cfg->report ? 1 : 0));
+	for (type = 0; type < CDP_TX_LATENCY_TYPE_MAX; type++)
+		qdf_atomic_set(&vdev->tx_latency_cfg.granularity[type],
+			       cfg->granularity[type]);
+
+send_htt:
+	/* in units of ms */
+	cca_granularity = cfg->granularity[CDP_TX_LATENCY_TYPE_CCA] / 1000;
+	status = dp_h2t_tx_latency_stats_cfg_msg_send(soc, vdev_id,
+						      cfg->enable, cfg->period,
+						      cca_granularity);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		dp_err_rl("failed to send htt msg: %d", status);
+		goto out;
+	}
+
+	qdf_atomic_set(&vdev->tx_latency_cfg.enabled, (cfg->enable ? 1 : 0));
+
+out:
+	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
+	return status;
+}
+
+/**
+ * dp_tx_latency_stats_register_cb() - register transmit latency statistics
+ * callback
+ * @handle: Handle to struct dp_soc
+ * @cb: callback function for transmit latency statistics
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+dp_tx_latency_stats_register_cb(struct cdp_soc_t *handle, cdp_tx_latency_cb cb)
+{
+	struct dp_soc *soc = (struct dp_soc *)handle;
+
+	if (!soc || !cb) {
+		dp_err("soc or cb is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	soc->tx_latency_cb = cb;
+	return QDF_STATUS_SUCCESS;
+}
+
+#else
+static inline void
+dp_tx_get_driver_ingress_ts(struct dp_vdev *vdev,
+			    struct dp_tx_msdu_info_s *msdu_info,
+			    qdf_nbuf_t nbuf)
+{
+}
+
+static inline void
+dp_tx_update_ts_on_enqueued(struct dp_vdev *vdev,
+			    struct dp_tx_msdu_info_s *msdu_info,
+			    struct dp_tx_desc_s *tx_desc)
+{
+}
+
+static inline void
+dp_tx_latency_stats_update(struct dp_soc *soc,
+			   struct dp_txrx_peer *txrx_peer,
+			   struct dp_tx_desc_s *tx_desc,
+			   struct hal_tx_completion_status *ts,
+			   uint8_t link_id)
+{
+}
+#endif
+
 qdf_nbuf_t
 dp_tx_send_msdu_single(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 		       struct dp_tx_msdu_info_s *msdu_info, uint16_t peer_id,
@@ -2449,6 +3074,8 @@ dp_tx_send_msdu_single(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 		drop_code = TX_HW_ENQUEUE;
 		goto release_desc;
 	}
+
+	dp_tx_update_ts_on_enqueued(vdev, msdu_info, tx_desc);
 
 	tx_sw_drop_stats_inc(pdev, nbuf, drop_code);
 	return NULL;
@@ -2810,6 +3437,8 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 			dp_tx_desc_release(soc, tx_desc, tx_q->desc_pool_id);
 			goto done;
 		}
+
+		dp_tx_update_ts_on_enqueued(vdev, msdu_info, tx_desc);
 
 		/*
 		 * TODO
@@ -3654,6 +4283,8 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	vdev = soc->vdev_id_map[vdev_id];
 	if (qdf_unlikely(!vdev))
 		return nbuf;
+
+	dp_tx_get_driver_ingress_ts(vdev, &msdu_info, nbuf);
 
 	dp_vdev_tx_mark_to_fw(nbuf, vdev);
 
@@ -5419,6 +6050,7 @@ void dp_tx_comp_process_tx_status(struct dp_soc *soc,
 	dp_tx_update_peer_sawf_stats(soc, vdev, txrx_peer, tx_desc,
 				     ts, ts->tid);
 	dp_tx_send_pktlog(soc, vdev->pdev, tx_desc, nbuf, dp_status);
+	dp_tx_latency_stats_update(soc, txrx_peer, tx_desc, ts, link_id);
 
 #ifdef QCA_SUPPORT_RDK_STATS
 	if (soc->peerstats_enabled)

@@ -2192,6 +2192,13 @@ dp_tgt_txrx_peer_get_ref_by_id(struct dp_soc *soc,
  */
 void dp_print_mlo_ast_stats_be(struct dp_soc *soc);
 
+/**
+ * dp_get_peer_link_id() - Get Link peer Link ID
+ * @peer: Datapath peer
+ *
+ * Return: Link peer Link ID
+ */
+uint8_t dp_get_peer_link_id(struct dp_peer *peer);
 #else
 
 #define IS_MLO_DP_MLD_TXRX_PEER(_peer) false
@@ -2343,6 +2350,11 @@ uint16_t dp_get_link_peer_id_by_lmac_id(struct dp_soc *soc, uint16_t peer_id,
 
 static inline void dp_print_mlo_ast_stats_be(struct dp_soc *soc)
 {
+}
+
+static inline uint8_t dp_get_peer_link_id(struct dp_peer *peer)
+{
+	return 0;
 }
 #endif /* WLAN_FEATURE_11BE_MLO */
 

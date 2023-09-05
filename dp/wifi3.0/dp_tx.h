@@ -210,6 +210,7 @@ struct dp_tx_queue {
  * @skip_hp_update : Skip HP update for TSO segments and update in last segment
  * @buf_len:
  * @payload_addr:
+ * @driver_ingress_ts: driver ingress timestamp
  *
  * This structure holds the complete MSDU information needed to program the
  * Hardware TCL and MSDU extension descriptors for different frame types
@@ -240,6 +241,9 @@ struct dp_tx_msdu_info_s {
 #ifdef QCA_DP_TX_RMNET_OPTIMIZATION
 	uint16_t buf_len;
 	uint8_t *payload_addr;
+#endif
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+	qdf_ktime_t driver_ingress_ts;
 #endif
 };
 
@@ -2149,5 +2153,45 @@ dp_tx_set_nbuf_band(qdf_nbuf_t nbuf, struct dp_txrx_peer *txrx_peer,
 		    uint8_t link_id)
 {
 }
+#endif
+
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+/**
+ * dp_tx_latency_stats_fetch() - fetch transmit latency statistics for
+ * specified link mac address
+ * @soc_hdl: Handle to struct dp_soc
+ * @vdev_id: vdev id
+ * @mac: link mac address of remote peer
+ * @latency: buffer to hold per-link transmit latency statistics
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+dp_tx_latency_stats_fetch(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+			  uint8_t *mac, struct cdp_tx_latency *latency);
+
+/**
+ * dp_tx_latency_stats_config() - config transmit latency statistics for
+ * specified vdev
+ * @soc_hdl: Handle to struct dp_soc
+ * @vdev_id: vdev id
+ * @cfg: configuration for transmit latency statistics
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+dp_tx_latency_stats_config(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+			   struct cdp_tx_latency_config *cfg);
+
+/**
+ * dp_tx_latency_stats_register_cb() - register transmit latency statistics
+ * callback
+ * @handle: Handle to struct dp_soc
+ * @cb: callback function for transmit latency statistics
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_tx_latency_stats_register_cb(struct cdp_soc_t *handle,
+					   cdp_tx_latency_cb cb);
 #endif
 #endif
