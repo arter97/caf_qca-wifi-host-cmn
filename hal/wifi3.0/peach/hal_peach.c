@@ -2412,6 +2412,29 @@ hal_rx_flow_cmem_update_reo_dst_ind(struct hal_soc *hal_soc, uint32_t cmem_ba,
 							L4_PROTOCOL), value);
 }
 
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
+/**
+ * hal_txmon_get_frame_timestamp_peach() - api to get frame timestamp for tx monitor
+ * @tlv_tag: TLV tag
+ * @tx_tlv: pointer to tx tlv information
+ * @ppdu_info: pointer to ppdu_info
+ *
+ * Return: void
+ */
+static inline
+void hal_txmon_get_frame_timestamp_peach(uint32_t tlv_tag, void *tx_tlv,
+			     void *ppdu_info)
+{
+	struct hal_tx_ppdu_info *tx_ppdu_info =
+			(struct hal_tx_ppdu_info *) ppdu_info;
+	    hal_phytx_pkt_end_t *phytx_pkt_end = (hal_phytx_pkt_end_t *)tx_tlv;
+
+		TXMON_HAL_STATUS(tx_ppdu_info, ppdu_timestamp) =
+			    (phytx_pkt_end->start_of_frame_timestamp_15_0 |
+				     (phytx_pkt_end->start_of_frame_timestamp_31_16 << 16));
+}
+#endif
+
 static void hal_hw_txrx_ops_attach_peach(struct hal_soc *hal_soc)
 {
 	/* init and setup */
@@ -2694,6 +2717,8 @@ static void hal_hw_txrx_ops_attach_peach(struct hal_soc *hal_soc)
 				hal_txmon_status_parse_tlv_generic_be;
 	hal_soc->ops->hal_txmon_status_get_num_users =
 				hal_txmon_status_get_num_users_generic_be;
+	hal_soc->ops->hal_txmon_get_frame_timestamp =
+				hal_txmon_get_frame_timestamp_peach;
 #endif /* WLAN_PKT_CAPTURE_TX_2_0 */
 	hal_soc->ops->hal_rx_flow_cmem_update_reo_dst_ind =
 				hal_rx_flow_cmem_update_reo_dst_ind;

@@ -2131,6 +2131,50 @@ bool hal_rx_en_mcast_fp_data_filter_kiwi(void)
 	return false;
 }
 
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
+/**
+ * hal_txmon_get_frame_timestamp_kiwi() - api to get frame timestamp for tx monitor
+ * @tlv_tag: TLV tag
+ * @tx_tlv: pointer to tx tlv information
+ * @ppdu_info: pointer to ppdu_info
+ *
+ * Return: void
+ */
+static inline
+void hal_txmon_get_frame_timestamp_kiwi(uint32_t tlv_tag, void *tx_tlv,
+					void *ppdu_info)
+{
+	struct hal_tx_ppdu_info *tx_ppdu_info =
+			(struct hal_tx_ppdu_info *) ppdu_info;
+
+	switch (tlv_tag) {
+	case WIFIRESPONSE_END_STATUS_E:
+	{
+		hal_response_end_status_t *resp_end_status =
+					(hal_response_end_status_t *)tx_tlv;
+
+		TXMON_HAL_STATUS(tx_ppdu_info, ppdu_timestamp) =
+			(resp_end_status->start_of_frame_timestamp_15_0 |
+			 (resp_end_status->start_of_frame_timestamp_31_16 << 16));
+		break;
+	}
+
+	case WIFITX_FES_STATUS_END_E:
+	{
+		hal_tx_fes_status_end_t *tx_fes_end =
+					(hal_tx_fes_status_end_t *)tx_tlv;
+
+		TXMON_HAL_STATUS(tx_ppdu_info, ppdu_timestamp) =
+			(tx_fes_end->start_of_frame_timestamp_15_0 |
+			 tx_fes_end->start_of_frame_timestamp_31_16 <<
+			 HAL_TX_LSB(TX_FES_STATUS_END,
+			 START_OF_FRAME_TIMESTAMP_31_16));
+		break;
+	}
+	}
+}
+#endif
+
 #ifdef QCA_WIFI_KIWI_V2
 /**
  * hal_srng_dst_hw_init_misc_1_kiwi() - Function to initialize MISC_1 register
@@ -2512,6 +2556,8 @@ static void hal_hw_txrx_ops_attach_kiwi(struct hal_soc *hal_soc)
 				hal_txmon_status_parse_tlv_generic_be;
 	hal_soc->ops->hal_txmon_status_get_num_users =
 				hal_txmon_status_get_num_users_generic_be;
+	hal_soc->ops->hal_txmon_get_frame_timestamp =
+				hal_txmon_get_frame_timestamp_kiwi;
 #endif /* WLAN_PKT_CAPTURE_TX_2_0 */
 	hal_soc->ops->hal_rx_flow_cmem_update_reo_dst_ind =
 				hal_rx_flow_cmem_update_reo_dst_ind_kiwi;

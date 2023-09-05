@@ -1561,7 +1561,8 @@ hal_txmon_status_parse_tlv(hal_soc_handle_t hal_soc_hdl,
 {
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 
-	return hal_soc->ops->hal_txmon_status_parse_tlv(data_ppdu_info,
+	return hal_soc->ops->hal_txmon_status_parse_tlv(hal_soc_hdl,
+							data_ppdu_info,
 							prot_ppdu_info,
 							data_status_info,
 							prot_status_info,
@@ -4159,4 +4160,26 @@ hal_rx_status_get_tlv_info_wrapper_be(void *rx_tlv_hdr, void *ppduinfo,
 	return hal_rx_status_get_tlv_info_generic_be(rx_tlv_hdr, ppduinfo,
 						     hal_soc_hdl, nbuf);
 }
+
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
+/**
+ * hal_txmon_get_frame_timestamp() - api to get frame timestamp for tx monitor
+ * @hal_soc_hdl: HAL soc handle
+ * @tlv_tag: TLV tag
+ * @tx_tlv: pointer to tx tlv information
+ * @ppdu_info: pointer to ppdu_info
+ *
+ * Return: void
+ */
+static inline void
+hal_txmon_get_frame_timestamp(hal_soc_handle_t hal_soc_hdl, uint32_t tlv_tag,
+			      void *tx_tlv, void *ppdu_info)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if (hal_soc->ops->hal_txmon_get_frame_timestamp)
+		return hal_soc->ops->hal_txmon_get_frame_timestamp(tlv_tag,
+							tx_tlv, ppdu_info);
+}
+#endif
 #endif /* _HAL_BE_API_MON_H_ */
