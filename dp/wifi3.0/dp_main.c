@@ -8066,6 +8066,7 @@ static QDF_STATUS dp_set_peer_param(struct cdp_soc_t *cdp_soc,  uint8_t vdev_id,
 				    enum cdp_peer_param_type param,
 				    cdp_config_param_type val)
 {
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	struct dp_peer *peer =
 			dp_peer_get_tgt_peer_hash_find((struct dp_soc *)cdp_soc,
 						       peer_mac, 0, vdev_id,
@@ -8095,8 +8096,8 @@ static QDF_STATUS dp_set_peer_param(struct cdp_soc_t *cdp_soc,  uint8_t vdev_id,
 		txrx_peer->in_twt = !!(val.cdp_peer_param_in_twt);
 		break;
 	case CDP_CONFIG_PEER_FREQ:
-		return dp_set_peer_freq(cdp_soc, vdev_id,
-					peer_mac, param, val);
+		status =  dp_set_peer_freq(cdp_soc, vdev_id,
+					   peer_mac, param, val);
 		break;
 	default:
 		break;
@@ -8104,7 +8105,7 @@ static QDF_STATUS dp_set_peer_param(struct cdp_soc_t *cdp_soc,  uint8_t vdev_id,
 
 	dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
 
-	return QDF_STATUS_SUCCESS;
+	return status;
 }
 
 #ifdef WLAN_FEATURE_11BE_MLO
