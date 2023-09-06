@@ -835,6 +835,10 @@ void mlo_mgr_remove_link_switch_cmd(struct wlan_objmgr_vdev *vdev)
 	req = &vdev->mlo_dev_ctx->link_ctx->last_req;
 	mlo_mgr_link_switch_notify(vdev, req);
 
+	/* Handle any pending disconnect */
+	if (cur_state == MLO_LINK_SWITCH_STATE_ABORT_TRANS)
+		mlo_handle_pending_disconnect(vdev);
+
 	if (req->reason == MLO_LINK_SWITCH_REASON_HOST_FORCE) {
 		mlo_debug("Link switch not serialized");
 		mlo_mgr_link_switch_complete(vdev);
@@ -1090,5 +1094,49 @@ mlo_mgr_link_switch_send_cnf_cmd(struct wlan_objmgr_psoc *psoc,
 		mlo_err("Link switch status update to FW failed");
 
 	return status;
+}
+
+QDF_STATUS
+mlo_mgr_link_switch_defer_disconnect_req(struct wlan_objmgr_vdev *vdev,
+					 enum wlan_cm_source source,
+					 enum wlan_reason_code reason)
+{
+	struct wlan_mlo_dev_context *mlo_dev_ctx;
+	struct wlan_mlo_sta *sta_ctx;
+
+	if (!mlo_mgr_is_link_switch_in_progress(vdev)) {
+		mlo_info("Link switch not in progress");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	mlo_dev_ctx = vdev->mlo_dev_ctx;
+	sta_ctx = mlo_dev_ctx->sta_ctx;
+
+	if (!sta_ctx) {
+		mlo_err("sta ctx null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	/* Move current link switch to abort state */
+	mlo_mgr_link_switch_trans_abort_state(mlo_dev_ctx);
+
+	if (sta_ctx->disconn_req) {
+		mlo_debug("Pending disconnect from source %d, reason %d",
+			  sta_ctx->disconn_req->source,
+			  sta_ctx->disconn_req->reason_code);
+		return QDF_STATUS_E_ALREADY;
+	}
+
+	sta_ctx->disconn_req =
+			qdf_mem_malloc(sizeof(struct wlan_cm_disconnect_req));
+	if (!sta_ctx->disconn_req)
+		return QDF_STATUS_E_NOMEM;
+
+	sta_ctx->disconn_req->vdev_id = wlan_vdev_get_id(vdev);
+	sta_ctx->disconn_req->source = source;
+	sta_ctx->disconn_req->reason_code = reason;
+
+	mlo_debug("Deferred disconnect source: %d, reason: %d", source, reason);
+	return QDF_STATUS_SUCCESS;
 }
 #endif

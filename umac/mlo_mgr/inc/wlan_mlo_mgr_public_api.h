@@ -117,4 +117,21 @@ wlan_mlo_mgr_link_switch_set_mac_addr_resp(struct wlan_objmgr_vdev *vdev,
 {
 	return mlo_mgr_link_switch_set_mac_addr_resp(vdev, resp_status);
 }
+
+/**
+ * wlan_mlo_mgr_link_switch_defer_disconnect_req() - Defer disconnect requests
+ * from source other than link switch.
+ * @vdev: VDEV object manager
+ * @source: Disconnect requestor
+ * @reason: Reason for disconnect
+ *
+ * Return: QDF_STATUS.
+ */
+static inline QDF_STATUS
+wlan_mlo_mgr_link_switch_defer_disconnect_req(struct wlan_objmgr_vdev *vdev,
+					      enum wlan_cm_source source,
+					      enum wlan_reason_code reason)
+{
+	return mlo_mgr_link_switch_defer_disconnect_req(vdev, source, reason);
+}
 #endif /* _WLAN_MLO_MGR_PUBLIC_API_H_ */

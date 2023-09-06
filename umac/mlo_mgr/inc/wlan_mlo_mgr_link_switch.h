@@ -21,6 +21,7 @@
 #define _WLAN_MLO_MGR_LINK_SWITCH_H_
 
 #include <wlan_mlo_mgr_public_structs.h>
+#include <wlan_cm_public_struct.h>
 
 struct wlan_channel;
 
@@ -536,6 +537,27 @@ mlo_mgr_link_switch_send_cnf_cmd(struct wlan_objmgr_psoc *psoc,
 				 struct wlan_mlo_link_switch_cnf *cnf_params);
 
 /**
+ * mlo_mgr_link_switch_defer_disconnect_req() - Defer disconnect request from
+ * source other than link switch
+ * @vdev: VDEV object manager
+ * @source: Disconnect requestor
+ * @reason: Reason for disconnect
+ *
+ * If link switch is in progress for @vdev, then queue to disconnect request
+ * received in the MLO dev context and move link switch state to abort and
+ * on completion of link switch schedule pending disconnect requests.
+ *
+ * If link switch is not in progress or already another disconnect in queued in
+ * MLO dev context then reject the disconnect defer request.
+ *
+ * Return: QDF_STATUS.
+ */
+QDF_STATUS
+mlo_mgr_link_switch_defer_disconnect_req(struct wlan_objmgr_vdev *vdev,
+					 enum wlan_cm_source source,
+					 enum wlan_reason_code reason);
+
+/**
  * mlo_mgr_link_switch_init() - API to initialize link switch
  * @ml_dev: MLO dev context
  *
@@ -704,6 +726,14 @@ mlo_mgr_link_switch_complete(struct wlan_objmgr_vdev *vdev)
 static inline QDF_STATUS
 mlo_mgr_link_switch_send_cnf_cmd(struct wlan_objmgr_psoc *psoc,
 				 struct wlan_mlo_link_switch_cnf *cnf_params)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline QDF_STATUS
+mlo_mgr_link_switch_defer_disconnect_req(struct wlan_objmgr_vdev *vdev,
+					 enum wlan_cm_source source,
+					 enum wlan_reason_code reason)
 {
 	return QDF_STATUS_E_NOSUPPORT;
 }
