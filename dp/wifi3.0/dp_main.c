@@ -2638,6 +2638,8 @@ void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id)
 		page_idx = 0;
 		count = 0;
 		offset = 0;
+
+		qdf_assert(pages->num_element_per_page != 0);
 		while ((desc = hal_srng_src_get_next(soc->hal_soc,
 						     desc_srng)) &&
 			(count < total_link_descs)) {
@@ -2673,6 +2675,7 @@ void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id)
 		offset = 0;
 		num_descs_per_page = pages->num_element_per_page;
 
+		qdf_assert(num_descs_per_page != 0);
 		while (count < total_link_descs) {
 			page_idx = count / num_descs_per_page;
 			offset = count % num_descs_per_page;
