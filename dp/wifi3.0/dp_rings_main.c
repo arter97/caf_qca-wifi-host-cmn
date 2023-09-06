@@ -706,8 +706,7 @@ uint32_t dp_service_srngs(void *dp_ctx, uint32_t dp_budget, int cpu)
 budget_done:
 	qdf_atomic_clear_bit(cpu, &soc->service_rings_running);
 
-	if (soc->notify_fw_callback)
-		soc->notify_fw_callback(soc);
+	dp_umac_reset_trigger_pre_reset_notify_cb(soc);
 
 	return dp_budget - budget;
 }
