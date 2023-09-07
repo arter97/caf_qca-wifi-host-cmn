@@ -394,28 +394,34 @@ struct qdf_dp_trace_ptr_buf {
 };
 
 /**
- * struct qdf_dp_trace_proto_buf - proto packet buffer
- * @sa: source address
- * @da: destination address
+ * struct qdf_dp_trace_proto_cmn - common info in proto packet
  * @vdev_id: vdev id
  * @type: packet type
  * @subtype: packet subtype
- * @dir: direction
  * @proto_priv_data: protocol private data
  * can be stored in this.
+ * @mpdu_seq: 802.11 MPDU sequence number
+ */
+struct qdf_dp_trace_proto_cmn {
+	uint8_t vdev_id;
+	uint8_t type;
+	uint8_t subtype;
+	uint32_t proto_priv_data;
+	uint16_t mpdu_seq;
+};
+
+/**
+ * struct qdf_dp_trace_proto_buf - proto packet buffer
+ * @sa: source address
+ * @da: destination address
+ * @dir: direction
+ * @cmn_info: common info
  */
 struct qdf_dp_trace_proto_buf {
 	struct qdf_mac_addr sa;
 	struct qdf_mac_addr da;
-	uint8_t vdev_id;
-	uint8_t type;
-	uint8_t subtype;
 	uint8_t dir;
-	/* for ICMP priv data is bit offset 38 to 42
-	 * 38-40 ICMP_ICMP_ID and
-	 * 40-42 ICMP_SEQ_NUM_OFFSET
-	 */
-	uint32_t proto_priv_data;
+	struct qdf_dp_trace_proto_cmn cmn_info;
 };
 
 /**
@@ -1205,23 +1211,21 @@ uint8_t qdf_dp_get_no_of_record(void);
 /**
  * qdf_dp_trace_proto_pkt() - record proto packet
  * @code: dptrace code
- * @vdev_id: vdev id
  * @sa: source mac address
  * @da: destination mac address
- * @type: proto type
- * @subtype: proto subtype
  * @dir: direction
  * @pdev_id: pdev id
  * @print: to print this proto pkt or not
- * @proto_priv_data: protocol specific private
- * data.
+ * @cmn_info: common info for proto pkt
+ *
  * Return: none
  */
 void
-qdf_dp_trace_proto_pkt(enum QDF_DP_TRACE_ID code, uint8_t vdev_id,
-	uint8_t *sa, uint8_t *da, enum qdf_proto_type type,
-	enum qdf_proto_subtype subtype, enum qdf_proto_dir dir,
-	uint8_t pdev_id, bool print, uint32_t proto_priv_data);
+qdf_dp_trace_proto_pkt(enum QDF_DP_TRACE_ID code,
+		       uint8_t *sa, uint8_t *da,
+		       enum qdf_proto_dir dir,
+		       uint8_t pdev_id, bool print,
+		       struct qdf_dp_trace_proto_cmn *cmn_info);
 
 /**
  * qdf_dp_trace_disable_live_mode() - disable live mode for dptrace
