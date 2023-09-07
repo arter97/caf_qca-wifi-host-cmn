@@ -1137,4 +1137,39 @@ void wlan_mlo_send_vdev_pause(struct wlan_objmgr_psoc *psoc,
 			      uint16_t vdev_pause_dur)
 {}
 #endif
+
+#if defined(WLAN_FEATURE_11BE_MLO_ADV_FEATURE) && defined(WLAN_FEATURE_11BE_MLO)
+/**
+ * mlo_defer_set_keys: Defer MLO set keys for link
+ * @vdev: vdev obj
+ * @link_id: link_id
+ * @value: bool true or false
+ * Return: none
+ */
+void mlo_defer_set_keys(struct wlan_objmgr_vdev *vdev,
+			uint8_t link_id, bool value);
+
+/**
+ * mlo_is_set_key_defered: Verify whether the set key deferred for the link
+ * @vdev: vdev obj
+ * @link_id: link_id
+ * Return: boolean value true or false
+ */
+bool mlo_is_set_key_defered(struct wlan_objmgr_vdev *vdev,
+			    uint8_t link_id);
+
+#else
+static inline
+void mlo_defer_set_keys(struct wlan_objmgr_vdev *vdev,
+			uint8_t link_id, bool value)
+{
+}
+
+static inline
+bool mlo_is_set_key_defered(struct wlan_objmgr_vdev *vdev,
+			    uint8_t link_id)
+{
+	return false;
+}
+#endif
 #endif

@@ -2343,6 +2343,50 @@ release_ref:
 		mlo_release_vdev_ref(wlan_vdev_list[i]);
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+void mlo_defer_set_keys(struct wlan_objmgr_vdev *vdev,
+			uint8_t link_id, bool value)
+{
+	struct wlan_mlo_sta *sta_ctx;
+	uint8_t link_iter;
+
+	if (!vdev || !vdev->mlo_dev_ctx)
+		return;
+
+	sta_ctx = vdev->mlo_dev_ctx->sta_ctx;
+	if (!sta_ctx)
+		return;
+	for (link_iter = 0; link_iter < WLAN_MAX_ML_BSS_LINKS;
+	     link_iter++) {
+		if (!sta_ctx->key_mgmt[link_iter].keys_saved) {
+			sta_ctx->key_mgmt[link_iter].link_id = link_id;
+			sta_ctx->key_mgmt[link_iter].keys_saved = value;
+		}
+	}
+}
+
+bool mlo_is_set_key_defered(struct wlan_objmgr_vdev *vdev,
+			    uint8_t link_id)
+{
+	struct wlan_mlo_sta *sta_ctx;
+	uint8_t link_iter;
+
+	if (!vdev || !vdev->mlo_dev_ctx)
+		return false;
+
+	sta_ctx = vdev->mlo_dev_ctx->sta_ctx;
+	if (!sta_ctx)
+		return false;
+
+	for (link_iter = 0; link_iter < WLAN_MAX_ML_BSS_LINKS;
+	     link_iter++) {
+		if (sta_ctx->key_mgmt[link_iter].link_id == link_id)
+			return sta_ctx->key_mgmt[link_iter].keys_saved;
+	}
+	return false;
+}
+#endif
+
 static uint16_t
 mlo_get_bcn_interval_by_bssid(struct wlan_objmgr_pdev *pdev,
 			      uint8_t *bssid)

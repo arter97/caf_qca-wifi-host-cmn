@@ -393,14 +393,12 @@ struct wlan_ml_vdev_aid_mgr {
 
 /**
  * struct wlan_mlo_key_mgmt - MLO key management
- * @link_mac_address: list of vdevs selected for connection with the MLAP
- * @vdev_id: vdev id value
  * @keys_saved: keys saved bool
+ * @link_id: link id
  */
 struct wlan_mlo_key_mgmt {
-	struct qdf_mac_addr link_mac_address;
-	uint8_t vdev_id;
 	bool keys_saved;
+	uint8_t link_id;
 };
 
 /**
@@ -678,7 +676,7 @@ struct emlsr_capability {
 struct wlan_mlo_sta {
 	qdf_bitmap(wlan_connect_req_links, WLAN_UMAC_MLO_MAX_VDEVS);
 	qdf_bitmap(wlan_connected_links, WLAN_UMAC_MLO_MAX_VDEVS);
-	struct wlan_mlo_key_mgmt key_mgmt[WLAN_UMAC_MLO_MAX_VDEVS - 1];
+	struct wlan_mlo_key_mgmt key_mgmt[WLAN_MAX_ML_BSS_LINKS];
 	struct wlan_cm_connect_req *connect_req;
 	struct wlan_cm_connect_req *copied_conn_req;
 #ifdef WLAN_MLO_USE_SPINLOCK
