@@ -344,14 +344,17 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 /**
  * wlan_cm_is_eht_allowed_for_current_security() - checks the current security,
  * if eht allowed or not.
+ * @psoc: psoc context
  * @scan_entry: pointer to scan cache entry
  *
  * Return: true if eht allowed for current security
  **/
 bool wlan_cm_is_eht_allowed_for_current_security(
+			struct wlan_objmgr_psoc *psoc,
 			struct scan_cache_entry *scan_entry);
 #else
 static inline bool wlan_cm_is_eht_allowed_for_current_security(
+			struct wlan_objmgr_psoc *psoc,
 			struct scan_cache_entry *scan_entry)
 {
 	return true;
@@ -359,6 +362,7 @@ static inline bool wlan_cm_is_eht_allowed_for_current_security(
 #endif
 #else
 static inline bool wlan_cm_is_eht_allowed_for_current_security(
+			struct wlan_objmgr_psoc *psoc,
 			struct scan_cache_entry *scan_entry)
 {
 	return false;
