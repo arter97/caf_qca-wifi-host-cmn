@@ -209,7 +209,7 @@ spatial_reuse_set_sr_enable_disable(struct wlan_objmgr_vdev *vdev,
 		wlan_vdev_obj_unlock(vdev);
 	}
 
-	mlme_debug("srp param val: %u, enable: %d",
+	mlme_debug("srp param val: %x, enable: %d",
 		   val, is_sr_enable);
 	if (is_sr_enable) {
 		status = spatial_reuse_send_bss_color_bit_map(vdev, pdev);

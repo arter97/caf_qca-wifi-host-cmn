@@ -410,7 +410,7 @@ wlan_mlme_update_sr_data(struct wlan_objmgr_vdev *vdev, int *val,
 			 int32_t srg_pd_threshold, int32_t non_srg_pd_threshold,
 			 bool is_sr_enable)
 {
-	uint8_t ap_non_srg_pd_threshold = 0;
+	int8_t ap_non_srg_pd_threshold = 0;
 	uint8_t ap_srg_min_pd_threshold_offset = 0;
 	uint8_t ap_srg_max_pd_threshold_offset = 0;
 	uint8_t sr_ctrl;
@@ -439,6 +439,8 @@ wlan_mlme_update_sr_data(struct wlan_objmgr_vdev *vdev, int *val,
 			non_srg_pd_threshold = ap_non_srg_pd_threshold;
 		else if (non_srg_pd_threshold < SR_PD_THRESHOLD_MIN)
 			non_srg_pd_threshold = SR_PD_THRESHOLD_MIN;
+		if (non_srg_pd_threshold > SR_PD_THRESHOLD_MAX)
+			non_srg_pd_threshold = SR_PD_THRESHOLD_MAX;
 
 		/* 31st BIT - Enable/Disable Non-SRG based spatial reuse. */
 		*val |= is_sr_enable << NON_SRG_SPR_ENABLE_POS;
