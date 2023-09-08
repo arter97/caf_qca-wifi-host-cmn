@@ -155,6 +155,17 @@ static inline uint8_t qdf_nbuf_get_lmac_id(qdf_nbuf_t buf)
 }
 
 /**
+ * qdf_nbuf_get_mpdu_seq_num() - get MPDU sequence number
+ * @buf: Network buffer
+ *
+ * Return: mpdu sequence number value
+ */
+static inline uint16_t qdf_nbuf_get_mpdu_seq_num(qdf_nbuf_t buf)
+{
+	return QDF_NBUF_CB_RX_MPDU_SEQ_NUM(buf);
+}
+
+/**
  * qdf_nbuf_set_rx_ipa_smmu_map() - set ipa smmu mapped flag
  * @buf: Network buffer
  * @value: 1 - ipa smmu mapped, 0 - ipa smmu unmapped

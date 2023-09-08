@@ -1524,7 +1524,7 @@ static bool qdf_log_icmpv6_pkt(uint8_t vdev_id, struct sk_buff *skb,
 		cmn_info.type = QDF_PROTO_TYPE_ICMPv6;
 		cmn_info.subtype = subtype;
 		cmn_info.proto_priv_data = 0;
-		cmn_info.mpdu_seq = 0xFF;
+		cmn_info.mpdu_seq = qdf_nbuf_get_mpdu_seq_num(skb);
 		DPTRACE(qdf_dp_trace_proto_pkt(
 			QDF_DP_TRACE_ICMPv6_PACKET_RECORD,
 			(skb->data + QDF_NBUF_SRC_MAC_OFFSET),
@@ -1590,7 +1590,7 @@ static bool qdf_log_icmp_pkt(uint8_t vdev_id, struct sk_buff *skb,
 		cmn_info.proto_priv_data |= (uint32_t)seq_num;
 		cmn_info.type = QDF_PROTO_TYPE_ICMP;
 		cmn_info.vdev_id = vdev_id;
-		cmn_info.mpdu_seq = 0xFF;
+		cmn_info.mpdu_seq = qdf_nbuf_get_mpdu_seq_num(skb);
 
 		if (QDF_TX == dir)
 			QDF_NBUF_CB_TX_DP_TRACE(skb) = 1;
@@ -1894,7 +1894,7 @@ static bool qdf_log_eapol_pkt(uint8_t vdev_id, struct sk_buff *skb,
 		cmn_info.type = QDF_PROTO_TYPE_EAPOL;
 		cmn_info.subtype = subtype;
 		cmn_info.proto_priv_data = 0;
-		cmn_info.mpdu_seq = 0xFF;
+		cmn_info.mpdu_seq = qdf_nbuf_get_mpdu_seq_num(skb);
 		DPTRACE(qdf_dp_trace_proto_pkt(QDF_DP_TRACE_EAPOL_PACKET_RECORD,
 					       skb->data +
 					       QDF_NBUF_SRC_MAC_OFFSET,
@@ -1979,7 +1979,7 @@ static bool qdf_log_dhcp_pkt(uint8_t vdev_id, struct sk_buff *skb,
 		cmn_info.type = QDF_PROTO_TYPE_DHCP;
 		cmn_info.subtype = subtype;
 		cmn_info.proto_priv_data = 0;
-		cmn_info.mpdu_seq = 0xFF;
+		cmn_info.mpdu_seq = qdf_nbuf_get_mpdu_seq_num(skb);
 		DPTRACE(qdf_dp_trace_proto_pkt(QDF_DP_TRACE_DHCP_PACKET_RECORD,
 					       skb->data +
 					       QDF_NBUF_SRC_MAC_OFFSET,
@@ -2043,7 +2043,7 @@ static bool qdf_log_arp_pkt(uint8_t vdev_id, struct sk_buff *skb,
 		cmn_info.type = QDF_PROTO_TYPE_ARP;
 		cmn_info.subtype = proto_subtype;
 		cmn_info.proto_priv_data = 0;
-		cmn_info.mpdu_seq = 0xFF;
+		cmn_info.mpdu_seq = qdf_nbuf_get_mpdu_seq_num(skb);
 		DPTRACE(qdf_dp_trace_proto_pkt(QDF_DP_TRACE_ARP_PACKET_RECORD,
 					       skb->data +
 					       QDF_NBUF_SRC_MAC_OFFSET,
