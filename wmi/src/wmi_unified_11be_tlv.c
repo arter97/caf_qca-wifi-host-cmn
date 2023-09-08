@@ -2105,11 +2105,11 @@ QDF_STATUS mlo_teardown_cmd_send_tlv(struct wmi_unified *wmi_handle,
 								wmi_handle,
 								param->pdev_id);
 	switch (param->reason) {
-	case WMI_MLO_TEARDOWN_REASON_SSR:
-	case WMI_MLO_TEARDOWN_REASON_MODE1_SSR:
+	case WMI_HOST_MLO_TEARDOWN_REASON_SSR:
+	case WMI_HOST_MLO_TEARDOWN_REASON_MODE1_SSR:
 		cmd->reason_code = WMI_MLO_TEARDOWN_SSR_REASON;
 		break;
-	case WMI_MLO_TEARDOWN_REASON_DOWN:
+	case WMI_HOST_MLO_TEARDOWN_REASON_DOWN:
 	default:
 		cmd->reason_code = WMI_MLO_TEARDOWN_SSR_REASON + 1;
 		break;
@@ -2147,9 +2147,9 @@ extract_mlo_setup_cmpl_event_tlv(struct wmi_unified *wmi_handle,
 								wmi_handle,
 								ev->pdev_id);
 	if (!ev->status)
-		params->status = WMI_MLO_SETUP_STATUS_SUCCESS;
+		params->status = WMI_HOST_MLO_SETUP_STATUS_SUCCESS;
 	else
-		params->status = WMI_MLO_SETUP_STATUS_FAILURE;
+		params->status = WMI_HOST_MLO_SETUP_STATUS_FAILURE;
 
 	params->max_ml_peer_ids = ev->max_ml_peer_ids;
 
@@ -2175,9 +2175,9 @@ extract_mlo_teardown_cmpl_event_tlv(struct wmi_unified *wmi_handle,
 								wmi_handle,
 								ev->pdev_id);
 	if (!ev->status)
-		params->status = WMI_MLO_TEARDOWN_STATUS_SUCCESS;
+		params->status = WMI_HOST_MLO_TEARDOWN_STATUS_SUCCESS;
 	else
-		params->status = WMI_MLO_TEARDOWN_STATUS_FAILURE;
+		params->status = WMI_HOST_MLO_TEARDOWN_STATUS_FAILURE;
 
 	return QDF_STATUS_SUCCESS;
 }
