@@ -9071,6 +9071,11 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		DP_UPDATE_PER_PKT_STATS(vdev_stats, per_pkt_stats);
 	}
 }
+
+void dp_get_vdev_stats_for_unmap_peer_legacy(struct dp_vdev *vdev,
+					     struct dp_peer *peer)
+{
+}
 #endif
 
 void dp_update_pdev_stats(struct dp_pdev *tgtobj,
