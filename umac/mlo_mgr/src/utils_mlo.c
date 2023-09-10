@@ -468,7 +468,7 @@ util_parse_bvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
 				     QDF_MAC_ADDR_SIZE);
 
 			mlo_nofl_debug("Copied MAC address: " QDF_MAC_ADDR_FMT,
-				       subelempayload + parsed_payload_len);
+				       QDF_MAC_ADDR_REF(macaddr->bytes));
 
 			if (is_macaddr_valid)
 				*is_macaddr_valid = true;
@@ -1818,13 +1818,6 @@ util_find_bvmlie_persta_prof_for_linkid(uint8_t req_link_id,
 
 	return QDF_STATUS_E_PROTO;
 }
-
-#define MLO_LINKSPECIFIC_ASSOC_REQ_FC0  0x00
-#define MLO_LINKSPECIFIC_ASSOC_REQ_FC1  0x00
-#define MLO_LINKSPECIFIC_ASSOC_RESP_FC0 0x10
-#define MLO_LINKSPECIFIC_ASSOC_RESP_FC1 0x00
-#define MLO_LINKSPECIFIC_PROBE_RESP_FC0 0x50
-#define MLO_LINKSPECIFIC_PROBE_RESP_FC1 0x00
 
 static
 QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
@@ -4257,8 +4250,8 @@ util_parse_rvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
 	 * payloads of all subsequent fragments (if any) but not the headers of
 	 * those fragments.
 	 *
-	 * Currently, the helper returns the link ID, MAC address, Delete timer
-	 * and STA profile. More (sub)fields can be added when required.
+	 * Currently, the helper returns the link ID, MAC address, AP removal
+	 * timer and STA profile. More (sub)fields can be added when required.
 	 */
 	if (!subelempayload) {
 		mlo_err("Pointer to subelement payload is NULL");
@@ -4333,7 +4326,7 @@ util_parse_rvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
 				     subelempayload + parsed_payload_len,
 				     QDF_MAC_ADDR_SIZE);
 			mlo_nofl_debug("Copied MAC address: " QDF_MAC_ADDR_FMT,
-				       subelempayload + parsed_payload_len);
+				       QDF_MAC_ADDR_REF(macaddr->bytes));
 
 			if (is_macaddr_valid)
 				*is_macaddr_valid = true;
@@ -4530,6 +4523,12 @@ util_parse_rv_info_from_linkinfo(uint8_t *linkinfo,
 								      &ap_removal_timer);
 			if (QDF_IS_STATUS_ERROR(ret))
 				return ret;
+			if (reconfig_info->num_links >=
+						WLAN_UMAC_MLO_MAX_VDEVS) {
+				mlo_err("num_link %d invalid",
+					reconfig_info->num_links);
+				return QDF_STATUS_E_INVAL;
+			}
 			link_info =
 			&reconfig_info->link_info[reconfig_info->num_links];
 			link_info->link_id = linkid;
@@ -4541,7 +4540,7 @@ util_parse_rv_info_from_linkinfo(uint8_t *linkinfo,
 			if (is_ap_removal_timer_valid)
 				link_info->ap_removal_timer = ap_removal_timer;
 			else
-				mlo_warn_rl("Delete timer not found in STA Info field of per-STA profile with link ID %u",
+				mlo_warn_rl("AP removal timer not found in STA Info field of per-STA profile with link ID %u",
 					    linkid);
 
 			mlo_debug("Per-STA Profile Link ID: %u AP removal timer present: %d AP removal timer: %u",

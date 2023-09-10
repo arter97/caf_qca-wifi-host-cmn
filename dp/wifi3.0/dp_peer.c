@@ -267,6 +267,54 @@ QDF_STATUS dp_peer_ast_table_attach(struct dp_soc *soc)
 }
 
 /**
+ * dp_find_peer_by_macaddr() - Finding the peer from mac address provided.
+ * @soc: soc handle
+ * @mac_addr: MAC address to be used to find peer
+ * @vdev_id: VDEV id
+ * @mod_id: MODULE ID
+ *
+ * Return: struct dp_peer
+ */
+struct dp_peer *dp_find_peer_by_macaddr(struct dp_soc *soc, uint8_t *mac_addr,
+					uint8_t vdev_id, enum dp_mod_id mod_id)
+{
+	bool ast_ind_disable = wlan_cfg_get_ast_indication_disable(
+							    soc->wlan_cfg_ctx);
+	struct cdp_peer_info peer_info = {0};
+
+	if ((!soc->ast_offload_support) || (!ast_ind_disable)) {
+		struct dp_ast_entry *ast_entry = NULL;
+		uint16_t peer_id;
+
+		qdf_spin_lock_bh(&soc->ast_lock);
+
+		if (vdev_id == DP_VDEV_ALL)
+			ast_entry = dp_peer_ast_hash_find_soc(soc, mac_addr);
+		else
+			ast_entry = dp_peer_ast_hash_find_by_vdevid
+						(soc, mac_addr, vdev_id);
+
+		if (!ast_entry) {
+			qdf_spin_unlock_bh(&soc->ast_lock);
+			dp_err("NULL ast entry");
+			return NULL;
+		}
+
+		peer_id = ast_entry->peer_id;
+		qdf_spin_unlock_bh(&soc->ast_lock);
+
+		if (peer_id == HTT_INVALID_PEER)
+			return NULL;
+
+		return dp_peer_get_ref_by_id(soc, peer_id, mod_id);
+	}
+
+	DP_PEER_INFO_PARAMS_INIT(&peer_info, vdev_id, mac_addr, false,
+				 CDP_WILD_PEER_TYPE);
+	return dp_peer_hash_find_wrapper(soc, &peer_info, mod_id);
+}
+
+/**
  * dp_peer_find_map_attach() - allocate memory for peer_id_to_obj_map
  * @soc: soc handle
  *
@@ -2623,7 +2671,7 @@ dp_rx_mlo_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 	 * on chip ID obtained from mlo peer_map event
 	 */
 	for (i = 0; i < DP_MAX_MLO_LINKS; i++) {
-		if (mlo_link_info[i].peer_chip_id == dp_mlo_get_chip_id(soc)) {
+		if (mlo_link_info[i].peer_chip_id == dp_get_chip_id(soc)) {
 			vdev_id = mlo_link_info[i].vdev_id;
 			break;
 		}
@@ -2915,9 +2963,9 @@ dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 	if (peer->txrx_peer) {
 		struct cdp_txrx_peer_params_update params = {0};
 
-		params.osif_vdev = (void *)vdev->osif_vdev;
+		params.vdev_id = vdev->vdev_id;
 		params.peer_mac = peer->mac_addr.raw;
-		params.chip_id = dp_mlo_get_chip_id(soc);
+		params.chip_id = dp_get_chip_id(soc);
 		params.pdev_id = vdev->pdev->pdev_id;
 
 		dp_wdi_event_handler(WDI_EVENT_PEER_UNMAP, soc,

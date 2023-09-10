@@ -56,8 +56,45 @@
 #ifdef WLAN_PKT_CAPTURE_RX_2_0
 QDF_STATUS dp_mon_pdev_ext_init_2_0(struct dp_pdev *pdev);
 QDF_STATUS dp_mon_pdev_ext_deinit_2_0(struct dp_pdev *pdev);
+#ifdef QCA_KMEM_CACHE_SUPPORT
 QDF_STATUS dp_rx_mon_ppdu_info_cache_create(struct dp_pdev *pdev);
 void dp_rx_mon_ppdu_info_cache_destroy(struct dp_pdev *pdev);
+struct hal_rx_ppdu_info*
+dp_rx_mon_get_ppdu_info(struct dp_mon_pdev *mon_pdev);
+void
+dp_rx_mon_free_ppdu_info(struct dp_pdev *pdev,
+			 struct hal_rx_ppdu_info *ppdu_info);
+void
+__dp_rx_mon_free_ppdu_info(struct dp_mon_pdev *mon_pdev,
+			   struct hal_rx_ppdu_info *ppdu_info);
+#else
+static inline QDF_STATUS dp_rx_mon_ppdu_info_cache_create(struct dp_pdev *pdev)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline void dp_rx_mon_ppdu_info_cache_destroy(struct dp_pdev *pdev)
+{
+}
+
+static inline struct hal_rx_ppdu_info*
+dp_rx_mon_get_ppdu_info(struct dp_mon_pdev *mon_pdev)
+{
+	return &mon_pdev->ppdu_info;
+}
+
+static inline void
+dp_rx_mon_free_ppdu_info(struct dp_pdev *pdev,
+			 struct hal_rx_ppdu_info *ppdu_info)
+{
+}
+
+static inline void
+__dp_rx_mon_free_ppdu_info(struct dp_mon_pdev *mon_pdev,
+			   struct hal_rx_ppdu_info *ppdu_info)
+{
+}
+#endif
 QDF_STATUS dp_rx_mon_pdev_htt_srng_setup_2_0(struct dp_soc *soc,
 					    struct dp_pdev *pdev,
 					    int mac_id,
@@ -194,6 +231,18 @@ static inline QDF_STATUS dp_rx_mon_ppdu_info_cache_create(struct dp_pdev *pdev)
 }
 
 static inline void dp_rx_mon_ppdu_info_cache_destroy(struct dp_pdev *pdev)
+{
+}
+
+static inline struct hal_rx_ppdu_info*
+dp_rx_mon_get_ppdu_info(struct dp_mon_pdev *mon_pdev)
+{
+	return NULL;
+}
+
+static inline void
+dp_rx_mon_free_ppdu_info(struct dp_pdev *pdev,
+			 struct hal_rx_ppdu_info *ppdu_info)
 {
 }
 

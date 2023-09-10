@@ -115,6 +115,7 @@ ucfg_twt_cfg_get_rtwt_requestor(struct wlan_objmgr_psoc *psoc, bool *val);
  */
 QDF_STATUS
 ucfg_twt_cfg_get_flex_sched(struct wlan_objmgr_psoc *psoc, bool *val);
+
 #else
 static inline
 QDF_STATUS ucfg_twt_cfg_get_requestor(struct wlan_objmgr_psoc *psoc, bool *val)

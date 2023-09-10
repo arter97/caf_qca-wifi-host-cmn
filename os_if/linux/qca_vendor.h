@@ -91,10 +91,38 @@
  *	ap found
  * @QCA_NL80211_VENDOR_SUBCMD_EXTSCAN_RESET_SIGNIFICANT_CHANGE: Ext scan reset
  *	significant change
- * @QCA_NL80211_VENDOR_SUBCMD_TDLS_ENABLE: Ext tdls enable
- * @QCA_NL80211_VENDOR_SUBCMD_TDLS_DISABLE: Ext tdls disable
- * @QCA_NL80211_VENDOR_SUBCMD_TDLS_GET_STATUS: Ext tdls get status
- * @QCA_NL80211_VENDOR_SUBCMD_TDLS_STATE: Ext tdls state
+ * @QCA_NL80211_VENDOR_SUBCMD_TDLS_ENABLE: This command is used to enable TDLS
+ *	capability or to form a session with the specified peer.
+ *	If %NL80211_ATTR_VENDOR_DATA is sent as an empty nested attribute this
+ *	indicates to enable TDLS capability on the interface.
+ *	If %QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAC_ADDR is nested in
+ *	%NL80211_ATTR_VENDOR_DATA this indicates the userspace requests to
+ *	form a TDLS session with the specified peer MAC address.
+ *	The attributes used with this command are defined in
+ *	enum qca_wlan_vendor_attr_tdls_enable.
+ * @QCA_NL80211_VENDOR_SUBCMD_TDLS_DISABLE: This command is used to disable TDLS
+ *	capability or to terminate the session with the specified peer.
+ *	If %NL80211_ATTR_VENDOR_DATA is sent as an empty nested attribute this
+ *	indicates to disable TDLS capability on the interface.
+ *	If %QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_MAC_ADDR is nested in
+ *	%NL80211_ATTR_VENDOR_DATA this indicates the userspace requests to
+ *	terminate TDLS session with the specified peer MAC address.
+ *	The attributes used with this command are defined in
+ *	enum qca_wlan_vendor_attr_tdls_disable.
+ * @QCA_NL80211_VENDOR_SUBCMD_TDLS_GET_STATUS: This command is to get the TDLS
+ *	status at the interface level or with the specific peer.
+ *	If %NL80211_ATTR_VENDOR_DATA is sent as an empty nested attribute this
+ *	indicates the TDLS status query is at interface level.
+ *	If %QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_MAC_ADDR is nested in
+ *	%NL80211_ATTR_VENDOR_DATA this indicates the userspace requests to
+ *	get TDLS session status with the specified peer MAC address.
+ *	The attributes used with this command are defined in
+ *	enum qca_wlan_vendor_attr_tdls_get_status.
+ * @QCA_NL80211_VENDOR_SUBCMD_TDLS_STATE: This event is to indicate the result
+ *	of the TDLS session request with the peer sent by userspace in
+ *	%QCA_NL80211_VENDOR_SUBCMD_TDLS_ENABLE.
+ *	The attributes used with this command are defined in
+ *	enum qca_wlan_vendor_attr_tdls_state.
  * @QCA_NL80211_VENDOR_SUBCMD_GET_SUPPORTED_FEATURES: Get supported features
  * @QCA_NL80211_VENDOR_SUBCMD_SCANNING_MAC_OUI: Set scanning_mac_oui
  * @QCA_NL80211_VENDOR_SUBCMD_NO_DFS_FLAG: No DFS flag
@@ -666,7 +694,9 @@
  *	In some implementations, MLO has multiple netdevs out of which one
  *	netdev is designated as primary to provide a unified interface to the
  *	bridge. In those implementations this event is sent on every MLO peer
- *	connection.
+ *	connection. User applications on an AP MLD will use this event to get
+ *	info for all the links from non-AP MLD that were negotiated to be used
+ *	for the ML association.
  *
  *	The attributes used with this event are defined in
  *	enum qca_wlan_vendor_attr_mlo_peer_prim_netdev_event.
@@ -1396,6 +1426,8 @@ enum qca_wlan_auth_type {
  *  the IEs when the peer station is still in connected state.
  * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_HE_OPERATION: Attribute type for
  * sending HE operation info.
+ * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_CH_WIDTH_V2: Attribute
+ * type for remote channel width greater than 160 MHz.
  * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_AFTER_LAST: After last
  *
  */
@@ -1440,55 +1472,12 @@ enum qca_wlan_vendor_attr_get_station_info {
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_DRIVER_DISCONNECT_REASON,
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_ASSOC_REQ_IES,
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_HE_OPERATION,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_CH_WIDTH_V2,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_MAX =
 		QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_AFTER_LAST - 1,
-};
-
-/**
- * enum qca_wlan_vendor_attr_tdls_enable - TDLS enable attribute
- *
- * @QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_INVALID: Invalid initial value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAC_ADDR: An array of 6 x Unsigned 8-bit
- *	value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_CHANNEL: Signed 32-bit value, but lets
- *	keep as unsigned for now
- * @QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_GLOBAL_OPERATING_CLASS: operating class
- * @QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAX_LATENCY_MS: Enable max latency in ms
- * @QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MIN_BANDWIDTH_KBPS: Enable min bandwidth
- *	in KBPS
- * @QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_AFTER_LAST: After last
- * @QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAX: Max value
- */
-enum qca_wlan_vendor_attr_tdls_enable {
-	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_INVALID = 0,
-	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAC_ADDR,
-	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_CHANNEL,
-	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_GLOBAL_OPERATING_CLASS,
-	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAX_LATENCY_MS,
-	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MIN_BANDWIDTH_KBPS,
-	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_AFTER_LAST,
-	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAX =
-		QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_AFTER_LAST - 1,
-};
-
-/**
- * enum qca_wlan_vendor_attr_tdls_disable: tdls disable attribute
- *
- * @QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_INVALID: Invalid initial value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_MAC_ADDR: An array of 6 x Unsigned
- *	8-bit value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_AFTER_LAST: After last
- * @QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_MAX: Max value
- */
-enum qca_wlan_vendor_attr_tdls_disable {
-	QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_INVALID = 0,
-	QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_MAC_ADDR,
-	QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_AFTER_LAST,
-	QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_MAX =
-		QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_AFTER_LAST - 1,
 };
 
 /**
@@ -1522,63 +1511,6 @@ enum qca_attr_chip_power_save_failure {
 	QCA_ATTR_CHIP_POWER_SAVE_FAILURE_LAST,
 	QCA_ATTR_CHIP_POWER_SAVE_FAILURE_MAX =
 		QCA_ATTR_CHIP_POWER_SAVE_FAILURE_LAST - 1,
-};
-
-
-/**
- * enum qca_wlan_vendor_attr_tdls_get_status - tdls get status attribute
- *
- * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_INVALID: Invalid initial value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_MAC_ADDR: An array of 6 x Unsigned
- *	8-bit value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_STATE: get status state,
- *	unsigned 32-bit value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_REASON: get status reason
- * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_CHANNEL: get status channel,
- *	unsigned 32-bit value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_GLOBAL_OPERATING_CLASS: get operating
- *	class, unsigned 32-bit value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_AFTER_LAST: After last
- * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_MAX: Max value
- */
-enum qca_wlan_vendor_attr_tdls_get_status {
-	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_INVALID = 0,
-	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_MAC_ADDR,
-	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_STATE,
-	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_REASON,
-	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_CHANNEL,
-	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_GLOBAL_OPERATING_CLASS,
-	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_AFTER_LAST,
-	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_MAX =
-		QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_AFTER_LAST - 1,
-};
-
-/**
- * enum qca_wlan_vendor_attr_tdls_state - tdls state attribute
- *
- * @QCA_WLAN_VENDOR_ATTR_TDLS_STATE_INVALID: Initial invalid value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_STATE_MAC_ADDR: An array of 6 x Unsigned
- *	8-bit value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_NEW_STATE: TDLS new state,
- *	unsigned 32-bit value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_STATE_REASON: TDLS state reason
- * @QCA_WLAN_VENDOR_ATTR_TDLS_STATE_CHANNEL: TDLS state channel,
- *	unsigned 32-bit value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_STATE_GLOBAL_OPERATING_CLASS: TDLS state
- *	operating class, unsigned 32-bit value
- * @QCA_WLAN_VENDOR_ATTR_TDLS_STATE_AFTER_LAST: After last
- * @QCA_WLAN_VENDOR_ATTR_TDLS_STATE_MAX: Max value
- */
-enum qca_wlan_vendor_attr_tdls_state {
-	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_INVALID = 0,
-	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_MAC_ADDR,
-	QCA_WLAN_VENDOR_ATTR_TDLS_NEW_STATE,
-	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_REASON,
-	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_CHANNEL,
-	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_GLOBAL_OPERATING_CLASS,
-	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_AFTER_LAST,
-	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_MAX =
-		QCA_WLAN_VENDOR_ATTR_TDLS_STATE_AFTER_LAST - 1,
 };
 
 /* enum's to provide TDLS capabilities */
@@ -3444,7 +3376,10 @@ enum qca_vendor_attr_scan_freq_list_scheme {
  *	due to poor RSSI of the connected AP.
  * @QCA_ROAM_TRIGGER_REASON_BETTER_RSSI: Set if the roam has to be triggered
  *	upon finding a BSSID with a better RSSI than the connected BSSID.
- *	Here the RSSI of the current BSSID need not be poor.
+ *	Also, set if the roam has to be triggered due to the high RSSI of the
+ *	current connected AP (better than
+ *	QCA_ATTR_ROAM_CONTROL_CONNECTED_HIGH_RSSI_OFFSET). Here the RSSI of
+ *	the current BSSID need not be poor.
  * @QCA_ROAM_TRIGGER_REASON_PERIODIC: Set if the roam has to be triggered
  *	by triggering a periodic scan to find a better AP to roam.
  * @QCA_ROAM_TRIGGER_REASON_DENSE: Set if the roam has to be triggered
@@ -3890,6 +3825,16 @@ enum qca_vendor_attr_roam_candidate_selection_criteria {
  *	    discovered.
  *	The default behavior if this flag is not specified is to include all
  *	the supported 6 GHz PSC frequencies in the roam full scan.
+ *
+ * @QCA_ATTR_ROAM_CONTROL_CONNECTED_HIGH_RSSI_OFFSET: Unsigned 8-bit value.
+ *	This attribute signifies the RSSI offset that is added to low RSSI
+ *	threshold (QCA_ATTR_ROAM_CONTROL_CONNECTED_LOW_RSSI_THRESHOLD) to imply
+ *	high RSSI threshold. STA is expected to trigger roam if the current
+ *	connected AP's RSSI gets above this high RSSI threshold. STA's roam
+ *	attempt on high RSSI threshold aims to find candidates from other
+ *	better Wi-Fi bands. E.g., STA would initially connect to a 2.4 GHz BSSID
+ *	and would migrate to 5/6 GHz when it comes closer to the AP (high RSSI
+ *	for 2.4 GHz BSS).
  */
 enum qca_vendor_attr_roam_control {
 	QCA_ATTR_ROAM_CONTROL_ENABLE = 1,
@@ -3913,6 +3858,7 @@ enum qca_vendor_attr_roam_control {
 	QCA_ATTR_ROAM_CONTROL_HO_DELAY_FOR_RX = 25,
 	QCA_ATTR_ROAM_CONTROL_FULL_SCAN_NO_REUSE_PARTIAL_SCAN_FREQ = 26,
 	QCA_ATTR_ROAM_CONTROL_FULL_SCAN_6GHZ_ONLY_ON_PRIOR_DISCOVERY = 27,
+	QCA_ATTR_ROAM_CONTROL_CONNECTED_HIGH_RSSI_OFFSET = 31,
 
 	/* keep last */
 	QCA_ATTR_ROAM_CONTROL_AFTER_LAST,
@@ -4743,6 +4689,21 @@ enum wifi_logger_supported_features {
 };
 
 /**
+ * enum qca_wlan_tdls_caps_features_supported - Values for TDLS get
+ * capabilities features
+ */
+enum qca_wlan_tdls_caps_features_supported {
+	WIFI_TDLS_SUPPORT = (1 << (0)),
+	WIFI_TDLS_EXTERNAL_CONTROL_SUPPORT = (1 << (1)),
+	WIFI_TDLS_OFFCHANNEL_SUPPORT = (1 << (2)),
+
+	/* Indicates if the TDLS session can be formed with the peer using
+	 * higher bandwidth than the bandwidth of the AP path.
+	 */
+	WIFI_TDLS_WIDER_BW_SUPPORT = (1 << (3)),
+};
+
+/**
  * enum qca_wlan_vendor_attr_acs_offload - Defines attributes to be used with
  * vendor command/event QCA_NL80211_VENDOR_SUBCMD_DO_ACS.
  *
@@ -5406,9 +5367,13 @@ enum qca_wlan_vendor_attr_config {
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_NSS = 70,
 
-	/*
-	 * 8-bit unsigned value to trigger Optimized Power Management:
-	 * 1-Enable, 0-Disable
+	/* 8-bit unsigned value to configure Optimized Power Management mode:
+	 * Modes are defined by enum qca_wlan_vendor_opm_mode.
+	 *
+	 * This attribute shall be configured along with
+	 * %QCA_WLAN_VENDOR_ATTR_CONFIG_OPM_ITO and
+	 * %QCA_WLAN_VENDOR_ATTR_CONFIG_OPM_SPEC_WAKE_INTERVAL attributes
+	 * when its value is set to %QCA_WLAN_VENDOR_OPM_MODE_USER_DEFINED.
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_OPTIMIZED_POWER_MANAGEMENT = 71,
 
@@ -5751,6 +5716,34 @@ enum qca_wlan_vendor_attr_config {
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_MLO_LINKS = 100,
 
+	/* 16-bit unsigned value to configure power save inactivity timeout in
+	 * milliseconds.
+	 *
+	 * STA enters into power save mode (PM=1) after TX/RX inactivity of time
+	 * duration specified by %QCA_WLAN_VENDOR_ATTR_CONFIG_OPM_ITO.
+	 *
+	 * This attribute shall be configured along with
+	 * %QCA_WLAN_VENDOR_ATTR_CONFIG_OPM_SPEC_WAKE_INTERVAL when
+	 * %QCA_WLAN_VENDOR_ATTR_CONFIG_OPTIMIZED_POWER_MANAGEMENT
+	 * is set to %QCA_WLAN_VENDOR_OPM_MODE_USER_DEFINED mode.
+	 */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_OPM_ITO = 101,
+
+	/* 16-bit unsigned value to configure speculative wake interval in
+	 * milliseconds.
+	 *
+	 * STA speculatively wakes up to look for buffered data by AP at
+	 * %QCA_WLAN_VENDOR_ATTR_CONFIG_OPM_SPEC_WAKE_INTERVAL interval after
+	 * entering into power save. If configured zero, STA wakes up at
+	 * upcoming DTIM beacon.
+	 *
+	 * This attribute shall be configured along with
+	 * %QCA_WLAN_VENDOR_ATTR_CONFIG_OPM_ITO and
+	 * %QCA_WLAN_VENDOR_ATTR_CONFIG_OPTIMIZED_POWER_MANAGEMENT
+	 * to %QCA_WLAN_VENDOR_OPM_MODE_USER_DEFINED mode.
+	 */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_OPM_SPEC_WAKE_INTERVAL = 102,
+
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_CONFIG_MAX =
@@ -5970,22 +5963,41 @@ enum qca_wlan_vendor_attr_rssi_monitoring {
  *     2:80 MHz,
  *     3:160 MHz
  * @QCA_WLAN_VENDOR_ATTR_NDP_CHANNEL_INFO: Array of channel/band width
- * @QCA_WLAN_VENDOR_ATTR_NDP_PARAMS_AFTER_LAST: id after last valid attribute
- * @QCA_WLAN_VENDOR_ATTR_NDP_PARAMS_MAX: max value of this enum type
  * @QCA_WLAN_VENDOR_ATTR_NDP_IPV6_ADDR: IPv6 address used by NDP, 16 bytes array
  * @QCA_WLAN_VENDOR_ATTR_NDP_TRANSPORT_PORT: Unsigned 16-bit value indicating
  * transport port used by NDP.
- * QCA_WLAN_VENDOR_ATTR_NDP_TRANSPORT_PROTOCOL: Unsigned 8-bit value indicating
+ * @QCA_WLAN_VENDOR_ATTR_NDP_TRANSPORT_PROTOCOL: Unsigned 8-bit value indicating
  * protocol used by NDP and assigned by the Internet Assigned Numbers Authority
  * as per: www.iana.org/assignments/protocol-numbers/protocol-numbers.xhtml
- * QCA_WLAN_VENDOR_ATTR_PEER_NDPE_SUPPORT: Unsigned 8-bit value indicating if
+ * @QCA_WLAN_VENDOR_ATTR_PEER_NDPE_SUPPORT: Unsigned 8-bit value indicating if
  * NDP remote peer supports NAN NDPE. 1:support 0:not support
- * QCA_WLAN_VENDOR_ATTR_NDP_SERVICE_ID: As per Wi-Fi Aware Specification v3.2
+ * @QCA_WLAN_VENDOR_ATTR_NDP_SERVICE_ID: As per Wi-Fi Aware Specification v3.2
  * Service Id is the first 48 bits of the SHA-256 hash of the Service Name.
  * A lower-case representation of the Service Name shall be used to
  * calculate the Service ID.
  * Array of u8: length is 6 bytes
  * This attribute is used and optional for ndp indication.
+ * @QCA_WLAN_VENDOR_ATTR_NDP_CSIA_CAPABILITIES: Unsigned 8-bit value for Cipher
+ * Suite
+ * This attribute is used and optional in ndp request, ndp response, ndp
+ * indication, and ndp confirm.
+ * This attribute is used to indicate the Capabilities field of Cipher Suite
+ * Information attribute (CSIA) of NDP frames as defined in Wi-Fi Aware
+ * Specification v4.0, 9.5.21.2, Table 122.
+ * Firmware can accept or ignore any of the capability bits.
+ * @QCA_WLAN_VENDOR_ATTR_NDP_GTK_REQUIRED: Indicate if the GTK protection is
+ * required for NDP. NLA_FLAG attribute.
+ * This attribute can be used in ndp request, ndp response, ndp indication, and
+ * ndp confirm.
+ * GTK protection required is indicated in the NDPE attribute of NAN action
+ * frame (NAF) during NDP negotiation as defined in Wi-Fi Aware Specification
+ * v4.0, 9.5.16.2.
+ * If the device and peer supports GTKSA and if GTK protection required bit is
+ * set in NDPE IE, devices will share GTK to each other in SKDA of Data Path
+ * Security Confirm and Data Path Security Install frames of NDP negotiation to
+ * send and receive protected group addressed data frames from each other.
+ * @QCA_WLAN_VENDOR_ATTR_NDP_PARAMS_AFTER_LAST: id after last valid attribute
+ * @QCA_WLAN_VENDOR_ATTR_NDP_PARAMS_MAX: max value of this enum type
 */
 enum qca_wlan_vendor_attr_ndp_params {
 	QCA_WLAN_VENDOR_ATTR_NDP_PARAM_INVALID = 0,
@@ -6020,6 +6032,8 @@ enum qca_wlan_vendor_attr_ndp_params {
 	QCA_WLAN_VENDOR_ATTR_NDP_TRANSPORT_PROTOCOL = 29,
 	QCA_WLAN_VENDOR_ATTR_PEER_NDPE_SUPPORT = 30,
 	QCA_WLAN_VENDOR_ATTR_NDP_SERVICE_ID = 31,
+	QCA_WLAN_VENDOR_ATTR_NDP_CSIA_CAPABILITIES = 32,
+	QCA_WLAN_VENDOR_ATTR_NDP_GTK_REQUIRED = 33,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_NDP_PARAMS_AFTER_LAST,
@@ -13447,6 +13461,38 @@ enum qca_wlan_vendor_attr_roam_stats_info {
 	 * this attribute.
 	 */
 	QCA_WLAN_VENDOR_ATTR_ROAM_STATS_FRAME_INFO = 43,
+	/* 6-byte MAC address used by the driver to send roam stats information
+	 * of the original AP BSSID. The original AP is the connected AP before
+	 * roam happens, regardless of the roam resulting in success or failure.
+	 * This attribute is only present when
+	 * QCA_WLAN_VENDOR_ATTR_ROAM_STATS_ROAM_STATUS has a value of
+	 * 0 (success) or 1 (failure).
+	 * For non-MLO scenario, it indicates the original connected AP BSSID.
+	 * For MLO scenario, it indicates the original BSSID of the link
+	 * for which the reassociation occurred during the roam.
+	 */
+	QCA_WLAN_VENDOR_ATTR_ROAM_STATS_ORIGINAL_BSSID = 45,
+	/* 6-byte MAC address used by the driver to send roam stats information
+	 * of the roam candidate AP BSSID when roam failed. This is only present
+	 * when QCA_WLAN_VENDOR_ATTR_ROAM_STATS_ROAM_STATUS has a value of
+	 * 1 (failure). If the firmware updates more than one candidate AP BSSID
+	 * to the driver, the driver only fills the last candidate AP BSSID and
+	 * reports it to user space.
+	 * For non-MLO scenario, it indicates the last candidate AP BSSID.
+	 * For MLO scenario, it indicates the AP BSSID which may be the primary
+	 * link BSSID or a nonprimary link BSSID.
+	 */
+	QCA_WLAN_VENDOR_ATTR_ROAM_STATS_CANDIDATE_BSSID = 46,
+	/* 6-byte MAC address used by the driver to send roam stats information
+	 * of the roamed AP BSSID when roam succeeds. This is only present when
+	 * QCA_WLAN_VENDOR_ATTR_ROAM_STATS_ROAM_STATUS has a value of
+	 * 0 (success).
+	 * For non-MLO scenario, it indicates the new AP BSSID to which has
+	 * been successfully roamed.
+	 * For MLO scenario, it indicates the new AP BSSID of the link on
+	 * which the reassociation occurred during the roam.
+	 */
+	QCA_WLAN_VENDOR_ATTR_ROAM_STATS_ROAMED_BSSID = 47,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_ROAM_STATS_AFTER_LAST,
@@ -15783,17 +15829,51 @@ enum qca_wlan_vendor_attr_sr {
  * MLD MAC address of the peer.
  * @QCA_WLAN_VENDOR_ATTR_MLO_PEER_PRIM_NETDEV_EVENT_PRIM_IFINDEX: u32 attribute,
  * used to pass ifindex of the primary netdev.
+ * @QCA_WLAN_VENDOR_ATTR_MLO_PEER_PRIM_NETDEV_EVENT_MLD_IFINDEX: u32 attribute,
+ * used to pass ifindex of the MLD netdev.
+ * @QCA_WLAN_VENDOR_ATTR_MLO_PEER_PRIM_NETDEV_EVENT_NUM_LINKS: u8 attribute,
+ * used to indicate the number of links that the non-AP MLD negotiated to be
+ * used in the ML connection.
+ * @QCA_WLAN_VENDOR_ATTR_MLO_PEER_PRIM_NETDEV_EVENT_LINK_INFO: Nested
+ * attribute, contains information regarding links of the non-AP MLD.
+ * User applications need to know all the links of a non-AP MLD that are
+ * participating in the ML association. The possible attributes inside this
+ * attribute are defined in enum qca_wlan_vendor_attr_mlo_link_info.
  */
 enum qca_wlan_vendor_attr_mlo_peer_prim_netdev_event {
 	QCA_WLAN_VENDOR_ATTR_MLO_PEER_PRIM_NETDEV_EVENT_INVALID = 0,
 	QCA_WLAN_VENDOR_ATTR_MLO_PEER_PRIM_NETDEV_EVENT_MACADDR = 1,
 	QCA_WLAN_VENDOR_ATTR_MLO_PEER_PRIM_NETDEV_EVENT_MLD_MAC_ADDR = 2,
 	QCA_WLAN_VENDOR_ATTR_MLO_PEER_PRIM_NETDEV_EVENT_PRIM_IFINDEX = 3,
+	QCA_WLAN_VENDOR_ATTR_MLO_PEER_PRIM_NETDEV_EVENT_MLD_IFINDEX = 4,
+	QCA_WLAN_VENDOR_ATTR_MLO_PEER_PRIM_NETDEV_EVENT_NUM_LINKS = 5,
+	QCA_WLAN_VENDOR_ATTR_MLO_PEER_PRIM_NETDEV_EVENT_LINK_INFO = 6,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_MLO_PEER_PRIM_NETDEV_EVENT_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_MLO_PEER_PRIM_NETDEV_EVENT_MAX =
 	QCA_WLAN_VENDOR_ATTR_MLO_PEER_PRIM_NETDEV_EVENT_AFTER_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_mlo_link_info - Defines attributes for
+ * non-AP MLD link parameters used by the attribute
+ * %QCA_WLAN_VENDOR_ATTR_MLO_PEER_PRIM_NETDEV_EVENT_LINK_INFO.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_MLO_LINK_INFO_IFINDEX: u32 attribute, used
+ * to pass the netdev ifindex of the non-AP MLD link.
+ * @QCA_WLAN_VENDOR_ATTR_MLO_LINK_INFO_MACADDR: 6 byte MAC address of
+ * the non-AP MLD link.
+ */
+enum qca_wlan_vendor_attr_mlo_link_info {
+	QCA_WLAN_VENDOR_ATTR_MLO_LINK_INFO_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_MLO_LINK_INFO_IFINDEX = 1,
+	QCA_WLAN_VENDOR_ATTR_MLO_LINK_INFO_MACADDR = 2,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_MLO_LINK_INFO_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_MLO_LINK_INFO_MAX =
+	QCA_WLAN_VENDOR_ATTR_MLO_LINK_INFO_AFTER_LAST - 1,
 };
 
 /**
@@ -16546,6 +16626,230 @@ enum qca_wlan_vendor_attr_tdls_disc_rsp_ext {
 	QCA_WLAN_VENDOR_ATTR_TDLS_DISC_RSP_EXT_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_TDLS_DISC_RSP_EXT_MAX =
 	QCA_WLAN_VENDOR_ATTR_TDLS_DISC_RSP_EXT_AFTER_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_tdls_state - Represents the possible TDLS states.
+ *
+ * @QCA_WLAN_VENDOR_TDLS_STATE_DISABLED: TDLS is not enabled, default status
+ * for all stations.
+ *
+ * @QCA_WLAN_VENDOR_TDLS_STATE_ENABLED: TDLS is enabled, but not yet tried to
+ * establish the session.
+ *
+ * @QCA_WLAN_VENDOR_TDLS_STATE_ESTABLISHED: Direct link TDLS session is
+ * established.
+ *
+ * @QCA_WLAN_VENDOR_TDLS_STATE_ESTABLISHED_OFF_CHANNEL: Direct link TDLS
+ * session is established using MCC.
+ *
+ * @QCA_WLAN_VENDOR_TDLS_STATE_DROPPED: Direct link TDLS session was
+ * established, but is temporarily dropped currently.
+ *
+ * @QCA_WLAN_VENDOR_TDLS_STATE_FAILED: TDLS session is failed to establish.
+ */
+enum qca_wlan_vendor_tdls_state {
+	QCA_WLAN_VENDOR_TDLS_STATE_DISABLED = 1,
+	QCA_WLAN_VENDOR_TDLS_STATE_ENABLED = 2,
+	QCA_WLAN_VENDOR_TDLS_STATE_ESTABLISHED = 3,
+	QCA_WLAN_VENDOR_TDLS_STATE_ESTABLISHED_OFF_CHANNEL = 4,
+	QCA_WLAN_VENDOR_TDLS_STATE_DROPPED = 5,
+	QCA_WLAN_VENDOR_TDLS_STATE_FAILED = 6,
+};
+
+/**
+ * enum qca_wlan_vendor_tdls_reason - Represents the possible TDLS reasons.
+ *
+ * @QCA_WLAN_TDLS_REASON_SUCCESS: TDLS session is successfully established.
+ *
+ * @QCA_WLAN_TDLS_REASON_UNSPECIFIED: Unspecified reason.
+ *
+ * @QCA_WLAN_TDLS_REASON_NOT_SUPPORTED: TDLS is not supported.
+ *
+ * @QCA_WLAN_TDLS_REASON_UNSUPPORTED_BAND: The specified band is not supported.
+ *
+ * @QCA_WLAN_TDLS_REASON_NOT_BENEFICIAL: Packets going through AP is better
+ * than through direct link.
+ *
+ * @QCA_WLAN_TDLS_REASON_DROPPED_BY_REMOTE: Peer station doesn't want the TDLS
+ * session anymore.
+ */
+
+enum qca_wlan_vendor_tdls_reason {
+	QCA_WLAN_TDLS_REASON_SUCCESS = 0,
+	QCA_WLAN_TDLS_REASON_UNSPECIFIED = -1,
+	QCA_WLAN_TDLS_REASON_NOT_SUPPORTED = -2,
+	QCA_WLAN_TDLS_REASON_UNSUPPORTED_BAND = -3,
+	QCA_WLAN_TDLS_REASON_NOT_BENEFICIAL = -4,
+	QCA_WLAN_TDLS_REASON_DROPPED_BY_REMOTE = -5,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_tdls_enable - Attributes used by
+ * %QCA_NL80211_VENDOR_SUBCMD_TDLS_ENABLE vendor command.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAC_ADDR: 6-byte MAC address of the peer
+ * station to enable the TDLS session. Optional attribute. The driver sends the
+ * TDLS session result as an asynchronous response using the command
+ * %QCA_NL80211_VENDOR_SUBCMD_TDLS_STATE when this peer MAC is provided in
+ * %QCA_NL80211_VENDOR_SUBCMD_TDLS_ENABLE command.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_CHANNEL: u32 attribute. Indicates the
+ * channel on which the TDLS session to be established. Required only when
+ * %QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAC_ADDR is present.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_GLOBAL_OPERATING_CLASS: u32 attribute.
+ * Indicates the global operating class of the TDLS session to be established.
+ * Required only when %QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAC_ADDR is present.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAX_LATENCY_MS: u32 attribute. Indicates
+ * the maximum latency of the WLAN packets to be transmitted/received in
+ * milliseconds on TDLS session. Required only when
+ * %QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAC_ADDR is present.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MIN_BANDWIDTH_KBPS: u32 attribute.
+ * Indicates the minimum bandwidth to be used to establish the TDLS session
+ * in kbps. Required only when %QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAC_ADDR is
+ * present.
+ */
+enum qca_wlan_vendor_attr_tdls_enable {
+	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAC_ADDR = 1,
+	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_CHANNEL = 2,
+	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_GLOBAL_OPERATING_CLASS = 3,
+	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAX_LATENCY_MS = 4,
+	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MIN_BANDWIDTH_KBPS = 5,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_MAX =
+	QCA_WLAN_VENDOR_ATTR_TDLS_ENABLE_AFTER_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_tdls_disable - Attributes used by
+ * %QCA_NL80211_VENDOR_SUBCMD_TDLS_DISABLE vendor command.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_MAC_ADDR: 6-byte MAC address of the peer
+ * station to disable the TDLS session. Optional attribute.
+ */
+enum qca_wlan_vendor_attr_tdls_disable {
+	QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_MAC_ADDR = 1,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_MAX =
+	QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_AFTER_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_tdls_get_status - Attributes used by
+ * %QCA_NL80211_VENDOR_SUBCMD_TDLS_GET_STATUS vendor command.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_MAC_ADDR: 6-byte MAC address of the
+ * peer station. Optional attribute. Used in
+ * %QCA_NL80211_VENDOR_SUBCMD_TDLS_GET_STATUS request and response.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_STATE: u32 attribute. Indicates the
+ * TDLS session state with the peer specified in
+ * %QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_MAC_ADDR. Uses the values from
+ * enum qca_wlan_vendor_tdls_state. Used in
+ * %QCA_NL80211_VENDOR_SUBCMD_TDLS_GET_STATUS response.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_REASON: s32 attribute. Indicates the
+ * reason for the TDLS session state indicated in
+ * %QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_STATE. Uses the values from enum
+ * qca_wlan_vendor_tdls_reason. Used in
+ * %QCA_NL80211_VENDOR_SUBCMD_TDLS_GET_STATUS response.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_CHANNEL: u32 attribute. Indicates the
+ * channel of the TDLS session established with
+ * %QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_MAC_ADDR. Used in
+ * %QCA_NL80211_VENDOR_SUBCMD_TDLS_GET_STATUS response.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_GLOBAL_OPERATING_CLASS: u32 attribute.
+ * Indicates the global operating class of the TDLS session established with
+ * %QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_MAC_ADDR. Used in
+ * %QCA_NL80211_VENDOR_SUBCMD_TDLS_GET_STATUS response.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_NUM_SESSIONS: u32 attribute. Indicates
+ * the current number of active TDLS sessions. This is indicated in the response
+ * when %QCA_NL80211_VENDOR_SUBCMD_TDLS_GET_STATUS is requested with
+ * %NL80211_ATTR_VENDOR_DATA as an empty nested attribute.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_AVAILABLE: Flag attribute. Indicates
+ * whether the driver can initiate new TDLS session. This is indicated in the
+ * response when %QCA_NL80211_VENDOR_SUBCMD_TDLS_GET_STATUS is requested with
+ * %NL80211_ATTR_VENDOR_DATA as an empty nested attribute.
+ */
+enum qca_wlan_vendor_attr_tdls_get_status {
+	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_MAC_ADDR = 1,
+	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_STATE = 2,
+	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_REASON = 3,
+	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_CHANNEL = 4,
+	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_GLOBAL_OPERATING_CLASS = 5,
+	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_NUM_SESSIONS = 6,
+	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_AVAILABLE = 7,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_MAX =
+	QCA_WLAN_VENDOR_ATTR_TDLS_GET_STATUS_AFTER_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_tdls_state - Attributes used by
+ * %QCA_NL80211_VENDOR_SUBCMD_TDLS_STATE vendor command.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_STATE_MAC_ADDR: 6-byte MAC address of the
+ * peer station. Required attribute.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_STATE_CURRENT_STATE: u32 attribute. Indicates
+ * the current TDLS state. Required attribute. Uses the values from
+ * enum qca_wlan_vendor_tdls_state.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_STATE_REASON: s32 attribute. Indicates the
+ * reason of the current TDLS session state. Required attribute. Uses the values
+ * from enum qca_wlan_vendor_tdls_reason.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_STATE_CHANNEL: u32 attribute. Indicates the
+ * TDLS session channel. Required attribute.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_STATE_GLOBAL_OPERATING_CLASS: u32 attribute.
+ * Indicates the TDLS session global operating class. Required attribute.
+ */
+enum qca_wlan_vendor_attr_tdls_state {
+	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_MAC_ADDR = 1,
+	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_NEW_STATE = 2,
+	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_REASON = 3,
+	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_CHANNEL = 4,
+	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_GLOBAL_OPERATING_CLASS = 5,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_MAX =
+	QCA_WLAN_VENDOR_ATTR_TDLS_STATE_AFTER_LAST - 1,
+};
+
+/*
+ * enum qca_wlan_vendor_opm_mode - Modes supported by
+ * %QCA_WLAN_VENDOR_ATTR_CONFIG_OPTIMIZED_POWER_MANAGEMENT vendor attribute.
+ *
+ * @QCA_WLAN_VENDOR_OPM_MODE_DISABLE: OPM Disabled
+ * @QCA_WLAN_VENDOR_OPM_MODE_ENABLE: OPM Enabled
+ * @QCA_WLAN_VENDOR_OPM_MODE_USER_DEFINED: User defined mode which allows user
+ * 	to configure power save inactivity timeout and speculative wake up
+ * 	interval through %QCA_WLAN_VENDOR_ATTR_CONFIG_OPM_ITO and
+ * 	%QCA_WLAN_VENDOR_ATTR_CONFIG_OPM_SPEC_WAKE_INTERVAL attributes.
+ */
+
+enum qca_wlan_vendor_opm_mode {
+	QCA_WLAN_VENDOR_OPM_MODE_DISABLE = 0,
+	QCA_WLAN_VENDOR_OPM_MODE_ENABLE = 1,
+	QCA_WLAN_VENDOR_OPM_MODE_USER_DEFINED = 2,
 };
 
 #endif

@@ -533,15 +533,17 @@ void hal_rx_proc_phyrx_other_receive_info_tlv_6450(void *rx_tlv_hdr,
 
 /**
  * hal_rx_dump_msdu_start_tlv_6450() : dump RX msdu_start TLV in structured
- *                           human readable format.
- * @msdustart: pointer the msdu_start TLV in pkt.
+ *				       human readable format.
+ * @pkttlvs: pointer to pkttlvs.
  * @dbg_level: log level.
  *
  * Return: void
  */
-static void hal_rx_dump_msdu_start_tlv_6450(void *msdustart, uint8_t dbg_level)
+static void hal_rx_dump_msdu_start_tlv_6450(void *pkttlvs, uint8_t dbg_level)
 {
-	struct rx_msdu_start *msdu_start = (struct rx_msdu_start *)msdustart;
+	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)pkttlvs;
+	struct rx_msdu_start *msdu_start =
+					&pkt_tlvs->msdu_start_tlv.rx_msdu_start;
 
 	hal_verbose_debug(
 			  "rx_msdu_start tlv (1/2) - "
@@ -610,16 +612,17 @@ static void hal_rx_dump_msdu_start_tlv_6450(void *msdustart, uint8_t dbg_level)
 
 /**
  * hal_rx_dump_msdu_end_tlv_6450: dump RX msdu_end TLV in structured
- *			     human readable format.
- * @msduend: pointer the msdu_end TLV in pkt.
+ *				  human readable format.
+ * @pkttlvs: pointer to pkttlvs.
  * @dbg_level: log level.
  *
  * Return: void
  */
-static void hal_rx_dump_msdu_end_tlv_6450(void *msduend,
+static void hal_rx_dump_msdu_end_tlv_6450(void *pkttlvs,
 					  uint8_t dbg_level)
 {
-	struct rx_msdu_end *msdu_end = (struct rx_msdu_end *)msduend;
+	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)pkttlvs;
+	struct rx_msdu_end *msdu_end = &pkt_tlvs->msdu_end_tlv.rx_msdu_end;
 
 	__QDF_TRACE_RL(dbg_level, QDF_MODULE_ID_DP,
 		       "rx_msdu_end tlv (1/3) - "
@@ -1813,9 +1816,20 @@ static void hal_hw_txrx_ops_attach_wcn6450(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_get_tlv = hal_rx_get_tlv_6450;
 	hal_soc->ops->hal_rx_proc_phyrx_other_receive_info_tlv =
 				hal_rx_proc_phyrx_other_receive_info_tlv_6450;
+
+	hal_soc->ops->hal_rx_dump_msdu_end_tlv =
+					hal_rx_dump_msdu_end_tlv_6450;
+	hal_soc->ops->hal_rx_dump_rx_attention_tlv =
+					hal_rx_dump_rx_attention_tlv_generic_rh;
 	hal_soc->ops->hal_rx_dump_msdu_start_tlv =
-				hal_rx_dump_msdu_start_tlv_6450;
-	hal_soc->ops->hal_rx_dump_msdu_end_tlv = hal_rx_dump_msdu_end_tlv_6450;
+					hal_rx_dump_msdu_start_tlv_6450;
+	hal_soc->ops->hal_rx_dump_mpdu_start_tlv =
+					hal_rx_dump_mpdu_start_tlv_generic_rh;
+	hal_soc->ops->hal_rx_dump_mpdu_end_tlv =
+					hal_rx_dump_mpdu_end_tlv_generic_rh;
+	hal_soc->ops->hal_rx_dump_pkt_hdr_tlv =
+					hal_rx_dump_pkt_hdr_tlv_generic_rh;
+
 	hal_soc->ops->hal_get_link_desc_size = hal_get_link_desc_size_6450;
 	hal_soc->ops->hal_rx_mpdu_start_tid_get =
 				hal_rx_mpdu_start_tid_get_6450;
@@ -1833,8 +1847,6 @@ static void hal_hw_txrx_ops_attach_wcn6450(struct hal_soc *hal_soc)
 				hal_rx_status_get_tlv_info_generic_rh;
 	hal_soc->ops->hal_rx_wbm_err_info_get =
 				hal_rx_wbm_err_info_get_6450;
-	hal_soc->ops->hal_rx_dump_mpdu_start_tlv =
-				hal_rx_dump_mpdu_start_tlv_generic_rh;
 	hal_soc->ops->hal_tx_set_pcp_tid_map =
 				hal_tx_set_pcp_tid_map_generic_rh;
 	hal_soc->ops->hal_tx_update_pcp_tid_map =

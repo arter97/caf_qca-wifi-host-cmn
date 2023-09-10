@@ -41,36 +41,27 @@
 #define F_MASK 0xFFFF
 #define TEST_MASK 0xCBF
 
-#if defined(WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG) &&\
-	defined(WLAN_SUPPORT_RX_TAG_STATISTICS)
-/** dp_mon_rx_update_rx_protocol_tag_stats() - Update mon protocols's
- *					      statistics
- * @pdev: pdev handle
- * @protocol_index: Protocol index for which the stats should be incremented
- * @ring_index: REO ring number from which this tag was received.
+/**
+ * dp_rx_mon_free_mpdu_queue() - Free MPDU queue
+ * @mon_pdev: monitor pdev
+ * @ppdu_info: PPDU info
  *
- * Return: void
+ * Return: Void
  */
-static void dp_mon_rx_update_rx_protocol_tag_stats(struct dp_pdev *pdev,
-						   uint16_t protocol_index)
-{
-	pdev->mon_proto_tag_stats[protocol_index].tag_ctr++;
-}
-#ifdef QCA_TEST_MON_PF_TAGS_STATS
 
-static
-void dp_rx_mon_print_tag_buf(uint8_t *buf, uint16_t room)
+static void dp_rx_mon_free_mpdu_queue(struct dp_mon_pdev *mon_pdev,
+				      struct hal_rx_ppdu_info *ppdu_info)
 {
-	print_hex_dump(KERN_ERR, "TLV BUFFER: ", DUMP_PREFIX_NONE,
-		       32, 2, buf, room, false);
-}
+	uint8_t user;
+	qdf_nbuf_t mpdu;
 
-#else
-static
-void dp_rx_mon_print_tag_buf(uint8_t *buf, uint16_t room)
-{
+	for (user = 0; user < HAL_MAX_UL_MU_USERS; user++) {
+		if (!qdf_nbuf_is_queue_empty(&ppdu_info->mpdu_q[user])) {
+			while ((mpdu = qdf_nbuf_queue_remove(&ppdu_info->mpdu_q[user])) != NULL)
+				dp_mon_free_parent_nbuf(mon_pdev, mpdu);
+		}
+	}
 }
-#endif
 
 /**
  * dp_rx_mon_update_drop_cnt() - Update drop statistics
@@ -101,6 +92,7 @@ void dp_rx_mon_set_zero(qdf_nbuf_t nbuf)
 	qdf_mem_zero(qdf_nbuf_head(nbuf), DP_RX_MON_TLV_ROOM);
 }
 
+#ifdef QCA_KMEM_CACHE_SUPPORT
 /**
  * dp_rx_mon_get_ppdu_info() - Get PPDU info from freelist
  *
@@ -108,7 +100,7 @@ void dp_rx_mon_set_zero(qdf_nbuf_t nbuf)
  *
  * Return: ppdu_info
  */
-static inline struct hal_rx_ppdu_info*
+struct hal_rx_ppdu_info*
 dp_rx_mon_get_ppdu_info(struct dp_mon_pdev *mon_pdev)
 {
 	struct dp_mon_pdev_be *mon_pdev_be =
@@ -133,7 +125,7 @@ dp_rx_mon_get_ppdu_info(struct dp_mon_pdev *mon_pdev)
 	return ppdu_info;
 }
 
-static inline void
+void
 __dp_rx_mon_free_ppdu_info(struct dp_mon_pdev *mon_pdev,
 			   struct hal_rx_ppdu_info *ppdu_info)
 {
@@ -148,6 +140,25 @@ __dp_rx_mon_free_ppdu_info(struct dp_mon_pdev *mon_pdev,
 	}
 	qdf_spin_unlock_bh(&mon_pdev_be->ppdu_info_lock);
 }
+
+/**
+ * dp_rx_mon_free_ppdu_info() - Free PPDU info
+ * @pdev: DP pdev
+ * @ppdu_info: PPDU info
+ *
+ * Return: Void
+ */
+void
+dp_rx_mon_free_ppdu_info(struct dp_pdev *pdev,
+			 struct hal_rx_ppdu_info *ppdu_info)
+{
+	struct dp_mon_pdev *mon_pdev;
+
+	mon_pdev = (struct dp_mon_pdev *)pdev->monitor_pdev;
+	dp_rx_mon_free_mpdu_queue(mon_pdev, ppdu_info);
+	__dp_rx_mon_free_ppdu_info(mon_pdev, ppdu_info);
+}
+#endif
 
 /**
  * dp_rx_mon_nbuf_add_rx_frag() -  Add frag to SKB
@@ -179,6 +190,38 @@ dp_rx_mon_nbuf_add_rx_frag(qdf_nbuf_t nbuf, qdf_frag_t *frag,
 	}
 	return QDF_STATUS_E_FAILURE;
 }
+
+#if defined(WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG) &&\
+	defined(WLAN_SUPPORT_RX_TAG_STATISTICS)
+/** dp_mon_rx_update_rx_protocol_tag_stats() - Update mon protocols's
+ *					      statistics
+ * @pdev: pdev handle
+ * @protocol_index: Protocol index for which the stats should be incremented
+ * @ring_index: REO ring number from which this tag was received.
+ *
+ * Return: void
+ */
+static void dp_mon_rx_update_rx_protocol_tag_stats(struct dp_pdev *pdev,
+						   uint16_t protocol_index)
+{
+	pdev->mon_proto_tag_stats[protocol_index].tag_ctr++;
+}
+
+#ifdef QCA_TEST_MON_PF_TAGS_STATS
+
+static
+void dp_rx_mon_print_tag_buf(uint8_t *buf, uint16_t room)
+{
+	print_hex_dump(KERN_ERR, "TLV BUFFER: ", DUMP_PREFIX_NONE,
+		       32, 2, buf, room, false);
+}
+
+#else
+static
+void dp_rx_mon_print_tag_buf(uint8_t *buf, uint16_t room)
+{
+}
+#endif
 
 void
 dp_rx_mon_shift_pf_tag_in_headroom(qdf_nbuf_t nbuf, struct dp_soc *soc,
@@ -339,36 +382,6 @@ dp_rx_mon_pf_tag_to_buf_headroom_2_0(void *nbuf,
 static inline void
 dp_mon_rx_update_rx_protocol_tag_stats(struct dp_pdev *pdev,
 				       uint16_t protocol_index)
-{
-}
-
-static inline void
-dp_rx_mon_update_drop_cnt(struct dp_mon_pdev *mon_pdev,
-			  struct hal_mon_desc *hal_mon_rx_desc)
-{
-}
-
-static inline void dp_rx_mon_set_zero(qdf_nbuf_t nbuf)
-{
-}
-
-static inline QDF_STATUS
-dp_rx_mon_nbuf_add_rx_frag(qdf_nbuf_t nbuf, qdf_frag_t *frag,
-			   uint16_t frag_len, uint16_t offset,
-			   uint16_t buf_size, bool frag_ref)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-static inline struct hal_rx_ppdu_info*
-dp_rx_mon_get_ppdu_info(struct dp_mon_pdev *mon_pdev)
-{
-	return NULL;
-}
-
-static inline void
-__dp_rx_mon_free_ppdu_info(struct dp_mon_pdev *mon_pdev,
-			   struct hal_rx_ppdu_info *ppdu_info)
 {
 }
 
@@ -629,46 +642,6 @@ void dp_mon_free_parent_nbuf(struct dp_mon_pdev *mon_pdev,
 {
 	mon_pdev->rx_mon_stats.parent_buf_free++;
 	qdf_nbuf_free(nbuf);
-}
-
-/**
- * dp_rx_mon_free_mpdu_queue() - Free MPDU queue
- * @mon_pdev: monitor pdev
- * @ppdu_info: PPDU info
- *
- * Return: Void
- */
-
-static void dp_rx_mon_free_mpdu_queue(struct dp_mon_pdev *mon_pdev,
-				      struct hal_rx_ppdu_info *ppdu_info)
-{
-	uint8_t user;
-	qdf_nbuf_t mpdu;
-
-	for (user = 0; user < HAL_MAX_UL_MU_USERS; user++) {
-		if (!qdf_nbuf_is_queue_empty(&ppdu_info->mpdu_q[user])) {
-			while ((mpdu = qdf_nbuf_queue_remove(&ppdu_info->mpdu_q[user])) != NULL)
-				dp_mon_free_parent_nbuf(mon_pdev, mpdu);
-		}
-	}
-}
-
-/**
- * dp_rx_mon_free_ppdu_info() - Free PPDU info
- * @pdev: DP pdev
- * @ppdu_info: PPDU info
- *
- * Return: Void
- */
-static void
-dp_rx_mon_free_ppdu_info(struct dp_pdev *pdev,
-			 struct hal_rx_ppdu_info *ppdu_info)
-{
-	struct dp_mon_pdev *mon_pdev;
-
-	mon_pdev = (struct dp_mon_pdev *)pdev->monitor_pdev;
-	dp_rx_mon_free_mpdu_queue(mon_pdev, ppdu_info);
-	__dp_rx_mon_free_ppdu_info(mon_pdev, ppdu_info);
 }
 
 void dp_rx_mon_drain_wq(struct dp_pdev *pdev)
@@ -1647,6 +1620,15 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 			return num_buf_reaped;
 		}
 
+		if (packet_info->dma_length >
+		    (DP_MON_DATA_BUFFER_SIZE - DP_RX_MON_PACKET_OFFSET)) {
+			/* WAR: Invalid DMA length is received for this MPDU */
+			mon_pdev->rx_mon_stats.invalid_dma_length++;
+			DP_STATS_INC(mon_soc, frag_free, 1);
+			qdf_frag_free(addr);
+			return num_buf_reaped;
+		}
+
 		nbuf = qdf_nbuf_queue_last(&ppdu_info->mpdu_q[user_id]);
 		if (qdf_unlikely(!nbuf)) {
 			dp_mon_debug("nbuf is NULL");
@@ -1955,12 +1937,12 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 			if ((rx_tlv - rx_tlv_start) >= (end_offset + 1))
 				break;
 
-	} while ((tlv_status == HAL_TLV_STATUS_PPDU_NOT_DONE) ||
-			(tlv_status == HAL_TLV_STATUS_HEADER) ||
-			(tlv_status == HAL_TLV_STATUS_MPDU_END) ||
-			(tlv_status == HAL_TLV_STATUS_MSDU_END) ||
-			(tlv_status == HAL_TLV_STATUS_MON_BUF_ADDR) ||
-			(tlv_status == HAL_TLV_STATUS_MPDU_START));
+		} while ((tlv_status == HAL_TLV_STATUS_PPDU_NOT_DONE) ||
+			 (tlv_status == HAL_TLV_STATUS_HEADER) ||
+			 (tlv_status == HAL_TLV_STATUS_MPDU_END) ||
+			 (tlv_status == HAL_TLV_STATUS_MSDU_END) ||
+			 (tlv_status == HAL_TLV_STATUS_MON_BUF_ADDR) ||
+			 (tlv_status == HAL_TLV_STATUS_MPDU_START));
 
 		/* set status buffer pointer to NULL */
 		mon_pdev_be->status[idx] = NULL;
@@ -2195,7 +2177,7 @@ dp_rx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 
 	qdf_spin_lock_bh(&mon_pdev->mon_lock);
 
-	if (qdf_unlikely(dp_srng_access_start(int_ctx, soc, mon_dst_srng))) {
+	if (qdf_unlikely(dp_rx_srng_access_start(int_ctx, soc, mon_dst_srng))) {
 		dp_mon_err("%s %d : HAL Mon Dest Ring access Failed -- %pK",
 			   __func__, __LINE__, mon_dst_srng);
 		qdf_spin_unlock_bh(&mon_pdev->mon_lock);
@@ -2311,7 +2293,7 @@ dp_rx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 
 		mon_pdev_be->desc_count = 0;
 	}
-	dp_srng_access_end(int_ctx, soc, mon_dst_srng);
+	dp_rx_srng_access_end(int_ctx, soc, mon_dst_srng);
 
 	qdf_spin_unlock_bh(&mon_pdev->mon_lock);
 	dp_mon_info("mac_id: %d, work_done:%d", mac_id, work_done);
@@ -2329,6 +2311,7 @@ dp_rx_mon_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 	return work_done;
 }
 
+#ifdef QCA_KMEM_CACHE_SUPPORT
 QDF_STATUS dp_rx_mon_ppdu_info_cache_create(struct dp_pdev *pdev)
 {
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
@@ -2386,6 +2369,7 @@ void dp_rx_mon_ppdu_info_cache_destroy(struct dp_pdev *pdev)
 	dp_mon_debug(" total free element: %d", mon_pdev_be->total_free_elem);
 	qdf_kmem_cache_destroy(mon_pdev_be->ppdu_info_cache);
 }
+#endif
 
 /**
  * dp_mon_pdev_ext_init_2_0() - Init pdev ext param
@@ -2590,6 +2574,8 @@ void dp_mon_rx_print_advanced_stats_2_0(struct dp_soc *soc,
 		       mon_pdev->rx_mon_stats.tlv_drop_cnt);
 	DP_PRINT_STATS("rx_hdr_invalid_cnt = %d",
 		       rx_mon_stats->rx_hdr_invalid_cnt);
+	DP_PRINT_STATS("invalid_dma_length Received = %d",
+		       rx_mon_stats->invalid_dma_length);
 }
 #endif
 

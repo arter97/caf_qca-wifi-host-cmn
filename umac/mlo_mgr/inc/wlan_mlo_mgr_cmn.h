@@ -144,6 +144,41 @@ QDF_STATUS mlo_reg_mlme_ext_cb(struct mlo_mgr_context *ctx,
  */
 QDF_STATUS mlo_unreg_mlme_ext_cb(struct mlo_mgr_context *ctx);
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+/**
+ * wlan_mlo_mgr_register_osif_ext_ops() - Function to register OSIF callbacks
+ * @mlo_ctx: Global MLO manager pointer
+ * @ops: Pointer to the struct containing OSIF callbacks.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_mlo_mgr_register_osif_ext_ops(struct mlo_mgr_context *mlo_ctx,
+					      struct mlo_osif_ext_ops *ops);
+
+/**
+ * wlan_mlo_mgr_unregister_osif_ext_ops() - Function to unregister OSIF
+ * callbacks
+ * @mlo_ctx: Global MLO manager pointer
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wlan_mlo_mgr_unregister_osif_ext_ops(struct mlo_mgr_context *mlo_ctx);
+#else
+static inline QDF_STATUS
+wlan_mlo_mgr_register_osif_ext_ops(struct mlo_mgr_context *mlo_ctx,
+				   struct mlo_osif_ext_ops *ops)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+wlan_mlo_mgr_unregister_osif_ext_ops(struct mlo_mgr_context *mlo_ctx)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 /**
  * mlo_mlme_clone_sta_security() - Clone Security params in partner vdevs
  * @vdev: Object manager vdev
@@ -642,11 +677,14 @@ void mlo_mlme_ptqm_migrate_timer_cb(void *arg);
  * @link_migration: flag to indicate if all peers of vdev need migration
  * or individual peer migration
  * @link_id: link id for new ptqm
+ * @force_mig: allow migration to vdevs which are disabled to be pumac
+ * using primary_umac_skip ini
  *
  * Return: Success if migration is triggered, else failure
  */
 QDF_STATUS wlan_mlo_set_ptqm_migration(struct wlan_objmgr_vdev *vdev,
 				       struct wlan_mlo_peer_context *ml_peer,
 				       bool link_migration,
-				       uint32_t link_id);
+				       uint32_t link_id,
+				       bool force_mig);
 #endif

@@ -30,6 +30,7 @@
 #include <wlan_cfg80211.h>
 #include <wlan_cfg80211_scan.h>
 #include "wlan_mlo_mgr_sta.h"
+#include "wlan_mlo_mgr_link_switch.h"
 #ifdef CONN_MGR_ADV_FEATURE
 #include "wlan_mlme_ucfg_api.h"
 #endif
@@ -358,7 +359,8 @@ osif_send_roam_auth_mlo_links_event(struct sk_buff *skb,
 	struct nlattr *mlo_links;
 	struct nlattr *mlo_links_info;
 	struct wlan_objmgr_vdev *link_vdev;
-	uint8_t link_vdev_id;
+	uint8_t link_vdev_id, link_id;
+	struct qdf_mac_addr link_addr;
 
 	if (!vdev)
 		return -EINVAL;
@@ -382,6 +384,8 @@ osif_send_roam_auth_mlo_links_event(struct sk_buff *skb,
 			return -EINVAL;
 		}
 
+		osif_debug("send roam auth for partner link:%d",
+			   rsp->ml_parnter_info.partner_link_info[i].link_id);
 		if (nla_put_u8(skb,
 			       QCA_WLAN_VENDOR_ATTR_MLO_LINK_ID,
 			       rsp->ml_parnter_info.partner_link_info[i].link_id)) {
@@ -396,23 +400,42 @@ osif_send_roam_auth_mlo_links_event(struct sk_buff *skb,
 			return -EINVAL;
 		}
 
-		link_vdev_id = rsp->ml_parnter_info.partner_link_info[i].vdev_id;
-		link_vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc,
-								 link_vdev_id,
-								 WLAN_OSIF_CM_ID);
-		if (!link_vdev) {
-			osif_err("link vdev is null");
-			return -EINVAL;
+		link_vdev_id =
+			rsp->ml_parnter_info.partner_link_info[i].vdev_id;
+		link_id = rsp->ml_parnter_info.partner_link_info[i].link_id;
+
+		/* Standby link */
+		if (link_vdev_id == WLAN_INVALID_VDEV_ID) {
+			struct mlo_link_info *standby_info =
+					mlo_mgr_get_ap_link_by_link_id(vdev,
+								       link_id);
+			if (standby_info) {
+				link_addr = standby_info->link_addr;
+			} else {
+				osif_err("link addr is null for id:%d",
+					 link_id);
+				return -EINVAL;
+			}
+		} else {
+			link_vdev = wlan_objmgr_get_vdev_by_id_from_psoc(
+							psoc, link_vdev_id,
+							WLAN_OSIF_CM_ID);
+			if (!link_vdev) {
+				osif_err("link vdev is null");
+				return -EINVAL;
+			}
+
+			qdf_copy_macaddr(&link_addr,
+					 (struct qdf_mac_addr *)wlan_vdev_mlme_get_macaddr(link_vdev));
+			wlan_objmgr_vdev_release_ref(link_vdev,
+						     WLAN_OSIF_CM_ID);
 		}
 
 		if (nla_put(skb, QCA_WLAN_VENDOR_ATTR_MLO_LINK_MAC_ADDR,
-			    ETH_ALEN, wlan_vdev_mlme_get_macaddr(link_vdev))) {
+			    ETH_ALEN, link_addr.bytes)) {
 			osif_err("nla put fail");
-			wlan_objmgr_vdev_release_ref(link_vdev,
-						     WLAN_OSIF_CM_ID);
 			return -EINVAL;
 		}
-		wlan_objmgr_vdev_release_ref(link_vdev, WLAN_OSIF_CM_ID);
 		nla_nest_end(skb, mlo_links_info);
 	}
 

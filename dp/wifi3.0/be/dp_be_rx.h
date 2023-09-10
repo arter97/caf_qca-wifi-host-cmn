@@ -188,6 +188,9 @@ dp_rx_desc_sw_cc_check(struct dp_soc *soc,
 }
 #endif /* DP_FEATURE_HW_COOKIE_CONVERSION && DP_HW_COOKIE_CONVERT_EXCEPTION */
 
+struct dp_rx_desc *dp_rx_desc_ppeds_cookie_2_va(struct dp_soc *soc,
+						unsigned long cookie);
+
 #define DP_PEER_METADATA_OFFLOAD_GET_BE(_peer_metadata)		(0)
 
 #define HTT_RX_PEER_META_DATA_FIELD_GET(_var, _field_s, _field_m) \

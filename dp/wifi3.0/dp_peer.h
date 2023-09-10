@@ -1316,6 +1316,17 @@ void dp_soc_wds_detach(struct dp_soc *soc);
 QDF_STATUS dp_peer_ast_table_attach(struct dp_soc *soc);
 
 /**
+ * dp_find_peer_by_macaddr() - Finding the peer from mac address provided.
+ * @soc: soc handle
+ * @mac_addr: MAC address to be used to find peer
+ * @vdev_id: VDEV id
+ * @mod_id: MODULE ID
+ *
+ * Return: struct dp_peer
+ */
+struct dp_peer *dp_find_peer_by_macaddr(struct dp_soc *soc, uint8_t *mac_addr,
+					uint8_t vdev_id, enum dp_mod_id mod_id);
+/**
  * dp_peer_ast_hash_attach() - Allocate and initialize AST Hash Table
  * @soc: SoC handle
  *
@@ -1517,17 +1528,33 @@ void dp_mlo_peer_delete(struct dp_soc *soc, struct dp_peer *peer, void *arg);
 	((link_peer)->mld_peer)
 
 #ifdef WLAN_MLO_MULTI_CHIP
-uint8_t dp_mlo_get_chip_id(struct dp_soc *soc);
+static inline uint8_t dp_get_chip_id(struct dp_soc *soc)
+{
+	if (soc->arch_ops.mlo_get_chip_id)
+		return soc->arch_ops.mlo_get_chip_id(soc);
 
-struct dp_peer *
+	return 0;
+}
+
+static inline struct dp_peer *
 dp_link_peer_hash_find_by_chip_id(struct dp_soc *soc,
 				  uint8_t *peer_mac_addr,
 				  int mac_addr_is_aligned,
 				  uint8_t vdev_id,
 				  uint8_t chip_id,
-				  enum dp_mod_id mod_id);
+				  enum dp_mod_id mod_id)
+{
+	if (soc->arch_ops.mlo_link_peer_find_hash_find_by_chip_id)
+		return soc->arch_ops.mlo_link_peer_find_hash_find_by_chip_id
+							(soc, peer_mac_addr,
+							 mac_addr_is_aligned,
+							 vdev_id, chip_id,
+							 mod_id);
+
+	return NULL;
+}
 #else
-static inline uint8_t dp_mlo_get_chip_id(struct dp_soc *soc)
+static inline uint8_t dp_get_chip_id(struct dp_soc *soc)
 {
 	return 0;
 }
@@ -1693,7 +1720,7 @@ void dp_mld_peer_add_link_peer(struct dp_peer *mld_peer,
 			link_peer_info->is_valid = true;
 			link_peer_info->vdev_id = link_peer->vdev->vdev_id;
 			link_peer_info->chip_id =
-				dp_mlo_get_chip_id(link_peer->vdev->pdev->soc);
+				dp_get_chip_id(link_peer->vdev->pdev->soc);
 			mld_peer->num_links++;
 			break;
 		}
@@ -2223,7 +2250,7 @@ void dp_mlo_peer_authorize(struct dp_soc *soc,
 {
 }
 
-static inline uint8_t dp_mlo_get_chip_id(struct dp_soc *soc)
+static inline uint8_t dp_get_chip_id(struct dp_soc *soc)
 {
 	return 0;
 }

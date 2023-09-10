@@ -4046,6 +4046,10 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 		cfg_get(psoc, CFG_DP_INT_BATCH_THRESHOLD_OTHER);
 	wlan_cfg_ctx->int_timer_threshold_other =
 		cfg_get(psoc, CFG_DP_INT_TIMER_THRESHOLD_OTHER);
+	wlan_cfg_ctx->int_batch_threshold_mon_dest =
+		cfg_get(psoc, CFG_DP_INT_BATCH_THRESHOLD_MON_DEST);
+	wlan_cfg_ctx->int_timer_threshold_mon_dest =
+		cfg_get(psoc, CFG_DP_INT_TIMER_THRESHOLD_MON_DEST);
 	wlan_cfg_ctx->pktlog_buffer_size =
 		cfg_get(psoc, CFG_DP_PKTLOG_BUFFER_SIZE);
 
@@ -4170,7 +4174,7 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 #endif
 	wlan_cfg_ctx->num_rxdma_dst_rings_per_pdev = NUM_RXDMA_RINGS_PER_PDEV;
 	wlan_cfg_ctx->num_rxdma_status_rings_per_pdev =
-					NUM_RXDMA_RINGS_PER_PDEV;
+					NUM_RXDMA_STATUS_RINGS_PER_PDEV;
 	wlan_soc_tx_capt_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_cfg_ctx->mpdu_retry_threshold_1 =
 			cfg_get(psoc, CFG_DP_MPDU_RETRY_THRESHOLD_1);
@@ -4246,6 +4250,10 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 		cfg_get(psoc, CFG_DP_INT_BATCH_THRESHOLD_OTHER);
 	wlan_cfg_ctx->int_timer_threshold_other =
 		cfg_get(psoc, CFG_DP_INT_TIMER_THRESHOLD_OTHER);
+	wlan_cfg_ctx->int_batch_threshold_mon_dest =
+		cfg_get(psoc, CFG_DP_INT_BATCH_THRESHOLD_MON_DEST);
+	wlan_cfg_ctx->int_timer_threshold_mon_dest =
+		cfg_get(psoc, CFG_DP_INT_TIMER_THRESHOLD_MON_DEST);
 	wlan_cfg_ctx->int_batch_threshold_ppe2tcl =
 			cfg_get(psoc, CFG_DP_INT_BATCH_THRESHOLD_PPE2TCL);
 	wlan_cfg_ctx->int_timer_threshold_ppe2tcl =
@@ -4411,7 +4419,7 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 #endif
 	wlan_cfg_ctx->num_rxdma_dst_rings_per_pdev = NUM_RXDMA_RINGS_PER_PDEV;
 	wlan_cfg_ctx->num_rxdma_status_rings_per_pdev =
-					NUM_RXDMA_RINGS_PER_PDEV;
+					NUM_RXDMA_STATUS_RINGS_PER_PDEV;
 	wlan_soc_tx_capt_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_cfg_ctx->mpdu_retry_threshold_1 =
 			cfg_get(psoc, CFG_DP_MPDU_RETRY_THRESHOLD_1);
@@ -4795,7 +4803,7 @@ int wlan_cfg_num_nss_tcl_data_rings(struct wlan_cfg_dp_soc_ctxt *cfg)
 #if defined(IPA_OFFLOAD) && defined(TX_MULTI_TCL)
 int wlan_cfg_num_tcl_data_rings(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
-	if (!cfg->ipa_enabled)
+	if (!cfg->ipa_enabled || ipa_config_is_opt_wifi_dp_enabled())
 		return cfg->num_tcl_data_rings;
 
 	return 1;
@@ -5136,9 +5144,14 @@ int wlan_cfg_get_int_timer_threshold_other(struct wlan_cfg_dp_soc_ctxt *cfg)
 	return cfg->int_timer_threshold_other;
 }
 
-int wlan_cfg_get_int_timer_threshold_mon(struct wlan_cfg_dp_soc_ctxt *cfg)
+int wlan_cfg_get_int_batch_threshold_mon_dest(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
-	return cfg->int_timer_threshold_mon;
+	return cfg->int_batch_threshold_mon_dest;
+}
+
+int wlan_cfg_get_int_timer_threshold_mon_dest(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->int_timer_threshold_mon_dest;
 }
 
 int wlan_cfg_get_p2p_checksum_offload(struct wlan_cfg_dp_soc_ctxt *cfg)

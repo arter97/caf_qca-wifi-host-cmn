@@ -1141,10 +1141,10 @@ dp_rx_wbm_err_reap_desc_li(struct dp_intr *int_ctx, struct dp_soc *soc,
 		/* XXX */
 		buf_type = HAL_RX_WBM_BUF_TYPE_GET(ring_desc);
 
-		/*
-		 * For WBM ring, expect only MSDU buffers
-		 */
-		qdf_assert_always(buf_type == HAL_RX_WBM_BUF_TYPE_REL_BUF);
+		if (dp_assert_always_internal_stat(
+				buf_type == HAL_RX_WBM_BUF_TYPE_REL_BUF,
+				soc, rx.err.wbm_err_buf_rel_type))
+			continue;
 
 		wbm_err_src = hal_rx_wbm_err_src_get(hal_soc, ring_desc);
 		qdf_assert((wbm_err_src == HAL_RX_WBM_ERR_SRC_RXDMA) ||
@@ -1157,7 +1157,9 @@ dp_rx_wbm_err_reap_desc_li(struct dp_intr *int_ctx, struct dp_soc *soc,
 			continue;
 		}
 
-		qdf_assert_always(rx_desc);
+		if (dp_assert_always_internal_stat(rx_desc, soc,
+						   rx.err.rx_desc_null))
+			continue;
 
 		if (!dp_rx_desc_check_magic(rx_desc)) {
 			dp_rx_err_err("%pk: Invalid rx_desc %pk",
@@ -1371,7 +1373,6 @@ dp_rx_null_q_desc_handle_li(struct dp_soc *soc, qdf_nbuf_t nbuf,
 		/* Set length in nbuf */
 		qdf_nbuf_set_pktlen(
 			nbuf, qdf_min(pkt_len, (uint32_t)RX_DATA_BUFFER_SIZE));
-		qdf_assert_always(nbuf->data == rx_tlv_hdr);
 	}
 
 	/*
@@ -1518,9 +1519,23 @@ dp_rx_null_q_desc_handle_li(struct dp_soc *soc, qdf_nbuf_t nbuf,
 		if (peer) {
 			rx_tid = &peer->rx_tid[tid];
 			qdf_spin_lock_bh(&rx_tid->tid_lock);
-			if (!peer->rx_tid[tid].hw_qdesc_vaddr_unaligned)
-				dp_rx_tid_setup_wifi3(peer, tid, 1,
-						      IEEE80211_SEQ_MAX);
+			if (!peer->rx_tid[tid].hw_qdesc_vaddr_unaligned) {
+			/* For Mesh peer, if on one of the mesh AP the
+			 * mesh peer is not deleted, the new addition of mesh
+			 * peer on other mesh AP doesn't do BA negotiation
+			 * leading to mismatch in BA windows.
+			 * To avoid this send max BA window during init.
+			 */
+				if (qdf_unlikely(vdev->mesh_vdev) ||
+				    qdf_unlikely(txrx_peer->nawds_enabled))
+					dp_rx_tid_setup_wifi3(
+						peer, tid,
+						hal_get_rx_max_ba_window(soc->hal_soc,tid),
+						IEEE80211_SEQ_MAX);
+				else
+					dp_rx_tid_setup_wifi3(peer, tid, 1,
+							      IEEE80211_SEQ_MAX);
+			}
 			qdf_spin_unlock_bh(&rx_tid->tid_lock);
 			/* IEEE80211_SEQ_MAX indicates invalid start_seq */
 			dp_peer_unref_delete(peer, DP_MOD_ID_RX_ERR);
@@ -1556,6 +1571,7 @@ dp_rx_null_q_desc_handle_li(struct dp_soc *soc, qdf_nbuf_t nbuf,
 		goto drop_nbuf;
 
 	if (qdf_unlikely(vdev->rx_decap_type == htt_cmn_pkt_type_raw)) {
+		qdf_nbuf_set_raw_frame(nbuf, 1);
 		qdf_nbuf_set_next(nbuf, NULL);
 		dp_rx_deliver_raw(vdev, nbuf, txrx_peer, 0);
 	} else {
@@ -1563,6 +1579,10 @@ dp_rx_null_q_desc_handle_li(struct dp_soc *soc, qdf_nbuf_t nbuf,
 		qdf_nbuf_set_next(nbuf, NULL);
 		DP_PEER_TO_STACK_INCC_PKT(txrx_peer, 1, qdf_nbuf_len(nbuf),
 					  enh_flag);
+
+		DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer,
+					      rx.rx_success, 1,
+					      qdf_nbuf_len(nbuf), 0);
 		/*
 		 * Update the protocol tag in SKB based on
 		 * CCE metadata

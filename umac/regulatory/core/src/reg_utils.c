@@ -737,7 +737,7 @@ QDF_STATUS reg_set_band(struct wlan_objmgr_pdev *pdev, uint32_t band_bitmap)
 	 * request 6 GHz band might be enabled/disabled. Hence reset
 	 * reg_set_keep_6ghz_sta_cli_connection flag.
 	 */
-	if (!wlan_reg_is_6ghz_band_set(pdev)) {
+	if (!reg_is_6ghz_band_set(pdev)) {
 		status = reg_set_keep_6ghz_sta_cli_connection(pdev, false);
 		if (QDF_IS_STATUS_ERROR(status))
 			return status;

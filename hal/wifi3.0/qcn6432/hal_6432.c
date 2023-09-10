@@ -278,13 +278,13 @@ void hal_rx_get_bb_info_6432(void *rx_tlv, void *ppdu_info_hdl)
 	struct hal_rx_ppdu_info *ppdu_info	= ppdu_info_hdl;
 
 	ppdu_info->cfr_info.bb_captured_channel =
-		HAL_RX_GET(rx_tlv, RXPCU_PPDU_END_INFO, BB_CAPTURED_CHANNEL);
+		HAL_RX_GET_64(rx_tlv, RXPCU_PPDU_END_INFO, BB_CAPTURED_CHANNEL);
 
 	ppdu_info->cfr_info.bb_captured_timeout =
-		HAL_RX_GET(rx_tlv, RXPCU_PPDU_END_INFO, BB_CAPTURED_TIMEOUT);
+		HAL_RX_GET_64(rx_tlv, RXPCU_PPDU_END_INFO, BB_CAPTURED_TIMEOUT);
 
 	ppdu_info->cfr_info.bb_captured_reason =
-		HAL_RX_GET(rx_tlv, RXPCU_PPDU_END_INFO, BB_CAPTURED_REASON);
+		HAL_RX_GET_64(rx_tlv, RXPCU_PPDU_END_INFO, BB_CAPTURED_REASON);
 }
 
 static inline
@@ -293,55 +293,65 @@ void hal_rx_get_rtt_info_6432(void *rx_tlv, void *ppdu_info_hdl)
 	struct hal_rx_ppdu_info *ppdu_info	= ppdu_info_hdl;
 
 	ppdu_info->cfr_info.rx_location_info_valid =
-		HAL_RX_GET(rx_tlv, PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
-				RX_LOCATION_INFO_VALID);
+		HAL_RX_GET_64(rx_tlv, PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
+			      RX_LOCATION_INFO_VALID);
 
 	ppdu_info->cfr_info.rtt_che_buffer_pointer_low32 =
-		HAL_RX_GET(rx_tlv,
-				PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
-				RTT_CHE_BUFFER_POINTER_LOW32);
+		HAL_RX_GET_64(rx_tlv,
+			      PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
+			      RTT_CHE_BUFFER_POINTER_LOW32);
 
 	ppdu_info->cfr_info.rtt_che_buffer_pointer_high8 =
-		HAL_RX_GET(rx_tlv,
-				PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
-				RTT_CHE_BUFFER_POINTER_HIGH8);
+		HAL_RX_GET_64(rx_tlv,
+			      PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
+			      RTT_CHE_BUFFER_POINTER_HIGH8);
 
 	ppdu_info->cfr_info.chan_capture_status =
 		HAL_GET_RX_LOCATION_INFO_CHAN_CAPTURE_STATUS(rx_tlv);
 
 	ppdu_info->cfr_info.rx_start_ts =
-		HAL_RX_GET(rx_tlv,
-				PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
-				RX_START_TS);
+		HAL_RX_GET_64(rx_tlv,
+			      PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
+			      RX_START_TS);
 
 	ppdu_info->cfr_info.rtt_cfo_measurement = (int16_t)
-		HAL_RX_GET(rx_tlv,
-				PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
-				RTT_CFO_MEASUREMENT);
+		HAL_RX_GET_64(rx_tlv,
+			      PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
+			      RTT_CFO_MEASUREMENT);
 
 	ppdu_info->cfr_info.agc_gain_info0 =
-		HAL_RX_GET(rx_tlv,
-				PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
-				GAIN_CHAIN0);
+		HAL_RX_GET_64(rx_tlv,
+			      PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
+			      GAIN_CHAIN0);
 
 	ppdu_info->cfr_info.agc_gain_info0 |=
-		(((uint32_t)HAL_RX_GET(rx_tlv,
-				       PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
-				       GAIN_CHAIN1)) << 16);
+	(((uint32_t)HAL_RX_GET_64(rx_tlv,
+				  PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
+				  GAIN_CHAIN1)) << 16);
 
 	ppdu_info->cfr_info.agc_gain_info1 =
-		HAL_RX_GET(rx_tlv,
-				PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
-				GAIN_CHAIN2);
+		HAL_RX_GET_64(rx_tlv,
+			      PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
+			      GAIN_CHAIN2);
 
 	ppdu_info->cfr_info.agc_gain_info1 |=
-		(((uint32_t)HAL_RX_GET(rx_tlv,
-				       PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
-				       GAIN_CHAIN3)) << 16);
+	(((uint32_t)HAL_RX_GET_64(rx_tlv,
+				  PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
+				  GAIN_CHAIN3)) << 16);
 
 	ppdu_info->cfr_info.agc_gain_info2 = 0;
 
 	ppdu_info->cfr_info.agc_gain_info3 = 0;
+
+	ppdu_info->cfr_info.mcs_rate =
+	HAL_RX_GET_64(rx_tlv,
+		      PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
+		      RTT_MCS_RATE);
+
+	ppdu_info->cfr_info.gi_type =
+	HAL_RX_GET_64(rx_tlv,
+		      PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
+		      RTT_GI_TYPE);
 }
 #endif
 #ifdef CONFIG_WORD_BASED_TLV
@@ -1134,7 +1144,7 @@ static inline void hal_rx_dump_pkt_hdr_tlv_6432(struct rx_pkt_tlvs *pkt_tlvs,
 	hal_verbose_debug("\n---------------\n"
 			"rx_pkt_hdr_tlv\n"
 			"---------------\n"
-			"phy_ppdu_id %llu ",
+			"phy_ppdu_id 0x%x ",
 			pkt_hdr_tlv->phy_ppdu_id);
 
 	hal_verbose_hex_dump(pkt_hdr_tlv->rx_pkt_hdr,
@@ -1570,12 +1580,12 @@ static void hal_hw_txrx_ops_attach_qcn6432(struct hal_soc *hal_soc)
 		hal_rx_mpdu_info_ampdu_flag_get_be;
 	hal_soc->ops->hal_rx_hw_desc_get_ppduid_get =
 		hal_rx_hw_desc_get_ppduid_get_be;
-	hal_soc->ops->hal_rx_get_ppdu_id = hal_rx_get_ppdu_id_be;
 	hal_soc->ops->hal_rx_tlv_phy_ppdu_id_get =
 		hal_rx_attn_phy_ppdu_id_get_be;
 	hal_soc->ops->hal_rx_get_filter_category =
 		hal_rx_get_filter_category_be;
 #endif
+	hal_soc->ops->hal_rx_get_ppdu_id = hal_rx_get_ppdu_id_be;
 	hal_soc->ops->hal_rx_mpdu_get_to_ds = hal_rx_mpdu_get_to_ds_be;
 	hal_soc->ops->hal_rx_mpdu_get_fr_ds = hal_rx_mpdu_get_fr_ds_be;
 	hal_soc->ops->hal_rx_get_mpdu_frame_control_valid =

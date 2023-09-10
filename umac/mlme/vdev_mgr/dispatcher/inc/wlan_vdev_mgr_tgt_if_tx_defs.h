@@ -49,6 +49,7 @@ enum mlme_dev_setparam {
 	MLME_VDEV_SETPARAM,
 };
 
+#ifdef WLAN_BCN_RATECODE_ENABLE
 /**
  * enum mlme_bcn_tx_rate_code - beacon tx rate code
  * @MLME_BCN_TX_RATE_CODE_1_M:
@@ -65,6 +66,21 @@ enum mlme_dev_setparam {
  * @MLME_BCN_TX_RATE_CODE_54_M:
  */
 enum mlme_bcn_tx_rate_code {
+	MLME_BCN_TX_RATE_CODE_1_M = 0x83,
+	MLME_BCN_TX_RATE_CODE_2_M = 0x82,
+	MLME_BCN_TX_RATE_CODE_5_5_M = 0x81,
+	MLME_BCN_TX_RATE_CODE_6_M = 0x03,
+	MLME_BCN_TX_RATE_CODE_9_M = 0x07,
+	MLME_BCN_TX_RATE_CODE_11M = 0x80,
+	MLME_BCN_TX_RATE_CODE_12_M = 0x02,
+	MLME_BCN_TX_RATE_CODE_18_M = 0x06,
+	MLME_BCN_TX_RATE_CODE_24_M = 0x01,
+	MLME_BCN_TX_RATE_CODE_36_M = 0x05,
+	MLME_BCN_TX_RATE_CODE_48_M = 0x00,
+	MLME_BCN_TX_RATE_CODE_54_M = 0x04,
+};
+#else
+enum mlme_bcn_tx_rate_code {
 	MLME_BCN_TX_RATE_CODE_1_M = 0x43,
 	MLME_BCN_TX_RATE_CODE_2_M = 0x42,
 	MLME_BCN_TX_RATE_CODE_5_5_M = 0x41,
@@ -78,6 +94,7 @@ enum mlme_bcn_tx_rate_code {
 	MLME_BCN_TX_RATE_CODE_48_M = 0x00,
 	MLME_BCN_TX_RATE_CODE_54_M = 0x04,
 };
+#endif
 
 /**
  * enum wlan_mlme_host_sta_ps_param_uapsd - STA UPASD params
@@ -110,6 +127,7 @@ enum wlan_mlme_host_sta_ps_param_uapsd {
  * @WLAN_MLME_HOST_VDEV_START_CHAN_INVALID_REGDOMAIN:
  * @WLAN_MLME_HOST_VDEV_START_CHAN_INVALID_BAND:
  * @WLAN_MLME_HOST_VDEV_START_TIMEOUT:
+ * @WLAN_MLME_HOST_VDEV_START_TX_VAP_CFG_INVALID:
  * @WLAN_MLME_HOST_VDEV_START_MAX_REASON: Max enumeration
  */
 enum wlan_mlme_host_vdev_start_status {
@@ -120,6 +138,7 @@ enum wlan_mlme_host_vdev_start_status {
 	WLAN_MLME_HOST_VDEV_START_CHAN_INVALID_REGDOMAIN,
 	WLAN_MLME_HOST_VDEV_START_CHAN_INVALID_BAND,
 	WLAN_MLME_HOST_VDEV_START_TIMEOUT,
+	WLAN_MLME_HOST_VDEV_START_TX_VAP_CFG_INVALID,
 	/* Add new response status code from here */
 	WLAN_MLME_HOST_VDEV_START_MAX_REASON,
 };
@@ -141,6 +160,7 @@ static inline char *string_from_start_rsp_status(
 					"CHAN_INVALID_REGDOMAIN",
 					"CHAN_INVALID_BAND",
 					"START_RESPONSE_TIMEOUT",
+					"TX_VAP_CONFIG_INVALID",
 					"START_RESPONSE_UNKNOWN"};
 
 	if (start_rsp >= WLAN_MLME_HOST_VDEV_START_MAX_REASON)
@@ -650,7 +670,11 @@ struct ml_vdev_start_partner_info {
  */
 struct mlo_vdev_start_partner_links {
 	uint8_t num_links;
+#ifdef WLAN_MLO_MULTI_CHIP
+	struct ml_vdev_start_partner_info partner_info[WLAN_UMAC_MLO_MAX_VDEVS + WLAN_UMAC_MLO_MAX_BRIDGE_VDEVS];
+#else
 	struct ml_vdev_start_partner_info partner_info[WLAN_UMAC_MLO_MAX_VDEVS];
+#endif
 };
 #endif
 /**

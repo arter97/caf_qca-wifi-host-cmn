@@ -131,6 +131,33 @@ mgmt_rx_reo_compare_global_timestamps_gte(uint32_t ts1, uint32_t ts2)
 
 #ifdef WLAN_MGMT_RX_REO_ERROR_HANDLING
 /**
+ * handle_snapshot_sanity_failures() - Handle snapshot sanity failure
+ * @desc: Pointer to frame descriptor
+ * @link: Link ID
+ *
+ * API to handle snapshot sanity failure. Host drops management frames which
+ * results in snapshot sanity failure.
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS
+handle_snapshot_sanity_failures(struct mgmt_rx_reo_frame_descriptor *desc,
+				uint8_t link)
+{
+	if (!desc) {
+		mgmt_rx_reo_err("Mgmt Rx REO frame descriptor is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	mgmt_rx_reo_debug_rl("Snapshot sanity check for link %u failed", link);
+
+	desc->drop = true;
+	desc->drop_reason = MGMT_RX_REO_SNAPSHOT_SANITY_FAILURE;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
  * handle_out_of_order_pkt_ctr() - Handle management frames with out of order
  * packet counter values
  * @desc: Pointer to frame descriptor
@@ -257,6 +284,33 @@ check_and_handle_invalid_reo_params(struct mgmt_rx_reo_frame_descriptor *desc)
 	return QDF_STATUS_SUCCESS;
 }
 #else
+/**
+ * handle_snapshot_sanity_failures() - Handle snapshot sanity failure
+ * @desc: Pointer to frame descriptor
+ * @link: Link ID
+ *
+ * API to handle snapshot sanity failure. Host drops management frames which
+ * results in snapshot sanity failure.
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS
+handle_snapshot_sanity_failures(struct mgmt_rx_reo_frame_descriptor *desc,
+				uint8_t link)
+{
+	if (!desc) {
+		mgmt_rx_reo_err("Mgmt Rx REO frame descriptor is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	mgmt_rx_reo_err_rl("Snapshot sanity check for link %u failed", link);
+
+	desc->drop = true;
+	desc->drop_reason = MGMT_RX_REO_SNAPSHOT_SANITY_FAILURE;
+
+	return QDF_STATUS_SUCCESS;
+}
+
 /**
  * handle_out_of_order_pkt_ctr() - Handle management frames with out of order
  * packet counter values
@@ -467,7 +521,12 @@ mgmt_rx_reo_validate_mlo_link_info(struct wlan_objmgr_psoc *psoc)
 		mgmt_rx_reo_err("Failed to get number of active MLO HW links");
 		return QDF_STATUS_E_FAILURE;
 	}
-	qdf_assert_always(num_active_links_shmem > 0);
+
+	if (num_active_links_shmem <= 0) {
+		mgmt_rx_reo_err("Invalid number of active links from shmem %d",
+				num_active_links_shmem);
+		return QDF_STATUS_E_INVAL;
+	}
 
 	if (!mlo_psoc_get_grp_id(psoc, &grp_id)) {
 		mgmt_rx_reo_err("Failed to get valid MLO Group id");
@@ -475,9 +534,17 @@ mgmt_rx_reo_validate_mlo_link_info(struct wlan_objmgr_psoc *psoc)
 	}
 
 	num_active_links = wlan_mlo_get_num_active_links(grp_id);
-	qdf_assert_always(num_active_links > 0);
+	if (num_active_links <= 0) {
+		mgmt_rx_reo_err("Invalid number of active links %d",
+				num_active_links);
+		return QDF_STATUS_E_INVAL;
+	}
 
-	qdf_assert_always(num_active_links_shmem == num_active_links);
+	if (num_active_links_shmem != num_active_links) {
+		mgmt_rx_reo_err("Mismatch in active links %d and %d",
+				num_active_links_shmem, num_active_links);
+		return QDF_STATUS_E_INVAL;
+	}
 
 	status = tgt_mgmt_rx_reo_get_valid_hw_link_bitmap(psoc,
 							  &valid_link_bitmap_shmem);
@@ -485,12 +552,23 @@ mgmt_rx_reo_validate_mlo_link_info(struct wlan_objmgr_psoc *psoc)
 		mgmt_rx_reo_err("Failed to get valid MLO HW link bitmap");
 		return QDF_STATUS_E_INVAL;
 	}
-	qdf_assert_always(valid_link_bitmap_shmem != 0);
+
+	if (!valid_link_bitmap_shmem) {
+		mgmt_rx_reo_err("Valid link bitmap from shmem is 0");
+		return QDF_STATUS_E_INVAL;
+	}
 
 	valid_link_bitmap = wlan_mlo_get_valid_link_bitmap(grp_id);
-	qdf_assert_always(valid_link_bitmap_shmem != 0);
+	if (!valid_link_bitmap) {
+		mgmt_rx_reo_err("Valid link bitmap is 0");
+		return QDF_STATUS_E_INVAL;
+	}
 
-	qdf_assert_always(valid_link_bitmap_shmem == valid_link_bitmap);
+	if (valid_link_bitmap_shmem != valid_link_bitmap) {
+		mgmt_rx_reo_err("Mismatch in valid link bit map 0x%x and 0x%x",
+				valid_link_bitmap_shmem, valid_link_bitmap);
+		return QDF_STATUS_E_INVAL;
+	}
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -514,7 +592,10 @@ mgmt_rx_reo_is_valid_link(uint8_t link_id, uint8_t grp_id)
 	}
 
 	valid_hw_link_bitmap = wlan_mlo_get_valid_link_bitmap(grp_id);
-	qdf_assert_always(valid_hw_link_bitmap);
+	if (!valid_hw_link_bitmap) {
+		mgmt_rx_reo_err("Valid HW link bitmap is zero");
+		return false;
+	}
 
 	return (valid_hw_link_bitmap & (1 << link_id));
 }
@@ -1106,7 +1187,7 @@ mgmt_rx_reo_snapshots_check_sanity
 	if (!mac_hw_ss->valid) {
 		if (fw_forwarded_ss->valid || fw_consumed_ss->valid ||
 		    host_ss->valid) {
-			mgmt_rx_reo_err("MAC HW SS is invalid");
+			mgmt_rx_reo_warn_rl("MAC HW SS is invalid");
 			status = QDF_STATUS_E_INVAL;
 			goto fail;
 		}
@@ -1116,7 +1197,7 @@ mgmt_rx_reo_snapshots_check_sanity
 
 	if (!fw_forwarded_ss->valid && !fw_consumed_ss->valid) {
 		if (host_ss->valid) {
-			mgmt_rx_reo_err("FW forwarded and consumed SS invalid");
+			mgmt_rx_reo_warn_rl("FW fwd and consumed SS invalid");
 			status = QDF_STATUS_E_INVAL;
 			goto fail;
 		}
@@ -1128,7 +1209,7 @@ mgmt_rx_reo_snapshots_check_sanity
 		if (!mgmt_rx_reo_compare_global_timestamps_gte
 					(mac_hw_ss->global_timestamp,
 					 fw_forwarded_ss->global_timestamp)) {
-			mgmt_rx_reo_err("TS: MAC HW SS < FW forwarded SS");
+			mgmt_rx_reo_warn_rl("TS: MAC HW SS < FW forwarded SS");
 			status = QDF_STATUS_E_INVAL;
 			goto fail;
 		}
@@ -1136,7 +1217,7 @@ mgmt_rx_reo_snapshots_check_sanity
 		if (!mgmt_rx_reo_compare_pkt_ctrs_gte
 					(mac_hw_ss->mgmt_pkt_ctr,
 					 fw_forwarded_ss->mgmt_pkt_ctr)) {
-			mgmt_rx_reo_err("PKT CTR: MAC HW SS < FW forwarded SS");
+			mgmt_rx_reo_warn_rl("CTR: MAC HW SS < FW forwarded SS");
 			status = QDF_STATUS_E_INVAL;
 			goto fail;
 		}
@@ -1146,7 +1227,7 @@ mgmt_rx_reo_snapshots_check_sanity
 		if (!mgmt_rx_reo_compare_global_timestamps_gte
 					(mac_hw_ss->global_timestamp,
 					 fw_consumed_ss->global_timestamp)) {
-			mgmt_rx_reo_err("TS: MAC HW SS < FW consumed SS");
+			mgmt_rx_reo_warn_rl("TS: MAC HW SS < FW consumed SS");
 			status = QDF_STATUS_E_INVAL;
 			goto fail;
 		}
@@ -1154,7 +1235,7 @@ mgmt_rx_reo_snapshots_check_sanity
 		if (!mgmt_rx_reo_compare_pkt_ctrs_gte
 					(mac_hw_ss->mgmt_pkt_ctr,
 					 fw_consumed_ss->mgmt_pkt_ctr)) {
-			mgmt_rx_reo_err("PKT CTR: MAC HW SS < FW consumed SS");
+			mgmt_rx_reo_warn_rl("CTR: MAC HW SS < FW consumed SS");
 			status = QDF_STATUS_E_INVAL;
 			goto fail;
 		}
@@ -1164,7 +1245,7 @@ mgmt_rx_reo_snapshots_check_sanity
 		if (!mgmt_rx_reo_compare_global_timestamps_gte
 					(mac_hw_ss->global_timestamp,
 					 host_ss->global_timestamp)) {
-			mgmt_rx_reo_err("TS: MAC HW SS < host SS");
+			mgmt_rx_reo_warn_rl("TS: MAC HW SS < host SS");
 			status = QDF_STATUS_E_INVAL;
 			goto fail;
 		}
@@ -1172,7 +1253,7 @@ mgmt_rx_reo_snapshots_check_sanity
 		if (!mgmt_rx_reo_compare_pkt_ctrs_gte
 					(mac_hw_ss->mgmt_pkt_ctr,
 					 host_ss->mgmt_pkt_ctr)) {
-			mgmt_rx_reo_err("PKT CTR: MAC HW SS < host SS");
+			mgmt_rx_reo_warn_rl("PKT CTR: MAC HW SS < host SS");
 			status = QDF_STATUS_E_INVAL;
 			goto fail;
 		}
@@ -1181,7 +1262,7 @@ mgmt_rx_reo_snapshots_check_sanity
 			if (!mgmt_rx_reo_compare_global_timestamps_gte
 					(fw_forwarded_ss->global_timestamp,
 					 host_ss->global_timestamp)) {
-				mgmt_rx_reo_err("TS: FW forwarded < host SS");
+				mgmt_rx_reo_warn_rl("TS: FW fwd < host SS");
 				status = QDF_STATUS_E_INVAL;
 				goto fail;
 			}
@@ -1189,7 +1270,7 @@ mgmt_rx_reo_snapshots_check_sanity
 			if (!mgmt_rx_reo_compare_pkt_ctrs_gte
 					(fw_forwarded_ss->mgmt_pkt_ctr,
 					 host_ss->mgmt_pkt_ctr)) {
-				mgmt_rx_reo_err("CTR: FW forwarded < host SS");
+				mgmt_rx_reo_warn_rl("CTR: FW fwd < host SS");
 				status = QDF_STATUS_E_INVAL;
 				goto fail;
 			}
@@ -1199,7 +1280,7 @@ mgmt_rx_reo_snapshots_check_sanity
 			if (!mgmt_rx_reo_compare_global_timestamps_gte
 					(fw_consumed_ss->global_timestamp,
 					 host_ss->global_timestamp)) {
-				mgmt_rx_reo_err("TS: FW consumed < host SS");
+				mgmt_rx_reo_warn_rl("TS: FW consumed < host");
 				status = QDF_STATUS_E_INVAL;
 				goto fail;
 			}
@@ -1207,7 +1288,7 @@ mgmt_rx_reo_snapshots_check_sanity
 			if (!mgmt_rx_reo_compare_pkt_ctrs_gte
 					(fw_consumed_ss->mgmt_pkt_ctr,
 					 host_ss->mgmt_pkt_ctr)) {
-				mgmt_rx_reo_err("CTR: FW consumed < host SS");
+				mgmt_rx_reo_warn_rl("CTR: FW consumed < host");
 				status = QDF_STATUS_E_INVAL;
 				goto fail;
 			}
@@ -1220,7 +1301,7 @@ mgmt_rx_reo_snapshots_check_sanity
 			    !mgmt_rx_reo_compare_global_timestamps_gte
 					(fw_forwarded_ss->global_timestamp,
 					 host_ss->global_timestamp)) {
-				mgmt_rx_reo_err("TS: FW consumed/forwarded < host");
+				mgmt_rx_reo_warn_rl("TS: FW consumed/fwd<host");
 				status = QDF_STATUS_E_INVAL;
 				goto fail;
 			}
@@ -1231,7 +1312,7 @@ mgmt_rx_reo_snapshots_check_sanity
 			    !mgmt_rx_reo_compare_pkt_ctrs_gte
 					(fw_forwarded_ss->mgmt_pkt_ctr,
 					 host_ss->mgmt_pkt_ctr)) {
-				mgmt_rx_reo_err("CTR: FW consumed/forwarded < host");
+				mgmt_rx_reo_warn_rl("CTR:FW consumed/fwd<host");
 				status = QDF_STATUS_E_INVAL;
 				goto fail;
 			}
@@ -1241,20 +1322,20 @@ mgmt_rx_reo_snapshots_check_sanity
 	return QDF_STATUS_SUCCESS;
 
 fail:
-	mgmt_rx_reo_debug("HW SS: valid = %u, ctr = %u, ts = %u",
-			  mac_hw_ss->valid, mac_hw_ss->mgmt_pkt_ctr,
-			  mac_hw_ss->global_timestamp);
-	mgmt_rx_reo_debug("FW forwarded SS: valid = %u, ctr = %u, ts = %u",
-			  fw_forwarded_ss->valid,
-			  fw_forwarded_ss->mgmt_pkt_ctr,
-			  fw_forwarded_ss->global_timestamp);
-	mgmt_rx_reo_debug("FW consumed SS: valid = %u, ctr = %u, ts = %u",
-			  fw_consumed_ss->valid,
-			  fw_consumed_ss->mgmt_pkt_ctr,
-			  fw_consumed_ss->global_timestamp);
-	mgmt_rx_reo_debug("HOST SS: valid = %u, ctr = %u, ts = %u",
-			  host_ss->valid, host_ss->mgmt_pkt_ctr,
-			  host_ss->global_timestamp);
+	mgmt_rx_reo_warn_rl("HW SS: valid = %u, ctr = %u, ts = %u",
+			    mac_hw_ss->valid, mac_hw_ss->mgmt_pkt_ctr,
+			    mac_hw_ss->global_timestamp);
+	mgmt_rx_reo_warn_rl("FW forwarded SS: valid = %u, ctr = %u, ts = %u",
+			    fw_forwarded_ss->valid,
+			    fw_forwarded_ss->mgmt_pkt_ctr,
+			    fw_forwarded_ss->global_timestamp);
+	mgmt_rx_reo_warn_rl("FW consumed SS: valid = %u, ctr = %u, ts = %u",
+			    fw_consumed_ss->valid,
+			    fw_consumed_ss->mgmt_pkt_ctr,
+			    fw_consumed_ss->global_timestamp);
+	mgmt_rx_reo_warn_rl("HOST SS: valid = %u, ctr = %u, ts = %u",
+			    host_ss->valid, host_ss->mgmt_pkt_ctr,
+			    host_ss->global_timestamp);
 
 	return status;
 }
@@ -1326,9 +1407,16 @@ wlan_mgmt_rx_reo_algo_calculate_wait_count(
 	/* Get the MLO link ID of incoming frame */
 	in_frame_link = wlan_get_mlo_link_id_from_pdev(in_frame_pdev);
 	grp_id = wlan_get_mlo_grp_id_from_pdev(in_frame_pdev);
-	qdf_assert_always(in_frame_link >= 0);
-	qdf_assert_always(in_frame_link < MAX_MLO_LINKS);
-	qdf_assert_always(mgmt_rx_reo_is_valid_link(in_frame_link, grp_id));
+	if (in_frame_link < 0 || in_frame_link >= MAX_MLO_LINKS) {
+		mgmt_rx_reo_err("Invalid frame link = %d", in_frame_link);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (!mgmt_rx_reo_is_valid_link(in_frame_link, grp_id)) {
+		mgmt_rx_reo_err("Invalid link = %d and group = %d",
+				in_frame_link, grp_id);
+		return QDF_STATUS_E_INVAL;
+	}
 
 	in_frame_rx_reo_pdev_ctx =
 			wlan_mgmt_rx_reo_get_priv_object(in_frame_pdev);
@@ -1447,8 +1535,15 @@ wlan_mgmt_rx_reo_algo_calculate_wait_count(
 		status = mgmt_rx_reo_snapshots_check_sanity
 			(mac_hw_ss, fw_forwarded_ss, fw_consumed_ss, host_ss);
 		if (QDF_IS_STATUS_ERROR(status)) {
-			mgmt_rx_reo_err_rl("Snapshot sanity for link %u failed",
-					   link);
+			QDF_STATUS ret;
+
+			ret = handle_snapshot_sanity_failures(desc, link);
+			if (QDF_IS_STATUS_ERROR(ret)) {
+				mgmt_rx_reo_err_rl("Err:SS sanity fail handle");
+				return ret;
+			}
+			mgmt_rx_reo_warn_rl("Drop frame due to SS sanity fail");
+
 			return status;
 		}
 
@@ -2250,9 +2345,6 @@ mgmt_rx_reo_debug_print_egress_frame_info(struct mgmt_rx_reo_context *reo_ctx,
 			       num_entries_to_print +
 			       egress_frame_debug_info->frame_list_size)
 			      % egress_frame_debug_info->frame_list_size;
-
-		qdf_assert_always(start_index >= 0 &&
-				  start_index < egress_frame_debug_info->frame_list_size);
 	}
 
 	mgmt_rx_reo_alert_no_fl("Egress Frame Info:-");
@@ -2522,15 +2614,24 @@ mgmt_rx_reo_list_entry_send_up(struct mgmt_rx_reo_context *reo_context,
 	QDF_STATUS status;
 	QDF_STATUS temp;
 
-	qdf_assert_always(reo_context);
-	qdf_assert_always(entry);
+	if (!reo_context) {
+		mgmt_rx_reo_err("Reo context is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (!entry) {
+		mgmt_rx_reo_err("Entry is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
 
 	link_id = mgmt_rx_reo_get_link_id(entry->rx_params);
 	entry_global_ts = mgmt_rx_reo_get_global_ts(entry->rx_params);
 
 	release_reason = mgmt_rx_reo_list_entry_get_release_reason(entry);
-
-	qdf_assert_always(release_reason != 0);
+	if (!release_reason) {
+		mgmt_rx_reo_err("Release reason is zero");
+		return QDF_STATUS_E_INVAL;
+	}
 
 	entry->is_delivered = false;
 	entry->is_dropped = false;
@@ -2595,7 +2696,10 @@ exit:
 static bool
 mgmt_rx_reo_is_entry_ready_to_send_up(struct mgmt_rx_reo_list_entry *entry)
 {
-	qdf_assert_always(entry);
+	if (!entry) {
+		mgmt_rx_reo_err("Entry is null");
+		return false;
+	}
 
 	return LIST_ENTRY_IS_REMOVED_DUE_TO_INGRESS_LIST_OVERFLOW(entry) ||
 	       LIST_ENTRY_IS_REMOVED_DUE_TO_EGRESS_LIST_OVERFLOW(entry) ||
@@ -2730,7 +2834,10 @@ mgmt_rx_reo_defer_delivery(struct mgmt_rx_reo_list_entry *entry,
 	uint8_t mlo_grp_id;
 	struct wlan_objmgr_pdev *pdev;
 
-	qdf_assert_always(entry);
+	if (!entry) {
+		mgmt_rx_reo_err("Entry is null");
+		return true;
+	}
 
 	link_id = mgmt_rx_reo_get_link_id(entry->rx_params);
 	mlo_grp_id = entry->rx_params->reo_params->mlo_grp_id;
@@ -2784,7 +2891,6 @@ mgmt_rx_reo_schedule_delivery(struct mgmt_rx_reo_context *reo_context,
 	}
 
 	scheduled_count = qdf_atomic_inc_return(&entry->scheduled_count);
-	qdf_assert_always(scheduled_count > 0);
 
 	reschedule = (scheduled_count > 1);
 	status = mgmt_rx_reo_log_scheduler_debug_info(reo_context, entry,
@@ -2800,7 +2906,6 @@ mgmt_rx_reo_schedule_delivery(struct mgmt_rx_reo_context *reo_context,
 	}
 
 	link_id = mgmt_rx_reo_get_link_id(entry->rx_params);
-	qdf_assert_always(link_id >= 0 && link_id < MAX_MLO_LINKS);
 	mlo_grp_id = entry->rx_params->reo_params->mlo_grp_id;
 	pdev = wlan_get_pdev_from_mlo_link_id(link_id, mlo_grp_id,
 					      WLAN_MGMT_RX_REO_ID);
@@ -2887,7 +2992,10 @@ mgmt_rx_reo_release_egress_list_entries(struct mgmt_rx_reo_context *reo_context,
 		}
 
 		ready = mgmt_rx_reo_is_entry_ready_to_send_up(first_entry);
-		qdf_assert_always(ready);
+		if (!ready) {
+			status = QDF_STATUS_E_FAILURE;
+			goto exit_unlock_egress_list_lock;
+		}
 
 		first_entry->ctx_info = *ctx;
 		defer = mgmt_rx_reo_defer_delivery(first_entry, link_bitmap);
@@ -2966,8 +3074,11 @@ mgmt_rx_reo_release_egress_list_entries(struct mgmt_rx_reo_context *reo_context,
 	goto exit_unlock_frame_release_lock;
 
 exit_unlock_egress_list_lock:
-	qdf_assert_always(qdf_list_size(&reo_egress_list->list) <=
-					reo_egress_list->max_list_size);
+	if (qdf_list_size(&reo_egress_list->list) >
+	    reo_egress_list->max_list_size)
+		mgmt_rx_reo_err("Egress list overflow size =%u, max = %u",
+				qdf_list_size(&reo_egress_list->list),
+				reo_egress_list->max_list_size);
 	qdf_spin_unlock_bh(&reo_egress_list->list_lock);
 exit_unlock_frame_release_lock:
 	qdf_spin_unlock(&reo_context->frame_release_lock);
@@ -3051,7 +3162,10 @@ mgmt_rx_reo_check_sanity_list(struct mgmt_rx_reo_list *reo_list)
 	uint32_t ts_prev;
 	uint32_t ts_cur;
 
-	qdf_assert_always(reo_list);
+	if (!reo_list) {
+		mgmt_rx_reo_err("Reo list is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
 
 	if (qdf_list_empty(&reo_list->list))
 		return QDF_STATUS_SUCCESS;
@@ -3059,7 +3173,10 @@ mgmt_rx_reo_check_sanity_list(struct mgmt_rx_reo_list *reo_list)
 	first = qdf_list_first_entry_or_null(&reo_list->list,
 					     struct mgmt_rx_reo_list_entry,
 					     node);
-	qdf_assert_always(first);
+	if (!first) {
+		mgmt_rx_reo_err("First entry is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
 
 	cur = first;
 	ts_prev = mgmt_rx_reo_get_global_ts(first->rx_params);
@@ -3105,8 +3222,15 @@ mgmt_rx_reo_check_sanity_lists(struct mgmt_rx_reo_list *reo_egress_list,
 	struct mgmt_rx_reo_list_entry *first_entry_ingress_list;
 	uint32_t ts_ingress_first_entry;
 
-	qdf_assert_always(reo_egress_list);
-	qdf_assert_always(reo_ingress_list);
+	if (!reo_egress_list) {
+		mgmt_rx_reo_err("Egress list is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (!reo_ingress_list) {
+		mgmt_rx_reo_err("Ingress list is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
 
 	status = mgmt_rx_reo_check_sanity_list(reo_egress_list);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -3257,52 +3381,75 @@ mgmt_rx_reo_move_entries_ingress_to_egress_list
 
 	/* Check if ingress list has at least one frame ready to be delivered */
 	if (num_frames_ready_to_deliver) {
-		qdf_list_t temp_list_frames_ready_to_deliver;
+		qdf_list_t temp_list_frames_to_deliver;
 
-		qdf_list_create(&temp_list_frames_ready_to_deliver,
+		qdf_list_create(&temp_list_frames_to_deliver,
 				INGRESS_TO_EGRESS_MOVEMENT_TEMP_LIST_MAX_SIZE);
 
-		status = qdf_list_split(&temp_list_frames_ready_to_deliver,
+		status = qdf_list_split(&temp_list_frames_to_deliver,
 					&reo_ingress_list->list,
 					&latest_frame_ready_to_deliver->node);
-		qdf_assert_always(QDF_IS_STATUS_SUCCESS(status));
+		if (QDF_IS_STATUS_ERROR(status)) {
+			mgmt_rx_reo_err("Failed to split list");
+			qdf_list_destroy(&temp_list_frames_to_deliver);
+			goto exit_unlock_ingress_list;
+		}
 
-		qdf_assert_always(num_frames_ready_to_deliver ==
-			qdf_list_size(&temp_list_frames_ready_to_deliver));
+		if (num_frames_ready_to_deliver !=
+		    qdf_list_size(&temp_list_frames_to_deliver)) {
+			uint32_t list_size;
+
+			list_size = qdf_list_size(&temp_list_frames_to_deliver);
+			mgmt_rx_reo_err("Mismatch in frames ready %u and %u",
+					num_frames_ready_to_deliver,
+					list_size);
+			status = QDF_STATUS_E_INVAL;
+			qdf_list_destroy(&temp_list_frames_to_deliver);
+			goto exit_unlock_ingress_list;
+		}
 
 		qdf_spin_lock_bh(&reo_egress_list->list_lock);
 
 		status = qdf_list_join(&reo_egress_list->list,
-				       &temp_list_frames_ready_to_deliver);
-		qdf_assert_always(QDF_IS_STATUS_SUCCESS(status));
+				       &temp_list_frames_to_deliver);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			mgmt_rx_reo_err("Failed to join lists");
+			qdf_list_destroy(&temp_list_frames_to_deliver);
+			goto exit_unlock_egress_and_ingress_list;
+		}
 
 		if (mgmt_rx_reo_list_overflowed(reo_egress_list)) {
 			status =
 			    mgmt_rx_reo_handle_egress_overflow(reo_egress_list);
 			if (QDF_IS_STATUS_ERROR(status)) {
 				mgmt_rx_reo_err("Failed to handle overflow");
-				qdf_assert_always(0);
+				qdf_list_destroy(&temp_list_frames_to_deliver);
+				goto exit_unlock_egress_and_ingress_list;
 			}
 		}
-
-		qdf_assert_always(qdf_list_size(&reo_ingress_list->list) <=
-				  reo_ingress_list->max_list_size);
 
 		status = mgmt_rx_reo_check_sanity_lists(reo_egress_list,
 							reo_ingress_list);
 		if (QDF_IS_STATUS_ERROR(status)) {
 			mgmt_rx_reo_err("Sanity check of reo lists failed");
-			qdf_assert_always(0);
+			qdf_list_destroy(&temp_list_frames_to_deliver);
+			goto exit_unlock_egress_and_ingress_list;
 		}
 
 		qdf_spin_unlock_bh(&reo_egress_list->list_lock);
 
-		qdf_list_destroy(&temp_list_frames_ready_to_deliver);
+		qdf_list_destroy(&temp_list_frames_to_deliver);
 	}
 
+	status = QDF_STATUS_SUCCESS;
+	goto exit_unlock_ingress_list;
+
+exit_unlock_egress_and_ingress_list:
+	qdf_spin_unlock_bh(&reo_egress_list->list_lock);
+exit_unlock_ingress_list:
 	qdf_spin_unlock_bh(&reo_ingress_list->list_lock);
 
-	return QDF_STATUS_SUCCESS;
+	return status;
 }
 
 /**
@@ -3325,8 +3472,15 @@ mgmt_rx_reo_ageout_entries_ingress_list
 	struct mgmt_rx_reo_list_entry *cur_entry;
 	uint64_t cur_ts;
 
-	qdf_assert_always(ingress_list);
-	qdf_assert_always(latest_aged_out_entry);
+	if (!ingress_list) {
+		mgmt_rx_reo_err("Ingress list is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (!latest_aged_out_entry) {
+		mgmt_rx_reo_err("Latest aged out entry is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
 
 	*latest_aged_out_entry = NULL;
 	reo_ingress_list = &ingress_list->reo_list;
@@ -3383,9 +3537,16 @@ mgmt_rx_reo_ingress_list_ageout_timer_handler(void *arg)
 	struct mgmt_rx_reo_list_entry *latest_aged_out_entry = NULL;
 	struct mgmt_rx_reo_context_info ctx_info = {0};
 
-	qdf_assert_always(ingress_list);
+	if (!ingress_list) {
+		mgmt_rx_reo_err("Ingress list is null");
+		return;
+	}
+
 	reo_ctx = mgmt_rx_reo_get_context_from_ingress_list(ingress_list);
-	qdf_assert_always(reo_ctx);
+	if (!reo_ctx) {
+		mgmt_rx_reo_err("Reo context is null");
+		return;
+	}
 	egress_list = &reo_ctx->egress_list;
 
 	qdf_timer_mod(&ingress_list->ageout_timer,
@@ -3435,7 +3596,10 @@ mgmt_rx_reo_egress_inactivity_timer_handler(void *arg)
 	struct mgmt_rx_reo_list *reo_egress_list;
 	struct mgmt_rx_reo_frame_info *last_delivered_frame;
 
-	qdf_assert_always(egress_list);
+	if (!egress_list) {
+		mgmt_rx_reo_err("Egress list is null");
+		return;
+	}
 
 	reo_egress_list = &egress_list->reo_list;
 	last_delivered_frame = &reo_egress_list->last_released_frame;
@@ -3541,8 +3705,15 @@ mgmt_rx_reo_update_wait_count(
 {
 	uint8_t link_id;
 
-	qdf_assert_always(wait_count_old_frame);
-	qdf_assert_always(wait_count_new_frame);
+	if (!wait_count_old_frame) {
+		mgmt_rx_reo_err("Pointer to old frame wait count is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (!wait_count_new_frame) {
+		mgmt_rx_reo_err("Pointer to new frame wait count is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
 
 	for (link_id = 0; link_id < MAX_MLO_LINKS; link_id++) {
 		if (wait_count_old_frame->per_link_count[link_id]) {
@@ -3621,8 +3792,10 @@ mgmt_rx_reo_update_ingress_list(struct mgmt_rx_reo_ingress_list *ingress_list,
 	}
 
 	if (!(frame_desc->type == MGMT_RX_REO_FRAME_DESC_HOST_CONSUMED_FRAME &&
-	      frame_desc->reo_required) != !new)
-		qdf_assert_always(0);
+	      frame_desc->reo_required) != !new) {
+		mgmt_rx_reo_err("Invalid input");
+		return QDF_STATUS_E_INVAL;
+	}
 
 	if (!is_queued) {
 		mgmt_rx_reo_err("Pointer to queued indication is null");
@@ -3816,8 +3989,10 @@ mgmt_rx_reo_update_egress_list(struct mgmt_rx_reo_egress_list *egress_list,
 	}
 
 	if (!(frame_desc->type == MGMT_RX_REO_FRAME_DESC_HOST_CONSUMED_FRAME &&
-	      frame_desc->reo_required) != !new)
-		qdf_assert_always(0);
+	      frame_desc->reo_required) != !new) {
+		mgmt_rx_reo_err("Invalid input");
+		return QDF_STATUS_E_INVAL;
+	}
 
 	if (!is_queued) {
 		mgmt_rx_reo_err("Pointer to queued indication is null");
@@ -3862,7 +4037,6 @@ mgmt_rx_reo_update_egress_list(struct mgmt_rx_reo_egress_list *egress_list,
 
 	last = qdf_list_last_entry(&reo_egress_list->list,
 				   struct mgmt_rx_reo_list_entry, node);
-	qdf_assert_always(last);
 
 	ts_last = mgmt_rx_reo_get_global_ts(last->rx_params);
 
@@ -3883,7 +4057,11 @@ mgmt_rx_reo_update_egress_list(struct mgmt_rx_reo_egress_list *egress_list,
 
 		list_insertion_pos++;
 	}
-	qdf_assert_always(least_greater_entry_found);
+
+	if (!least_greater_entry_found) {
+		mgmt_rx_reo_err("Lest greater entry not found");
+		return QDF_STATUS_E_FAILURE;
+	}
 
 	ret = mgmt_rx_reo_update_wait_count(&new->wait_count,
 					    &least_greater->wait_count);
@@ -3911,7 +4089,6 @@ mgmt_rx_reo_update_egress_list(struct mgmt_rx_reo_egress_list *egress_list,
 		ret = mgmt_rx_reo_handle_egress_overflow(reo_egress_list);
 		if (QDF_IS_STATUS_ERROR(ret)) {
 			mgmt_rx_reo_err("Failed to handle egress overflow");
-			qdf_assert_always(0);
 		}
 	}
 
@@ -3979,13 +4156,15 @@ mgmt_rx_reo_update_lists(struct mgmt_rx_reo_ingress_list *ingress_list,
 	status = mgmt_rx_reo_update_egress_list(egress_list, frame_desc,
 						new_entry,
 						&is_queued_to_egress_list);
-	if (QDF_IS_STATUS_ERROR(status))
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mgmt_rx_reo_err("Egress list update failed");
 		goto exit_release_egress_list_lock;
+	}
 
 	status = mgmt_rx_reo_check_sanity_list(reo_egress_list);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		mgmt_rx_reo_err("Sanity check of egress list failed");
-		qdf_assert_always(0);
+		goto exit_release_egress_list_lock;
 	}
 
 	qdf_spin_unlock_bh(&reo_egress_list->list_lock);
@@ -3993,13 +4172,15 @@ mgmt_rx_reo_update_lists(struct mgmt_rx_reo_ingress_list *ingress_list,
 	status = mgmt_rx_reo_update_ingress_list(ingress_list, frame_desc,
 						 new_entry,
 						 &is_queued_to_ingress_list);
-	if (QDF_IS_STATUS_ERROR(status))
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mgmt_rx_reo_err("Ingress list update failed");
 		goto exit_release_ingress_list_lock;
+	}
 
 	status = mgmt_rx_reo_check_sanity_list(reo_ingress_list);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		mgmt_rx_reo_err("Sanity check of ingress list failed");
-		qdf_assert_always(0);
+		goto exit_release_ingress_list_lock;
 	}
 
 	status = QDF_STATUS_SUCCESS;
@@ -4010,16 +4191,17 @@ exit_release_egress_list_lock:
 exit_release_ingress_list_lock:
 	qdf_spin_unlock_bh(&reo_ingress_list->list_lock);
 
-	qdf_assert_always(!is_queued_to_ingress_list ||
-			  !is_queued_to_egress_list);
+	if (is_queued_to_ingress_list && is_queued_to_egress_list)
+		mgmt_rx_reo_err("Frame is queued to ingress and egress lists");
 
 	*is_queued = is_queued_to_ingress_list || is_queued_to_egress_list;
 
 	queued_list = frame_desc->queued_list;
-	qdf_assert_always(!(*is_queued &&
-			    queued_list == MGMT_RX_REO_LIST_TYPE_INVALID));
+	if (*is_queued && queued_list == MGMT_RX_REO_LIST_TYPE_INVALID)
+		mgmt_rx_reo_err("Invalid queued list type %d", queued_list);
 
-	qdf_assert_always(new_entry || !*is_queued);
+	if (!new_entry && *is_queued)
+		mgmt_rx_reo_err("Queued an invalid frame");
 
 	/* Cleanup the entry if it is not queued */
 	if (new_entry && !*is_queued) {
@@ -4815,9 +4997,6 @@ mgmt_rx_reo_debug_print_ingress_frame_info(struct mgmt_rx_reo_context *reo_ctx,
 			       num_entries_to_print +
 			       ingress_frame_debug_info->frame_list_size)
 			      % ingress_frame_debug_info->frame_list_size;
-
-		qdf_assert_always(start_index >= 0 &&
-				  start_index < ingress_frame_debug_info->frame_list_size);
 	}
 
 	mgmt_rx_reo_alert_no_fl("Ingress Frame Info:-");
@@ -5165,7 +5344,10 @@ wlan_mgmt_rx_reo_algo_entry(struct wlan_objmgr_pdev *pdev,
 	qdf_spin_lock(&reo_ctx->reo_algo_entry_lock);
 
 	cur_link = mgmt_rx_reo_get_link_id(desc->rx_params);
-	qdf_assert_always(desc->frame_type == IEEE80211_FC0_TYPE_MGT);
+	if (desc->frame_type != IEEE80211_FC0_TYPE_MGT) {
+		ret = QDF_STATUS_E_INVAL;
+		goto failure;
+	}
 
 	ret = log_ingress_frame_entry(reo_ctx, desc);
 	if (QDF_IS_STATUS_ERROR(ret))

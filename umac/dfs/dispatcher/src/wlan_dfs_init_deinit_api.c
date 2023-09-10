@@ -508,7 +508,7 @@ QDF_STATUS wlan_dfs_pdev_obj_create_notification(struct wlan_objmgr_pdev *pdev,
 	}
 
 	dfs->dfs_is_offload_enabled = dfs_tx_ops->dfs_is_tgt_offload(psoc);
-	dfs_info(dfs, WLAN_DEBUG_DFS_ALWAYS, "dfs_offload %d",
+	dfs_info(dfs, WLAN_DEBUG_DFS, "dfs_offload %d",
 		 dfs->dfs_is_offload_enabled);
 
 	if (!dfs_tx_ops->dfs_is_tgt_bangradar_320_supp) {

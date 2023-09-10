@@ -43,6 +43,7 @@
 #ifdef CONFIG_SAWF_DEF_QUEUES
 #include <dp_sawf_htt.h>
 #endif
+#include <wbuff.h>
 
 #define HTT_TLV_HDR_LEN HTT_T2H_EXT_STATS_CONF_TLV_HDR_SIZE
 
@@ -1762,7 +1763,8 @@ int htt_h2t_rx_ring_cfg(struct htt_soc *htt_soc, int pdev_id,
 						msg_word,
 						(void *)htt_tlv_filter);
 
-	dp_mon_rx_wmask_subscribe(soc->dp_soc, msg_word, htt_tlv_filter);
+	dp_mon_rx_wmask_subscribe(soc->dp_soc, msg_word,
+				  pdev_id, htt_tlv_filter);
 
 	if (mon_drop_th > 0)
 		HTT_RX_RING_SELECTION_CFG_RX_DROP_THRESHOLD_SET(*msg_word,
@@ -3475,20 +3477,20 @@ dp_rx_mlo_timestamp_ind_handler(struct dp_soc *soc,
 static void dp_htt_mlo_peer_map_handler(struct htt_soc *soc,
 					uint32_t *msg_word)
 {
-	qdf_assert_always(0);
+	dp_alert("Unexpected event");
 }
 
 static void dp_htt_mlo_peer_unmap_handler(struct htt_soc *soc,
 					 uint32_t *msg_word)
 {
-	qdf_assert_always(0);
+	dp_alert("Unexpected event");
 }
 
 static void
 dp_rx_mlo_timestamp_ind_handler(void *soc_handle,
 				uint32_t *msg_word)
 {
-	qdf_assert_always(0);
+	dp_alert("Unexpected event");
 }
 
 static void dp_htt_t2h_primary_link_migration(struct htt_soc *soc,
@@ -3685,6 +3687,20 @@ dp_htt_peer_ext_evt(struct htt_soc *soc, uint32_t *msg_word)
 }
 #endif
 
+#ifdef WLAN_FEATURE_CE_RX_BUFFER_REUSE
+static void dp_htt_rx_nbuf_free(qdf_nbuf_t nbuf)
+{
+	nbuf = wbuff_buff_put(nbuf);
+	if (nbuf)
+		qdf_nbuf_free(nbuf);
+}
+#else
+static inline void dp_htt_rx_nbuf_free(qdf_nbuf_t nbuf)
+{
+	return qdf_nbuf_free(nbuf);
+}
+#endif
+
 void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 {
 	struct htt_soc *soc = (struct htt_soc *) context;
@@ -3698,7 +3714,7 @@ void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 		if (pkt->Status != QDF_STATUS_E_CANCELED)
 			soc->stats.htc_err_cnt++;
 
-		qdf_nbuf_free(htt_t2h_msg);
+		dp_htt_rx_nbuf_free(htt_t2h_msg);
 		return;
 	}
 
@@ -4150,7 +4166,7 @@ void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 
 	/* Free the indication buffer */
 	if (free_buf)
-		qdf_nbuf_free(htt_t2h_msg);
+		dp_htt_rx_nbuf_free(htt_t2h_msg);
 }
 
 enum htc_send_full_action
@@ -5105,7 +5121,8 @@ dp_htt_rx_fisa_config(struct dp_pdev *pdev,
 
 	msg_word++;
 	HTT_RX_FISA_CONFIG_FISA_V2_ENABLE_SET(*msg_word, 1);
-	HTT_RX_FISA_CONFIG_FISA_V2_AGGR_LIMIT_SET(*msg_word, 0xf);
+	HTT_RX_FISA_CONFIG_FISA_V2_AGGR_LIMIT_SET(*msg_word,
+	(fisa_config->max_aggr_supported ? fisa_config->max_aggr_supported : 0xf));
 
 	msg_word++;
 	htt_fisa_config->fisa_timeout_threshold = fisa_config->fisa_timeout;

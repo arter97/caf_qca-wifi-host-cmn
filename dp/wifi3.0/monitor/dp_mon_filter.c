@@ -649,7 +649,7 @@ QDF_STATUS dp_mon_filter_update(struct dp_pdev *pdev)
 
 	mon_ops = dp_mon_ops_get(pdev->soc);
 	if (!mon_ops) {
-		dp_mon_filter_err("Mon ops uninitialized");
+		dp_mon_filter_err("Rx mon filter update failed ops uninitialized");
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -665,7 +665,7 @@ QDF_STATUS dp_tx_mon_filter_update(struct dp_pdev *pdev)
 
 	mon_ops = dp_mon_ops_get(pdev->soc);
 	if (!mon_ops) {
-		dp_mon_filter_err("Mon ops uninitialized");
+		dp_mon_filter_err("Tx mon filter update failed ops uninitialized");
 		return QDF_STATUS_E_FAILURE;
 	}
 

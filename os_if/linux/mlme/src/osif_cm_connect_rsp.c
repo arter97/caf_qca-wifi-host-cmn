@@ -34,6 +34,7 @@
 #include "wlan_objmgr_vdev_obj.h"
 #include "wlan_objmgr_peer_obj.h"
 #include "utils_mlo.h"
+#include <wlan_mlo_mgr_link_switch.h>
 
 #ifdef CONN_MGR_ADV_FEATURE
 void osif_cm_get_assoc_req_ie_data(struct element_info *assoc_req,
@@ -481,14 +482,15 @@ static
 void osif_populate_connect_response_for_link(struct wlan_objmgr_vdev *vdev,
 					     struct cfg80211_connect_resp_params *conn_rsp_params,
 					     uint8_t link_id,
+					     uint8_t *link_addr,
 					     struct cfg80211_bss *bss)
 {
 	osif_debug("Link_id :%d", link_id);
 	conn_rsp_params->valid_links |=  BIT(link_id);
 	conn_rsp_params->links[link_id].bssid = bss->bssid;
 	conn_rsp_params->links[link_id].bss = bss;
-	conn_rsp_params->links[link_id].addr =
-					 wlan_vdev_mlme_get_macaddr(vdev);
+	conn_rsp_params->links[link_id].addr = link_addr;
+	mlo_mgr_osif_update_connect_info(vdev, link_id);
 }
 
 static QDF_STATUS
@@ -516,50 +518,34 @@ osif_fill_peer_mld_mac_connect_resp(struct wlan_objmgr_vdev *vdev,
 }
 
 static void
-osif_populate_partner_links_mlo_params(struct wlan_objmgr_pdev *pdev,
+osif_populate_partner_links_mlo_params(struct wlan_objmgr_vdev *vdev,
 				       struct wlan_cm_connect_resp *rsp,
 				       struct cfg80211_connect_resp_params *conn_rsp_params)
 {
-	struct wlan_objmgr_vdev *partner_vdev;
 	struct mlo_link_info *rsp_partner_info;
-	struct mlo_partner_info assoc_partner_info = {0};
 	struct cfg80211_bss *bss = NULL;
-	QDF_STATUS qdf_status;
 	uint8_t link_id = 0, num_links;
 	int i;
-
-	qdf_status = osif_get_partner_info_from_mlie(rsp, &assoc_partner_info);
-	if (QDF_IS_STATUS_ERROR(qdf_status))
-		return;
+	struct mlo_link_info *link_info;
 
 	num_links = rsp->ml_parnter_info.num_partner_links;
 	for (i = 0 ; i < num_links; i++) {
 		rsp_partner_info = &rsp->ml_parnter_info.partner_link_info[i];
+		link_id = rsp_partner_info->link_id;
 
-		qdf_status = osif_get_link_id_from_assoc_ml_ie(rsp_partner_info,
-							    &assoc_partner_info,
-							    &link_id);
-		if (QDF_IS_STATUS_ERROR(qdf_status))
+		link_info = mlo_mgr_get_ap_link_by_link_id(vdev, link_id);
+		if (!link_info)
 			continue;
 
-		partner_vdev = wlan_objmgr_get_vdev_by_id_from_pdev(pdev,
-						      rsp_partner_info->vdev_id,
-						      WLAN_MLO_MGR_ID);
-		if (!partner_vdev)
+		bss = osif_get_chan_bss_from_kernel(vdev, rsp_partner_info,
+						    rsp);
+		if (!bss)
 			continue;
 
-		bss = osif_get_chan_bss_from_kernel(partner_vdev,
-						    rsp_partner_info, rsp);
-		if (!bss) {
-			wlan_objmgr_vdev_release_ref(partner_vdev,
-						     WLAN_MLO_MGR_ID);
-			continue;
-		}
-
-		osif_populate_connect_response_for_link(partner_vdev,
-							conn_rsp_params,
-							link_id, bss);
-		wlan_objmgr_vdev_release_ref(partner_vdev, WLAN_MLO_MGR_ID);
+		osif_populate_connect_response_for_link(vdev, conn_rsp_params,
+							link_id,
+							link_info->link_addr.bytes,
+							bss);
 	}
 }
 
@@ -570,6 +556,7 @@ static void osif_fill_connect_resp_mlo_params(struct wlan_objmgr_vdev *vdev,
 {
 	uint8_t assoc_link_id;
 	QDF_STATUS qdf_status;
+	struct mlo_link_info *link_info = NULL;
 
 	if (!wlan_vdev_mlme_is_mlo_vdev(vdev))
 		return;
@@ -582,11 +569,18 @@ static void osif_fill_connect_resp_mlo_params(struct wlan_objmgr_vdev *vdev,
 	}
 
 	assoc_link_id = wlan_vdev_get_link_id(vdev);
-	osif_populate_connect_response_for_link(vdev, conn_rsp_params,
-						assoc_link_id, bss);
+	link_info = mlo_mgr_get_ap_link_by_link_id(vdev, assoc_link_id);
+	if (!link_info) {
+		osif_err("Unable to find link_info for link_id: %d",
+			 assoc_link_id);
+		return;
+	}
 
-	osif_populate_partner_links_mlo_params(wlan_vdev_get_pdev(vdev), rsp,
-					       conn_rsp_params);
+	osif_populate_connect_response_for_link(vdev, conn_rsp_params,
+						assoc_link_id,
+						link_info->link_addr.bytes,
+						bss);
+	osif_populate_partner_links_mlo_params(vdev, rsp, conn_rsp_params);
 }
 
 static void
@@ -1053,7 +1047,8 @@ static void osif_indcate_connect_results(struct wlan_objmgr_vdev *vdev,
 static inline
 bool osif_cm_is_unlink_bss_required(struct wlan_cm_connect_resp *rsp)
 {
-	if (QDF_IS_STATUS_SUCCESS(rsp->connect_status))
+	if (QDF_IS_STATUS_SUCCESS(rsp->connect_status) ||
+	    rsp->cm_id & CM_ID_LSWITCH_BIT)
 		return false;
 
 	if (rsp->reason == CM_NO_CANDIDATE_FOUND ||
@@ -1113,7 +1108,7 @@ QDF_STATUS osif_connect_handler(struct wlan_objmgr_vdev *vdev,
 	osif_check_and_unlink_bss(vdev, rsp);
 
 	status = osif_validate_connect_and_reset_src_id(osif_priv, rsp);
-	if (QDF_IS_STATUS_ERROR(status)) {
+	if (QDF_IS_STATUS_ERROR(status) || rsp->cm_id & CM_ID_LSWITCH_BIT) {
 		osif_cm_connect_comp_ind(vdev, rsp, OSIF_NOT_HANDLED);
 		return status;
 	}

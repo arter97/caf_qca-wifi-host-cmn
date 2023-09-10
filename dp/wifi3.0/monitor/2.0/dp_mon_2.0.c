@@ -598,7 +598,10 @@ QDF_STATUS dp_mon_soc_init_2_0(struct dp_soc *soc)
 	}
 
 	mon_soc_be->tx_mon_ring_fill_level = 0;
-	mon_soc_be->rx_mon_ring_fill_level = DP_MON_RING_FILL_LEVEL_DEFAULT;
+	if (soc->rxdma_mon_buf_ring[0].num_entries < DP_MON_RING_FILL_LEVEL_DEFAULT)
+		mon_soc_be->rx_mon_ring_fill_level = soc->rxdma_mon_buf_ring[0].num_entries;
+	else
+		mon_soc_be->rx_mon_ring_fill_level = DP_MON_RING_FILL_LEVEL_DEFAULT;
 
 	mon_soc_be->is_dp_mon_soc_initialized = true;
 	return QDF_STATUS_SUCCESS;
@@ -1452,8 +1455,10 @@ struct dp_mon_ops monitor_ops_2_0 = {
 	.mon_lite_mon_vdev_delete = dp_lite_mon_vdev_delete,
 	.mon_lite_mon_disable_rx = dp_lite_mon_disable_rx,
 	.mon_lite_mon_is_rx_adv_filter_enable = dp_lite_mon_is_rx_adv_filter_enable,
+#ifdef QCA_KMEM_CACHE_SUPPORT
 	.mon_rx_ppdu_info_cache_create = dp_rx_mon_ppdu_info_cache_create,
 	.mon_rx_ppdu_info_cache_destroy = dp_rx_mon_ppdu_info_cache_destroy,
+#endif
 	.mon_rx_pdev_tlv_logger_init = dp_mon_pdev_tlv_logger_init,
 	.mon_rx_pdev_tlv_logger_deinit = dp_mon_pdev_tlv_logger_deinit,
 };

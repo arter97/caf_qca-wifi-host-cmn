@@ -433,6 +433,7 @@ enum cdp_mon_phyrx_abort_reason_code {
  * @rx_undecoded_count: Received undecoded frame count
  * @rx_undecoded_error: Rx undecoded errors
  * @rx_hdr_not_received: Rx HDR not received for MPDU
+ * @invalid_dma_length: Invalid length received for packet buffer
  * @parent_buf_alloc: Numder of parent nbuf allocated for MPDU
  * @parent_buf_free: Number of parent nbuf freed
  * @pkt_buf_count: Number of packet buffers received
@@ -493,6 +494,7 @@ struct cdp_pdev_mon_stats {
 	uint32_t rx_undecoded_error[CDP_PHYRX_ERR_MAX];
 #endif
 	uint32_t rx_hdr_not_received;
+	uint32_t invalid_dma_length;
 	uint32_t parent_buf_alloc;
 	uint32_t parent_buf_free;
 	uint32_t pkt_buf_count;

@@ -110,6 +110,12 @@ cdp_dump_flow_pool_info(struct cdp_soc_t *soc)
 #include <target_if_dp.h>
 #endif
 
+#ifdef QCA_DP_ENABLE_TX_COMP_RING4
+#define TXCOMP_RING4_NUM 3
+#else
+#define TXCOMP_RING4_NUM WBM2SW_TXCOMP_RING4_NUM
+#endif
+
 #if defined(DP_PEER_EXTENDED_API) || defined(WLAN_DP_PENDING_MEM_FLUSH)
 #define SET_PEER_REF_CNT_ONE(_peer) \
 	qdf_atomic_set(&(_peer)->ref_cnt, 1)
@@ -129,6 +135,7 @@ cdp_dump_flow_pool_info(struct cdp_soc_t *soc)
 #define DP_TX_TCL_METADATA_PDEV_ID_SET(_var, _val) \
 		HTT_TX_TCL_METADATA_PDEV_ID_SET(_var, _val)
 #endif
+#define MLD_MODE_INVALID 0xFF
 
 QDF_COMPILE_TIME_ASSERT(max_rx_rings_check,
 			MAX_REO_DEST_RINGS == CDP_MAX_RX_RINGS);
@@ -1456,6 +1463,803 @@ update_flag:
 	pdev->rx_fast_flag = rx_fast_flag;
 }
 
+void dp_soc_set_interrupt_mode(struct dp_soc *soc)
+{
+	uint32_t msi_base_data, msi_vector_start;
+	int msi_vector_count, ret;
+
+	soc->intr_mode = DP_INTR_INTEGRATED;
+
+	if (!(soc->wlan_cfg_ctx->napi_enabled) ||
+	    (dp_is_monitor_mode_using_poll(soc) &&
+	     soc->cdp_soc.ol_ops->get_con_mode &&
+	     soc->cdp_soc.ol_ops->get_con_mode() == QDF_GLOBAL_MONITOR_MODE)) {
+		soc->intr_mode = DP_INTR_POLL;
+	} else {
+		ret = pld_get_user_msi_assignment(soc->osdev->dev, "DP",
+						  &msi_vector_count,
+						  &msi_base_data,
+						  &msi_vector_start);
+		if (ret)
+			return;
+
+		soc->intr_mode = DP_INTR_MSI;
+	}
+}
+
+static int dp_srng_calculate_msi_group(struct dp_soc *soc,
+				       enum hal_ring_type ring_type,
+				       int ring_num,
+				       int *reg_msi_grp_num,
+				       bool nf_irq_support,
+				       int *nf_msi_grp_num)
+{
+	struct wlan_cfg_dp_soc_ctxt *cfg_ctx = soc->wlan_cfg_ctx;
+	uint8_t *grp_mask, *nf_irq_mask = NULL;
+	bool nf_irq_enabled = false;
+	uint8_t wbm2_sw_rx_rel_ring_id;
+
+	switch (ring_type) {
+	case WBM2SW_RELEASE:
+		wbm2_sw_rx_rel_ring_id =
+			wlan_cfg_get_rx_rel_ring_id(cfg_ctx);
+		if (ring_num == wbm2_sw_rx_rel_ring_id) {
+			/* dp_rx_wbm_err_process - soc->rx_rel_ring */
+			grp_mask = &cfg_ctx->int_rx_wbm_rel_ring_mask[0];
+			ring_num = 0;
+		} else if (ring_num == WBM2_SW_PPE_REL_RING_ID) {
+			grp_mask = &cfg_ctx->int_ppeds_wbm_release_ring_mask[0];
+			ring_num = 0;
+		}  else { /* dp_tx_comp_handler - soc->tx_comp_ring */
+			grp_mask = &soc->wlan_cfg_ctx->int_tx_ring_mask[0];
+			nf_irq_mask = dp_srng_get_near_full_irq_mask(soc,
+								     ring_type,
+								     ring_num);
+			if (nf_irq_mask)
+				nf_irq_enabled = true;
+
+			/*
+			 * Using ring 4 as 4th tx completion ring since ring 3
+			 * is Rx error ring
+			 */
+			if (ring_num == WBM2SW_TXCOMP_RING4_NUM)
+				ring_num = TXCOMP_RING4_NUM;
+		}
+	break;
+
+	case REO_EXCEPTION:
+		/* dp_rx_err_process - &soc->reo_exception_ring */
+		grp_mask = &soc->wlan_cfg_ctx->int_rx_err_ring_mask[0];
+	break;
+
+	case REO_DST:
+		/* dp_rx_process - soc->reo_dest_ring */
+		grp_mask = &soc->wlan_cfg_ctx->int_rx_ring_mask[0];
+		nf_irq_mask = dp_srng_get_near_full_irq_mask(soc, ring_type,
+							     ring_num);
+		if (nf_irq_mask)
+			nf_irq_enabled = true;
+	break;
+
+	case REO_STATUS:
+		/* dp_reo_status_ring_handler - soc->reo_status_ring */
+		grp_mask = &soc->wlan_cfg_ctx->int_reo_status_ring_mask[0];
+	break;
+
+	/* dp_rx_mon_status_srng_process - pdev->rxdma_mon_status_ring*/
+	case RXDMA_MONITOR_STATUS:
+	/* dp_rx_mon_dest_process - pdev->rxdma_mon_dst_ring */
+	case RXDMA_MONITOR_DST:
+		/* dp_mon_process */
+		grp_mask = &soc->wlan_cfg_ctx->int_rx_mon_ring_mask[0];
+	break;
+	case TX_MONITOR_DST:
+		/* dp_tx_mon_process */
+		grp_mask = &soc->wlan_cfg_ctx->int_tx_mon_ring_mask[0];
+	break;
+	case RXDMA_DST:
+		/* dp_rxdma_err_process */
+		grp_mask = &soc->wlan_cfg_ctx->int_rxdma2host_ring_mask[0];
+	break;
+
+	case RXDMA_BUF:
+		grp_mask = &soc->wlan_cfg_ctx->int_host2rxdma_ring_mask[0];
+	break;
+
+	case RXDMA_MONITOR_BUF:
+		grp_mask = &soc->wlan_cfg_ctx->int_host2rxdma_mon_ring_mask[0];
+	break;
+
+	case TX_MONITOR_BUF:
+		grp_mask = &soc->wlan_cfg_ctx->int_host2txmon_ring_mask[0];
+	break;
+
+	case REO2PPE:
+		grp_mask = &soc->wlan_cfg_ctx->int_reo2ppe_ring_mask[0];
+	break;
+
+	case PPE2TCL:
+		grp_mask = &soc->wlan_cfg_ctx->int_ppe2tcl_ring_mask[0];
+	break;
+
+	case TCL_DATA:
+	/* CMD_CREDIT_RING is used as command in 8074 and credit in 9000 */
+	case TCL_CMD_CREDIT:
+	case REO_CMD:
+	case SW2WBM_RELEASE:
+	case WBM_IDLE_LINK:
+		/* normally empty SW_TO_HW rings */
+		return -QDF_STATUS_E_NOENT;
+	break;
+
+	case TCL_STATUS:
+	case REO_REINJECT:
+		/* misc unused rings */
+		return -QDF_STATUS_E_NOENT;
+	break;
+
+	case CE_SRC:
+	case CE_DST:
+	case CE_DST_STATUS:
+		/* CE_rings - currently handled by hif */
+	default:
+		return -QDF_STATUS_E_NOENT;
+	break;
+	}
+
+	*reg_msi_grp_num = dp_srng_find_ring_in_mask(ring_num, grp_mask);
+
+	if (nf_irq_support && nf_irq_enabled) {
+		*nf_msi_grp_num = dp_srng_find_ring_in_mask(ring_num,
+							    nf_irq_mask);
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+#if defined(IPA_OFFLOAD) && defined(IPA_WDI3_VLAN_SUPPORT)
+static void
+dp_ipa_vlan_srng_msi_setup(struct hal_srng_params *ring_params, int ring_type,
+			   int ring_num)
+{
+	if (wlan_ipa_is_vlan_enabled()) {
+		if ((ring_type == REO_DST) &&
+		    (ring_num == IPA_ALT_REO_DEST_RING_IDX)) {
+			ring_params->msi_addr = 0;
+			ring_params->msi_data = 0;
+			ring_params->flags &= ~HAL_SRNG_MSI_INTR;
+		}
+	}
+}
+#else
+static inline void
+dp_ipa_vlan_srng_msi_setup(struct hal_srng_params *ring_params, int ring_type,
+			   int ring_num)
+{
+}
+#endif
+
+void dp_srng_msi_setup(struct dp_soc *soc, struct dp_srng *srng,
+		       struct hal_srng_params *ring_params,
+		       int ring_type, int ring_num)
+{
+	int reg_msi_grp_num;
+	/*
+	 * nf_msi_grp_num needs to be initialized with negative value,
+	 * to avoid configuring near-full msi for WBM2SW3 ring
+	 */
+	int nf_msi_grp_num = -1;
+	int msi_data_count;
+	int ret;
+	uint32_t msi_data_start, msi_irq_start, addr_low, addr_high;
+	bool nf_irq_support;
+	int vector;
+
+	ret = pld_get_user_msi_assignment(soc->osdev->dev, "DP",
+					  &msi_data_count, &msi_data_start,
+					  &msi_irq_start);
+
+	if (ret)
+		return;
+
+	nf_irq_support = hal_srng_is_near_full_irq_supported(soc->hal_soc,
+							     ring_type,
+							     ring_num);
+	ret = dp_srng_calculate_msi_group(soc, ring_type, ring_num,
+					  &reg_msi_grp_num,
+					  nf_irq_support,
+					  &nf_msi_grp_num);
+	if (ret < 0) {
+		dp_init_info("%pK: ring not part of an ext_group; ring_type: %d,ring_num %d",
+			     soc, ring_type, ring_num);
+		ring_params->msi_addr = 0;
+		ring_params->msi_data = 0;
+		dp_srng_set_msi2_ring_params(soc, ring_params, 0, 0);
+		return;
+	}
+
+	if (reg_msi_grp_num < 0) {
+		dp_init_info("%pK: ring not part of an ext_group; ring_type: %d,ring_num %d",
+			     soc, ring_type, ring_num);
+		ring_params->msi_addr = 0;
+		ring_params->msi_data = 0;
+		goto configure_msi2;
+	}
+
+	if (dp_is_msi_group_number_invalid(soc, reg_msi_grp_num,
+					   msi_data_count)) {
+		dp_init_warn("%pK: 2 msi_groups will share an msi; msi_group_num %d",
+			     soc, reg_msi_grp_num);
+		QDF_ASSERT(0);
+	}
+
+	pld_get_msi_address(soc->osdev->dev, &addr_low, &addr_high);
+
+	ring_params->msi_addr = addr_low;
+	ring_params->msi_addr |= (qdf_dma_addr_t)(((uint64_t)addr_high) << 32);
+	ring_params->msi_data = (reg_msi_grp_num % msi_data_count)
+		+ msi_data_start;
+	ring_params->flags |= HAL_SRNG_MSI_INTR;
+
+	dp_ipa_vlan_srng_msi_setup(ring_params, ring_type, ring_num);
+
+	dp_debug("ring type %u ring_num %u msi->data %u msi_addr %llx",
+		 ring_type, ring_num, ring_params->msi_data,
+		 (uint64_t)ring_params->msi_addr);
+
+	vector = msi_irq_start + (reg_msi_grp_num % msi_data_count);
+
+	/*
+	 * During umac reset ppeds interrupts free is not called.
+	 * Avoid registering interrupts again.
+	 *
+	 */
+	if (dp_check_umac_reset_in_progress(soc))
+		goto configure_msi2;
+
+	if (soc->arch_ops.dp_register_ppeds_interrupts)
+		if (soc->arch_ops.dp_register_ppeds_interrupts(soc, srng,
+							       vector,
+							       ring_type,
+							       ring_num))
+			return;
+
+configure_msi2:
+	if (!nf_irq_support) {
+		dp_srng_set_msi2_ring_params(soc, ring_params, 0, 0);
+		return;
+	}
+
+	dp_srng_msi2_setup(soc, ring_params, ring_type, ring_num,
+			   nf_msi_grp_num);
+}
+
+#ifdef WLAN_DP_PER_RING_TYPE_CONFIG
+/**
+ * dp_srng_configure_interrupt_thresholds() - Retrieve interrupt
+ * threshold values from the wlan_srng_cfg table for each ring type
+ * @soc: device handle
+ * @ring_params: per ring specific parameters
+ * @ring_type: Ring type
+ * @ring_num: Ring number for a given ring type
+ * @num_entries: number of entries to fill
+ *
+ * Fill the ring params with the interrupt threshold
+ * configuration parameters available in the per ring type wlan_srng_cfg
+ * table.
+ *
+ * Return: None
+ */
+void
+dp_srng_configure_interrupt_thresholds(struct dp_soc *soc,
+				       struct hal_srng_params *ring_params,
+				       int ring_type, int ring_num,
+				       int num_entries)
+{
+	uint8_t wbm2_sw_rx_rel_ring_id;
+
+	wbm2_sw_rx_rel_ring_id = wlan_cfg_get_rx_rel_ring_id(soc->wlan_cfg_ctx);
+
+	if (ring_type == REO_DST) {
+		ring_params->intr_timer_thres_us =
+			wlan_cfg_get_int_timer_threshold_rx(soc->wlan_cfg_ctx);
+		ring_params->intr_batch_cntr_thres_entries =
+			wlan_cfg_get_int_batch_threshold_rx(soc->wlan_cfg_ctx);
+	} else if (ring_type == WBM2SW_RELEASE &&
+		   (ring_num == wbm2_sw_rx_rel_ring_id)) {
+		ring_params->intr_timer_thres_us =
+				wlan_cfg_get_int_timer_threshold_other(soc->wlan_cfg_ctx);
+		ring_params->intr_batch_cntr_thres_entries =
+				wlan_cfg_get_int_batch_threshold_other(soc->wlan_cfg_ctx);
+	} else {
+		ring_params->intr_timer_thres_us =
+				soc->wlan_srng_cfg[ring_type].timer_threshold;
+		ring_params->intr_batch_cntr_thres_entries =
+				soc->wlan_srng_cfg[ring_type].batch_count_threshold;
+	}
+	ring_params->low_threshold =
+			soc->wlan_srng_cfg[ring_type].low_threshold;
+	if (ring_params->low_threshold)
+		ring_params->flags |= HAL_SRNG_LOW_THRES_INTR_ENABLE;
+
+	dp_srng_configure_nf_interrupt_thresholds(soc, ring_params, ring_type);
+}
+#else
+void
+dp_srng_configure_interrupt_thresholds(struct dp_soc *soc,
+				       struct hal_srng_params *ring_params,
+				       int ring_type, int ring_num,
+				       int num_entries)
+{
+	uint8_t wbm2_sw_rx_rel_ring_id;
+	bool rx_refill_lt_disable;
+
+	wbm2_sw_rx_rel_ring_id = wlan_cfg_get_rx_rel_ring_id(soc->wlan_cfg_ctx);
+
+	if (ring_type == REO_DST || ring_type == REO2PPE) {
+		ring_params->intr_timer_thres_us =
+			wlan_cfg_get_int_timer_threshold_rx(soc->wlan_cfg_ctx);
+		ring_params->intr_batch_cntr_thres_entries =
+			wlan_cfg_get_int_batch_threshold_rx(soc->wlan_cfg_ctx);
+	} else if (ring_type == WBM2SW_RELEASE &&
+		   (ring_num < wbm2_sw_rx_rel_ring_id ||
+		   ring_num == WBM2SW_TXCOMP_RING4_NUM ||
+		   ring_num == WBM2_SW_PPE_REL_RING_ID)) {
+		ring_params->intr_timer_thres_us =
+			wlan_cfg_get_int_timer_threshold_tx(soc->wlan_cfg_ctx);
+		ring_params->intr_batch_cntr_thres_entries =
+			wlan_cfg_get_int_batch_threshold_tx(soc->wlan_cfg_ctx);
+	} else if (ring_type == RXDMA_BUF) {
+		rx_refill_lt_disable =
+			wlan_cfg_get_dp_soc_rxdma_refill_lt_disable
+							(soc->wlan_cfg_ctx);
+		ring_params->intr_timer_thres_us =
+			wlan_cfg_get_int_timer_threshold_rx(soc->wlan_cfg_ctx);
+
+		if (!rx_refill_lt_disable) {
+			ring_params->low_threshold = num_entries >> 3;
+			ring_params->flags |= HAL_SRNG_LOW_THRES_INTR_ENABLE;
+			ring_params->intr_batch_cntr_thres_entries = 0;
+		}
+	} else {
+		ring_params->intr_timer_thres_us =
+			wlan_cfg_get_int_timer_threshold_other(soc->wlan_cfg_ctx);
+		ring_params->intr_batch_cntr_thres_entries =
+			wlan_cfg_get_int_batch_threshold_other(soc->wlan_cfg_ctx);
+	}
+
+	/* These rings donot require interrupt to host. Make them zero */
+	switch (ring_type) {
+	case REO_REINJECT:
+	case REO_CMD:
+	case TCL_DATA:
+	case TCL_CMD_CREDIT:
+	case TCL_STATUS:
+	case WBM_IDLE_LINK:
+	case SW2WBM_RELEASE:
+	case SW2RXDMA_NEW:
+		ring_params->intr_timer_thres_us = 0;
+		ring_params->intr_batch_cntr_thres_entries = 0;
+		break;
+	case PPE2TCL:
+		ring_params->intr_timer_thres_us =
+			wlan_cfg_get_int_timer_threshold_ppe2tcl(soc->wlan_cfg_ctx);
+		ring_params->intr_batch_cntr_thres_entries =
+			wlan_cfg_get_int_batch_threshold_ppe2tcl(soc->wlan_cfg_ctx);
+		break;
+	case RXDMA_MONITOR_DST:
+		ring_params->intr_timer_thres_us =
+		  wlan_cfg_get_int_timer_threshold_mon_dest(soc->wlan_cfg_ctx);
+		ring_params->intr_batch_cntr_thres_entries =
+		  wlan_cfg_get_int_batch_threshold_mon_dest(soc->wlan_cfg_ctx);
+		break;
+	}
+
+	/* Enable low threshold interrupts for rx buffer rings (regular and
+	 * monitor buffer rings.
+	 * TODO: See if this is required for any other ring
+	 */
+	if ((ring_type == RXDMA_MONITOR_BUF) ||
+	    (ring_type == RXDMA_MONITOR_STATUS ||
+	    (ring_type == TX_MONITOR_BUF))) {
+		/* TODO: Setting low threshold to 1/8th of ring size
+		 * see if this needs to be configurable
+		 */
+		ring_params->low_threshold = num_entries >> 3;
+		ring_params->intr_timer_thres_us =
+			wlan_cfg_get_int_timer_threshold_rx(soc->wlan_cfg_ctx);
+		ring_params->flags |= HAL_SRNG_LOW_THRES_INTR_ENABLE;
+		ring_params->intr_batch_cntr_thres_entries = 0;
+	}
+
+	/* During initialisation monitor rings are only filled with
+	 * MON_BUF_MIN_ENTRIES entries. So low threshold needs to be set to
+	 * a value less than that. Low threshold value is reconfigured again
+	 * to 1/8th of the ring size when monitor vap is created.
+	 */
+	if (ring_type == RXDMA_MONITOR_BUF)
+		ring_params->low_threshold = MON_BUF_MIN_ENTRIES >> 1;
+
+	/* In case of PCI chipsets, we dont have PPDU end interrupts,
+	 * so MONITOR STATUS ring is reaped by receiving MSI from srng.
+	 * Keep batch threshold as 8 so that interrupt is received for
+	 * every 4 packets in MONITOR_STATUS ring
+	 */
+	if ((ring_type == RXDMA_MONITOR_STATUS) &&
+	    (soc->intr_mode == DP_INTR_MSI))
+		ring_params->intr_batch_cntr_thres_entries = 4;
+}
+#endif
+
+static int dp_process_rxdma_dst_ring(struct dp_soc *soc,
+				     struct dp_intr *int_ctx,
+				     int mac_for_pdev,
+				     int total_budget)
+{
+	uint32_t target_type;
+
+	target_type = hal_get_target_type(soc->hal_soc);
+	if (target_type == TARGET_TYPE_QCN9160)
+		return dp_monitor_process(soc, int_ctx,
+					  mac_for_pdev, total_budget);
+	else
+		return dp_rxdma_err_process(int_ctx, soc, mac_for_pdev,
+					    total_budget);
+}
+
+/**
+ * dp_process_lmac_rings() - Process LMAC rings
+ * @int_ctx: interrupt context
+ * @total_budget: budget of work which can be done
+ *
+ * Return: work done
+ */
+int dp_process_lmac_rings(struct dp_intr *int_ctx, int total_budget)
+{
+	struct dp_intr_stats *intr_stats = &int_ctx->intr_stats;
+	struct dp_soc *soc = int_ctx->soc;
+	uint32_t remaining_quota = total_budget;
+	struct dp_pdev *pdev = NULL;
+	uint32_t work_done  = 0;
+	int budget = total_budget;
+	int ring = 0;
+	bool rx_refill_lt_disable;
+
+	rx_refill_lt_disable =
+		wlan_cfg_get_dp_soc_rxdma_refill_lt_disable(soc->wlan_cfg_ctx);
+
+	/* Process LMAC interrupts */
+	for  (ring = 0 ; ring < MAX_NUM_LMAC_HW; ring++) {
+		int mac_for_pdev = ring;
+
+		pdev = dp_get_pdev_for_lmac_id(soc, mac_for_pdev);
+		if (!pdev)
+			continue;
+		if (int_ctx->rx_mon_ring_mask & (1 << mac_for_pdev)) {
+			work_done = dp_monitor_process(soc, int_ctx,
+						       mac_for_pdev,
+						       remaining_quota);
+			if (work_done)
+				intr_stats->num_rx_mon_ring_masks++;
+			budget -= work_done;
+			if (budget <= 0)
+				goto budget_done;
+			remaining_quota = budget;
+		}
+
+		if (int_ctx->tx_mon_ring_mask & (1 << mac_for_pdev)) {
+			work_done = dp_tx_mon_process(soc, int_ctx,
+						      mac_for_pdev,
+						      remaining_quota);
+			if (work_done)
+				intr_stats->num_tx_mon_ring_masks++;
+			budget -= work_done;
+			if (budget <= 0)
+				goto budget_done;
+			remaining_quota = budget;
+		}
+
+		if (int_ctx->rxdma2host_ring_mask &
+				(1 << mac_for_pdev)) {
+			work_done = dp_process_rxdma_dst_ring(soc, int_ctx,
+							      mac_for_pdev,
+							      remaining_quota);
+			if (work_done)
+				intr_stats->num_rxdma2host_ring_masks++;
+			budget -=  work_done;
+			if (budget <= 0)
+				goto budget_done;
+			remaining_quota = budget;
+		}
+
+		if (int_ctx->host2rxdma_ring_mask & (1 << mac_for_pdev)) {
+			union dp_rx_desc_list_elem_t *desc_list = NULL;
+			union dp_rx_desc_list_elem_t *tail = NULL;
+			struct dp_srng *rx_refill_buf_ring;
+			struct rx_desc_pool *rx_desc_pool;
+
+			rx_desc_pool = &soc->rx_desc_buf[mac_for_pdev];
+			if (wlan_cfg_per_pdev_lmac_ring(soc->wlan_cfg_ctx))
+				rx_refill_buf_ring =
+					&soc->rx_refill_buf_ring[mac_for_pdev];
+			else
+				rx_refill_buf_ring =
+					&soc->rx_refill_buf_ring[pdev->lmac_id];
+
+			intr_stats->num_host2rxdma_ring_masks++;
+
+			if (!rx_refill_lt_disable)
+				dp_rx_buffers_lt_replenish_simple(soc,
+							  mac_for_pdev,
+							  rx_refill_buf_ring,
+							  rx_desc_pool,
+							  0,
+							  &desc_list,
+							  &tail);
+		}
+	}
+
+	if (int_ctx->host2rxdma_mon_ring_mask)
+		dp_rx_mon_buf_refill(int_ctx);
+
+	if (int_ctx->host2txmon_ring_mask)
+		dp_tx_mon_buf_refill(int_ctx);
+
+budget_done:
+	return total_budget - budget;
+}
+
+uint32_t dp_service_srngs_wrapper(void *dp_ctx, uint32_t dp_budget, int cpu)
+{
+	struct dp_intr *int_ctx = (struct dp_intr *)dp_ctx;
+	struct dp_soc *soc = int_ctx->soc;
+
+	return soc->arch_ops.dp_service_srngs(dp_ctx, dp_budget, cpu);
+}
+
+#ifdef QCA_SUPPORT_LEGACY_INTERRUPTS
+/**
+ * dp_soc_interrupt_map_calculate_wifi3_pci_legacy() -
+ * Calculate interrupt map for legacy interrupts
+ * @soc: DP soc handle
+ * @intr_ctx_num: Interrupt context number
+ * @irq_id_map: IRQ map
+ * @num_irq_r: Number of interrupts assigned for this context
+ *
+ * Return: void
+ */
+static void dp_soc_interrupt_map_calculate_wifi3_pci_legacy(struct dp_soc *soc,
+							    int intr_ctx_num,
+							    int *irq_id_map,
+							    int *num_irq_r)
+{
+	int j;
+	int num_irq = 0;
+	int tx_mask = wlan_cfg_get_tx_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int rx_mask = wlan_cfg_get_rx_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int rx_mon_mask = wlan_cfg_get_rx_mon_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int rx_err_ring_mask = wlan_cfg_get_rx_err_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int rx_wbm_rel_ring_mask = wlan_cfg_get_rx_wbm_rel_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int reo_status_ring_mask = wlan_cfg_get_reo_status_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int rxdma2host_ring_mask = wlan_cfg_get_rxdma2host_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int host2rxdma_ring_mask = wlan_cfg_get_host2rxdma_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int host2rxdma_mon_ring_mask = wlan_cfg_get_host2rxdma_mon_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int host2txmon_ring_mask = wlan_cfg_get_host2txmon_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int txmon2host_mon_ring_mask = wlan_cfg_get_tx_mon_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	soc->intr_mode = DP_INTR_LEGACY_VIRTUAL_IRQ;
+	for (j = 0; j < HIF_MAX_GRP_IRQ; j++) {
+		if (tx_mask & (1 << j))
+			irq_id_map[num_irq++] = (wbm2sw0_release - j);
+		if (rx_mask & (1 << j))
+			irq_id_map[num_irq++] = (reo2sw1_intr - j);
+		if (rx_mon_mask & (1 << j))
+			irq_id_map[num_irq++] = (rxmon2sw_p0_dest0 - j);
+		if (rx_err_ring_mask & (1 << j))
+			irq_id_map[num_irq++] = (reo2sw0_intr - j);
+		if (rx_wbm_rel_ring_mask & (1 << j))
+			irq_id_map[num_irq++] = (wbm2sw5_release - j);
+		if (reo_status_ring_mask & (1 << j))
+			irq_id_map[num_irq++] = (reo_status - j);
+		if (rxdma2host_ring_mask & (1 << j))
+			irq_id_map[num_irq++] = (rxdma2sw_dst_ring0 - j);
+		if (host2rxdma_ring_mask & (1 << j))
+			irq_id_map[num_irq++] = (sw2rxdma_0 - j);
+		if (host2rxdma_mon_ring_mask & (1 << j))
+			irq_id_map[num_irq++] = (sw2rxmon_src_ring - j);
+		if (host2txmon_ring_mask & (1 << j))
+			irq_id_map[num_irq++] = sw2txmon_src_ring;
+		if (txmon2host_mon_ring_mask & (1 << j))
+			irq_id_map[num_irq++] = (txmon2sw_p0_dest0 - j);
+	}
+	*num_irq_r = num_irq;
+}
+#else
+static void dp_soc_interrupt_map_calculate_wifi3_pci_legacy(struct dp_soc *soc,
+							    int intr_ctx_num,
+							    int *irq_id_map,
+							    int *num_irq_r)
+{
+}
+#endif
+
+static void
+dp_soc_interrupt_map_calculate_integrated(struct dp_soc *soc, int intr_ctx_num,
+					  int *irq_id_map, int *num_irq_r)
+{
+	int j;
+	int num_irq = 0;
+
+	int tx_mask =
+		wlan_cfg_get_tx_ring_mask(soc->wlan_cfg_ctx, intr_ctx_num);
+	int rx_mask =
+		wlan_cfg_get_rx_ring_mask(soc->wlan_cfg_ctx, intr_ctx_num);
+	int rx_mon_mask =
+		wlan_cfg_get_rx_mon_ring_mask(soc->wlan_cfg_ctx, intr_ctx_num);
+	int rx_err_ring_mask = wlan_cfg_get_rx_err_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int rx_wbm_rel_ring_mask = wlan_cfg_get_rx_wbm_rel_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int reo_status_ring_mask = wlan_cfg_get_reo_status_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int rxdma2host_ring_mask = wlan_cfg_get_rxdma2host_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int host2rxdma_ring_mask = wlan_cfg_get_host2rxdma_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int host2rxdma_mon_ring_mask = wlan_cfg_get_host2rxdma_mon_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int host2txmon_ring_mask = wlan_cfg_get_host2txmon_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int txmon2host_mon_ring_mask = wlan_cfg_get_tx_mon_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+
+	soc->intr_mode = DP_INTR_INTEGRATED;
+
+	for (j = 0; j < HIF_MAX_GRP_IRQ; j++) {
+		if (tx_mask & (1 << j)) {
+			irq_id_map[num_irq++] =
+				(wbm2host_tx_completions_ring1 - j);
+		}
+
+		if (rx_mask & (1 << j)) {
+			irq_id_map[num_irq++] =
+				(reo2host_destination_ring1 - j);
+		}
+
+		if (rxdma2host_ring_mask & (1 << j)) {
+			irq_id_map[num_irq++] =
+				rxdma2host_destination_ring_mac1 - j;
+		}
+
+		if (host2rxdma_ring_mask & (1 << j)) {
+			irq_id_map[num_irq++] =
+				host2rxdma_host_buf_ring_mac1 -	j;
+		}
+
+		if (host2rxdma_mon_ring_mask & (1 << j)) {
+			irq_id_map[num_irq++] =
+				host2rxdma_monitor_ring1 - j;
+		}
+
+		if (rx_mon_mask & (1 << j)) {
+			irq_id_map[num_irq++] =
+				ppdu_end_interrupts_mac1 - j;
+			irq_id_map[num_irq++] =
+				rxdma2host_monitor_status_ring_mac1 - j;
+			irq_id_map[num_irq++] =
+				rxdma2host_monitor_destination_mac1 - j;
+		}
+
+		if (rx_wbm_rel_ring_mask & (1 << j))
+			irq_id_map[num_irq++] = wbm2host_rx_release;
+
+		if (rx_err_ring_mask & (1 << j))
+			irq_id_map[num_irq++] = reo2host_exception;
+
+		if (reo_status_ring_mask & (1 << j))
+			irq_id_map[num_irq++] = reo2host_status;
+
+		if (host2txmon_ring_mask & (1 << j))
+			irq_id_map[num_irq++] = host2tx_monitor_ring1;
+
+		if (txmon2host_mon_ring_mask & (1 << j)) {
+			irq_id_map[num_irq++] =
+				(txmon2host_monitor_destination_mac1 - j);
+		}
+	}
+	*num_irq_r = num_irq;
+}
+
+static void
+dp_soc_interrupt_map_calculate_msi(struct dp_soc *soc, int intr_ctx_num,
+				   int *irq_id_map, int *num_irq_r,
+				   int msi_vector_count, int msi_vector_start)
+{
+	int tx_mask = wlan_cfg_get_tx_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int rx_mask = wlan_cfg_get_rx_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int rx_mon_mask = wlan_cfg_get_rx_mon_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int tx_mon_mask = wlan_cfg_get_tx_mon_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int rx_err_ring_mask = wlan_cfg_get_rx_err_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int rx_wbm_rel_ring_mask = wlan_cfg_get_rx_wbm_rel_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int reo_status_ring_mask = wlan_cfg_get_reo_status_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int rxdma2host_ring_mask = wlan_cfg_get_rxdma2host_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int host2rxdma_ring_mask = wlan_cfg_get_host2rxdma_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int host2rxdma_mon_ring_mask = wlan_cfg_get_host2rxdma_mon_ring_mask(
+					soc->wlan_cfg_ctx, intr_ctx_num);
+	int rx_near_full_grp_1_mask =
+		wlan_cfg_get_rx_near_full_grp_1_mask(soc->wlan_cfg_ctx,
+						     intr_ctx_num);
+	int rx_near_full_grp_2_mask =
+		wlan_cfg_get_rx_near_full_grp_2_mask(soc->wlan_cfg_ctx,
+						     intr_ctx_num);
+	int tx_ring_near_full_mask =
+		wlan_cfg_get_tx_ring_near_full_mask(soc->wlan_cfg_ctx,
+						    intr_ctx_num);
+
+	int host2txmon_ring_mask =
+		wlan_cfg_get_host2txmon_ring_mask(soc->wlan_cfg_ctx,
+						  intr_ctx_num);
+	unsigned int vector =
+		(intr_ctx_num % msi_vector_count) + msi_vector_start;
+	int num_irq = 0;
+
+	soc->intr_mode = DP_INTR_MSI;
+
+	if (tx_mask | rx_mask | rx_mon_mask | tx_mon_mask | rx_err_ring_mask |
+	    rx_wbm_rel_ring_mask | reo_status_ring_mask | rxdma2host_ring_mask |
+	    host2rxdma_ring_mask | host2rxdma_mon_ring_mask |
+	    rx_near_full_grp_1_mask | rx_near_full_grp_2_mask |
+	    tx_ring_near_full_mask | host2txmon_ring_mask)
+		irq_id_map[num_irq++] =
+			pld_get_msi_irq(soc->osdev->dev, vector);
+
+	*num_irq_r = num_irq;
+}
+
+void dp_soc_interrupt_map_calculate(struct dp_soc *soc, int intr_ctx_num,
+				    int *irq_id_map, int *num_irq)
+{
+	int msi_vector_count, ret;
+	uint32_t msi_base_data, msi_vector_start;
+
+	if (pld_get_enable_intx(soc->osdev->dev)) {
+		return dp_soc_interrupt_map_calculate_wifi3_pci_legacy(soc,
+				intr_ctx_num, irq_id_map, num_irq);
+	}
+
+	ret = pld_get_user_msi_assignment(soc->osdev->dev, "DP",
+					  &msi_vector_count,
+					  &msi_base_data,
+					  &msi_vector_start);
+	if (ret)
+		return dp_soc_interrupt_map_calculate_integrated(soc,
+				intr_ctx_num, irq_id_map, num_irq);
+
+	else
+		dp_soc_interrupt_map_calculate_msi(soc,
+				intr_ctx_num, irq_id_map, num_irq,
+				msi_vector_count, msi_vector_start);
+}
+
 void dp_srng_free(struct dp_soc *soc, struct dp_srng *srng)
 {
 	if (srng->alloc_size && srng->base_vaddr_unaligned) {
@@ -1658,8 +2462,8 @@ void dp_interrupt_timer(void *arg)
 		if (qdf_atomic_read(&soc->cmn_init_done)) {
 			for (i = 0; i < wlan_cfg_get_num_contexts(
 						soc->wlan_cfg_ctx); i++)
-				dp_service_srngs(&soc->intr_ctx[i], 0xffff,
-						 cpu);
+				soc->arch_ops.dp_service_srngs(&soc->intr_ctx[i], 0xffff,
+							       cpu);
 
 			qdf_timer_mod(&soc->int_timer, DP_INTR_POLL_TIMER_MS);
 		}
@@ -1719,6 +2523,19 @@ budget_done:
 		dp_srng_record_timer_exit(soc, dp_intr_id);
 }
 
+/**
+ * dp_soc_interrupt_detach_wrapper() - wrapper function for interrupt detach
+ * @txrx_soc: DP SOC handle
+ *
+ * Return: None
+ */
+static void dp_soc_interrupt_detach_wrapper(struct cdp_soc_t *txrx_soc)
+{
+	struct dp_soc *soc = (struct dp_soc *)txrx_soc;
+
+	return soc->arch_ops.dp_soc_interrupt_detach(txrx_soc);
+}
+
 #if defined(DP_INTR_POLL_BOTH)
 /**
  * dp_soc_interrupt_attach_wrapper() - Register handlers for DP interrupts
@@ -1739,17 +2556,19 @@ static QDF_STATUS dp_soc_interrupt_attach_wrapper(struct cdp_soc_t *txrx_soc)
 	     soc->cdp_soc.ol_ops->get_con_mode() ==
 	     QDF_GLOBAL_MONITOR_MODE)) {
 		dp_info("Poll mode");
-		return dp_soc_attach_poll(txrx_soc);
+		return soc->arch_ops.dp_soc_attach_poll(txrx_soc);
 	} else {
 		dp_info("Interrupt  mode");
-		return dp_soc_interrupt_attach(txrx_soc);
+		return soc->arch_ops.dp_soc_interrupt_attach(txrx_soc);
 	}
 }
 #else
 #if defined(DP_INTR_POLL_BASED) && DP_INTR_POLL_BASED
 static QDF_STATUS dp_soc_interrupt_attach_wrapper(struct cdp_soc_t *txrx_soc)
 {
-	return dp_soc_attach_poll(txrx_soc);
+	struct dp_soc *soc = (struct dp_soc *)txrx_soc;
+
+	return soc->arch_ops.dp_soc_attach_poll(txrx_soc);
 }
 #else
 static QDF_STATUS dp_soc_interrupt_attach_wrapper(struct cdp_soc_t *txrx_soc)
@@ -1757,9 +2576,9 @@ static QDF_STATUS dp_soc_interrupt_attach_wrapper(struct cdp_soc_t *txrx_soc)
 	struct dp_soc *soc = (struct dp_soc *)txrx_soc;
 
 	if (wlan_cfg_is_poll_mode_enabled(soc->wlan_cfg_ctx))
-		return dp_soc_attach_poll(txrx_soc);
+		return soc->arch_ops.dp_soc_attach_poll(txrx_soc);
 	else
-		return dp_soc_interrupt_attach(txrx_soc);
+		return soc->arch_ops.dp_soc_interrupt_attach(txrx_soc);
 }
 #endif
 #endif
@@ -3737,11 +4556,38 @@ static inline void dp_vdev_save_mld_addr(struct dp_vdev *vdev,
 		qdf_mem_copy(&vdev->mld_mac_addr.raw[0],
 			     vdev_info->mld_mac_addr, QDF_MAC_ADDR_SIZE);
 }
+
+#ifdef WLAN_MLO_MULTI_CHIP
+static inline void
+dp_vdev_update_bridge_vdev_param(struct dp_vdev *vdev,
+				 struct cdp_vdev_info *vdev_info)
+{
+	if (vdev_info->is_bridge_vap)
+		vdev->is_bridge_vdev = 1;
+
+	dp_info("is_bridge_link = %d vdev id = %d chip id = %d",
+		vdev->is_bridge_vdev, vdev->vdev_id,
+		dp_get_chip_id(vdev->pdev->soc));
+}
+#else
+static inline void
+dp_vdev_update_bridge_vdev_param(struct dp_vdev *vdev,
+				 struct cdp_vdev_info *vdev_info)
+{
+}
+#endif /* WLAN_MLO_MULTI_CHIP */
+
 #else
 static inline void dp_vdev_save_mld_addr(struct dp_vdev *vdev,
 					 struct cdp_vdev_info *vdev_info)
 {
 
+}
+
+static inline void
+dp_vdev_update_bridge_vdev_param(struct dp_vdev *vdev,
+				 struct cdp_vdev_info *vdev_info)
+{
 }
 #endif
 
@@ -3883,6 +4729,7 @@ static QDF_STATUS dp_vdev_attach_wifi3(struct cdp_soc_t *cdp_soc,
 
 	qdf_mem_copy(&vdev->mac_addr.raw[0], vdev_mac_addr, QDF_MAC_ADDR_SIZE);
 
+	dp_vdev_update_bridge_vdev_param(vdev, vdev_info);
 	dp_vdev_save_mld_addr(vdev, vdev_info);
 
 	/* TODO: Initialize default HTT meta data that will be used in
@@ -4250,7 +5097,8 @@ static void dp_vdev_flush_peers(struct cdp_vdev *vdev_handle,
 						 vdev->vdev_id,
 						 peer->mac_addr.raw, 0,
 						 DP_PEER_WDS_COUNT_INVALID);
-			SET_PEER_REF_CNT_ONE(peer);
+			if (!IS_MLO_DP_MLD_PEER(peer))
+				SET_PEER_REF_CNT_ONE(peer);
 		} else if (IS_MLO_DP_LINK_PEER(peer) ||
 			   IS_MLO_DP_MLD_PEER(peer)) {
 			dp_info("peer: " QDF_MAC_ADDR_FMT " is getting unmap",
@@ -4562,12 +5410,15 @@ static QDF_STATUS dp_txrx_peer_detach(struct dp_soc *soc, struct dp_peer *peer)
 		peer->txrx_peer = NULL;
 		pdev = txrx_peer->vdev->pdev;
 
-		params.osif_vdev = (void *)peer->vdev->osif_vdev;
-		params.peer_mac = peer->mac_addr.raw;
+		if ((peer->vdev->opmode != wlan_op_mode_sta) &&
+		    !peer->bss_peer) {
+			params.vdev_id = peer->vdev->vdev_id;
+			params.peer_mac = peer->mac_addr.raw;
 
-		dp_wdi_event_handler(WDI_EVENT_PEER_DELETE, soc,
-				     (void *)&params, peer->peer_id,
-				     WDI_NO_VAL, pdev->pdev_id);
+			dp_wdi_event_handler(WDI_EVENT_PEER_DELETE, soc,
+					     (void *)&params, peer->peer_id,
+					     WDI_NO_VAL, pdev->pdev_id);
+		}
 
 		dp_peer_defrag_rx_tids_deinit(txrx_peer);
 		/*
@@ -4654,9 +5505,12 @@ static QDF_STATUS dp_txrx_peer_attach(struct dp_soc *soc, struct dp_peer *peer)
 
 	dp_txrx_peer_attach_add(soc, peer, txrx_peer);
 
+	if ((peer->vdev->opmode == wlan_op_mode_sta) || peer->bss_peer)
+		return QDF_STATUS_SUCCESS;
+
 	params.peer_mac = peer->mac_addr.raw;
-	params.osif_vdev = (void *)peer->vdev->osif_vdev;
-	params.chip_id = dp_mlo_get_chip_id(soc);
+	params.vdev_id = peer->vdev->vdev_id;
+	params.chip_id = dp_get_chip_id(soc);
 	params.pdev_id = peer->vdev->pdev->pdev_id;
 
 	dp_wdi_event_handler(WDI_EVENT_TXRX_PEER_CREATE, soc,
@@ -4832,8 +5686,9 @@ dp_peer_create_wifi3(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 			goto fail; /* failure */
 
 		dp_mld_peer_init_link_peers_info(peer);
-	} else if (dp_monitor_peer_attach(soc, peer) !=
-				QDF_STATUS_SUCCESS)
+	}
+
+	if (dp_monitor_peer_attach(soc, peer) != QDF_STATUS_SUCCESS)
 		dp_warn("peer monitor ctx alloc failed");
 
 	TAILQ_INIT(&peer->ast_entry_list);
@@ -4981,9 +5836,9 @@ QDF_STATUS dp_peer_mlo_setup(
 		if (peer->vdev->opmode == wlan_op_mode_sta) {
 			struct cdp_txrx_peer_params_update params = {0};
 
-			params.chip_id = dp_mlo_get_chip_id(soc);
+			params.chip_id = dp_get_chip_id(soc);
 			params.pdev_id = peer->vdev->pdev->pdev_id;
-			params.osif_vdev = peer->vdev->osif_vdev;
+			params.vdev_id = peer->vdev->vdev_id;
 
 			dp_wdi_event_handler(
 					WDI_EVENT_STA_PRIMARY_UMAC_UPDATE,
@@ -5015,9 +5870,9 @@ QDF_STATUS dp_peer_mlo_setup(
 	    setup_info->is_primary_link) {
 		struct cdp_txrx_peer_params_update params = {0};
 
-		params.chip_id = dp_mlo_get_chip_id(soc);
+		params.chip_id = dp_get_chip_id(soc);
 		params.pdev_id = peer->vdev->pdev->pdev_id;
-		params.osif_vdev = peer->vdev->osif_vdev;
+		params.vdev_id = peer->vdev->vdev_id;
 
 		dp_wdi_event_handler(
 				WDI_EVENT_STA_PRIMARY_UMAC_UPDATE,
@@ -5061,9 +5916,9 @@ QDF_STATUS dp_peer_mlo_setup(
 
 			dp_mld_peer_change_vdev(soc, mld_peer, vdev_id);
 
-			params.osif_vdev = (void *)peer->vdev->osif_vdev;
+			params.vdev_id = peer->vdev->vdev_id;
 			params.peer_mac = mld_peer->mac_addr.raw;
-			params.chip_id = dp_mlo_get_chip_id(soc);
+			params.chip_id = dp_get_chip_id(soc);
 			params.pdev_id = peer->vdev->pdev->pdev_id;
 
 			dp_wdi_event_handler(
@@ -5527,8 +6382,7 @@ void dp_peer_unref_delete(struct dp_peer *peer, enum dp_mod_id mod_id)
 		/* cleanup the peer data */
 		dp_peer_cleanup(vdev, peer);
 
-		if (!IS_MLO_DP_MLD_PEER(peer))
-			dp_monitor_peer_detach(soc, peer);
+		dp_monitor_peer_detach(soc, peer);
 
 		qdf_spinlock_destroy(&peer->peer_state_lock);
 
@@ -6904,6 +7758,7 @@ dp_print_host_stats(struct dp_vdev *vdev,
 		dp_print_pdev_tx_stats(pdev);
 		dp_print_soc_tx_stats(pdev->soc);
 		dp_print_global_desc_count();
+		dp_print_vdev_mlo_mcast_tx_stats(vdev);
 		break;
 	case TXRX_RX_HOST_STATS:
 		dp_print_pdev_rx_stats(pdev);
@@ -6913,6 +7768,8 @@ dp_print_host_stats(struct dp_vdev *vdev,
 		dp_print_ast_stats(pdev->soc);
 		dp_print_mec_stats(pdev->soc);
 		dp_print_peer_table(vdev);
+		if (soc->arch_ops.dp_mlo_print_ptnr_info)
+			soc->arch_ops.dp_mlo_print_ptnr_info(vdev);
 		break;
 	case TXRX_SRNG_PTR_STATS:
 		dp_print_ring_stats(pdev);
@@ -8129,6 +8986,24 @@ dp_set_psoc_param(struct cdp_soc_t *cdp_soc,
 	return QDF_STATUS_SUCCESS;
 }
 
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+/**
+ * dp_get_mldev_mode: function to get mlo operation mode
+ * @soc: soc structure for data path
+ *
+ * Return: uint8_t
+ */
+static uint8_t dp_get_mldev_mode(struct dp_soc *soc)
+{
+	return soc->mld_mode_ap;
+}
+#else
+static uint8_t dp_get_mldev_mode(struct dp_soc *cdp_soc)
+{
+	return MLD_MODE_INVALID;
+}
+#endif
+
 /**
  * dp_get_psoc_param: function to get parameters in soc
  * @cdp_soc: DP soc handle
@@ -8205,6 +9080,9 @@ static QDF_STATUS dp_get_psoc_param(struct cdp_soc_t *cdp_soc,
 		break;
 	case CDP_RX_PKT_TLV_SIZE:
 		val->rx_pkt_tlv_size = soc->rx_pkt_tlv_size;
+		break;
+	case CDP_CFG_GET_MLO_OPER_MODE:
+		val->cdp_psoc_param_mlo_oper_mode = dp_get_mldev_mode(soc);
 		break;
 	default:
 		dp_warn("Invalid param: %u", param);
@@ -11219,7 +12097,7 @@ static struct cdp_cmn_ops dp_ops_cmn = {
 	.display_stats = dp_txrx_dump_stats,
 	.notify_asserted_soc = dp_soc_notify_asserted_soc,
 	.txrx_intr_attach = dp_soc_interrupt_attach_wrapper,
-	.txrx_intr_detach = dp_soc_interrupt_detach,
+	.txrx_intr_detach = dp_soc_interrupt_detach_wrapper,
 	.txrx_ppeds_stop = dp_soc_ppeds_stop,
 	.set_key_sec_type = dp_set_key_sec_type_wifi3,
 	.update_config_parameters = dp_update_config_parameters,
@@ -12569,6 +13447,9 @@ dp_soc_attach(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 	dp_soc_set_interrupt_mode(soc);
 	dp_soc_set_def_pdev(soc);
 	dp_soc_set_qref_debug_list(soc);
+
+	if (!ipa_config_is_opt_wifi_dp_enabled())
+		qdf_atomic_set(&soc->ipa_mapped, 1);
 
 	dp_info("Mem stats: DMA = %u HEAP = %u SKB = %u",
 		qdf_dma_mem_stats_read(),

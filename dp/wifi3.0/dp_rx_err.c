@@ -28,6 +28,7 @@
 #include "qdf_nbuf.h"
 #include "dp_rx_defrag.h"
 #include "dp_ipa.h"
+#include "dp_internal.h"
 #ifdef WIFI_MONITOR_SUPPORT
 #include "dp_htt.h"
 #include <dp_mon.h>
@@ -1073,7 +1074,10 @@ more_msdu_link_desc:
 						soc,
 						msdu_list.sw_cookie[i]);
 
-		qdf_assert_always(rx_desc);
+		if (dp_assert_always_internal_stat(rx_desc, soc,
+						   rx.err.reo_err_rx_desc_null))
+			continue;
+
 		nbuf = rx_desc->nbuf;
 
 		/*
@@ -1203,6 +1207,18 @@ more_msdu_link_desc:
 			DP_STATS_INC(soc, rx.err.reo_err_oor_sg_count, 1);
 		}
 		head_nbuf = NULL;
+
+		dp_rx_nbuf_set_link_id_from_tlv(soc, qdf_nbuf_data(nbuf), nbuf);
+
+		if (pdev && pdev->link_peer_stats &&
+		    txrx_peer && txrx_peer->is_mld_peer) {
+			link_id = dp_rx_get_stats_arr_idx_from_link_id(
+								nbuf,
+								txrx_peer);
+		}
+
+		if (txrx_peer)
+			dp_rx_set_nbuf_band(nbuf, txrx_peer, link_id);
 
 		switch (err_code) {
 		case HAL_REO_ERR_REGULAR_FRAME_2K_JUMP:
@@ -1629,7 +1645,6 @@ dp_rx_err_route_hdl(struct dp_soc *soc, qdf_nbuf_t nbuf,
 		/* Set length in nbuf */
 		qdf_nbuf_set_pktlen(
 			nbuf, qdf_min(pkt_len, (uint32_t)RX_DATA_BUFFER_SIZE));
-		qdf_assert_always(nbuf->data == rx_tlv_hdr);
 	}
 
 	/*
@@ -1694,6 +1709,10 @@ dp_rx_err_route_hdl(struct dp_soc *soc, qdf_nbuf_t nbuf,
 			DP_PEER_TO_STACK_INCC_PKT(txrx_peer, 1,
 						  qdf_nbuf_len(nbuf),
 						  vdev->pdev->enhanced_stats_en);
+			DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer,
+						      rx.rx_success, 1,
+						      qdf_nbuf_len(nbuf),
+						      link_id);
 			qdf_nbuf_set_exc_frame(nbuf, 1);
 			qdf_nbuf_set_next(nbuf, NULL);
 
@@ -2681,7 +2700,7 @@ dp_rx_wbm_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
 				dp_rx_err_alert("invalid reo push reason %u",
 						wbm_err.info_bit.reo_psh_rsn);
 				dp_rx_nbuf_free(nbuf);
-				qdf_assert_always(0);
+				dp_assert_always_internal(0);
 			}
 		} else if (wbm_err.info_bit.wbm_err_src ==
 					HAL_RX_WBM_ERR_SRC_RXDMA) {
@@ -2808,7 +2827,7 @@ dp_rx_wbm_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
 				dp_rx_err_alert("invalid rxdma push reason %u",
 						wbm_err.info_bit.rxdma_psh_rsn);
 				dp_rx_nbuf_free(nbuf);
-				qdf_assert_always(0);
+				dp_assert_always_internal(0);
 			}
 		} else {
 			/* Should not come here */

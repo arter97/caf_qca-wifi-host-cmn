@@ -438,10 +438,11 @@ struct CE_handle *ce_init(struct hif_softc *scn,
 /*
  * hif_ce_desc_history_log_register() - Register hif_ce_desc_history buffers
  * to SSR driver dump.
+ * @scn: HIF context
  *
  * Return: None
  */
-void hif_ce_desc_history_log_register(void);
+void hif_ce_desc_history_log_register(struct hif_softc *scn);
 
 /*==================CE Engine Shutdown=======================================*/
 /*

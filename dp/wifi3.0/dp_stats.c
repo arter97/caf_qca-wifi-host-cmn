@@ -35,7 +35,7 @@
 #ifdef IPA_OFFLOAD
 #include "dp_ipa.h"
 #endif
-#define DP_MAX_STRING_LEN 500
+#define DP_MAX_STRING_LEN 1000
 #define DP_HTT_TX_RX_EXPECTED_TLVS (((uint64_t)1 << HTT_STATS_TX_PDEV_CMN_TAG) |\
 	((uint64_t)1 << HTT_STATS_TX_PDEV_UNDERRUN_TAG) |\
 	((uint64_t)1 << HTT_STATS_TX_PDEV_SIFS_TAG) |\
@@ -4144,8 +4144,7 @@ static void dp_print_rx_pdev_fw_stats_tlv(uint32_t *tag_buf)
 		(htt_rx_pdev_fw_stats_tlv *)tag_buf;
 	uint8_t i;
 	uint16_t index = 0;
-	char fw_ring_mgmt_subtype[DP_MAX_STRING_LEN];
-	char fw_ring_ctrl_subtype[DP_MAX_STRING_LEN];
+	char fw_ring_subtype_buf[DP_MAX_STRING_LEN];
 
 	DP_PRINT_STATS("HTT_RX_PDEV_FW_STATS_TLV:");
 	DP_PRINT_STATS("mac_id__word = %u",
@@ -4167,22 +4166,24 @@ static void dp_print_rx_pdev_fw_stats_tlv(uint32_t *tag_buf)
 	DP_PRINT_STATS("fw_ring_mpdu_ind = %u",
 		       dp_stats_buf->fw_ring_mpdu_ind);
 
+	qdf_mem_zero(fw_ring_subtype_buf, DP_MAX_STRING_LEN);
 	for (i = 0; i <  DP_HTT_FW_RING_MGMT_SUBTYPE_LEN; i++) {
-		index += qdf_snprint(&fw_ring_mgmt_subtype[index],
+		index += qdf_snprint(&fw_ring_subtype_buf[index],
 				DP_MAX_STRING_LEN - index,
 				" %u:%u,", i,
 				dp_stats_buf->fw_ring_mgmt_subtype[i]);
 	}
-	DP_PRINT_STATS("fw_ring_mgmt_subtype = %s ", fw_ring_mgmt_subtype);
+	DP_PRINT_STATS("fw_ring_mgmt_subtype = %s ", fw_ring_subtype_buf);
 
 	index = 0;
+	qdf_mem_zero(fw_ring_subtype_buf, DP_MAX_STRING_LEN);
 	for (i = 0; i <  DP_HTT_FW_RING_CTRL_SUBTYPE_LEN; i++) {
-		index += qdf_snprint(&fw_ring_ctrl_subtype[index],
+		index += qdf_snprint(&fw_ring_subtype_buf[index],
 				DP_MAX_STRING_LEN - index,
 				" %u:%u,", i,
 				dp_stats_buf->fw_ring_ctrl_subtype[i]);
 	}
-	DP_PRINT_STATS("fw_ring_ctrl_subtype = %s ", fw_ring_ctrl_subtype);
+	DP_PRINT_STATS("fw_ring_ctrl_subtype = %s ", fw_ring_subtype_buf);
 	DP_PRINT_STATS("fw_ring_mcast_data_msdu = %u",
 		       dp_stats_buf->fw_ring_mcast_data_msdu);
 	DP_PRINT_STATS("fw_ring_bcast_data_msdu = %u",
@@ -5669,6 +5670,10 @@ void dp_print_soc_cfg_params(struct dp_soc *soc)
 		       soc_cfg_ctx->int_batch_threshold_other);
 	DP_PRINT_STATS("Int timer threshold other: %u ",
 		       soc_cfg_ctx->int_timer_threshold_other);
+	DP_PRINT_STATS("Int batch threshold mon dest: %u ",
+		       soc_cfg_ctx->int_batch_threshold_mon_dest);
+	DP_PRINT_STATS("Int timer threshold mon dest: %u ",
+		       soc_cfg_ctx->int_timer_threshold_mon_dest);
 	DP_PRINT_STATS("Int batch threshold ppe2tcl: %u ",
 		       soc_cfg_ctx->int_batch_threshold_ppe2tcl);
 	DP_PRINT_STATS("Int timer threshold ppe2tcl: %u ",
@@ -7498,9 +7503,9 @@ void dp_print_peer_stats(struct dp_peer *peer,
 
 	DP_PRINT_STATS("Node Rx Stats:");
 	DP_PRINT_STATS("Packets Sent To Stack = %llu",
-		       peer_stats->rx.to_stack.num);
+		       peer_stats->rx.rx_success.num);
 	DP_PRINT_STATS("Bytes Sent To Stack = %llu",
-		       peer_stats->rx.to_stack.bytes);
+		       peer_stats->rx.rx_success.bytes);
 	for (i = 0; i <  CDP_MAX_RX_RINGS; i++) {
 		DP_PRINT_STATS("Ring Id = %d", i);
 		DP_PRINT_STATS("	Packets Received = %llu",
@@ -8177,6 +8182,17 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 	dp_monitor_print_pdev_tx_capture_stats(pdev);
 }
 
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MCAST_MLO)
+void dp_print_vdev_mlo_mcast_tx_stats(struct dp_vdev *vdev)
+{
+	DP_PRINT_STATS("MLO MCAST TX stats:");
+	DP_PRINT_STATS("	send packet count = %u",
+		       vdev->stats.tx_i.mlo_mcast.send_pkt_count);
+	DP_PRINT_STATS("	failed packet count = %u",
+		       vdev->stats.tx_i.mlo_mcast.fail_pkt_count);
+}
+#endif
+
 #ifdef WLAN_SUPPORT_RX_FLOW_TAG
 static inline void dp_rx_basic_fst_stats(struct dp_pdev *pdev)
 {
@@ -8343,6 +8359,20 @@ void dp_dump_srng_high_wm_stats(struct dp_soc *soc, uint64_t srng_mask)
 }
 #endif
 
+#ifdef GLOBAL_ASSERT_AVOIDANCE
+static void dp_print_assert_war_stats(struct dp_soc *soc)
+{
+	DP_PRINT_STATS("Rx WAR stats: [%d] [%d] [%d] [%d]",
+		       soc->stats.rx.err.rx_desc_null,
+		       soc->stats.rx.err.wbm_err_buf_rel_type,
+		       soc->stats.rx.err.reo_err_rx_desc_null,
+		       soc->stats.rx.err.intra_bss_bad_chipid);
+}
+#else
+static void dp_print_assert_war_stats(struct dp_soc *soc)
+{
+}
+#endif
 void
 dp_print_soc_rx_stats(struct dp_soc *soc)
 {
@@ -8484,6 +8514,7 @@ dp_print_soc_rx_stats(struct dp_soc *soc)
 		       soc->stats.rx.err.defrag_ad1_invalid);
 	DP_PRINT_STATS("Rx decrypt error frame for valid peer:%d",
 		       soc->stats.rx.err.decrypt_err_drop);
+	dp_print_assert_war_stats(soc);
 }
 
 #ifdef FEATURE_TSO_STATS

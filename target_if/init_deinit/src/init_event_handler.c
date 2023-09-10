@@ -39,6 +39,7 @@
 #include <wlan_reg_ucfg_api.h>
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 #include <wlan_mlo_mgr_cmn.h>
+#include <wlan_mlo_mgr_ap.h>
 #include <wlan_mlo_mgr_setup.h>
 #endif
 #include <target_if_twt.h>
@@ -587,6 +588,23 @@ static int init_deinit_service_ext2_ready_event_handler(ol_scn_t scn_handle,
 	if (err_code)
 		target_if_debug("failed to populate sap_coex_capability ext2");
 
+	if (info->service_ext2_param.num_aux_dev_caps) {
+		err_code = init_deinit_populate_aux_dev_cap_ext2(psoc,
+								 wmi_handle,
+								 event, info);
+		if (err_code)
+			target_if_debug("failed to populate aux_dev cap ext2");
+	}
+
+	if (wmi_service_enabled(wmi_handle,
+				wmi_service_aoa_for_rcc_supported)) {
+		err_code = init_deinit_populate_rcc_aoa_cap_ext2(psoc,
+								 wmi_handle,
+								 event, info);
+		if (err_code)
+			target_if_debug("failed to populate aoa cap ext2");
+	}
+
 	legacy_callback = target_if_get_psoc_legacy_service_ready_cb();
 	if (legacy_callback)
 		if (legacy_callback(wmi_service_ready_ext2_event_id,
@@ -594,6 +612,12 @@ static int init_deinit_service_ext2_ready_event_handler(ol_scn_t scn_handle,
 			target_if_err("Legacy callback return error!");
 			goto exit;
 		}
+
+	if (wmi_service_enabled(wmi_handle, wmi_service_radar_flags_support)) {
+		target_if_debug("Full bw nol supported");
+		info->wlan_res_cfg.is_full_bw_nol_supported = true;
+	}
+
 	target_if_regulatory_set_ext_tpc(psoc);
 
 	target_if_reg_set_lower_6g_edge_ch_info(psoc);
@@ -1195,6 +1219,13 @@ static int init_deinit_mlo_setup_comp_event_handler(ol_scn_t scn_handle,
 
 	pdev = wlan_objmgr_get_pdev_by_id(psoc, params.pdev_id,
 					  WLAN_INIT_DEINIT_ID);
+
+	if (mlo_ap_update_max_ml_peer_ids(
+				params.pdev_id, params.max_ml_peer_ids)
+			!= QDF_STATUS_SUCCESS) {
+		target_if_err("max_ml_peer_ids update failed for pdev_id: %d",
+			      params.pdev_id);
+	}
 
 	if (pdev) {
 		mlo_link_setup_complete(pdev, grp_id);

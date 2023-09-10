@@ -426,6 +426,25 @@ wlan_cp_stats_infra_cp_register_resp_cb(struct wlan_objmgr_psoc *psoc,
 }
 
 QDF_STATUS
+wlan_cp_stats_infra_cp_deregister_resp_cb(struct wlan_objmgr_psoc *psoc)
+{
+	struct psoc_cp_stats *psoc_cp_stats_priv;
+
+	psoc_cp_stats_priv = wlan_cp_stats_get_psoc_stats_obj(psoc);
+	if (!psoc_cp_stats_priv) {
+		cp_stats_err("psoc cp stats object is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	wlan_cp_stats_psoc_obj_lock(psoc_cp_stats_priv);
+	if (psoc_cp_stats_priv->get_infra_cp_stats)
+		psoc_cp_stats_priv->get_infra_cp_stats = NULL;
+	wlan_cp_stats_psoc_obj_unlock(psoc_cp_stats_priv);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS
 wlan_cp_stats_infra_cp_get_context(struct wlan_objmgr_psoc *psoc,
 				   get_infra_cp_stats_cb *resp_cb,
 				   void **context)
@@ -439,8 +458,10 @@ wlan_cp_stats_infra_cp_get_context(struct wlan_objmgr_psoc *psoc,
 	}
 
 	wlan_cp_stats_psoc_obj_lock(psoc_cp_stats_priv);
-	*resp_cb = psoc_cp_stats_priv->get_infra_cp_stats;
-	*context = psoc_cp_stats_priv->infra_cp_stats_req_context;
+	if (psoc_cp_stats_priv->get_infra_cp_stats)
+		*resp_cb = psoc_cp_stats_priv->get_infra_cp_stats;
+	if (psoc_cp_stats_priv->infra_cp_stats_req_context)
+		*context = psoc_cp_stats_priv->infra_cp_stats_req_context;
 	wlan_cp_stats_psoc_obj_unlock(psoc_cp_stats_priv);
 
 	return QDF_STATUS_SUCCESS;

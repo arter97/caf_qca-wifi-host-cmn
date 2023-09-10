@@ -100,23 +100,30 @@ struct ctry_change_cbk_entry {
 	reg_ctry_change_callback cbk;
 };
 
-/**
- * typedef reg_is_chan_connected_callback() - Regulatory callback to check if
- *                                            channel is connected
+/*
+ * typedef reg_get_connected_chan_for_mode_callback() - Regulatory callback to
+ * get connected channel in given range for specific opmode
  * @psoc: Pointer to psoc object
  * @opmode: vdev operating mode
- * @freq: Frequency
+ * @start_freq: Start frequency
+ * @end_freq: End frequency
+ *
+ * Return: Return connected channel information for the given power mode and
+ * frequency range
  */
-typedef bool (*reg_is_chan_connected_callback)(
-		struct wlan_objmgr_psoc *psoc,
-		enum QDF_OPMODE opmode,
-		uint32_t      freq);
+typedef struct wlan_channel * (*reg_get_connected_chan_for_mode_callback)(
+				struct wlan_objmgr_psoc *psoc,
+				enum QDF_OPMODE opmode,
+				qdf_freq_t start_freq,
+				qdf_freq_t end_freq);
 
-/* struct is_chan_connected_cbk_entry - Is channel connected callback entry
+/* struct get_connected_chan_for_mode_cbk_entry - Get connected channel for
+ * mode callback entry
+ *
  * @cbk: Callback
  */
-struct is_chan_connected_cbk_entry {
-	reg_is_chan_connected_callback cbk;
+struct get_connected_chan_for_mode_cbk_entry {
+	reg_get_connected_chan_for_mode_callback cbk;
 };
 
 #ifdef CONFIG_REG_CLIENT
@@ -166,7 +173,6 @@ struct indoor_concurrency_list {
  * @enable_11d_supp:
  * @is_11d_offloaded:
  * @vdev_id_for_11d_scan:
- * @master_vdev_cnt:
  * @vdev_cnt_11d:
  * @scan_11d_interval:
  * @is_host_11d_inited:
@@ -245,7 +251,6 @@ struct wlan_regulatory_psoc_priv_obj {
 	bool enable_11d_supp;
 	bool is_11d_offloaded;
 	uint8_t vdev_id_for_11d_scan;
-	uint8_t master_vdev_cnt;
 	uint8_t vdev_cnt_11d;
 	uint32_t scan_11d_interval;
 #ifdef HOST_11D_SCAN
@@ -258,7 +263,7 @@ struct wlan_regulatory_psoc_priv_obj {
 	bool user_ctry_priority;
 	bool user_ctry_set;
 	struct chan_change_cbk_entry cbk_list[REG_MAX_CHAN_CHANGE_CBKS];
-	struct is_chan_connected_cbk_entry conn_chan_cb;
+	struct get_connected_chan_for_mode_cbk_entry conn_chan_cb;
 	uint8_t num_chan_change_cbks;
 	struct ctry_change_cbk_entry cc_cbk;
 	uint8_t ch_avoid_ind;
@@ -470,8 +475,8 @@ struct wlan_regulatory_pdev_priv_obj {
 #ifdef CONFIG_REG_CLIENT
 	struct cur_fcc_rule fcc_rules_ptr[MAX_NUM_FCC_RULES];
 	struct indoor_concurrency_list indoor_list[MAX_INDOOR_LIST_SIZE];
-#endif
 	bool keep_6ghz_sta_cli_connection;
+#endif
 };
 
 /**

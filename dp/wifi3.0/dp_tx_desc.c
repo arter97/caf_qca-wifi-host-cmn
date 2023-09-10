@@ -118,16 +118,17 @@ void dp_tx_desc_pool_cleanup(struct dp_soc *soc, qdf_nbuf_t *nbuf_list)
 QDF_STATUS dp_tx_desc_pool_alloc(struct dp_soc *soc, uint8_t pool_id,
 				 uint32_t num_elem)
 {
-	uint32_t desc_size;
+	uint32_t desc_size, num_elem_t;
 	struct dp_tx_desc_pool_s *tx_desc_pool;
 	QDF_STATUS status;
 
+	num_elem_t = dp_get_updated_tx_desc(soc->ctrl_psoc, pool_id, num_elem);
 	desc_size = DP_TX_DESC_SIZE(sizeof(struct dp_tx_desc_s));
 	tx_desc_pool = &((soc)->tx_desc[(pool_id)]);
 	tx_desc_pool->desc_pages.page_size = DP_BLOCKMEM_SIZE;
 	dp_desc_multi_pages_mem_alloc(soc, QDF_DP_TX_DESC_TYPE,
 				      &tx_desc_pool->desc_pages,
-				      desc_size, num_elem,
+				      desc_size, num_elem_t,
 				      0, true);
 
 	if (!tx_desc_pool->desc_pages.num_pages) {
@@ -136,7 +137,7 @@ QDF_STATUS dp_tx_desc_pool_alloc(struct dp_soc *soc, uint8_t pool_id,
 	}
 
 	/* Arch specific TX descriptor allocation */
-	status = soc->arch_ops.dp_tx_desc_pool_alloc(soc, num_elem, pool_id);
+	status = soc->arch_ops.dp_tx_desc_pool_alloc(soc, num_elem_t, pool_id);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		dp_err("failed to allocate arch specific descriptors");
 		return QDF_STATUS_E_NOMEM;
@@ -164,14 +165,15 @@ QDF_STATUS dp_tx_desc_pool_init(struct dp_soc *soc, uint8_t pool_id,
 				uint32_t num_elem)
 {
 	struct dp_tx_desc_pool_s *tx_desc_pool;
-	uint32_t desc_size;
+	uint32_t desc_size, num_elem_t;
 
 	desc_size = DP_TX_DESC_SIZE(sizeof(struct dp_tx_desc_s));
 
+	num_elem_t = dp_get_updated_tx_desc(soc->ctrl_psoc, pool_id, num_elem);
 	tx_desc_pool = &soc->tx_desc[pool_id];
 	if (qdf_mem_multi_page_link(soc->osdev,
 				    &tx_desc_pool->desc_pages,
-				    desc_size, num_elem, true)) {
+				    desc_size, num_elem_t, true)) {
 		dp_err("invalid tx desc allocation -overflow num link");
 		return QDF_STATUS_E_FAULT;
 	}
@@ -180,14 +182,14 @@ QDF_STATUS dp_tx_desc_pool_init(struct dp_soc *soc, uint8_t pool_id,
 		*tx_desc_pool->desc_pages.cacheable_pages;
 	/* Set unique IDs for each Tx descriptor */
 	if (QDF_STATUS_SUCCESS != soc->arch_ops.dp_tx_desc_pool_init(
-						soc, num_elem, pool_id)) {
+						soc, num_elem_t, pool_id)) {
 		dp_err("initialization per target failed");
 		return QDF_STATUS_E_FAULT;
 	}
 
 	tx_desc_pool->elem_size = DP_TX_DESC_SIZE(sizeof(struct dp_tx_desc_s));
 
-	dp_tx_desc_pool_counter_initialize(tx_desc_pool, num_elem);
+	dp_tx_desc_pool_counter_initialize(tx_desc_pool, num_elem_t);
 	TX_DESC_LOCK_CREATE(&tx_desc_pool->lock);
 
 	return QDF_STATUS_SUCCESS;
@@ -748,7 +750,7 @@ void dp_tx_tso_num_seg_pool_free(struct dp_soc *soc, uint8_t num_pool)
 
 QDF_STATUS
 dp_tx_tso_num_seg_pool_init_by_id(struct dp_soc *soc, uint32_t num_elem,
-				  uint8_t pool_id);
+				  uint8_t pool_id)
 {
 	return QDF_STATUS_SUCCESS;
 }

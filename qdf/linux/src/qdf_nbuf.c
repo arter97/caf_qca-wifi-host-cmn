@@ -479,6 +479,40 @@ qdf_export_symbol(qdf_nbuf_frag_count_dec);
 
 #endif
 
+static inline void
+qdf_nbuf_set_defaults(struct sk_buff *skb, int align, int reserve)
+{
+	unsigned long offset;
+
+	memset(skb->cb, 0x0, sizeof(skb->cb));
+	skb->dev = NULL;
+
+	/*
+	 * The default is for netbuf fragments to be interpreted
+	 * as wordstreams rather than bytestreams.
+	 */
+	QDF_NBUF_CB_TX_EXTRA_FRAG_WORDSTR_EFRAG(skb) = 1;
+	QDF_NBUF_CB_TX_EXTRA_FRAG_WORDSTR_NBUF(skb) = 1;
+
+	/*
+	 * XXX:how about we reserve first then align
+	 * Align & make sure that the tail & data are adjusted properly
+	 */
+
+	if (align) {
+		offset = ((unsigned long)skb->data) % align;
+		if (offset)
+			skb_reserve(skb, align - offset);
+	}
+
+	/*
+	 * NOTE:alloc doesn't take responsibility if reserve unaligns the data
+	 * pointer
+	 */
+	skb_reserve(skb, reserve);
+	qdf_nbuf_count_inc(skb);
+}
+
 #if defined(CONFIG_WIFI_EMULATION_WIFI_3_0) && defined(BUILD_X86) && \
 	!defined(QCA_WIFI_QCN9000)
 struct sk_buff *__qdf_nbuf_alloc(qdf_device_t osdev, size_t size, int reserve,
@@ -486,7 +520,6 @@ struct sk_buff *__qdf_nbuf_alloc(qdf_device_t osdev, size_t size, int reserve,
 				 uint32_t line)
 {
 	struct sk_buff *skb;
-	unsigned long offset;
 	uint32_t lowmem_alloc_tries = 0;
 
 	if (align)
@@ -524,32 +557,8 @@ skb_alloc:
 			goto realloc;
 		}
 	}
-	memset(skb->cb, 0x0, sizeof(skb->cb));
 
-	/*
-	 * The default is for netbuf fragments to be interpreted
-	 * as wordstreams rather than bytestreams.
-	 */
-	QDF_NBUF_CB_TX_EXTRA_FRAG_WORDSTR_EFRAG(skb) = 1;
-	QDF_NBUF_CB_TX_EXTRA_FRAG_WORDSTR_NBUF(skb) = 1;
-
-	/*
-	 * XXX:how about we reserve first then align
-	 * Align & make sure that the tail & data are adjusted properly
-	 */
-
-	if (align) {
-		offset = ((unsigned long)skb->data) % align;
-		if (offset)
-			skb_reserve(skb, align - offset);
-	}
-
-	/*
-	 * NOTE:alloc doesn't take responsibility if reserve unaligns the data
-	 * pointer
-	 */
-	skb_reserve(skb, reserve);
-	qdf_nbuf_count_inc(skb);
+	qdf_nbuf_set_defaults(skb, align, reserve);
 
 	return skb;
 }
@@ -570,7 +579,6 @@ struct sk_buff *__qdf_nbuf_alloc(qdf_device_t osdev, size_t size, int reserve,
 				 uint32_t line)
 {
 	struct sk_buff *skb;
-	unsigned long offset;
 	int flags = GFP_KERNEL;
 
 	if (align)
@@ -606,32 +614,7 @@ struct sk_buff *__qdf_nbuf_alloc(qdf_device_t osdev, size_t size, int reserve,
 	__qdf_nbuf_stop_replenish_timer();
 
 skb_alloc:
-	memset(skb->cb, 0x0, sizeof(skb->cb));
-	skb->dev = NULL;
-	/*
-	 * The default is for netbuf fragments to be interpreted
-	 * as wordstreams rather than bytestreams.
-	 */
-	QDF_NBUF_CB_TX_EXTRA_FRAG_WORDSTR_EFRAG(skb) = 1;
-	QDF_NBUF_CB_TX_EXTRA_FRAG_WORDSTR_NBUF(skb) = 1;
-
-	/*
-	 * XXX:how about we reserve first then align
-	 * Align & make sure that the tail & data are adjusted properly
-	 */
-
-	if (align) {
-		offset = ((unsigned long)skb->data) % align;
-		if (offset)
-			skb_reserve(skb, align - offset);
-	}
-
-	/*
-	 * NOTE:alloc doesn't take responsibility if reserve unaligns the data
-	 * pointer
-	 */
-	skb_reserve(skb, reserve);
-	qdf_nbuf_count_inc(skb);
+	qdf_nbuf_set_defaults(skb, align, reserve);
 
 	return skb;
 }
@@ -645,13 +628,14 @@ struct sk_buff *__qdf_nbuf_frag_alloc(qdf_device_t osdev, size_t size,
 				      const char *func, uint32_t line)
 {
 	struct sk_buff *skb;
-	unsigned long offset;
 	int flags = GFP_KERNEL & ~__GFP_DIRECT_RECLAIM;
+	bool atomic = false;
 
 	if (align)
 		size += (align - 1);
 
 	if (in_interrupt() || irqs_disabled() || in_atomic()) {
+		atomic = true;
 		flags = GFP_ATOMIC;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)
 		/*
@@ -665,7 +649,14 @@ struct sk_buff *__qdf_nbuf_frag_alloc(qdf_device_t osdev, size_t size,
 	}
 
 	skb = __netdev_alloc_skb(NULL, size, flags);
+	if (skb)
+		goto skb_alloc;
 
+	/* 32k page frag alloc failed, try page slab allocation */
+	if (likely(!atomic))
+		flags |= __GFP_DIRECT_RECLAIM;
+
+	skb = alloc_skb(size, flags);
 	if (skb)
 		goto skb_alloc;
 
@@ -681,31 +672,7 @@ struct sk_buff *__qdf_nbuf_frag_alloc(qdf_device_t osdev, size_t size,
 	__qdf_nbuf_stop_replenish_timer();
 
 skb_alloc:
-	memset(skb->cb, 0x0, sizeof(skb->cb));
-	/*
-	 * The default is for netbuf fragments to be interpreted
-	 * as wordstreams rather than bytestreams.
-	 */
-	QDF_NBUF_CB_TX_EXTRA_FRAG_WORDSTR_EFRAG(skb) = 1;
-	QDF_NBUF_CB_TX_EXTRA_FRAG_WORDSTR_NBUF(skb) = 1;
-
-	/*
-	 * XXX:how about we reserve first then align
-	 * Align & make sure that the tail & data are adjusted properly
-	 */
-
-	if (align) {
-		offset = ((unsigned long)skb->data) % align;
-		if (offset)
-			skb_reserve(skb, align - offset);
-	}
-
-	/*
-	 * NOTE:alloc doesn't take responsibility if reserve unaligns the data
-	 * pointer
-	 */
-	skb_reserve(skb, reserve);
-	qdf_nbuf_count_inc(skb);
+	qdf_nbuf_set_defaults(skb, align, reserve);
 
 	return skb;
 }
@@ -772,6 +739,63 @@ __qdf_nbuf_t __qdf_nbuf_clone(__qdf_nbuf_t skb)
 }
 
 qdf_export_symbol(__qdf_nbuf_clone);
+
+struct sk_buff *
+__qdf_nbuf_page_frag_alloc(qdf_device_t osdev, size_t size, int reserve,
+			   int align, __qdf_frag_cache_t *pf_cache,
+			   const char *func, uint32_t line)
+{
+	struct sk_buff *skb;
+	qdf_frag_t frag_data;
+	size_t orig_size = size;
+	int flags = GFP_KERNEL;
+
+	if (align)
+		size += (align - 1);
+
+	size += NET_SKB_PAD;
+	size += SKB_DATA_ALIGN(sizeof(struct skb_shared_info));
+	size = SKB_DATA_ALIGN(size);
+
+	if (in_interrupt() || irqs_disabled() || in_atomic())
+		flags = GFP_ATOMIC;
+
+	frag_data = page_frag_alloc(pf_cache, size, flags);
+	if (!frag_data) {
+		qdf_rl_nofl_err("page frag alloc failed %zuB @ %s:%d",
+				size, func, line);
+		return __qdf_nbuf_alloc(osdev, orig_size, reserve, align, 0,
+					func, line);
+	}
+
+	skb = build_skb(frag_data, size);
+	if (skb) {
+		skb_reserve(skb, NET_SKB_PAD);
+		goto skb_alloc;
+	}
+
+	/* Free the data allocated from pf_cache */
+	page_frag_free(frag_data);
+
+	size = orig_size + align - 1;
+
+	skb = pld_nbuf_pre_alloc(size);
+	if (!skb) {
+		qdf_rl_nofl_err("NBUF alloc failed %zuB @ %s:%d",
+				size, func, line);
+		__qdf_nbuf_start_replenish_timer();
+		return NULL;
+	}
+
+	__qdf_nbuf_stop_replenish_timer();
+
+skb_alloc:
+	qdf_nbuf_set_defaults(skb, align, reserve);
+
+	return skb;
+}
+
+qdf_export_symbol(__qdf_nbuf_page_frag_alloc);
 
 #ifdef QCA_DP_TX_NBUF_LIST_FREE
 void
@@ -3702,6 +3726,33 @@ qdf_nbuf_t qdf_nbuf_clone_debug(qdf_nbuf_t buf, const char *func, uint32_t line)
 }
 qdf_export_symbol(qdf_nbuf_clone_debug);
 
+qdf_nbuf_t
+qdf_nbuf_page_frag_alloc_debug(qdf_device_t osdev, qdf_size_t size, int reserve,
+			       int align, __qdf_frag_cache_t *pf_cache,
+			       const char *func, uint32_t line)
+{
+	qdf_nbuf_t nbuf;
+
+	if (is_initial_mem_debug_disabled)
+		return __qdf_nbuf_page_frag_alloc(osdev, size, reserve, align,
+						  pf_cache, func, line);
+
+	nbuf = __qdf_nbuf_page_frag_alloc(osdev, size, reserve, align,
+					  pf_cache, func, line);
+
+	/* Store SKB in internal QDF tracking table */
+	if (qdf_likely(nbuf)) {
+		qdf_net_buf_debug_add_node(nbuf, size, func, line);
+		qdf_nbuf_history_add(nbuf, func, line, QDF_NBUF_ALLOC);
+	} else {
+		qdf_nbuf_history_add(nbuf, func, line, QDF_NBUF_ALLOC_FAILURE);
+	}
+
+	return nbuf;
+}
+
+qdf_export_symbol(qdf_nbuf_page_frag_alloc_debug);
+
 qdf_nbuf_t qdf_nbuf_copy_debug(qdf_nbuf_t buf, const char *func, uint32_t line)
 {
 	qdf_nbuf_t copied_buf = __qdf_nbuf_copy(buf);
@@ -5042,11 +5093,6 @@ qdf_nbuf_update_radiotap_he_flags(struct mon_rx_status *rx_status,
 
 	put_unaligned_le16(rx_status->he_data6, &rtap_buf[rtap_len]);
 	rtap_len += 2;
-	qdf_rl_debug("he data %x %x %x %x %x %x",
-		     rx_status->he_data1,
-		     rx_status->he_data2, rx_status->he_data3,
-		     rx_status->he_data4, rx_status->he_data5,
-		     rx_status->he_data6);
 
 	return rtap_len;
 }
@@ -5093,11 +5139,6 @@ qdf_nbuf_update_radiotap_he_mu_flags(struct mon_rx_status *rx_status,
 
 		rtap_buf[rtap_len] = rx_status->he_RU[3];
 		rtap_len += 1;
-		qdf_debug("he_flags %x %x he-RU %x %x %x %x",
-			  rx_status->he_flags1,
-			  rx_status->he_flags2, rx_status->he_RU[0],
-			  rx_status->he_RU[1], rx_status->he_RU[2],
-			  rx_status->he_RU[3]);
 	} else {
 		put_unaligned_le16(rx_user_status->he_flags1,
 				   &rtap_buf[rtap_len]);
@@ -5164,11 +5205,6 @@ qdf_nbuf_update_radiotap_he_mu_other_flags(struct mon_rx_status *rx_status,
 
 		rtap_buf[rtap_len] = rx_status->he_per_user_known;
 		rtap_len += 1;
-		qdf_debug("he_per_user %x %x pos %x knwn %x",
-			  rx_status->he_per_user_1,
-			  rx_status->he_per_user_2,
-			  rx_status->he_per_user_position,
-			  rx_status->he_per_user_known);
 	} else {
 		put_unaligned_le16(rx_user_status->he_per_user_1,
 				   &rtap_buf[rtap_len]);
@@ -5183,11 +5219,6 @@ qdf_nbuf_update_radiotap_he_mu_other_flags(struct mon_rx_status *rx_status,
 
 		rtap_buf[rtap_len] = rx_user_status->he_per_user_known;
 		rtap_len += 1;
-		qdf_debug("he_per_user %x %x pos %x knwn %x",
-			  rx_user_status->he_per_user_1,
-			  rx_user_status->he_per_user_2,
-			  rx_user_status->he_per_user_position,
-			  rx_user_status->he_per_user_known);
 	}
 
 	return rtap_len;
@@ -5772,7 +5803,6 @@ qdf_export_symbol(__qdf_nbuf_init);
 void qdf_nbuf_init_fast(qdf_nbuf_t nbuf)
 {
 	qdf_nbuf_users_set(&nbuf->users, 1);
-	nbuf->data = nbuf->head + NET_SKB_PAD;
 	skb_reset_tail_pointer(nbuf);
 }
 qdf_export_symbol(qdf_nbuf_init_fast);

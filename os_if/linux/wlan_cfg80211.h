@@ -291,9 +291,7 @@ enum qca_nl80211_vendor_subcmds_index {
 	QCA_NL80211_VENDOR_SUBCMD_PEER_FLUSH_PENDING_INDEX,
 	QCA_NL80211_VENDOR_SUBCMD_DRIVER_READY_INDEX,
 	QCA_NL80211_VENDOR_SUBCMD_PASN_AUTH_STATUS_INDEX,
-#ifdef WLAN_SUPPORT_SCS
 	QCA_NL80211_VENDOR_SUBCMD_SCS_RULE_CONFIG_INDEX,
-#endif
 #ifdef WLAN_FEATURE_SR
 	QCA_NL80211_VENDOR_SUBCMD_SR_INDEX,
 #endif
@@ -308,9 +306,9 @@ enum qca_nl80211_vendor_subcmds_index {
 	QCA_NL80211_VENDOR_SUBCMD_ROAM_STATS_INDEX,
 #endif
 	QCA_NL80211_VENDOR_SUBCMD_CONNECTED_CHANNEL_STATS_INDEX,
-#if defined WLAN_FEATURE_11BE_MLO
+#ifdef WLAN_FEATURE_11BE_MLO
 	QCA_NL80211_VENDOR_SUBCMD_TID_TO_LINK_MAP_INDEX,
-#if defined(CONN_MGR_ADV_FEATURE)
+#ifdef CONN_MGR_ADV_FEATURE
 	QCA_NL80211_VENDOR_SUBCMD_LINK_RECONFIG_INDEX,
 #endif
 #endif
@@ -586,7 +584,8 @@ wlan_cfg80211_nla_strscpy(char *dst, const struct nlattr *nla, size_t dstsize)
 }
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0) || \
+	(defined CFG80211_CHANGE_NETDEV_REGISTRATION_SEMANTICS))
 static inline int wlan_cfg80211_register_netdevice(struct net_device *dev)
 {
 	return cfg80211_register_netdevice(dev);
@@ -598,7 +597,8 @@ static inline int wlan_cfg80211_register_netdevice(struct net_device *dev)
 }
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0) || \
+	(defined CFG80211_CHANGE_NETDEV_REGISTRATION_SEMANTICS))
 static inline void wlan_cfg80211_unregister_netdevice(struct net_device *dev)
 {
 	cfg80211_unregister_netdevice(dev);
@@ -611,7 +611,8 @@ static inline void wlan_cfg80211_unregister_netdevice(struct net_device *dev)
 #endif
 
 #ifdef CFG80211_SINGLE_NETDEV_MULTI_LINK_SUPPORT
-#if defined(CFG80211_RU_PUNCT_NOTIFY) || defined(CFG80211_MLO_SINGLE_NETDEV_API)
+#if defined(CFG80211_RU_PUNCT_NOTIFY) || \
+	defined(CFG80211_PUNCTURING_SINGLE_NETDEV_API)
 static inline
 void wlan_cfg80211_ch_switch_notify(struct net_device *dev,
 				    struct cfg80211_chan_def *chandef,

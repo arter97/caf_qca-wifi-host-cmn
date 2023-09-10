@@ -50,6 +50,15 @@ struct __attribute__((__packed__)) dp_tx_comp_peer_id {
 #define DP_TX_L3_L4_CSUM_ENABLE	0x1f
 
 #ifdef DP_USE_REDUCED_PEER_ID_FIELD_WIDTH
+static inline uint16_t
+dp_tx_comp_adjust_peer_id_be(struct dp_soc *soc, uint16_t peer_id)
+{
+	struct dp_tx_comp_peer_id *tx_peer_id =
+		(struct dp_tx_comp_peer_id *)&peer_id;
+
+	return (tx_peer_id->peer_id |
+		(tx_peer_id->ml_peer_valid << soc->peer_id_shift));
+}
 /**
  * dp_tx_comp_get_peer_id_be() - Get peer ID from TX Comp Desc
  * @soc: Handle to DP Soc structure
@@ -61,13 +70,15 @@ static inline uint16_t dp_tx_comp_get_peer_id_be(struct dp_soc *soc,
 						 void *tx_comp_hal_desc)
 {
 	uint16_t peer_id = hal_tx_comp_get_peer_id(tx_comp_hal_desc);
-	struct dp_tx_comp_peer_id *tx_peer_id =
-			(struct dp_tx_comp_peer_id *)&peer_id;
 
-	return (tx_peer_id->peer_id |
-		(tx_peer_id->ml_peer_valid << soc->peer_id_shift));
+	return dp_tx_comp_adjust_peer_id_be(soc, peer_id);
 }
 #else
+static inline uint16_t
+dp_tx_comp_adjust_peer_id_be(struct dp_soc *soc, uint16_t peer_id)
+{
+	return peer_id;
+}
 static inline uint16_t dp_tx_comp_get_peer_id_be(struct dp_soc *soc,
 						 void *tx_comp_hal_desc)
 {

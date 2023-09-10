@@ -25,6 +25,7 @@
 #ifdef DP_UMAC_HW_RESET_SUPPORT
 #include "if_pci.h"
 #endif
+#include "qdf_ssr_driver_dump.h"
 
 /* mapping NAPI budget 0 to internal budget 0
  * NAPI budget 1 to internal budget [1,scaler -1]
@@ -39,6 +40,23 @@ static struct hif_exec_context *hif_exec_tasklet_create(void);
 
 #ifdef WLAN_FEATURE_DP_EVENT_HISTORY
 struct hif_event_history hif_event_desc_history[HIF_NUM_INT_CONTEXTS];
+uint32_t hif_event_hist_max = HIF_EVENT_HIST_MAX;
+
+void hif_desc_history_log_register(void)
+{
+	qdf_ssr_driver_dump_register_region("hif_event_history",
+					    hif_event_desc_history,
+					    sizeof(hif_event_desc_history));
+	qdf_ssr_driver_dump_register_region("hif_event_hist_max",
+					    &hif_event_hist_max,
+					    sizeof(hif_event_hist_max));
+}
+
+void hif_desc_history_log_unregister(void)
+{
+	qdf_ssr_driver_dump_unregister_region("hif_event_hist_max");
+	qdf_ssr_driver_dump_unregister_region("hif_event_history");
+}
 
 static inline
 int hif_get_next_record_index(qdf_atomic_t *table_index,
@@ -849,18 +867,6 @@ int32_t hif_get_int_ctx_irq_num(struct hif_opaque_softc *softc,
 }
 
 qdf_export_symbol(hif_get_int_ctx_irq_num);
-
-#ifdef HIF_CPU_PERF_AFFINE_MASK
-void hif_config_irq_set_perf_affinity_hint(
-	struct hif_opaque_softc *hif_ctx)
-{
-	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
-
-	hif_config_irq_affinity(scn);
-}
-
-qdf_export_symbol(hif_config_irq_set_perf_affinity_hint);
-#endif
 
 QDF_STATUS hif_configure_ext_group_interrupts(struct hif_opaque_softc *hif_ctx)
 {

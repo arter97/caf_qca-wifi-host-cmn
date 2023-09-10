@@ -779,6 +779,21 @@ static void reg_dmn_fill_6g_opcls_chan_lists(struct wlan_objmgr_pdev *pdev,
 	}
 }
 
+/**
+ * reg_is_unsupported_opclass() - Checks if the given opclass is unsupported or
+ * not.
+ * @pdev: Pointer to pdev.
+ * @op_class: Opclass number.
+ *
+ * Return: True if opclass is unsupported, else false.
+ */
+static bool
+reg_is_unsupported_opclass(struct wlan_objmgr_pdev *pdev, uint8_t op_class)
+{
+	return ((op_class == GLOBAL_6G_OPCLASS_80P80) &&
+		(!reg_is_dev_supports_80p80(pdev)));
+}
+
 QDF_STATUS reg_dmn_get_6g_opclasses_and_channels(struct wlan_objmgr_pdev *pdev,
 						 struct wlan_afc_frange_list *p_frange_lst,
 						 uint8_t *num_opclasses,
@@ -842,12 +857,18 @@ QDF_STATUS reg_dmn_get_6g_opclasses_and_channels(struct wlan_objmgr_pdev *pdev,
 	count = 0;
 	while (op_class_tbl && op_class_tbl->op_class) {
 		const struct c_freq_lst *p_lst;
+		uint8_t op_class = op_class_tbl->op_class;
 
 		p_lst = op_class_tbl->p_cfi_lst_obj;
 		if (p_lst &&
-		    reg_is_6ghz_op_class(pdev, op_class_tbl->op_class)) {
+		    reg_is_6ghz_op_class(pdev, op_class)) {
 			uint8_t n_supp_cfis = 0;
 			uint8_t j;
+
+			if (reg_is_unsupported_opclass(pdev, op_class)) {
+				op_class_tbl++;
+				continue;
+			}
 
 			for (j = 0; j < p_lst->num_cfis; j++) {
 				uint8_t cfi;
@@ -870,7 +891,7 @@ QDF_STATUS reg_dmn_get_6g_opclasses_and_channels(struct wlan_objmgr_pdev *pdev,
 			 */
 			if (n_supp_cfis) {
 				l_chansize_lst[count] = n_supp_cfis;
-				l_opcls_lst[count] = op_class_tbl->op_class;
+				l_opcls_lst[count] = op_class;
 				(*num_opclasses)++;
 				count++;
 			}
@@ -2343,4 +2364,16 @@ QDF_STATUS reg_enable_disable_opclass_chans(struct wlan_objmgr_pdev *pdev,
 	return QDF_STATUS_E_INVAL;
 }
 #endif /* #ifndef CONFIG_REG_CLIENT */
+
+QDF_STATUS reg_get_opclass_from_map(const struct reg_dmn_op_class_map_t **map,
+				    bool is_global_op_table_needed)
+{
+	if (is_global_op_table_needed)
+		*map = global_op_class;
+	else
+		reg_get_op_class_tbl_by_chan_map(map);
+
+	return QDF_STATUS_SUCCESS;
+}
+
 #endif

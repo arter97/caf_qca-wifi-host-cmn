@@ -51,6 +51,7 @@ struct cnx_mgr;
 #define WLAN_VDEV_MLME_SUBTYPE_MESH 0x5
 #define WLAN_VDEV_MLME_SUBTYPE_MESH_11S   0x6
 #define WLAN_VDEV_MLME_SUBTYPE_SMART_MONITOR 0x7
+#define WLAN_VDEV_MLME_SUBTYPE_MLO_BRIDGE 0x8
 
 /* vdev control flags (per bits) */
 #define WLAN_VDEV_MLME_FLAGS_NON_MBSSID_AP      0x00000001
@@ -420,15 +421,12 @@ struct vdev_mlme_mgmt_generic {
 #endif
 };
 
-/*
+/**
  * struct wlan_vdev_aid_mgr - AID manager
  * @aid_bitmap: AID bitmap array
  * @start_aid: start of AID index
  * @max_aid: Max allowed AID
  * @ref_cnt:  to share AID across VDEVs for MBSSID
- *
- * NB: Not using kernel-doc comment since the kernel-doc script
- *     doesn't handle the qdf_bitmap() macro.
  */
 struct wlan_vdev_aid_mgr {
 	qdf_bitmap(aid_bitmap, WLAN_UMAC_MAX_AID);
@@ -488,6 +486,7 @@ struct vdev_mlme_inactivity_params {
  * @WLAN_VDEV_RATEMASK_TYPE_HT: phy type ht
  * @WLAN_VDEV_RATEMASK_TYPE_VHT: phy type vht
  * @WLAN_VDEV_RATEMASK_TYPE_HE: phy type he
+ * @WLAN_VDEV_RATEMASK_TYPE_EHT: phy type eht
  * @WLAN_VDEV_RATEMASK_TYPE_MAX: Maximum enumeration
  */
 enum vdev_ratemask_type {
@@ -495,6 +494,7 @@ enum vdev_ratemask_type {
 	WLAN_VDEV_RATEMASK_TYPE_HT,
 	WLAN_VDEV_RATEMASK_TYPE_VHT,
 	WLAN_VDEV_RATEMASK_TYPE_HE,
+	WLAN_VDEV_RATEMASK_TYPE_EHT,
 	WLAN_VDEV_RATEMASK_TYPE_MAX,
 };
 
