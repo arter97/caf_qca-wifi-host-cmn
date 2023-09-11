@@ -3560,6 +3560,37 @@ QDF_STATUS dp_ipa_set_perf_level(int client, uint32_t max_supported_bw_mbps,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef QCA_SUPPORT_WDS_EXTENDED
+/**
+ * dp_ipa_rx_wdsext_iface() - Forward RX exception packets to wdsext interface
+ * @soc_hdl: data path soc handle
+ * @peer_id: Peer id to get respective peer
+ * @skb: socket buffer
+ *
+ * Return: true on success, else false
+ */
+bool dp_ipa_rx_wdsext_iface(struct cdp_soc_t *soc_hdl, uint8_t peer_id,
+			    qdf_nbuf_t skb)
+{
+	struct dp_txrx_peer *txrx_peer;
+	dp_txrx_ref_handle txrx_ref_handle = NULL;
+	struct dp_soc *dp_soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	bool status = false;
+
+	txrx_peer = dp_tgt_txrx_peer_get_ref_by_id(soc_hdl, peer_id,
+						   &txrx_ref_handle,
+						   DP_MOD_ID_IPA);
+
+	if (qdf_likely(txrx_peer)) {
+		if (dp_rx_deliver_to_stack_ext(dp_soc, txrx_peer->vdev,
+					       txrx_peer, skb)
+			status =  true;
+		dp_txrx_peer_unref_delete(txrx_ref_handle, DP_MOD_ID_IPA);
+	}
+	return status;
+}
+#endif
+
 /**
  * dp_ipa_intrabss_send() - send IPA RX intra-bss frames
  * @pdev: pdev

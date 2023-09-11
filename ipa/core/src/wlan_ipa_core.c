@@ -1298,9 +1298,11 @@ wlan_ipa_send_to_nw_queue(struct wlan_ipa_iface_context *iface_ctx,
 }
 #endif /* QCA_IPA_LL_TX_FLOW_CONTROL */
 
+#if defined(IPA_OFFLOAD) && defined(QCA_SUPPORT_WDS_EXTENDED)
 /**
  * wlan_ipa_send_skb_to_network() - Send skb to kernel
  * @skb: network buffer
+ * @peer_id: Peer id to get respective peer
  * @iface_ctx: IPA interface context
  *
  * Called when a network buffer is received which should not be routed
@@ -1309,7 +1311,46 @@ wlan_ipa_send_to_nw_queue(struct wlan_ipa_iface_context *iface_ctx,
  * Return: None
  */
 static void
-wlan_ipa_send_skb_to_network(qdf_nbuf_t skb,
+wlan_ipa_send_skb_to_network(qdf_nbuf_t skb, uint8_t peer_id,
+			     struct wlan_ipa_iface_context *iface_ctx)
+{
+	struct wlan_ipa_priv *ipa_ctx;
+
+	ipa_ctx = iface_ctx->ipa_ctx;
+
+	if (!iface_ctx->dev) {
+		ipa_debug_rl("Invalid interface");
+		ipa_ctx->ipa_rx_internal_drop_count++;
+		dev_kfree_skb_any(skb);
+		return;
+	}
+
+	skb->destructor = wlan_ipa_uc_rt_debug_destructor;
+
+	if (wlan_ipa_send_to_nw_defer(iface_ctx, skb)) {
+		wlan_ipa_send_to_nw_queue(iface_ctx, skb);
+	} else {
+		if (!cdp_ipa_rx_wdsext_iface(ipa_ctx->dp_soc, peer_id, skb)) {
+			if (ipa_ctx->send_to_nw)
+				ipa_ctx->send_to_nw(skb, iface_ctx->dev);
+		}
+		ipa_ctx->ipa_rx_net_send_count++;
+	}
+}
+#else
+/**
+ * wlan_ipa_send_skb_to_network() - Send skb to kernel
+ * @skb: network buffer
+ * @peer_id: Peer id to get respective peer
+ * @iface_ctx: IPA interface context
+ *
+ * Called when a network buffer is received which should not be routed
+ * to the IPA module.
+ *
+ * Return: None
+ */
+static void
+wlan_ipa_send_skb_to_network(qdf_nbuf_t skb, uint8_t peer_id,
 			     struct wlan_ipa_iface_context *iface_ctx)
 {
 	struct wlan_ipa_priv *ipa_ctx;
@@ -1334,6 +1375,7 @@ wlan_ipa_send_skb_to_network(qdf_nbuf_t skb,
 		ipa_ctx->ipa_rx_net_send_count++;
 	}
 }
+#endif
 
 /**
  * wlan_ipa_eapol_intrabss_fwd_check() - Check if eapol pkt intrabss fwd is
@@ -1550,6 +1592,7 @@ static void __wlan_ipa_w2i_cb(void *priv, qdf_ipa_dp_evt_type_t evt,
 	struct wlan_ipa_iface_context *iface_context;
 	bool is_eapol_wapi = false;
 	struct qdf_mac_addr peer_mac_addr = QDF_MAC_ADDR_ZERO_INIT;
+	uint8_t peer_id;
 
 	ipa_ctx = (struct wlan_ipa_priv *)priv;
 	if (!ipa_ctx) {
@@ -1668,7 +1711,8 @@ static void __wlan_ipa_w2i_cb(void *priv, qdf_ipa_dp_evt_type_t evt,
 				     iface_context->session_id);
 		}
 
-		wlan_ipa_send_skb_to_network(skb, iface_context);
+		peer_id = (uint8_t)skb->cb[WLAN_IPA_NBUF_CB_PEER_ID_OFFSET];
+		wlan_ipa_send_skb_to_network(skb, peer_id, iface_context);
 		break;
 
 	default:

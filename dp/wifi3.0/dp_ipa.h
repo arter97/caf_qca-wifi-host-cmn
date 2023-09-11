@@ -362,6 +362,19 @@ int dp_ipa_pcie_link_up(struct cdp_soc_t *soc_hdl);
 void dp_ipa_pcie_link_down(struct cdp_soc_t *soc_hdl);
 #endif
 
+#ifdef QCA_SUPPORT_WDS_EXTENDED
+/**
+ * dp_ipa_rx_wdsext_iface() -  Forward RX exception packets to wdsext interface
+ * @soc_hdl: data path SoC handle
+ * @peer_id: Peer ID to get respective peer
+ * @skb: socket buffer
+ *
+ * Return: bool
+ */
+bool dp_ipa_rx_wdsext_iface(struct cdp_soc_t *soc_hdl, uint8_t peer_id,
+			    qdf_nbuf_t skb);
+#endif
+
 /**
  * dp_ipa_rx_intrabss_fwd() - Perform intra-bss fwd for IPA RX path
  *

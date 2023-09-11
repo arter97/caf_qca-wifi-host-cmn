@@ -25,6 +25,7 @@
 #include "wlan_ipa_priv.h"
 #include "wlan_ipa_public_struct.h"
 
+#define WLAN_IPA_NBUF_CB_PEER_ID_OFFSET		5
 /**
  * wlan_ipa_is_enabled() - Is IPA enabled?
  * @ipa_cfg: IPA config

@@ -3478,6 +3478,20 @@ dp_rx_is_list_ready(qdf_nbuf_t nbuf_head,
 
 	return false;
 }
+
+/**
+ * dp_rx_deliver_to_stack_ext() - Deliver to netdev per sta
+ * @soc: core txrx main context
+ * @vdev: vdev
+ * @txrx_peer: txrx peer
+ * @nbuf_head: skb list head
+ *
+ * Return: true if packet is delivered to netdev per STA.
+ */
+bool
+dp_rx_deliver_to_stack_ext(struct dp_soc *soc, struct dp_vdev *vdev,
+			   struct dp_txrx_peer *txrx_peer,
+			   qdf_nbuf_t nbuf_head);
 #else
 static inline bool
 dp_rx_is_list_ready(qdf_nbuf_t nbuf_head,

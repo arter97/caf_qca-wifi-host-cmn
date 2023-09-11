@@ -4416,6 +4416,16 @@ QDF_STATUS dp_wds_ext_get_peer_osif_handle(
 				uint8_t *mac,
 				ol_osif_peer_handle *osif_peer);
 
+/**
+ * dp_wds_ext_set_peer_bit(): function to set wds-ext peer bit
+ * @soc: Datapath soc handle
+ * @mac: Peer mac address
+ *
+ * Return: QDF_STATUS_SUCCESS on success
+ *         QDF_STATUS_E_INVAL if peer is not found
+ */
+QDF_STATUS dp_wds_ext_set_peer_bit(ol_txrx_soc_handle soc, uint8_t *mac);
+
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
 
 #ifdef DP_MEM_PRE_ALLOC
