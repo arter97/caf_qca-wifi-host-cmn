@@ -122,6 +122,86 @@ static inline bool dp_is_monitor_mode_using_poll(struct dp_soc *soc)
 }
 #endif
 
+#if !defined(DISABLE_MON_CONFIG) && defined(CONFIG_LITHIUM)
+/**
+ * dp_mon_htt_srng_setup_1_0() - Prepare HTT messages for Monitor rings
+ * @soc: soc handle
+ * @pdev: physical device handle
+ * @mac_id: ring number
+ * @mac_for_pdev: mac_id
+ *
+ * Return: non-zero for failure, zero for success
+ */
+QDF_STATUS dp_mon_htt_srng_setup_1_0(struct dp_soc *soc,
+				     struct dp_pdev *pdev,
+				     int mac_id,
+				     int mac_for_pdev);
+
+/**
+ * dp_mon_rings_alloc_1_0() - DP monitor rings allocation
+ * @pdev: physical device handle
+ *
+ * Return: non-zero for failure, zero for success
+ */
+QDF_STATUS dp_mon_rings_alloc_1_0(struct dp_pdev *pdev);
+
+/**
+ * dp_mon_rings_free_1_0() - DP monitor rings deallocation
+ * @pdev: physical device handle
+ *
+ * Return: non-zero for failure, zero for success
+ */
+void dp_mon_rings_free_1_0(struct dp_pdev *pdev);
+
+/**
+ * dp_mon_rings_init_1_0() - DP monitor rings initialization
+ * @pdev: physical device handle
+ *
+ * Return: non-zero for failure, zero for success
+ */
+QDF_STATUS dp_mon_rings_init_1_0(struct dp_pdev *pdev);
+
+/**
+ * dp_mon_rings_deinit_1_0() - DP monitor rings deinitialization
+ * @pdev: physical device handle
+ *
+ * Return: non-zero for failure, zero for success
+ */
+void dp_mon_rings_deinit_1_0(struct dp_pdev *pdev);
+#else
+static inline
+void dp_mon_rings_deinit_1_0(struct dp_pdev *pdev)
+{
+}
+
+static inline
+void dp_mon_rings_free_1_0(struct dp_pdev *pdev)
+{
+}
+
+static inline
+QDF_STATUS dp_mon_rings_init_1_0(struct dp_pdev *pdev)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS dp_mon_rings_alloc_1_0(struct dp_pdev *pdev)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS dp_mon_htt_srng_setup_1_0(struct dp_soc *soc,
+				     struct dp_pdev *pdev,
+				     int mac_id,
+				     int mac_for_pdev)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+#endif
+
 /**
  * dp_mon_soc_attach() - DP monitor soc attach
  * @soc: Datapath SOC handle
@@ -4401,6 +4481,7 @@ dp_ppdu_desc_user_stats_update(struct dp_pdev *pdev,
 }
 #endif /* QCA_ENHANCED_STATS_SUPPORT */
 
+#ifdef CONFIG_LITHIUM
 /**
  * dp_mon_ops_register_1_0(): register legacy monitor ops
  * @mon_soc: monitor soc handle
@@ -4416,6 +4497,15 @@ void dp_mon_ops_register_1_0(struct dp_mon_soc *mon_soc);
  * return: void
  */
 void dp_mon_cdp_ops_register_1_0(struct cdp_ops *ops);
+#else
+static inline void dp_mon_cdp_ops_register_1_0(struct cdp_ops *ops)
+{
+}
+
+static inline void dp_mon_ops_register_1_0(struct dp_mon_soc *mon_soc)
+{
+}
+#endif
 
 #if defined(WLAN_CFR_ENABLE) && defined(WLAN_ENH_CFR_ENABLE)
 /**

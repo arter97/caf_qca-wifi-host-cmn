@@ -756,6 +756,19 @@ QDF_STATUS dp_rx_mon_process_dest_pktlog(struct dp_soc *soc,
 					 uint32_t mac_id,
 					 qdf_nbuf_t mpdu);
 
+/**
+ * dp_send_mgmt_packet_to_stack(): function to send mgmt packet to stack
+ * @soc: DP soc
+ * @nbuf: MPDU buf
+ * @pdev: Physical dev
+ *
+ * Return: status: 0 - Success, non-zero: Failure
+ */
+QDF_STATUS
+dp_send_mgmt_packet_to_stack(struct dp_soc *soc,
+			     qdf_nbuf_t nbuf,
+			     struct dp_pdev *pdev);
+
 #ifdef WLAN_TX_PKT_CAPTURE_ENH
 void
 dp_handle_tx_capture(struct dp_soc *soc, struct dp_pdev *pdev,
