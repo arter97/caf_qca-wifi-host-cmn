@@ -5948,7 +5948,7 @@ QDF_STATUS dp_peer_mlo_setup(
 
 		/* associate mld and link peer */
 		dp_link_peer_add_mld_peer(peer, mld_peer);
-		dp_mld_peer_add_link_peer(mld_peer, peer);
+		dp_mld_peer_add_link_peer(mld_peer, peer, setup_info->is_bridge_peer);
 
 		mld_peer->txrx_peer->is_mld_peer = 1;
 		dp_peer_unref_delete(mld_peer, DP_MOD_ID_CDP);
@@ -12563,6 +12563,10 @@ static struct cdp_sawf_ops dp_ops_sawf = {
 	.peer_config_ul = dp_sawf_peer_config_ul,
 	.swaf_peer_sla_configuration = dp_swaf_peer_sla_configuration,
 	.sawf_peer_flow_count = dp_sawf_peer_flow_count,
+#endif
+#ifdef WLAN_FEATURE_11BE_MLO_3_LINK_TX
+	.get_peer_msduq = dp_sawf_get_peer_msduq,
+	.sawf_3_link_peer_flow_count = dp_sawf_3_link_peer_flow_count,
 #endif
 };
 #endif
