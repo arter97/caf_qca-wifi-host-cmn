@@ -1327,6 +1327,27 @@ void cm_set_candidate_custom_sort_cb(
 bool cm_is_connect_req_reassoc(struct wlan_cm_connect_req *req);
 
 /**
+ * cm_is_first_candidate_connect_attempt() - Is it a first attempt to
+ * connect to a candidate after receiving connect request
+ * @vdev: vdev pointer
+ *
+ * Return: True if it is the first connect attempt to a candidate
+ * after receiving the connect request from the userspace
+ */
+bool cm_is_first_candidate_connect_attempt(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * cm_get_active_connect_req_param() - Get Connect request parameter
+ * @vdev: vdev pointer
+ * @req: Connection request buffer to be filled
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+cm_get_active_connect_req_param(struct wlan_objmgr_vdev *vdev,
+				struct wlan_cm_connect_req *req);
+
+/**
  * cm_get_rnr() - get rnr
  * @vdev:vdev
  * @cm_id: connect mgr id

@@ -79,6 +79,12 @@ struct wlan_cm_wep_key_params {
  * @rsn_caps: rsn caps
  * @mgmt_ciphers: mgmt cipher bitmask
  * @user_mfp: Management frame protection state configured by user
+ * @user_auth_type: user provided auth type
+ * @user_grp_cipher: user provided  group cipher
+ * @user_akm_suite: user provided AKM suite. First akm suite value
+ * is populated from akm suites array received from userspace
+ * @user_cipher_pairwise: user provided pairwise cipher. First pairwise
+ * cipher values populated from pairwise cipher array received from userspace
  */
 struct wlan_cm_connect_crypto_info {
 	uint32_t wpa_versions;
@@ -90,6 +96,12 @@ struct wlan_cm_connect_crypto_info {
 	uint16_t rsn_caps;
 	uint32_t mgmt_ciphers;
 	uint8_t user_mfp;
+#ifdef CONNECTIVITY_DIAG_EVENT
+	uint32_t user_auth_type;
+	uint32_t user_grp_cipher;
+	uint32_t user_akm_suite;
+	uint32_t user_cipher_pairwise;
+#endif
 };
 
 #ifdef WLAN_FEATURE_FILS_SK
