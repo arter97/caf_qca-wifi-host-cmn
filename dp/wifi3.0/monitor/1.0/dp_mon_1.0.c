@@ -219,7 +219,6 @@ void dp_mon_rings_deinit_1_0(struct dp_pdev *pdev)
 	int mac_id = 0;
 	struct dp_soc *soc = pdev->soc;
 
-
 	for (mac_id = 0;
 	     mac_id  < soc->wlan_cfg_ctx->num_rxdma_status_rings_per_pdev;
 	     mac_id++) {
