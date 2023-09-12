@@ -710,15 +710,15 @@ bool wlan_reg_11d_enabled_on_host(struct wlan_objmgr_psoc *psoc)
 	return reg_11d_enabled_on_host(psoc);
 }
 
-bool wlan_reg_is_etsi13_regdmn(struct wlan_objmgr_pdev *pdev)
+bool wlan_reg_is_etsi_regdmn(struct wlan_objmgr_pdev *pdev)
 {
-	return reg_is_etsi13_regdmn(pdev);
+	return reg_is_etsi_regdmn(pdev);
 }
 
-bool wlan_reg_is_etsi13_srd_chan_allowed_master_mode(struct wlan_objmgr_pdev
+bool wlan_reg_is_etsi_srd_chan_allowed_master_mode(struct wlan_objmgr_pdev
 						     *pdev)
 {
-	return reg_is_etsi13_srd_chan_allowed_master_mode(pdev);
+	return reg_is_etsi_srd_chan_allowed_master_mode(pdev);
 }
 
 bool wlan_reg_is_6ghz_band_set(struct wlan_objmgr_pdev *pdev)
@@ -1075,10 +1075,10 @@ bool wlan_reg_is_freq_present_in_cur_chan_list(struct wlan_objmgr_pdev *pdev,
 	return reg_is_freq_present_in_cur_chan_list(pdev, freq);
 }
 
-bool wlan_reg_is_etsi13_srd_chan_for_freq(struct wlan_objmgr_pdev *pdev,
-					  qdf_freq_t freq)
+bool wlan_reg_is_etsi_srd_chan_for_freq(struct wlan_objmgr_pdev *pdev,
+					qdf_freq_t freq)
 {
-	return reg_is_etsi13_srd_chan_for_freq(pdev, freq);
+	return reg_is_etsi_srd_chan_for_freq(pdev, freq);
 }
 
 bool wlan_reg_is_dsrc_freq(qdf_freq_t freq)

@@ -3917,7 +3917,7 @@ reg_skip_invalid_chan_freq(struct wlan_objmgr_pdev *pdev,
 				}
 
 				if (!(enable_srd_chan & srd_mask) &&
-				    reg_is_etsi13_srd_chan_for_freq(
+				    reg_is_etsi_srd_chan_for_freq(
 					pdev, res_msg[chan_enum].freq)) {
 					res_msg[chan_enum].iface_mode_mask &=
 						~(iface_mode);

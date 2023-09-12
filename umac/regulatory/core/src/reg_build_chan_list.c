@@ -1500,17 +1500,17 @@ reg_modify_chan_list_for_srd_channels(struct wlan_objmgr_pdev *pdev,
 {
 	enum channel_enum chan_enum;
 
-	if (!reg_is_etsi13_regdmn(pdev))
+	if (!reg_is_etsi_regdmn(pdev))
 		return;
 
-	if (reg_is_etsi13_srd_chan_allowed_master_mode(pdev))
+	if (reg_is_etsi_srd_chan_allowed_master_mode(pdev))
 		return;
 
 	for (chan_enum = 0; chan_enum < NUM_CHANNELS; chan_enum++) {
 		if (chan_list[chan_enum].chan_flags & REGULATORY_CHAN_DISABLED)
 			continue;
 
-		if (reg_is_etsi13_srd_chan_for_freq(
+		if (reg_is_etsi_srd_chan_for_freq(
 					pdev,
 					chan_list[chan_enum].center_freq)) {
 			chan_list[chan_enum].state =

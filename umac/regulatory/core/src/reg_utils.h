@@ -33,8 +33,8 @@
 #define REG_DSRC_END_FREQ   channel_map[MAX_DSRC_CHANNEL].center_freq
 #endif
 
-#define REG_ETSI13_SRD_START_FREQ 5745
-#define REG_ETSI13_SRD_END_FREQ   5865
+#define REG_ETSI_SRD_START_FREQ 5745
+#define REG_ETSI_SRD_END_FREQ   5865
 
 /**
  * reg_is_world_ctry_code() - Check if the given country code is WORLD regdomain
@@ -560,13 +560,13 @@ QDF_STATUS reg_set_keep_6ghz_sta_cli_connection(struct wlan_objmgr_pdev *pdev,
 bool reg_is_dsrc_freq(qdf_freq_t freq);
 #endif /* CONFIG_CHAN_FREQ_API*/
 
-static inline bool reg_is_etsi13_regdmn(struct wlan_objmgr_pdev *pdev)
+static inline bool reg_is_etsi_regdmn(struct wlan_objmgr_pdev *pdev)
 {
 	return false;
 }
 
 /**
- * reg_is_etsi13_srd_chan_for_freq() - Checks the channel for ETSI13 srd ch
+ * reg_is_etsi_srd_chan_for_freq() - Checks the channel for ETSI13 srd ch
  * frequency or not
  * @freq: Channel center frequency
  * @pdev: pdev ptr
@@ -574,13 +574,13 @@ static inline bool reg_is_etsi13_regdmn(struct wlan_objmgr_pdev *pdev)
  * Return: true or false
  */
 static inline bool
-reg_is_etsi13_srd_chan_for_freq(struct wlan_objmgr_pdev *pdev, uint16_t freq)
+reg_is_etsi_srd_chan_for_freq(struct wlan_objmgr_pdev *pdev, uint16_t freq)
 {
 	return false;
 }
 
 static inline bool
-reg_is_etsi13_srd_chan_allowed_master_mode(struct wlan_objmgr_pdev *pdev)
+reg_is_etsi_srd_chan_allowed_master_mode(struct wlan_objmgr_pdev *pdev)
 {
 	return true;
 }
@@ -591,27 +591,28 @@ static inline bool reg_is_dsrc_freq(qdf_freq_t freq)
 }
 
 #ifdef CONFIG_CHAN_FREQ_API
-bool reg_is_etsi13_srd_chan_for_freq(struct wlan_objmgr_pdev
-				     *pdev, uint16_t freq);
+bool reg_is_etsi_srd_chan_for_freq(struct wlan_objmgr_pdev
+				   *pdev, uint16_t freq);
 #endif /*CONFIG_CHAN_FREQ_API */
 
 /**
- * reg_is_etsi13_regdmn() - Checks if the current reg domain is ETSI13 or not
+ * reg_is_etsi_regdmn() - Check if the current reg domain is
+ * ETSI13/ETSI18/ETSI20 or not
  * @pdev: pdev ptr
  *
  * Return: true or false
  */
-bool reg_is_etsi13_regdmn(struct wlan_objmgr_pdev *pdev);
+bool reg_is_etsi_regdmn(struct wlan_objmgr_pdev *pdev);
 
 /**
- * reg_is_etsi13_srd_chan_allowed_master_mode() - Checks if regdmn is ETSI13
+ * reg_is_etsi_srd_chan_allowed_master_mode() - Checks if regdmn is ETSI13
  * and SRD channels are allowed in master mode or not.
  *
  * @pdev: pdev ptr
  *
  * Return: true or false
  */
-bool reg_is_etsi13_srd_chan_allowed_master_mode(struct wlan_objmgr_pdev *pdev);
+bool reg_is_etsi_srd_chan_allowed_master_mode(struct wlan_objmgr_pdev *pdev);
 #else
 static inline bool reg_is_dsrc_freq(qdf_freq_t freq)
 {
@@ -619,19 +620,19 @@ static inline bool reg_is_dsrc_freq(qdf_freq_t freq)
 }
 
 static inline
-bool reg_is_etsi13_srd_chan_for_freq(struct wlan_objmgr_pdev *pdev,
-				     uint16_t freq)
+bool reg_is_etsi_srd_chan_for_freq(struct wlan_objmgr_pdev *pdev,
+				   uint16_t freq)
 {
 	return false;
 }
 
-static inline bool reg_is_etsi13_regdmn(struct wlan_objmgr_pdev *pdev)
+static inline bool reg_is_etsi_regdmn(struct wlan_objmgr_pdev *pdev)
 {
 	return false;
 }
 
 static inline bool
-reg_is_etsi13_srd_chan_allowed_master_mode(struct wlan_objmgr_pdev *pdev)
+reg_is_etsi_srd_chan_allowed_master_mode(struct wlan_objmgr_pdev *pdev)
 {
 	return false;
 }
