@@ -3072,8 +3072,9 @@ static uint32_t util_gen_new_ie(uint8_t *ie, uint32_t ielen,
 	 * copied to new ie, skip ssid, capability, bssid-index ie
 	 */
 	tmp_new = sub_copy;
-	while (((tmp_new + tmp_new[1] + MIN_IE_LEN) - sub_copy) <=
-	       (subie_len - 1)) {
+	while ((subie_len > 0) &&
+	       (((tmp_new + tmp_new[1] + MIN_IE_LEN) - sub_copy) <=
+		(subie_len - 1))) {
 		if (!(tmp_new[0] == WLAN_ELEMID_NONTX_BSSID_CAP ||
 		      tmp_new[0] == WLAN_ELEMID_SSID ||
 		      tmp_new[0] == WLAN_ELEMID_MULTI_BSSID_IDX ||
@@ -3460,6 +3461,7 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 				if (mbssid_info.split_prof_continue) {
 					qdf_mem_free(split_prof_start);
 					split_prof_start = NULL;
+					split_prof_end = NULL;
 				}
 				continue;
 			}
@@ -3529,6 +3531,7 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 				if (mbssid_info.split_prof_continue) {
 					qdf_mem_free(split_prof_start);
 					split_prof_start = NULL;
+					split_prof_end = NULL;
 					qdf_mem_zero(&mbssid_info,
 						     sizeof(mbssid_info));
 				}
@@ -3542,6 +3545,7 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 			if (mbssid_info.split_prof_continue) {
 				qdf_mem_free(split_prof_start);
 				split_prof_start = NULL;
+				split_prof_end = NULL;
 			}
 			qdf_mem_free(new_frame);
 		}
