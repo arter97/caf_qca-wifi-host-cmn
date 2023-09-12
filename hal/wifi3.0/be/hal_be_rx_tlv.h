@@ -1890,6 +1890,18 @@ static inline uint8_t hal_rx_get_mpdu_frame_control_valid_be(uint8_t *buf)
 }
 
 /**
+ * hal_rx_phy_legacy_get_rssi_be() - API to get RSSI from TLV
+ *                                   WIFIPHYRX_RSSI_LEGACY_E
+ * @buf: pointer to the start of WIFIPHYRX_RSSI_LEGACY_E TLV
+ *
+ * Return: value of RSSI
+ */
+static inline int8_t hal_rx_phy_legacy_get_rssi_be(uint8_t *buf)
+{
+	return HAL_RX_GET_64(buf, PHYRX_RSSI_LEGACY, RSSI_COMB);
+}
+
+/**
  * hal_rx_mpdu_get_addr2_be() - API to check get address2 of the mpdu
  *                              in the packet
  * @buf: pointer to the start of RX PKT TLV header

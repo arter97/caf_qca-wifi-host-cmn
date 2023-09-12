@@ -1137,6 +1137,8 @@ struct hal_hw_txrx_ops {
 	void (*hal_rx_mon_hw_desc_get_mpdu_status)(void *hw_desc_addr,
 						   struct mon_rx_status *rs);
 	uint8_t (*hal_rx_get_tlv)(void *rx_tlv);
+	int8_t (*hal_rx_phy_legacy_get_rssi)(uint8_t *rx_tlv);
+
 	void (*hal_rx_proc_phyrx_other_receive_info_tlv)(void *rx_tlv_hdr,
 							void *ppdu_info_handle);
 	void (*hal_rx_dump_msdu_end_tlv)(void *pkt_tlvs, uint8_t dbg_level);

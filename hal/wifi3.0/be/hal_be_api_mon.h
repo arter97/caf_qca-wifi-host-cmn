@@ -3393,8 +3393,8 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 				      RECEIVE_RSSI_INFO_PREAMBLE_RSSI_INFO_DETAILS);
 
 		ppdu_info->rx_status.rssi_comb =
-			HAL_RX_GET_64(rx_tlv,
-				      PHYRX_RSSI_LEGACY, RSSI_COMB);
+				hal_rx_phy_legacy_get_rssi(hal_soc_hdl, rx_tlv);
+
 		ppdu_info->rx_status.bw = hal->ops->hal_rx_get_tlv(rx_tlv);
 		ppdu_info->rx_status.he_re = 0;
 
