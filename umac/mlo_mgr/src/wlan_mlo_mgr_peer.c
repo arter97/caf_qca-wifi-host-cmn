@@ -1039,7 +1039,8 @@ static QDF_STATUS mlo_dev_get_link_vdevs(
 	mlo_debug("num_partner_links %d", ml_info->num_partner_links);
 	for (i = 0; i < ml_info->num_partner_links; i++) {
 		link_id = ml_info->partner_link_info[i].link_id;
-		vdev_link = mlo_get_vdev_by_link_id(vdev, link_id);
+		vdev_link = mlo_get_vdev_by_link_id(vdev, link_id,
+						    WLAN_MLO_MGR_ID);
 		if (vdev_link) {
 			link_vdevs[i] = vdev_link;
 		} else {
