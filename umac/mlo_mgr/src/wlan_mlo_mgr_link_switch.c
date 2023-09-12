@@ -205,27 +205,6 @@ void mlo_mgr_reset_ap_link_info(struct wlan_objmgr_vdev *vdev)
 }
 
 struct mlo_link_info
-*mlo_mgr_get_ap_link_by_link_id(struct wlan_mlo_dev_context *mlo_dev_ctx,
-				int link_id)
-{
-	struct mlo_link_info *link_info;
-	uint8_t link_info_iter;
-
-	if (!mlo_dev_ctx || link_id < 0 || link_id > 15)
-		return NULL;
-
-	link_info = &mlo_dev_ctx->link_ctx->links_info[0];
-	for (link_info_iter = 0; link_info_iter < WLAN_MAX_ML_BSS_LINKS;
-	     link_info_iter++) {
-		if (link_info->link_id == link_id)
-			return link_info;
-		link_info++;
-	}
-
-	return NULL;
-}
-
-struct mlo_link_info
 *mlo_mgr_get_ap_link(struct wlan_objmgr_vdev *vdev)
 {
 	if (!vdev || !vdev->mlo_dev_ctx)
@@ -273,6 +252,27 @@ void mlo_mgr_free_link_info_wmi_chan(struct wlan_mlo_dev_context *ml_dev)
 }
 
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+struct mlo_link_info
+*mlo_mgr_get_ap_link_by_link_id(struct wlan_mlo_dev_context *mlo_dev_ctx,
+				int link_id)
+{
+	struct mlo_link_info *link_info;
+	uint8_t link_info_iter;
+
+	if (!mlo_dev_ctx || link_id < 0 || link_id > 15)
+		return NULL;
+
+	link_info = &mlo_dev_ctx->link_ctx->links_info[0];
+	for (link_info_iter = 0; link_info_iter < WLAN_MAX_ML_BSS_LINKS;
+	     link_info_iter++) {
+		if (link_info->link_id == link_id)
+			return link_info;
+		link_info++;
+	}
+
+	return NULL;
+}
+
 bool mlo_mgr_update_csa_link_info(struct wlan_mlo_dev_context *mlo_dev_ctx,
 				  struct csa_offload_params *csa_param,
 				  uint8_t link_id)
