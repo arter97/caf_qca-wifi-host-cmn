@@ -2524,10 +2524,6 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 			hal_err("Matching ppdu_id(%u) detected",
 				ppdu_info->com_info.last_ppdu_id);
 
-		/* Reset ppdu_info before processing the ppdu */
-		qdf_mem_zero(ppdu_info,
-			     sizeof(struct hal_rx_ppdu_info));
-
 		ppdu_info->com_info.last_ppdu_id =
 			ppdu_info->com_info.ppdu_id =
 				HAL_RX_GET_64(rx_tlv, RX_PPDU_START,

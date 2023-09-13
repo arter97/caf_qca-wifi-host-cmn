@@ -134,6 +134,7 @@ __dp_rx_mon_free_ppdu_info(struct dp_mon_pdev *mon_pdev,
 
 	qdf_spin_lock_bh(&mon_pdev_be->ppdu_info_lock);
 	if (ppdu_info) {
+		qdf_mem_zero(ppdu_info, sizeof(struct hal_rx_ppdu_info));
 		TAILQ_INSERT_TAIL(&mon_pdev_be->rx_mon_free_queue, ppdu_info,
 				  ppdu_free_list_elem);
 		mon_pdev_be->total_free_elem++;
@@ -1887,7 +1888,6 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 	union dp_mon_desc_list_elem_t *desc_list = NULL;
 	union dp_mon_desc_list_elem_t *tail = NULL;
 	struct dp_mon_desc *mon_desc;
-	uint8_t user;
 	uint16_t idx;
 	void *buf;
 	struct hal_rx_ppdu_info *ppdu_info;
@@ -1914,11 +1914,7 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 		return NULL;
 	}
 
-	qdf_mem_zero(ppdu_info, sizeof(struct hal_rx_ppdu_info));
 	mon_pdev->rx_mon_stats.total_ppdu_info_alloc++;
-
-	for (user = 0; user < HAL_MAX_UL_MU_USERS; user++)
-		qdf_nbuf_queue_init(&ppdu_info->mpdu_q[user]);
 
 	status_buf_count = mon_pdev_be->desc_count;
 	for (idx = 0; idx < status_buf_count; idx++) {
@@ -2392,6 +2388,7 @@ QDF_STATUS dp_rx_mon_ppdu_info_cache_create(struct dp_pdev *pdev)
 		ppdu_info =  (struct hal_rx_ppdu_info *)qdf_kmem_cache_alloc(mon_pdev_be->ppdu_info_cache);
 
 		if (ppdu_info) {
+			qdf_mem_zero(ppdu_info, sizeof(struct hal_rx_ppdu_info));
 			TAILQ_INSERT_TAIL(&mon_pdev_be->rx_mon_free_queue,
 					  ppdu_info,
 					  ppdu_free_list_elem);
