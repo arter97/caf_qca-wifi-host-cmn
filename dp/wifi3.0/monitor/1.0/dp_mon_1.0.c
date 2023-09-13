@@ -605,6 +605,25 @@ static void dp_mon_reap_timer_deinit(struct dp_soc *soc)
 }
 
 /**
+ * dp_mon_is_irq_enabled() - check if DP monitor status srng irq enabled
+ * @soc: point to soc
+ *
+ * Return: true if irq enabled, false if not.
+ */
+static bool
+dp_mon_is_irq_enabled(struct dp_soc *soc)
+{
+	void *mon_status_srng;
+
+	mon_status_srng = soc->rxdma_mon_status_ring[0].hal_srng;
+
+	if (!mon_status_srng)
+		return false;
+
+	return hal_srng_batch_threshold_irq_enabled(mon_status_srng);
+}
+
+/**
  * dp_mon_reap_timer_start() - start reap timer of monitor status ring
  * @soc: point to soc
  * @source: trigger source
@@ -621,7 +640,8 @@ dp_mon_reap_timer_start(struct dp_soc *soc, enum cdp_mon_reap_source source)
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
 	bool do_start;
 
-	if (!mon_soc->reap_timer_init)
+	/* if monitor status ring irq enabled, no need to start timer */
+	if (!mon_soc->reap_timer_init || dp_mon_is_irq_enabled(soc))
 		return false;
 
 	qdf_spin_lock_bh(&mon_soc->reap_timer_lock);
@@ -656,7 +676,7 @@ dp_mon_reap_timer_stop(struct dp_soc *soc, enum cdp_mon_reap_source source)
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
 	bool do_stop;
 
-	if (!mon_soc->reap_timer_init)
+	if (!mon_soc->reap_timer_init || dp_mon_is_irq_enabled(soc))
 		return false;
 
 	qdf_spin_lock_bh(&mon_soc->reap_timer_lock);
