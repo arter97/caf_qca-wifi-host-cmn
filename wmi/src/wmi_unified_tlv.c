@@ -744,6 +744,8 @@ static const uint32_t vdev_param_tlv[] = {
 		  VDEV_PARAM_RTT_11AZ_NTB_MIN_TIME_BW_MEAS),
 	PARAM_MAP(vdev_param_11az_security_config,
 		  VDEV_PARAM_11AZ_SECURITY_CONFIG),
+	PARAM_MAP(vdev_param_mlo_max_recom_active_links,
+		  VDEV_PARAM_MLO_MAX_RECOM_ACTIVE_LINKS),
 };
 #endif
 

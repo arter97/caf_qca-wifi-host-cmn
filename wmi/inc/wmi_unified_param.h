@@ -6093,6 +6093,8 @@ typedef enum {
 		   VDEV_PARAM_DISABLE_2G_TWT),
 	VDEV_PARAM(vdev_param_disable_twt_info_frame,
 		   VDEV_PARAM_DISABLE_TWT_INFO_FRAME),
+	VDEV_PARAM(vdev_param_mlo_max_recom_active_links,
+		   VDEV_PARAM_MLO_MAX_RECOM_ACTIVE_LINKS),
 	vdev_param_max,
 } wmi_conv_vdev_param_id;
 
