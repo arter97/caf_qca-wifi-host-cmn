@@ -4986,7 +4986,7 @@ enum qca_wlan_vendor_attr_config {
 	 * the DTIM period. If DTIM is set to 3, the STA shall wake up every 3
 	 * DTIM beacons.
 	 */
-	QCA_WLAN_VENDOR_ATTR_CONFIG_MODULATED_DTIM = 1,
+	QCA_WLAN_VENDOR_ATTR_CONFIG_DYNAMIC_DTIM = 1,
 	/*
 	 * Unsigned 32-bit value to set the wifi_iface stats averaging factor
 	 * used to calculate statistics like average the TSF offset or average
