@@ -210,6 +210,17 @@ void mlo_mgr_update_ap_link_info(struct wlan_objmgr_vdev *vdev, uint8_t link_id,
 				 struct wlan_channel channel);
 
 /**
+ * mlo_mgr_clear_ap_link_info() - Clear AP link information
+ * @vdev: Object Manager vdev
+ * @ap_link_addr: AP link addresses
+ *
+ * Clear AP link info
+ * Return: void
+ */
+void mlo_mgr_clear_ap_link_info(struct wlan_objmgr_vdev *vdev,
+				uint8_t *ap_link_addr);
+
+/**
  * mlo_mgr_reset_ap_link_info() - Reset AP links information
  * @vdev: Object Manager vdev
  *

@@ -1954,6 +1954,8 @@ cm_modify_partner_info_based_on_dbs_or_sbs_mode(struct wlan_objmgr_vdev *vdev,
 				best_partner_idx_2g = i;
 			else
 				best_partner_idx_5g = i;
+
+			break;
 		}
 	}
 
