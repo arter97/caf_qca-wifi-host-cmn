@@ -709,7 +709,9 @@ util_scan_get_phymode_5g(struct wlan_objmgr_pdev *pdev,
 	if (htcap)
 		ht_cap = le16toh(htcap->hc_cap);
 
-	if (ht_cap & WLAN_HTCAP_C_CHWIDTH40)
+	if ((ht_cap & WLAN_HTCAP_C_CHWIDTH40) &&
+	    (htinfo->hi_extchoff == WLAN_HTINFO_EXTOFFSET_ABOVE ||
+	     htinfo->hi_extchoff == WLAN_HTINFO_EXTOFFSET_BELOW))
 		phymode = WLAN_PHYMODE_11NA_HT40;
 	else
 		phymode = WLAN_PHYMODE_11NA_HT20;
@@ -721,7 +723,7 @@ util_scan_get_phymode_5g(struct wlan_objmgr_pdev *pdev,
 	if (util_scan_entry_vhtcap(scan_params) && vhtop) {
 		switch (vhtop->vht_op_chwidth) {
 		case WLAN_VHTOP_CHWIDTH_2040:
-			if (ht_cap & WLAN_HTCAP_C_CHWIDTH40)
+			if (phymode == WLAN_PHYMODE_11NA_HT40)
 				phymode = WLAN_PHYMODE_11AC_VHT40;
 			else
 				phymode = WLAN_PHYMODE_11AC_VHT20;
@@ -1132,10 +1134,9 @@ util_scan_parse_rnr_ie(struct scan_cache_entry *scan_entry,
 		tbtt_count = neighbor_ap_info->tbtt_header.tbtt_info_count;
 		tbtt_length = neighbor_ap_info->tbtt_header.tbtt_info_length;
 		fieldtype = neighbor_ap_info->tbtt_header.tbbt_info_fieldtype;
-		scm_debug("channel number %d, op class %d",
+		scm_debug("chan %d, opclass %d tbtt_cnt %d, tbtt_len %d, fieldtype %d",
 			  neighbor_ap_info->channel_number,
-			  neighbor_ap_info->operting_class);
-		scm_debug("tbtt_count %d, tbtt_length %d, fieldtype %d",
+			  neighbor_ap_info->operting_class,
 			  tbtt_count, tbtt_length, fieldtype);
 		data += sizeof(struct neighbor_ap_info_field);
 
@@ -1689,7 +1690,8 @@ util_scan_populate_bcn_ie_list(struct wlan_objmgr_pdev *pdev,
 err:
 	status = QDF_STATUS_E_INVAL;
 err_status:
-	scm_debug("failed to parse IE - id: %d, len: %d",
+	scm_debug(QDF_MAC_ADDR_FMT ": failed to parse IE - id: %d, len: %d",
+		  QDF_MAC_ADDR_REF(scan_params->bssid.bytes),
 		  ie->ie_id, ie->ie_len);
 
 	return status;
@@ -2444,8 +2446,6 @@ util_scan_gen_scan_entry(struct wlan_objmgr_pdev *pdev,
 	status = util_scan_populate_bcn_ie_list(pdev, scan_entry, &chan_freq,
 						band_mask);
 	if (QDF_IS_STATUS_ERROR(status)) {
-		scm_debug(QDF_MAC_ADDR_FMT": failed to parse beacon IE",
-			  QDF_MAC_ADDR_REF(scan_entry->bssid.bytes));
 		qdf_mem_free(scan_entry->raw_frame.ptr);
 		qdf_mem_free(scan_entry);
 		return QDF_STATUS_E_FAILURE;
@@ -3074,8 +3074,9 @@ static uint32_t util_gen_new_ie(uint8_t *ie, uint32_t ielen,
 	 * copied to new ie, skip ssid, capability, bssid-index ie
 	 */
 	tmp_new = sub_copy;
-	while (((tmp_new + tmp_new[1] + MIN_IE_LEN) - sub_copy) <=
-	       (subie_len - 1)) {
+	while ((subie_len > 0) &&
+	       (((tmp_new + tmp_new[1] + MIN_IE_LEN) - sub_copy) <=
+		(subie_len - 1))) {
 		if (!(tmp_new[0] == WLAN_ELEMID_NONTX_BSSID_CAP ||
 		      tmp_new[0] == WLAN_ELEMID_SSID ||
 		      tmp_new[0] == WLAN_ELEMID_MULTI_BSSID_IDX ||
@@ -3462,6 +3463,7 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 				if (mbssid_info.split_prof_continue) {
 					qdf_mem_free(split_prof_start);
 					split_prof_start = NULL;
+					split_prof_end = NULL;
 				}
 				continue;
 			}
@@ -3531,6 +3533,7 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 				if (mbssid_info.split_prof_continue) {
 					qdf_mem_free(split_prof_start);
 					split_prof_start = NULL;
+					split_prof_end = NULL;
 					qdf_mem_zero(&mbssid_info,
 						     sizeof(mbssid_info));
 				}
@@ -3544,6 +3547,7 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 			if (mbssid_info.split_prof_continue) {
 				qdf_mem_free(split_prof_start);
 				split_prof_start = NULL;
+				split_prof_end = NULL;
 			}
 			qdf_mem_free(new_frame);
 		}
