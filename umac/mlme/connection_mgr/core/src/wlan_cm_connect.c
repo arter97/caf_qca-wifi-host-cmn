@@ -2924,11 +2924,22 @@ static void cm_osif_connect_complete(struct cnx_mgr *cm_ctx,
 	QDF_STATUS status = QDF_STATUS_E_FAILURE;
 	struct wlan_cm_connect_resp *connect_rsp = resp;
 
+	/* Currently, driver only notifies the first candidate failure to upper
+	 * layers, to post disconnect rsp to clear kernel connected state, need
+	 * copy send_disconnect flag from last candidate to first candidate.
+	 */
 	if (QDF_IS_STATUS_ERROR(resp->connect_status)) {
 		status = cm_get_first_candidate_rsp(cm_ctx, resp->cm_id,
 						    &first_failure_resp);
-		if (QDF_IS_STATUS_SUCCESS(status))
+		if (QDF_IS_STATUS_SUCCESS(status)) {
 			connect_rsp = &first_failure_resp;
+			if (resp->send_disconnect) {
+				connect_rsp->send_disconnect = resp->send_disconnect;
+				mlme_debug(CM_PREFIX_FMT "sent disconnect rsp for first candidate",
+					   CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev),
+							 resp->cm_id));
+			}
+		}
 	}
 
 	mlme_cm_osif_connect_complete(cm_ctx->vdev, connect_rsp);
