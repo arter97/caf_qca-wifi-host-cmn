@@ -2881,8 +2881,10 @@ dp_queue_mon_ring_stats(struct dp_pdev *pdev,
 			 RXDMA_MONITOR_BUF,
 			 &soc_srngs_state->ring_state[*num_srng]);
 
-		if (status == QDF_STATUS_SUCCESS)
-			qdf_assert_always(++(*num_srng) < DP_MAX_SRNGS);
+		if (status == QDF_STATUS_SUCCESS) {
+			++(*num_srng);
+			qdf_assert_always(*num_srng < DP_MAX_SRNGS);
+		}
 
 		status = dp_get_srng_ring_state_from_hal
 			(pdev->soc, pdev,
@@ -2890,8 +2892,10 @@ dp_queue_mon_ring_stats(struct dp_pdev *pdev,
 			 RXDMA_MONITOR_DST,
 			 &soc_srngs_state->ring_state[*num_srng]);
 
-		if (status == QDF_STATUS_SUCCESS)
-			qdf_assert_always(++(*num_srng) < DP_MAX_SRNGS);
+		if (status == QDF_STATUS_SUCCESS) {
+			++(*num_srng);
+			qdf_assert_always(*num_srng < DP_MAX_SRNGS);
+		}
 
 		status = dp_get_srng_ring_state_from_hal
 			(pdev->soc, pdev,
@@ -2899,8 +2903,10 @@ dp_queue_mon_ring_stats(struct dp_pdev *pdev,
 			 RXDMA_MONITOR_DESC,
 			 &soc_srngs_state->ring_state[*num_srng]);
 
-		if (status == QDF_STATUS_SUCCESS)
-			qdf_assert_always(++(*num_srng) < DP_MAX_SRNGS);
+		if (status == QDF_STATUS_SUCCESS) {
+			++(*num_srng);
+			qdf_assert_always(*num_srng < DP_MAX_SRNGS);
+		}
 	}
 }
 #else
