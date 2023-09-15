@@ -342,7 +342,7 @@ uint8_t *peer_assoc_add_mlo_params(uint8_t *buf_ptr,
 		  mlo_params->mlo_flags.nstr_bitmap_size,
 		  mlo_params->mlo_flags.mlo_link_switch,
 		  mlo_params->nstr_indication_bitmap,
-		  req->mlo_params.mld_mac);
+		  QDF_MAC_ADDR_REF(req->mlo_params.mld_mac));
 
 	return buf_ptr + sizeof(wmi_peer_assoc_mlo_params);
 }
