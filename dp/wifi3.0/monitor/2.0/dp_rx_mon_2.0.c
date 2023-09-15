@@ -1975,6 +1975,38 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 	return ppdu_info;
 }
 
+/**
+ * dp_mon_pdev_flush_desc() - Flush status and packet desc during deinit
+ *
+ * @pdev: DP pdev handle
+ *
+ * Return
+ */
+static QDF_STATUS dp_mon_pdev_flush_desc(struct dp_pdev *pdev)
+{
+	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	struct dp_mon_pdev_be *mon_pdev_be;
+
+	if (qdf_unlikely(!mon_pdev)) {
+		dp_mon_debug("monitor pdev is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
+
+	qdf_spin_lock_bh(&mon_pdev->mon_lock);
+
+	if (mon_pdev_be->desc_count) {
+		mon_pdev->rx_mon_stats.pending_desc_count +=
+						mon_pdev_be->desc_count;
+		dp_rx_mon_flush_status_buf_queue(pdev);
+	}
+
+	qdf_spin_unlock_bh(&mon_pdev->mon_lock);
+
+	return QDF_STATUS_SUCCESS;
+}
+
 #ifdef WLAN_FEATURE_11BE_MLO
 #define DP_PEER_ID_MASK 0x3FFF
 /**
@@ -2413,6 +2445,8 @@ QDF_STATUS dp_mon_pdev_ext_deinit_2_0(struct dp_pdev *pdev)
 	struct dp_mon_pdev_be *mon_pdev_be =
 			dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
 
+	dp_mon_pdev_flush_desc(pdev);
+
 	if (!mon_pdev_be->rx_mon_workqueue)
 		return QDF_STATUS_E_FAILURE;
 
@@ -2572,6 +2606,8 @@ void dp_mon_rx_print_advanced_stats_2_0(struct dp_soc *soc,
 		       rx_mon_stats->rx_hdr_invalid_cnt);
 	DP_PRINT_STATS("invalid_dma_length Received = %d",
 		       rx_mon_stats->invalid_dma_length);
+	DP_PRINT_STATS("pending_desc_count= %d",
+		       mon_pdev->rx_mon_stats.pending_desc_count);
 }
 #endif
 
