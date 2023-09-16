@@ -22900,6 +22900,7 @@ void wmi_tlv_attach(wmi_unified_t wmi_handle)
 	wmi_gpio_attach_tlv(wmi_handle);
 	wmi_11be_attach_tlv(wmi_handle);
 	wmi_coap_attach_tlv(wmi_handle);
+	wmi_mlme_attach_tlv(wmi_handle);
 }
 qdf_export_symbol(wmi_tlv_attach);
 
