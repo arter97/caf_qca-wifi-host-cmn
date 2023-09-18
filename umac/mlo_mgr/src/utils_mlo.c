@@ -4276,7 +4276,7 @@ util_parse_rvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
 		     WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_SIZE);
 
 	stacontrol = qdf_le16_to_cpu(stacontrol);
-	parsed_payload_len += WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_SIZE;
+	parsed_payload_len += WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_SIZE;
 
 	if (linkid)
 		*linkid = QDF_GET_BITS(stacontrol,
@@ -4378,11 +4378,11 @@ util_parse_rvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
 	 * highlight the spec change.
 	 */
 	if (sta_info_len != (parsed_payload_len -
-			     WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_SIZE))
+			     WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_SIZE))
 		mlo_debug_rl("Length of sta info len %zu octets not match parsed payload length of %zu octets.",
 			     sta_info_len,
 			     parsed_payload_len -
-			     WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_SIZE);
+			     WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_SIZE);
 
 	return QDF_STATUS_SUCCESS;
 }
