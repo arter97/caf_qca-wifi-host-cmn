@@ -145,19 +145,23 @@ static inline int hal_history_get_next_index(qdf_atomic_t *table_index,
  * @offset: register offset to read
  * @exp_val: the expected value of register
  *
- * Return: none
+ * Return: QDF_STATUS - Success or Failure
  */
-static inline void hal_reg_write_result_check(struct hal_soc *hal_soc,
-					      uint32_t offset,
-					      uint32_t exp_val)
+static inline QDF_STATUS hal_reg_write_result_check(struct hal_soc *hal_soc,
+						    uint32_t offset,
+						    uint32_t exp_val)
 {
 	uint32_t value;
 
 	value = qdf_ioread32(hal_soc->dev_base_addr + offset);
-	if (exp_val != value) {
+	if (qdf_unlikely(exp_val != value)) {
 		HAL_REG_WRITE_FAIL_HIST_ADD(hal_soc, offset, exp_val, value);
 		HAL_STATS_INC(hal_soc, reg_write_fail, 1);
+
+		return QDF_STATUS_E_FAILURE;
 	}
+
+	return QDF_STATUS_SUCCESS;
 }
 
 #ifdef WINDOW_REG_PLD_LOCK_ENABLE
@@ -291,8 +295,21 @@ static inline void hal_write32_mb(struct hal_soc *hal_soc, uint32_t offset,
 	}
 }
 
-#define hal_write32_mb_confirm(_hal_soc, _offset, _value) \
-		hal_write32_mb(_hal_soc, _offset, _value)
+/**
+ * hal_write32_mb_confirm() - write register and check writing result
+ * @hal_soc: hal soc handle
+ * @offset: I/O memory address to write
+ * @value: value to write
+ *
+ * Return: QDF_STATUS - return E_NOSUPPORT as no read back confirmation
+ */
+static inline QDF_STATUS hal_write32_mb_confirm(struct hal_soc *hal_soc,
+						uint32_t offset,
+						uint32_t value)
+{
+	hal_write32_mb(hal_soc, offset, value);
+	return QDF_STATUS_E_NOSUPPORT;
+}
 
 #define hal_write32_mb_cmem(_hal_soc, _offset, _value)
 #else
@@ -356,25 +373,28 @@ static inline void hal_write32_mb(struct hal_soc *hal_soc, uint32_t offset,
  * @hal_soc: hal soc handle
  * @offset: I/O memory address to write
  * @value: value to write
+ *
+ * Return: QDF_STATUS - Success or Failure
  */
-static inline void hal_write32_mb_confirm(struct hal_soc *hal_soc,
-					  uint32_t offset,
-					  uint32_t value)
+static inline QDF_STATUS hal_write32_mb_confirm(struct hal_soc *hal_soc,
+						uint32_t offset,
+						uint32_t value)
 {
 	int ret;
 	unsigned long flags;
 	qdf_iomem_t new_addr;
+	QDF_STATUS status = QDF_STATUS_E_FAILURE;
 
 	if (!TARGET_ACCESS_ALLOWED(HIF_GET_SOFTC(
 					hal_soc->hif_handle))) {
 		hal_err_rl("target access is not allowed");
-		return;
+		return status;
 	}
 
 	/* Region < BAR + 4K can be directly accessed */
 	if (offset < MAPPED_REF_OFF) {
 		qdf_iowrite32(hal_soc->dev_base_addr + offset, value);
-		return;
+		return QDF_STATUS_E_NOSUPPORT;
 	}
 
 	/* Region greater than BAR + 4K */
@@ -383,30 +403,31 @@ static inline void hal_write32_mb_confirm(struct hal_soc *hal_soc,
 		if (ret) {
 			hal_err("Wake up request failed");
 			qdf_check_state_before_panic(__func__, __LINE__);
-			return;
+			return status;
 		}
 	}
 
 	if (!hal_soc->use_register_windowing ||
 	    offset < MAX_UNWINDOWED_ADDRESS) {
 		qdf_iowrite32(hal_soc->dev_base_addr + offset, value);
-		hal_reg_write_result_check(hal_soc, offset,
-					   value);
+		status = hal_reg_write_result_check(hal_soc, offset,
+						    value);
 	} else if (hal_soc->static_window_map) {
 		new_addr = hal_get_window_address(
 					hal_soc,
 					hal_soc->dev_base_addr + offset);
 		qdf_iowrite32(new_addr, value);
-		hal_reg_write_result_check(hal_soc,
-					   new_addr - hal_soc->dev_base_addr,
-					   value);
+		status = hal_reg_write_result_check(
+					hal_soc,
+					new_addr - hal_soc->dev_base_addr,
+					value);
 	} else {
 		hal_lock_reg_access(hal_soc, &flags);
 		hal_select_window_confirm(hal_soc, offset);
 		qdf_iowrite32(hal_soc->dev_base_addr + WINDOW_START +
 			  (offset & WINDOW_RANGE_MASK), value);
 
-		hal_reg_write_result_check(
+		status = hal_reg_write_result_check(
 				hal_soc,
 				WINDOW_START + (offset & WINDOW_RANGE_MASK),
 				value);
@@ -418,9 +439,11 @@ static inline void hal_write32_mb_confirm(struct hal_soc *hal_soc,
 		if (ret) {
 			hal_err("Wake up release failed");
 			qdf_check_state_before_panic(__func__, __LINE__);
-			return;
+			return QDF_STATUS_E_INVAL;
 		}
 	}
+
+	return status;
 }
 
 /**
@@ -797,9 +820,14 @@ static inline void hal_write32_mb_confirm_retry(struct hal_soc *hal_soc,
 {
 	uint8_t retry_cnt = 0;
 	uint32_t read_value;
+	QDF_STATUS ret;
 
 	while (retry_cnt <= HAL_REG_WRITE_RETRY_MAX) {
-		hal_write32_mb_confirm(hal_soc, offset, value);
+		ret = hal_write32_mb_confirm(hal_soc, offset, value);
+		/* Positive confirmation, return directly */
+		if (qdf_likely(QDF_IS_STATUS_SUCCESS(ret)))
+			return;
+
 		read_value = hal_read32_mb(hal_soc, offset);
 		if (qdf_likely(read_value == value))
 			break;
