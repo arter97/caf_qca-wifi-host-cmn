@@ -1597,8 +1597,6 @@ enum qdf_suspend_type {
  * @QDF_SELF_PEER_DEL_FAILED: Failed to send self peer deletion cmd to fw
  * @QDF_DEL_SELF_STA_FAILED: Received del self sta without del bss
  * @QDF_FLUSH_LOGS : Recovery needed when sending flush completion to userspace
- * @QDF_WMI_CMD_SENT_DURING_SUSPEND: WMI command is received when target is
- * suspended
  * @QDF_VDEV_MAC_ADDR_UPDATE_RESPONSE_TIMED_OUT: VDEV MAC address update
  * request for Link switch timedout.
  * @QDF_MGMT_RX_REO_INCONSISTENT_SNAPSHOT: Inconsistent management Rx reorder
@@ -1643,7 +1641,6 @@ enum qdf_hang_reason {
 	QDF_SELF_PEER_DEL_FAILED,
 	QDF_DEL_SELF_STA_FAILED,
 	QDF_FLUSH_LOGS,
-	QDF_WMI_CMD_SENT_DURING_SUSPEND,
 	QDF_VDEV_MAC_ADDR_UPDATE_RESPONSE_TIMED_OUT,
 	QDF_MGMT_RX_REO_INCONSISTENT_SNAPSHOT,
 	QDF_MGMT_RX_REO_OUT_OF_ORDER_PKT,
