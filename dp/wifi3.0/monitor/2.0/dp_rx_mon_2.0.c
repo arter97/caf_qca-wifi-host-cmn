@@ -752,6 +752,7 @@ dp_rx_mon_process_ppdu_info(struct dp_pdev *pdev,
 
 			mpdu_meta = (struct hal_rx_mon_mpdu_info *)qdf_nbuf_data(mpdu);
 
+			ppdu_info->rx_status.rs_fcs_err = mpdu_meta->fcs_err;
 			if (dp_lite_mon_is_rx_enabled(mon_pdev)) {
 				status = dp_lite_mon_rx_mpdu_process(pdev, ppdu_info,
 								     mpdu, mpdu_idx, user);
@@ -800,6 +801,7 @@ dp_rx_mon_process_ppdu_info(struct dp_pdev *pdev,
 				if (status != QDF_STATUS_SUCCESS)
 					dp_mon_free_parent_nbuf(mon_pdev, mpdu);
 			}
+			ppdu_info->rx_status.rs_fcs_err = false;
 		}
 	}
 
@@ -1818,7 +1820,6 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 		mpdu_meta = (struct hal_rx_mon_mpdu_info *)qdf_nbuf_data(nbuf);
 		mpdu_meta->mpdu_length_err = mpdu_info->mpdu_length_err;
 		mpdu_meta->fcs_err = mpdu_info->fcs_err;
-		ppdu_info->rx_status.rs_fcs_err = mpdu_info->fcs_err;
 		mpdu_meta->overflow_err = mpdu_info->overflow_err;
 		mpdu_meta->decrypt_err = mpdu_info->decrypt_err;
 		mpdu_meta->full_pkt = mpdu_info->full_pkt;
