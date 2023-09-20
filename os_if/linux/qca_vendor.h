@@ -5430,6 +5430,19 @@ enum qca_wlan_vendor_attr_config {
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_OPM_SPEC_WAKE_INTERVAL = 102,
 
+	/* 8-bit unsigned value.
+	 *
+	 * This attribute configures a traffic shaping mode
+	 * applied during coex scenarios.
+	 * By default all coex traffic shaping modes are enabled,
+	 * i.e., shape WLAN traffic based on coex traffic pattern and priority.
+	 * To shape traffic, STA may enter in power save mode
+	 * and AP may send CTS-to-self frame.
+	 *
+	 * Uses enum qca_coex_traffic_shaping_mode values.
+	 */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_COEX_TRAFFIC_SHAPING_MODE = 105,
+
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_CONFIG_MAX =
@@ -9009,6 +9022,16 @@ enum qca_wlan_eht_mlo_mode {
 enum qca_wlan_emlsr_mode {
 	QCA_WLAN_EMLSR_MODE_ENTER = 0,
 	QCA_WLAN_EMLSR_MODE_EXIT = 1,
+};
+
+/**
+ * enum qca_coex_traffic_shaping_mode: Coex traffic shaping mode
+ * @QCA_COEX_TRAFFIC_SHAPING_MODE_DISABLE: Coex policies disabled
+ * @QCA_COEX_TRAFFIC_SHAPING_MODE_ENABLE: All coex policies enabled
+ */
+enum qca_coex_traffic_shaping_mode {
+	QCA_COEX_TRAFFIC_SHAPING_MODE_DISABLE = 0,
+	QCA_COEX_TRAFFIC_SHAPING_MODE_ENABLE = 1,
 };
 
 /**
