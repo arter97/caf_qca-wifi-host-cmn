@@ -934,6 +934,15 @@ dp_rx_mon_handle_full_mon(struct dp_pdev *pdev,
 	mpdu_meta = (struct hal_rx_mon_mpdu_info *)qdf_nbuf_data(mpdu);
 
 	if (mpdu_meta->decap_type == HAL_HW_RX_DECAP_FORMAT_RAW) {
+		if (qdf_unlikely(ppdu_info->rx_status.rs_fcs_err)) {
+			hdr_desc = qdf_nbuf_get_frag_addr(mpdu, 0);
+			wh = (struct ieee80211_frame *)hdr_desc;
+			if ((wh->i_fc[0] & QDF_IEEE80211_FC0_VERSION_MASK) !=
+			    QDF_IEEE80211_FC0_VERSION_0) {
+				DP_STATS_INC(pdev, dropped.mon_ver_err, 1);
+				return QDF_STATUS_E_FAILURE;
+			}
+		}
 		qdf_nbuf_trim_add_frag_size(mpdu,
 					    qdf_nbuf_get_nr_frags(mpdu) - 1,
 					    -HAL_RX_FCS_LEN, 0);
