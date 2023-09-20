@@ -7044,7 +7044,7 @@ void __dp_tx_desc_flush(struct dp_pdev *pdev, struct dp_vdev *vdev,
 {
 	uint8_t i, num_pool;
 	uint32_t j;
-	uint32_t num_desc, num_desc_t, page_id, offset;
+	uint32_t num_desc_t, page_id, offset;
 	uint16_t num_desc_per_page;
 	struct dp_soc *soc = pdev->soc;
 	struct dp_tx_desc_s *tx_desc = NULL;
@@ -7055,22 +7055,15 @@ void __dp_tx_desc_flush(struct dp_pdev *pdev, struct dp_vdev *vdev,
 		return;
 	}
 
-	num_desc = spcl_pool ? wlan_cfg_get_num_tx_spl_desc(soc->wlan_cfg_ctx) :
-			wlan_cfg_get_num_tx_desc(soc->wlan_cfg_ctx);
-
 	num_pool = wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
 
 	for (i = 0; i < num_pool; i++) {
 		tx_desc_pool = spcl_pool ? dp_get_spcl_tx_desc_pool(soc, i) :
 						dp_get_tx_desc_pool(soc, i);
+
+		num_desc_t = tx_desc_pool->elem_count;
 		if (!tx_desc_pool->desc_pages.cacheable_pages)
 			continue;
-
-		if (spcl_pool)
-			num_desc_t = num_desc;
-		else
-			num_desc_t = dp_get_updated_tx_desc(soc->ctrl_psoc, i,
-							    num_desc);
 
 		num_desc_per_page =
 			tx_desc_pool->desc_pages.num_element_per_page;
