@@ -4175,6 +4175,7 @@ void dp_soc_cfg_attach(struct dp_soc *soc)
 		wlan_cfg_set_num_tx_desc_pool(soc->wlan_cfg_ctx, 0);
 		wlan_cfg_set_num_tx_ext_desc_pool(soc->wlan_cfg_ctx, 0);
 		wlan_cfg_set_num_tx_desc(soc->wlan_cfg_ctx, 0);
+		wlan_cfg_set_num_tx_spl_desc(soc->wlan_cfg_ctx, 0);
 		wlan_cfg_set_num_tx_ext_desc(soc->wlan_cfg_ctx, 0);
 		soc->init_tcl_cmd_cred_ring = false;
 		soc->num_tcl_data_rings =
