@@ -1752,8 +1752,17 @@ error:
 	return ch_freq;
 }
 
-void mlo_get_assoc_rsp(struct wlan_objmgr_vdev *vdev,
-		       struct element_info *assoc_rsp_frame)
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+/**
+ * mlo_get_reassoc_rsp() - To get reassoc response
+ * @vdev: objmgr vdev
+ * @reassoc_rsp_frame: reassoc rsp
+ *
+ * Return: NA
+ */
+static
+void mlo_get_reassoc_rsp(struct wlan_objmgr_vdev *vdev,
+			 struct element_info **reassoc_rsp_frame)
 {
 	struct wlan_mlo_dev_context *mlo_dev_ctx = vdev->mlo_dev_ctx;
 	struct wlan_mlo_sta *sta_ctx = NULL;
@@ -1762,13 +1771,52 @@ void mlo_get_assoc_rsp(struct wlan_objmgr_vdev *vdev,
 		return;
 
 	sta_ctx = mlo_dev_ctx->sta_ctx;
-
-	if (!sta_ctx->assoc_rsp.len || !sta_ctx->assoc_rsp.ptr) {
-		mlo_err("Assoc Resp info is empty");
+	if (!sta_ctx->copied_reassoc_rsp) {
+		mlo_err("Reassoc rsp not present for vdev_id %d",
+			wlan_vdev_get_id(vdev));
+		*reassoc_rsp_frame = NULL;
 		return;
 	}
 
-	*assoc_rsp_frame = sta_ctx->assoc_rsp;
+	if (!sta_ctx->copied_reassoc_rsp->connect_ies.assoc_rsp.len ||
+	    !sta_ctx->copied_reassoc_rsp->connect_ies.assoc_rsp.ptr) {
+		mlo_err("Reassoc Resp info empty vdev_id %d assoc len %d",
+			wlan_vdev_get_id(vdev),
+			sta_ctx->copied_reassoc_rsp->connect_ies.assoc_rsp.len);
+		*reassoc_rsp_frame = NULL;
+		return;
+	}
+
+	*reassoc_rsp_frame =
+		&sta_ctx->copied_reassoc_rsp->connect_ies.assoc_rsp;
+}
+#else
+static inline
+void mlo_get_reassoc_rsp(struct wlan_objmgr_vdev *vdev,
+			 struct element_info **reassoc_rsp_frame)
+{
+	*reassoc_rsp_frame = NULL;
+}
+#endif
+
+void mlo_get_assoc_rsp(struct wlan_objmgr_vdev *vdev,
+		       struct element_info *assoc_rsp_frame)
+{
+	struct wlan_mlo_dev_context *mlo_dev_ctx = vdev->mlo_dev_ctx;
+	struct wlan_mlo_sta *sta_ctx = NULL;
+	struct element_info *mlo_reassoc_rsp = NULL;
+
+	if (!mlo_dev_ctx || !mlo_dev_ctx->sta_ctx)
+		return;
+
+	sta_ctx = mlo_dev_ctx->sta_ctx;
+	if (sta_ctx->assoc_rsp.len && sta_ctx->assoc_rsp.ptr) {
+		*assoc_rsp_frame = sta_ctx->assoc_rsp;
+		return;
+	}
+	mlo_get_reassoc_rsp(vdev, &mlo_reassoc_rsp);
+	if (mlo_reassoc_rsp)
+		*assoc_rsp_frame = *mlo_reassoc_rsp;
 }
 
 QDF_STATUS mlo_sta_save_quiet_status(struct wlan_mlo_dev_context *mlo_dev_ctx,
