@@ -43,6 +43,9 @@
 #ifdef WLAN_RX_PKT_CAPTURE_ENH
 #include "cdp_txrx_extd_struct.h"
 #endif
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+#include "qdf_list.h"
+#endif
 
 #ifdef WLAN_MAX_CLIENTS_ALLOWED
 #define OL_TXRX_NUM_LOCAL_PEER_IDS (WLAN_MAX_CLIENTS_ALLOWED + 1 + 1 + 1)
