@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1860,12 +1860,60 @@ void dp_rx_word_mask_subscribe_be(struct dp_soc *soc,
 }
 #endif
 
-#if defined(WLAN_MCAST_MLO) && defined(CONFIG_MLO_SINGLE_DEV)
+#if defined(WLAN_MCAST_MLO) || defined(WLAN_MCAST_MLO_SAP)
+
+#if defined(WLAN_MCAST_MLO)
+
+/**
+ * dp_get_mlo_intrabss_vdev() - Function to get vdev for intrabss
+ *
+ * @be_soc: core DP main context
+ * @be_vdev: DP be_vdev structure
+ *
+ *  Return: dp vdev to forward the packet
+ */
+static
+struct dp_vdev *dp_get_mlo_intrabss_vdev(struct dp_soc_be *be_soc,
+					 struct dp_vdev_be *be_vdev)
+{
+	return dp_mlo_get_mcast_primary_vdev(be_soc,
+					     be_vdev,
+					     DP_MOD_ID_RX);
+}
+
+/**
+ * dp_release_mlo_intrabss_vdev() - Function to release intrabss vdev
+ *
+ * @intrabss_vdev: DP be_vdev structure
+ *
+ *  Return: None
+ */
+static void
+dp_release_mlo_intrabss_vdev(struct dp_vdev *intrabss_vdev)
+{
+	dp_vdev_unref_delete(intrabss_vdev->pdev->soc,
+			     intrabss_vdev, DP_MOD_ID_RX);
+}
+
+#else
+static
+struct dp_vdev *dp_get_mlo_intrabss_vdev(struct dp_soc_be *be_soc,
+					 struct dp_vdev_be *be_vdev)
+{
+	return &be_vdev->vdev;
+}
+
+static void
+dp_release_mlo_intrabss_vdev(struct dp_vdev *intrabss_vdev)
+{
+}
+#endif
+
 static inline
 bool dp_rx_intrabss_mlo_mcbc_fwd(struct dp_soc *soc, struct dp_vdev *vdev,
 				 qdf_nbuf_t nbuf_copy)
 {
-	struct dp_vdev *mcast_primary_vdev = NULL;
+	struct dp_vdev *intrabss_vdev = NULL;
 	struct dp_vdev_be *be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
 	struct cdp_tx_exception_metadata tx_exc_metadata = {0};
@@ -1876,25 +1924,23 @@ bool dp_rx_intrabss_mlo_mcbc_fwd(struct dp_soc *soc, struct dp_vdev *vdev,
 	tx_exc_metadata.peer_id = CDP_INVALID_PEER;
 	tx_exc_metadata.tid = CDP_INVALID_TID;
 
-	mcast_primary_vdev = dp_mlo_get_mcast_primary_vdev(be_soc,
-							   be_vdev,
-							   DP_MOD_ID_RX);
+	intrabss_vdev = dp_get_mlo_intrabss_vdev(be_soc, be_vdev);
 
-	if (!mcast_primary_vdev)
+	if (!intrabss_vdev)
 		return false;
 
 	nbuf_copy = dp_tx_send_exception((struct cdp_soc_t *)
-					 mcast_primary_vdev->pdev->soc,
-					 mcast_primary_vdev->vdev_id,
+					 intrabss_vdev->pdev->soc,
+					 intrabss_vdev->vdev_id,
 					 nbuf_copy, &tx_exc_metadata);
 
 	if (nbuf_copy)
 		qdf_nbuf_free(nbuf_copy);
 
-	dp_vdev_unref_delete(mcast_primary_vdev->pdev->soc,
-			     mcast_primary_vdev, DP_MOD_ID_RX);
+	dp_release_mlo_intrabss_vdev(intrabss_vdev);
 	return true;
 }
+
 #else
 static inline
 bool dp_rx_intrabss_mlo_mcbc_fwd(struct dp_soc *soc, struct dp_vdev *vdev,
