@@ -35,6 +35,7 @@
 #include "wlan_objmgr_peer_obj.h"
 #include "utils_mlo.h"
 #include <wlan_mlo_mgr_link_switch.h>
+#include "wlan_crypto_global_api.h"
 
 #ifdef CONN_MGR_ADV_FEATURE
 void osif_cm_get_assoc_req_ie_data(struct element_info *assoc_req,
@@ -837,6 +838,7 @@ static void osif_indcate_connect_results(struct wlan_objmgr_vdev *vdev,
 {
 	struct cfg80211_bss *bss = NULL;
 	struct ieee80211_channel *chan;
+	int32_t akm;
 
 	if (QDF_IS_STATUS_SUCCESS(rsp->connect_status)) {
 		chan = ieee80211_get_channel(osif_priv->wdev->wiphy,
@@ -854,12 +856,24 @@ static void osif_indcate_connect_results(struct wlan_objmgr_vdev *vdev,
 		return;
 	}
 
+	akm = wlan_crypto_get_param(vdev, WLAN_CRYPTO_PARAM_KEY_MGMT);
 	if (!wlan_vdev_mlme_is_mlo_link_vdev(vdev)) {
 		if (osif_update_connect_results(
 				osif_priv->wdev->netdev, bss,
 				rsp, vdev))
 			osif_connect_bss(osif_priv->wdev->netdev,
 					 bss, rsp);
+	} else if (osif_get_connect_status_code(rsp) == WLAN_STATUS_SUCCESS &&
+		   QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_OWE)) {
+		/*
+		 * For OWE roaming, link vdev is disconnected on receiving
+		 * roam synch indication. As part of the disconnect osif link
+		 * info will be cleared and connect request is prepared from
+		 * mlo roam module.
+		 * So update OSIF Link info for that case here.
+		 */
+		mlo_mgr_osif_update_connect_info(vdev,
+						 wlan_vdev_get_link_id(vdev));
 	}
 
 }
