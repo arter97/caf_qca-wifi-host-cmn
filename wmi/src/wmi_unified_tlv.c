@@ -127,6 +127,7 @@ static const uint32_t peer_param_tlv[] = {
 					WMI_PEER_CHWIDTH_PUNCTURE_20MHZ_BITMAP,
 	[WMI_HOST_PEER_FT_ROAMING_PEER_UPDATE] =
 					WMI_PEER_FT_ROAMING_PEER_UPDATE,
+	[WMI_HOST_PEER_PARAM_DMS_SUPPORT] = WMI_PEER_PARAM_DMS_SUPPORT,
 };
 
 #define PARAM_MAP(name, NAME) [wmi_ ## name] = WMI_ ##NAME
@@ -19696,6 +19697,10 @@ extract_roam_trigger_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 				btm_data->btm_mbo_assoc_retry_timeout;
 			trig->btm_trig_data.token =
 				(uint16_t)btm_data->btm_req_dialog_token;
+			trig->btm_trig_data.band =
+				WMI_GET_MLO_BAND(scan_info->flags);
+			if (trig->btm_trig_data.band != WMI_MLO_BAND_NO_MLO)
+				trig->btm_trig_data.is_mlo = true;
 		} else if (src_data) {
 			trig->btm_trig_data.btm_request_mode =
 					src_data->btm_request_mode;
@@ -19713,6 +19718,10 @@ extract_roam_trigger_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 					src_data->btm_mbo_assoc_retry_timeout;
 			trig->btm_trig_data.token =
 				src_data->btm_req_dialog_token;
+			trig->btm_trig_data.band =
+				WMI_GET_MLO_BAND(scan_info->flags);
+			if (trig->btm_trig_data.band != WMI_MLO_BAND_NO_MLO)
+				trig->btm_trig_data.is_mlo = true;
 			if ((btm_idx +
 				trig->btm_trig_data.candidate_list_count) <=
 			    param_buf->num_roam_btm_request_candidate_info)
@@ -19865,6 +19874,7 @@ extract_roam_scan_ap_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 		dst->dl_source = src->bl_source;
 		dst->dl_timestamp = src->bl_timestamp;
 		dst->dl_original_timeout = src->bl_original_timeout;
+		dst->is_mlo = WMI_GET_AP_INFO_MLO_STATUS(src->flags);
 
 		src++;
 		dst++;
@@ -19910,6 +19920,10 @@ extract_roam_scan_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	dst->frame_info_count = src_data->frame_info_count;
 	if (dst->frame_info_count >  WLAN_ROAM_MAX_FRAME_INFO)
 		dst->frame_info_count =  WLAN_ROAM_MAX_FRAME_INFO;
+
+	dst->band = WMI_GET_MLO_BAND(src_data->flags);
+	if (dst->band != WMI_MLO_BAND_NO_MLO)
+		dst->is_mlo = true;
 
 	/* Read the channel data only for dst->type is 0 (partial scan) */
 	if (dst->num_chan && !dst->type && param_buf->num_roam_scan_chan_info &&
@@ -19992,11 +20006,12 @@ extract_roam_result_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
  * @dst:        Pointer to destination structure to fill data
  * @idx:        TLV id
  * @rpt_idx:    Neighbor report Channel index
+ * @band: Band of the link on which packet is transmitted or received
  */
 static QDF_STATUS
 extract_roam_11kv_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 			    struct wmi_neighbor_report_data *dst,
-			    uint8_t idx, uint8_t rpt_idx)
+			    uint8_t idx, uint8_t rpt_idx, uint8_t band)
 {
 	WMI_ROAM_STATS_EVENTID_param_tlvs *param_buf;
 	wmi_roam_neighbor_report_info *src_data = NULL;
@@ -20026,6 +20041,11 @@ extract_roam_11kv_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 		WMI_ROAM_NEIGHBOR_REPORT_INFO_RESPONSE_TOKEN_GET(src_data->neighbor_report_detail);
 	dst->num_rpt =
 		WMI_ROAM_NEIGHBOR_REPORT_INFO_NUM_OF_NRIE_GET(src_data->neighbor_report_detail);
+
+	dst->band = band;
+
+	if (dst->band != WMI_MLO_BAND_NO_MLO)
+		dst->is_mlo = true;
 
 	if (!dst->num_freq || !param_buf->num_roam_neighbor_report_chan_info ||
 	    rpt_idx >= param_buf->num_roam_neighbor_report_chan_info)
@@ -20121,7 +20141,7 @@ extract_roam_result_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 static QDF_STATUS
 extract_roam_11kv_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 			    struct wmi_neighbor_report_data *dst,
-			    uint8_t idx, uint8_t rpt_idx)
+			    uint8_t idx, uint8_t rpt_idx, uint8_t band)
 {
 	return QDF_STATUS_E_NOSUPPORT;
 }
@@ -21760,6 +21780,8 @@ static void populate_tlv_events_id(WMI_EVT_ID *event_ids)
 					WMI_PEER_DELETE_RESP_EVENTID;
 	event_ids[wmi_peer_delete_all_response_event_id] =
 					WMI_VDEV_DELETE_ALL_PEER_RESP_EVENTID;
+	event_ids[wmi_peer_oper_mode_change_event_id] =
+					WMI_PEER_OPER_MODE_CHANGE_EVENTID;
 	event_ids[wmi_mgmt_rx_event_id] = WMI_MGMT_RX_EVENTID;
 	event_ids[wmi_host_swba_event_id] = WMI_HOST_SWBA_EVENTID;
 	event_ids[wmi_tbttoffset_update_event_id] =

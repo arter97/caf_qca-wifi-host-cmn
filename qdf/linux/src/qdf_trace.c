@@ -1751,6 +1751,7 @@ bool qdf_skip_wlan_connectivity_log(enum qdf_proto_type type,
  * @op_mode: Vdev Operation mode
  * @vdev_id: DP vdev ID
  * @data: skb data pointer
+ * @band: band
  *
  * Return: None
  */
@@ -1760,7 +1761,8 @@ void qdf_fill_wlan_connectivity_log(enum qdf_proto_type type,
 				    enum qdf_proto_dir dir,
 				    enum qdf_dp_tx_rx_status qdf_tx_status,
 				    enum QDF_OPMODE op_mode,
-				    uint8_t vdev_id, uint8_t *data)
+				    uint8_t vdev_id, uint8_t *data,
+				    uint8_t band)
 {
 	uint8_t pkt_type;
 
@@ -1805,10 +1807,14 @@ void qdf_fill_wlan_connectivity_log(enum qdf_proto_type type,
 		return;
 	}
 
+	wlan_diag_event.supported_links = band;
+
 	/*Tx completion status needs to be logged*/
-	if (dir == QDF_TX)
+	if (dir == QDF_TX) {
+		wlan_diag_event.is_tx = 1;
 		wlan_diag_event.tx_status =
 					wlan_get_diag_tx_status(qdf_tx_status);
+	}
 
 	WLAN_HOST_DIAG_EVENT_REPORT(&wlan_diag_event, EVENT_WLAN_CONN_DP);
 }
@@ -1819,8 +1825,9 @@ void qdf_fill_wlan_connectivity_log(enum qdf_proto_type type,
 				    enum qdf_proto_subtype subtype,
 				    enum qdf_proto_dir dir,
 				    enum qdf_dp_tx_rx_status qdf_tx_status,
-					enum QDF_OPMODE op_mode,
-				    uint8_t vdev_id, uint8_t *data)
+				    enum QDF_OPMODE op_mode,
+				    uint8_t vdev_id, uint8_t *data,
+				    uint8_t band)
 {
 }
 #endif
@@ -1865,7 +1872,8 @@ static bool qdf_log_eapol_pkt(uint8_t vdev_id, struct sk_buff *skb,
 					  QDF_TX_RX_STATUS_INVALID);
 		qdf_fill_wlan_connectivity_log(QDF_PROTO_TYPE_EAPOL, subtype,
 					       QDF_RX, 0, op_mode,
-					       vdev_id, skb->data);
+					       vdev_id, skb->data,
+					       qdf_nbuf_rx_get_band(skb));
 	}
 
 	if (dp_eap_trace) {
@@ -1945,7 +1953,8 @@ static bool qdf_log_dhcp_pkt(uint8_t vdev_id, struct sk_buff *skb,
 					  QDF_TRACE_DEFAULT_MSDU_ID,
 					  QDF_TX_RX_STATUS_INVALID);
 		qdf_fill_wlan_connectivity_log(QDF_PROTO_TYPE_DHCP, subtype,
-					       QDF_RX, 0, op_mode, vdev_id, 0);
+					       QDF_RX, 0, op_mode, vdev_id, 0,
+					       qdf_nbuf_rx_get_band(skb));
 	}
 
 	if (dp_dhcp_trace) {
@@ -2453,7 +2462,8 @@ void qdf_dp_trace_ptr(qdf_nbuf_t nbuf, enum QDF_DP_TRACE_ID code,
 		qdf_fill_wlan_connectivity_log(pkt_type, subtype,
 					       QDF_TX, qdf_tx_status, op_mode,
 					       QDF_NBUF_CB_TX_VDEV_CTX(nbuf),
-					       nbuf->data);
+					       nbuf->data,
+					       qdf_nbuf_tx_get_band(nbuf));
 	}
 
 	if (qdf_dp_enable_check(nbuf, code, QDF_TX) == false)

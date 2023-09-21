@@ -7993,6 +7993,61 @@ static QDF_STATUS dp_get_peer_param(struct cdp_soc_t *cdp_soc,  uint8_t vdev_id,
 	return QDF_STATUS_SUCCESS;
 }
 
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
+static inline void
+dp_check_map_link_id_band(struct dp_peer *peer)
+{
+	if (peer->link_id_valid)
+		dp_map_link_id_band(peer);
+}
+#else
+static inline void
+dp_check_map_link_id_band(struct dp_peer *peer)
+{
+}
+#endif
+
+/**
+ * dp_set_peer_freq() - Set peer frequency
+ * @cdp_soc: DP soc handle
+ * @vdev_id: id of vdev handle
+ * @peer_mac: peer mac address
+ * @param: parameter type to be set
+ * @val: value of parameter to be set
+ *
+ * Return: QDF_STATUS_SUCCESS for success. error code for failure.
+ */
+static inline QDF_STATUS
+dp_set_peer_freq(struct cdp_soc_t *cdp_soc,  uint8_t vdev_id,
+		 uint8_t *peer_mac, enum cdp_peer_param_type param,
+		 cdp_config_param_type val)
+{
+	struct dp_peer *peer = NULL;
+	struct cdp_peer_info peer_info = { 0 };
+
+	DP_PEER_INFO_PARAMS_INIT(&peer_info, vdev_id, peer_mac,
+				 false, CDP_LINK_PEER_TYPE);
+
+	peer = dp_peer_hash_find_wrapper((struct dp_soc *)cdp_soc,
+					 &peer_info, DP_MOD_ID_CDP);
+	if (!peer) {
+		dp_err("peer NULL,MAC " QDF_MAC_ADDR_FMT ", vdev_id %u",
+		       QDF_MAC_ADDR_REF(peer_mac), vdev_id);
+
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	peer->freq = val.cdp_peer_param_freq;
+	dp_check_map_link_id_band(peer);
+	dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
+
+	dp_info("Peer " QDF_MAC_ADDR_FMT " vdev_id %u, frequency %u",
+		QDF_MAC_ADDR_REF(peer_mac), vdev_id,
+		peer->freq);
+
+	return QDF_STATUS_SUCCESS;
+}
+
 /**
  * dp_set_peer_param: function to set parameters in peer
  * @cdp_soc: DP soc handle
@@ -8035,6 +8090,10 @@ static QDF_STATUS dp_set_peer_param(struct cdp_soc_t *cdp_soc,  uint8_t vdev_id,
 		break;
 	case CDP_CONFIG_IN_TWT:
 		txrx_peer->in_twt = !!(val.cdp_peer_param_in_twt);
+		break;
+	case CDP_CONFIG_PEER_FREQ:
+		return dp_set_peer_freq(cdp_soc, vdev_id,
+					peer_mac, param, val);
 		break;
 	default:
 		break;
@@ -9272,23 +9331,19 @@ static QDF_STATUS dp_txrx_update_vdev_host_stats(struct cdp_soc_t *soc_hdl,
 }
 
 /**
- * dp_txrx_get_peer_stats() - will return cdp_peer_stats
+ * dp_txrx_get_peer_stats_wrapper() - will get cdp_peer_stats
  * @soc: soc handle
- * @vdev_id: id of vdev handle
- * @peer_mac: mac of DP_PEER handle
- * @peer_stats: buffer to copy to
+ * @peer_stats: destination buffer to copy to
+ * @peer_info: peer info
  *
  * Return: status success/failure
  */
 static QDF_STATUS
-dp_txrx_get_peer_stats(struct cdp_soc_t *soc, uint8_t vdev_id,
-		       uint8_t *peer_mac, struct cdp_peer_stats *peer_stats)
+dp_txrx_get_peer_stats_wrapper(struct cdp_soc_t *soc,
+			       struct cdp_peer_stats *peer_stats,
+			       struct cdp_peer_info peer_info)
 {
 	struct dp_peer *peer = NULL;
-	struct cdp_peer_info peer_info = { 0 };
-
-	DP_PEER_INFO_PARAMS_INIT(&peer_info, vdev_id, peer_mac, false,
-				 CDP_WILD_PEER_TYPE);
 
 	peer = dp_peer_hash_find_wrapper((struct dp_soc *)soc, &peer_info,
 					 DP_MOD_ID_CDP);
@@ -9303,6 +9358,52 @@ dp_txrx_get_peer_stats(struct cdp_soc_t *soc, uint8_t vdev_id,
 	dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
 
 	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * dp_txrx_get_peer_stats() - will get cdp_peer_stats
+ * @soc: soc handle
+ * @vdev_id: id of vdev handle
+ * @peer_mac: peer mac address of DP_PEER handle
+ * @peer_stats: destination buffer to copy to
+ *
+ * Return: status success/failure
+ */
+static QDF_STATUS
+dp_txrx_get_peer_stats(struct cdp_soc_t *soc, uint8_t vdev_id,
+		       uint8_t *peer_mac, struct cdp_peer_stats *peer_stats)
+{
+	struct cdp_peer_info peer_info = { 0 };
+
+	DP_PEER_INFO_PARAMS_INIT(&peer_info, vdev_id, peer_mac, false,
+				 CDP_WILD_PEER_TYPE);
+
+	return dp_txrx_get_peer_stats_wrapper(soc, peer_stats, peer_info);
+}
+
+/**
+ * dp_txrx_get_peer_stats_based_on_peer_type() - get peer stats based on the
+ * peer type
+ * @soc: soc handle
+ * @vdev_id: id of vdev handle
+ * @peer_mac: mac of DP_PEER handle
+ * @peer_stats: buffer to copy to
+ * @peer_type: type of peer
+ *
+ * Return: status success/failure
+ */
+static QDF_STATUS
+dp_txrx_get_peer_stats_based_on_peer_type(struct cdp_soc_t *soc, uint8_t vdev_id,
+					  uint8_t *peer_mac,
+					  struct cdp_peer_stats *peer_stats,
+					  enum cdp_peer_type peer_type)
+{
+	struct cdp_peer_info peer_info = { 0 };
+
+	DP_PEER_INFO_PARAMS_INIT(&peer_info, vdev_id, peer_mac, false,
+				 peer_type);
+
+	return dp_txrx_get_peer_stats_wrapper(soc, peer_stats, peer_info);
 }
 
 #if defined WLAN_FEATURE_11BE_MLO && defined DP_MLO_LINK_STATS_SUPPORT
@@ -11517,12 +11618,17 @@ void dp_check_n_notify_umac_prereset_done(struct dp_soc *soc)
 	if (soc->service_rings_running)
 		return;
 
+	/* Unregister the callback */
+	dp_unregister_notify_umac_pre_reset_fw_callback(soc);
+
+	/* Check if notify was already sent by any other thread */
+	if (qdf_atomic_test_and_set_bit(DP_UMAC_RESET_NOTIFY_DONE,
+					&soc->service_rings_running))
+		return;
+
 	/* Notify the firmware that Umac pre reset is complete */
 	dp_umac_reset_notify_action_completion(soc,
 					       UMAC_RESET_ACTION_DO_PRE_RESET);
-
-	/* Unregister the callback */
-	dp_unregister_notify_umac_pre_reset_fw_callback(soc);
 }
 
 /**
@@ -11672,7 +11778,7 @@ static QDF_STATUS dp_umac_reset_service_handle_n_notify_done(struct dp_soc *soc)
 
 non_ppeds:
 	dp_register_notify_umac_pre_reset_fw_callback(soc);
-	dp_check_n_notify_umac_prereset_done(soc);
+	dp_umac_reset_trigger_pre_reset_notify_cb(soc);
 	soc->umac_reset_ctx.nbuf_list = NULL;
 	return QDF_STATUS_SUCCESS;
 }
@@ -11710,7 +11816,7 @@ static inline void dp_umac_reset_ppeds_start(struct dp_soc *soc)
 static QDF_STATUS dp_umac_reset_service_handle_n_notify_done(struct dp_soc *soc)
 {
 	dp_register_notify_umac_pre_reset_fw_callback(soc);
-	dp_check_n_notify_umac_prereset_done(soc);
+	dp_umac_reset_trigger_pre_reset_notify_cb(soc);
 	soc->umac_reset_ctx.nbuf_list = NULL;
 	return QDF_STATUS_SUCCESS;
 }
@@ -11784,6 +11890,8 @@ static QDF_STATUS dp_umac_reset_handle_post_reset_complete(struct dp_soc *soc)
 	qdf_nbuf_t nbuf_list = soc->umac_reset_ctx.nbuf_list;
 
 	soc->umac_reset_ctx.nbuf_list = NULL;
+
+	soc->service_rings_running = 0;
 
 	dp_resume_reo_send_cmd(soc);
 
@@ -12261,6 +12369,8 @@ static struct cdp_host_stats_ops dp_ops_host_stats = {
 	.txrx_stats_publish = dp_txrx_stats_publish,
 	.txrx_get_vdev_stats  = dp_txrx_get_vdev_stats,
 	.txrx_get_peer_stats = dp_txrx_get_peer_stats,
+	.txrx_get_peer_stats_based_on_peer_type =
+			dp_txrx_get_peer_stats_based_on_peer_type,
 	.txrx_get_soc_stats = dp_txrx_get_soc_stats,
 	.txrx_get_peer_stats_param = dp_txrx_get_peer_stats_param,
 	.txrx_get_per_link_stats = dp_txrx_get_per_link_peer_stats,

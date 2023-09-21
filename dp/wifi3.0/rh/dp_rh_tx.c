@@ -553,7 +553,8 @@ static void dp_tx_alloc_tcl_desc_rh(struct dp_tx_tcl_desc_pool_s *tcl_desc_pool,
 
 QDF_STATUS dp_tx_desc_pool_init_rh(struct dp_soc *soc,
 				   uint32_t num_elem,
-				   uint8_t pool_id)
+				   uint8_t pool_id,
+				   bool spcl_tx_desc)
 {
 	struct dp_soc_rh *rh_soc = dp_get_rh_soc_from_dp_soc(soc);
 	uint32_t id, count, page_id, offset, pool_id_32;
@@ -623,7 +624,7 @@ err_out:
 
 void dp_tx_desc_pool_deinit_rh(struct dp_soc *soc,
 			       struct dp_tx_desc_pool_s *tx_desc_pool,
-			       uint8_t pool_id)
+			       uint8_t pool_id, bool spcl_tx_desc)
 {
 	dp_tx_tso_num_seg_pool_free_by_id(soc, pool_id);
 	dp_tx_tso_desc_pool_deinit_by_id(soc, pool_id);

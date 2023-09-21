@@ -1601,6 +1601,12 @@ enum qdf_suspend_type {
  * suspended
  * @QDF_VDEV_MAC_ADDR_UPDATE_RESPONSE_TIMED_OUT: VDEV MAC address update
  * request for Link switch timedout.
+ * @QDF_MGMT_RX_REO_INCONSISTENT_SNAPSHOT: Inconsistent management Rx reorder
+ * snapshots
+ * @QDF_MGMT_RX_REO_OUT_OF_ORDER_PKT: Reception of management packet with out
+ * of order packet counter values
+ * @QDF_MGMT_RX_REO_ZERO_DURATION_PKT: Reception of management packet with zero
+ * packet duration
  */
 enum qdf_hang_reason {
 	QDF_REASON_UNSPECIFIED,
@@ -1639,6 +1645,9 @@ enum qdf_hang_reason {
 	QDF_FLUSH_LOGS,
 	QDF_WMI_CMD_SENT_DURING_SUSPEND,
 	QDF_VDEV_MAC_ADDR_UPDATE_RESPONSE_TIMED_OUT,
+	QDF_MGMT_RX_REO_INCONSISTENT_SNAPSHOT,
+	QDF_MGMT_RX_REO_OUT_OF_ORDER_PKT,
+	QDF_MGMT_RX_REO_ZERO_DURATION_PKT,
 };
 
 /**
@@ -1806,6 +1815,7 @@ enum qdf_iommu_attr {
 /**
  * enum qdf_dp_desc_type - source type for multiple pages allocation
  * @QDF_DP_TX_DESC_TYPE: DP SW TX descriptor
+ * @QDF_DP_TX_SPCL_DESC_TYPE: DP SW TX special descriptor
  * @QDF_DP_TX_PPEDS_DESC_TYPE: DP PPE-DS Tx descriptor
  * @QDF_DP_TX_EXT_DESC_TYPE: DP TX msdu extension descriptor
  * @QDF_DP_TX_EXT_DESC_LINK_TYPE: DP link descriptor for msdu ext_desc
@@ -1824,6 +1834,7 @@ enum qdf_iommu_attr {
  */
 enum qdf_dp_desc_type {
 	QDF_DP_TX_DESC_TYPE,
+	QDF_DP_TX_SPCL_DESC_TYPE,
 	QDF_DP_TX_PPEDS_DESC_TYPE,
 	QDF_DP_TX_EXT_DESC_TYPE,
 	QDF_DP_TX_EXT_DESC_LINK_TYPE,

@@ -655,6 +655,25 @@ static inline void target_if_fill_provisioned_links(
 		     &t2lm->ieee_link_map_tid,
 		     sizeof(uint16_t) * T2LM_MAX_NUM_TIDS);
 }
+
+/**
+ * target_if_fill_timer() - API to fill the t2lm timer values
+ * @params: Pointer to T2LM params structure
+ * @t2lm: Pointer to T2LM info structure
+ *
+ * Return: none
+ */
+static inline void
+target_if_fill_timer(struct wmi_host_tid_to_link_map_params *params,
+		     struct wlan_t2lm_info *t2lm)
+{
+	if (t2lm->mapping_switch_time_present)
+		params->mapping_switch_time = t2lm->mapping_switch_time;
+
+	if (t2lm->expected_duration_present)
+		params->expected_duration = t2lm->expected_duration;
+}
+
 #else
 static inline void target_if_fill_provisioned_links(
 		struct wmi_host_tid_to_link_map_params *params,
@@ -663,6 +682,12 @@ static inline void target_if_fill_provisioned_links(
 	qdf_mem_copy(&params->t2lm_info[params->num_dir].t2lm_provisioned_links,
 		     &t2lm->hw_link_map_tid,
 		     sizeof(uint16_t) * T2LM_MAX_NUM_TIDS);
+}
+
+static inline void
+target_if_fill_timer(struct wmi_host_tid_to_link_map_params *params,
+		     struct wlan_t2lm_info *t2lm)
+{
 }
 #endif
 
@@ -701,6 +726,14 @@ target_if_mlo_send_tid_to_link_mapping(struct wlan_objmgr_vdev *vdev,
 
 	if (!params.t2lm_info[params.num_dir].default_link_mapping)
 		target_if_fill_provisioned_links(&params, t2lm);
+
+	target_if_fill_timer(&params, t2lm);
+	t2lm_debug("mapping_switch_time_present %d MST %d",
+		   t2lm->mapping_switch_time_present,
+		   params.mapping_switch_time);
+	t2lm_debug("expected_switch_time_present %d EDT %d",
+		   t2lm->expected_duration_present,
+		   params.expected_duration);
 
 	t2lm_debug("num_dir:%d direction:%d default_link_mapping:%d",
 		   params.num_dir, params.t2lm_info[params.num_dir].direction,

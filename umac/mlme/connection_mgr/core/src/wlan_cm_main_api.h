@@ -1443,4 +1443,26 @@ void cm_store_n_send_failed_candidate(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id)
 {
 }
 #endif /* CONN_MGR_ADV_FEATURE */
+
+#ifdef WLAN_FEATURE_11BE_MLO
+/**
+ * cm_bss_mlo_type() - Check if the scan entry is of MLO type
+ * @psoc: Pointer to psoc
+ * @entry: scan cache entry
+ * @scan_list: list of scan entries to look for if @entry is of ML type
+ *
+ * Return: MLO AP type: SLO, MLMR or EMLSR.
+ */
+enum MLO_TYPE cm_bss_mlo_type(struct wlan_objmgr_psoc *psoc,
+			      struct scan_cache_entry *entry,
+			      qdf_list_t *scan_list);
+#else
+static inline enum MLO_TYPE
+cm_bss_mlo_type(struct wlan_objmgr_psoc *psoc,
+		struct scan_cache_entry *entry,
+		qdf_list_t *scan_list)
+{
+	return SLO;
+}
+#endif
 #endif /* __WLAN_CM_MAIN_API_H__ */

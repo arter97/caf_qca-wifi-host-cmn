@@ -2766,6 +2766,15 @@ void dp_reo_desc_freelist_destroy(struct dp_soc *soc);
 void dp_reset_rx_reo_tid_queue(struct dp_soc *soc, void *hw_qdesc_vaddr,
 			       uint32_t size);
 
+
+static inline void dp_umac_reset_trigger_pre_reset_notify_cb(struct dp_soc *soc)
+{
+	notify_pre_reset_fw_callback callback = soc->notify_fw_callback;
+
+	if (callback)
+		callback(soc);
+}
+
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 /**
  * dp_umac_reset_complete_umac_recovery() - Complete Umac reset session
@@ -2850,7 +2859,10 @@ QDF_STATUS dp_mlo_umac_reset_stats_print(struct dp_soc *soc)
 	return QDF_STATUS_SUCCESS;
 }
 #endif
-
+#else
+static inline void dp_umac_reset_trigger_pre_reset_notify_cb(struct dp_soc *soc)
+{
+}
 #endif
 
 #if defined(DP_UMAC_HW_RESET_SUPPORT) && defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
@@ -5453,4 +5465,42 @@ void dp_tx_remove_vlan_tag(struct dp_vdev *vdev, qdf_nbuf_t nbuf);
  * Return: None.
  */
 void dp_print_per_link_stats(struct cdp_soc_t *soc_hdl, uint8_t vdev_id);
+
+/**
+ * dp_get_ring_stats_from_hal(): get hal level ring pointer values
+ * @soc: DP_SOC handle
+ * @srng: DP_SRNG handle
+ * @ring_type: srng src/dst ring
+ * @_tailp: pointer to tail of ring
+ * @_headp: pointer to head of ring
+ * @_hw_headp: pointer to head of ring in HW
+ * @_hw_tailp: pointer to tail of ring in HW
+ *
+ * Return: void
+ */
+static inline void
+dp_get_ring_stats_from_hal(struct dp_soc *soc,  struct dp_srng *srng,
+			   enum hal_ring_type ring_type,
+			   uint32_t *_tailp, uint32_t *_headp,
+			   int32_t *_hw_headp, int32_t *_hw_tailp)
+{
+	uint32_t tailp;
+	uint32_t headp;
+	int32_t hw_headp = -1;
+	int32_t hw_tailp = -1;
+	struct hal_soc *hal_soc;
+
+	if (soc && srng && srng->hal_srng) {
+		hal_soc = (struct hal_soc *)soc->hal_soc;
+		hal_get_sw_hptp(soc->hal_soc, srng->hal_srng, &tailp, &headp);
+		*_headp = headp;
+		*_tailp = tailp;
+
+		hal_get_hw_hptp(soc->hal_soc, srng->hal_srng, &hw_headp,
+				&hw_tailp, ring_type);
+		*_hw_headp = hw_headp;
+		*_hw_tailp = hw_tailp;
+	}
+}
+
 #endif /* #ifndef _DP_INTERNAL_H_ */

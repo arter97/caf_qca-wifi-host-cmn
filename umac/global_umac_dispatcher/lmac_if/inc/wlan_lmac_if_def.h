@@ -267,10 +267,8 @@ struct wlan_lmac_if_global_shmem_local_ops {
 
 	QDF_STATUS (*init_shmem_arena_ctx)(void *arena_vaddr,
 					   size_t arena_len,
-					   uint8_t grp_id,
-					   uint8_t recovery);
-	QDF_STATUS (*deinit_shmem_arena_ctx)(uint8_t grp_id,
-					     uint8_t recovery);
+					   uint8_t grp_id);
+	QDF_STATUS (*deinit_shmem_arena_ctx)(uint8_t grp_id);
 	void *(*get_crash_reason_address)(uint8_t grp_id,
 					  uint8_t chip_id);
 	void *(*get_recovery_mode_address)(uint8_t grp_id,
@@ -2096,6 +2094,7 @@ struct wlan_lmac_if_p2p_rx_ops {
  * struct wlan_lmac_if_atf_rx_ops - ATF south bound rx function pointers
  * @atf_get_fmcap:                     Get firmware capability for ATF
  * @atf_get_mode:                      Get mode of ATF
+ * @atf_is_enabled:                    Check atf_mode, fwcap & atf_commit flags
  * @atf_get_msdu_desc:                 Get msdu desc for ATF
  * @atf_get_max_vdevs:                 Get maximum vdevs for a Radio
  * @atf_get_peers:                     Get number of peers for a radio
@@ -2129,6 +2128,8 @@ struct wlan_lmac_if_p2p_rx_ops {
 struct wlan_lmac_if_atf_rx_ops {
 	uint32_t (*atf_get_fmcap)(struct wlan_objmgr_psoc *psoc);
 	uint32_t (*atf_get_mode)(struct wlan_objmgr_psoc *psoc);
+	bool (*atf_is_enabled)(struct wlan_objmgr_psoc *psoc,
+			       struct wlan_objmgr_pdev *pdev);
 	uint32_t (*atf_get_msdu_desc)(struct wlan_objmgr_psoc *psoc);
 	uint32_t (*atf_get_max_vdevs)(struct wlan_objmgr_psoc *psoc);
 	uint32_t (*atf_get_peers)(struct wlan_objmgr_psoc *psoc);

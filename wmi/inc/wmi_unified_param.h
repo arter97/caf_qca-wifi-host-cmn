@@ -1153,6 +1153,8 @@ struct wlan_host_t2lm_of_tids {
  * @peer_macaddr: link peer macaddr
  * @num_dir: number of directions for which T2LM info is available
  * @t2lm_info: TID-to-link mapping info for the given directions
+ * @mapping_switch_time: Mapping switch time of this T2LM IE
+ * @expected_duration: Expected duration of this T2LM IE
  * @preferred_links: Preferred link info.
  */
 struct wmi_host_tid_to_link_map_params {
@@ -1160,6 +1162,8 @@ struct wmi_host_tid_to_link_map_params {
 	uint8_t peer_macaddr[QDF_MAC_ADDR_SIZE];
 	uint8_t num_dir;
 	struct wlan_host_t2lm_of_tids t2lm_info[WLAN_T2LM_MAX_DIRECTION];
+	uint16_t mapping_switch_time;
+	uint32_t expected_duration;
 #ifdef WMI_AP_SUPPORT
 	struct wlan_host_preferred_links preferred_links;
 #endif
@@ -5353,6 +5357,7 @@ typedef enum {
 #ifdef WLAN_RCC_ENHANCED_AOA_SUPPORT
 	wmi_pdev_enhanced_aoa_phasedelta_eventid,
 #endif
+	wmi_peer_oper_mode_change_event_id,
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -7340,6 +7345,7 @@ typedef enum {
  *                                         puncture bitmap
  * @WMI_HOST_PEER_FT_ROAMING_PEER_UPDATE: Reset PN value on
  *                                        every roam event
+ * @WMI_HOST_PEER_PARAM_DMS_SUPPORT: Set DMS capability
  */
 enum {
 	PEER_PARAM(PEER_MIMO_PS_STATE),
@@ -7374,6 +7380,7 @@ enum {
 	PEER_PARAM(PEER_PARAM_ENABLE_FT),
 	PEER_PARAM(PEER_CHWIDTH_PUNCTURE_20MHZ_BITMAP),
 	PEER_PARAM(PEER_FT_ROAMING_PEER_UPDATE),
+	PEER_PARAM(PEER_PARAM_DMS_SUPPORT),
 
 };
 #define WMI_HOST_PEER_MIMO_PS_NONE	0x0
@@ -9144,6 +9151,8 @@ struct wmi_roam_trigger_background_data {
  * milli seconds
  * @token: BTM request dialog token
  * @btm_cand: BTM request candidate information
+ * @is_mlo: Flag to check whether the existing connection a MLO connection
+ * @band: indicates the link involved in MLO conenection.
  */
 struct wmi_roam_btm_trigger_data {
 	uint32_t timestamp;
@@ -9156,6 +9165,8 @@ struct wmi_roam_btm_trigger_data {
 	uint32_t btm_mbo_assoc_retry_timeout;
 	uint16_t token;
 	struct wmi_btm_req_candidate_info btm_cand[WLAN_MAX_BTM_CANDIDATE];
+	bool is_mlo;
+	uint8_t band;
 };
 
 /**
@@ -9269,6 +9280,7 @@ struct wmi_roam_trigger_abort_reason {
  *  to denylist.
  *  @dl_original_timeout: Original timeout value in milli seconds
  *  when AP added to DL
+ *  @is_mlo: Flag to check whether the existing connection is MLO connection
  */
 struct wmi_roam_candidate_info {
 	uint32_t timestamp;
@@ -9285,6 +9297,7 @@ struct wmi_roam_candidate_info {
 	uint32_t dl_source;
 	uint32_t dl_timestamp;
 	uint32_t dl_original_timeout;
+	bool is_mlo;
 };
 
 /**
@@ -9300,6 +9313,8 @@ struct wmi_roam_candidate_info {
  * @ap: List of candidate AP info
  * @dwell_type: roam scan channel dwell type, enum in roam_scan_dwell_type
  * @scan_complete_timestamp: timestamp of all channels scan completed
+ * @is_mlo: Flag to check whether the existing connection is MLO connection
+ * @band: Band involved in the roaming during a MLO connection.
  */
 struct wmi_roam_scan_data {
 	bool present;
@@ -9313,6 +9328,8 @@ struct wmi_roam_scan_data {
 	struct wmi_roam_candidate_info ap[MAX_ROAM_CANDIDATE_AP];
 	uint8_t dwell_type[MAX_ROAM_SCAN_CHAN];
 	uint32_t scan_complete_timestamp;
+	bool is_mlo;
+	uint8_t band;
 };
 
 /**
@@ -9351,6 +9368,8 @@ struct wmi_roam_result {
  *  @req_token: Request token
  *  @resp_token: Response Token
  *  @num_rpt: Number of report element
+ *  @is_mlo: Flag to check if the current connection is MLO connection
+ *  @band: indicates the link involved in MLO conenection.
  */
 struct wmi_neighbor_report_data {
 	bool present;
@@ -9365,6 +9384,8 @@ struct wmi_neighbor_report_data {
 	uint8_t req_token;
 	uint8_t resp_token;
 	uint8_t num_rpt;
+	bool is_mlo;
+	uint8_t band;
 };
 
 /**

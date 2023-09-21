@@ -134,9 +134,26 @@ enum CMEM_MEM_CLIENTS {
 	((WLAN_CFG_NUM_TX_DESC_MAX / DP_CC_SPT_PAGE_MAX_ENTRIES) * \
 	 DP_CC_PPT_ENTRY_SIZE_4K_ALIGNED)
 
+#ifndef QCA_SUPPORT_DP_GLOBAL_CTX
 /* Offset of rx descripotor pool */
 #define DP_RX_DESC_CMEM_OFFSET \
 	DP_TX_DESC_CMEM_OFFSET + (MAX_TXDESC_POOLS * DP_TX_DESC_POOL_CMEM_SIZE)
+
+#else
+/* tx special descriptor are programmed after tx desc CMEM region*/
+#define DP_TX_SPCL_DESC_CMEM_OFFSET \
+	DP_TX_DESC_CMEM_OFFSET + (MAX_TXDESC_POOLS * DP_TX_DESC_POOL_CMEM_SIZE)
+
+/* size of CMEM needed for a tx special desc pool*/
+#define DP_TX_SPCL_DESC_POOL_CMEM_SIZE \
+	((WLAN_CFG_NUM_TX_SPL_DESC_MAX / DP_CC_SPT_PAGE_MAX_ENTRIES) * \
+	 DP_CC_PPT_ENTRY_SIZE_4K_ALIGNED)
+
+/* Offset of rx descripotor pool */
+#define DP_RX_DESC_CMEM_OFFSET \
+	DP_TX_SPCL_DESC_CMEM_OFFSET + (MAX_TXDESC_POOLS * \
+	DP_TX_SPCL_DESC_POOL_CMEM_SIZE)
+#endif
 
 /* size of CMEM needed for a rx desc pool */
 #define DP_RX_DESC_POOL_CMEM_SIZE \
@@ -423,8 +440,6 @@ struct dp_vdev_be {
 	int8_t bank_id;
 	uint8_t vdev_id_check_en;
 #ifdef WLAN_MLO_MULTI_CHIP
-	uint8_t partner_vdev_list[WLAN_MAX_MLO_CHIPS][WLAN_MAX_MLO_LINKS_PER_SOC];
-	uint8_t bridge_vdev_list[WLAN_MAX_MLO_CHIPS][WLAN_MAX_MLO_LINKS_PER_SOC];
 	struct cdp_vdev_stats mlo_stats;
 #ifdef WLAN_FEATURE_11BE_MLO
 #ifdef WLAN_MCAST_MLO
@@ -548,8 +563,6 @@ dp_mlo_get_peer_hash_obj(struct dp_soc *soc)
 	return be_soc->ml_ctxt;
 }
 
-void  dp_clr_mlo_ptnr_list(struct dp_soc *soc, struct dp_vdev *vdev);
-
 /**
  * dp_get_mlo_dev_list_obj() - return the container struct of MLO Dev list
  * @be_soc: be soc handle
@@ -561,6 +574,7 @@ dp_get_mlo_dev_list_obj(struct dp_soc_be *be_soc)
 {
 	return be_soc->ml_ctxt;
 }
+
 #if defined(WLAN_FEATURE_11BE_MLO)
 /**
  * dp_mlo_partner_chips_map() - Map MLO peers to partner SOCs
@@ -603,6 +617,7 @@ typedef void dp_ptnr_vdev_iter_func(struct dp_vdev_be *be_vdev,
  * @arg: argument need to be passed to func
  * @mod_id: module id
  * @type: iterate type
+ * @include_self_vdev: flag to include/exclude self vdev in iteration
  *
  * Return: None
  */
@@ -610,7 +625,8 @@ void dp_mlo_iter_ptnr_vdev(struct dp_soc_be *be_soc,
 			   struct dp_vdev_be *be_vdev,
 			   dp_ptnr_vdev_iter_func func, void *arg,
 			   enum dp_mod_id mod_id,
-			   uint8_t type);
+			   uint8_t type,
+			   bool include_self_vdev);
 #endif
 
 #ifdef WLAN_MCAST_MLO
@@ -638,15 +654,50 @@ dp_mlo_get_peer_hash_obj(struct dp_soc *soc)
 	return dp_get_be_soc_from_dp_soc(soc);
 }
 
-static inline void  dp_clr_mlo_ptnr_list(struct dp_soc *soc,
-					 struct dp_vdev *vdev)
-{
-}
-
 static inline dp_mlo_dev_obj_t
 dp_get_mlo_dev_list_obj(struct dp_soc_be *be_soc)
 {
 	return be_soc;
+}
+#endif
+
+#ifdef QCA_SUPPORT_DP_GLOBAL_CTX
+static inline
+struct dp_hw_cookie_conversion_t *dp_get_tx_cookie_t(struct dp_soc *soc,
+						     uint8_t pool_id)
+{
+	struct dp_global_context *dp_global = NULL;
+
+	dp_global = wlan_objmgr_get_global_ctx();
+	return dp_global->tx_cc_ctx[pool_id];
+}
+
+static inline
+struct dp_hw_cookie_conversion_t *dp_get_spcl_tx_cookie_t(struct dp_soc *soc,
+							  uint8_t pool_id)
+{
+	struct dp_global_context *dp_global = NULL;
+
+	dp_global = wlan_objmgr_get_global_ctx();
+	return dp_global->spcl_tx_cc_ctx[pool_id];
+}
+#else
+static inline
+struct dp_hw_cookie_conversion_t *dp_get_tx_cookie_t(struct dp_soc *soc,
+						     uint8_t pool_id)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+
+	return &be_soc->tx_cc_ctx[pool_id];
+}
+
+static inline
+struct dp_hw_cookie_conversion_t *dp_get_spcl_tx_cookie_t(struct dp_soc *soc,
+							  uint8_t pool_id)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+
+	return &be_soc->tx_cc_ctx[pool_id];
 }
 #endif
 
@@ -942,6 +993,21 @@ _dp_srng_test_and_update_nf_params(struct dp_soc *soc,
 }
 #endif
 
+#ifdef QCA_SUPPORT_DP_GLOBAL_CTX
+static inline
+uint32_t dp_desc_pool_get_spcl_cmem_base(uint8_t desc_pool_id)
+{
+	return (DP_TX_SPCL_DESC_CMEM_OFFSET +
+		(desc_pool_id * DP_TX_SPCL_DESC_POOL_CMEM_SIZE));
+}
+#else
+static inline
+uint32_t dp_desc_pool_get_spcl_cmem_base(uint8_t desc_pool_id)
+{
+	QDF_BUG(0);
+	return 0;
+}
+#endif
 static inline
 uint32_t dp_desc_pool_get_cmem_base(uint8_t chip_id, uint8_t desc_pool_id,
 				    enum qdf_dp_desc_type desc_type)
@@ -950,6 +1016,8 @@ uint32_t dp_desc_pool_get_cmem_base(uint8_t chip_id, uint8_t desc_pool_id,
 	case QDF_DP_TX_DESC_TYPE:
 		return (DP_TX_DESC_CMEM_OFFSET +
 			(desc_pool_id * DP_TX_DESC_POOL_CMEM_SIZE));
+	case QDF_DP_TX_SPCL_DESC_TYPE:
+		return dp_desc_pool_get_spcl_cmem_base(desc_pool_id);
 	case QDF_DP_RX_DESC_BUF_TYPE:
 		return (DP_RX_DESC_CMEM_OFFSET +
 			((chip_id * MAX_RXDESC_POOLS) + desc_pool_id) *

@@ -724,6 +724,14 @@ void wlan_mlo_partner_peer_disconnect_notify(struct wlan_objmgr_peer *src_peer)
 	if (!vdev)
 		return;
 
+	/* Do not change peer state to disconnect initiated for
+	 * link switch case, this can lead to not sending deauth frame
+	 * incase of actual disconnect and AP might drop the next connect
+	 * request as it might think STA is still in connected state.
+	 */
+	if (wlan_vdev_mlme_is_mlo_link_switch_in_progress(vdev))
+		return;
+
 	mlo_peer_lock_acquire(ml_peer);
 
 	if (ml_peer->mlpeer_state == ML_PEER_DISCONN_INITIATED) {
@@ -989,12 +997,9 @@ static QDF_STATUS mlo_peer_detach_link_peer(
 			qdf_atomic_dec(&vdev->vdev_objmgr.wlan_ml_peer_count);
 		} else {
 			mlo_err("vdev is null for ml_peer: " QDF_MAC_ADDR_FMT
-				"mld mac addr: " QDF_MAC_ADDR_FMT
-				"ml_peer_count: %d",
+				"mld mac addr: " QDF_MAC_ADDR_FMT,
 				QDF_MAC_ADDR_REF(link_peer->macaddr),
-				QDF_MAC_ADDR_REF(link_peer->mldaddr),
-				qdf_atomic_read
-				(&vdev->vdev_objmgr.wlan_ml_peer_count));
+				QDF_MAC_ADDR_REF(link_peer->mldaddr));
 			qdf_assert_always(vdev);
 		}
 		wlan_objmgr_peer_release_ref(link_peer, WLAN_MLO_MGR_ID);

@@ -29,7 +29,6 @@
 #ifdef BE_PKTLOG_SUPPORT
 #define BUFFER_RESIDUE 1
 #define RX_MON_MIN_HEAD_ROOM   64
-#endif
 
 QDF_STATUS
 dp_rx_process_pktlog_be(struct dp_soc *soc, struct dp_pdev *pdev,
@@ -72,4 +71,5 @@ dp_rx_process_pktlog_be(struct dp_soc *soc, struct dp_pdev *pdev,
 
 	return QDF_STATUS_SUCCESS;
 }
+#endif
 

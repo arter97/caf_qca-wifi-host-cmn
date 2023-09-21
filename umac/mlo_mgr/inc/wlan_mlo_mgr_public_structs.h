@@ -208,9 +208,29 @@ struct mlo_state_params {
 
 #endif
 
+/**
+ * enum wlan_mlo_link_switch_notify_reason - Enum for link switch notifier
+ *                                           callback trigger reason.
+ * @MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_PRE_SER: Prior to start of
+ *                                                   link switch and prior to
+ *                                                   serializing link switch.
+ * @MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_POST_SER: Prior to link switch start
+ *                                                    but link switch is
+ *                                                    serialized
+ * @MLO_LINK_SWITCH_NOTIFY_REASON_STOP_FAILURE: Link switch failure notify
+ * @MLO_LINK_SWITCH_NOTIFY_REASON_STOP_SUCCESS: Link switch success notify
+ */
+enum wlan_mlo_link_switch_notify_reason {
+	MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_PRE_SER,
+	MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_POST_SER,
+	MLO_LINK_SWITCH_NOTIFY_REASON_STOP_FAILURE,
+	MLO_LINK_SWITCH_NOTIFY_REASON_STOP_SUCCESS,
+};
+
 typedef QDF_STATUS
 (*mlo_mgr_link_switch_notifier_cb)(struct wlan_objmgr_vdev *vdev,
-				   struct wlan_mlo_link_switch_req *lswitch_req);
+				   struct wlan_mlo_link_switch_req *lswitch_req,
+				   enum wlan_mlo_link_switch_notify_reason notify_reason);
 
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 /*
@@ -598,6 +618,7 @@ struct emlsr_capability {
  * @ml_partner_info: mlo partner link info
  * @emlsr_cap: EMLSR capabilities info
  * @link_force_ctx: set link force mode context
+ * @ml_link_control_mode: link control mode configured via user space
  */
 struct wlan_mlo_sta {
 	qdf_bitmap(wlan_connect_req_links, WLAN_UMAC_MLO_MAX_VDEVS);
@@ -627,6 +648,7 @@ struct wlan_mlo_sta {
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 	struct wlan_link_force_context link_force_ctx;
 #endif
+	uint8_t ml_link_control_mode;
 };
 
 /**
@@ -690,6 +712,7 @@ struct wlan_mlo_link_mac_update {
  * @mld_addr: MLO device MAC address
  * @wlan_vdev_list: list of vdevs associated with this MLO connection
  * @wlan_bridge_vdev_list: list of bridge vdevs associated with this MLO
+ * @wlan_bridge_vdev_count: number of elements in the bridge vdev list
  * @bridge_sta_ctx: bridge sta context
  * @wlan_vdev_count: number of elements in the vdev list
  * @mlo_peer_list: list peers in this MLO connection
@@ -716,6 +739,7 @@ struct wlan_mlo_dev_context {
 	struct wlan_mlo_bridge_sta *bridge_sta_ctx;
 #endif
 	uint16_t wlan_vdev_count;
+	uint16_t wlan_bridge_vdev_count;
 	struct wlan_mlo_peer_list mlo_peer_list;
 	uint16_t wlan_max_mlo_peer_count;
 #ifdef WLAN_MLO_USE_SPINLOCK

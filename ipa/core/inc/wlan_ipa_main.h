@@ -605,6 +605,19 @@ void ipa_init_deinit_unlock(void);
  */
 bool ipa_is_wds_enabled(void);
 
+/**
+ * ipa_get_alt_pipe() - Get alt_pipe for vdev_id
+ * @pdev: pdev obj
+ * @vdev_id: vdev_id of the target interface
+ * @alt_pipe: Boolean output to indicate if interface with @vdev_id
+ *	      is using alternate TX pipe or not.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS ipa_get_alt_pipe(struct wlan_objmgr_pdev *pdev,
+			    uint8_t vdev_id,
+			    bool *alt_pipe);
+
 #else /* Not IPA_OFFLOAD */
 typedef QDF_STATUS (*wlan_ipa_softap_xmit)(qdf_nbuf_t nbuf, qdf_netdev_t dev);
 typedef void (*wlan_ipa_send_to_nw)(qdf_nbuf_t nbuf, qdf_netdev_t dev);

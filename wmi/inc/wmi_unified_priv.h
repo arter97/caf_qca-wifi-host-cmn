@@ -88,6 +88,7 @@
 
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 #include <wlan_cm_roam_public_struct.h>
+#include <wlan_mlme_public_struct.h>
 #endif
 
 #ifdef WMI_AP_SUPPORT
@@ -508,6 +509,11 @@ QDF_STATUS
 				 uint8_t *num_keys,
 				 struct qdf_mac_addr *mld_addr);
 #endif
+
+QDF_STATUS
+(*extract_peer_oper_mode_event)(wmi_unified_t wmi_handle,
+				uint8_t *event, uint32_t data_len,
+				struct peer_oper_mode_event *data);
 #endif
 
 #ifdef FEATURE_MEC_OFFLOAD
@@ -2562,7 +2568,7 @@ QDF_STATUS
 (*extract_roam_11kv_stats)(wmi_unified_t wmi_handle,
 			   void *evt_buf,
 			   struct wmi_neighbor_report_data *dst,
-			   uint8_t idx, uint8_t rpt_idx);
+			   uint8_t idx, uint8_t rpt_idx, uint8_t band);
 
 void (*wmi_pdev_id_conversion_enable)(wmi_unified_t wmi_handle,
 				      uint32_t *pdev_map,

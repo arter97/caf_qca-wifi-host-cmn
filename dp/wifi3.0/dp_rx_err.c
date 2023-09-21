@@ -1814,7 +1814,7 @@ dp_rx_err_ring_record_entry(struct dp_soc *soc, uint64_t paddr,
 }
 #endif
 
-#ifdef HANDLE_RX_REROUTE_ERR
+#if defined(HANDLE_RX_REROUTE_ERR) || defined(REO_EXCEPTION_MSDU_WAR)
 static int dp_rx_err_handle_msdu_buf(struct dp_soc *soc,
 				     hal_ring_desc_t ring_desc)
 {
@@ -1868,7 +1868,9 @@ assert_return:
 	qdf_assert(0);
 	return lmac_id;
 }
+#endif
 
+#ifdef HANDLE_RX_REROUTE_ERR
 static int dp_rx_err_exception(struct dp_soc *soc, hal_ring_desc_t ring_desc)
 {
 	int ret;
@@ -1913,13 +1915,19 @@ static int dp_rx_err_exception(struct dp_soc *soc, hal_ring_desc_t ring_desc)
 	return ret;
 }
 #else /* HANDLE_RX_REROUTE_ERR */
-
+#ifdef REO_EXCEPTION_MSDU_WAR
+static int dp_rx_err_exception(struct dp_soc *soc, hal_ring_desc_t ring_desc)
+{
+	return dp_rx_err_handle_msdu_buf(soc, ring_desc);
+}
+#else	/* REO_EXCEPTION_MSDU_WAR */
 static int dp_rx_err_exception(struct dp_soc *soc, hal_ring_desc_t ring_desc)
 {
 	qdf_assert_always(0);
 
 	return DP_INVALID_LMAC_ID;
 }
+#endif /* REO_EXCEPTION_MSDU_WAR */
 #endif /* HANDLE_RX_REROUTE_ERR */
 
 #ifdef WLAN_MLO_MULTI_CHIP

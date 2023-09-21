@@ -130,6 +130,12 @@ void dp_tx_process_htt_completion_li(struct dp_soc *soc,
 	}
 
 	pdev = tx_desc->pdev;
+	if (qdf_unlikely(!pdev)) {
+		dp_tx_comp_warn("The pdev in TX desc is NULL, dropped.");
+		dp_tx_comp_warn("tx_status: %u", tx_status);
+		tx_desc->flags |= DP_TX_DESC_FLAG_TX_COMP_ERR;
+		goto release_tx_desc;
+	}
 
 	if (qdf_unlikely(tx_desc->pdev->is_pdev_down)) {
 		dp_tx_comp_info_rl("pdev in down state %d", tx_desc->id);
@@ -155,6 +161,7 @@ void dp_tx_process_htt_completion_li(struct dp_soc *soc,
 	case HTT_TX_FW2WBM_TX_STATUS_TTL:
 	{
 		uint8_t tid;
+		uint8_t transmit_cnt_valid = 0;
 
 		if (HTT_TX_WBM_COMPLETION_V2_VALID_GET(htt_desc[2])) {
 			ts.peer_id =
@@ -174,6 +181,13 @@ void dp_tx_process_htt_completion_li(struct dp_soc *soc,
 		ts.ack_frame_rssi =
 			HTT_TX_WBM_COMPLETION_V2_ACK_FRAME_RSSI_GET(
 					htt_desc[1]);
+		transmit_cnt_valid =
+			HTT_TX_WBM_COMPLETION_V2_TRANSMIT_CNT_VALID_GET(
+					htt_desc[2]);
+		if (transmit_cnt_valid)
+			ts.transmit_cnt =
+				HTT_TX_WBM_COMPLETION_V2_TRANSMIT_COUNT_GET(
+						htt_desc[0]);
 
 		ts.tsf = htt_desc[3];
 		ts.first_msdu = 1;
@@ -570,14 +584,18 @@ ring_access_fail:
 
 QDF_STATUS dp_tx_desc_pool_init_li(struct dp_soc *soc,
 				   uint32_t num_elem,
-				   uint8_t pool_id)
+				   uint8_t pool_id,
+				   bool spcl_tx_desc)
 {
 	uint32_t id, count, page_id, offset, pool_id_32;
 	struct dp_tx_desc_s *tx_desc;
 	struct dp_tx_desc_pool_s *tx_desc_pool;
 	uint16_t num_desc_per_page;
 
-	tx_desc_pool = &soc->tx_desc[pool_id];
+	if (spcl_tx_desc)
+		tx_desc_pool = dp_get_spcl_tx_desc_pool(soc, pool_id);
+	else
+		tx_desc_pool = dp_get_tx_desc_pool(soc, pool_id);
 	tx_desc = tx_desc_pool->freelist;
 	count = 0;
 	pool_id_32 = (uint32_t)pool_id;
@@ -601,7 +619,7 @@ QDF_STATUS dp_tx_desc_pool_init_li(struct dp_soc *soc,
 
 void dp_tx_desc_pool_deinit_li(struct dp_soc *soc,
 			       struct dp_tx_desc_pool_s *tx_desc_pool,
-			       uint8_t pool_id)
+			       uint8_t pool_id, bool spcl_tx_desc)
 {
 }
 
