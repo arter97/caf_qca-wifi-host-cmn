@@ -250,6 +250,16 @@ bool wlan_cm_is_first_candidate_connect_attempt(struct wlan_objmgr_vdev *vdev)
 	return cm_is_first_candidate_connect_attempt(vdev);
 }
 
+bool wlan_cm_is_link_switch_disconnect_resp(struct wlan_cm_discon_rsp *resp)
+{
+	return cm_is_link_switch_disconnect_resp(resp);
+}
+
+bool wlan_cm_is_link_switch_connect_resp(struct wlan_cm_connect_resp *resp)
+{
+	return cm_is_link_switch_connect_resp(resp);
+}
+
 #ifdef WLAN_FEATURE_HOST_ROAM
 bool wlan_cm_get_active_reassoc_req(struct wlan_objmgr_vdev *vdev,
 				    struct wlan_cm_vdev_reassoc_req *req)

@@ -1229,7 +1229,7 @@ void mlo_sta_link_connect_notify(struct wlan_objmgr_vdev *vdev,
 		return;
 	}
 
-	if (rsp->cm_id & CM_ID_LSWITCH_BIT) {
+	if (wlan_cm_is_link_switch_connect_resp(rsp)) {
 		mlo_info("Skip for link switch connect request");
 		return;
 	}
@@ -1649,7 +1649,7 @@ void mlo_sta_link_disconn_notify(struct wlan_objmgr_vdev *vdev,
 		}
 	}
 
-	if (resp->req.req.source != CM_MLO_LINK_SWITCH_DISCONNECT)
+	if (!wlan_cm_is_link_switch_disconnect_resp(resp))
 		mlo_handle_disconnect_resp(vdev, resp);
 }
 

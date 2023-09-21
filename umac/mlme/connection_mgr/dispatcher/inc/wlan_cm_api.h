@@ -229,6 +229,24 @@ void wlan_cm_free_connect_resp(struct wlan_cm_connect_resp *connect_rsp);
  */
 void wlan_cm_free_connect_req_param(struct wlan_cm_connect_req *req);
 
+/**
+ * wlan_cm_is_link_switch_disconnect_resp() - Check if the disconnect response
+ * is for link switch request.
+ * @resp: Connection manager disconnect response.
+ *
+ * Return: bool
+ */
+bool wlan_cm_is_link_switch_disconnect_resp(struct wlan_cm_discon_rsp *resp);
+
+/**
+ * wlan_cm_is_link_switch_connect_resp() - Check if the connect response if for
+ * link switch request.
+ * @resp: Connection manager connect response.
+ *
+ * Return: bool
+ */
+bool wlan_cm_is_link_switch_connect_resp(struct wlan_cm_connect_resp *resp);
+
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 /**
  * wlan_cm_is_vdev_roam_started() - check if vdev is in roaming state and

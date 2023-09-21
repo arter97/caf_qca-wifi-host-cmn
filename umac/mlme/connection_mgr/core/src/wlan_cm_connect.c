@@ -1750,7 +1750,7 @@ cm_handle_connect_req_in_non_init_state(struct cnx_mgr *cm_ctx,
 	}
 
 	/* Reject any link switch connect request while in non-init state */
-	if (cm_req->req.source == CM_MLO_LINK_SWITCH_CONNECT) {
+	if (cm_is_link_switch_connect_req(cm_req)) {
 		mlme_info(CM_PREFIX_FMT "Ignore connect req from source %d state %d",
 			  CM_PREFIX_REF(vdev_id, cm_req->cm_id),
 			  cm_req->req.source, cm_state_substate);
@@ -1902,7 +1902,7 @@ QDF_STATUS cm_connect_start(struct cnx_mgr *cm_ctx,
 		return QDF_STATUS_SUCCESS;
 	}
 
-	if (cm_req->req.source == CM_MLO_LINK_SWITCH_CONNECT) {
+	if (cm_is_link_switch_connect_req(cm_req)) {
 		/* The error handling has to be different here.not corresponds
 		 * to connect req serialization now.
 		 */
@@ -2988,7 +2988,7 @@ QDF_STATUS cm_notify_connect_complete(struct cnx_mgr *cm_ctx,
 					  resp->connect_status);
 	cm_inform_dlm_connect_complete(cm_ctx->vdev, resp);
 	if (QDF_IS_STATUS_ERROR(resp->connect_status) &&
-	    sm_state == WLAN_CM_S_INIT && !(resp->cm_id & CM_ID_LSWITCH_BIT))
+	    sm_state == WLAN_CM_S_INIT && !cm_is_link_switch_connect_resp(resp))
 		cm_clear_vdev_mlo_cap(cm_ctx->vdev);
 
 	return QDF_STATUS_SUCCESS;
@@ -3050,7 +3050,7 @@ QDF_STATUS cm_connect_complete(struct cnx_mgr *cm_ctx,
 				 resp->cm_id));
 	cm_remove_cmd(cm_ctx, &resp->cm_id);
 
-	if (resp->cm_id & CM_ID_LSWITCH_BIT) {
+	if (cm_is_link_switch_connect_resp(resp)) {
 		cm_reset_active_cm_id(cm_ctx->vdev, resp->cm_id);
 		mlo_mgr_link_switch_connect_done(cm_ctx->vdev,
 						 resp->connect_status);
