@@ -4172,6 +4172,9 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	wlan_cfg_ctx->pkt_capture_mode = cfg_get(psoc, CFG_PKT_CAPTURE_MODE) &
 						 PKT_CAPTURE_MODE_DATA_ONLY;
 #endif
+#ifdef WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL
+	wlan_cfg_ctx->rx_refill_buff_pool_size = DP_RX_REFILL_BUFF_POOL_SIZE;
+#endif
 	wlan_cfg_ctx->num_rxdma_dst_rings_per_pdev = NUM_RXDMA_RINGS_PER_PDEV;
 	wlan_cfg_ctx->num_rxdma_status_rings_per_pdev =
 					NUM_RXDMA_STATUS_RINGS_PER_PDEV;
