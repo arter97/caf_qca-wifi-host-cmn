@@ -56,6 +56,7 @@
 #ifdef WIFI_MONITOR_SUPPORT
 #include <dp_mon.h>
 #endif
+#include "qdf_ssr_driver_dump.h"
 
 #ifdef WLAN_FEATURE_STATS_EXT
 #define INIT_RX_HW_STATS_LOCK(_soc) \
@@ -2016,6 +2017,9 @@ static void dp_deinit_tx_pair_by_index(struct dp_soc *soc, int index)
 		return;
 	}
 
+	dp_ssr_dump_srng_unregister("tcl_data_ring", index);
+	dp_ssr_dump_srng_unregister("tx_comp_ring", index);
+
 	wlan_minidump_remove(soc->tcl_data_ring[index].base_vaddr_unaligned,
 			     soc->tcl_data_ring[index].alloc_size,
 			     soc->ctrl_psoc,
@@ -2087,6 +2091,11 @@ static QDF_STATUS dp_init_tx_ring_pair_by_index(struct dp_soc *soc,
 		dp_err("dp_srng_init failed for tx_comp_ring");
 		goto fail1;
 	}
+
+	dp_ssr_dump_srng_register("tcl_data_ring",
+				  &soc->tcl_data_ring[index], index);
+	dp_ssr_dump_srng_register("tx_comp_ring",
+				  &soc->tx_comp_ring[index], index);
 
 	wlan_minidump_log(soc->tx_comp_ring[index].base_vaddr_unaligned,
 			  soc->tx_comp_ring[index].alloc_size,
@@ -3745,6 +3754,7 @@ void dp_soc_srng_deinit(struct dp_soc *soc)
 			     soc->ctrl_psoc, WLAN_MD_DP_SRNG_WBM_DESC_REL,
 			     "wbm_desc_rel_ring");
 	dp_srng_deinit(soc, &soc->wbm_desc_rel_ring, SW2WBM_RELEASE, 0);
+	dp_ssr_dump_srng_unregister("wbm_desc_rel_ring", -1);
 
 	/* Tx data rings */
 	for (i = 0; i < soc->num_tcl_data_rings; i++)
@@ -3763,6 +3773,7 @@ void dp_soc_srng_deinit(struct dp_soc *soc)
 		/* TODO: Get number of rings and ring sizes
 		 * from wlan_cfg
 		 */
+		dp_ssr_dump_srng_unregister("reo_dest_ring", i);
 		wlan_minidump_remove(soc->reo_dest_ring[i].base_vaddr_unaligned,
 				     soc->reo_dest_ring[i].alloc_size,
 				     soc->ctrl_psoc, WLAN_MD_DP_SRNG_REO_DEST,
@@ -3770,6 +3781,7 @@ void dp_soc_srng_deinit(struct dp_soc *soc)
 		dp_srng_deinit(soc, &soc->reo_dest_ring[i], REO_DST, i);
 	}
 
+	dp_ssr_dump_srng_unregister("reo_reinject_ring", -1);
 	/* REO reinjection ring */
 	wlan_minidump_remove(soc->reo_reinject_ring.base_vaddr_unaligned,
 			     soc->reo_reinject_ring.alloc_size,
@@ -3777,6 +3789,7 @@ void dp_soc_srng_deinit(struct dp_soc *soc)
 			     "reo_reinject_ring");
 	dp_srng_deinit(soc, &soc->reo_reinject_ring, REO_REINJECT, 0);
 
+	dp_ssr_dump_srng_unregister("rx_rel_ring", -1);
 	/* Rx release ring */
 	wlan_minidump_remove(soc->rx_rel_ring.base_vaddr_unaligned,
 			     soc->rx_rel_ring.alloc_size,
@@ -3788,6 +3801,7 @@ void dp_soc_srng_deinit(struct dp_soc *soc)
 	/* TODO: Better to store ring_type and ring_num in
 	 * dp_srng during setup
 	 */
+	dp_ssr_dump_srng_unregister("reo_exception_ring", -1);
 	wlan_minidump_remove(soc->reo_exception_ring.base_vaddr_unaligned,
 			     soc->reo_exception_ring.alloc_size,
 			     soc->ctrl_psoc, WLAN_MD_DP_SRNG_REO_EXCEPTION,
@@ -3795,11 +3809,13 @@ void dp_soc_srng_deinit(struct dp_soc *soc)
 	dp_srng_deinit(soc, &soc->reo_exception_ring, REO_EXCEPTION, 0);
 
 	/* REO command and status rings */
+	dp_ssr_dump_srng_unregister("reo_cmd_ring", -1);
 	wlan_minidump_remove(soc->reo_cmd_ring.base_vaddr_unaligned,
 			     soc->reo_cmd_ring.alloc_size,
 			     soc->ctrl_psoc, WLAN_MD_DP_SRNG_REO_CMD,
 			     "reo_cmd_ring");
 	dp_srng_deinit(soc, &soc->reo_cmd_ring, REO_CMD, 0);
+	dp_ssr_dump_srng_unregister("reo_status_ring", -1);
 	wlan_minidump_remove(soc->reo_status_ring.base_vaddr_unaligned,
 			     soc->reo_status_ring.alloc_size,
 			     soc->ctrl_psoc, WLAN_MD_DP_SRNG_REO_STATUS,
@@ -3829,6 +3845,8 @@ QDF_STATUS dp_soc_srng_init(struct dp_soc *soc)
 		dp_init_err("%pK: dp_srng_init failed for wbm_desc_rel_ring", soc);
 		goto fail1;
 	}
+	dp_ssr_dump_srng_register("wbm_desc_rel_ring",
+				  &soc->wbm_desc_rel_ring, -1);
 
 	wlan_minidump_log(soc->wbm_desc_rel_ring.base_vaddr_unaligned,
 			  soc->wbm_desc_rel_ring.alloc_size,
@@ -3852,6 +3870,8 @@ QDF_STATUS dp_soc_srng_init(struct dp_soc *soc)
 		dp_init_err("%pK: dp_srng_init failed for reo_reinject_ring", soc);
 		goto fail1;
 	}
+	dp_ssr_dump_srng_register("reo_reinject_ring",
+				  &soc->reo_reinject_ring, -1);
 
 	wlan_minidump_log(soc->reo_reinject_ring.base_vaddr_unaligned,
 			  soc->reo_reinject_ring.alloc_size,
@@ -3866,6 +3886,7 @@ QDF_STATUS dp_soc_srng_init(struct dp_soc *soc)
 		dp_init_err("%pK: dp_srng_init failed for rx_rel_ring", soc);
 		goto fail1;
 	}
+	dp_ssr_dump_srng_register("rx_rel_ring", &soc->rx_rel_ring, -1);
 
 	wlan_minidump_log(soc->rx_rel_ring.base_vaddr_unaligned,
 			  soc->rx_rel_ring.alloc_size,
@@ -3879,6 +3900,8 @@ QDF_STATUS dp_soc_srng_init(struct dp_soc *soc)
 		dp_init_err("%pK: dp_srng_init failed - reo_exception", soc);
 		goto fail1;
 	}
+	dp_ssr_dump_srng_register("reo_exception_ring",
+				  &soc->reo_exception_ring, -1);
 
 	wlan_minidump_log(soc->reo_exception_ring.base_vaddr_unaligned,
 			  soc->reo_exception_ring.alloc_size,
@@ -3891,6 +3914,7 @@ QDF_STATUS dp_soc_srng_init(struct dp_soc *soc)
 		dp_init_err("%pK: dp_srng_init failed for reo_cmd_ring", soc);
 		goto fail1;
 	}
+	dp_ssr_dump_srng_register("reo_cmd_ring", &soc->reo_cmd_ring, -1);
 
 	wlan_minidump_log(soc->reo_cmd_ring.base_vaddr_unaligned,
 			  soc->reo_cmd_ring.alloc_size,
@@ -3906,6 +3930,7 @@ QDF_STATUS dp_soc_srng_init(struct dp_soc *soc)
 		dp_init_err("%pK: dp_srng_init failed for reo_status_ring", soc);
 		goto fail1;
 	}
+	dp_ssr_dump_srng_register("reo_status_ring", &soc->reo_status_ring, -1);
 
 	wlan_minidump_log(soc->reo_status_ring.base_vaddr_unaligned,
 			  soc->reo_status_ring.alloc_size,
@@ -3935,6 +3960,8 @@ QDF_STATUS dp_soc_srng_init(struct dp_soc *soc)
 			goto fail1;
 		}
 
+		dp_ssr_dump_srng_register("reo_dest_ring",
+					  &soc->reo_dest_ring[i], i);
 		wlan_minidump_log(soc->reo_dest_ring[i].base_vaddr_unaligned,
 				  soc->reo_dest_ring[i].alloc_size,
 				  soc->ctrl_psoc,

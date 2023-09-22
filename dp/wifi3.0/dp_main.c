@@ -109,6 +109,7 @@ cdp_dump_flow_pool_info(struct cdp_soc_t *soc)
 #ifdef WLAN_FEATURE_PEER_TXQ_FLUSH_CONF
 #include <target_if_dp.h>
 #endif
+#include "qdf_ssr_driver_dump.h"
 
 #ifdef QCA_DP_ENABLE_TX_COMP_RING4
 #define TXCOMP_RING4_NUM 3
@@ -2920,6 +2921,8 @@ static int dp_rxdma_ring_setup(struct dp_soc *soc, struct dp_pdev *pdev)
 			dp_init_err("%pK: failed rx mac ring setup", soc);
 			return QDF_STATUS_E_FAILURE;
 		}
+		dp_ssr_dump_srng_register("rx_mac_buf_ring",
+					  &pdev->rx_mac_buf_ring[i], i);
 	}
 	return QDF_STATUS_SUCCESS;
 }
@@ -2935,8 +2938,10 @@ static void dp_rxdma_ring_cleanup(struct dp_soc *soc, struct dp_pdev *pdev)
 {
 	int i;
 
-	for (i = 0; i < MAX_RX_MAC_RINGS; i++)
+	for (i = 0; i < MAX_RX_MAC_RINGS; i++) {
+		dp_ssr_dump_srng_unregister("rx_mac_buf_ring", i);
 		dp_srng_deinit(soc, &pdev->rx_mac_buf_ring[i], RXDMA_BUF, 1);
+	}
 
 	dp_reap_timer_deinit(soc);
 }
@@ -3580,9 +3585,10 @@ QDF_STATUS dp_pdev_attach_wifi3(struct cdp_soc_t *txrx_soc,
 	pdev->soc = soc;
 	pdev->pdev_id = pdev_id;
 	soc->pdev_list[pdev_id] = pdev;
-
 	pdev->lmac_id = wlan_cfg_get_hw_mac_idx(soc->wlan_cfg_ctx, pdev_id);
 	soc->pdev_count++;
+
+	dp_ssr_dump_pdev_register(pdev, pdev_id);
 
 	/*sync DP pdev cfg items with profile support after cfg_pdev_attach*/
 	wlan_dp_pdev_cfg_sync_profile((struct cdp_soc_t *)soc, pdev_id);
@@ -3936,6 +3942,8 @@ static QDF_STATUS dp_pdev_detach_wifi3(struct cdp_soc_t *psoc, uint8_t pdev_id,
 		return QDF_STATUS_E_FAILURE;
 	}
 
+	dp_ssr_dump_pdev_unregister(pdev_id);
+
 	soc->arch_ops.txrx_pdev_detach(pdev);
 
 	dp_pdev_detach((struct cdp_pdev *)pdev, force);
@@ -4001,6 +4009,11 @@ static void dp_soc_detach(struct cdp_soc_t *txrx_soc)
 	struct dp_soc *soc = (struct dp_soc *)txrx_soc;
 
 	soc->arch_ops.txrx_soc_detach(soc);
+
+	qdf_ssr_driver_dump_unregister_region("wlan_cfg_ctx");
+	qdf_ssr_driver_dump_unregister_region("dp_soc");
+	qdf_ssr_driver_dump_unregister_region("tcl_wbm_map_array");
+	qdf_nbuf_ssr_unregister_region();
 
 	dp_runtime_deinit();
 
@@ -13534,10 +13547,17 @@ dp_soc_attach(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 		goto fail2;
 	}
 
+	qdf_ssr_driver_dump_register_region("wlan_cfg_ctx", soc->wlan_cfg_ctx,
+					    sizeof(*soc->wlan_cfg_ctx));
+
 	/*sync DP soc cfg items with profile support after cfg_soc_attach*/
 	wlan_dp_soc_cfg_sync_profile((struct cdp_soc_t *)soc);
 
 	soc->arch_ops.soc_cfg_attach(soc);
+
+	qdf_ssr_driver_dump_register_region("tcl_wbm_map_array",
+					    &soc->wlan_cfg_ctx->tcl_wbm_map_array,
+					    sizeof(struct wlan_cfg_tcl_wbm_ring_num_map));
 
 	if (dp_hw_link_desc_pool_banks_alloc(soc, WLAN_INVALID_PDEV_ID)) {
 		dp_err("failed to allocate link desc pool banks");
@@ -13588,6 +13608,8 @@ dp_soc_attach(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 	dp_soc_set_interrupt_mode(soc);
 	dp_soc_set_def_pdev(soc);
 	dp_soc_set_qref_debug_list(soc);
+	qdf_ssr_driver_dump_register_region("dp_soc", soc, sizeof(*soc));
+	qdf_nbuf_ssr_register_region();
 
 	dp_info("Mem stats: DMA = %u HEAP = %u SKB = %u",
 		qdf_dma_mem_stats_read(),
@@ -14621,3 +14643,59 @@ void dp_peer_multipass_list_init(struct dp_vdev *vdev)
 	qdf_spinlock_create(&vdev->mpass_peer_mutex);
 }
 #endif /* QCA_MULTIPASS_SUPPORT */
+
+#ifdef WLAN_FEATURE_SSR_DRIVER_DUMP
+#define MAX_STR_LEN 50
+#define MAX_SRNG_STR_LEN 30
+
+void dp_ssr_dump_srng_register(char *region_name, struct dp_srng *srng, int num)
+{
+	char ring[MAX_SRNG_STR_LEN], ring_handle[MAX_STR_LEN];
+
+	if (num >= 0)
+		qdf_snprint(ring, MAX_SRNG_STR_LEN, "%s%s%d",
+			    region_name, "_", num);
+	else
+		qdf_snprint(ring, MAX_SRNG_STR_LEN, "%s", region_name);
+
+	qdf_snprint(ring_handle, MAX_STR_LEN, "%s%s", ring, "_handle");
+
+	qdf_ssr_driver_dump_register_region(ring_handle, srng->hal_srng,
+					    sizeof(struct hal_srng));
+	qdf_ssr_driver_dump_register_region(ring,
+					    srng->base_vaddr_aligned,
+					    srng->alloc_size);
+}
+
+void dp_ssr_dump_srng_unregister(char *region_name, int num)
+{
+	char ring[MAX_SRNG_STR_LEN], ring_handle[MAX_STR_LEN];
+
+	if (num >= 0)
+		qdf_snprint(ring, MAX_SRNG_STR_LEN, "%s%s%d",
+			    region_name, "_", num);
+	else
+		qdf_snprint(ring, MAX_SRNG_STR_LEN, "%s", region_name);
+
+	qdf_snprint(ring_handle, MAX_STR_LEN, "%s%s", ring, "_handle");
+
+	qdf_ssr_driver_dump_unregister_region(ring);
+	qdf_ssr_driver_dump_unregister_region(ring_handle);
+}
+
+void dp_ssr_dump_pdev_register(struct dp_pdev *pdev, uint8_t pdev_id)
+{
+	char pdev_str[MAX_STR_LEN];
+
+	qdf_snprint(pdev_str, MAX_STR_LEN, "%s%s%d", "dp_pdev", "_", pdev_id);
+	qdf_ssr_driver_dump_register_region(pdev_str, pdev, sizeof(*pdev));
+}
+
+void dp_ssr_dump_pdev_unregister(uint8_t pdev_id)
+{
+	char pdev_str[MAX_STR_LEN];
+
+	qdf_snprint(pdev_str, MAX_STR_LEN, "%s%s%d", "dp_pdev", "_", pdev_id);
+	qdf_ssr_driver_dump_unregister_region(pdev_str);
+}
+#endif
