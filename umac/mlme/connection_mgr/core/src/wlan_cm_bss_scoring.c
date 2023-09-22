@@ -2143,11 +2143,13 @@ cm_sort_vendor_algo_mlo_bss_entry(struct wlan_objmgr_psoc *psoc,
 	bool eht_capab;
 	struct partner_link_info tmp_link_info;
 	uint32_t tmp_total_score = 0;
+	uint8_t mlo_support_link_num;
 
 	wlan_psoc_mlme_get_11be_capab(psoc, &eht_capab);
 	if (!eht_capab)
 		return;
 
+	mlo_support_link_num = wlan_mlme_get_sta_mlo_conn_max_num(psoc);
 	link = &entry->ml_info.link_info[0];
 	freq_entry = entry->channel.chan_freq;
 	for (i = 0; i < entry->ml_info.num_links; i++) {
@@ -2166,10 +2168,15 @@ cm_sort_vendor_algo_mlo_bss_entry(struct wlan_objmgr_psoc *psoc,
 
 		if (policy_mgr_are_2_freq_on_same_mac(psoc, freq[i],
 						      freq_entry)) {
-			link[i].is_valid_link = false;
 			total_score[i] = 0;
 			mlme_nofl_debug("freq %d and %d can't be MLMR",
 					freq[i], freq_entry);
+
+			if (mlo_support_link_num <= WLAN_MAX_ML_DEFAULT_LINK ||
+			    entry->ml_info.num_links <=
+						WLAN_MAX_ML_DEFAULT_LINK)
+				link[i].is_valid_link = false;
+
 			continue;
 		}
 
