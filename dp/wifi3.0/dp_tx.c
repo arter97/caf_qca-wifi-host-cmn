@@ -5931,6 +5931,32 @@ void dp_tx_update_uplink_delay(struct dp_soc *soc, struct dp_vdev *vdev,
 }
 #endif /* WLAN_FEATURE_TSF_UPLINK_DELAY */
 
+#ifndef CONFIG_AP_PLATFORM
+/**
+ * dp_update_mcast_stats() - Update Tx Mcast stats
+ * @txrx_peer: txrx_peer pointer
+ * @link_id: Link ID
+ * @length: packet length
+ * @nbuf: nbuf handle
+ *
+ * Return: None
+ */
+static inline void
+dp_update_mcast_stats(struct dp_txrx_peer *txrx_peer, uint8_t link_id,
+		      uint32_t length, qdf_nbuf_t nbuf)
+{
+	if (QDF_NBUF_CB_GET_IS_MCAST(nbuf))
+		DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer, tx.mcast, 1,
+					      length, link_id);
+}
+#else
+static inline void
+dp_update_mcast_stats(struct dp_txrx_peer *txrx_peer, uint8_t link_id,
+		      uint32_t length, qdf_nbuf_t nbuf)
+{
+}
+#endif
+
 void dp_tx_comp_process_tx_status(struct dp_soc *soc,
 				  struct dp_tx_desc_s *tx_desc,
 				  struct hal_tx_completion_status *ts,
@@ -6041,6 +6067,8 @@ void dp_tx_comp_process_tx_status(struct dp_soc *soc,
 							      1, length,
 							      link_id);
 			}
+
+			dp_update_mcast_stats(txrx_peer, link_id, length, nbuf);
 		}
 	}
 
