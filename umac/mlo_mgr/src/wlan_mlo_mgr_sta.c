@@ -719,6 +719,34 @@ void mlo_clear_cu_bpcc(struct wlan_objmgr_vdev *vdev)
 	mlo_debug("clear cu bpcc");
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+static void mlo_clear_sta_key_mgmt(struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_mlo_dev_context *mlo_dev_ctx = NULL;
+	struct wlan_mlo_sta *sta_ctx = NULL;
+
+	if (!vdev)
+		return;
+
+	mlo_dev_ctx = vdev->mlo_dev_ctx;
+	if (!mlo_dev_ctx)
+		return;
+
+	sta_ctx = mlo_dev_ctx->sta_ctx;
+	if (!sta_ctx)
+		return;
+
+	qdf_mem_zero(sta_ctx->key_mgmt, sizeof(sta_ctx->key_mgmt));
+
+	mlo_debug("clear sta_key_mgmt");
+}
+
+#else
+static void mlo_clear_sta_key_mgmt(struct wlan_objmgr_vdev *vdev)
+{
+}
+#endif
+
 QDF_STATUS mlo_connect(struct wlan_objmgr_vdev *vdev,
 		       struct wlan_cm_connect_req *req)
 {
@@ -761,6 +789,7 @@ QDF_STATUS mlo_connect(struct wlan_objmgr_vdev *vdev,
 		if (QDF_IS_STATUS_SUCCESS(status)) {
 			mlo_clear_cu_bpcc(vdev);
 			mlo_clear_connected_links_bmap(vdev);
+			mlo_clear_sta_key_mgmt(vdev);
 			mlo_dev_lock_release(mlo_dev_ctx);
 
 			status = wlan_cm_start_connect(vdev, req);
@@ -2361,11 +2390,33 @@ void mlo_defer_set_keys(struct wlan_objmgr_vdev *vdev,
 	sta_ctx = vdev->mlo_dev_ctx->sta_ctx;
 	if (!sta_ctx)
 		return;
-	for (link_iter = 0; link_iter < WLAN_MAX_ML_BSS_LINKS;
-	     link_iter++) {
-		if (!sta_ctx->key_mgmt[link_iter].keys_saved) {
-			sta_ctx->key_mgmt[link_iter].link_id = link_id;
-			sta_ctx->key_mgmt[link_iter].keys_saved = value;
+	if (value) {
+		for (link_iter = 0; link_iter < WLAN_MAX_ML_BSS_LINKS;
+		     link_iter++) {
+			if (sta_ctx->key_mgmt[link_iter].keys_saved &&
+			    sta_ctx->key_mgmt[link_iter].link_id == link_id)
+				return;
+		}
+
+		for (link_iter = 0; link_iter < WLAN_MAX_ML_BSS_LINKS;
+		     link_iter++) {
+			if (!sta_ctx->key_mgmt[link_iter].keys_saved) {
+				sta_ctx->key_mgmt[link_iter].link_id = link_id;
+				sta_ctx->key_mgmt[link_iter].keys_saved = true;
+				mlo_debug("set key link id %d value %d iter %d",
+					  link_id, value, link_iter);
+				return;
+			}
+		}
+	} else {
+		for (link_iter = 0; link_iter < WLAN_MAX_ML_BSS_LINKS;
+		     link_iter++) {
+			if (sta_ctx->key_mgmt[link_iter].link_id == link_id) {
+				sta_ctx->key_mgmt[link_iter].keys_saved = false;
+				mlo_debug("set key link id %d value %d iter %d",
+					  link_id, value, link_iter);
+				return;
+			}
 		}
 	}
 }
