@@ -819,6 +819,28 @@ mlo_mgr_start_link_switch(struct wlan_objmgr_vdev *vdev,
 	return status;
 }
 
+/**
+ * mlo_mgr_trigger_recovery_on_link_switch_timeout() - trigger panic on link
+ * switch timeout
+ * @vdev: vdev pointer
+ *
+ * Return: void
+ */
+static void
+mlo_mgr_trigger_recovery_on_link_switch_timeout(struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_objmgr_psoc *psoc;
+
+	psoc = wlan_vdev_get_psoc(vdev);
+	if (!psoc)
+		return;
+
+	if (qdf_is_recovering() || qdf_is_fw_down())
+		return;
+
+	qdf_trigger_self_recovery(psoc, QDF_ACTIVE_LIST_TIMEOUT);
+}
+
 static QDF_STATUS
 mlo_mgr_ser_link_switch_cb(struct wlan_serialization_command *cmd,
 			   enum wlan_serialization_cb_reason reason)
@@ -852,6 +874,7 @@ mlo_mgr_ser_link_switch_cb(struct wlan_serialization_command *cmd,
 		break;
 	case WLAN_SER_CB_ACTIVE_CMD_TIMEOUT:
 		mlo_err("Link switch active cmd timeout");
+		mlo_mgr_trigger_recovery_on_link_switch_timeout(vdev);
 		break;
 	default:
 		QDF_ASSERT(0);
