@@ -163,6 +163,20 @@ void wlan_scan_cfg_get_min_dwelltime_6g(struct wlan_objmgr_psoc *psoc,
 		return;
 	*min_dwell_time_6ghz = scan_obj->scan_def.min_dwell_time_6g;
 }
+
+QDF_STATUS wlan_scan_cfg_set_scan_mode_6g(struct wlan_objmgr_psoc *psoc,
+					  enum scan_mode_6ghz scan_mode_6g)
+{
+	struct wlan_scan_obj *scan_obj;
+
+	scan_obj = wlan_psoc_get_scan_obj(psoc);
+	if (!scan_obj)
+		return QDF_STATUS_E_INVAL;
+
+	scan_obj->scan_def.scan_mode_6g = scan_mode_6g;
+
+	return QDF_STATUS_SUCCESS;
+}
 #endif
 
 #ifdef WLAN_POLICY_MGR_ENABLE
