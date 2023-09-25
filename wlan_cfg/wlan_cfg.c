@@ -4189,7 +4189,6 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	wlan_soc_tx_packet_inspect_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_local_pkt_capture_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_umac_reset_cfg_attach(psoc, wlan_cfg_ctx);
-	wlan_cfg_ctx->rx_buffer_size = cfg_get(psoc, CFG_DP_RX_BUFFER_SIZE);
 	return wlan_cfg_ctx;
 }
 
@@ -4231,7 +4230,6 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 
 	wlan_cfg_ctx->tx_ring_size = cfg_get(psoc, CFG_DP_TX_RING_SIZE);
 	wlan_cfg_ctx->time_control_bp = cfg_get(psoc, CFG_DP_TIME_CONTROL_BP);
-	wlan_cfg_ctx->rx_buffer_size = cfg_get(psoc, CFG_DP_RX_BUFFER_SIZE);
 	wlan_cfg_ctx->qref_control_size =
 					cfg_get(psoc, CFG_DP_QREF_CONTROL_SIZE);
 	wlan_cfg_ctx->tx_comp_ring_size = cfg_get(psoc,
@@ -4851,13 +4849,6 @@ int wlan_cfg_time_control_bp(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return cfg->time_control_bp;
 }
-
-int wlan_cfg_rx_buffer_size(struct wlan_cfg_dp_soc_ctxt *cfg)
-{
-	return cfg->rx_buffer_size;
-}
-
-qdf_export_symbol(wlan_cfg_rx_buffer_size);
 
 int wlan_cfg_qref_control_size(struct wlan_cfg_dp_soc_ctxt *cfg)
 {

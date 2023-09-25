@@ -177,7 +177,6 @@ struct wlan_srng_cfg {
  * @int_timer_threshold_mon_dest: Timer threshold counter for monitor dest
  * @tx_ring_size:
  * @time_control_bp:
- * @rx_buffer_size: skb size
  * @qref_control_size: list size for memory history arrays
  * @tx_comp_ring_size:
  * @tx_comp_ring_size_nss:
@@ -387,7 +386,6 @@ struct wlan_cfg_dp_soc_ctxt {
 	int int_timer_threshold_mon_dest;
 	int tx_ring_size;
 	int time_control_bp;
-	int rx_buffer_size;
 	int qref_control_size;
 	int tx_comp_ring_size;
 	int tx_comp_ring_size_nss;
@@ -1618,14 +1616,6 @@ void wlan_cfg_set_tx_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg,
  * Return: interval time
  */
 int wlan_cfg_time_control_bp(struct wlan_cfg_dp_soc_ctxt *cfg);
-
-/**
- * wlan_cfg_rx_buffer_size - Get buffer size for skb
- * @cfg: soc configuration context
- *
- * Return: buffer size
- */
-int wlan_cfg_rx_buffer_size(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
  * wlan_cfg_qref_control_size - Get debug array size
