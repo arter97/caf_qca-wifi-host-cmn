@@ -3614,14 +3614,15 @@ QDF_STATUS dp_peer_state_update(struct cdp_soc_t *soc_hdl, uint8_t *peer_mac,
 	if (peer->txrx_peer)
 		peer->txrx_peer->authorize = peer->authorize;
 
-	dp_peer_info("peer" QDF_MAC_ADDR_FMT "state %d",
-		     QDF_MAC_ADDR_REF(peer->mac_addr.raw),
+	dp_peer_info("peer %pK MAC " QDF_MAC_ADDR_FMT " state %d",
+		     peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw),
 		     peer->state);
 
 	if (IS_MLO_DP_LINK_PEER(peer) && peer->first_link) {
 		peer->mld_peer->state = peer->state;
 		peer->mld_peer->txrx_peer->authorize = peer->authorize;
-		dp_peer_info("mld peer" QDF_MAC_ADDR_FMT "state %d",
+		dp_peer_info("mld peer %pK MAC " QDF_MAC_ADDR_FMT " state %d",
+			     peer->mld_peer,
 			     QDF_MAC_ADDR_REF(peer->mld_peer->mac_addr.raw),
 			     peer->mld_peer->state);
 	}
@@ -3797,10 +3798,15 @@ int dp_get_peer_state(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	if (!peer)
 		return OL_TXRX_PEER_STATE_INVALID;
 
-	DP_TRACE(DEBUG, "peer %pK stats %d", peer, peer->state);
-
 	tgt_peer = dp_get_tgt_peer_from_peer(peer);
 	peer_state = tgt_peer->state;
+
+	dp_peer_info("peer %pK tgt_peer: %pK peer MAC "
+		     QDF_MAC_ADDR_FMT " tgt peer MAC "
+		     QDF_MAC_ADDR_FMT " tgt peer state %d",
+		     peer, tgt_peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw),
+		     QDF_MAC_ADDR_REF(tgt_peer->mac_addr.raw),
+		     tgt_peer->state);
 
 	dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
 
