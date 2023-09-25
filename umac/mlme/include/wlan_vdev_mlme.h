@@ -421,15 +421,12 @@ struct vdev_mlme_mgmt_generic {
 #endif
 };
 
-/*
+/**
  * struct wlan_vdev_aid_mgr - AID manager
  * @aid_bitmap: AID bitmap array
  * @start_aid: start of AID index
  * @max_aid: Max allowed AID
  * @ref_cnt:  to share AID across VDEVs for MBSSID
- *
- * NB: Not using kernel-doc comment since the kernel-doc script
- *     doesn't handle the qdf_bitmap() macro.
  */
 struct wlan_vdev_aid_mgr {
 	qdf_bitmap(aid_bitmap, WLAN_UMAC_MAX_AID);

@@ -1387,15 +1387,7 @@ static void target_if_vdev_register_set_mac_address(
 }
 #endif
 
-/**
- * target_if_phy_ch_width_to_wmi_chan_width() - convert channel width from
- *                                              phy_ch_width to
- *                                              wmi_host_channel_width
- * @ch_width: enum phy_ch_width
- *
- * return: wmi_host_channel_width
- */
-static wmi_host_channel_width
+wmi_host_channel_width
 target_if_phy_ch_width_to_wmi_chan_width(enum phy_ch_width ch_width)
 {
 	switch (ch_width) {

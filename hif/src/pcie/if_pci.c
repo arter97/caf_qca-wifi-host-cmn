@@ -2375,19 +2375,16 @@ int hif_pci_bus_suspend(struct hif_softc *scn)
 
 	hif_apps_irqs_disable(GET_HIF_OPAQUE_HDL(scn));
 
-	ret = hif_try_complete_tasks(scn);
-	if (QDF_IS_STATUS_ERROR(ret)) {
-		hif_apps_irqs_enable(GET_HIF_OPAQUE_HDL(scn));
-		return -EBUSY;
-	}
-
 	/*
 	 * In an unlikely case, if draining becomes infinite loop,
 	 * it returns an error, shall abort the bus suspend.
 	 */
 	ret = hif_drain_fw_diag_ce(scn);
-	if (ret) {
-		hif_err("draining fw_diag_ce goes infinite, so abort suspend");
+	if (ret)
+		hif_err("draining fw_diag_ce not got cleaned");
+
+	ret = hif_try_complete_tasks(scn);
+	if (QDF_IS_STATUS_ERROR(ret)) {
 		hif_apps_irqs_enable(GET_HIF_OPAQUE_HDL(scn));
 		return -EBUSY;
 	}

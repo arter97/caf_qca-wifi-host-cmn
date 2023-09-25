@@ -516,6 +516,7 @@ done:
 		rx_tlv_hdr = qdf_nbuf_data(nbuf);
 		vdev_id = QDF_NBUF_CB_RX_VDEV_ID(nbuf);
 		peer_id = dp_rx_get_peer_id_be(nbuf);
+		dp_rx_set_mpdu_seq_number_be(nbuf, rx_tlv_hdr);
 
 		if (dp_rx_is_list_ready(deliver_list_head, vdev, txrx_peer,
 					peer_id, vdev_id)) {
@@ -584,6 +585,8 @@ done:
 		} else {
 			link_id = 0;
 		}
+
+		dp_rx_set_nbuf_band(nbuf, txrx_peer, link_id);
 
 		/* when hlos tid override is enabled, save tid in
 		 * skb->priority
@@ -833,6 +836,11 @@ done:
 		DP_PEER_TO_STACK_INCC_PKT(txrx_peer, 1,
 					  QDF_NBUF_CB_RX_PKT_LEN(nbuf),
 					  enh_flag);
+		DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer,
+					      rx.rx_success, 1,
+					      QDF_NBUF_CB_RX_PKT_LEN(nbuf),
+					      link_id);
+
 		if (qdf_unlikely(txrx_peer->in_twt))
 			DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer,
 						      rx.to_stack_twt, 1,
@@ -1357,9 +1365,19 @@ dp_rx_intrabss_ucast_check_be(qdf_nbuf_t nbuf,
 	if (!qdf_nbuf_is_intra_bss(nbuf))
 		return false;
 
+	if (!be_vdev->mlo_dev_ctxt) {
+		params->tx_vdev_id = ta_peer->vdev->vdev_id;
+		return true;
+	}
+
 	hal_rx_tlv_get_dest_chip_pmac_id(rx_tlv_hdr,
 					 &dest_chip_id,
 					 &dest_chip_pmac_id);
+
+	if (dp_assert_always_internal_stat(
+				(dest_chip_id <= (DP_MLO_MAX_DEST_CHIP_ID - 1)),
+				&be_soc->soc, rx.err.intra_bss_bad_chipid))
+		return false;
 
 	params->dest_soc =
 		dp_mlo_get_soc_ref_by_chip_id(be_soc->ml_ctxt,
@@ -1379,20 +1397,19 @@ dp_rx_intrabss_ucast_check_be(qdf_nbuf_t nbuf,
 		dp_peer_unref_delete(da_peer, DP_MOD_ID_RX);
 	}
 
-	qdf_assert_always(dest_chip_id <= (DP_MLO_MAX_DEST_CHIP_ID - 1));
-
 	if (dest_chip_id == be_soc->mlo_chip_id) {
 		if (dest_chip_pmac_id == ta_peer->vdev->pdev->pdev_id)
 			params->tx_vdev_id = ta_peer->vdev->vdev_id;
 		else
 			params->tx_vdev_id =
-				be_vdev->partner_vdev_list[dest_chip_id]
+				be_vdev->mlo_dev_ctxt->vdev_list[dest_chip_id]
 							  [dest_chip_pmac_id];
 		return true;
 	}
 
 	params->tx_vdev_id =
-		be_vdev->partner_vdev_list[dest_chip_id][dest_chip_pmac_id];
+		be_vdev->mlo_dev_ctxt->vdev_list[dest_chip_id]
+						[dest_chip_pmac_id];
 
 	return true;
 }
@@ -1419,7 +1436,11 @@ dp_rx_intrabss_ucast_check_be(qdf_nbuf_t nbuf,
 		return false;
 
 	dest_chip_id = HAL_RX_DEST_CHIP_ID_GET(msdu_metadata);
-	qdf_assert_always(dest_chip_id <= (DP_MLO_MAX_DEST_CHIP_ID - 1));
+	if (dp_assert_always_internal_stat(
+				(dest_chip_id <= (DP_MLO_MAX_DEST_CHIP_ID - 1)),
+				&be_soc->soc, rx.err.intra_bss_bad_chipid))
+		return false;
+
 	da_peer_id = HAL_RX_PEER_ID_GET(msdu_metadata);
 
 	/* use dest chip id when TA is MLD peer and DA is legacy */
@@ -1476,14 +1497,19 @@ dp_rx_intrabss_ucast_check_be(qdf_nbuf_t nbuf,
 		goto rel_da_peer;
 	}
 
+	if (!be_vdev->mlo_dev_ctxt)
+		ret = false;
+		goto rel_da_peer;
+	}
+
 	/* MLO specific Intra-BSS check */
 	if (dp_rx_intrabss_fwd_mlo_allow(ta_peer, da_peer)) {
 		/* use dest chip id for legacy dest peer */
 		if (!(da_peer_id & HAL_RX_DA_IDX_ML_PEER_MASK)) {
-			if (!(be_vdev->partner_vdev_list[dest_chip_id][0] ==
-			      params->tx_vdev_id) &&
-			    !(be_vdev->partner_vdev_list[dest_chip_id][1] ==
-			      params->tx_vdev_id)) {
+			if (!(be_vdev->mlo_dev_ctxt->vdev_list[dest_chip_id][0]
+			      == params->tx_vdev_id) &&
+			    !(be_vdev->mlo_dev_ctxt->vdev_list[dest_chip_id][1]
+			      == params->tx_vdev_id)) {
 				/*dp_soc_unref_delete(soc);*/
 				goto rel_da_peer;
 			}
@@ -1723,75 +1749,6 @@ bool dp_rx_intrabss_fwd_be(struct dp_soc *soc, struct dp_txrx_peer *ta_peer,
 }
 #endif
 
-bool dp_rx_chain_msdus_be(struct dp_soc *soc, qdf_nbuf_t nbuf,
-			  uint8_t *rx_tlv_hdr, uint8_t mac_id)
-{
-	bool mpdu_done = false;
-	qdf_nbuf_t curr_nbuf = NULL;
-	qdf_nbuf_t tmp_nbuf = NULL;
-
-	struct dp_pdev *dp_pdev = dp_get_pdev_for_lmac_id(soc, mac_id);
-
-	if (!dp_pdev) {
-		dp_rx_debug("%pK: pdev is null for mac_id = %d", soc, mac_id);
-		return mpdu_done;
-	}
-	/* if invalid peer SG list has max values free the buffers in list
-	 * and treat current buffer as start of list
-	 *
-	 * current logic to detect the last buffer from attn_tlv is not reliable
-	 * in OFDMA UL scenario hence add max buffers check to avoid list pile
-	 * up
-	 */
-	if (!dp_pdev->first_nbuf ||
-	    (dp_pdev->invalid_peer_head_msdu &&
-	    QDF_NBUF_CB_RX_NUM_ELEMENTS_IN_LIST
-	    (dp_pdev->invalid_peer_head_msdu) >= DP_MAX_INVALID_BUFFERS)) {
-		qdf_nbuf_set_rx_chfrag_start(nbuf, 1);
-		dp_pdev->first_nbuf = true;
-
-		/* If the new nbuf received is the first msdu of the
-		 * amsdu and there are msdus in the invalid peer msdu
-		 * list, then let us free all the msdus of the invalid
-		 * peer msdu list.
-		 * This scenario can happen when we start receiving
-		 * new a-msdu even before the previous a-msdu is completely
-		 * received.
-		 */
-		curr_nbuf = dp_pdev->invalid_peer_head_msdu;
-		while (curr_nbuf) {
-			tmp_nbuf = curr_nbuf->next;
-			dp_rx_nbuf_free(curr_nbuf);
-			curr_nbuf = tmp_nbuf;
-		}
-
-		dp_pdev->invalid_peer_head_msdu = NULL;
-		dp_pdev->invalid_peer_tail_msdu = NULL;
-
-		dp_monitor_get_mpdu_status(dp_pdev, soc, rx_tlv_hdr);
-	}
-
-	if (qdf_nbuf_is_rx_chfrag_end(nbuf) &&
-	    hal_rx_attn_msdu_done_get(soc->hal_soc, rx_tlv_hdr)) {
-		qdf_assert_always(dp_pdev->first_nbuf);
-		dp_pdev->first_nbuf = false;
-		mpdu_done = true;
-	}
-
-	/*
-	 * For MCL, invalid_peer_head_msdu and invalid_peer_tail_msdu
-	 * should be NULL here, add the checking for debugging purpose
-	 * in case some corner case.
-	 */
-	DP_PDEV_INVALID_PEER_MSDU_CHECK(dp_pdev->invalid_peer_head_msdu,
-					dp_pdev->invalid_peer_tail_msdu);
-	DP_RX_LIST_APPEND(dp_pdev->invalid_peer_head_msdu,
-			  dp_pdev->invalid_peer_tail_msdu,
-			  nbuf);
-
-	return mpdu_done;
-}
-
 qdf_nbuf_t
 dp_rx_wbm_err_reap_desc_be(struct dp_intr *int_ctx, struct dp_soc *soc,
 			   hal_ring_handle_t hal_ring_hdl, uint32_t quota,
@@ -1847,7 +1804,9 @@ dp_rx_wbm_err_reap_desc_be(struct dp_intr *int_ctx, struct dp_soc *soc,
 			continue;
 		}
 
-		qdf_assert_always(rx_desc);
+		if (dp_assert_always_internal_stat(rx_desc, soc,
+						   rx.err.rx_desc_null))
+			continue;
 
 		if (!dp_rx_desc_check_magic(rx_desc)) {
 			dp_rx_err_err("%pK: Invalid rx_desc %pK",
@@ -1901,8 +1860,11 @@ dp_rx_wbm_err_reap_desc_be(struct dp_intr *int_ctx, struct dp_soc *soc,
 		/*
 		 * For WBM ring, expect only MSDU buffers
 		 */
-		qdf_assert_always(wbm_err.info_bit.buffer_or_desc_type ==
-				  HAL_RX_WBM_BUF_TYPE_REL_BUF);
+		if (dp_assert_always_internal_stat(
+				wbm_err.info_bit.buffer_or_desc_type ==
+						HAL_RX_WBM_BUF_TYPE_REL_BUF,
+				soc, rx.err.wbm_err_buf_rel_type))
+			continue;
 		/*
 		 * Errors are handled only if the source is RXDMA or REO
 		 */
@@ -2092,7 +2054,6 @@ dp_rx_null_q_desc_handle_be(struct dp_soc *soc, qdf_nbuf_t nbuf,
 		/* Set length in nbuf */
 		qdf_nbuf_set_pktlen(
 			nbuf, qdf_min(pkt_len, (uint32_t)RX_DATA_BUFFER_SIZE));
-		qdf_assert_always(nbuf->data == rx_tlv_hdr);
 	}
 
 	/*
@@ -2133,15 +2094,6 @@ dp_rx_null_q_desc_handle_be(struct dp_soc *soc, qdf_nbuf_t nbuf,
 							   nbuf,
 							   mpdu_done,
 							   pool_id);
-		} else {
-			mpdu_done = soc->arch_ops.dp_rx_chain_msdus(soc, nbuf,
-								    rx_tlv_hdr,
-								    pool_id);
-			/* Trigger invalid peer handler wrapper */
-			dp_rx_process_invalid_peer_wrapper(
-					soc,
-					pdev->invalid_peer_head_msdu,
-					mpdu_done, pool_id);
 		}
 
 		if (mpdu_done) {
@@ -2303,6 +2255,7 @@ dp_rx_null_q_desc_handle_be(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	}
 
 	if (qdf_unlikely(vdev->rx_decap_type == htt_cmn_pkt_type_raw)) {
+		qdf_nbuf_set_raw_frame(nbuf, 1);
 		qdf_nbuf_set_next(nbuf, NULL);
 		dp_rx_deliver_raw(vdev, nbuf, txrx_peer, link_id);
 	} else {
@@ -2310,6 +2263,10 @@ dp_rx_null_q_desc_handle_be(struct dp_soc *soc, qdf_nbuf_t nbuf,
 		qdf_nbuf_set_next(nbuf, NULL);
 		DP_PEER_TO_STACK_INCC_PKT(txrx_peer, 1, qdf_nbuf_len(nbuf),
 					  enh_flag);
+		DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer,
+					      rx.rx_success, 1,
+					      qdf_nbuf_len(nbuf),
+					      link_id);
 		/*
 		 * Update the protocol tag in SKB based on
 		 * CCE metadata

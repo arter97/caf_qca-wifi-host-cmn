@@ -201,6 +201,34 @@ static const enum cdp_packet_type hal_2_dp_pkt_type_map[HAL_DOT11_MAX] = {
 	[HAL_DOT11N_GF] = DOT11_MAX,
 };
 
+#ifdef GLOBAL_ASSERT_AVOIDANCE
+#define dp_assert_always_internal_stat(_expr, _handle, _field) \
+	(qdf_unlikely(!(_expr)) ? ((_handle)->stats._field++, true) : false)
+
+#define dp_assert_always_internal_ds_stat(_expr, _handle, _field) \
+				((_handle)->ppeds_stats._field++)
+
+static inline bool dp_assert_always_internal(bool expr)
+{
+	return !expr;
+}
+#else
+static inline bool __dp_assert_always_internal(bool expr)
+{
+	qdf_assert_always(expr);
+
+	return false;
+}
+
+#define dp_assert_always_internal(_expr) __dp_assert_always_internal(_expr)
+
+#define dp_assert_always_internal_stat(_expr, _handle, _field) \
+				dp_assert_always_internal(_expr)
+
+#define dp_assert_always_internal_ds_stat(_expr, _handle, _field) \
+				dp_assert_always_internal(_expr)
+#endif
+
 #ifdef WLAN_FEATURE_11BE
 /**
  * dp_get_mcs_array_index_by_pkt_type_mcs() - get the destination mcs index
@@ -1980,6 +2008,8 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		\
 		_tgtobj->rx.multicast.num += _srcobj->rx.multicast.num; \
 		_tgtobj->rx.multicast.bytes += _srcobj->rx.multicast.bytes; \
+		_tgtobj->rx.rx_success.num += _srcobj->rx.rx_success.num;\
+		_tgtobj->rx.rx_success.bytes += _srcobj->rx.rx_success.bytes;\
 		_tgtobj->rx.bcast.num += _srcobj->rx.bcast.num; \
 		_tgtobj->rx.bcast.bytes += _srcobj->rx.bcast.bytes; \
 		_tgtobj->rx.unicast.num += _srcobj->rx.unicast.num; \
@@ -2736,6 +2766,15 @@ void dp_reo_desc_freelist_destroy(struct dp_soc *soc);
 void dp_reset_rx_reo_tid_queue(struct dp_soc *soc, void *hw_qdesc_vaddr,
 			       uint32_t size);
 
+
+static inline void dp_umac_reset_trigger_pre_reset_notify_cb(struct dp_soc *soc)
+{
+	notify_pre_reset_fw_callback callback = soc->notify_fw_callback;
+
+	if (callback)
+		callback(soc);
+}
+
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 /**
  * dp_umac_reset_complete_umac_recovery() - Complete Umac reset session
@@ -2820,7 +2859,10 @@ QDF_STATUS dp_mlo_umac_reset_stats_print(struct dp_soc *soc)
 	return QDF_STATUS_SUCCESS;
 }
 #endif
-
+#else
+static inline void dp_umac_reset_trigger_pre_reset_notify_cb(struct dp_soc *soc)
+{
+}
 #endif
 
 #if defined(DP_UMAC_HW_RESET_SUPPORT) && defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
@@ -3177,6 +3219,28 @@ void dp_print_peer_stats(struct dp_peer *peer,
  */
 void
 dp_print_pdev_tx_stats(struct dp_pdev *pdev);
+
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MCAST_MLO)
+/**
+ * dp_print_vdev_mlo_mcast_tx_stats(): Print vdev level mlo mcast tx stats
+ * @vdev: DP_VDEV Handle
+ *
+ * Return:void
+ */
+void
+dp_print_vdev_mlo_mcast_tx_stats(struct dp_vdev *vdev);
+#else
+/**
+ * dp_print_vdev_mlo_mcast_tx_stats(): Print vdev level mlo mcast tx stats
+ * @vdev: DP_VDEV Handle
+ *
+ * Return:void
+ */
+static inline
+void dp_print_vdev_mlo_mcast_tx_stats(struct dp_vdev *vdev)
+{
+}
+#endif
 
 /**
  * dp_print_pdev_rx_stats(): Print Pdev level RX stats
@@ -5401,4 +5465,42 @@ void dp_tx_remove_vlan_tag(struct dp_vdev *vdev, qdf_nbuf_t nbuf);
  * Return: None.
  */
 void dp_print_per_link_stats(struct cdp_soc_t *soc_hdl, uint8_t vdev_id);
+
+/**
+ * dp_get_ring_stats_from_hal(): get hal level ring pointer values
+ * @soc: DP_SOC handle
+ * @srng: DP_SRNG handle
+ * @ring_type: srng src/dst ring
+ * @_tailp: pointer to tail of ring
+ * @_headp: pointer to head of ring
+ * @_hw_headp: pointer to head of ring in HW
+ * @_hw_tailp: pointer to tail of ring in HW
+ *
+ * Return: void
+ */
+static inline void
+dp_get_ring_stats_from_hal(struct dp_soc *soc,  struct dp_srng *srng,
+			   enum hal_ring_type ring_type,
+			   uint32_t *_tailp, uint32_t *_headp,
+			   int32_t *_hw_headp, int32_t *_hw_tailp)
+{
+	uint32_t tailp;
+	uint32_t headp;
+	int32_t hw_headp = -1;
+	int32_t hw_tailp = -1;
+	struct hal_soc *hal_soc;
+
+	if (soc && srng && srng->hal_srng) {
+		hal_soc = (struct hal_soc *)soc->hal_soc;
+		hal_get_sw_hptp(soc->hal_soc, srng->hal_srng, &tailp, &headp);
+		*_headp = headp;
+		*_tailp = tailp;
+
+		hal_get_hw_hptp(soc->hal_soc, srng->hal_srng, &hw_headp,
+				&hw_tailp, ring_type);
+		*_hw_headp = hw_headp;
+		*_hw_tailp = hw_tailp;
+	}
+}
+
 #endif /* #ifndef _DP_INTERNAL_H_ */

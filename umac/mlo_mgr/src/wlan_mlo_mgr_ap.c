@@ -18,6 +18,7 @@
 /*
  * DOC: contains MLO manager ap related functionality
  */
+#include <qdf_module.h>
 #include "wlan_objmgr_vdev_obj.h"
 #include "wlan_mlo_mgr_ap.h"
 #include <wlan_mlo_mgr_cmn.h>
@@ -48,29 +49,23 @@ bool mlo_ap_vdev_attach(struct wlan_objmgr_vdev *vdev,
 		return false;
 
 	dev_ctx = vdev->mlo_dev_ctx;
-	wlan_vdev_set_link_id(vdev, link_id);
 
-	if (!vdev->vdev_objmgr.mlo_bridge_vdev)
+	if (!vdev->vdev_objmgr.mlo_bridge_vdev) {
+		wlan_vdev_set_link_id(vdev, link_id);
 		wlan_vdev_mlme_set_mlo_vdev(vdev);
 
-	/*
-	 * every link will trigger mlo_ap_vdev_attach,
-	 * and they should provide the same vdev_count.
-	 */
-	mlo_dev_lock_acquire(dev_ctx);
-	dev_ctx->ap_ctx->num_ml_vdevs = vdev_count;
-	mlo_dev_lock_release(dev_ctx);
+		/*
+		 * every link will trigger mlo_ap_vdev_attach,
+		 * and they should provide the same vdev_count.
+		 */
+		mlo_dev_lock_acquire(dev_ctx);
+		dev_ctx->ap_ctx->num_ml_vdevs = vdev_count;
+		mlo_dev_lock_release(dev_ctx);
+	}
 
 	for (i = 0; i < WLAN_UMAC_MLO_MAX_VDEVS; i++) {
 		if (dev_ctx->wlan_vdev_list[i])
 			pr_vdev_ids[i] = wlan_vdev_get_id(dev_ctx->wlan_vdev_list[i]);
-	}
-
-	if (cdp_update_mlo_ptnr_list(wlan_psoc_get_dp_handle(psoc),
-				pr_vdev_ids, WLAN_UMAC_MLO_MAX_VDEVS,
-				wlan_vdev_get_id(vdev)) != QDF_STATUS_SUCCESS) {
-		mlo_debug("Failed to add vdev to partner vdev list, vdev id:%d",
-			 wlan_vdev_get_id(vdev));
 	}
 
 	/* reset the vdev id list */
@@ -84,13 +79,6 @@ bool mlo_ap_vdev_attach(struct wlan_objmgr_vdev *vdev,
 					dev_ctx->wlan_bridge_vdev_list[i]);
 	}
 
-	if (cdp_update_mlo_ptnr_list(
-				wlan_psoc_get_dp_handle(psoc),
-				pr_vdev_ids, WLAN_UMAC_MLO_MAX_VDEVS,
-				wlan_vdev_get_id(vdev)) != QDF_STATUS_SUCCESS) {
-		mlo_debug("Failed to add vdev to partner vdev list, vdev id:%d",
-			  wlan_vdev_get_id(vdev));
-	}
 	return true;
 }
 #else
@@ -600,6 +588,33 @@ void mlo_ap_link_down_cmpl_notify(struct wlan_objmgr_vdev *vdev)
 {
 	mlo_ap_vdev_detach(vdev);
 }
+
+QDF_STATUS
+mlo_ap_update_max_ml_peer_ids(uint32_t pdev_id, uint32_t max_ml_peer_ids)
+{
+	struct mlo_mgr_context *mlo_mgr_ctx = wlan_objmgr_get_mlo_ctx();
+	uint16_t max_mlo_peer_id_stale;
+
+	max_mlo_peer_id_stale = mlo_mgr_ctx->max_mlo_peer_id;
+
+	ml_peerid_lock_acquire(mlo_mgr_ctx);
+
+	/* Reset the value to default if max_ml_peer_ids received is "0" */
+	mlo_mgr_ctx->max_mlo_peer_id = max_ml_peer_ids ?
+				max_ml_peer_ids : MAX_MLO_PEER_ID;
+
+	mlo_info("max_ml_peer_ids update from: %d to: %d for pdev: %d",
+		 max_mlo_peer_id_stale,
+		 mlo_mgr_ctx->max_mlo_peer_id, pdev_id);
+
+	mlo_info("max_peer support from target obtained :%d", max_ml_peer_ids);
+
+	ml_peerid_lock_release(mlo_mgr_ctx);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+qdf_export_symbol(mlo_ap_update_max_ml_peer_ids);
 
 uint16_t mlo_ap_ml_peerid_alloc(void)
 {

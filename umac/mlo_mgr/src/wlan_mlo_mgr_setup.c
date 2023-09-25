@@ -144,6 +144,7 @@ static void mlo_set_soc_list(uint8_t grp_id, struct wlan_objmgr_psoc *psoc)
 		if (mlo_ctx->setup_info[grp_id].soc_id_list[idx] ==
 				psoc->soc_objmgr.psoc_id) {
 			mlo_ctx->setup_info[grp_id].soc_list[idx] = psoc;
+			mlo_wsi_link_info_update_soc(psoc, grp_id);
 		}
 	}
 }
@@ -475,6 +476,8 @@ void mlo_setup_init(uint8_t total_grp)
 	mlo_ctx->setup_info[0].ml_grp_id = 0;
 	for (id = 0; id < total_grp; id++) {
 		mlo_ctx->setup_info[id].tsf_sync_enabled = true;
+		mlo_ctx->setup_info[id].wsi_stats_info_support = 0xff;
+
 		if (qdf_event_create(&mlo_ctx->setup_info[id].event) !=
 							QDF_STATUS_SUCCESS)
 			mlo_err("Unable to create teardown event");
@@ -1022,7 +1025,7 @@ static void mlo_send_teardown_req(struct wlan_objmgr_psoc *psoc,
 	setup_info = &mlo_ctx->setup_info[grp_id];
 	tot_links = setup_info->tot_links;
 
-	if (reason == WMI_MLO_TEARDOWN_REASON_MODE1_SSR) {
+	if (reason == WMI_HOST_MLO_TEARDOWN_REASON_MODE1_SSR) {
 		for (link_idx = 0; link_idx < tot_links; link_idx++) {
 			umac_reset = 0;
 			temp_pdev = setup_info->pdev_list[link_idx];
@@ -1124,7 +1127,7 @@ QDF_STATUS mlo_link_teardown_link(struct wlan_objmgr_psoc *psoc,
 	/* Trigger MLO teardown */
 	mlo_send_teardown_req(psoc, grp_id, reason);
 
-	if (reason == WMI_MLO_TEARDOWN_REASON_SSR) {
+	if (reason == WMI_HOST_MLO_TEARDOWN_REASON_SSR) {
 		/* do not wait for teardown event completion here for SSR */
 		return QDF_STATUS_SUCCESS;
 	}
@@ -1142,6 +1145,49 @@ QDF_STATUS mlo_link_teardown_link(struct wlan_objmgr_psoc *psoc,
 }
 
 qdf_export_symbol(mlo_link_teardown_link);
+
+void mlo_update_wsi_stats_info_support(struct wlan_objmgr_psoc *psoc,
+				       bool wsi_stats_info_support)
+{
+	uint8_t ml_grp_id;
+	struct mlo_mgr_context *mlo_ctx = wlan_objmgr_get_mlo_ctx();
+	struct mlo_setup_info *mlo_setup;
+
+	ml_grp_id = wlan_mlo_get_psoc_group_id(psoc);
+	if ((ml_grp_id ==  WLAN_MLO_GROUP_INVALID) ||
+	    (ml_grp_id < 0)) {
+		mlo_err("Invalid ML Grp ID %d", ml_grp_id);
+		return;
+	}
+
+	mlo_setup = &mlo_ctx->setup_info[ml_grp_id];
+	if (mlo_setup->wsi_stats_info_support == 0xFF)
+		mlo_setup->wsi_stats_info_support = wsi_stats_info_support;
+	else
+		mlo_setup->wsi_stats_info_support &= wsi_stats_info_support;
+}
+
+qdf_export_symbol(mlo_update_wsi_stats_info_support);
+
+uint8_t mlo_get_wsi_stats_info_support(struct wlan_objmgr_psoc *psoc)
+{
+	uint8_t ml_grp_id;
+	struct mlo_mgr_context *mlo_ctx = wlan_objmgr_get_mlo_ctx();
+	struct mlo_setup_info *mlo_setup;
+
+	ml_grp_id = wlan_mlo_get_psoc_group_id(psoc);
+	if ((ml_grp_id ==  WLAN_MLO_GROUP_INVALID) ||
+	    (ml_grp_id < 0)) {
+		mlo_err("Invalid ML Grp ID %d", ml_grp_id);
+		return 0;
+	}
+
+	mlo_setup = &mlo_ctx->setup_info[ml_grp_id];
+	if (mlo_setup->wsi_stats_info_support == 0xFF)
+		return 0;
+
+	return mlo_setup->wsi_stats_info_support;
+}
 
 void mlo_update_tsf_sync_support(struct wlan_objmgr_psoc *psoc,
 				 bool tsf_sync_enab)

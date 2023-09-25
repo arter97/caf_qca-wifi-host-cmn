@@ -28,6 +28,7 @@
 #include "qdf_nbuf.h"
 #include "dp_rx_defrag.h"
 #include "dp_ipa.h"
+#include "dp_internal.h"
 #ifdef WIFI_MONITOR_SUPPORT
 #include "dp_htt.h"
 #include <dp_mon.h>
@@ -1073,7 +1074,10 @@ more_msdu_link_desc:
 						soc,
 						msdu_list.sw_cookie[i]);
 
-		qdf_assert_always(rx_desc);
+		if (dp_assert_always_internal_stat(rx_desc, soc,
+						   rx.err.reo_err_rx_desc_null))
+			continue;
+
 		nbuf = rx_desc->nbuf;
 
 		/*
@@ -1212,6 +1216,9 @@ more_msdu_link_desc:
 								nbuf,
 								txrx_peer);
 		}
+
+		if (txrx_peer)
+			dp_rx_set_nbuf_band(nbuf, txrx_peer, link_id);
 
 		switch (err_code) {
 		case HAL_REO_ERR_REGULAR_FRAME_2K_JUMP:
@@ -1638,7 +1645,6 @@ dp_rx_err_route_hdl(struct dp_soc *soc, qdf_nbuf_t nbuf,
 		/* Set length in nbuf */
 		qdf_nbuf_set_pktlen(
 			nbuf, qdf_min(pkt_len, (uint32_t)RX_DATA_BUFFER_SIZE));
-		qdf_assert_always(nbuf->data == rx_tlv_hdr);
 	}
 
 	/*
@@ -1703,6 +1709,10 @@ dp_rx_err_route_hdl(struct dp_soc *soc, qdf_nbuf_t nbuf,
 			DP_PEER_TO_STACK_INCC_PKT(txrx_peer, 1,
 						  qdf_nbuf_len(nbuf),
 						  vdev->pdev->enhanced_stats_en);
+			DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer,
+						      rx.rx_success, 1,
+						      qdf_nbuf_len(nbuf),
+						      link_id);
 			qdf_nbuf_set_exc_frame(nbuf, 1);
 			qdf_nbuf_set_next(nbuf, NULL);
 
@@ -1804,7 +1814,7 @@ dp_rx_err_ring_record_entry(struct dp_soc *soc, uint64_t paddr,
 }
 #endif
 
-#ifdef HANDLE_RX_REROUTE_ERR
+#if defined(HANDLE_RX_REROUTE_ERR) || defined(REO_EXCEPTION_MSDU_WAR)
 static int dp_rx_err_handle_msdu_buf(struct dp_soc *soc,
 				     hal_ring_desc_t ring_desc)
 {
@@ -1858,7 +1868,9 @@ assert_return:
 	qdf_assert(0);
 	return lmac_id;
 }
+#endif
 
+#ifdef HANDLE_RX_REROUTE_ERR
 static int dp_rx_err_exception(struct dp_soc *soc, hal_ring_desc_t ring_desc)
 {
 	int ret;
@@ -1903,13 +1915,19 @@ static int dp_rx_err_exception(struct dp_soc *soc, hal_ring_desc_t ring_desc)
 	return ret;
 }
 #else /* HANDLE_RX_REROUTE_ERR */
-
+#ifdef REO_EXCEPTION_MSDU_WAR
+static int dp_rx_err_exception(struct dp_soc *soc, hal_ring_desc_t ring_desc)
+{
+	return dp_rx_err_handle_msdu_buf(soc, ring_desc);
+}
+#else	/* REO_EXCEPTION_MSDU_WAR */
 static int dp_rx_err_exception(struct dp_soc *soc, hal_ring_desc_t ring_desc)
 {
 	qdf_assert_always(0);
 
 	return DP_INVALID_LMAC_ID;
 }
+#endif /* REO_EXCEPTION_MSDU_WAR */
 #endif /* HANDLE_RX_REROUTE_ERR */
 
 #ifdef WLAN_MLO_MULTI_CHIP
@@ -2690,7 +2708,7 @@ dp_rx_wbm_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
 				dp_rx_err_alert("invalid reo push reason %u",
 						wbm_err.info_bit.reo_psh_rsn);
 				dp_rx_nbuf_free(nbuf);
-				qdf_assert_always(0);
+				dp_assert_always_internal(0);
 			}
 		} else if (wbm_err.info_bit.wbm_err_src ==
 					HAL_RX_WBM_ERR_SRC_RXDMA) {
@@ -2817,7 +2835,7 @@ dp_rx_wbm_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
 				dp_rx_err_alert("invalid rxdma push reason %u",
 						wbm_err.info_bit.rxdma_psh_rsn);
 				dp_rx_nbuf_free(nbuf);
-				qdf_assert_always(0);
+				dp_assert_always_internal(0);
 			}
 		} else {
 			/* Should not come here */

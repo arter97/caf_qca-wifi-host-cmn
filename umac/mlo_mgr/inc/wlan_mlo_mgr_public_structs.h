@@ -172,6 +172,7 @@ struct mlo_chip_info {
  * @dp_handle: pointer to DP ML context
  * @chip_info: chip specific info of the soc
  * @tsf_sync_enabled: MLO TSF sync is enabled at FW or not
+ * @wsi_stats_info_support: WSI stats support at FW or not
  */
 struct mlo_setup_info {
 	uint8_t ml_grp_id;
@@ -192,6 +193,7 @@ struct mlo_setup_info {
 	struct cdp_mlo_ctxt *dp_handle;
 	struct mlo_chip_info chip_info;
 	bool tsf_sync_enabled;
+	uint8_t wsi_stats_info_support;
 };
 
 /**
@@ -208,9 +210,29 @@ struct mlo_state_params {
 
 #endif
 
+/**
+ * enum wlan_mlo_link_switch_notify_reason - Enum for link switch notifier
+ *                                           callback trigger reason.
+ * @MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_PRE_SER: Prior to start of
+ *                                                   link switch and prior to
+ *                                                   serializing link switch.
+ * @MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_POST_SER: Prior to link switch start
+ *                                                    but link switch is
+ *                                                    serialized
+ * @MLO_LINK_SWITCH_NOTIFY_REASON_STOP_FAILURE: Link switch failure notify
+ * @MLO_LINK_SWITCH_NOTIFY_REASON_STOP_SUCCESS: Link switch success notify
+ */
+enum wlan_mlo_link_switch_notify_reason {
+	MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_PRE_SER,
+	MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_POST_SER,
+	MLO_LINK_SWITCH_NOTIFY_REASON_STOP_FAILURE,
+	MLO_LINK_SWITCH_NOTIFY_REASON_STOP_SUCCESS,
+};
+
 typedef QDF_STATUS
 (*mlo_mgr_link_switch_notifier_cb)(struct wlan_objmgr_vdev *vdev,
-				   struct wlan_mlo_link_switch_req *lswitch_req);
+				   struct wlan_mlo_link_switch_req *lswitch_req,
+				   enum wlan_mlo_link_switch_notify_reason notify_reason);
 
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 /*
@@ -265,6 +287,45 @@ mlo_mgr_unregister_link_switch_notifier(enum wlan_umac_comp_id comp_id)
 #endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
 
 /*
+ * struct mlo_wsi_link_stats - MLO ingress/egress counters of PSOC
+ * @ingress_cnt:  Ingress counter
+ * @egress_cnt:  Egress counter
+ * @send_wmi_cmd: To indicate whether WMI command to be sent or not
+ */
+struct mlo_wsi_link_stats {
+	uint32_t ingress_cnt;
+	uint32_t egress_cnt;
+	bool  send_wmi_cmd;
+};
+
+/*
+ * struct mlo_wsi_psoc_grp - MLO WSI PSOC group
+ * @psoc_order:  PSOC list in WSI loop order
+ * @num_psoc: num psoc in the group
+ */
+struct mlo_wsi_psoc_grp {
+	uint32_t psoc_order[WLAN_OBJMGR_MAX_DEVICES];
+	uint32_t num_psoc;
+};
+
+#define MLO_WSI_MAX_MLO_GRPS 2
+#define MLO_WSI_PSOC_ID_MAX 0xFF
+
+/*
+ * struct mlo_wsi_info - MLO ingress/egress link context per-PSOC
+ * @mlo_psoc_grp: PSOC IDs for different MLO groups
+ * @num_psoc: Total num psoc
+ * @link_stats: Ingress and Egress counts for PSOCs
+ * @block_wmi_cmd: Blocks WMI command
+ */
+struct mlo_wsi_info {
+	struct mlo_wsi_psoc_grp mlo_psoc_grp[MLO_WSI_MAX_MLO_GRPS];
+	uint32_t num_psoc;
+	struct mlo_wsi_link_stats link_stats[WLAN_OBJMGR_MAX_DEVICES];
+	uint8_t block_wmi_cmd;
+};
+
+/**
  * struct mlo_mgr_context - MLO manager context
  * @ml_dev_list_lock: ML DEV list lock
  * @aid_lock: AID global lock
@@ -281,10 +342,8 @@ mlo_mgr_unregister_link_switch_notifier(enum wlan_umac_comp_id comp_id)
  * @mlo_is_force_primary_umac: Force Primary UMAC enable
  * @mlo_forced_primary_umac_id: Force Primary UMAC ID
  * @force_non_assoc_prim_umac: Force non-assoc link to be primary umac
- *
- * NB: not using kernel-doc format since the kernel-doc script doesn't
- *     handle the qdf_bitmap() macro
- * @lswitch_notifier: Holds callback functions to notify link switch start
+ * @lswitch_notifier: Link switch notifier callbacks
+ * @wsi_info: WSI stats info
  */
 struct mlo_mgr_context {
 #ifdef WLAN_MLO_USE_SPINLOCK
@@ -315,17 +374,15 @@ struct mlo_mgr_context {
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 	struct wlan_mlo_link_switch_notifier lswitch_notifier[WLAN_UMAC_COMP_ID_MAX];
 #endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
+	struct mlo_wsi_info *wsi_info;
 };
 
-/*
+/**
  * struct wlan_ml_vdev_aid_mgr - ML AID manager
  * @aid_bitmap: AID bitmap array
  * @start_aid: start of AID index
  * @max_aid: Max allowed AID
  * @aid_mgr:  Array of link vdev aid mgr
- *
- * NB: not using kernel-doc format since the kernel-doc script doesn't
- *     handle the qdf_bitmap() macro
  */
 struct wlan_ml_vdev_aid_mgr {
 	qdf_bitmap(aid_bitmap, WLAN_UMAC_MAX_AID);
@@ -583,7 +640,7 @@ struct emlsr_capability {
 };
 #endif
 
-/*
+/**
  * struct wlan_mlo_sta - MLO sta additional info
  * @wlan_connect_req_links: list of vdevs selected for connection with the MLAP
  * @wlan_connected_links: list of vdevs associated with this MLO connection
@@ -600,10 +657,11 @@ struct emlsr_capability {
  *                      to re-use while link connect in case of deferred/need
  *                      basis link connect (e.g. MLO OWE roaming).
  * @ml_link_state: ml link state command info param
- * NB: not using kernel-doc format since the kernel-doc script doesn't
- *     handle the qdf_bitmap() macro
  * @copied_t2lm_ie_assoc_rsp: copy of t2lm ie received in assoc response
+ * @ml_partner_info: mlo partner link info
+ * @emlsr_cap: EMLSR capabilities info
  * @link_force_ctx: set link force mode context
+ * @ml_link_control_mode: link control mode configured via user space
  */
 struct wlan_mlo_sta {
 	qdf_bitmap(wlan_connect_req_links, WLAN_UMAC_MLO_MAX_VDEVS);
@@ -633,18 +691,16 @@ struct wlan_mlo_sta {
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 	struct wlan_link_force_context link_force_ctx;
 #endif
+	uint8_t ml_link_control_mode;
 };
 
-/*
+/**
  * struct wlan_mlo_ap - MLO AP related info
  * @num_ml_vdevs: number of vdevs to form MLD
  * @ml_aid_mgr: ML AID mgr
  * @mlo_ap_lock: lock to sync VDEV SM event
  * @mlo_vdev_quiet_bmap: Bitmap of vdevs for which quiet ie needs to enabled
  * @mlo_vdev_up_bmap: Bitmap of vdevs for which sync complete can be dispatched
- *
- * NB: not using kernel-doc format since the kernel-doc script doesn't
- *     handle the qdf_bitmap() macro
  */
 struct wlan_mlo_ap {
 	uint8_t num_ml_vdevs;
@@ -699,6 +755,7 @@ struct wlan_mlo_link_mac_update {
  * @mld_addr: MLO device MAC address
  * @wlan_vdev_list: list of vdevs associated with this MLO connection
  * @wlan_bridge_vdev_list: list of bridge vdevs associated with this MLO
+ * @wlan_bridge_vdev_count: number of elements in the bridge vdev list
  * @bridge_sta_ctx: bridge sta context
  * @wlan_vdev_count: number of elements in the vdev list
  * @mlo_peer_list: list peers in this MLO connection
@@ -713,10 +770,6 @@ struct wlan_mlo_link_mac_update {
  * @epcs_ctx: EPCS related information
  * @ptqm_migrate_timer: timer for ptqm migration
  * @mlo_peer_id_bmap: mlo_peer_id bitmap for ptqm migration
- * @MAX_MLO_PEER_ID: Max mlo peer ID supported
- *
- * NB: Not using kernel-doc format since the kernel-doc script doesn't
- *     handle the qdf_bitmap() macro
  * @link_ctx: link related information
  */
 struct wlan_mlo_dev_context {
@@ -729,6 +782,7 @@ struct wlan_mlo_dev_context {
 	struct wlan_mlo_bridge_sta *bridge_sta_ctx;
 #endif
 	uint16_t wlan_vdev_count;
+	uint16_t wlan_bridge_vdev_count;
 	struct wlan_mlo_peer_list mlo_peer_list;
 	uint16_t wlan_max_mlo_peer_count;
 #ifdef WLAN_MLO_USE_SPINLOCK
@@ -1038,6 +1092,7 @@ struct mlo_tgt_partner_info {
  * @is_force_central_primary: Flag to tell if bridge should be primary umac
  * @bridge_vap_exists: If there is bridge vap
  * @bridge_node_auth: Is bridge node auth done
+ * @bss_mld_addr: MLD address of the BSS
  */
 struct wlan_mlo_bridge_sta {
 	struct mlo_partner_info bridge_partners;
@@ -1047,6 +1102,7 @@ struct wlan_mlo_bridge_sta {
 	bool is_force_central_primary;
 	bool bridge_vap_exists;
 	bool bridge_node_auth;
+	struct qdf_mac_addr bss_mld_addr;
 };
 
 /**
@@ -1384,7 +1440,7 @@ struct mlo_link_removal_cmd_params {
 /**
  * struct mlo_link_removal_tbtt_info - MLO link removal TBTT info. This
  * information will be in correspondence with an outgoing beacon instance.
- * @tbtt_count: Delete timer TBTT count in the reported beacon
+ * @tbtt_count: AP removal timer TBTT count in the reported beacon
  * @qtimer_reading: Q-timer reading when the reported beacon is sent out
  * @tsf: TSF of the reported beacon
  */
@@ -1409,7 +1465,7 @@ struct mlo_link_removal_evt_params {
  * a link undergoing removal from its MLD
  * @vdev_id: Vdev ID of the link undergoing removal
  * @hw_link_id: HW link ID of the link undergoing removal
- * @tbtt_count: Delete timer TBTT count of the link undergoing removal
+ * @tbtt_count: AP removal timer TBTT count of the link undergoing removal
  */
 struct mgmt_rx_mlo_link_removal_info {
 	uint8_t vdev_id;

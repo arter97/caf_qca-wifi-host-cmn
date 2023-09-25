@@ -406,6 +406,9 @@ QDF_STATUS cm_disconnect_active(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 	struct wlan_cm_vdev_discon_req *req;
 	struct cm_req *cm_req;
 	QDF_STATUS status = QDF_STATUS_E_NOSUPPORT;
+	enum wlan_reason_code reason_code;
+	enum wlan_cm_source source;
+	enum QDF_OPMODE op_mode;
 
 	cm_ctx->active_cm_id = *cm_id;
 	cm_req = cm_get_req_by_cm_id(cm_ctx, *cm_id);
@@ -423,7 +426,15 @@ QDF_STATUS cm_disconnect_active(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 		return QDF_STATUS_E_INVAL;
 	}
 
-	if (wlan_vdev_mlme_get_opmode(cm_ctx->vdev) == QDF_STA_MODE)
+	reason_code = cm_req->discon_req.req.reason_code;
+	source = cm_req->discon_req.req.source;
+	op_mode = wlan_vdev_mlme_get_opmode(cm_ctx->vdev);
+	mlme_debug("op_mode:%d, source:%d, reason_code:%d", op_mode, source,
+		   reason_code);
+
+	if (op_mode == QDF_STA_MODE &&
+	    (reason_code != REASON_FW_TRIGGERED_ROAM_FAILURE) &&
+	    (source != CM_MLO_ROAM_INTERNAL_DISCONNECT))
 		status = mlme_cm_rso_stop_req(cm_ctx->vdev);
 
 	if (status != QDF_STATUS_E_NOSUPPORT)
@@ -639,7 +650,8 @@ QDF_STATUS cm_disconnect_complete(struct cnx_mgr *cm_ctx,
 	if (is_link_switch_cmd) {
 		cm_reset_active_cm_id(cm_ctx->vdev, resp->req.cm_id);
 		mlo_mgr_link_switch_disconnect_done(cm_ctx->vdev,
-						    link_switch_status);
+						    link_switch_status,
+						    is_link_switch_cmd);
 	}
 
 	return QDF_STATUS_SUCCESS;
@@ -760,13 +772,27 @@ cm_handle_discon_req_in_non_connected_state(struct cnx_mgr *cm_ctx,
 		 *
 		 * So no need to do anything here, just return failure and drop
 		 * disconnect.
+		 *
+		 * Notification to userspace is done on non-LINK VDEV in case of
+		 * MLO connection, and if assoc VDEV is in INIT state due to
+		 * link switch disconnect and dropping userspace disconnect here
+		 * might lead to not notifying kernel and any further connect
+		 * requests from supplicant will be dropped by kernel saying
+		 * already connected and supplicant will immediately attempt
+		 * disconnect which will again gets dropped.
+		 * Notify MLO manager to terminate link switch operation and
+		 * instead of dropping the disconnect forcefully move VDEV state
+		 * to disconnecting and add disconnect request to queue so that
+		 * kernel and driver will be in sync.
 		 */
 		if (cm_req->req.source != CM_MLO_LINK_SWITCH_DISCONNECT &&
 		    wlan_vdev_mlme_is_mlo_link_switch_in_progress(cm_ctx->vdev)) {
 			mlme_info(CM_PREFIX_FMT "Notfiy MLO MGR to abort link switch",
 				  CM_PREFIX_REF(vdev_id, cm_req->cm_id));
 			mlo_mgr_link_switch_disconnect_done(cm_ctx->vdev,
-							    QDF_STATUS_E_ABORTED);
+							    QDF_STATUS_E_ABORTED,
+							    false);
+			break;
 
 		} else {
 			mlme_info(CM_PREFIX_FMT "dropping disconnect req from source %d in INIT state",

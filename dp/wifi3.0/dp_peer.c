@@ -43,7 +43,9 @@
 #ifdef BYPASS_OL_OPS
 #include <target_if_dp.h>
 #endif
-
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
+#include "reg_services_common.h"
+#endif
 #ifdef FEATURE_AST
 #ifdef BYPASS_OL_OPS
 /**
@@ -2671,7 +2673,7 @@ dp_rx_mlo_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 	 * on chip ID obtained from mlo peer_map event
 	 */
 	for (i = 0; i < DP_MAX_MLO_LINKS; i++) {
-		if (mlo_link_info[i].peer_chip_id == dp_mlo_get_chip_id(soc)) {
+		if (mlo_link_info[i].peer_chip_id == dp_get_chip_id(soc)) {
 			vdev_id = mlo_link_info[i].vdev_id;
 			break;
 		}
@@ -2965,7 +2967,7 @@ dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 
 		params.vdev_id = vdev->vdev_id;
 		params.peer_mac = peer->mac_addr.raw;
-		params.chip_id = dp_mlo_get_chip_id(soc);
+		params.chip_id = dp_get_chip_id(soc);
 		params.pdev_id = vdev->pdev->pdev_id;
 
 		dp_wdi_event_handler(WDI_EVENT_PEER_UNMAP, soc,
@@ -3057,6 +3059,41 @@ dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 }
 
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
+/**
+ * dp_freq_to_band() - Convert frequency to band
+ * @freq: peer frequency
+ *
+ * Return: band for input frequency
+ */
+static inline
+enum dp_bands dp_freq_to_band(qdf_freq_t freq)
+{
+	if (REG_IS_24GHZ_CH_FREQ(freq))
+		return DP_BAND_2GHZ;
+	else if (REG_IS_5GHZ_FREQ(freq) || REG_IS_49GHZ_FREQ(freq))
+		return DP_BAND_5GHZ;
+	else if (REG_IS_6GHZ_FREQ(freq))
+		return DP_BAND_6GHZ;
+	return DP_BAND_INVALID;
+}
+
+void dp_map_link_id_band(struct dp_peer *peer)
+{
+	struct dp_txrx_peer *txrx_peer = NULL;
+	enum dp_bands band;
+
+	txrx_peer = dp_get_txrx_peer(peer);
+	if (txrx_peer) {
+		band = dp_freq_to_band(peer->freq);
+		txrx_peer->band[peer->link_id + 1] = band;
+		dp_info("Band(Freq: %u): %u mapped to Link ID: %u",
+			peer->freq, band, peer->link_id);
+	} else {
+		dp_info("txrx_peer NULL for peer: " QDF_MAC_ADDR_FMT,
+			QDF_MAC_ADDR_REF(peer->mac_addr.raw));
+	}
+}
+
 QDF_STATUS
 dp_rx_peer_ext_evt(struct dp_soc *soc, struct dp_peer_ext_evt_info *info)
 {
@@ -3079,6 +3116,10 @@ dp_rx_peer_ext_evt(struct dp_soc *soc, struct dp_peer_ext_evt_info *info)
 
 	peer->link_id = info->link_id;
 	peer->link_id_valid = info->link_id_valid;
+
+	if (peer->freq)
+		dp_map_link_id_band(peer);
+
 	dp_peer_unref_delete(peer, DP_MOD_ID_CONFIG);
 
 	return QDF_STATUS_SUCCESS;

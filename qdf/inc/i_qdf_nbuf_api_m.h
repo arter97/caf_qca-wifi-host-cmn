@@ -155,6 +155,17 @@ static inline uint8_t qdf_nbuf_get_lmac_id(qdf_nbuf_t buf)
 }
 
 /**
+ * qdf_nbuf_get_mpdu_seq_num() - get MPDU sequence number
+ * @buf: Network buffer
+ *
+ * Return: mpdu sequence number value
+ */
+static inline uint16_t qdf_nbuf_get_mpdu_seq_num(qdf_nbuf_t buf)
+{
+	return QDF_NBUF_CB_RX_MPDU_SEQ_NUM(buf);
+}
+
+/**
  * qdf_nbuf_set_rx_ipa_smmu_map() - set ipa smmu mapped flag
  * @buf: Network buffer
  * @value: 1 - ipa smmu mapped, 0 - ipa smmu unmapped
@@ -227,5 +238,55 @@ static inline void *qdf_nbuf_get_tx_fctx(qdf_nbuf_t buf)
 static inline void
 qdf_nbuf_set_tx_fctx_type(qdf_nbuf_t buf, void *ctx, uint8_t type)
 {
+}
+
+/**
+ * qdf_nbuf_tx_set_band() - Set band in nbuf cb
+ * @nbuf: nbuf pointer
+ * @band: peer band
+ *
+ * Return: None
+ */
+static inline void
+qdf_nbuf_tx_set_band(qdf_nbuf_t nbuf, uint8_t band)
+{
+	QDF_NBUF_CB_TX_BAND(nbuf) = band;
+}
+
+/**
+ * qdf_nbuf_tx_get_band() - Get band from nbuf cb
+ * @nbuf: nbuf pointer
+ *
+ * Return: Band
+ */
+static inline uint8_t
+qdf_nbuf_tx_get_band(qdf_nbuf_t nbuf)
+{
+	return QDF_NBUF_CB_TX_BAND(nbuf);
+}
+
+/**
+ * qdf_nbuf_rx_set_band() - Set band in nbuf cb
+ * @nbuf: nbuf pointer
+ * @band: peer band
+ *
+ * Return: None
+ */
+static inline void
+qdf_nbuf_rx_set_band(qdf_nbuf_t nbuf, uint8_t band)
+{
+	QDF_NBUF_CB_RX_BAND(nbuf) = band;
+}
+
+/**
+ * qdf_nbuf_rx_get_band() - Get band from nbuf cb
+ * @nbuf: nbuf pointer
+ *
+ * Return: Band
+ */
+static inline uint8_t
+qdf_nbuf_rx_get_band(qdf_nbuf_t nbuf)
+{
+	return QDF_NBUF_CB_RX_BAND(nbuf);
 }
 #endif /* _QDF_NBUF_M_H */

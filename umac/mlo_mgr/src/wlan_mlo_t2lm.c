@@ -29,6 +29,7 @@
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_FEATURE_11BE_MLO_ADV_FEATURE)
 #include <wlan_t2lm_api.h>
 #endif
+#include <wlan_mlo_mgr_sta.h>
 
 QDF_STATUS wlan_mlo_parse_t2lm_info(uint8_t *ie,
 				    struct wlan_t2lm_info *t2lm)
@@ -37,7 +38,7 @@ QDF_STATUS wlan_mlo_parse_t2lm_info(uint8_t *ie,
 	enum wlan_t2lm_direction dir;
 	uint8_t *t2lm_control_field;
 	uint16_t t2lm_control;
-	uint8_t link_mapping_presence_ind;
+	uint8_t link_mapping_presence_ind = 0;
 	uint8_t *link_mapping_of_tids;
 	uint8_t tid_num;
 	uint8_t *ie_ptr = NULL;
@@ -816,6 +817,12 @@ QDF_STATUS wlan_send_t2lm_info(struct wlan_objmgr_vdev *vdev,
 		co_mld_vdev = wlan_vdev_list[i];
 		if (!co_mld_vdev) {
 			t2lm_err("co_mld_vdev is null");
+			mlo_release_vdev_ref(co_mld_vdev);
+			continue;
+		}
+
+		if (mlo_is_sta_bridge_vdev(co_mld_vdev)) {
+			t2lm_debug("skip co_mld_vdev for bridge sta");
 			mlo_release_vdev_ref(co_mld_vdev);
 			continue;
 		}

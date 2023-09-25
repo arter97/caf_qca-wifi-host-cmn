@@ -461,7 +461,8 @@ static QDF_STATUS osif_cm_disconnect_start_cb(struct wlan_objmgr_vdev *vdev,
 					      enum wlan_cm_source source)
 {
 	/* Don't stop netif queues for link switch disconnect */
-	if (source == CM_MLO_LINK_SWITCH_DISCONNECT)
+	if (source == CM_MLO_LINK_SWITCH_DISCONNECT ||
+	    source == CM_MLO_ROAM_INTERNAL_DISCONNECT)
 		return QDF_STATUS_SUCCESS;
 
 	/* Disable netif queue on disconnect start */

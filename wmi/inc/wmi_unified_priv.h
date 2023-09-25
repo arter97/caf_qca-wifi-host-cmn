@@ -88,6 +88,7 @@
 
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 #include <wlan_cm_roam_public_struct.h>
+#include <wlan_mlme_public_struct.h>
 #endif
 
 #ifdef WMI_AP_SUPPORT
@@ -508,6 +509,11 @@ QDF_STATUS
 				 uint8_t *num_keys,
 				 struct qdf_mac_addr *mld_addr);
 #endif
+
+QDF_STATUS
+(*extract_peer_oper_mode_event)(wmi_unified_t wmi_handle,
+				uint8_t *event, uint32_t data_len,
+				struct peer_oper_mode_event *data);
 #endif
 
 #ifdef FEATURE_MEC_OFFLOAD
@@ -2339,6 +2345,11 @@ QDF_STATUS (*extract_dbr_buf_cv_metadata)(
 			wmi_unified_t wmi_handle,
 			uint8_t *evt_buf, uint8_t idx,
 			struct direct_buf_rx_cv_metadata *param);
+
+QDF_STATUS (*extract_dbr_buf_cqi_metadata)(
+			wmi_unified_t wmi_handle,
+			uint8_t *evt_buf, uint8_t idx,
+			struct direct_buf_rx_cqi_metadata *param);
 #endif
 
 QDF_STATUS (*extract_pdev_utf_event)(wmi_unified_t wmi_hdl,
@@ -2557,7 +2568,7 @@ QDF_STATUS
 (*extract_roam_11kv_stats)(wmi_unified_t wmi_handle,
 			   void *evt_buf,
 			   struct wmi_neighbor_report_data *dst,
-			   uint8_t idx, uint8_t rpt_idx);
+			   uint8_t idx, uint8_t rpt_idx, uint8_t band);
 
 void (*wmi_pdev_id_conversion_enable)(wmi_unified_t wmi_handle,
 				      uint32_t *pdev_map,
@@ -3039,6 +3050,14 @@ QDF_STATUS (*config_peer_latency_info_cmd)(
 				*param);
 #endif
 #endif
+
+#ifdef WLAN_WSI_STATS_SUPPORT
+QDF_STATUS (*send_wsi_stats_info_cmd)(
+				wmi_unified_t wmi,
+				struct wmi_wsi_stats_info_params
+				*param);
+#endif
+
 #ifdef QCA_MANUAL_TRIGGERED_ULOFDMA
 QDF_STATUS
 (*trigger_ulofdma_su_cmd)(wmi_unified_t wmi,

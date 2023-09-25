@@ -341,7 +341,7 @@ struct wlan_objmgr_psoc_nif {
 	struct wlan_objmgr_psoc_user_config user_config;
 };
 
-/*
+/**
  * struct wlan_objmgr_psoc_objmgr - psoc object manager sub structure
  * @psoc_id:              The PSOC's numeric Id
  * @wlan_pdev_count:      PDEV count
@@ -359,9 +359,6 @@ struct wlan_objmgr_psoc_nif {
  * @ref_cnt:              Ref count
  * @ref_id_dbg:           Array to track Ref count
  * @qdf_dev:              QDF Device
- *
- * NB: not using kernel-doc format since the kernel-doc script doesn't
- *     handle the qdf_bitmap() macro
  */
 struct wlan_objmgr_psoc_objmgr {
 	uint8_t psoc_id;

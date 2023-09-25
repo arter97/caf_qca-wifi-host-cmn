@@ -3061,6 +3061,18 @@ static inline void target_if_set_reo_shared_qref_feature(struct wlan_objmgr_psoc
 #endif
 
 /**
+ * target_if_phy_ch_width_to_wmi_chan_width() - convert host ch_width to fw format
+ *
+ * @ch_width: enum phy_ch_width
+ *
+ * Convert host driver chan width value to fw recognizable value.
+ *
+ * return: wmi_host_channel_width
+ */
+wmi_host_channel_width
+target_if_phy_ch_width_to_wmi_chan_width(enum phy_ch_width ch_width);
+
+/**
  * target_if_wmi_chan_width_to_phy_ch_width() - convert channel width from
  * wmi_host_channel_width to phy_ch_width
  *

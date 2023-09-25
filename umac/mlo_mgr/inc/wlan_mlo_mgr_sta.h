@@ -196,6 +196,14 @@ QDF_STATUS mlo_check_topology(struct wlan_objmgr_pdev *pdev,
 
 void mlo_update_partner_bridge_info(struct wlan_mlo_dev_context *ml_dev,
 				    struct mlo_partner_info *partner_info);
+/**
+ * mlo_get_total_links() - get total links supported by device
+ * @pdev: pdev pointer
+ *
+ * Return: Number of total links supported
+ */
+
+uint8_t mlo_get_total_links(struct wlan_objmgr_pdev *pdev);
 
 /**
  * mlo_is_sta_bridge_vdev() - Check if the vdev is sta bridge vdev
@@ -215,15 +223,121 @@ bool mlo_is_sta_bridge_vdev(struct wlan_objmgr_vdev *vdev);
 bool mlo_sta_bridge_exists(struct wlan_objmgr_vdev *vdev);
 
 /**
- * mlo_get_total_links() - get total links supported by device
- * @pdev: pdev pointer
+ * mlo_is_force_central_primary() - Check if central vdev is forced
+ * as primary
+ * @vdev: vdev pointer
  *
- * Return: Number of total links supported
+ * Return: True if Central Vdev is force as primary else false
  */
 
-uint8_t mlo_get_total_links(struct wlan_objmgr_pdev *pdev);
-#endif
+bool mlo_is_force_central_primary(struct wlan_objmgr_vdev *vdev);
 
+/**
+ * mlo_set_sta_ctx_bss_mld_addr() - Save BSS MLD in sta ctx
+ * @vdev: vdev pointer
+ * @bss_mld_addr: MLD Address of BSS
+ *
+ * Return: none
+ */
+
+static inline
+void mlo_set_sta_ctx_bss_mld_addr(struct wlan_objmgr_vdev *vdev,
+				  struct qdf_mac_addr *bss_mld_addr)
+{
+	struct wlan_mlo_dev_context *ml_dev = NULL;
+
+	if (!vdev || !vdev->mlo_dev_ctx || !bss_mld_addr)
+		return;
+
+	ml_dev = vdev->mlo_dev_ctx;
+	if (mlo_sta_bridge_exists(vdev) &&
+	    qdf_is_macaddr_zero(&ml_dev->bridge_sta_ctx->bss_mld_addr)) {
+		if (qdf_is_macaddr_zero(bss_mld_addr))
+			return;
+		qdf_copy_macaddr(&ml_dev->bridge_sta_ctx->bss_mld_addr,
+				 bss_mld_addr);
+	}
+}
+
+/**
+ * mlo_get_sta_ctx_bss_mld_addr() - Get BSS MLD from sta ctx
+ * @vdev: vdev pointer
+ *
+ * Return: pointer to qdf_mac_addr
+ */
+
+static inline
+struct qdf_mac_addr *mlo_get_sta_ctx_bss_mld_addr(struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_mlo_dev_context *ml_dev = NULL;
+	struct qdf_mac_addr *mld_addr;
+
+	if (!vdev || !vdev->mlo_dev_ctx)
+		return NULL;
+
+	ml_dev = vdev->mlo_dev_ctx;
+	if (mlo_sta_bridge_exists(vdev) &&
+	    !qdf_is_macaddr_zero(&ml_dev->bridge_sta_ctx->bss_mld_addr)) {
+		mld_addr = &ml_dev->bridge_sta_ctx->bss_mld_addr;
+		return mld_addr;
+	}
+	return NULL;
+}
+
+/**
+ * mlo_clear_bridge_sta_ctx() - clear bridge_sta_ctx
+ * @vdev: vdev object
+ *
+ * Return: none
+ */
+static inline
+void mlo_clear_bridge_sta_ctx(struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_mlo_dev_context *ml_dev = NULL;
+
+	if (!vdev || !vdev->mlo_dev_ctx)
+		return;
+
+	ml_dev = vdev->mlo_dev_ctx;
+	if (ml_dev->bridge_sta_ctx)
+		qdf_mem_zero(ml_dev->bridge_sta_ctx,
+			     sizeof(ml_dev->bridge_sta_ctx));
+}
+
+#else
+static inline
+void mlo_set_sta_ctx_bss_mld_addr(struct wlan_objmgr_vdev *vdev,
+				  struct qdf_mac_addr *bss_mld_addr)
+{ }
+
+static inline
+struct qdf_mac_addr *mlo_get_sta_ctx_bss_mld_addr(struct wlan_objmgr_vdev *vdev)
+{
+	return NULL;
+}
+
+static inline
+bool mlo_is_sta_bridge_vdev(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
+
+static inline
+bool mlo_sta_bridge_exists(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
+
+static inline
+bool mlo_is_force_central_primary(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
+
+static inline
+void mlo_clear_bridge_sta_ctx(struct wlan_objmgr_vdev *vdev)
+{ }
+#endif
 /**
  * wlan_mlo_get_tdls_link_vdev() - API to get tdls link vdev
  * @vdev: vdev object
@@ -781,6 +895,39 @@ mlo_get_link_state_context(struct wlan_objmgr_psoc *psoc,
 			   get_ml_link_state_cb *resp_cb,
 			   void **context, uint8_t vdev_id);
 #else
+static inline
+void mlo_clear_bridge_sta_ctx(struct wlan_objmgr_vdev *vdev)
+{ }
+
+static inline
+void mlo_set_sta_ctx_bss_mld_addr(struct wlan_objmgr_vdev *vdev,
+				  struct qdf_mac_addr *bss_mld_addr)
+{ }
+
+static inline
+struct qdf_mac_addr *mlo_get_sta_ctx_bss_mld_addr(struct wlan_objmgr_vdev *vdev)
+{
+	return NULL;
+}
+
+static inline
+bool mlo_is_sta_bridge_vdev(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
+
+static inline
+bool mlo_sta_bridge_exists(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
+
+static inline
+bool mlo_is_force_central_primary(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
+
 static inline
 QDF_STATUS mlo_connect(struct wlan_objmgr_vdev *vdev,
 		       struct wlan_cm_connect_req *req)

@@ -52,6 +52,8 @@
 #define IPV4 0x0008
 #define IPV6 0xdd86
 #define IPV6ARRAY 4
+#define OPT_DP_TARGET_RESUME_WAIT_TIMEOUT_MS 50
+#define OPT_DP_TARGET_RESUME_WAIT_COUNT 10
 #endif
 
 static struct wlan_ipa_priv *gp_ipa;
@@ -2077,6 +2079,45 @@ static int wlan_ipa_get_ifaceid(struct wlan_ipa_priv *ipa_ctx,
 	return i;
 }
 
+#ifdef IPA_WDI3_TX_TWO_PIPES
+#define WLAN_IPA_SESSION_ID_SHIFT 1
+static uint8_t wlan_ipa_set_session_id(uint8_t session_id, bool is_2g_iface)
+{
+	return (session_id << WLAN_IPA_SESSION_ID_SHIFT) | is_2g_iface;
+}
+
+static void
+wlan_ipa_setup_iface_alt_pipe(struct wlan_ipa_iface_context *iface_context,
+			      bool alt_pipe)
+{
+	iface_context->alt_pipe = alt_pipe;
+}
+
+static void
+wlan_ipa_cleanup_iface_alt_pipe(struct wlan_ipa_iface_context *iface_context)
+{
+	iface_context->alt_pipe = false;
+}
+
+#else
+static uint8_t wlan_ipa_set_session_id(uint8_t session_id, bool is_2g_iface)
+{
+	return session_id;
+}
+
+static void
+wlan_ipa_setup_iface_alt_pipe(struct wlan_ipa_iface_context *iface_context,
+			      bool alt_pipe)
+{
+}
+
+static void
+wlan_ipa_cleanup_iface_alt_pipe(struct wlan_ipa_iface_context *iface_context)
+{
+}
+
+#endif
+
 /**
  * wlan_ipa_cleanup_iface() - Cleanup IPA on a given interface
  * @iface_context: interface-specific IPA context
@@ -2128,6 +2169,7 @@ static void wlan_ipa_cleanup_iface(struct wlan_ipa_iface_context *iface_context,
 	iface_context->device_mode = QDF_MAX_NO_OF_MODE;
 	iface_context->session_id = WLAN_IPA_MAX_SESSION;
 	qdf_mem_set(iface_context->mac_addr, QDF_MAC_ADDR_SIZE, 0);
+	wlan_ipa_cleanup_iface_alt_pipe(iface_context);
 	qdf_spin_unlock_bh(&iface_context->interface_lock);
 	iface_context->ifa_address = 0;
 	qdf_zero_macaddr(&iface_context->bssid);
@@ -2217,19 +2259,6 @@ static void wlan_ipa_nbuf_cb(qdf_nbuf_t skb)
 }
 
 #endif /* QCA_LL_TX_FLOW_CONTROL_V2 */
-
-#ifdef IPA_WDI3_TX_TWO_PIPES
-#define WLAN_IPA_SESSION_ID_SHIFT 1
-static uint8_t wlan_ipa_set_session_id(uint8_t session_id, bool is_2g_iface)
-{
-	return (session_id << WLAN_IPA_SESSION_ID_SHIFT) | is_2g_iface;
-}
-#else
-static uint8_t wlan_ipa_set_session_id(uint8_t session_id, bool is_2g_iface)
-{
-	return session_id;
-}
-#endif
 
 /**
  * wlan_ipa_setup_iface() - Setup IPA on a given interface
@@ -2328,6 +2357,7 @@ static QDF_STATUS wlan_ipa_setup_iface(struct wlan_ipa_priv *ipa_ctx,
 	iface_context->device_mode = device_mode;
 	iface_context->session_id = session_id;
 	qdf_mem_copy(iface_context->mac_addr, mac_addr, QDF_MAC_ADDR_SIZE);
+	wlan_ipa_setup_iface_alt_pipe(iface_context, is_2g_iface);
 	qdf_spin_unlock_bh(&iface_context->interface_lock);
 
 	status = cdp_ipa_setup_iface(ipa_ctx->dp_soc, net_dev->name,
@@ -5237,7 +5267,10 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_cb(
 	struct wlan_ipa_priv *ipa_obj = (struct wlan_ipa_priv *)ipa_ctx;
 	int i, pdev_id, param_val;
 	struct wlan_objmgr_pdev *pdev;
+	struct wlan_objmgr_psoc *psoc;
+	wmi_unified_t wmi_handle;
 	int response = 0;
+	int wait_cnt = 0;
 
 	if (ipa_obj->ipa_pipes_down || ipa_obj->pipes_down_in_progress) {
 		ipa_err("Pipes are going down. Reject flt rsrv request");
@@ -5246,12 +5279,29 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_cb(
 
 	pdev = ipa_obj->pdev;
 	pdev_id = ipa_obj->dp_pdev_id;
+	psoc = wlan_pdev_get_psoc(pdev);
+	wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
 
 	/* Hold wakelock */
 	qdf_wake_lock_acquire(&ipa_obj->opt_dp_wake_lock,
 			      WIFI_POWER_EVENT_WAKELOCK_OPT_WIFI_DP);
-	qdf_pm_system_wakeup();
 	ipa_info("opt_dp: Wakelock acquired");
+	qdf_pm_system_wakeup();
+
+	ipa_info("Target suspend state %d", qdf_atomic_read(&wmi_handle->is_target_suspended));
+	while (qdf_atomic_read(&wmi_handle->is_target_suspended) &&
+	       wait_cnt < OPT_DP_TARGET_RESUME_WAIT_COUNT) {
+		qdf_sleep(OPT_DP_TARGET_RESUME_WAIT_TIMEOUT_MS);
+		wait_cnt++;
+	}
+
+	if (qdf_atomic_read(&wmi_handle->is_target_suspended)) {
+		ipa_err("Wifi is suspended. Reject request");
+		goto error;
+	}
+
+	response = cdp_ipa_pcie_link_up(ipa_obj->dp_soc);
+	ipa_info("opt_dp: Pcie link up status %d", response);
 
 	/* Disable Low power features before filter reservation */
 	ipa_info("opt_dp: Disable low power features to reserve filter");
@@ -5263,9 +5313,6 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_cb(
 			response);
 		goto error;
 	}
-
-	response = cdp_ipa_pcie_link_up(ipa_obj->dp_soc);
-	ipa_info("opt_dp: Pcie link up status %d", response);
 
 	ipa_info("opt_dp: Send filter reserve req");
 	dp_flt_params = &(ipa_obj->dp_cce_super_rule_flt_param);
@@ -5603,3 +5650,36 @@ void wlan_ipa_wdi_opt_dpath_notify_flt_add_rem_cb(int flt0_rslt, int flt1_rslt)
 	qdf_event_set(&ipa_obj->ipa_flt_evnt);
 }
 #endif /* IPA_OPT_WIFI_DP */
+
+#ifdef IPA_WDI3_TX_TWO_PIPES
+QDF_STATUS wlan_ipa_get_alt_pipe(struct wlan_ipa_priv *ipa_ctx,
+				 uint8_t vdev_id,
+				 bool *alt_pipe)
+{
+	struct wlan_ipa_iface_context *ctxt;
+	uint8_t iface_id;
+
+	if (qdf_unlikely(!ipa_ctx || !alt_pipe))
+		return QDF_STATUS_E_INVAL;
+
+	iface_id = ipa_ctx->vdev_to_iface[vdev_id];
+	if (qdf_unlikely(iface_id >= WLAN_IPA_MAX_IFACE)) {
+		ipa_err("Invalid iface_id %u from vdev_id %d", iface_id,
+			vdev_id);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	ctxt = &ipa_ctx->iface_context[iface_id];
+	if (qdf_unlikely(ctxt->session_id >= WLAN_IPA_MAX_SESSION)) {
+		ipa_err("Invalid session_id %u from iface_id %d",
+			ctxt->session_id, iface_id);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	*alt_pipe = ctxt->alt_pipe;
+	ipa_info("vdev_id %d alt_pipe %d", vdev_id, *alt_pipe);
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* IPA_WDI3_TX_TWO_PIPES */
+

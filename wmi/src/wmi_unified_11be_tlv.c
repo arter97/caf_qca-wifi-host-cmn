@@ -108,6 +108,10 @@ uint8_t *vdev_start_add_mlo_params(uint8_t *buf_ptr,
 	vdev_start_add_mlo_mcast_params(&mlo_params->mlo_flags.mlo_flags,
 					req);
 
+	wmi_info("mlo_flags 0x%x emlsr_support %d ",
+		 mlo_params->mlo_flags.mlo_flags,
+		 mlo_params->mlo_flags.emlsr_support);
+
 	return buf_ptr + sizeof(wmi_vdev_start_mlo_params);
 }
 
@@ -134,6 +138,10 @@ uint8_t *vdev_start_add_ml_partner_links(uint8_t *buf_ptr,
 				req_partner->partner_info[i].hw_mld_link_id;
 		WMI_CHAR_ARRAY_TO_MAC_ADDR(req_partner->partner_info[i].mac_addr,
 					   &ml_partner_link->vdev_macaddr);
+		wmi_info("vdev_id %d hw_link_id %d MAC addr " QDF_MAC_ADDR_FMT,
+			 ml_partner_link->vdev_id,
+			 ml_partner_link->hw_link_id,
+			 QDF_MAC_ADDR_REF(req_partner->partner_info[i].mac_addr));
 		ml_partner_link++;
 	}
 
@@ -314,6 +322,27 @@ uint8_t *peer_assoc_add_mlo_params(uint8_t *buf_ptr,
 			req->mlo_params.link_switch_in_progress;
 	mlo_params->nstr_indication_bitmap =
 		req->mlo_params.nstr_indication_bitmap;
+
+	wmi_debug("emlsr_support %d mlo_flags 0x%x logical_link_index %d mld_peer_id %d ieee_link_id %d "
+		  "emlsr_trans_timeout_us %d emlsr_trans_delay_us %d "
+		  "emlsr_padding_delay_us %d msd_dur_subfield %d msd_ofdm_ed_thr %d msd_max_num_txops %d "
+		  "max_num_simultaneous_links %d nstr_bitmap_present %d nstr_bitmap_size %d "
+		  "mlo_link_switch %d "
+		  "nstr_indication_bitmap 0x%x MLD addr " QDF_MAC_ADDR_FMT,
+		  mlo_params->mlo_flags.emlsr_support,
+		  mlo_params->mlo_flags.mlo_flags,
+		  mlo_params->logical_link_index,
+		  mlo_params->mld_peer_id, mlo_params->ieee_link_id,
+		  mlo_params->emlsr_trans_timeout_us,
+		  mlo_params->emlsr_trans_delay_us,
+		  mlo_params->emlsr_padding_delay_us,
+		  mlo_params->msd_dur_subfield, mlo_params->msd_ofdm_ed_thr,
+		  mlo_params->msd_max_num_txops, mlo_params->max_num_simultaneous_links,
+		  mlo_params->mlo_flags.nstr_bitmap_present,
+		  mlo_params->mlo_flags.nstr_bitmap_size,
+		  mlo_params->mlo_flags.mlo_link_switch,
+		  mlo_params->nstr_indication_bitmap,
+		  req->mlo_params.mld_mac);
 
 	return buf_ptr + sizeof(wmi_peer_assoc_mlo_params);
 }
@@ -1409,6 +1438,12 @@ static uint8_t *populate_link_control_tlv(
 
 	return buf_ptr;
 }
+
+static void
+populate_fill_t2lm_timer_tlv(wmi_peer_tid_to_link_map_fixed_param *cmd,
+			     struct wmi_host_tid_to_link_map_params *params)
+{
+}
 #else
 static uint32_t find_buf_len_pref_link(
 		struct wmi_host_tid_to_link_map_params *params,
@@ -1427,6 +1462,14 @@ static uint8_t *populate_link_control_tlv(
 		struct wmi_host_tid_to_link_map_params *params)
 {
 	return buf_ptr;
+}
+
+static void
+populate_fill_t2lm_timer_tlv(wmi_peer_tid_to_link_map_fixed_param *cmd,
+			     struct wmi_host_tid_to_link_map_params *params)
+{
+	cmd->mapping_switch_time = params->mapping_switch_time;
+	cmd->expected_duration = params->expected_duration;
 }
 #endif
 
@@ -1647,6 +1690,7 @@ static QDF_STATUS send_mlo_peer_tid_to_link_map_cmd_tlv(
 	WMI_CHAR_ARRAY_TO_MAC_ADDR(params->peer_macaddr, &cmd->link_macaddr);
 
 	buf_ptr += sizeof(wmi_peer_tid_to_link_map_fixed_param);
+	populate_fill_t2lm_timer_tlv(cmd, params);
 
 	if (t2lm_info) {
 		WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC,
@@ -2090,11 +2134,11 @@ QDF_STATUS mlo_teardown_cmd_send_tlv(struct wmi_unified *wmi_handle,
 								wmi_handle,
 								param->pdev_id);
 	switch (param->reason) {
-	case WMI_MLO_TEARDOWN_REASON_SSR:
-	case WMI_MLO_TEARDOWN_REASON_MODE1_SSR:
+	case WMI_HOST_MLO_TEARDOWN_REASON_SSR:
+	case WMI_HOST_MLO_TEARDOWN_REASON_MODE1_SSR:
 		cmd->reason_code = WMI_MLO_TEARDOWN_SSR_REASON;
 		break;
-	case WMI_MLO_TEARDOWN_REASON_DOWN:
+	case WMI_HOST_MLO_TEARDOWN_REASON_DOWN:
 	default:
 		cmd->reason_code = WMI_MLO_TEARDOWN_SSR_REASON + 1;
 		break;
@@ -2132,9 +2176,11 @@ extract_mlo_setup_cmpl_event_tlv(struct wmi_unified *wmi_handle,
 								wmi_handle,
 								ev->pdev_id);
 	if (!ev->status)
-		params->status = WMI_MLO_SETUP_STATUS_SUCCESS;
+		params->status = WMI_HOST_MLO_SETUP_STATUS_SUCCESS;
 	else
-		params->status = WMI_MLO_SETUP_STATUS_FAILURE;
+		params->status = WMI_HOST_MLO_SETUP_STATUS_FAILURE;
+
+	params->max_ml_peer_ids = ev->max_ml_peer_ids;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -2158,9 +2204,9 @@ extract_mlo_teardown_cmpl_event_tlv(struct wmi_unified *wmi_handle,
 								wmi_handle,
 								ev->pdev_id);
 	if (!ev->status)
-		params->status = WMI_MLO_TEARDOWN_STATUS_SUCCESS;
+		params->status = WMI_HOST_MLO_TEARDOWN_STATUS_SUCCESS;
 	else
-		params->status = WMI_MLO_TEARDOWN_STATUS_FAILURE;
+		params->status = WMI_HOST_MLO_TEARDOWN_STATUS_FAILURE;
 
 	return QDF_STATUS_SUCCESS;
 }
