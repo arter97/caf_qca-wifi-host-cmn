@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -8213,12 +8213,6 @@ QDF_STATUS dp_peer_mlo_setup(
 
 	dp_cfg_event_record_peer_setup_evt(soc, DP_CFG_EVENT_MLO_SETUP,
 					   peer, NULL, vdev_id, setup_info);
-	dp_info("link peer: " QDF_MAC_ADDR_FMT "mld peer: " QDF_MAC_ADDR_FMT
-		"first_link %d, primary_link %d",
-		QDF_MAC_ADDR_REF(peer->mac_addr.raw),
-		QDF_MAC_ADDR_REF(setup_info->mld_peer_mac),
-		setup_info->is_first_link,
-		setup_info->is_primary_link);
 
 	/* if this is the first link peer */
 	if (setup_info->is_first_link)
@@ -8233,6 +8227,14 @@ QDF_STATUS dp_peer_mlo_setup(
 	mld_peer = dp_mld_peer_find_hash_find(soc,
 					      setup_info->mld_peer_mac,
 					      0, vdev_id, DP_MOD_ID_CDP);
+
+	dp_info("Peer %pK MAC " QDF_MAC_ADDR_FMT " mld peer %pK MAC "
+		QDF_MAC_ADDR_FMT " first_link %d, primary_link %d", peer,
+		QDF_MAC_ADDR_REF(peer->mac_addr.raw), mld_peer,
+		QDF_MAC_ADDR_REF(setup_info->mld_peer_mac),
+		peer->first_link,
+		peer->primary_link);
+
 	if (mld_peer) {
 		if (setup_info->is_first_link) {
 			/* assign rx_tid to mld peer */
