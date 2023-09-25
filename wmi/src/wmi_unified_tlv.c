@@ -19707,10 +19707,13 @@ extract_roam_trigger_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 				btm_data->btm_mbo_assoc_retry_timeout;
 			trig->btm_trig_data.token =
 				(uint16_t)btm_data->btm_req_dialog_token;
-			trig->btm_trig_data.band =
-				WMI_GET_MLO_BAND(scan_info->flags);
-			if (trig->btm_trig_data.band != WMI_MLO_BAND_NO_MLO)
-				trig->btm_trig_data.is_mlo = true;
+			if (scan_info) {
+				trig->btm_trig_data.band =
+					WMI_GET_MLO_BAND(scan_info->flags);
+				if (trig->btm_trig_data.band !=
+						WMI_MLO_BAND_NO_MLO)
+					trig->btm_trig_data.is_mlo = true;
+			}
 		} else if (src_data) {
 			trig->btm_trig_data.btm_request_mode =
 					src_data->btm_request_mode;
@@ -19728,10 +19731,13 @@ extract_roam_trigger_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 					src_data->btm_mbo_assoc_retry_timeout;
 			trig->btm_trig_data.token =
 				src_data->btm_req_dialog_token;
-			trig->btm_trig_data.band =
-				WMI_GET_MLO_BAND(scan_info->flags);
-			if (trig->btm_trig_data.band != WMI_MLO_BAND_NO_MLO)
-				trig->btm_trig_data.is_mlo = true;
+			if (scan_info) {
+				trig->btm_trig_data.band =
+					WMI_GET_MLO_BAND(scan_info->flags);
+				if (trig->btm_trig_data.band !=
+						WMI_MLO_BAND_NO_MLO)
+					trig->btm_trig_data.is_mlo = true;
+			}
 			if ((btm_idx +
 				trig->btm_trig_data.candidate_list_count) <=
 			    param_buf->num_roam_btm_request_candidate_info)
