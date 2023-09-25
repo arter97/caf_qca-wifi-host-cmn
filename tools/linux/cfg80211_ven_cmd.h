@@ -1499,6 +1499,7 @@ enum _ol_ath_param_t {
 #endif
 	OL_ATH_PARAM_STANDBY_ACTIVE_MODE = 540,
 	OL_ATH_PARAM_SET_AWGN_EVENT = 541,
+	OL_ATH_PARAM_DP_DEBUG_LOG = 542,
 };
 
 #ifdef CONFIG_SUPPORT_VENCMDTABLE
@@ -3944,6 +3945,10 @@ struct vendor_commands radio_vendor_cmds[] = {
 #endif
 	{"set_awgn_event",
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_SET_AWGN_EVENT, SET_PARAM, 1},
+	{"dp_debug_log",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_DP_DEBUG_LOG, SET_PARAM, 1},
+	{"g_dp_debug_log",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_DP_DEBUG_LOG, GET_PARAM, 0},
 };
 #endif
 
