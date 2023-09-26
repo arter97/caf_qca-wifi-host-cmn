@@ -9506,19 +9506,12 @@ reg_get_eirp_from_mas_chan_list(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
 	return txpower;
 }
 
-#ifdef CONFIG_AFC_SUPPORT
-/**
- * reg_compute_6g_center_freq_from_cfi() - Given the IEEE value of the
- * 6 GHz center frequency, find the 6 GHz center frequency.
- * @ieee_6g_cfi: IEEE value of 6 GHz cfi
- * Return: Center frequency in MHz
- */
-static qdf_freq_t
-reg_compute_6g_center_freq_from_cfi(uint8_t ieee_6g_cfi)
+qdf_freq_t reg_compute_6g_center_freq_from_cfi(uint8_t ieee_6g_cfi)
 {
 	return (SIXG_START_FREQ + ieee_6g_cfi * FREQ_TO_CHAN_SCALE);
 }
 
+#ifdef CONFIG_AFC_SUPPORT
 #ifdef WLAN_FEATURE_11BE
 /**
  * reg_is_320_opclass: Find out if the opclass computed from freq and
