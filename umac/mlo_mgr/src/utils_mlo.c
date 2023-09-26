@@ -265,7 +265,6 @@ util_parse_multi_link_ctrl(uint8_t *mlieseqpayload,
 	}
 
 	if (mlieseqpayloadlen == parsed_payload_len) {
-		mlo_debug("No Link Info field present");
 		if (link_info)
 			*link_info = NULL;
 		return QDF_STATUS_SUCCESS;
@@ -1822,11 +1821,6 @@ util_find_bvmlie_persta_prof_for_linkid(uint8_t req_link_id,
 			if (req_link_id == linkid) {
 				mlo_debug("Found requested per-STA prof for linkid %u, len %zu",
 					  linkid, subelemseqpayloadlen);
-				QDF_TRACE_HEX_DUMP(QDF_MODULE_ID_MLO,
-						   QDF_TRACE_LEVEL_DEBUG,
-						   linkinfo_currpos,
-						   subelemseqpayloadlen +
-						   sizeof(struct subelem_header));
 				*persta_prof_frame = linkinfo_currpos;
 				*persta_prof_len = subelemseqpayloadlen;
 				return QDF_STATUS_SUCCESS;
@@ -2121,7 +2115,7 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 			return QDF_STATUS_E_FAILURE;
 		}
 
-		mlo_debug("Multi-Link element fragment sequence found with payload len %zu",
+		mlo_debug("ML IE fragment sequence found with payload len %zu",
 			  mlieseqpayloadlen);
 	} else {
 		if (mlieseqlen > (sizeof(struct ie_header) + WLAN_MAX_IE_LEN)) {
@@ -2186,10 +2180,6 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 		qdf_mem_free(mlieseqpayload_copy);
 		return QDF_STATUS_E_PROTO;
 	}
-
-	mlo_debug("Dumping hex of link info after parsing Multi-Link element control");
-	QDF_TRACE_HEX_DUMP(QDF_MODULE_ID_MLO, QDF_TRACE_LEVEL_DEBUG,
-			   link_info, link_info_len);
 
 	/* Note: We may have a future change to skip subelements which are not
 	 * Per-STA Profile, handle more than two links in MLO, handle cases
@@ -2313,8 +2303,6 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 			     WLAN_CAPABILITYINFO_LEN);
 		link_frame_currpos += WLAN_CAPABILITYINFO_LEN;
 		link_frame_currlen += WLAN_CAPABILITYINFO_LEN;
-		mlo_debug("Added Capability Info field (%u octets) to link specific frame",
-			  WLAN_CAPABILITYINFO_LEN);
 
 		sta_prof_currpos += WLAN_CAPABILITYINFO_LEN;
 		sta_prof_remlen -= WLAN_CAPABILITYINFO_LEN;
@@ -2338,8 +2326,6 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 			     WLAN_LISTENINTERVAL_LEN);
 		link_frame_currpos += WLAN_LISTENINTERVAL_LEN;
 		link_frame_currlen += WLAN_LISTENINTERVAL_LEN;
-		mlo_debug("Added Listen Interval field (%u octets) to link specific frame",
-			  WLAN_LISTENINTERVAL_LEN);
 
 		if (subtype == WLAN_FC0_STYPE_REASSOC_REQ) {
 			/* Current AP address is common between all links. Copy
@@ -2457,8 +2443,6 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 		qdf_mem_copy(link_frame_currpos, &tsf, WLAN_TIMESTAMP_LEN);
 		link_frame_currpos += WLAN_TIMESTAMP_LEN;
 		link_frame_currlen += WLAN_TIMESTAMP_LEN;
-		mlo_debug("Added Timestamp Info field (%u octets) to link specific frame",
-			  WLAN_TIMESTAMP_LEN);
 
 		if (!is_beaconinterval_valid) {
 			mlo_err_rl("Beacon interval information not present in STA info field of per-STA profile");
@@ -2483,8 +2467,6 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 			     WLAN_BEACONINTERVAL_LEN);
 		link_frame_currpos += WLAN_BEACONINTERVAL_LEN;
 		link_frame_currlen += WLAN_BEACONINTERVAL_LEN;
-		mlo_debug("Added Beacon Interval Info field (%u octets) to link specific frame",
-			  WLAN_BEACONINTERVAL_LEN);
 
 		if (sta_prof_remlen < WLAN_CAPABILITYINFO_LEN) {
 			mlo_err_rl("Remaining length of STA profile %zu octets is less than length of Capability Info %u",
@@ -2513,8 +2495,6 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 			     WLAN_CAPABILITYINFO_LEN);
 		link_frame_currpos += WLAN_CAPABILITYINFO_LEN;
 		link_frame_currlen += WLAN_CAPABILITYINFO_LEN;
-		mlo_debug("Added Capability Info field (%u octets) to link specific frame",
-			  WLAN_CAPABILITYINFO_LEN);
 
 		sta_prof_currpos += WLAN_CAPABILITYINFO_LEN;
 		sta_prof_remlen -= WLAN_CAPABILITYINFO_LEN;
@@ -2686,29 +2666,29 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 						reportingsta_ie_size;
 
 					if (reportingsta_ie[ID_POS] == WLAN_ELEMID_EXTN_ELEM) {
-						mlo_debug("IE with element ID : %u extension element ID : %u (%zu octets) present for reporting STA but not in STA profile. Copied IE from reporting frame to link specific frame",
-							  reportingsta_ie[ID_POS],
-							  reportingsta_ie[IDEXT_POS],
-							  reportingsta_ie_size);
+						mlo_etrace_debug("IE with element ID : %u extension element ID : %u (%zu octets) present for reporting STA but not in STA profile. Copied IE from reporting frame to link specific frame",
+							      reportingsta_ie[ID_POS],
+							      reportingsta_ie[IDEXT_POS],
+							      reportingsta_ie_size);
 					} else {
-						mlo_debug("IE with element ID : %u (%zu octets) present for reporting STA but not in STA profile. Copied IE from reporting frame to link specific frame",
-							  reportingsta_ie[ID_POS],
-							  reportingsta_ie_size);
+						mlo_etrace_debug("IE with element ID : %u (%zu octets) present for reporting STA but not in STA profile. Copied IE from reporting frame to link specific frame",
+							      reportingsta_ie[ID_POS],
+							      reportingsta_ie_size);
 					}
 				} else {
 					if (reportingsta_ie[ID_POS] == WLAN_ELEMID_EXTN_ELEM) {
-						mlo_err_rl("Insufficient space in link specific frame for IE with element ID : %u extension element ID : %u. Required: %zu octets, available: %zu octets",
-							   reportingsta_ie[ID_POS],
-							   reportingsta_ie[IDEXT_POS],
-							   reportingsta_ie_size,
-							   link_frame_maxsize -
-							   link_frame_currlen);
+						mlo_etrace_err_rl("Insufficient space in link specific frame for IE with element ID : %u extension element ID : %u. Required: %zu octets, available: %zu octets",
+							       reportingsta_ie[ID_POS],
+							       reportingsta_ie[IDEXT_POS],
+							       reportingsta_ie_size,
+							       link_frame_maxsize -
+							       link_frame_currlen);
 					} else {
-						mlo_err_rl("Insufficient space in link specific frame for IE with element ID : %u. Required: %zu octets, available: %zu octets",
-							   reportingsta_ie[ID_POS],
-							   reportingsta_ie_size,
-							   link_frame_maxsize -
-							   link_frame_currlen);
+						mlo_etrace_err_rl("Insufficient space in link specific frame for IE with element ID : %u. Required: %zu octets, available: %zu octets",
+							       reportingsta_ie[ID_POS],
+							       reportingsta_ie_size,
+							       link_frame_maxsize -
+							       link_frame_currlen);
 					}
 
 					qdf_mem_free(mlieseqpayload_copy);
@@ -2716,14 +2696,14 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 				}
 			} else {
 				if (reportingsta_ie[ID_POS] == WLAN_ELEMID_EXTN_ELEM) {
-					mlo_debug("IE with element ID : %u extension element ID : %u (%zu octets) present for reporting STA but not in STA profile. However it is in Non-Inheritance list, hence ignoring.",
-						  reportingsta_ie[ID_POS],
-						  reportingsta_ie[IDEXT_POS],
-						  reportingsta_ie_size);
+					mlo_etrace_debug("IE with element ID : %u extension element ID : %u (%zu octets) present for reporting STA but not in STA profile. However it is in Non-Inheritance list, hence ignoring.",
+						      reportingsta_ie[ID_POS],
+						      reportingsta_ie[IDEXT_POS],
+						      reportingsta_ie_size);
 				} else {
-					mlo_debug("IE with element ID : %u (%zu octets) present for reporting STA but not in STA profile. However it is in Non-Inheritance list, hence ignoring.",
-						  reportingsta_ie[ID_POS],
-						  reportingsta_ie_size);
+					mlo_etrace_debug("IE with element ID : %u (%zu octets) present for reporting STA but not in STA profile. However it is in Non-Inheritance list, hence ignoring.",
+						      reportingsta_ie[ID_POS],
+						      reportingsta_ie_size);
 				}
 			}
 		} else {
@@ -2781,32 +2761,32 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 
 					if (reportingsta_ie[ID_POS] ==
 							WLAN_ELEMID_EXTN_ELEM) {
-						mlo_debug("IE with element ID : %u extension element ID : %u (%zu octets) for reporting STA also present in STA profile. Copied IE from STA profile to link specific frame",
-							  sta_prof_ie[ID_POS],
-							  sta_prof_ie[IDEXT_POS],
-							  sta_prof_ie_size);
+						mlo_etrace_debug("IE with element ID : %u extension element ID : %u (%zu octets) for reporting STA also present in STA profile. Copied IE from STA profile to link specific frame",
+							      sta_prof_ie[ID_POS],
+							      sta_prof_ie[IDEXT_POS],
+							      sta_prof_ie_size);
 					} else {
-						mlo_debug("IE with element ID : %u (%zu octets) for reporting STA also present in STA profile. Copied IE from STA profile to link specific frame",
-							  sta_prof_ie[ID_POS],
-							  sta_prof_ie_size);
+						mlo_etrace_debug("IE with element ID : %u (%zu octets) for reporting STA also present in STA profile. Copied IE from STA profile to link specific frame",
+								 sta_prof_ie[ID_POS],
+								 sta_prof_ie_size);
 					}
 
 					sta_prof_ie[0] = 0;
 				} else {
 					if (sta_prof_ie[ID_POS] ==
 							WLAN_ELEMID_EXTN_ELEM) {
-						mlo_err_rl("Insufficient space in link specific frame for IE with element ID : %u extension element ID : %u. Required: %zu octets, available: %zu octets",
-							   sta_prof_ie[ID_POS],
-							   sta_prof_ie[IDEXT_POS],
-							   sta_prof_ie_size,
-							   link_frame_maxsize -
-							   link_frame_currlen);
+						mlo_etrace_err_rl("Insufficient space in link specific frame for IE with element ID : %u extension element ID : %u. Required: %zu octets, available: %zu octets",
+								  sta_prof_ie[ID_POS],
+								  sta_prof_ie[IDEXT_POS],
+								  sta_prof_ie_size,
+								  link_frame_maxsize -
+								  link_frame_currlen);
 					} else {
-						mlo_err_rl("Insufficient space in link specific frame for IE with element ID : %u. Required: %zu octets, available: %zu octets",
-							   sta_prof_ie[ID_POS],
-							   sta_prof_ie_size,
-							   link_frame_maxsize -
-							   link_frame_currlen);
+						mlo_etrace_err_rl("Insufficient space in link specific frame for IE with element ID : %u. Required: %zu octets, available: %zu octets",
+								  sta_prof_ie[ID_POS],
+								  sta_prof_ie_size,
+								  link_frame_maxsize -
+								  link_frame_currlen);
 					}
 
 					qdf_mem_free(mlieseqpayload_copy);
@@ -2877,31 +2857,31 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 
 			if (reportingsta_ie[ID_POS] ==
 					WLAN_ELEMID_EXTN_ELEM) {
-				mlo_debug("IE with element ID : %u extension element ID : %u (%zu octets) is present only in STA profile. Copied IE from STA profile to link specific frame",
-					  sta_prof_ie[ID_POS],
-					  sta_prof_ie[IDEXT_POS],
-					  sta_prof_ie_size);
+				mlo_etrace_debug("IE with element ID : %u extension element ID : %u (%zu octets) is present only in STA profile. Copied IE from STA profile to link specific frame",
+						 sta_prof_ie[ID_POS],
+						 sta_prof_ie[IDEXT_POS],
+						 sta_prof_ie_size);
 			} else {
-				mlo_debug("IE with element ID : %u (%zu octets) is present only in STA profile. Copied IE from STA profile to link specific frame",
-					  sta_prof_ie[ID_POS],
-					  sta_prof_ie_size);
+				mlo_etrace_debug("IE with element ID : %u (%zu octets) is present only in STA profile. Copied IE from STA profile to link specific frame",
+						 sta_prof_ie[ID_POS],
+						 sta_prof_ie_size);
 			}
 
 			sta_prof_ie[0] = 0;
 		} else {
 			if (sta_prof_ie[ID_POS] == WLAN_ELEMID_EXTN_ELEM) {
-				mlo_err_rl("Insufficient space in link specific frame for IE with element ID : %u extension element ID : %u. Required: %zu octets, available: %zu octets",
-					   sta_prof_ie[ID_POS],
-					   sta_prof_ie[IDEXT_POS],
-					   sta_prof_ie_size,
-					   link_frame_maxsize -
-					   link_frame_currlen);
+				mlo_etrace_err_rl("Insufficient space in link specific frame for IE with element ID : %u extension element ID : %u. Required: %zu octets, available: %zu octets",
+						  sta_prof_ie[ID_POS],
+						  sta_prof_ie[IDEXT_POS],
+						  sta_prof_ie_size,
+						  link_frame_maxsize -
+						  link_frame_currlen);
 			} else {
-				mlo_err_rl("Insufficient space in link specific frame for IE with element ID : %u. Required: %zu octets, available: %zu octets",
-					   sta_prof_ie[ID_POS],
-					   sta_prof_ie_size,
-					   link_frame_maxsize -
-					   link_frame_currlen);
+				mlo_etrace_err_rl("Insufficient space in link specific frame for IE with element ID : %u. Required: %zu octets, available: %zu octets",
+						  sta_prof_ie[ID_POS],
+						  sta_prof_ie_size,
+						  link_frame_maxsize -
+						  link_frame_currlen);
 			}
 
 			qdf_mem_free(mlieseqpayload_copy);

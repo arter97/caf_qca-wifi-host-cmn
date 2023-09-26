@@ -86,6 +86,16 @@
 #define mlo_nofl_debug_rl(format, args...) \
 		QDF_TRACE_DEBUG_RL_NO_FL(QDF_MODULE_ID_MLO, format, ## args)
 
+#if defined(WLAN_FEATURE_11BE_MLO_ENABLE_ENHANCED_TRACE)
+#define mlo_etrace_debug(format, args...) \
+		QDF_TRACE_DEBUG(QDF_MODULE_ID_MLO, format, ## args)
+#define mlo_etrace_err_rl(format, args...) \
+		QDF_TRACE_ERROR_RL(QDF_MODULE_ID_MLO, format, ## args)
+#else
+#define mlo_etrace_debug(format, args...)
+#define mlo_etrace_err_rl(format, args...)
+#endif
+
 #define MLO_INVALID_LINK_IDX 0xFF
 /**
  * mlo_get_link_information() - get partner link information

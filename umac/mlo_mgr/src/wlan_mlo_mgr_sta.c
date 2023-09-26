@@ -715,8 +715,6 @@ void mlo_clear_cu_bpcc(struct wlan_objmgr_vdev *vdev)
 
 	size = sizeof(sta_ctx->mlo_cu_param);
 	qdf_mem_zero(sta_ctx->mlo_cu_param, size);
-
-	mlo_debug("clear cu bpcc");
 }
 
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
@@ -771,7 +769,6 @@ QDF_STATUS mlo_connect(struct wlan_objmgr_vdev *vdev,
 		else
 			wlan_cm_free_connect_req_param(sta_ctx->copied_conn_req);
 
-		mlo_debug("storing orig connect req");
 		if (sta_ctx->copied_conn_req) {
 			qdf_mem_copy(sta_ctx->copied_conn_req, req,
 				     sizeof(struct wlan_cm_connect_req));
