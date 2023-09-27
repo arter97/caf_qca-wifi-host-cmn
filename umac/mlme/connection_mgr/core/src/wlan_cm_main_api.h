@@ -332,19 +332,22 @@ void cm_hw_mode_change_resp(struct wlan_objmgr_pdev *pdev, uint8_t vdev_id,
 			    wlan_cm_id cm_id, QDF_STATUS status);
 
 /**
- * cm_handle_hw_mode_change() - SM handling of hw mode change resp
+ * cm_ser_connect_after_mode_change_resp() - SM handling of
+ * hw mode change/bearer switch resp
  * @cm_ctx: connection manager context
  * @cm_id: Connection mgr ID assigned to this connect request.
- * @event: HW mode success or failure event
+ * @event: success or failure event
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS cm_handle_hw_mode_change(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id,
-				    enum wlan_cm_sm_evt event);
+QDF_STATUS cm_ser_connect_after_mode_change_resp(struct cnx_mgr *cm_ctx,
+						wlan_cm_id *cm_id,
+						enum wlan_cm_sm_evt event);
 #else
 static inline
-QDF_STATUS cm_handle_hw_mode_change(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id,
-				    enum wlan_cm_sm_evt event)
+QDF_STATUS cm_ser_connect_after_mode_change_resp(struct cnx_mgr *cm_ctx,
+						wlan_cm_id *cm_id,
+						enum wlan_cm_sm_evt event)
 {
 	return QDF_STATUS_SUCCESS;
 }
@@ -1591,4 +1594,19 @@ cm_bss_mlo_type(struct wlan_objmgr_psoc *psoc,
 	return SLO;
 }
 #endif
+
+#ifdef WLAN_FEATURE_LL_LT_SAP
+/**
+ * cm_bearer_switch_resp() - Bearer switch response
+ * @psoc: Psoc pointer
+ * @vdev_id: vdev id
+ * @cm_id: connection ID which gave the hw mode change request
+ * @status: status of the bearer switch
+ *
+ * Return: void
+ */
+void cm_bearer_switch_resp(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id,
+			   wlan_cm_id cm_id, QDF_STATUS status);
+#endif
+
 #endif /* __WLAN_CM_MAIN_API_H__ */

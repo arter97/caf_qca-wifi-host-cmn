@@ -44,6 +44,9 @@
 #include <wlan_objmgr_vdev_obj.h>
 #include "wlan_psoc_mlme_api.h"
 #include "wlan_scan_public_structs.h"
+#ifdef WLAN_FEATURE_LL_LT_SAP
+#include "wlan_ll_sap_api.h"
+#endif
 
 void
 cm_fill_failure_resp_from_cm_id(struct cnx_mgr *cm_ctx,
@@ -313,9 +316,41 @@ cm_send_connect_start_fail(struct cnx_mgr *cm_ctx,
 }
 
 #ifdef WLAN_POLICY_MGR_ENABLE
+static void
+cm_cont_connect_for_event(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id,
+			  wlan_cm_id cm_id, enum wlan_cm_sm_evt event)
+{
+	struct wlan_objmgr_vdev *vdev;
+	QDF_STATUS status;
+	struct cnx_mgr *cm_ctx;
 
-QDF_STATUS cm_handle_hw_mode_change(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id,
-				    enum wlan_cm_sm_evt event)
+	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, vdev_id,
+						    WLAN_MLME_CM_ID);
+	if (!vdev)
+		return;
+
+	cm_ctx = cm_get_cm_ctx(vdev);
+	if (!cm_ctx) {
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_MLME_CM_ID);
+		return;
+	}
+
+	status = cm_sm_deliver_event(vdev, event, sizeof(wlan_cm_id), &cm_id);
+
+	/*
+	 * Handle failure if posting fails, i.e. the SM state has
+	 * changed or head cm_id doesn't match the active cm_id. If
+	 * new command has been received connect should be
+	 * aborted from here with req cleanup.
+	 */
+	if (QDF_IS_STATUS_ERROR(status))
+		cm_connect_handle_event_post_fail(cm_ctx, cm_id);
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLME_CM_ID);
+}
+
+QDF_STATUS
+cm_ser_connect_after_mode_change_resp(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id,
+				      enum wlan_cm_sm_evt event)
 {
 	struct cm_req *cm_req;
 	enum wlan_cm_connect_fail_reason reason = CM_GENERIC_FAILURE;
@@ -337,17 +372,21 @@ QDF_STATUS cm_handle_hw_mode_change(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id,
 		goto send_failure;
 	}
 
-	if (event == WLAN_CM_SM_EV_HW_MODE_SUCCESS) {
+	switch (event) {
+	case WLAN_CM_SM_EV_HW_MODE_SUCCESS:
+	case WLAN_CM_SM_EV_BEARER_SWITCH_COMPLETE:
 		status = cm_ser_connect_req(pdev, cm_ctx, &cm_req->connect_req);
 		if (QDF_IS_STATUS_ERROR(status)) {
 			reason = CM_SER_FAILURE;
-			goto send_failure;
+			break;
 		}
 		return status;
+	case WLAN_CM_SM_EV_HW_MODE_FAILURE:
+		reason = CM_HW_MODE_FAILURE;
+		break;
+	default:
+		break;
 	}
-
-	/* Set reason HW mode fail for event WLAN_CM_SM_EV_HW_MODE_FAILURE */
-	reason = CM_HW_MODE_FAILURE;
 
 send_failure:
 	return cm_send_connect_start_fail(cm_ctx, &cm_req->connect_req, reason);
@@ -356,40 +395,16 @@ send_failure:
 void cm_hw_mode_change_resp(struct wlan_objmgr_pdev *pdev, uint8_t vdev_id,
 			    wlan_cm_id cm_id, QDF_STATUS status)
 {
-	struct wlan_objmgr_vdev *vdev;
-	QDF_STATUS qdf_status;
 	enum wlan_cm_sm_evt event = WLAN_CM_SM_EV_HW_MODE_SUCCESS;
-	struct cnx_mgr *cm_ctx;
 
 	mlme_debug(CM_PREFIX_FMT "Continue connect after HW mode change, status %d",
 		   CM_PREFIX_REF(vdev_id, cm_id), status);
 
-	vdev = wlan_objmgr_get_vdev_by_id_from_pdev(pdev, vdev_id,
-						    WLAN_MLME_CM_ID);
-	if (!vdev)
-		return;
-
-	cm_ctx = cm_get_cm_ctx(vdev);
-	if (!cm_ctx) {
-		wlan_objmgr_vdev_release_ref(vdev, WLAN_MLME_CM_ID);
-		return;
-	}
-
 	if (QDF_IS_STATUS_ERROR(status))
 		event = WLAN_CM_SM_EV_HW_MODE_FAILURE;
-	qdf_status = cm_sm_deliver_event(vdev, event, sizeof(wlan_cm_id),
-					 &cm_id);
 
-	/*
-	 * Handle failure if posting fails, i.e. the SM state has
-	 * changed or head cm_id doesn't match the active cm_id.
-	 * hw mode change resp should be handled only in JOIN_PENDING. If
-	 * new command has been received connect should be
-	 * aborted from here with connect req cleanup.
-	 */
-	if (QDF_IS_STATUS_ERROR(status))
-		cm_connect_handle_event_post_fail(cm_ctx, cm_id);
-	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLME_CM_ID);
+	cm_cont_connect_for_event(wlan_pdev_get_psoc(pdev), vdev_id, cm_id,
+				  event);
 }
 
 static QDF_STATUS cm_check_for_hw_mode_change(struct wlan_objmgr_psoc *psoc,
@@ -400,10 +415,7 @@ static QDF_STATUS cm_check_for_hw_mode_change(struct wlan_objmgr_psoc *psoc,
 	return policy_mgr_change_hw_mode_sta_connect(psoc, scan_list, vdev_id,
 						     connect_id);
 }
-
-
 #else
-
 static inline
 QDF_STATUS cm_check_for_hw_mode_change(struct wlan_objmgr_psoc *psoc,
 				       qdf_list_t *scan_list, uint8_t vdev_id,
@@ -411,8 +423,34 @@ QDF_STATUS cm_check_for_hw_mode_change(struct wlan_objmgr_psoc *psoc,
 {
 	return QDF_STATUS_E_ALREADY;
 }
-
 #endif /* WLAN_POLICY_MGR_ENABLE */
+
+#ifdef WLAN_FEATURE_LL_LT_SAP
+void cm_bearer_switch_resp(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id,
+			   wlan_cm_id cm_id, QDF_STATUS status)
+{
+	mlme_debug(CM_PREFIX_FMT "Continue connect after bearer switch %d",
+		   CM_PREFIX_REF(vdev_id, cm_id), status);
+
+	cm_cont_connect_for_event(psoc, vdev_id, cm_id,
+				  WLAN_CM_SM_EV_BEARER_SWITCH_COMPLETE);
+}
+
+static QDF_STATUS
+cm_check_for_bearer_switch(struct wlan_objmgr_psoc *psoc, qdf_list_t *scan_list,
+			   uint8_t vdev_id, wlan_cm_id cm_id)
+{
+	return wlan_ll_sap_switch_bearer_on_sta_connect_start(psoc, scan_list,
+							      vdev_id, cm_id);
+}
+#else
+static inline QDF_STATUS
+cm_check_for_bearer_switch(struct wlan_objmgr_psoc *psoc, qdf_list_t *scan_list,
+			   uint8_t vdev_id, wlan_cm_id cm_id)
+{
+	return QDF_STATUS_E_ALREADY;
+}
+#endif /* WLAN_FEATURE_LL_LT_SAP  */
 
 static inline void cm_delete_pmksa_for_bssid(struct cnx_mgr *cm_ctx,
 					     struct qdf_mac_addr *bssid)
@@ -1887,6 +1925,14 @@ QDF_STATUS cm_connect_start(struct cnx_mgr *cm_ctx,
 	if (QDF_IS_STATUS_ERROR(status)) {
 		reason = CM_NO_CANDIDATE_FOUND;
 		goto connect_err;
+	}
+
+	status = cm_check_for_bearer_switch(psoc, cm_req->candidate_list,
+					    vdev_id, cm_req->cm_id);
+	if (QDF_IS_STATUS_SUCCESS(status)) {
+		mlme_debug(CM_PREFIX_FMT "Connect will continue after bearer switch",
+			   CM_PREFIX_REF(vdev_id, cm_req->cm_id));
+		return QDF_STATUS_SUCCESS;
 	}
 
 	status = cm_check_for_hw_mode_change(psoc, cm_req->candidate_list,
