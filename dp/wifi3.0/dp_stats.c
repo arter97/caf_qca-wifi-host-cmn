@@ -9748,6 +9748,7 @@ dp_txrx_get_peer_jitter_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	struct cdp_peer_info peer_info = { 0 };
 	struct cdp_peer_tid_stats *jitter_stats;
 	uint8_t ring_id;
+	struct dp_txrx_peer *txrx_peer;
 
 	if (!pdev)
 		return QDF_STATUS_E_FAILURE;
@@ -9762,7 +9763,8 @@ dp_txrx_get_peer_jitter_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	if (!peer)
 		return QDF_STATUS_E_FAILURE;
 
-	if (!peer->txrx_peer || !peer->txrx_peer->jitter_stats) {
+	txrx_peer = dp_get_txrx_peer(peer);
+	if (!txrx_peer || !txrx_peer->jitter_stats) {
 		dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -9770,7 +9772,7 @@ dp_txrx_get_peer_jitter_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	if (wlan_cfg_get_dp_pdev_nss_enabled(pdev->wlan_cfg_ctx)) {
 		for (tid = 0; tid < qdf_min(CDP_DATA_TID_MAX, DP_MAX_TIDS); tid++) {
 			struct cdp_peer_tid_stats *rx_tid =
-					&peer->txrx_peer->jitter_stats[tid];
+					&txrx_peer->jitter_stats[tid];
 
 			tid_stats[tid].tx_avg_jitter = rx_tid->tx_avg_jitter;
 			tid_stats[tid].tx_avg_delay = rx_tid->tx_avg_delay;
@@ -9780,7 +9782,7 @@ dp_txrx_get_peer_jitter_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 		}
 
 	} else {
-		jitter_stats = peer->txrx_peer->jitter_stats;
+		jitter_stats = txrx_peer->jitter_stats;
 		for (tid = 0; tid < qdf_min(CDP_DATA_TID_MAX, DP_MAX_TIDS); tid++) {
 			for (ring_id = 0; ring_id < CDP_MAX_TXRX_CTX; ring_id++) {
 				struct cdp_peer_tid_stats *rx_tid =
