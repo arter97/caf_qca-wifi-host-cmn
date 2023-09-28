@@ -3123,7 +3123,7 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 
 
 	for (i = 0; i < MAX_RX_MAC_RINGS; i++) {
-		dp_get_srng_ring_state_from_hal
+		status = dp_get_srng_ring_state_from_hal
 				(pdev->soc, pdev,
 				 &pdev->rx_mac_buf_ring[i],
 				 RXDMA_BUF,
