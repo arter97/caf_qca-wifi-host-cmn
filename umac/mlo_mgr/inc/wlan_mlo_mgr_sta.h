@@ -1175,6 +1175,15 @@ void mlo_defer_set_keys(struct wlan_objmgr_vdev *vdev,
 bool mlo_is_set_key_defered(struct wlan_objmgr_vdev *vdev,
 			    uint8_t link_id);
 
+/**
+ * mlo_is_any_link_disconnecting: Check if any ML link is disconnecting
+ * @vdev: vdev obj
+ *
+ * Check connection manager state machine if any ML link is disconnecting
+ *
+ * Return: boolean value true or false
+ */
+bool mlo_is_any_link_disconnecting(struct wlan_objmgr_vdev *vdev);
 #else
 static inline
 void mlo_defer_set_keys(struct wlan_objmgr_vdev *vdev,
@@ -1185,6 +1194,12 @@ void mlo_defer_set_keys(struct wlan_objmgr_vdev *vdev,
 static inline
 bool mlo_is_set_key_defered(struct wlan_objmgr_vdev *vdev,
 			    uint8_t link_id)
+{
+	return false;
+}
+
+static inline
+bool mlo_is_any_link_disconnecting(struct wlan_objmgr_vdev *vdev)
 {
 	return false;
 }

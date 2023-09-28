@@ -2783,4 +2783,25 @@ wlan_mlo_send_vdev_pause(struct wlan_objmgr_psoc *psoc,
 	if (QDF_IS_STATUS_ERROR(status))
 		mlo_err("Failed to send vdev pause to FW");
 }
+
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+bool mlo_is_any_link_disconnecting(struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_objmgr_vdev *wlan_vdev_list[WLAN_UMAC_MLO_MAX_VDEVS];
+	uint16_t vdev_count = 0, i;
+	bool status = false;
+
+	if (!vdev)
+		return status;
+
+	mlo_sta_get_vdev_list(vdev, &vdev_count, wlan_vdev_list);
+	for (i =  0; i < vdev_count; i++) {
+		if (!status && wlan_cm_is_vdev_disconnecting(wlan_vdev_list[i]))
+			status = true;
+		mlo_release_vdev_ref(wlan_vdev_list[i]);
+	}
+
+	return status;
+}
+#endif
 #endif
