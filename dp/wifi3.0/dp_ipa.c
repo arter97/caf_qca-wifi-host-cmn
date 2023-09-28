@@ -1511,8 +1511,15 @@ static int dp_tx_ipa_uc_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 			break;
 		}
 
-		qdf_nbuf_map_single(soc->osdev, nbuf,
-				    QDF_DMA_BIDIRECTIONAL);
+		retval = qdf_nbuf_map_single(soc->osdev, nbuf,
+					     QDF_DMA_BIDIRECTIONAL);
+		if (qdf_unlikely(retval != QDF_STATUS_SUCCESS)) {
+			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+				  "%s: nbuf map failed", __func__);
+			qdf_nbuf_free(nbuf);
+			retval = -EFAULT;
+			break;
+		}
 		buffer_paddr = qdf_nbuf_get_frag_paddr(nbuf, 0);
 		qdf_mem_dp_tx_skb_cnt_inc();
 		qdf_mem_dp_tx_skb_inc(qdf_nbuf_get_end_offset(nbuf));
@@ -1574,6 +1581,8 @@ int dp_ipa_uc_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
 			  "%s: DP IPA UC TX attach fail code %d",
 			  __func__, error);
+		if (error == -EFAULT)
+			dp_tx_ipa_uc_detach(soc, pdev);
 		return error;
 	}
 

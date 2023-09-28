@@ -835,7 +835,6 @@ uint32_t get_ipa_config(struct wlan_objmgr_psoc *psoc)
 			ipa_err("Invalid IPA Config 0x%x", val);
 		val = INTRL_MODE_ENABLE;
 	}
-	ipa_info("IPAConfig set as 0x%x", val);
 	return val;
 }
 #else
@@ -863,8 +862,8 @@ void ipa_component_config_update(struct wlan_objmgr_psoc *psoc)
 
 	if (g_ipa_pld_enable) {
 		g_ipa_config->ipa_config = get_ipa_config(psoc);
-		ipa_info("IPA ini configuration: 0x%x",
-			 g_ipa_config->ipa_config);
+		ipa_debug("IPA ini configuration: 0x%x",
+			  g_ipa_config->ipa_config);
 	} else {
 		g_ipa_config->ipa_config = 0;
 		ipa_info("IPA disabled from platform driver");
