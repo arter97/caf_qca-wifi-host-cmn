@@ -406,9 +406,6 @@ void dp_sawf_config_li(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 	uint8_t q_id = 0;
 	uint32_t flow_idx = 0;
 
-	if (!wlan_cfg_get_sawf_config(soc->wlan_cfg_ctx))
-		return;
-
 	q_id = dp_sawf_queue_id_get(nbuf);
 	if (q_id == DP_SAWF_DEFAULT_Q_INVALID)
 		return;
@@ -419,6 +416,9 @@ void dp_sawf_config_li(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 
 	if ((q_id >= DP_SAWF_DEFAULT_QUEUE_MIN) &&
 	    (q_id < DP_SAWF_DEFAULT_QUEUE_MAX))
+		return;
+
+	if (!wlan_cfg_get_sawf_config(soc->wlan_cfg_ctx))
 		return;
 
 	dp_sawf_tcl_cmd(fw_metadata, nbuf);
