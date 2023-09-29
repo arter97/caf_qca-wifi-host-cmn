@@ -835,7 +835,15 @@ void wlan_scan_update_low_latency_profile_chnlist(
 		return;
 	}
 
+/*
+ * Get ll_sap freq api will be cleaned up once macro is enabled
+ */
+#ifndef WLAN_FEATURE_LL_LT_SAP
 	ll_sap_freq = policy_mgr_get_ll_sap_freq(psoc);
+#else
+	ll_sap_freq = policy_mgr_get_ll_ht_sap_freq(psoc);
+#endif
+
 	if (!ll_sap_freq)
 		return;
 
