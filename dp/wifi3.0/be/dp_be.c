@@ -790,10 +790,10 @@ QDF_STATUS dp_peer_setup_ppeds_be(struct dp_soc *soc,
 	return qdf_status;
 }
 #else
-static QDF_STATUS dp_peer_setup_ppeds_be(struct dp_soc *soc,
-					 struct dp_peer *peer,
-					 struct dp_vdev_be *be_vdev
-					 void *args)
+QDF_STATUS dp_peer_setup_ppeds_be(struct dp_soc *soc,
+				 struct dp_peer *peer,
+				 struct dp_vdev_be *be_vdev,
+				 void *args)
 {
 	struct dp_ppe_vp_profile *vp_profile = (struct dp_ppe_vp_profile *)args;
 	struct dp_peer_be *be_peer = dp_get_be_peer_from_dp_peer(peer);
