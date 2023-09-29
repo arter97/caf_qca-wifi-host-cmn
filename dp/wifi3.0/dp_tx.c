@@ -2114,7 +2114,7 @@ qdf_dma_addr_t dp_tx_nbuf_map(struct dp_vdev *vdev,
 			      struct dp_tx_desc_s *tx_desc,
 			      qdf_nbuf_t nbuf)
 {
-	if (qdf_likely(tx_desc->flags & DP_TX_DESC_FLAG_SIMPLE)) {
+	if (qdf_likely(tx_desc->flags & DP_TX_DESC_FLAG_FAST)) {
 		qdf_nbuf_dma_clean_range((void *)nbuf->data,
 					 (void *)(nbuf->data + nbuf->len));
 		return (qdf_dma_addr_t)qdf_mem_virt_to_phys(nbuf->data);

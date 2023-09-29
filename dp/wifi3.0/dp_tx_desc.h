@@ -1280,10 +1280,14 @@ static inline void dp_tx_desc_update_fast_comp_flag(struct dp_soc *soc,
 						    uint8_t allow_fast_comp)
 {
 	if (qdf_likely(!(desc->flags & DP_TX_DESC_FLAG_TO_FW)) &&
-	    qdf_likely(allow_fast_comp)) {
+	    qdf_likely(allow_fast_comp))
 		desc->flags |= DP_TX_DESC_FLAG_SIMPLE;
-	}
+
+	if (qdf_likely(desc->nbuf->is_from_recycler) &&
+	    qdf_likely(desc->nbuf->fast_xmit))
+		desc->flags |= DP_TX_DESC_FLAG_FAST;
 }
+
 #else
 static inline void dp_tx_desc_update_fast_comp_flag(struct dp_soc *soc,
 						    struct dp_tx_desc_s *desc,
