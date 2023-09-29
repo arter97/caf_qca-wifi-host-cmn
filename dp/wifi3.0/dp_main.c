@@ -1974,8 +1974,6 @@ int dp_process_lmac_rings(struct dp_intr *int_ctx, int total_budget)
 		}
 
 		if (int_ctx->host2rxdma_ring_mask & (1 << mac_for_pdev)) {
-			union dp_rx_desc_list_elem_t *desc_list = NULL;
-			union dp_rx_desc_list_elem_t *tail = NULL;
 			struct dp_srng *rx_refill_buf_ring;
 			struct rx_desc_pool *rx_desc_pool;
 
@@ -1990,13 +1988,11 @@ int dp_process_lmac_rings(struct dp_intr *int_ctx, int total_budget)
 			intr_stats->num_host2rxdma_ring_masks++;
 
 			if (!rx_refill_lt_disable)
-				dp_rx_buffers_lt_replenish_simple(soc,
-							  mac_for_pdev,
-							  rx_refill_buf_ring,
-							  rx_desc_pool,
-							  0,
-							  &desc_list,
-							  &tail);
+				dp_rx_buffers_lt_replenish_simple
+							(soc, mac_for_pdev,
+							 rx_refill_buf_ring,
+							 rx_desc_pool,
+							 false);
 		}
 	}
 
@@ -11936,6 +11932,7 @@ static QDF_STATUS dp_umac_reset_handle_post_reset_complete(struct dp_soc *soc)
 {
 	QDF_STATUS status;
 	qdf_nbuf_t nbuf_list = soc->umac_reset_ctx.nbuf_list;
+	uint8_t mac_id;
 
 	soc->umac_reset_ctx.nbuf_list = NULL;
 
@@ -11957,6 +11954,19 @@ static QDF_STATUS dp_umac_reset_handle_post_reset_complete(struct dp_soc *soc)
 
 		qdf_nbuf_free(nbuf_list);
 		nbuf_list = nbuf;
+	}
+
+	/*
+	 * at pre-reset if in_use descriptors are not sufficient we replenish
+	 * only 1/3 of the ring. Try to replenish full ring here.
+	 */
+	for (mac_id = 0; mac_id < MAX_PDEV_CNT; mac_id++) {
+		struct dp_srng *dp_rxdma_srng =
+					&soc->rx_refill_buf_ring[mac_id];
+		struct rx_desc_pool *rx_desc_pool = &soc->rx_desc_buf[mac_id];
+
+		dp_rx_buffers_lt_replenish_simple(soc, mac_id, dp_rxdma_srng,
+						  rx_desc_pool, true);
 	}
 
 	dp_umac_reset_info("Umac reset done on soc %pK\n trigger start : %u us "

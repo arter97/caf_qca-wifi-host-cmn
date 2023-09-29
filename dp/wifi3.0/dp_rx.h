@@ -219,7 +219,7 @@ struct dp_rx_desc {
 				num_buffers, desc_list, tail, req_only) \
 	__dp_rx_buffers_replenish(soc, mac_id, rxdma_srng, rx_desc_pool, \
 				  num_buffers, desc_list, tail, req_only, \
-				  __func__)
+				  false, __func__)
 
 #ifdef WLAN_SUPPORT_RX_FISA
 /**
@@ -1675,6 +1675,9 @@ dp_rx_update_flow_tag(struct dp_soc *soc, struct dp_vdev *vdev,
  *	       interrupt.
  * @tail: tail of descs list
  * @req_only: If true don't replenish more than req buffers
+ * @force_replenish: replenish full ring without limit check this
+ *                   this field will be considered only when desc_list
+ *                   is NULL and req_only is false
  * @func_name: name of the caller function
  *
  * Return: return success or failure
@@ -1686,6 +1689,7 @@ QDF_STATUS __dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 				 union dp_rx_desc_list_elem_t **desc_list,
 				 union dp_rx_desc_list_elem_t **tail,
 				 bool req_only,
+				 bool force_replenish,
 				 const char *func_name);
 
 /**
@@ -1754,13 +1758,15 @@ __dp_rx_comp2refill_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
  * @mac_id: mac_id which is one of 3 mac_ids
  * @dp_rxdma_srng: dp rxdma circular ring
  * @rx_desc_pool: Pointer to free Rx descriptor pool
+ * @force_replenish: Force replenish the ring fully
  *
  * Return: return success or failure
  */
 QDF_STATUS
 __dp_rx_buffers_no_map_lt_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 				    struct dp_srng *dp_rxdma_srng,
-				    struct rx_desc_pool *rx_desc_pool);
+				    struct rx_desc_pool *rx_desc_pool,
+				    bool force_replenish);
 
 /**
  * __dp_pdev_rx_buffers_no_map_attach() - replenish rxdma ring with rx nbufs
@@ -2585,12 +2591,11 @@ static inline
 void dp_rx_buffers_lt_replenish_simple(struct dp_soc *soc, uint32_t mac_id,
 				       struct dp_srng *rxdma_srng,
 				       struct rx_desc_pool *rx_desc_pool,
-				       uint32_t num_req_buffers,
-				       union dp_rx_desc_list_elem_t **desc_list,
-				       union dp_rx_desc_list_elem_t **tail)
+				       bool force_replenish)
 {
 	__dp_rx_buffers_no_map_lt_replenish(soc, mac_id, rxdma_srng,
-					    rx_desc_pool);
+					    rx_desc_pool,
+					    force_replenish);
 }
 
 #ifndef QCA_DP_NBUF_FAST_RECYCLE_CHECK
@@ -2727,12 +2732,11 @@ static inline
 void dp_rx_buffers_lt_replenish_simple(struct dp_soc *soc, uint32_t mac_id,
 				       struct dp_srng *rxdma_srng,
 				       struct rx_desc_pool *rx_desc_pool,
-				       uint32_t num_req_buffers,
-				       union dp_rx_desc_list_elem_t **desc_list,
-				       union dp_rx_desc_list_elem_t **tail)
+				       bool force_replenish)
 {
-	dp_rx_buffers_replenish(soc, mac_id, rxdma_srng, rx_desc_pool,
-				num_req_buffers, desc_list, tail, false);
+	__dp_rx_buffers_replenish(soc, mac_id, rxdma_srng, rx_desc_pool,
+				  0, NULL, NULL, false, force_replenish,
+				  __func__);
 }
 
 static inline
