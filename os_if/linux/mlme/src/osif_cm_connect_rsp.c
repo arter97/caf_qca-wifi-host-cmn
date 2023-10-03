@@ -471,10 +471,12 @@ osif_get_chan_bss_from_kernel(struct wlan_objmgr_vdev *vdev,
 
 #if defined(CFG80211_SINGLE_NETDEV_MULTI_LINK_SUPPORT) && defined(WLAN_FEATURE_11BE_MLO)
 #ifndef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
-static struct wlan_objmgr_vdev *osif_get_partner_vdev(struct wlan_objmgr_vdev *vdev,
-						      struct mlo_link_info rsp_partner_info)
+static struct wlan_objmgr_vdev *osif_get_partner_vdev(
+					struct wlan_objmgr_vdev *vdev,
+					struct mlo_link_info rsp_partner_info,
+					wlan_objmgr_ref_dbgid id)
 {
-	return mlo_get_vdev_by_link_id(vdev, rsp_partner_info.link_id);
+	return mlo_get_vdev_by_link_id(vdev, rsp_partner_info.link_id, id);
 }
 #endif
 
@@ -593,19 +595,20 @@ osif_free_ml_link_params(struct cfg80211_connect_resp_params *conn_rsp_params)
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 static struct wlan_objmgr_vdev *osif_get_partner_vdev(
 					struct wlan_objmgr_vdev *vdev,
-					struct mlo_link_info rsp_partner_info)
+					struct mlo_link_info rsp_partner_info,
+					wlan_objmgr_ref_dbgid id)
 {
 	return wlan_objmgr_get_vdev_by_id_from_pdev(
 						vdev->vdev_objmgr.wlan_pdev,
-						rsp_partner_info.vdev_id,
-						WLAN_MLO_MGR_ID);
+						rsp_partner_info.vdev_id, id);
 }
 #else
 static struct wlan_objmgr_vdev *osif_get_partner_vdev(
 					struct wlan_objmgr_vdev *vdev,
-					struct mlo_link_info rsp_partner_info)
+					struct mlo_link_info rsp_partner_info,
+					wlan_objmgr_ref_dbgid id)
 {
-	return mlo_get_vdev_by_link_id(vdev, rsp_partner_info.link_id);
+	return mlo_get_vdev_by_link_id(vdev, rsp_partner_info.link_id, id);
 }
 #endif
 static void osif_fill_connect_resp_mlo_params(
@@ -661,12 +664,13 @@ static void osif_fill_connect_resp_mlo_params(
 				break;
 
 			ml_vdev = osif_get_partner_vdev(vdev,
-							rsp_partner_info[i]);
+							rsp_partner_info[i],
+							WLAN_OSIF_CM_ID);
 
 			if (ml_vdev) {
 				osif_priv = wlan_vdev_get_ospriv(ml_vdev);
 				wlan_objmgr_vdev_release_ref(ml_vdev,
-							     WLAN_MLO_MGR_ID);
+							     WLAN_OSIF_CM_ID);
 			} else {
 				osif_err("Partner vdev not found with vdev_id:%d",
 					 rsp_partner_info[i].vdev_id);

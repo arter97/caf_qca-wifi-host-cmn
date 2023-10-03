@@ -210,6 +210,7 @@ struct dp_tx_queue {
  * @skip_hp_update : Skip HP update for TSO segments and update in last segment
  * @buf_len:
  * @payload_addr:
+ * @driver_ingress_ts: driver ingress timestamp
  *
  * This structure holds the complete MSDU information needed to program the
  * Hardware TCL and MSDU extension descriptors for different frame types
@@ -240,6 +241,9 @@ struct dp_tx_msdu_info_s {
 #ifdef QCA_DP_TX_RMNET_OPTIMIZATION
 	uint16_t buf_len;
 	uint8_t *payload_addr;
+#endif
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+	qdf_ktime_t driver_ingress_ts;
 #endif
 };
 
@@ -1524,7 +1528,7 @@ dp_tx_hw_desc_update_evt(uint8_t *hal_tx_desc_cached,
 }
 #endif
 
-#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(WLAN_CONFIG_TX_DELAY)
+#if defined(WLAN_FEATURE_TSF_AUTO_REPORT) || defined(WLAN_CONFIG_TX_DELAY)
 /**
  * dp_tx_compute_hw_delay_us() - Compute hardware Tx completion delay
  * @ts: Tx completion status
@@ -1683,7 +1687,8 @@ bool dp_tx_desc_set_ktimestamp(struct dp_vdev *vdev,
 	    qdf_unlikely(vdev->pdev->soc->wlan_cfg_ctx->pext_stats_enabled) ||
 	    qdf_unlikely(dp_tx_pkt_tracepoints_enabled()) ||
 	    qdf_unlikely(vdev->pdev->soc->peerstats_enabled) ||
-	    qdf_unlikely(dp_is_vdev_tx_delay_stats_enabled(vdev))) {
+	    qdf_unlikely(dp_is_vdev_tx_delay_stats_enabled(vdev)) ||
+	    qdf_unlikely(wlan_cfg_is_peer_jitter_stats_enabled(vdev->pdev->soc->wlan_cfg_ctx))) {
 		tx_desc->timestamp = qdf_ktime_real_get();
 		return true;
 	}
@@ -1697,7 +1702,8 @@ bool dp_tx_desc_set_ktimestamp(struct dp_vdev *vdev,
 	if (qdf_unlikely(vdev->pdev->delay_stats_flag) ||
 	    qdf_unlikely(vdev->pdev->soc->wlan_cfg_ctx->pext_stats_enabled) ||
 	    qdf_unlikely(dp_tx_pkt_tracepoints_enabled()) ||
-	    qdf_unlikely(vdev->pdev->soc->peerstats_enabled)) {
+	    qdf_unlikely(vdev->pdev->soc->peerstats_enabled) ||
+	    qdf_unlikely(wlan_cfg_is_peer_jitter_stats_enabled(vdev->pdev->soc->wlan_cfg_ctx))) {
 		tx_desc->timestamp = qdf_ktime_real_get();
 		return true;
 	}
@@ -2149,5 +2155,45 @@ dp_tx_set_nbuf_band(qdf_nbuf_t nbuf, struct dp_txrx_peer *txrx_peer,
 		    uint8_t link_id)
 {
 }
+#endif
+
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+/**
+ * dp_tx_latency_stats_fetch() - fetch transmit latency statistics for
+ * specified link mac address
+ * @soc_hdl: Handle to struct dp_soc
+ * @vdev_id: vdev id
+ * @mac: link mac address of remote peer
+ * @latency: buffer to hold per-link transmit latency statistics
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+dp_tx_latency_stats_fetch(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+			  uint8_t *mac, struct cdp_tx_latency *latency);
+
+/**
+ * dp_tx_latency_stats_config() - config transmit latency statistics for
+ * specified vdev
+ * @soc_hdl: Handle to struct dp_soc
+ * @vdev_id: vdev id
+ * @cfg: configuration for transmit latency statistics
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+dp_tx_latency_stats_config(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+			   struct cdp_tx_latency_config *cfg);
+
+/**
+ * dp_tx_latency_stats_register_cb() - register transmit latency statistics
+ * callback
+ * @handle: Handle to struct dp_soc
+ * @cb: callback function for transmit latency statistics
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_tx_latency_stats_register_cb(struct cdp_soc_t *handle,
+					   cdp_tx_latency_cb cb);
 #endif
 #endif

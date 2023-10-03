@@ -108,15 +108,13 @@ void is_mlo_all_links_up(struct wlan_mlo_dev_context *ml_dev);
  * mlo_get_vdev_by_link_id() - get vdev by link id
  * @vdev: vdev pointer
  * @link_id: link id
- *
- * Caller should make sure to release the reference of thus obtained vdev
- * by calling mlo_release_vdev_ref() after usage of vdev.
+ * @id: debug id
  *
  * Return: vdev object pointer to link id
  */
 struct wlan_objmgr_vdev *mlo_get_vdev_by_link_id(
 			struct wlan_objmgr_vdev *vdev,
-			uint8_t link_id);
+			uint8_t link_id, wlan_objmgr_ref_dbgid id);
 
 /**
  * mlo_release_vdev_ref() - release vdev reference

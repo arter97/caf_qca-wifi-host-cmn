@@ -172,6 +172,7 @@ struct mlo_chip_info {
  * @dp_handle: pointer to DP ML context
  * @chip_info: chip specific info of the soc
  * @tsf_sync_enabled: MLO TSF sync is enabled at FW or not
+ * @wsi_stats_info_support: WSI stats support at FW or not
  */
 struct mlo_setup_info {
 	uint8_t ml_grp_id;
@@ -192,6 +193,7 @@ struct mlo_setup_info {
 	struct cdp_mlo_ctxt *dp_handle;
 	struct mlo_chip_info chip_info;
 	bool tsf_sync_enabled;
+	uint8_t wsi_stats_info_support;
 };
 
 /**
@@ -284,6 +286,45 @@ mlo_mgr_unregister_link_switch_notifier(enum wlan_umac_comp_id comp_id)
 }
 #endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
 
+/*
+ * struct mlo_wsi_link_stats - MLO ingress/egress counters of PSOC
+ * @ingress_cnt:  Ingress counter
+ * @egress_cnt:  Egress counter
+ * @send_wmi_cmd: To indicate whether WMI command to be sent or not
+ */
+struct mlo_wsi_link_stats {
+	uint32_t ingress_cnt;
+	uint32_t egress_cnt;
+	bool  send_wmi_cmd;
+};
+
+/*
+ * struct mlo_wsi_psoc_grp - MLO WSI PSOC group
+ * @psoc_order:  PSOC list in WSI loop order
+ * @num_psoc: num psoc in the group
+ */
+struct mlo_wsi_psoc_grp {
+	uint32_t psoc_order[WLAN_OBJMGR_MAX_DEVICES];
+	uint32_t num_psoc;
+};
+
+#define MLO_WSI_MAX_MLO_GRPS 2
+#define MLO_WSI_PSOC_ID_MAX 0xFF
+
+/*
+ * struct mlo_wsi_info - MLO ingress/egress link context per-PSOC
+ * @mlo_psoc_grp: PSOC IDs for different MLO groups
+ * @num_psoc: Total num psoc
+ * @link_stats: Ingress and Egress counts for PSOCs
+ * @block_wmi_cmd: Blocks WMI command
+ */
+struct mlo_wsi_info {
+	struct mlo_wsi_psoc_grp mlo_psoc_grp[MLO_WSI_MAX_MLO_GRPS];
+	uint32_t num_psoc;
+	struct mlo_wsi_link_stats link_stats[WLAN_OBJMGR_MAX_DEVICES];
+	uint8_t block_wmi_cmd;
+};
+
 /**
  * struct mlo_mgr_context - MLO manager context
  * @ml_dev_list_lock: ML DEV list lock
@@ -302,6 +343,7 @@ mlo_mgr_unregister_link_switch_notifier(enum wlan_umac_comp_id comp_id)
  * @mlo_forced_primary_umac_id: Force Primary UMAC ID
  * @force_non_assoc_prim_umac: Force non-assoc link to be primary umac
  * @lswitch_notifier: Link switch notifier callbacks
+ * @wsi_info: WSI stats info
  */
 struct mlo_mgr_context {
 #ifdef WLAN_MLO_USE_SPINLOCK
@@ -332,6 +374,7 @@ struct mlo_mgr_context {
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 	struct wlan_mlo_link_switch_notifier lswitch_notifier[WLAN_UMAC_COMP_ID_MAX];
 #endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
+	struct mlo_wsi_info *wsi_info;
 };
 
 /**
@@ -350,14 +393,24 @@ struct wlan_ml_vdev_aid_mgr {
 
 /**
  * struct wlan_mlo_key_mgmt - MLO key management
- * @link_mac_address: list of vdevs selected for connection with the MLAP
- * @vdev_id: vdev id value
  * @keys_saved: keys saved bool
+ * @link_id: link id
  */
 struct wlan_mlo_key_mgmt {
-	struct qdf_mac_addr link_mac_address;
-	uint8_t vdev_id;
 	bool keys_saved;
+	uint8_t link_id;
+};
+
+/**
+ * struct mlo_link_bss_params - link bss param
+ * @link_id: link id
+ * @ap_mld_mac: mld mac address
+ * @chan: channel
+ */
+struct mlo_link_bss_params {
+	int8_t link_id;
+	int8_t ap_mld_mac[QDF_MAC_ADDR_SIZE];
+	struct wlan_channel *chan;
 };
 
 #ifdef WLAN_FEATURE_11BE_MLO
@@ -623,7 +676,7 @@ struct emlsr_capability {
 struct wlan_mlo_sta {
 	qdf_bitmap(wlan_connect_req_links, WLAN_UMAC_MLO_MAX_VDEVS);
 	qdf_bitmap(wlan_connected_links, WLAN_UMAC_MLO_MAX_VDEVS);
-	struct wlan_mlo_key_mgmt key_mgmt[WLAN_UMAC_MLO_MAX_VDEVS - 1];
+	struct wlan_mlo_key_mgmt key_mgmt[WLAN_MAX_ML_BSS_LINKS];
 	struct wlan_cm_connect_req *connect_req;
 	struct wlan_cm_connect_req *copied_conn_req;
 #ifdef WLAN_MLO_USE_SPINLOCK
@@ -1439,6 +1492,36 @@ struct mgmt_rx_mlo_link_removal_info {
 struct mlo_link_disable_request_evt_params {
 	struct qdf_mac_addr mld_addr;
 	uint32_t link_id_bitmap;
+};
+
+#define MAX_LINK_SWITCH_TLV 5
+/**
+ * struct mlo_link_switch_params - Structure to hold link State switch
+ * related parameters
+ * @mld_addr: MLD address
+ * @active_link_bitmap: Bitmap of ieee link id for active links
+ * @prev_link_bitmap: Bitmap of ieee link id for previous active links
+ * @fw_timestamp: Firmware timestamp in milliseconds
+ * @reason_code: Reason code for the switch
+ */
+struct mlo_link_switch_params {
+	struct qdf_mac_addr mld_addr;
+	uint32_t active_link_bitmap;
+	uint32_t prev_link_bitmap;
+	uint32_t fw_timestamp;
+	uint32_t reason_code;
+};
+
+/**
+ * struct mlo_link_switch_state_info  - Structure to hold the link switch
+ * related parameters corresponding to all the TLV received in link state switch
+ * event.
+ * @num_params: Number of the link switch parameters
+ * @link_switch_param: Link switch parameters
+ */
+struct mlo_link_switch_state_info {
+	uint8_t num_params;
+	struct mlo_link_switch_params link_switch_param[MAX_LINK_SWITCH_TLV];
 };
 
 #ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE

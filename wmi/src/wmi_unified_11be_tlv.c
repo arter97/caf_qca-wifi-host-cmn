@@ -108,6 +108,10 @@ uint8_t *vdev_start_add_mlo_params(uint8_t *buf_ptr,
 	vdev_start_add_mlo_mcast_params(&mlo_params->mlo_flags.mlo_flags,
 					req);
 
+	wmi_info("mlo_flags 0x%x emlsr_support %d ",
+		 mlo_params->mlo_flags.mlo_flags,
+		 mlo_params->mlo_flags.emlsr_support);
+
 	return buf_ptr + sizeof(wmi_vdev_start_mlo_params);
 }
 
@@ -134,6 +138,10 @@ uint8_t *vdev_start_add_ml_partner_links(uint8_t *buf_ptr,
 				req_partner->partner_info[i].hw_mld_link_id;
 		WMI_CHAR_ARRAY_TO_MAC_ADDR(req_partner->partner_info[i].mac_addr,
 					   &ml_partner_link->vdev_macaddr);
+		wmi_info("vdev_id %d hw_link_id %d MAC addr " QDF_MAC_ADDR_FMT,
+			 ml_partner_link->vdev_id,
+			 ml_partner_link->hw_link_id,
+			 QDF_MAC_ADDR_REF(req_partner->partner_info[i].mac_addr));
 		ml_partner_link++;
 	}
 
@@ -314,6 +322,27 @@ uint8_t *peer_assoc_add_mlo_params(uint8_t *buf_ptr,
 			req->mlo_params.link_switch_in_progress;
 	mlo_params->nstr_indication_bitmap =
 		req->mlo_params.nstr_indication_bitmap;
+
+	wmi_debug("emlsr_support %d mlo_flags 0x%x logical_link_index %d mld_peer_id %d ieee_link_id %d "
+		  "emlsr_trans_timeout_us %d emlsr_trans_delay_us %d "
+		  "emlsr_padding_delay_us %d msd_dur_subfield %d msd_ofdm_ed_thr %d msd_max_num_txops %d "
+		  "max_num_simultaneous_links %d nstr_bitmap_present %d nstr_bitmap_size %d "
+		  "mlo_link_switch %d "
+		  "nstr_indication_bitmap 0x%x MLD addr " QDF_MAC_ADDR_FMT,
+		  mlo_params->mlo_flags.emlsr_support,
+		  mlo_params->mlo_flags.mlo_flags,
+		  mlo_params->logical_link_index,
+		  mlo_params->mld_peer_id, mlo_params->ieee_link_id,
+		  mlo_params->emlsr_trans_timeout_us,
+		  mlo_params->emlsr_trans_delay_us,
+		  mlo_params->emlsr_padding_delay_us,
+		  mlo_params->msd_dur_subfield, mlo_params->msd_ofdm_ed_thr,
+		  mlo_params->msd_max_num_txops, mlo_params->max_num_simultaneous_links,
+		  mlo_params->mlo_flags.nstr_bitmap_present,
+		  mlo_params->mlo_flags.nstr_bitmap_size,
+		  mlo_params->mlo_flags.mlo_link_switch,
+		  mlo_params->nstr_indication_bitmap,
+		  req->mlo_params.mld_mac);
 
 	return buf_ptr + sizeof(wmi_peer_assoc_mlo_params);
 }
@@ -1248,6 +1277,72 @@ extract_mlo_link_disable_request_evt_param_tlv(
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+static QDF_STATUS
+extract_mlo_link_state_switch_event_tlv(struct wmi_unified *wmi_handle,
+					void *evt_buf, uint8_t len,
+					struct mlo_link_switch_state_info *info)
+{
+	WMI_MLO_LINK_STATE_SWITCH_EVENTID_param_tlvs *param_buf = evt_buf;
+	wmi_mlo_link_state_switch_req_evt_fixed_param *fixed_param;
+	wmi_mlo_link_state_switch_trigger_reason *lnk_switch_param;
+	uint8_t i, num_tlv, rem_len;
+
+	if (!param_buf) {
+		wmi_err("param buf is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	fixed_param = param_buf->fixed_param;
+	if (!fixed_param) {
+		wmi_err("fixed param is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	num_tlv = fixed_param->link_state_switch_count;
+	if (num_tlv > MAX_LINK_SWITCH_TLV)
+		num_tlv = MAX_LINK_SWITCH_TLV;
+
+	rem_len = len - sizeof(*fixed_param);
+	if (rem_len <
+	    num_tlv * sizeof(wmi_mlo_link_state_switch_trigger_reason)) {
+		wmi_err_rl("Invalid link state switch TLVs rem_len:%d num_tlv:%d",
+			   rem_len, num_tlv);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	lnk_switch_param = param_buf->switch_trigger_reason;
+	if (!lnk_switch_param) {
+		wmi_err_rl("No TLV is present");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	info->num_params = num_tlv;
+	for (i = 0; i < num_tlv; i++) {
+		WMI_MAC_ADDR_TO_CHAR_ARRAY(&lnk_switch_param->ml_bssid,
+					   info->link_switch_param[i].mld_addr.bytes);
+
+		info->link_switch_param[i].active_link_bitmap =
+			lnk_switch_param->cur_active_ieee_bitmap;
+		info->link_switch_param[i].prev_link_bitmap =
+			lnk_switch_param->prev_active_ieee_bitmap;
+		info->link_switch_param[i].fw_timestamp =
+			lnk_switch_param->host_ref_fw_timestamp_ms;
+		info->link_switch_param[i].reason_code =
+			lnk_switch_param->reason_code;
+		wmi_debug("i:%d active_link_bmap:0x%x prev_bmap:0x%x reason_code:%d MLD addr: "QDF_MAC_ADDR_FMT,
+			  i, info->link_switch_param[i].active_link_bitmap,
+			  info->link_switch_param[i].prev_link_bitmap,
+			  info->link_switch_param[i].reason_code,
+			  QDF_MAC_ADDR_REF(info->link_switch_param[i].mld_addr.bytes));
+
+		lnk_switch_param++;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 #ifdef WLAN_FEATURE_11BE
 size_t peer_assoc_t2lm_params_size(struct peer_assoc_params *req)
 {
@@ -1567,6 +1662,77 @@ send_link_state_request_cmd_tlv(wmi_unified_t wmi_handle,
 		wmi_buf_free(buf);
 	}
 	return ret;
+}
+
+static QDF_STATUS
+send_link_set_bss_params_cmd_tlv(wmi_unified_t wmi_handle,
+				 struct wmi_host_link_bss_params *params)
+{
+	QDF_STATUS status;
+	wmi_buf_t buf;
+	wmi_mlo_set_link_bss_params_cmd_fixed_param *cmd;
+	uint8_t *buf_ptr;
+	wmi_mlo_link_bss_param *bss_param;
+		WMI_HOST_WLAN_PHY_MODE fw_phy_mode;
+
+	size_t len = sizeof(*cmd) +
+		     sizeof(wmi_mlo_link_bss_param) +
+		     WMI_TLV_HDR_SIZE;
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf) {
+		wmi_err("wmi_buf_alloc failed");
+		return QDF_STATUS_E_FAILURE;
+	}
+	buf_ptr = (uint8_t *)wmi_buf_data(buf);
+	cmd =
+	(wmi_mlo_set_link_bss_params_cmd_fixed_param *)buf_ptr;
+	WMITLV_SET_HDR(
+		&cmd->tlv_header,
+		WMITLV_TAG_STRUC_wmi_mlo_set_link_bss_params_cmd_fixed_param,
+		WMITLV_GET_STRUCT_TLVLEN(
+		wmi_mlo_set_link_bss_params_cmd_fixed_param));
+
+	WMI_CHAR_ARRAY_TO_MAC_ADDR(params->ap_mld_mac, &cmd->ap_mld_macaddr);
+
+	buf_ptr += sizeof(wmi_mlo_set_link_bss_params_cmd_fixed_param);
+
+	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC,
+		       (sizeof(wmi_mlo_link_bss_param)));
+	buf_ptr += WMI_TLV_HDR_SIZE;
+
+	bss_param =
+		(wmi_mlo_link_bss_param *)buf_ptr;
+
+	WMITLV_SET_HDR(&bss_param->tlv_header,
+		       WMITLV_TAG_STRUC_wmi_mlo_link_bss_param,
+		       WMITLV_GET_STRUCT_TLVLEN(wmi_mlo_link_bss_param));
+
+	bss_param->ieee_link_id = params->link_id;
+
+	bss_param->wmi_chan.mhz = params->chan.ch_freq;
+	bss_param->wmi_chan.band_center_freq1 = params->chan.ch_cfreq1;
+	bss_param->wmi_chan.band_center_freq2 = params->chan.ch_cfreq2;
+	fw_phy_mode = wmi_host_to_fw_phymode(params->chan.ch_phymode);
+	WMI_SET_CHANNEL_MODE(&bss_param->wmi_chan, fw_phy_mode);
+	wmi_debug("ap mld mac: " QDF_MAC_ADDR_FMT " link id %d chan freq %d cfreq1 %d cfreq2 %d fw phymode %d",
+		  QDF_MAC_ADDR_REF(params->ap_mld_mac), bss_param->ieee_link_id,
+		  bss_param->wmi_chan.mhz,
+		  bss_param->wmi_chan.band_center_freq1,
+		  bss_param->wmi_chan.band_center_freq2,
+		  fw_phy_mode);
+
+	buf_ptr += sizeof(wmi_mlo_link_bss_param);
+
+	wmi_mtrace(WMI_MLO_LINK_SET_BSS_PARAMS_CMDID, 0, 0);
+	status = wmi_unified_cmd_send(wmi_handle, buf, len,
+				      WMI_MLO_LINK_SET_BSS_PARAMS_CMDID);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		wmi_err("Failed to send link set bss command ret = %d", status);
+		wmi_buf_free(buf);
+	}
+
+	return status;
 }
 
 static QDF_STATUS
@@ -2105,11 +2271,14 @@ QDF_STATUS mlo_teardown_cmd_send_tlv(struct wmi_unified *wmi_handle,
 								wmi_handle,
 								param->pdev_id);
 	switch (param->reason) {
-	case WMI_MLO_TEARDOWN_REASON_SSR:
-	case WMI_MLO_TEARDOWN_REASON_MODE1_SSR:
+	case WMI_HOST_MLO_TEARDOWN_REASON_SSR:
+	case WMI_HOST_MLO_TEARDOWN_REASON_MODE1_SSR:
 		cmd->reason_code = WMI_MLO_TEARDOWN_SSR_REASON;
 		break;
-	case WMI_MLO_TEARDOWN_REASON_DOWN:
+	case WMI_HOST_MLO_TEARDOWN_REASON_STANDBY:
+		cmd->reason_code = WMI_MLO_TEARDOWN_REASON_STANDBY_DOWN;
+		break;
+	case WMI_HOST_MLO_TEARDOWN_REASON_DOWN:
 	default:
 		cmd->reason_code = WMI_MLO_TEARDOWN_SSR_REASON + 1;
 		break;
@@ -2147,9 +2316,9 @@ extract_mlo_setup_cmpl_event_tlv(struct wmi_unified *wmi_handle,
 								wmi_handle,
 								ev->pdev_id);
 	if (!ev->status)
-		params->status = WMI_MLO_SETUP_STATUS_SUCCESS;
+		params->status = WMI_HOST_MLO_SETUP_STATUS_SUCCESS;
 	else
-		params->status = WMI_MLO_SETUP_STATUS_FAILURE;
+		params->status = WMI_HOST_MLO_SETUP_STATUS_FAILURE;
 
 	params->max_ml_peer_ids = ev->max_ml_peer_ids;
 
@@ -2175,9 +2344,9 @@ extract_mlo_teardown_cmpl_event_tlv(struct wmi_unified *wmi_handle,
 								wmi_handle,
 								ev->pdev_id);
 	if (!ev->status)
-		params->status = WMI_MLO_TEARDOWN_STATUS_SUCCESS;
+		params->status = WMI_HOST_MLO_TEARDOWN_STATUS_SUCCESS;
 	else
-		params->status = WMI_MLO_TEARDOWN_STATUS_FAILURE;
+		params->status = WMI_HOST_MLO_TEARDOWN_STATUS_FAILURE;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -2457,6 +2626,8 @@ void wmi_11be_attach_tlv(wmi_unified_t wmi_handle)
 		send_mlo_vdev_tid_to_link_map_cmd_tlv;
 	ops->send_mlo_link_state_request =
 		send_link_state_request_cmd_tlv;
+	ops->send_link_set_bss_params_cmd =
+		send_link_set_bss_params_cmd_tlv;
 	ops->extract_mlo_vdev_tid_to_link_map_event =
 		extract_mlo_vdev_tid_to_link_map_event_tlv;
 	ops->extract_mlo_vdev_bcast_tid_to_link_map_event =
@@ -2487,5 +2658,7 @@ void wmi_11be_attach_tlv(wmi_unified_t wmi_handle)
 			extract_mlo_link_switch_request_event_tlv;
 	ops->send_mlo_link_switch_req_cnf_cmd =
 			send_link_switch_request_cnf_cmd_tlv;
+	ops->extract_mlo_link_state_switch_evt =
+		extract_mlo_link_state_switch_event_tlv;
 #endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
 }

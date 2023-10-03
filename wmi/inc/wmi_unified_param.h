@@ -1209,6 +1209,18 @@ struct wmi_host_link_state_params {
 	uint8_t mld_mac[QDF_MAC_ADDR_SIZE];
 };
 
+/**
+ * struct wmi_host_link_bss_params - link bss params
+ * @link_id: link id
+ * @ap_mld_mac: ap mld mac address
+ * @chan: channel
+ */
+struct wmi_host_link_bss_params {
+	uint8_t link_id;
+	uint8_t ap_mld_mac[QDF_MAC_ADDR_SIZE];
+	struct wlan_channel chan;
+};
+
 #endif /* WLAN_FEATURE_11BE */
 
 #ifdef WLAN_FEATURE_11BE_MLO
@@ -5291,6 +5303,7 @@ typedef enum {
 	wmi_mlo_link_disable_request_eventid,
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 	wmi_mlo_link_switch_request_eventid,
+	wmi_mlo_link_state_switch_eventid,
 #endif
 #endif
 	wmi_pdev_fips_extend_event_id,
@@ -6440,6 +6453,7 @@ typedef enum {
 	wmi_service_mlo_tsf_sync,
 	wmi_service_n_link_mlo_support,
 	wmi_service_per_link_stats_support,
+	wmi_service_pdev_wsi_stats_info_support,
 #endif
 	wmi_service_aux_mac_support,
 #ifdef WLAN_ATF_INCREASED_STA

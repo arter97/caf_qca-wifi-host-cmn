@@ -75,8 +75,12 @@
  * @u.rx.dev.priv_cb_m.to_ds: to DS bit in RX packet
  * @u.rx.dev.priv_cb_m.logical_link_id: link id of RX packet
  * @u.rx.dev.priv_cb_m.reserved1: reserved bits
- * @u.rx.dev.priv_cb_m.tcp_seq_num: TCP sequence number
- * @u.rx.dev.priv_cb_m.tcp_ack_num: TCP ACK number
+ * @u.rx.dev.priv_cb_m.dp_ext: Union of tcp and ext structs
+ * @u.rx.dev.priv_cb_m.dp_ext.tcp: TCP structs
+ * @u.rx.dev.priv_cb_m.dp_ext.tcp.tcp_seq_num: TCP sequence number
+ * @u.rx.dev.priv_cb_m.dp_ext.tcp.tcp_ack_num: TCP ACK number
+ * @u.rx.dev.priv_cb_m.dp_ext.ext: Extension struct for other usage
+ * @u.rx.dev.priv_cb_m.dp_ext.ext.mpdu_seq: wifi MPDU sequence number
  * @u.rx.dev.priv_cb_m.dp: Union of wifi3 and wifi2 structs
  * @u.rx.dev.priv_cb_m.dp.wifi3: wifi3 data
  * @u.rx.dev.priv_cb_m.dp.wifi3.msdu_len: length of RX packet
@@ -219,8 +223,17 @@ struct qdf_nbuf_cb {
 						 logical_link_id:4,
 						 band:3,
 						 reserved1:7;
-					uint32_t tcp_seq_num;
-					uint32_t tcp_ack_num;
+					union {
+						struct {
+							uint32_t tcp_seq_num;
+							uint32_t tcp_ack_num;
+						} tcp;
+						struct {
+							uint32_t mpdu_seq:12,
+								 reserved:20;
+							uint32_t reserved1;
+						} ext;
+					} dp_ext;
 					union {
 						struct {
 							uint16_t msdu_len;
@@ -542,9 +555,15 @@ QDF_COMPILE_TIME_ASSERT(qdf_nbuf_cb_size,
 	(QDF_NBUF_CB_TX_NUM_EXTRA_FRAGS(skb) = 0)
 
 #define QDF_NBUF_CB_RX_TCP_SEQ_NUM(skb) \
-	(((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.dev.priv_cb_m.tcp_seq_num)
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.dev.priv_cb_m. \
+	 dp_ext.tcp.tcp_seq_num)
 #define QDF_NBUF_CB_RX_TCP_ACK_NUM(skb) \
-	(((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.dev.priv_cb_m.tcp_ack_num)
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.dev.priv_cb_m. \
+	 dp_ext.tcp.tcp_ack_num)
+#define QDF_NBUF_CB_RX_MPDU_SEQ_NUM(skb) \
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.dev.priv_cb_m. \
+	 dp_ext.ext.mpdu_seq)
+
 #define QDF_NBUF_CB_RX_LRO_CTX(skb) \
 	(((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.dev.priv_cb_m.lro_ctx)
 

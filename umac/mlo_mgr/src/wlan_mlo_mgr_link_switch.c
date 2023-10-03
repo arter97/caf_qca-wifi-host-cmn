@@ -26,6 +26,7 @@
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 #include "wlan_cm_roam_api.h"
 #endif
+#include "host_diag_core_event.h"
 
 void mlo_mgr_update_link_info_mac_addr(struct wlan_objmgr_vdev *vdev,
 				       struct wlan_mlo_link_mac_update *ml_mac_update)
@@ -240,6 +241,42 @@ void mlo_mgr_free_link_info_wmi_chan(struct wlan_mlo_dev_context *ml_dev)
 }
 
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+bool mlo_mgr_update_csa_link_info(struct wlan_mlo_dev_context *mlo_dev_ctx,
+				  struct csa_offload_params *csa_param,
+				  uint8_t link_id)
+{
+	struct mlo_link_info *link_info;
+	uint16_t bw_val;
+
+	if (!mlo_dev_ctx) {
+		mlo_err("invalid mlo dev ctx");
+		goto done;
+	}
+
+	bw_val = wlan_reg_get_bw_value(csa_param->new_ch_width);
+
+	link_info = mlo_mgr_get_ap_link_by_link_id(mlo_dev_ctx, link_id);
+	if (!link_info) {
+		mlo_err("invalid link_info");
+		goto done;
+	}
+
+	link_info->link_chan_info->ch_freq =
+				csa_param->csa_chan_freq;
+	link_info->link_chan_info->ch_cfreq1 =
+				csa_param->new_ch_freq_seg1;
+	link_info->link_chan_info->ch_cfreq2 =
+				csa_param->new_ch_freq_seg2;
+
+	link_info->link_chan_info->ch_phymode =
+			wlan_eht_chan_phy_mode(
+				csa_param->csa_chan_freq,
+				bw_val, csa_param->new_ch_width);
+	return true;
+done:
+	return false;
+}
+
 struct wlan_objmgr_vdev *
 mlo_mgr_link_switch_get_assoc_vdev(struct wlan_objmgr_vdev *vdev)
 {
@@ -1044,6 +1081,19 @@ QDF_STATUS mlo_mgr_link_switch_request_params(struct wlan_objmgr_psoc *psoc,
 	}
 
 	return status;
+}
+
+QDF_STATUS
+mlo_mgr_link_state_switch_info_handler(struct wlan_objmgr_psoc *psoc,
+				       struct mlo_link_switch_state_info *info)
+{
+	uint8_t i;
+
+	for (i = 0; i < info->num_params; i++)
+		wlan_connectivity_mld_link_status_event(psoc,
+							&info->link_switch_param[i]);
+
+	return QDF_STATUS_SUCCESS;
 }
 
 QDF_STATUS mlo_mgr_link_switch_complete(struct wlan_objmgr_vdev *vdev)

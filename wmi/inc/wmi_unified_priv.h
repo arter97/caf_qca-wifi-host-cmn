@@ -3050,6 +3050,14 @@ QDF_STATUS (*config_peer_latency_info_cmd)(
 				*param);
 #endif
 #endif
+
+#ifdef WLAN_WSI_STATS_SUPPORT
+QDF_STATUS (*send_wsi_stats_info_cmd)(
+				wmi_unified_t wmi,
+				struct wmi_wsi_stats_info_params
+				*param);
+#endif
+
 #ifdef QCA_MANUAL_TRIGGERED_ULOFDMA
 QDF_STATUS
 (*trigger_ulofdma_su_cmd)(wmi_unified_t wmi,
@@ -3200,6 +3208,11 @@ QDF_STATUS (*extract_mlo_link_disable_request_evt_param)(
 		struct mlo_link_disable_request_evt_params *params);
 
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+QDF_STATUS (*extract_mlo_link_state_switch_evt)(
+			struct wmi_unified *wmi_handle,
+			void *buf, uint8_t len,
+			struct mlo_link_switch_state_info *params);
+
 QDF_STATUS
 (*extract_mlo_link_switch_request_event)(struct wmi_unified *wmi_handle,
 					 void *buf,
@@ -3283,6 +3296,10 @@ QDF_STATUS (*send_mlo_vdev_tid_to_link_map)(
 QDF_STATUS (*send_mlo_link_state_request)(
 			wmi_unified_t wmi_handle,
 			struct wmi_host_link_state_params *params);
+
+QDF_STATUS (*send_link_set_bss_params_cmd)(
+		wmi_unified_t wmi_handle,
+		struct wmi_host_link_bss_params *params);
 
 QDF_STATUS (*extract_mlo_vdev_tid_to_link_map_event)(
 		struct wmi_unified *wmi_handle,

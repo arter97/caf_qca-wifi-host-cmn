@@ -771,7 +771,32 @@ bool mlo_is_sta_csa_synced(struct wlan_mlo_dev_context *mlo_dev_ctx,
 QDF_STATUS mlo_sta_csa_save_params(struct wlan_mlo_dev_context *mlo_dev_ctx,
 				   uint8_t link_id,
 				   struct csa_offload_params *csa_param);
-
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+/**
+ * mlo_sta_handle_csa_standby_link - Handle csa parameters for standby link
+ * @mlo_dev_ctx: mlo context
+ * @link_id: link id
+ * @csa_param: csa parameters to be saved
+ * @vdev: vdev obj mgr
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlo_sta_handle_csa_standby_link(
+			struct wlan_mlo_dev_context *mlo_dev_ctx,
+			uint8_t link_id,
+			struct csa_offload_params *csa_param,
+			struct wlan_objmgr_vdev *vdev);
+#else
+static inline
+QDF_STATUS mlo_sta_handle_csa_standby_link(
+			struct wlan_mlo_dev_context *mlo_dev_ctx,
+			uint8_t link_id,
+			struct csa_offload_params *csa_param,
+			struct wlan_objmgr_vdev *vdev)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 /**
  * mlo_sta_up_active_notify - mlo sta up active notify
  * @vdev: vdev obj mgr
@@ -1111,5 +1136,40 @@ void wlan_mlo_send_vdev_pause(struct wlan_objmgr_psoc *psoc,
 			      uint16_t session_id,
 			      uint16_t vdev_pause_dur)
 {}
+#endif
+
+#if defined(WLAN_FEATURE_11BE_MLO_ADV_FEATURE) && defined(WLAN_FEATURE_11BE_MLO)
+/**
+ * mlo_defer_set_keys: Defer MLO set keys for link
+ * @vdev: vdev obj
+ * @link_id: link_id
+ * @value: bool true or false
+ * Return: none
+ */
+void mlo_defer_set_keys(struct wlan_objmgr_vdev *vdev,
+			uint8_t link_id, bool value);
+
+/**
+ * mlo_is_set_key_defered: Verify whether the set key deferred for the link
+ * @vdev: vdev obj
+ * @link_id: link_id
+ * Return: boolean value true or false
+ */
+bool mlo_is_set_key_defered(struct wlan_objmgr_vdev *vdev,
+			    uint8_t link_id);
+
+#else
+static inline
+void mlo_defer_set_keys(struct wlan_objmgr_vdev *vdev,
+			uint8_t link_id, bool value)
+{
+}
+
+static inline
+bool mlo_is_set_key_defered(struct wlan_objmgr_vdev *vdev,
+			    uint8_t link_id)
+{
+	return false;
+}
 #endif
 #endif

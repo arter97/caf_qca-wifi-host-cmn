@@ -182,7 +182,8 @@ QDF_STATUS dp_ipa_handle_rx_buf_smmu_mapping(struct dp_soc *soc,
 	 * operation and nbuf has done ipa smmu map before,
 	 * do ipa smmu unmap as well.
 	 */
-	if (!qdf_atomic_read(&soc->ipa_pipes_enabled)) {
+	if (!(qdf_atomic_read(&soc->ipa_pipes_enabled) &&
+				qdf_atomic_read(&soc->ipa_map_allowed))) {
 		if (!create && qdf_nbuf_is_rx_ipa_smmu_map(nbuf)) {
 			DP_STATS_INC(soc, rx.err.ipa_unmap_no_pipe, 1);
 		} else {
@@ -382,7 +383,7 @@ QDF_STATUS dp_ipa_set_smmu_mapped(struct cdp_soc_t *soc_hdl, int val)
 {
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
 
-	qdf_atomic_set(&soc->ipa_mapped, val);
+	qdf_atomic_set(&soc->ipa_map_allowed, val);
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -390,7 +391,7 @@ int dp_ipa_get_smmu_mapped(struct cdp_soc_t *soc_hdl)
 {
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
 
-	return qdf_atomic_read(&soc->ipa_mapped);
+	return qdf_atomic_read(&soc->ipa_map_allowed);
 }
 
 static QDF_STATUS dp_ipa_get_shared_mem_info(qdf_device_t osdev,
@@ -3466,9 +3467,11 @@ QDF_STATUS dp_ipa_enable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	qdf_atomic_set(&soc->ipa_pipes_enabled, 1);
 	DP_IPA_EP_SET_TX_DB_PA(soc, ipa_res);
 
-	if (!ipa_config_is_opt_wifi_dp_enabled())
+	if (!ipa_config_is_opt_wifi_dp_enabled()) {
+		qdf_atomic_set(&soc->ipa_map_allowed, 1);
 		dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, pdev, true,
 						       __func__, __LINE__);
+	}
 
 	result = qdf_ipa_wdi_enable_pipes(hdl);
 	if (result) {
@@ -3477,9 +3480,11 @@ QDF_STATUS dp_ipa_enable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 			  __func__, result);
 		qdf_atomic_set(&soc->ipa_pipes_enabled, 0);
 		DP_IPA_RESET_TX_DB_PA(soc, ipa_res);
-		if (qdf_atomic_read(&soc->ipa_mapped))
+		if (qdf_atomic_read(&soc->ipa_map_allowed)) {
+			qdf_atomic_set(&soc->ipa_map_allowed, 0);
 			dp_ipa_handle_rx_buf_pool_smmu_mapping(
 					soc, pdev, false, __func__, __LINE__);
+		}
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -3526,9 +3531,11 @@ QDF_STATUS dp_ipa_disable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 
 	qdf_atomic_set(&soc->ipa_pipes_enabled, 0);
 
-	if (qdf_atomic_read(&soc->ipa_mapped))
+	if (!ipa_config_is_opt_wifi_dp_enabled()) {
+		qdf_atomic_set(&soc->ipa_map_allowed, 0);
 		dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, pdev, false,
 						       __func__, __LINE__);
+	}
 
 	return result ? QDF_STATUS_E_FAILURE : QDF_STATUS_SUCCESS;
 }
@@ -3836,8 +3843,11 @@ static qdf_nbuf_t dp_ipa_frag_nbuf_linearize(struct dp_soc *soc,
 	uint32_t nbuf_len = qdf_nbuf_len(nbuf);
 	bool is_nbuf_head = true;
 	uint32_t copy_len = 0;
+	uint16_t buf_size;
 
-	dst_nbuf = qdf_nbuf_alloc(soc->osdev, RX_DATA_BUFFER_SIZE,
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
+
+	dst_nbuf = qdf_nbuf_alloc(soc->osdev, buf_size,
 				  RX_BUFFER_RESERVATION,
 				  RX_DATA_BUFFER_ALIGNMENT, FALSE);
 
@@ -3846,7 +3856,7 @@ static qdf_nbuf_t dp_ipa_frag_nbuf_linearize(struct dp_soc *soc,
 		return NULL;
 	}
 
-	if ((nbuf_len + L3_HEADER_PADDING) > RX_DATA_BUFFER_SIZE) {
+	if ((nbuf_len + L3_HEADER_PADDING) > buf_size) {
 		qdf_nbuf_free(dst_nbuf);
 		dp_err_rl("nbuf is jumbo data");
 		return NULL;

@@ -3507,6 +3507,25 @@ uint16_t hal_srng_dst_get_hpidx(hal_ring_handle_t hal_ring_hdl)
 	return hp / srng->entry_size;
 }
 
+/**
+ * hal_srng_batch_threshold_irq_enabled() - check if srng batch count
+ *                                          threshold irq enabled
+ * @hal_ring_hdl: srng handle
+ *
+ * Return: true if enabled, false if not.
+ */
+static inline
+bool hal_srng_batch_threshold_irq_enabled(hal_ring_handle_t hal_ring_hdl)
+{
+	struct hal_srng *srng = (struct hal_srng *)hal_ring_hdl;
+
+	if (srng->intr_batch_cntr_thres_entries &&
+	    srng->flags & HAL_SRNG_MSI_INTR)
+		return true;
+	else
+		return false;
+}
+
 #ifdef FEATURE_DIRECT_LINK
 /**
  * hal_srng_set_msi_irq_config() - Set the MSI irq configuration for srng

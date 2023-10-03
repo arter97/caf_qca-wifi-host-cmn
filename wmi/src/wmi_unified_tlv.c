@@ -18177,7 +18177,7 @@ static QDF_STATUS extract_green_ap_ll_ps_param_tlv(
 		((uint64_t)ll_ps_event->next_tsf_high32 << 32) |
 		ll_ps_event->next_tsf_low32;
 
-	wmi_debug("cookie : %llu next_tsf %llu", ll_ps_params->dialog_token,
+	wmi_debug("cookie : %u next_tsf %llu", ll_ps_params->dialog_token,
 		  ll_ps_params->next_tsf);
 
 	return QDF_STATUS_SUCCESS;
@@ -21728,6 +21728,8 @@ static void populate_tlv_events_id_mlo(WMI_EVT_ID *event_ids)
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 	event_ids[wmi_mlo_link_switch_request_eventid] =
 			WMI_MLO_LINK_SWITCH_REQUEST_EVENTID;
+	event_ids[wmi_mlo_link_state_switch_eventid] =
+			WMI_MLO_LINK_STATE_SWITCH_EVENTID;
 #endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
 }
 #else /* WLAN_FEATURE_11BE_MLO */
@@ -22815,6 +22817,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 			WMI_SERVICE_N_LINK_MLO_SUPPORT;
 	wmi_service[wmi_service_per_link_stats_support] =
 					WMI_SERVICE_PER_LINK_STATS_SUPPORT;
+	wmi_service[wmi_service_pdev_wsi_stats_info_support] =
+			WMI_SERVICE_PDEV_WSI_STATS_INFO_SUPPORT;
 #endif
 	wmi_service[wmi_service_aux_mac_support] = WMI_SERVICE_AUX_MAC_SUPPORT;
 #ifdef WLAN_ATF_INCREASED_STA

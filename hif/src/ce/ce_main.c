@@ -2308,8 +2308,8 @@ static struct hif_ce_desc_event *
 {
 	struct ce_desc_hist *ce_hist = &scn->hif_ce_desc_hist;
 
-	hif_debug("get ce debug buffer ce_id %u, only_ce2/ce3=%lu, idx=%u",
-		  ce_id, (unsigned long)IS_CE_DEBUG_ONLY_FOR_CRIT_CE,
+	hif_debug("get ce debug buffer ce_id %u, only_ce2/ce3=0x%lx, idx=%u",
+		  ce_id, IS_CE_DEBUG_ONLY_FOR_CRIT_CE,
 		  ce_hist->ce_id_hist_map[ce_id]);
 	if (IS_CE_DEBUG_ONLY_FOR_CRIT_CE &&
 	    (ce_id == CE_ID_2 || ce_id == CE_ID_3 || ce_id == CE_ID_7)) {

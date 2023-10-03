@@ -947,7 +947,7 @@ struct cdp_ctrl_ops {
 
 #endif
 
-#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(WLAN_CONFIG_TX_DELAY)
+#if defined(WLAN_FEATURE_TSF_AUTO_REPORT) || defined(WLAN_CONFIG_TX_DELAY)
 	void (*txrx_set_delta_tsf)(struct cdp_soc_t *soc, uint8_t vdev_id,
 				   uint32_t delta_tsf);
 #endif
@@ -1195,6 +1195,10 @@ struct cdp_mon_ops {
  * @get_pdev_obss_stats:
  * @clear_pdev_obss_pd_stats:
  * @txrx_get_interface_stats:
+ * @tx_latency_stats_config: config tx latency stats for specified vdev
+ * @tx_latency_stats_fetch: fetch tx latency stats for specified link
+ * mac address
+ * @tx_latency_stats_register_cb: register tx latency stats callback
  */
 struct cdp_host_stats_ops {
 	int (*txrx_host_stats_get)(struct cdp_soc_t *soc, uint8_t vdev_id,
@@ -1404,6 +1408,18 @@ struct cdp_host_stats_ops {
 					       uint8_t vdev_id,
 					       void *buf,
 					       bool is_aggregate);
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+	QDF_STATUS
+	(*tx_latency_stats_config)(struct cdp_soc_t *soc,
+				   uint8_t vdev_id,
+				   struct cdp_tx_latency_config *config);
+	QDF_STATUS (*tx_latency_stats_fetch)(struct cdp_soc_t *soc,
+					     uint8_t vdev_id,
+					     uint8_t *mac,
+					     struct cdp_tx_latency *latency);
+	QDF_STATUS (*tx_latency_stats_register_cb)(struct cdp_soc_t *soc,
+						   cdp_tx_latency_cb cb);
+#endif
 };
 
 /**
@@ -1658,6 +1674,10 @@ struct ol_if_ops {
 	int (*dp_rx_get_pending)(ol_txrx_soc_handle soc);
 	void (*dp_rx_sched_refill_thread)(ol_txrx_soc_handle soc);
 	/* TODO: Add any other control path calls required to OL_IF/WMA layer */
+#ifdef WLAN_SUPPORT_RX_FLOW_TAG
+	void (*send_wakeup_trigger)(struct cdp_ctrl_objmgr_psoc *soc,
+				    uint8_t vdev_id);
+#endif
 #ifdef QCA_SUPPORT_WDS_EXTENDED
 	void (*rx_wds_ext_peer_learn)(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 				      uint16_t peer_id, uint8_t vdev_id,

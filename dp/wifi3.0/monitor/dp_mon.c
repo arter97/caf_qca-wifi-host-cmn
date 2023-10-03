@@ -16,6 +16,7 @@
  */
 #include <dp_types.h>
 #include "dp_rx.h"
+#include "dp_tx.h"
 #include "dp_peer.h"
 #include <dp_htt.h>
 #include <dp_mon_filter.h>
@@ -1438,8 +1439,9 @@ void dp_pktlogmod_exit(struct dp_pdev *pdev)
 
 #if defined(WDI_EVENT_ENABLE) && defined(QCA_ENHANCED_STATS_SUPPORT)
 #ifdef IPA_OFFLOAD
-void dp_peer_get_tx_rx_stats(struct dp_peer *peer,
-			     struct cdp_interface_peer_stats *peer_stats_intf)
+static void
+dp_peer_get_tx_rx_stats(struct dp_peer *peer,
+			struct cdp_interface_peer_stats *peer_stats_intf)
 {
 	struct dp_rx_tid *rx_tid = NULL;
 	uint8_t i = 0;
@@ -1457,8 +1459,9 @@ void dp_peer_get_tx_rx_stats(struct dp_peer *peer,
 		peer->monitor_peer->stats.tx.tx_ucast_success.bytes;
 }
 #else
-void dp_peer_get_tx_rx_stats(struct dp_peer *peer,
-			     struct cdp_interface_peer_stats *peer_stats_intf)
+static void
+dp_peer_get_tx_rx_stats(struct dp_peer *peer,
+			struct cdp_interface_peer_stats *peer_stats_intf)
 {
 	struct dp_txrx_peer *txrx_peer = NULL;
 	struct dp_peer *tgt_peer = NULL;
@@ -1822,6 +1825,11 @@ dp_enable_enhanced_stats(struct cdp_soc_t *soc, uint8_t pdev_id)
 
 	dp_mon_tx_enable_enhanced_stats(pdev);
 
+	/* reset the tx fast path flag, as enhanced stats are enabled */
+	pdev->tx_fast_flag &= ~DP_TX_DESC_FLAG_SIMPLE;
+	if (dp_soc->hw_txrx_stats_en)
+		pdev->tx_fast_flag &= ~DP_TX_DESC_FLAG_FASTPATH_SIMPLE;
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -1855,6 +1863,7 @@ dp_disable_enhanced_stats(struct cdp_soc_t *soc, uint8_t pdev_id)
 	struct dp_pdev *pdev =
 		dp_get_pdev_from_soc_pdev_id_wifi3((struct dp_soc *)soc,
 						   pdev_id);
+	struct dp_soc *dp_soc = cdp_soc_t_to_dp_soc(soc);
 	struct dp_mon_pdev *mon_pdev;
 
 	if (!pdev || !pdev->monitor_pdev)
@@ -1876,6 +1885,11 @@ dp_disable_enhanced_stats(struct cdp_soc_t *soc, uint8_t pdev_id)
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
 			  FL("Failed to reset enhanced mode filters"));
 	}
+
+	/* set the tx fast path flag, as enhanced stats are disabled */
+	pdev->tx_fast_flag |= DP_TX_DESC_FLAG_SIMPLE;
+	if (dp_soc->hw_txrx_stats_en)
+		pdev->tx_fast_flag |= DP_TX_DESC_FLAG_FASTPATH_SIMPLE;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -5620,6 +5634,8 @@ static void dp_mon_pdev_per_target_config(struct dp_pdev *pdev)
 	switch (target_type) {
 	case TARGET_TYPE_KIWI:
 	case TARGET_TYPE_QCN9224:
+	case TARGET_TYPE_QCA5332:
+	case TARGET_TYPE_QCN6432:
 	case TARGET_TYPE_MANGO:
 		mon_pdev->is_tlv_hdr_64_bit = true;
 		mon_pdev->tlv_hdr_size = HAL_RX_TLV64_HDR_SIZE;
@@ -6138,7 +6154,6 @@ QDF_STATUS dp_mon_pdev_deinit(struct dp_pdev *pdev)
 		mon_ops->tx_mon_filter_dealloc(pdev);
 	if (mon_pdev->filter)
 		dp_mon_filter_dealloc(mon_pdev);
-	dp_mon_rings_deinit(pdev);
 	if (mon_pdev->invalid_mon_peer)
 		qdf_mem_free(mon_pdev->invalid_mon_peer);
 	mon_pdev->is_dp_mon_pdev_initialized = false;

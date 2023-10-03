@@ -1505,6 +1505,7 @@ static bool qdf_log_icmpv6_pkt(uint8_t vdev_id, struct sk_buff *skb,
 			       enum qdf_proto_dir dir, uint8_t pdev_id)
 {
 	enum qdf_proto_subtype subtype;
+	struct qdf_dp_trace_proto_cmn cmn_info;
 
 	if ((qdf_dp_get_proto_bitmap() & QDF_NBUF_PKT_TRAC_TYPE_ICMPv6) &&
 		((dir == QDF_TX && QDF_NBUF_CB_PACKET_TYPE_ICMPv6 ==
@@ -1519,11 +1520,16 @@ static bool qdf_log_icmpv6_pkt(uint8_t vdev_id, struct sk_buff *skb,
 		else if (dir == QDF_RX)
 			QDF_NBUF_CB_RX_DP_TRACE(skb) = 1;
 
+		cmn_info.vdev_id = vdev_id;
+		cmn_info.type = QDF_PROTO_TYPE_ICMPv6;
+		cmn_info.subtype = subtype;
+		cmn_info.proto_priv_data = 0;
+		cmn_info.mpdu_seq = qdf_nbuf_get_mpdu_seq_num(skb);
 		DPTRACE(qdf_dp_trace_proto_pkt(
 			QDF_DP_TRACE_ICMPv6_PACKET_RECORD,
-			vdev_id, (skb->data + QDF_NBUF_SRC_MAC_OFFSET),
+			(skb->data + QDF_NBUF_SRC_MAC_OFFSET),
 			(skb->data + QDF_NBUF_DEST_MAC_OFFSET),
-			QDF_PROTO_TYPE_ICMPv6, subtype, dir, pdev_id, false, 0));
+			dir, pdev_id, false, &cmn_info));
 
 		switch (subtype) {
 		case QDF_PROTO_ICMPV6_REQ:
@@ -1565,24 +1571,26 @@ static bool qdf_log_icmpv6_pkt(uint8_t vdev_id, struct sk_buff *skb,
 static bool qdf_log_icmp_pkt(uint8_t vdev_id, struct sk_buff *skb,
 			     enum qdf_proto_dir dir, uint8_t pdev_id)
 {
-	enum qdf_proto_subtype proto_subtype;
 	uint8_t *data = NULL;
 	uint16_t seq_num = 0;
 	uint16_t icmp_id = 0;
-	uint32_t proto_priv_data = 0;
+	struct qdf_dp_trace_proto_cmn cmn_info;
 
 	if ((qdf_dp_get_proto_bitmap() & QDF_NBUF_PKT_TRAC_TYPE_ICMP) &&
 	    (qdf_nbuf_is_icmp_pkt(skb) == true)) {
 
 		QDF_NBUF_CB_DP_TRACE_PRINT(skb) = false;
-		proto_subtype = qdf_nbuf_get_icmp_subtype(skb);
+		cmn_info.subtype = qdf_nbuf_get_icmp_subtype(skb);
 
 		data = qdf_nbuf_data(skb);
 		icmp_id = qdf_cpu_to_be16(*(uint16_t *)(data + ICMP_ID_OFFSET));
 		seq_num = qdf_cpu_to_be16(*(uint16_t *)(data + ICMP_SEQ_NUM_OFFSET));
 
-		proto_priv_data |= ((proto_priv_data | ((uint32_t)icmp_id)) << 16);
-		proto_priv_data |= (uint32_t)seq_num;
+		cmn_info.proto_priv_data = ((uint32_t)icmp_id) << 16;
+		cmn_info.proto_priv_data |= (uint32_t)seq_num;
+		cmn_info.type = QDF_PROTO_TYPE_ICMP;
+		cmn_info.vdev_id = vdev_id;
+		cmn_info.mpdu_seq = qdf_nbuf_get_mpdu_seq_num(skb);
 
 		if (QDF_TX == dir)
 			QDF_NBUF_CB_TX_DP_TRACE(skb) = 1;
@@ -1590,16 +1598,14 @@ static bool qdf_log_icmp_pkt(uint8_t vdev_id, struct sk_buff *skb,
 			QDF_NBUF_CB_RX_DP_TRACE(skb) = 1;
 
 		DPTRACE(qdf_dp_trace_proto_pkt(QDF_DP_TRACE_ICMP_PACKET_RECORD,
-					       vdev_id,
 					       skb->data +
 					       QDF_NBUF_SRC_MAC_OFFSET,
 					       skb->data +
 					       QDF_NBUF_DEST_MAC_OFFSET,
-					       QDF_PROTO_TYPE_ICMP,
-					       proto_subtype, dir, pdev_id,
-					       false, proto_priv_data));
+					       dir, pdev_id,
+					       false, &cmn_info));
 
-		if (proto_subtype == QDF_PROTO_ICMP_REQ)
+		if (cmn_info.subtype == QDF_PROTO_ICMP_REQ)
 			g_qdf_dp_trace_data.icmp_req++;
 		else
 			g_qdf_dp_trace_data.icmp_resp++;
@@ -1849,6 +1855,7 @@ static bool qdf_log_eapol_pkt(uint8_t vdev_id, struct sk_buff *skb,
 	enum qdf_proto_subtype subtype;
 	uint32_t dp_eap_trace;
 	uint32_t dp_eap_event;
+	struct qdf_dp_trace_proto_cmn cmn_info;
 
 	dp_eap_trace = qdf_dp_get_proto_bitmap() & QDF_NBUF_PKT_TRAC_TYPE_EAPOL;
 	dp_eap_event = qdf_dp_get_proto_event_bitmap() &
@@ -1883,14 +1890,17 @@ static bool qdf_log_eapol_pkt(uint8_t vdev_id, struct sk_buff *skb,
 		else if (QDF_RX == dir)
 			QDF_NBUF_CB_RX_DP_TRACE(skb) = 1;
 
+		cmn_info.vdev_id = vdev_id;
+		cmn_info.type = QDF_PROTO_TYPE_EAPOL;
+		cmn_info.subtype = subtype;
+		cmn_info.proto_priv_data = 0;
+		cmn_info.mpdu_seq = qdf_nbuf_get_mpdu_seq_num(skb);
 		DPTRACE(qdf_dp_trace_proto_pkt(QDF_DP_TRACE_EAPOL_PACKET_RECORD,
-					       vdev_id,
 					       skb->data +
 					       QDF_NBUF_SRC_MAC_OFFSET,
 					       skb->data +
 					       QDF_NBUF_DEST_MAC_OFFSET,
-					       QDF_PROTO_TYPE_EAPOL, subtype,
-					       dir, pdev_id, true, 0));
+					       dir, pdev_id, true, &cmn_info));
 
 		switch (subtype) {
 		case QDF_PROTO_EAPOL_M1:
@@ -1926,11 +1936,12 @@ static bool qdf_log_eapol_pkt(uint8_t vdev_id, struct sk_buff *skb,
  */
 static bool qdf_log_dhcp_pkt(uint8_t vdev_id, struct sk_buff *skb,
 			     enum qdf_proto_dir dir, uint8_t pdev_id,
-				 enum QDF_OPMODE op_mode)
+			     enum QDF_OPMODE op_mode)
 {
 	enum qdf_proto_subtype subtype = QDF_PROTO_INVALID;
 	uint32_t dp_dhcp_trace;
 	uint32_t dp_dhcp_event;
+	struct qdf_dp_trace_proto_cmn cmn_info;
 
 	dp_dhcp_trace = qdf_dp_get_proto_bitmap() & QDF_NBUF_PKT_TRAC_TYPE_DHCP;
 	dp_dhcp_event = qdf_dp_get_proto_event_bitmap() &
@@ -1964,14 +1975,17 @@ static bool qdf_log_dhcp_pkt(uint8_t vdev_id, struct sk_buff *skb,
 		else if (QDF_RX == dir)
 			QDF_NBUF_CB_RX_DP_TRACE(skb) = 1;
 
+		cmn_info.vdev_id = vdev_id;
+		cmn_info.type = QDF_PROTO_TYPE_DHCP;
+		cmn_info.subtype = subtype;
+		cmn_info.proto_priv_data = 0;
+		cmn_info.mpdu_seq = qdf_nbuf_get_mpdu_seq_num(skb);
 		DPTRACE(qdf_dp_trace_proto_pkt(QDF_DP_TRACE_DHCP_PACKET_RECORD,
-					       vdev_id,
 					       skb->data +
 					       QDF_NBUF_SRC_MAC_OFFSET,
 					       skb->data +
 					       QDF_NBUF_DEST_MAC_OFFSET,
-					       QDF_PROTO_TYPE_DHCP, subtype,
-					       dir, pdev_id, true, 0));
+					       dir, pdev_id, true, &cmn_info));
 
 		switch (subtype) {
 		case QDF_PROTO_DHCP_DISCOVER:
@@ -2011,6 +2025,7 @@ static bool qdf_log_arp_pkt(uint8_t vdev_id, struct sk_buff *skb,
 			    enum qdf_proto_dir dir, uint8_t pdev_id)
 {
 	enum qdf_proto_subtype proto_subtype;
+	struct qdf_dp_trace_proto_cmn cmn_info;
 
 	if ((qdf_dp_get_proto_bitmap() & QDF_NBUF_PKT_TRAC_TYPE_ARP) &&
 		((dir == QDF_TX && QDF_NBUF_CB_PACKET_TYPE_ARP ==
@@ -2024,15 +2039,18 @@ static bool qdf_log_arp_pkt(uint8_t vdev_id, struct sk_buff *skb,
 		else if (QDF_RX == dir)
 			QDF_NBUF_CB_RX_DP_TRACE(skb) = 1;
 
+		cmn_info.vdev_id = vdev_id;
+		cmn_info.type = QDF_PROTO_TYPE_ARP;
+		cmn_info.subtype = proto_subtype;
+		cmn_info.proto_priv_data = 0;
+		cmn_info.mpdu_seq = qdf_nbuf_get_mpdu_seq_num(skb);
 		DPTRACE(qdf_dp_trace_proto_pkt(QDF_DP_TRACE_ARP_PACKET_RECORD,
-					       vdev_id,
 					       skb->data +
 					       QDF_NBUF_SRC_MAC_OFFSET,
 					       skb->data +
 					       QDF_NBUF_DEST_MAC_OFFSET,
-					       QDF_PROTO_TYPE_ARP,
-					       proto_subtype, dir, pdev_id,
-					       true, 0));
+					       dir, pdev_id, true,
+					       &cmn_info));
 
 		if (QDF_PROTO_ARP_REQ == proto_subtype)
 			g_qdf_dp_trace_data.arp_req++;
@@ -2244,23 +2262,38 @@ void qdf_dp_display_proto_pkt(struct qdf_dp_trace_record_s *record,
 	qdf_mem_zero(prepend_str, sizeof(prepend_str));
 	loc = qdf_dp_trace_fill_meta_str(prepend_str, sizeof(prepend_str),
 					 index, info, record);
-	DPTRACE_PRINT("%s [%d] [%s] SA: "
-		      QDF_MAC_ADDR_FMT " %s DA:"
-		      QDF_MAC_ADDR_FMT " proto priv data = %08x",
-		      prepend_str,
-		      buf->vdev_id,
-		      qdf_dp_subtype_to_str(buf->subtype),
-		      QDF_MAC_ADDR_REF(buf->sa.bytes),
-		      qdf_dp_dir_to_str(buf->dir),
-		      QDF_MAC_ADDR_REF(buf->da.bytes),
-		      buf->proto_priv_data);
+
+	if (QDF_RX == buf->dir)
+		DPTRACE_PRINT("%s [%d] [%d] [%s] SA: "
+			      QDF_MAC_ADDR_FMT " %s DA:"
+			      QDF_MAC_ADDR_FMT " proto priv data = %08x",
+			      prepend_str,
+			      buf->cmn_info.vdev_id,
+			      buf->cmn_info.mpdu_seq,
+			      qdf_dp_subtype_to_str(buf->cmn_info.subtype),
+			      QDF_MAC_ADDR_REF(buf->sa.bytes),
+			      qdf_dp_dir_to_str(buf->dir),
+			      QDF_MAC_ADDR_REF(buf->da.bytes),
+			      buf->cmn_info.proto_priv_data);
+	else
+		DPTRACE_PRINT("%s [%d] [%s] SA: "
+			      QDF_MAC_ADDR_FMT " %s DA:"
+			      QDF_MAC_ADDR_FMT " proto priv data = %08x",
+			      prepend_str,
+			      buf->cmn_info.vdev_id,
+			      qdf_dp_subtype_to_str(buf->cmn_info.subtype),
+			      QDF_MAC_ADDR_REF(buf->sa.bytes),
+			      qdf_dp_dir_to_str(buf->dir),
+			      QDF_MAC_ADDR_REF(buf->da.bytes),
+			      buf->cmn_info.proto_priv_data);
 }
 qdf_export_symbol(qdf_dp_display_proto_pkt);
 
-void qdf_dp_trace_proto_pkt(enum QDF_DP_TRACE_ID code, uint8_t vdev_id,
-		uint8_t *sa, uint8_t *da, enum qdf_proto_type type,
-		enum qdf_proto_subtype subtype, enum qdf_proto_dir dir,
-		uint8_t pdev_id, bool print, uint32_t proto_priv_data)
+void qdf_dp_trace_proto_pkt(enum QDF_DP_TRACE_ID code,
+			    uint8_t *sa, uint8_t *da,
+			    enum qdf_proto_dir dir,
+			    uint8_t pdev_id, bool print,
+			    struct qdf_dp_trace_proto_cmn *cmn_info)
 {
 	struct qdf_dp_trace_proto_buf buf;
 	int buf_size = sizeof(struct qdf_dp_trace_proto_buf);
@@ -2273,11 +2306,8 @@ void qdf_dp_trace_proto_pkt(enum QDF_DP_TRACE_ID code, uint8_t vdev_id,
 
 	memcpy(&buf.sa, sa, QDF_NET_ETH_LEN);
 	memcpy(&buf.da, da, QDF_NET_ETH_LEN);
+	memcpy(&buf.cmn_info, cmn_info, sizeof(*cmn_info));
 	buf.dir = dir;
-	buf.type = type;
-	buf.subtype = subtype;
-	buf.vdev_id = vdev_id;
-	buf.proto_priv_data = proto_priv_data;
 	qdf_dp_add_record(code, pdev_id,
 			  (uint8_t *)&buf, buf_size, NULL, 0, print);
 }
@@ -2689,8 +2719,8 @@ static void qdf_dpt_display_proto_pkt_debugfs(qdf_debugfs_file_t file,
 			   QDF_MAC_ADDR_FMT " %s DA: "
 			   QDF_MAC_ADDR_FMT,
 			   prepend_str,
-			   buf->vdev_id,
-			   qdf_dp_subtype_to_str(buf->subtype),
+			   buf->cmn_info.vdev_id,
+			   qdf_dp_subtype_to_str(buf->cmn_info.subtype),
 			   QDF_MAC_ADDR_REF(buf->sa.bytes),
 			   qdf_dp_dir_to_str(buf->dir),
 			   QDF_MAC_ADDR_REF(buf->da.bytes));

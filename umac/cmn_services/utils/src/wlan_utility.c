@@ -29,6 +29,7 @@
 #include "cfg_ucfg_api.h"
 #include <wlan_serialization_api.h>
 #include "wlan_cm_api.h"
+#include "host_diag_core_event.h"
 
 /* CRC polynomial 0xedb88320 */
 static unsigned long const wlan_shortssid_table[] = {
@@ -1985,6 +1986,42 @@ bool wlan_get_connected_vdev_by_mld_addr(struct wlan_objmgr_psoc *psoc,
 
 	return context.connected;
 }
+#endif
+
+#if defined(WLAN_FEATURE_11BE)
+enum wlan_phymode
+wlan_eht_chan_phy_mode(uint32_t freq,
+		       uint16_t bw_val,
+		       enum phy_ch_width chan_width)
+{
+	if (wlan_reg_is_24ghz_ch_freq(freq)) {
+		if (bw_val == 20)
+			return WLAN_PHYMODE_11BEG_EHT20;
+		else if (bw_val == 40)
+			return WLAN_PHYMODE_11BEG_EHT40;
+	} else {
+		if (bw_val == 20)
+			return WLAN_PHYMODE_11BEA_EHT20;
+		else if (bw_val == 40)
+			return WLAN_PHYMODE_11BEA_EHT40;
+		else if (bw_val == 80)
+			return WLAN_PHYMODE_11BEA_EHT80;
+		else if (chan_width == CH_WIDTH_160MHZ)
+			return WLAN_PHYMODE_11BEA_EHT160;
+		else if (chan_width == CH_WIDTH_320MHZ)
+			return WLAN_PHYMODE_11BEA_EHT320;
+	}
+	return WLAN_PHYMODE_AUTO;
+}
+#else
+enum wlan_phymode
+wlan_eht_chan_phy_mode(uint32_t freq,
+		       uint16_t bw_val,
+		       enum phy_ch_width chan_width)
+{
+	return WLAN_PHYMODE_AUTO;
+}
+
 #endif
 
 static void wlan_pdev_chan_match(struct wlan_objmgr_pdev *pdev, void *object,

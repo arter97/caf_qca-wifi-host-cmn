@@ -2638,6 +2638,8 @@ void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id)
 		page_idx = 0;
 		count = 0;
 		offset = 0;
+
+		qdf_assert(pages->num_element_per_page != 0);
 		while ((desc = hal_srng_src_get_next(soc->hal_soc,
 						     desc_srng)) &&
 			(count < total_link_descs)) {
@@ -2673,6 +2675,7 @@ void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id)
 		offset = 0;
 		num_descs_per_page = pages->num_element_per_page;
 
+		qdf_assert(num_descs_per_page != 0);
 		while (count < total_link_descs) {
 			page_idx = count / num_descs_per_page;
 			offset = count % num_descs_per_page;
@@ -7417,24 +7420,6 @@ void dp_get_peer_extd_stats(struct dp_peer *peer,
 #endif
 #else
 #if defined WLAN_FEATURE_11BE_MLO && defined DP_MLO_LINK_STATS_SUPPORT
-/**
- * dp_get_peer_link_id() - Get Link peer Link ID
- * @peer: Datapath peer
- *
- * Return: Link peer Link ID
- */
-static inline
-uint8_t dp_get_peer_link_id(struct dp_peer *peer)
-{
-	uint8_t link_id;
-
-	link_id = IS_MLO_DP_LINK_PEER(peer) ? peer->link_id + 1 : 0;
-	if (link_id < 1 || link_id > DP_MAX_MLO_LINKS)
-		link_id = 0;
-
-	return link_id;
-}
-
 static inline
 void dp_get_peer_per_pkt_stats(struct dp_peer *peer,
 			       struct cdp_peer_stats *peer_stats)
@@ -8063,6 +8048,7 @@ static QDF_STATUS dp_set_peer_param(struct cdp_soc_t *cdp_soc,  uint8_t vdev_id,
 				    enum cdp_peer_param_type param,
 				    cdp_config_param_type val)
 {
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	struct dp_peer *peer =
 			dp_peer_get_tgt_peer_hash_find((struct dp_soc *)cdp_soc,
 						       peer_mac, 0, vdev_id,
@@ -8092,8 +8078,8 @@ static QDF_STATUS dp_set_peer_param(struct cdp_soc_t *cdp_soc,  uint8_t vdev_id,
 		txrx_peer->in_twt = !!(val.cdp_peer_param_in_twt);
 		break;
 	case CDP_CONFIG_PEER_FREQ:
-		return dp_set_peer_freq(cdp_soc, vdev_id,
-					peer_mac, param, val);
+		status =  dp_set_peer_freq(cdp_soc, vdev_id,
+					   peer_mac, param, val);
 		break;
 	default:
 		break;
@@ -8101,7 +8087,7 @@ static QDF_STATUS dp_set_peer_param(struct cdp_soc_t *cdp_soc,  uint8_t vdev_id,
 
 	dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
 
-	return QDF_STATUS_SUCCESS;
+	return status;
 }
 
 #ifdef WLAN_FEATURE_11BE_MLO
@@ -8205,7 +8191,7 @@ static QDF_STATUS dp_get_pdev_param(struct cdp_soc_t *cdp_soc, uint8_t pdev_id,
 	switch (param) {
 	case CDP_CONFIG_VOW:
 		val->cdp_pdev_param_cfg_vow =
-				((struct dp_pdev *)pdev)->delay_stats_flag;
+				((struct dp_pdev *)pdev)->vow_stats;
 		break;
 	case CDP_TX_PENDING:
 		val->cdp_pdev_param_tx_pending = dp_get_tx_pending(pdev);
@@ -8233,6 +8219,10 @@ static QDF_STATUS dp_get_pdev_param(struct cdp_soc_t *cdp_soc, uint8_t pdev_id,
 	case CDP_CONFIG_RXDMA_BUF_RING_SIZE:
 		val->cdp_rxdma_buf_ring_size =
 			wlan_cfg_get_rx_dma_buf_ring_size(((struct dp_pdev *)pdev)->wlan_cfg_ctx);
+		break;
+	case CDP_CONFIG_DELAY_STATS:
+		val->cdp_pdev_param_cfg_delay_stats =
+				((struct dp_pdev *)pdev)->delay_stats_flag;
 		break;
 	default:
 		return QDF_STATUS_E_FAILURE;
@@ -8370,6 +8360,9 @@ static QDF_STATUS dp_set_pdev_param(struct cdp_soc_t *cdp_soc, uint8_t pdev_id,
 	case CDP_CONFIG_RXDMA_BUF_RING_SIZE:
 		wlan_cfg_set_rx_dma_buf_ring_size(pdev->wlan_cfg_ctx,
 						  val.cdp_rxdma_buf_ring_size);
+		break;
+	case CDP_CONFIG_VOW:
+		pdev->vow_stats = val.cdp_pdev_param_cfg_vow;
 		break;
 	default:
 		return QDF_STATUS_E_INVAL;
@@ -9084,6 +9077,9 @@ static QDF_STATUS dp_get_psoc_param(struct cdp_soc_t *cdp_soc,
 	wlan_cfg_ctx = soc->wlan_cfg_ctx;
 
 	switch (param) {
+	case CDP_ENABLE_RATE_STATS:
+		val->cdp_psoc_param_en_rate_stats = soc->peerstats_enabled;
+		break;
 	case CDP_CFG_PEER_EXT_STATS:
 		val->cdp_psoc_param_pext_stats =
 			wlan_cfg_is_peer_ext_stats_enabled(wlan_cfg_ctx);
@@ -9142,6 +9138,10 @@ static QDF_STATUS dp_get_psoc_param(struct cdp_soc_t *cdp_soc,
 		break;
 	case CDP_CFG_GET_MLO_OPER_MODE:
 		val->cdp_psoc_param_mlo_oper_mode = dp_get_mldev_mode(soc);
+		break;
+	case CDP_CFG_PEER_JITTER_STATS:
+		val->cdp_psoc_param_jitter_stats =
+			wlan_cfg_is_peer_jitter_stats_enabled(soc->wlan_cfg_ctx);
 		break;
 	default:
 		dp_warn("Invalid param: %u", param);
@@ -9708,8 +9708,10 @@ dp_txrx_stats_publish(struct cdp_soc_t *soc, uint8_t pdev_id,
 	if (!pdev)
 		return TXRX_STATS_LEVEL_OFF;
 
-	if (pdev->pending_fw_stats_response)
+	if (pdev->pending_fw_stats_response) {
+		dp_warn("pdev%d: prev req pending\n", pdev->pdev_id);
 		return TXRX_STATS_LEVEL_OFF;
+	}
 
 	dp_aggregate_pdev_stats(pdev);
 
@@ -9718,25 +9720,43 @@ dp_txrx_stats_publish(struct cdp_soc_t *soc, uint8_t pdev_id,
 	req.cookie_val = DBG_STATS_COOKIE_DP_STATS;
 	pdev->fw_stats_tlv_bitmap_rcvd = 0;
 	qdf_event_reset(&pdev->fw_stats_event);
-	dp_h2t_ext_stats_msg_send(pdev, req.stats, req.param0,
-				req.param1, req.param2, req.param3, 0,
-				req.cookie_val, 0);
-
-	req.stats = (enum cdp_stats)HTT_DBG_EXT_STATS_PDEV_RX;
-	req.cookie_val = DBG_STATS_COOKIE_DP_STATS;
-	dp_h2t_ext_stats_msg_send(pdev, req.stats, req.param0,
-				req.param1, req.param2, req.param3, 0,
-				req.cookie_val, 0);
-
-	status =
-		qdf_wait_single_event(&pdev->fw_stats_event, DP_MAX_SLEEP_TIME);
+	status = dp_h2t_ext_stats_msg_send(pdev, req.stats, req.param0,
+					   req.param1, req.param2, req.param3, 0,
+					   req.cookie_val, 0);
 
 	if (status != QDF_STATUS_SUCCESS) {
-		if (status == QDF_STATUS_E_TIMEOUT)
-			qdf_debug("TIMEOUT_OCCURS");
+		dp_warn("pdev%d: tx stats req failed\n", pdev->pdev_id);
 		pdev->pending_fw_stats_response = false;
 		return TXRX_STATS_LEVEL_OFF;
 	}
+
+	req.stats = (enum cdp_stats)HTT_DBG_EXT_STATS_PDEV_RX;
+	req.cookie_val = DBG_STATS_COOKIE_DP_STATS;
+	status = dp_h2t_ext_stats_msg_send(pdev, req.stats, req.param0,
+					   req.param1, req.param2, req.param3, 0,
+					   req.cookie_val, 0);
+	if (status != QDF_STATUS_SUCCESS) {
+		dp_warn("pdev%d: rx stats req failed\n", pdev->pdev_id);
+		pdev->pending_fw_stats_response = false;
+		return TXRX_STATS_LEVEL_OFF;
+	}
+
+	/* The event may have already been signaled. Wait only if it's pending */
+	if (!pdev->fw_stats_event.done) {
+		status =
+			qdf_wait_single_event(&pdev->fw_stats_event,
+					      DP_MAX_SLEEP_TIME);
+
+		if (status != QDF_STATUS_SUCCESS) {
+			if (status == QDF_STATUS_E_TIMEOUT)
+				dp_warn("pdev%d: fw stats timeout. TLVs rcvd 0x%llx\n",
+					     pdev->pdev_id,
+					     pdev->fw_stats_tlv_bitmap_rcvd);
+			pdev->pending_fw_stats_response = false;
+			return TXRX_STATS_LEVEL_OFF;
+		}
+	}
+
 	qdf_mem_copy(buf, &pdev->stats, sizeof(struct cdp_pdev_stats));
 	pdev->pending_fw_stats_response = false;
 
@@ -12332,7 +12352,7 @@ static struct cdp_ctrl_ops dp_ops_ctrl = {
 #ifdef QCA_MULTIPASS_SUPPORT
 	.txrx_peer_set_vlan_id = dp_peer_set_vlan_id,
 #endif /*QCA_MULTIPASS_SUPPORT*/
-#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(WLAN_CONFIG_TX_DELAY)
+#if defined(WLAN_FEATURE_TSF_AUTO_REPORT) || defined(WLAN_CONFIG_TX_DELAY)
 	.txrx_set_delta_tsf = dp_set_delta_tsf,
 #endif
 #ifdef WLAN_FEATURE_TSF_UPLINK_DELAY
@@ -12411,6 +12431,11 @@ static struct cdp_host_stats_ops dp_ops_host_stats = {
 	.get_pdev_obss_stats = dp_get_obss_stats,
 	.clear_pdev_obss_pd_stats = dp_clear_pdev_obss_pd_stats,
 	.txrx_get_interface_stats  = dp_txrx_get_interface_stats,
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+	.tx_latency_stats_fetch = dp_tx_latency_stats_fetch,
+	.tx_latency_stats_config = dp_tx_latency_stats_config,
+	.tx_latency_stats_register_cb = dp_tx_latency_stats_register_cb,
+#endif
 	/* TODO */
 };
 
@@ -12558,7 +12583,8 @@ void dp_find_missing_tx_comp(struct dp_soc *soc)
 					 desc_pages.cacheable_pages)))
 				break;
 
-			tx_desc = dp_tx_desc_find(soc, i, page_id, offset);
+			tx_desc = dp_tx_desc_find(soc, i, page_id, offset,
+						  false);
 			if (tx_desc->magic == DP_TX_MAGIC_PATTERN_FREE) {
 				continue;
 			} else if (tx_desc->magic ==
@@ -13558,9 +13584,6 @@ dp_soc_attach(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 	dp_soc_set_def_pdev(soc);
 	dp_soc_set_qref_debug_list(soc);
 
-	if (!ipa_config_is_opt_wifi_dp_enabled())
-		qdf_atomic_set(&soc->ipa_mapped, 1);
-
 	dp_info("Mem stats: DMA = %u HEAP = %u SKB = %u",
 		qdf_dma_mem_stats_read(),
 		qdf_heap_mem_stats_read(),
@@ -14373,6 +14396,11 @@ static QDF_STATUS dp_pdev_init(struct cdp_soc_t *txrx_soc,
 
 	dp_init_tso_stats(pdev);
 	dp_init_link_peer_stats_enabled(pdev);
+
+	/* Initialize dp tx fast path flag */
+	pdev->tx_fast_flag = DP_TX_DESC_FLAG_SIMPLE;
+	if (soc->hw_txrx_stats_en)
+		pdev->tx_fast_flag |= DP_TX_DESC_FLAG_FASTPATH_SIMPLE;
 
 	pdev->rx_fast_flag = false;
 	dp_info("Mem stats: DMA = %u HEAP = %u SKB = %u",

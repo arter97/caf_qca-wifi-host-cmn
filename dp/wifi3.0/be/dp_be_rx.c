@@ -226,6 +226,7 @@ uint32_t dp_rx_process_be(struct dp_intr *int_ctx,
 	uint32_t dsf;
 	uint32_t l3_pad;
 	uint8_t link_id = 0;
+	uint16_t buf_size;
 
 	DP_HIST_INIT();
 
@@ -237,6 +238,7 @@ uint32_t dp_rx_process_be(struct dp_intr *int_ctx,
 	intr_id = int_ctx->dp_intr_id;
 	num_entries = hal_srng_get_num_entries(hal_soc, hal_ring_hdl);
 	dp_runtime_pm_mark_last_busy(soc);
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 
 more_data:
 	/* reset local variables here to be re-used in the function */
@@ -400,7 +402,7 @@ more_data:
 				 * reap this MPDU
 				 */
 				if ((QDF_NBUF_CB_RX_PKT_LEN(rx_desc->nbuf) /
-				     (RX_DATA_BUFFER_SIZE -
+				     (buf_size -
 				      soc->rx_pkt_tlv_size) + 1) >
 				    num_pending) {
 					DP_STATS_INC(soc,
@@ -514,6 +516,7 @@ done:
 		rx_tlv_hdr = qdf_nbuf_data(nbuf);
 		vdev_id = QDF_NBUF_CB_RX_VDEV_ID(nbuf);
 		peer_id = dp_rx_get_peer_id_be(nbuf);
+		dp_rx_set_mpdu_seq_number_be(nbuf, rx_tlv_hdr);
 
 		if (dp_rx_is_list_ready(deliver_list_head, vdev, txrx_peer,
 					peer_id, vdev_id)) {
@@ -2022,6 +2025,9 @@ dp_rx_null_q_desc_handle_be(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	uint16_t sa_idx = 0;
 	bool is_eapol = 0;
 	bool enh_flag;
+	uint16_t buf_size;
+
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 
 	qdf_nbuf_set_rx_chfrag_start(
 				nbuf,
@@ -2049,8 +2055,7 @@ dp_rx_null_q_desc_handle_be(struct dp_soc *soc, qdf_nbuf_t nbuf,
 			goto drop_nbuf;
 
 		/* Set length in nbuf */
-		qdf_nbuf_set_pktlen(
-			nbuf, qdf_min(pkt_len, (uint32_t)RX_DATA_BUFFER_SIZE));
+		qdf_nbuf_set_pktlen(nbuf, qdf_min(pkt_len, (uint32_t)buf_size));
 	}
 
 	/*

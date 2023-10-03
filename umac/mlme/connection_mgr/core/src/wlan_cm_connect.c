@@ -971,6 +971,50 @@ cm_update_mlo_links_for_retry_with_same_candidate(struct wlan_objmgr_psoc *psoc,
 #endif
 
 /**
+ * cm_retry_with_same_candidate_for_sae_connection() - This API check if
+ * reconnect attempt is required with the same candidate again or not based
+ * on sae connection
+ * @psoc: obj mgr psoc
+ * @req: Connect request
+ * @max_retry_count: pointer to hold max retry value
+ * @is_mlo_vdev: MLO connection or not
+ * @is_sae_con: SAE connection or not
+ *
+ * Return: void
+ */
+static void
+cm_retry_with_same_candidate_for_sae_connection(
+			struct wlan_objmgr_psoc *psoc,
+			struct cm_connect_req *req,
+			uint8_t *max_retry_count, bool is_mlo_vdev,
+			bool is_sae_con)
+{
+	uint8_t sae_max_retry_count = CM_MAX_CANDIDATE_RETRIES;
+	struct scoring_cfg *score_config;
+	struct psoc_mlme_obj *mlme_psoc_obj;
+
+	mlme_psoc_obj = wlan_psoc_mlme_get_cmpt_obj(psoc);
+	if (!mlme_psoc_obj)
+		return;
+
+	score_config = &mlme_psoc_obj->psoc_cfg.score_config;
+
+	/* For SAE use max retry count from INI */
+	if (is_sae_con)
+		wlan_mlme_get_sae_assoc_retry_count(psoc, &sae_max_retry_count);
+
+	if (score_config->vendor_roam_score_algorithm) {
+		if (is_mlo_vdev)
+			sae_max_retry_count = QDF_MAX(sae_max_retry_count,
+						      *max_retry_count);
+
+		cm_update_mlo_links_for_retry_with_same_candidate(psoc, req);
+	}
+
+	*max_retry_count = sae_max_retry_count;
+}
+
+/**
  * cm_is_retry_with_same_candidate() - This API check if reconnect attempt is
  * required with the same candidate again
  * @cm_ctx: connection manager context
@@ -989,7 +1033,9 @@ static bool cm_is_retry_with_same_candidate(struct cnx_mgr *cm_ctx,
 	uint32_t key_mgmt;
 	struct wlan_objmgr_psoc *psoc;
 	bool sae_connection;
+	bool is_mlo_vdev = false;
 	QDF_STATUS status;
+	uint8_t mlo_link_num;
 	qdf_freq_t freq;
 	struct scoring_cfg *score_config;
 	struct psoc_mlme_obj *mlme_psoc_obj;
@@ -1003,6 +1049,16 @@ static bool cm_is_retry_with_same_candidate(struct cnx_mgr *cm_ctx,
 	key_mgmt = req->cur_candidate->entry->neg_sec_info.key_mgmt;
 	freq = req->cur_candidate->entry->channel.chan_freq;
 
+	is_mlo_vdev = wlan_vdev_mlme_is_mlo_vdev(cm_ctx->vdev);
+	mlo_link_num = wlan_mlme_get_sta_mlo_conn_max_num(psoc);
+	/*
+	 * Update no of retrials for n link MLO, so that connection can be
+	 * tried with all possible link combinations till SLO.
+	 */
+	if (score_config->vendor_roam_score_algorithm &&
+	    is_mlo_vdev && mlo_link_num > 1)
+		max_retry_count = mlo_link_num - 1;
+
 	/* Try once again for the invalid PMKID case without PMKID */
 	if (resp->status_code == STATUS_INVALID_PMKID) {
 		if (score_config->vendor_roam_score_algorithm)
@@ -1010,6 +1066,11 @@ static bool cm_is_retry_with_same_candidate(struct cnx_mgr *cm_ctx,
 									  req);
 		goto use_same_candidate;
 	}
+
+	sae_connection = key_mgmt & (1 << WLAN_CRYPTO_KEY_MGMT_SAE |
+				     1 << WLAN_CRYPTO_KEY_MGMT_FT_SAE |
+				     1 << WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY |
+				     1 << WLAN_CRYPTO_KEY_MGMT_FT_SAE_EXT_KEY);
 
 	/* Try again for the JOIN timeout if only one candidate */
 	if (resp->reason == CM_JOIN_TIMEOUT &&
@@ -1023,10 +1084,10 @@ static bool cm_is_retry_with_same_candidate(struct cnx_mgr *cm_ctx,
 		if (policy_mgr_will_freq_lead_to_mcc(psoc, freq))
 			return false;
 
-		wlan_mlme_get_sae_assoc_retry_count(psoc, &max_retry_count);
-		if (score_config->vendor_roam_score_algorithm)
-			cm_update_mlo_links_for_retry_with_same_candidate(psoc,
-									  req);
+		cm_retry_with_same_candidate_for_sae_connection(
+				psoc, req, &max_retry_count, is_mlo_vdev,
+				sae_connection);
+
 		goto use_same_candidate;
 	}
 
@@ -1034,20 +1095,13 @@ static bool cm_is_retry_with_same_candidate(struct cnx_mgr *cm_ctx,
 	 * Try again for the ASSOC timeout in SAE connection or
 	 * AP has reconnect on assoc timeout OUI.
 	 */
-	sae_connection = key_mgmt & (1 << WLAN_CRYPTO_KEY_MGMT_SAE |
-				     1 << WLAN_CRYPTO_KEY_MGMT_FT_SAE |
-				     1 << WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY |
-				     1 << WLAN_CRYPTO_KEY_MGMT_FT_SAE_EXT_KEY);
 	if (resp->reason == CM_ASSOC_TIMEOUT && (sae_connection ||
 	    (mlme_get_reconn_after_assoc_timeout_flag(psoc, resp->vdev_id)))) {
-		/* For SAE use max retry count from INI */
-		if (sae_connection)
-			wlan_mlme_get_sae_assoc_retry_count(psoc,
-							    &max_retry_count);
 
-		if (score_config->vendor_roam_score_algorithm)
-			cm_update_mlo_links_for_retry_with_same_candidate(psoc,
-									  req);
+		cm_retry_with_same_candidate_for_sae_connection(
+				psoc, req, &max_retry_count, is_mlo_vdev,
+				sae_connection);
+
 		goto use_same_candidate;
 	}
 

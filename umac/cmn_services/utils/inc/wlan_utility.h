@@ -1057,4 +1057,17 @@ void wlan_minidump_remove(void *start_addr, const size_t size,
  */
 bool wlan_util_is_vdev_in_cac_wait(struct wlan_objmgr_pdev *pdev,
 				   wlan_objmgr_ref_dbgid dbg_id);
+
+/**
+ * wlan_eht_chan_phy_mode - convert eht chan to phy mode
+ * @freq: frequency
+ * @bw_val: bandwidth
+ * @chan_width: channel width
+ *
+ * Return: return phy mode
+ */
+enum wlan_phymode
+wlan_eht_chan_phy_mode(uint32_t freq,
+		       uint16_t bw_val,
+		       enum phy_ch_width chan_width);
 #endif /* _WLAN_UTILITY_H_ */

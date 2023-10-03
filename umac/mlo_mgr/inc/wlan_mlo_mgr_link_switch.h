@@ -259,6 +259,17 @@ struct mlo_link_info *mlo_mgr_get_ap_link(struct wlan_objmgr_vdev *vdev);
 
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 /**
+ * mlo_mgr_update_csa_link_info - update mlo sta csa params
+ * @mlo_dev_ctx: mlo dev ctx
+ * @csa_param: csa parameters to be updated
+ * @link_id: link id
+ * Return : true if csa parameters are updated
+ */
+bool mlo_mgr_update_csa_link_info(struct wlan_mlo_dev_context *mlo_dev_ctx,
+				  struct csa_offload_params *csa_param,
+				  uint8_t link_id);
+
+/**
  * mlo_mgr_osif_update_connect_info() - Update connection info to OSIF
  * layer on successful connection complete.
  * @vdev: VDEV object manager.
@@ -513,6 +524,18 @@ mlo_mgr_link_switch_validate_request(struct wlan_objmgr_vdev *vdev,
 QDF_STATUS mlo_mgr_link_switch_request_params(struct wlan_objmgr_psoc *psoc,
 					      void *evt_params);
 /**
+ * mlo_mgr_link_state_switch_info_handler() - Handle Link State change related
+ * information and generate corresponding connectivity logging event
+ * @psoc: Pointer to PSOC object
+ * @info: Source info to be sent for the logging event
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+mlo_mgr_link_state_switch_info_handler(struct wlan_objmgr_psoc *psoc,
+				       struct mlo_link_switch_state_info *info);
+
+/**
  * mlo_mgr_link_switch_complete() - Link switch complete notification to FW
  * @vdev: VDV object manager
  *
@@ -737,6 +760,14 @@ mlo_mgr_link_switch_defer_disconnect_req(struct wlan_objmgr_vdev *vdev,
 					 enum wlan_reason_code reason)
 {
 	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline bool
+mlo_mgr_update_csa_link_info(struct wlan_mlo_dev_context *mlo_dev_ctx,
+			     struct csa_offload_params *csa_param,
+			     uint8_t link_id)
+{
+	return false;
 }
 #endif
 #endif

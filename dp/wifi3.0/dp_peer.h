@@ -2097,12 +2097,13 @@ struct dp_peer *dp_get_primary_link_peer_by_id(struct dp_soc *soc,
 		for (i = 0; i < link_peers_info.num_links; i++) {
 			link_peer = link_peers_info.link_peers[i];
 			if (link_peer->primary_link) {
-				primary_peer = link_peer;
 				/*
 				 * Take additional reference over
 				 * primary link peer.
 				 */
-				dp_peer_get_ref(NULL, primary_peer, mod_id);
+				if (QDF_STATUS_SUCCESS ==
+				    dp_peer_get_ref(NULL, link_peer, mod_id))
+					primary_peer = link_peer;
 				break;
 			}
 		}
@@ -2191,6 +2192,13 @@ dp_tgt_txrx_peer_get_ref_by_id(struct dp_soc *soc,
  */
 void dp_print_mlo_ast_stats_be(struct dp_soc *soc);
 
+/**
+ * dp_get_peer_link_id() - Get Link peer Link ID
+ * @peer: Datapath peer
+ *
+ * Return: Link peer Link ID
+ */
+uint8_t dp_get_peer_link_id(struct dp_peer *peer);
 #else
 
 #define IS_MLO_DP_MLD_TXRX_PEER(_peer) false
@@ -2342,6 +2350,11 @@ uint16_t dp_get_link_peer_id_by_lmac_id(struct dp_soc *soc, uint16_t peer_id,
 
 static inline void dp_print_mlo_ast_stats_be(struct dp_soc *soc)
 {
+}
+
+static inline uint8_t dp_get_peer_link_id(struct dp_peer *peer)
+{
+	return 0;
 }
 #endif /* WLAN_FEATURE_11BE_MLO */
 

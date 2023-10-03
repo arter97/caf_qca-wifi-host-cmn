@@ -103,7 +103,7 @@ dp_tx_comp_find_tx_desc_rh(struct dp_soc *soc, uint32_t sw_cookie)
 				  (sw_cookie & DP_TX_DESC_ID_PAGE_MASK) >>
 						DP_TX_DESC_ID_PAGE_OS,
 				  (sw_cookie & DP_TX_DESC_ID_OFFSET_MASK) >>
-						DP_TX_DESC_ID_OFFSET_OS);
+						DP_TX_DESC_ID_OFFSET_OS, false);
 	/* pool id is not matching. Error */
 	if (tx_desc && tx_desc->pool_id != pool_id) {
 		dp_tx_comp_alert("Tx Comp pool id %d not matched %d",

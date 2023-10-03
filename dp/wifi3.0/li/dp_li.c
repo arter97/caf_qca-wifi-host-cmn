@@ -259,6 +259,9 @@ dp_rxdma_ring_sel_cfg_li(struct dp_soc *soc)
 	struct dp_srng *rx_mac_srng;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	uint32_t target_type = hal_get_target_type(soc->hal_soc);
+	uint16_t buf_size;
+
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 
 	if (target_type == TARGET_TYPE_QCN9160)
 		return status;
@@ -327,7 +330,7 @@ dp_rxdma_ring_sel_cfg_li(struct dp_soc *soc)
 			rx_mac_srng = dp_get_rxdma_ring(pdev, lmac_id);
 			htt_h2t_rx_ring_cfg(soc->htt_handle, mac_for_pdev,
 					    rx_mac_srng->hal_srng,
-					    RXDMA_BUF, RX_DATA_BUFFER_SIZE,
+					    RXDMA_BUF, buf_size,
 					    &htt_tlv_filter);
 		}
 	}
@@ -344,6 +347,9 @@ dp_rxdma_ring_sel_cfg_li(struct dp_soc *soc)
 	struct dp_srng *rx_mac_srng;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	uint32_t target_type = hal_get_target_type(soc->hal_soc);
+	uint16_t buf_size;
+
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 
 	if (target_type == TARGET_TYPE_QCN9160)
 		return status;
@@ -412,7 +418,7 @@ dp_rxdma_ring_sel_cfg_li(struct dp_soc *soc)
 			rx_mac_srng = dp_get_rxdma_ring(pdev, lmac_id);
 			htt_h2t_rx_ring_cfg(soc->htt_handle, mac_for_pdev,
 					    rx_mac_srng->hal_srng,
-					    RXDMA_BUF, RX_DATA_BUFFER_SIZE,
+					    RXDMA_BUF, buf_size,
 					    &htt_tlv_filter);
 		}
 	}
@@ -738,7 +744,8 @@ void dp_tx_comp_get_prefetched_params_from_hal_desc(
 			(tx_desc_id & DP_TX_DESC_ID_PAGE_MASK) >>
 			DP_TX_DESC_ID_PAGE_OS,
 			(tx_desc_id & DP_TX_DESC_ID_OFFSET_MASK) >>
-			DP_TX_DESC_ID_OFFSET_OS);
+			DP_TX_DESC_ID_OFFSET_OS,
+			(tx_desc_id & DP_TX_DESC_ID_SPCL_MASK));
 	qdf_prefetch((uint8_t *)*r_tx_desc);
 }
 #endif

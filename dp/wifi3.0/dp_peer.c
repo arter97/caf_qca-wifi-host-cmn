@@ -535,6 +535,17 @@ void dp_peer_find_hash_remove(struct dp_soc *soc, struct dp_peer *peer)
 		dp_err("unknown peer type %d", peer->peer_type);
 	}
 }
+
+uint8_t dp_get_peer_link_id(struct dp_peer *peer)
+{
+	uint8_t link_id;
+
+	link_id = IS_MLO_DP_LINK_PEER(peer) ? peer->link_id + 1 : 0;
+	if (link_id < 1 || link_id > DP_MAX_MLO_LINKS)
+		link_id = 0;
+
+	return link_id;
+}
 #else
 static QDF_STATUS dp_peer_find_hash_attach(struct dp_soc *soc)
 {
