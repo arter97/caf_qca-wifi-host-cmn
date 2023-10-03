@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -193,10 +194,10 @@ iot_sim_apply_content_change_rule(struct wlan_objmgr_pdev *pdev,
 
 	if (IEEE80211_IS_BEACON((struct ieee80211_frame *)qdf_nbuf_data(nbuf)))
 		status = iot_sim_update_beacon_template_struct(nbuf, param);
-		if (QDF_IS_STATUS_ERROR(status))
-			iot_sim_err("Failed to update beacon param");
+	if (QDF_IS_STATUS_ERROR(status))
+		iot_sim_err("Failed to update beacon param");
 
-	return QDF_STATUS_SUCCESS;
+	return status;
 }
 
 /*

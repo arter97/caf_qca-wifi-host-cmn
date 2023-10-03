@@ -30,6 +30,12 @@ INCS += -I$(obj)/$(DEPTH)/component_dev/wmi/inc
 INCS += -I$(obj)/$(DEPTH)/pld/inc
 INCS += -I$(obj)/$(DEPTH)/component_dev/dp/inc
 
+ifeq ($(WLAN_IOT_SIM_SUPPORT), 1)
+INCS += -I$(obj)/$(DEPTH)/cmn_dev/umac/mlo_mgr/inc
+INCS += -I$(obj)/$(DEPTH)/cmn_dev/umac/wifi_pos/inc
+INCS += -I$(obj)/$(DEPTH)/cmn_dev/umac/twt/dispatcher/inc
+endif
+
 INCS += -I$(obj)/$(DEPTH)/cmn_dev/umac/cmn_services/crypto/inc
 INCS += -I$(obj)/$(DEPTH)/component_dev/crypto/inc
 

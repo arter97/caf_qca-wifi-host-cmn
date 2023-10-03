@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -1781,22 +1781,24 @@ iot_sim_debugfs_init(struct iot_sim_context *isc)
 {
 	struct dentry *dbgfs_dir = NULL;
 	struct dentry *de = NULL;
-	uint8_t i, pdev_id;
-	char buf[32];
+	uint8_t i, pdev_id, psoc_id;
+	char buf[32] = {0};
 
 	if (!isc)
 		return QDF_STATUS_E_FAILURE;
 
 	pdev_id = wlan_objmgr_pdev_get_pdev_id(isc->pdev_obj);
+	psoc_id = wlan_psoc_get_id(wlan_pdev_get_psoc(isc->pdev_obj));
 
 	qdf_mem_zero(buf, sizeof(buf));
-	snprintf(buf, sizeof(buf), "iot_sim_pdev%u", pdev_id);
+	snprintf(buf, sizeof(buf), "iot_sim_soc%u_pdev%u", psoc_id, pdev_id);
 
 	dbgfs_dir = qdf_debugfs_create_dir(buf, NULL);
 	isc->iot_sim_dbgfs_ctx.iot_sim_dir_de = dbgfs_dir;
 
 	if (!isc->iot_sim_dbgfs_ctx.iot_sim_dir_de) {
-		iot_sim_err("dbgfs dir creation failed for pdev%u", pdev_id);
+		iot_sim_err("dbgfs dir creation failed for psoc%u_pdev%u",
+			    psoc_id, pdev_id);
 		return QDF_STATUS_E_FAILURE;
 	}
 
