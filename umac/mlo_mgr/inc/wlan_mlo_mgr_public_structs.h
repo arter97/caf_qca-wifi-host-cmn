@@ -424,6 +424,25 @@ struct mlo_link_bss_params {
 };
 
 #ifdef WLAN_FEATURE_11BE_MLO
+
+/**
+ * enum mlo_link_info_event_status - link info event status
+ * @WLAN_LINK_INFO_EVENT_SUCCESS: success
+ * @WLAN_LINK_INFO_EVENT_REJECT_FAILURE: reject due to common failure reason
+ * @WLAN_LINK_INFO_EVENT_REJECT_VDEV_NOT_UP: reject as vdev is not up
+ * @WLAN_LINK_INFO_EVENT_REJECT_ROAMING_IN_PROGRESS: reject as roaming
+ *						     is in progress
+ * @WLAN_LINK_INFO_EVENT_REJECT_NON_MLO_CONNECTION: reject as it's not
+ *						    MLO connection
+ */
+enum mlo_link_info_event_status {
+	WLAN_LINK_INFO_EVENT_SUCCESS,
+	WLAN_LINK_INFO_EVENT_REJECT_FAILURE,
+	WLAN_LINK_INFO_EVENT_REJECT_VDEV_NOT_UP,
+	WLAN_LINK_INFO_EVENT_REJECT_ROAMING_IN_PROGRESS,
+	WLAN_LINK_INFO_EVENT_REJECT_NON_MLO_CONNECTION,
+};
+
 /**
  * struct mlo_link_state_cmd_params - MLO link state params
  * @vdev_id: Vdev id
