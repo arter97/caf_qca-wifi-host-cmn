@@ -1747,6 +1747,9 @@ dp_rxdma_ring_sel_cfg_be(struct dp_soc *soc)
 	struct htt_rx_ring_tlv_filter htt_tlv_filter = {0};
 	struct dp_srng *rx_mac_srng;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	uint16_t buf_size;
+
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 
 	/*
 	 * In Beryllium chipset msdu_start, mpdu_end
@@ -1832,7 +1835,7 @@ dp_rxdma_ring_sel_cfg_be(struct dp_soc *soc)
 
 			htt_h2t_rx_ring_cfg(soc->htt_handle, mac_for_pdev,
 					    rx_mac_srng->hal_srng,
-					    RXDMA_BUF, RX_DATA_BUFFER_SIZE,
+					    RXDMA_BUF, buf_size,
 					    &htt_tlv_filter);
 		}
 	}
@@ -1853,6 +1856,9 @@ dp_rxdma_ring_sel_cfg_be(struct dp_soc *soc)
 	struct htt_rx_ring_tlv_filter htt_tlv_filter = {0};
 	struct dp_srng *rx_mac_srng;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	uint16_t buf_size;
+
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 
 	/*
 	 * In Beryllium chipset msdu_start, mpdu_end
@@ -1958,7 +1964,7 @@ dp_rxdma_ring_sel_cfg_be(struct dp_soc *soc)
 
 			htt_h2t_rx_ring_cfg(soc->htt_handle, mac_for_pdev,
 					    rx_mac_srng->hal_srng,
-					    RXDMA_BUF, RX_DATA_BUFFER_SIZE,
+					    RXDMA_BUF, buf_size,
 					    &htt_tlv_filter);
 		}
 	}
