@@ -128,6 +128,7 @@ static const uint32_t peer_param_tlv[] = {
 	[WMI_HOST_PEER_FT_ROAMING_PEER_UPDATE] =
 					WMI_PEER_FT_ROAMING_PEER_UPDATE,
 	[WMI_HOST_PEER_PARAM_DMS_SUPPORT] = WMI_PEER_PARAM_DMS_SUPPORT,
+	[WMI_HOST_PEER_PARAM_UL_OFDMA_RTD] = WMI_PEER_PARAM_UL_OFDMA_RTD,
 };
 
 #define PARAM_MAP(name, NAME) [wmi_ ## name] = WMI_ ##NAME
@@ -453,6 +454,7 @@ static const uint32_t pdev_param_tlv[] = {
 		  PDEV_PARAM_ATF_VO_DEDICATED_TIME),
 	PARAM_MAP(pdev_param_atf_vi_dedicated_time,
 		  PDEV_PARAM_ATF_VI_DEDICATED_TIME),
+	PARAM_MAP(pdev_param_ul_ofdma_rtd, PDEV_PARAM_UL_OFDMA_RTD),
 };
 
 /* Populate vdev_param array whose index is host param, value is target param */

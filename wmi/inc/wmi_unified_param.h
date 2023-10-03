@@ -5753,6 +5753,7 @@ typedef enum {
 		   PDEV_PARAM_ATF_VO_DEDICATED_TIME),
 	PDEV_PARAM(pdev_param_atf_vi_dedicated_time,
 		   PDEV_PARAM_ATF_VI_DEDICATED_TIME),
+	PDEV_PARAM(pdev_param_ul_ofdma_rtd, PDEV_PARAM_UL_OFDMA_RTD),
 	pdev_param_max,
 } wmi_conv_pdev_params_id;
 
@@ -7403,6 +7404,7 @@ enum {
 	PEER_PARAM(PEER_CHWIDTH_PUNCTURE_20MHZ_BITMAP),
 	PEER_PARAM(PEER_FT_ROAMING_PEER_UPDATE),
 	PEER_PARAM(PEER_PARAM_DMS_SUPPORT),
+	PEER_PARAM(PEER_PARAM_UL_OFDMA_RTD),
 
 };
 #define WMI_HOST_PEER_MIMO_PS_NONE	0x0
