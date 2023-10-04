@@ -20024,12 +20024,11 @@ extract_roam_result_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
  * @dst:        Pointer to destination structure to fill data
  * @idx:        TLV id
  * @rpt_idx:    Neighbor report Channel index
- * @band: Band of the link on which packet is transmitted or received
  */
 static QDF_STATUS
 extract_roam_11kv_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 			    struct wmi_neighbor_report_data *dst,
-			    uint8_t idx, uint8_t rpt_idx, uint8_t band)
+			    uint8_t idx, uint8_t rpt_idx)
 {
 	WMI_ROAM_STATS_EVENTID_param_tlvs *param_buf;
 	wmi_roam_neighbor_report_info *src_data = NULL;
@@ -20060,7 +20059,8 @@ extract_roam_11kv_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	dst->num_rpt =
 		WMI_ROAM_NEIGHBOR_REPORT_INFO_NUM_OF_NRIE_GET(src_data->neighbor_report_detail);
 
-	dst->band = band;
+	dst->band =
+		WMI_ROAM_NEIGHBOR_REPORT_INFO_MLO_BAND_INFO_GET(src_data->neighbor_report_detail);
 
 	if (dst->band != WMI_MLO_BAND_NO_MLO)
 		dst->is_mlo = true;
@@ -20159,7 +20159,7 @@ extract_roam_result_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 static QDF_STATUS
 extract_roam_11kv_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 			    struct wmi_neighbor_report_data *dst,
-			    uint8_t idx, uint8_t rpt_idx, uint8_t band)
+			    uint8_t idx, uint8_t rpt_idx)
 {
 	return QDF_STATUS_E_NOSUPPORT;
 }
