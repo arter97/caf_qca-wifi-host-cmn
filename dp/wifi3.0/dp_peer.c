@@ -5743,7 +5743,7 @@ int dp_get_peer_state(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	tgt_peer = dp_get_tgt_peer_from_peer(peer);
 	peer_state = tgt_peer->state;
 
-	dp_peer_info("peer %pK tgt_peer: %pK peer MAC "
+	dp_peer_debug("peer %pK tgt_peer: %pK peer MAC "
 		     QDF_MAC_ADDR_FMT " tgt peer MAC "
 		     QDF_MAC_ADDR_FMT " tgt peer state %d",
 		     peer, tgt_peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw),
