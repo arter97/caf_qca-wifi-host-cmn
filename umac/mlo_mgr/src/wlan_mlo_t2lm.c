@@ -1068,6 +1068,36 @@ void wlan_mlo_t2lm_timer_expiry_handler(void *vdev)
 }
 
 /**
+ * mlme_vdev_notify_link_update_event() - Notify link update Event
+ * @vdev: Pointer to vdev object
+ * @t2lm: Pointer to T2LM info structure
+ *
+ * Notify link update event
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS mlme_vdev_notify_link_update_event(
+				struct wlan_objmgr_vdev *vdev,
+				struct wlan_t2lm_info *t2lm)
+{
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme) {
+		qdf_err("vdev_mlme is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (vdev_mlme->ops &&
+	    vdev_mlme->ops->mlme_vdev_notify_link_update_event)
+		ret = vdev_mlme->ops->mlme_vdev_notify_link_update_event(
+					vdev, t2lm);
+
+	return ret;
+}
+
+/**
  * wlan_mlo_t2lm_update_peer_to_peer_negotiation() - API to update peer-to-peer
  * level T2LM negotiation data structure on mapping switch time expiry and
  * expected duration expiry.
@@ -1128,6 +1158,9 @@ static QDF_STATUS wlan_mlo_t2lm_link_update_notifier_callback(
 		struct wlan_objmgr_vdev *vdev,
 		struct wlan_t2lm_info *t2lm)
 {
+	/* Send event to user-space to notify link update */
+	mlme_vdev_notify_link_update_event(vdev, t2lm);
+
 	/* Go over all MLO peers on this MLD and clear the peer-to-peer level
 	 * mapping.
 	 */

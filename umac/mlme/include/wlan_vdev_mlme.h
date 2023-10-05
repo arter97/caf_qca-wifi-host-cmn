@@ -725,6 +725,8 @@ enum vdev_start_resp_type {
  * @mlme_vdev_reconfig_notify_standby: callback to notify to process standby
  *                                      link removal
  * @mlme_vdev_notify_mlo_sync_wait_entry:
+ * @mlme_vdev_notify_link_update_event: callback for t2lm link enable/
+ *                                           disable event
  */
 struct vdev_mlme_ops {
 	QDF_STATUS (*mlme_vdev_validate_basic_params)(
@@ -814,6 +816,9 @@ struct vdev_mlme_ops {
 				struct ml_rv_info *reconfig_info);
 	QDF_STATUS (*mlme_vdev_notify_mlo_sync_wait_entry)(
 				struct vdev_mlme_obj *vdev_mlme);
+	QDF_STATUS (*mlme_vdev_notify_link_update_event)(
+				struct wlan_objmgr_vdev *vdev,
+				void *t2lm);
 };
 
 /**
