@@ -971,13 +971,13 @@ defined(WLAN_PKT_CAPTURE_RX_2_0)
 static inline
 void hal_mon_buff_addr_info_set(hal_soc_handle_t hal_soc_hdl,
 				void *mon_entry,
-				void *mon_desc_addr,
+				unsigned long long mon_desc_addr,
 				qdf_dma_addr_t phy_addr)
 {
 	uint32_t paddr_lo = ((uintptr_t)phy_addr & 0x00000000ffffffff);
 	uint32_t paddr_hi = ((uintptr_t)phy_addr & 0xffffffff00000000) >> 32;
-	uint32_t vaddr_lo = ((uintptr_t)mon_desc_addr & 0x00000000ffffffff);
-	uint32_t vaddr_hi = ((uintptr_t)mon_desc_addr & 0xffffffff00000000) >> 32;
+	uint32_t vaddr_lo = ((unsigned long long)mon_desc_addr & 0x00000000ffffffff);
+	uint32_t vaddr_hi = ((unsigned long long)mon_desc_addr & 0xffffffff00000000) >> 32;
 
 	HAL_MON_PADDR_LO_SET(mon_entry, paddr_lo);
 	HAL_MON_PADDR_HI_SET(mon_entry, paddr_hi);
