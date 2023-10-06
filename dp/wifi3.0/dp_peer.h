@@ -2447,8 +2447,8 @@ dp_peer_update_state(struct dp_soc *soc,
 	switch (state) {
 	case DP_PEER_STATE_INIT:
 		DP_PEER_STATE_ASSERT
-			(peer, state, (peer_state != DP_PEER_STATE_ACTIVE) ||
-			 (peer_state != DP_PEER_STATE_LOGICAL_DELETE));
+			(peer, state, (peer_state != DP_PEER_STATE_ACTIVE) &&
+			(peer_state != DP_PEER_STATE_LOGICAL_DELETE));
 		break;
 
 	case DP_PEER_STATE_ACTIVE:
