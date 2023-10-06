@@ -1460,6 +1460,230 @@ static QDF_STATUS send_peer_flush_tids_cmd_tlv(wmi_unified_t wmi,
 	return 0;
 }
 
+/**
+ * map_to_wmi_ack_policy() - Map ack_policy to firmware defined values
+ * @ack_policy: The ack policy for TID
+ *
+ * Return: WMI layer TID config ack policy value
+ */
+static WMI_PEER_TID_CONFIG_ACK_POLICY
+map_to_wmi_ack_policy(enum peer_tid_ack_policy ack_policy)
+{
+	switch (ack_policy) {
+	case PEER_TID_CONFIG_ACK:
+		return WMI_PEER_TID_CONFIG_ACK;
+	case PEER_TID_CONFIG_NOACK:
+		return WMI_PEER_TID_CONFIG_NOACK;
+	default:
+		return WMI_PEER_TID_CONFIG_ACK_POLICY_IGNORE;
+	}
+}
+
+/**
+ * map_to_wmi_aggr_control() - Map aggr_control to firmware defined values
+ * @aggr_control: The aggregation control for TID
+ *
+ * Return: WMI layer TID config aggregation control
+ */
+static WMI_PEER_TID_CONFIG_AGGR_CONTROL
+map_to_wmi_aggr_control(enum peer_tid_aggr_control aggr_control)
+{
+	switch (aggr_control) {
+	case PEER_TID_CONFIG_AGGR_CONTROL_ENABLE:
+		return WMI_PEER_TID_CONFIG_AGGR_CONTROL_ENABLE;
+	case PEER_TID_CONFIG_AGGR_CONTROL_DISABLE:
+		return WMI_PEER_TID_CONFIG_AGGR_CONTROL_DISABLE;
+	default:
+		return WMI_PEER_TID_CONFIG_AGGR_CONTROL_IGNORE;
+	}
+}
+
+/**
+ * map_to_wmi_rate_control() - Map rate control to firmware defined values
+ * @rate_control: The rate control for TID
+ *
+ * Return: WMI layer TID config rate control
+ */
+static WMI_PEER_TID_CONFIG_RATE_CONTROL
+map_to_wmi_rate_control(enum peer_tid_rate_control rate_control)
+{
+	switch (rate_control) {
+	case PEER_TID_CONFIG_RATE_CONTROL_AUTO:
+		return WMI_PEER_TID_CONFIG_RATE_CONTROL_AUTO;
+	case PEER_TID_CONFIG_RATE_CONTROL_FIXED_RATE:
+		return WMI_PEER_TID_CONFIG_RATE_CONTROL_FIXED_RATE;
+	case PEER_TID_CONFIG_RATE_CONTROL_DEFAULT_LOWEST_RATE:
+		return WMI_PEER_TID_CONFIG_RATE_CONTROL_DEFAULT_LOWEST_RATE;
+	case PEER_TID_CONFIG_RATE_UPPER_CAP:
+		return WMI_PEER_TID_CONFIG_RATE_UPPER_CAP;
+	default:
+		return WMI_PEER_TID_CONFIG_RATE_CONTROL_IGNORE;
+	}
+}
+
+/**
+ * map_to_wmi_sw_retry_threshold() - Map sw_retry_thresh to fw defined val
+ * @sw_retry_thresh: The software retry threshold for TID
+ *
+ * Return: WMI layer TID config software retry threshold
+ */
+static WMI_PEER_TID_CONFIG_SW_RETRY_THRESHOLD
+map_to_wmi_sw_retry_threshold(enum peer_tid_sw_retry_threshold sw_retry_thresh)
+{
+	switch (sw_retry_thresh) {
+	case PEER_TID_SW_RETRY_MIN:
+		return WMI_PEER_TID_SW_RETRY_MIN;
+	case PEER_TID_SW_RETRY_MAX:
+		return WMI_PEER_TID_SW_RETRY_MAX;
+	case PEER_TID_SW_RETRY_NO_RETRY:
+		return WMI_PEER_TID_SW_RETRY_NO_RETRY;
+	default:
+		return WMI_PEER_TID_SW_RETRY_IGNORE;
+	}
+}
+
+/**
+ * map_to_wmi_tid_cfg_supp_bitmap() - Map tid_cfg_supp bitmap to fW defined val
+ * @tid_cfg_supp_bitmap: The tid config bitmap for extended TID feature
+ *
+ * Return: WMI layer TID config ext config valid bitmap
+ */
+static WMI_PEER_TID_EXT_CONFIG_VALID_BITMAP
+map_to_wmi_tid_cfg_supp_bitmap(enum peer_tid_supported_bitmap
+					tid_cfg_supp_bitmap)
+{
+	uint32_t tid_ext_cfg_bitmap = 0;
+
+	if ((tid_cfg_supp_bitmap & PEER_TID_DISABLE_RTS_CTS_VALID))
+		tid_ext_cfg_bitmap |= WMI_PEER_TID_DISABLE_RTS_CTS_VALID;
+
+	if ((tid_cfg_supp_bitmap & PEER_TID_MAX_NUM_MPDU_IN_PPDU_VALID))
+		tid_ext_cfg_bitmap |= WMI_PEER_TID_MAX_NUM_MPDU_IN_PPDU_VALID;
+
+	if ((tid_cfg_supp_bitmap & PEER_TID_MAX_NUM_MSDU_IN_MPDU_VALID))
+		tid_ext_cfg_bitmap |= WMI_PEER_TID_MAX_NUM_MSDU_IN_MPDU_VALID;
+
+	return tid_ext_cfg_bitmap;
+}
+
+/**
+ * map_to_wmi_rts_cts_control() - Map rts_cts_control to fW defined val
+ * @rts_cts_control: The rts_cts control for TID
+ *
+ * Return: WMI layer TID config rts cts control
+ */
+static WMI_PEER_TID_CONFIG_RTSCTS_CONTROL
+map_to_wmi_rts_cts_control(enum peer_tid_rts_cts_control rts_cts_control)
+{
+	switch (rts_cts_control) {
+	case PEER_TID_RTSCTS_DISABLE:
+		return WMI_RTSCTS_DISABLE;
+	case PEER_TID_RTSCTS_ENABLE:
+		return WMI_RTSCTS_ENABLE;
+	default:
+		return WMI_RTSCTS_RESET;
+	}
+}
+
+/**
+ * map_to_wmi_num_mpdu_in_ppdu() - Map num_mpdu_in_ppdu to fW define val
+ * @num_mpdu_in_ppdu: The max num of mpdu in ppdu for TID
+ *
+ * Return: WMI layer TID config max mpdu in ppdu value
+ */
+static WMI_PEER_TID_CONFIG_MAX_NUM_MPDU_IN_PPDU
+map_to_wmi_num_mpdu_in_ppdu(enum peer_tid_num_mpdu_in_ppdu num_mpdu_in_ppdu)
+{
+	switch (num_mpdu_in_ppdu) {
+	case PEER_TID_MAX_NUM_MPDU_IN_PPDU_MIN:
+		return WMI_PEER_TID_MAX_NUM_MPDU_IN_PPDU_MIN;
+	case PEER_TID_MAX_NUM_MPDU_IN_PPDU_MAX:
+		return WMI_PEER_TID_MAX_NUM_MPDU_IN_PPDU_MAX;
+	default:
+		return WMI_PEER_TID_MAX_NUM_MPDU_IN_PPDU_DEFAULT;
+	}
+}
+
+/**
+ * map_to_wmi_num_msdu_in_mpdu() - Map num_msdu_in_mpdu to fw defined val
+ * @num_msdu_in_mpdu: The max num of msdu in mpdu for TID
+ *
+ * Return: WMI layer TID config max msdu in mpdu value
+ */
+static WMI_PEER_TID_CONFIG_MAX_NUM_MSDU_IN_MPDU
+map_to_wmi_num_msdu_in_mpdu(enum peer_tid_num_msdu_in_mpdu num_msdu_in_mpdu)
+{
+	switch (num_msdu_in_mpdu) {
+	case PEER_TID_MAX_NUM_MSDU_IN_MPDU_MIN:
+		return WMI_PEER_TID_MAX_NUM_MSDU_IN_MPDU_MIN;
+	case PEER_TID_MAX_NUM_MSDU_IN_MPDU_MAX:
+		return WMI_PEER_TID_MAX_NUM_MSDU_IN_MPDU_MAX;
+	default:
+		return WMI_PEER_TID_MAX_NUM_MSDU_IN_MPDU_DEFAULT;
+	}
+}
+
+/**
+ * send_peer_tid_config_cmd_tlv() - send TID config command to fw
+ * @wmi_handle: wmi handle
+ * @macaddr: peer mac address
+ * @params: pointer to hold peer tid config parameter
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+static QDF_STATUS
+send_peer_tid_config_cmd_tlv(wmi_unified_t wmi_handle,
+			     uint8_t macaddr[QDF_MAC_ADDR_SIZE],
+			     struct peer_tid_config_params *params)
+{
+	wmi_peer_tid_configurations_cmd_fixed_param *cmd;
+	wmi_buf_t buf;
+	int32_t len = sizeof(*cmd);
+	QDF_STATUS ret;
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+
+	if (!buf)
+		return QDF_STATUS_E_NOMEM;
+
+	cmd = (wmi_peer_tid_configurations_cmd_fixed_param *)wmi_buf_data(buf);
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		WMITLV_TAG_STRUC_wmi_peer_tid_configurations_cmd_fixed_param,
+		WMITLV_GET_STRUCT_TLVLEN
+		(wmi_peer_tid_configurations_cmd_fixed_param));
+	cmd->vdev_id = params->vdev_id;
+	WMI_CHAR_ARRAY_TO_MAC_ADDR(macaddr, &cmd->peer_mac_address);
+	cmd->tid_num = params->tid_num;
+	cmd->ack_policy = map_to_wmi_ack_policy(params->ack_policy);
+	cmd->aggr_control = map_to_wmi_aggr_control(params->aggr_control);
+	cmd->rate_control = map_to_wmi_rate_control(params->rate_control);
+	cmd->rcode_rcflags = params->rcode_rcflags;
+	cmd->sw_retry_threshold =
+		map_to_wmi_sw_retry_threshold(params->sw_retry_threshold);
+	cmd->tid_config_supported_bitmap =
+		map_to_wmi_tid_cfg_supp_bitmap(params->tid_cfg_supp_bitmap);
+	cmd->disable_rts_cts =
+		map_to_wmi_rts_cts_control(params->disable_rts_cts);
+	cmd->max_num_mpdu_in_ppdu =
+		map_to_wmi_num_mpdu_in_ppdu(params->max_num_mpdu_in_ppdu);
+	cmd->max_num_msdu_in_mpdu =
+		map_to_wmi_num_msdu_in_mpdu(params->max_num_msdu_in_mpdu);
+
+	wmi_mtrace(WMI_PEER_TID_CONFIGURATIONS_CMDID, cmd->vdev_id, 0);
+	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
+				   WMI_PEER_TID_CONFIGURATIONS_CMDID);
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		wmi_err("Failed to send WMI_PEER_TID_CONFIGURATIONS_CMDID");
+		wmi_buf_free(buf);
+	}
+
+	wmi_debug("peer macaddr "QDF_MAC_ADDR_FMT" vdev_id %d and tid_num %d",
+		  QDF_MAC_ADDR_REF(macaddr), params->vdev_id,
+		  params->tid_num);
+
+	return ret;
+}
+
 #ifdef WLAN_FEATURE_PEER_TXQ_FLUSH_CONF
 /**
  * map_to_wmi_flush_policy() - Map flush policy to firmware defined values
@@ -21279,6 +21503,7 @@ struct wmi_ops tlv_ops =  {
 	.send_vdev_down_cmd = send_vdev_down_cmd_tlv,
 	.send_vdev_start_cmd = send_vdev_start_cmd_tlv,
 	.send_peer_flush_tids_cmd = send_peer_flush_tids_cmd_tlv,
+	.send_peer_tid_config_cmd = send_peer_tid_config_cmd_tlv,
 	.send_peer_param_cmd = send_peer_param_cmd_tlv,
 	.send_vdev_up_cmd = send_vdev_up_cmd_tlv,
 	.send_vdev_stop_cmd = send_vdev_stop_cmd_tlv,

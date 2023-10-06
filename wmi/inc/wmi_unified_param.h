@@ -827,6 +827,154 @@ struct vdev_nss_chains {
 	bool disable_tx_mrc[NSS_CHAINS_BAND_MAX];
 };
 
+/**
+ * enum peer_tid_ack_policy - Peer tid ack policy values
+ * @PEER_TID_CONFIG_ACK_POLICY_IGNORE: Ignore Ack policy
+ * @PEER_TID_CONFIG_ACK: Allow Ack for the TID
+ * @PEER_TID_CONFIG_NOACK: Do not expect Ack
+ *
+ * This is mapped to 'ack_policy' in WMI_PEER_TID_CONFIGURATIONS_CMDID
+ */
+enum peer_tid_ack_policy {
+	PEER_TID_CONFIG_ACK_POLICY_IGNORE,
+	PEER_TID_CONFIG_ACK,
+	PEER_TID_CONFIG_NOACK,
+};
+
+/**
+ * enum peer_tid_aggr_control - Peer tid aggr_control values
+ * @PEER_TID_CONFIG_AGGR_CONTROL_IGNORE: Ignore aggr control
+ * @PEER_TID_CONFIG_AGGR_CONTROL_ENABLE: enable aggregation for TID
+ * @PEER_TID_CONFIG_AGGR_CONTROL_DISABLE: disable aggregation for TID
+ *
+ * This is mapped to 'aggr_control' in WMI_PEER_TID_CONFIGURATIONS_CMDID
+ */
+enum peer_tid_aggr_control {
+	PEER_TID_CONFIG_AGGR_CONTROL_IGNORE,
+	PEER_TID_CONFIG_AGGR_CONTROL_ENABLE,
+	PEER_TID_CONFIG_AGGR_CONTROL_DISABLE,
+};
+
+/**
+ * enum peer_tid_rate_control - Peer tid rate_control values
+ * @PEER_TID_CONFIG_RATE_CONTROL_IGNORE: Ignore rate control
+ * @PEER_TID_CONFIG_RATE_CONTROL_AUTO: Auto rate control
+ * @PEER_TID_CONFIG_RATE_CONTROL_FIXED_RATE: fixed rate control
+ * @PEER_TID_CONFIG_RATE_CONTROL_DEFAULT_LOWEST_RATE: default lowest rate
+ * @PEER_TID_CONFIG_RATE_UPPER_CAP: set highest rate
+ *
+ * This is mapped to 'rate_control' in WMI_PEER_TID_CONFIGURATIONS_CMDID
+ */
+enum peer_tid_rate_control {
+	PEER_TID_CONFIG_RATE_CONTROL_IGNORE,
+	PEER_TID_CONFIG_RATE_CONTROL_AUTO,
+	PEER_TID_CONFIG_RATE_CONTROL_FIXED_RATE,
+	PEER_TID_CONFIG_RATE_CONTROL_DEFAULT_LOWEST_RATE,
+	PEER_TID_CONFIG_RATE_UPPER_CAP,
+};
+
+/**
+ * enum peer_tid_sw_retry_threshold - Peer tid sw_retry_threshold values
+ * @PEER_TID_SW_RETRY_IGNORE: Ignore sw retry
+ * @PEER_TID_SW_RETRY_MIN: set sw_retry threshold to min
+ * @PEER_TID_SW_RETRY_MAX: set sw_retry threshold to max
+ * @PEER_TID_SW_RETRY_NO_RETRY: No sw retry for the TID
+ *
+ * This is mapped to'sw_retry_threshold' in WMI_PEER_TID_CONFIGURATIONS_CMDID
+ */
+enum peer_tid_sw_retry_threshold {
+	PEER_TID_SW_RETRY_IGNORE,
+	PEER_TID_SW_RETRY_MIN,
+	PEER_TID_SW_RETRY_MAX,
+	PEER_TID_SW_RETRY_NO_RETRY,
+};
+
+/**
+ * enum peer_tid_supported_bitmap - Peer tid supported bitmap values
+ * @PEER_TID_SUPPORTED_BITMAP_IGNORE: Ignore supported bit map
+ * @PEER_TID_DISABLE_RTS_CTS_VALID: allow to control rts_cts for TID
+ * @PEER_TID_MAX_NUM_MPDU_IN_PPDU_VALID: allow to control max_num_mpdu_in_ppdu
+ * @PEER_TID_MAX_NUM_MSDU_IN_MPDU_VALID: allow to control max_num_msdu_in_mpdu
+ *
+ * This is mapped to'tid_config_supported_bitmap' in
+ * WMI_PEER_TID_CONFIGURATIONS_CMDID
+ */
+enum peer_tid_supported_bitmap {
+	PEER_TID_SUPPORTED_BITMAP_IGNORE = 0x00000000,
+	PEER_TID_DISABLE_RTS_CTS_VALID = 0x00000001,
+	PEER_TID_MAX_NUM_MPDU_IN_PPDU_VALID = 0x000000002,
+	PEER_TID_MAX_NUM_MSDU_IN_MPDU_VALID = 0x000000004,
+};
+
+/**
+ * enum peer_tid_rts_cts_control - Peer tid rts cts control values
+ * @PEER_TID_RTSCTS_RESET: reset rtscts for TID
+ * @PEER_TID_RTSCTS_DISABLE: disable rtscts for TID
+ * @PEER_TID_RTSCTS_ENABLE: enable rtscts for TID
+ *
+ * This is mapped to'disable_rts_cts' in WMI_PEER_TID_CONFIGURATIONS_CMDID
+ */
+enum peer_tid_rts_cts_control {
+	PEER_TID_RTSCTS_RESET,
+	PEER_TID_RTSCTS_DISABLE,
+	PEER_TID_RTSCTS_ENABLE,
+};
+
+/**
+ * enum peer_tid_num_mpdu_in_ppdu - Peer tid max mpdu in ppdu values
+ * @PEER_TID_MAX_NUM_MPDU_IN_PPDU_DEFAULT: set max mpdu in ppdu to default
+ * @PEER_TID_MAX_NUM_MPDU_IN_PPDU_MIN: set max mpdu in ppdu to min
+ * @PEER_TID_MAX_NUM_MPDU_IN_PPDU_MAX: set max mpdu in ppdu to max
+ *
+ * This is mapped to'max_num_mpdu_in_ppdu' in WMI_PEER_TID_CONFIGURATIONS_CMDID
+ */
+enum peer_tid_num_mpdu_in_ppdu {
+	PEER_TID_MAX_NUM_MPDU_IN_PPDU_DEFAULT,
+	PEER_TID_MAX_NUM_MPDU_IN_PPDU_MIN,
+	PEER_TID_MAX_NUM_MPDU_IN_PPDU_MAX,
+};
+
+/**
+ * enum peer_tid_num_msdu_in_mpdu - Peer tid max msdu in mpdu values
+ * @PEER_TID_MAX_NUM_MSDU_IN_MPDU_DEFAULT: set max msdu in mpdu to default
+ * @PEER_TID_MAX_NUM_MSDU_IN_MPDU_MIN: set max msdu in mpdu to min
+ * @PEER_TID_MAX_NUM_MSDU_IN_MPDU_MAX: set max msdu in mpdu to max
+ *
+ * This is mapped to'max_num_mpdu_in_ppdu' in WMI_PEER_TID_CONFIGURATIONS_CMDID
+ */
+enum peer_tid_num_msdu_in_mpdu {
+	PEER_TID_MAX_NUM_MSDU_IN_MPDU_DEFAULT,
+	PEER_TID_MAX_NUM_MSDU_IN_MPDU_MIN,
+	PEER_TID_MAX_NUM_MSDU_IN_MPDU_MAX,
+};
+
+/**
+ * struct peer_tid_config_params - peer tid config cmd parameter
+ * @vdev_id: vdev id
+ * @tid_num: TID Num
+ * @ack_policy: ACK policy
+ * @aggr_control: Aggregation control
+ * @rate_control: Rate control
+ * @rcode_rcflags: Fixed control parameter
+ * @sw_retry_threshold: MPDU retry threshold
+ * @tid_cfg_supp_bitmap: bitmap for extended structure
+ * @disable_rts_cts: enable,disable or reset RTS/CTS
+ * @max_num_mpdu_in_ppdu: size of mpdu aggregation
+ * @max_num_msdu_in_mpdu: size of msdu aggregation
+ */
+struct peer_tid_config_params {
+	uint32_t vdev_id;
+	uint32_t tid_num;
+	uint32_t ack_policy;
+	uint32_t aggr_control;
+	uint32_t rate_control;
+	uint32_t rcode_rcflags;
+	uint32_t sw_retry_threshold;
+	uint32_t tid_cfg_supp_bitmap;
+	uint32_t disable_rts_cts;
+	uint32_t max_num_mpdu_in_ppdu;
+	uint32_t max_num_msdu_in_mpdu;
+};
 
 /**
  * struct peer_delete_params - peer delete cmd parameter

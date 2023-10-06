@@ -560,6 +560,10 @@ QDF_STATUS (*send_peer_delete_cmd)(wmi_unified_t wmi,
 				   uint8_t peer_addr[QDF_MAC_ADDR_SIZE],
 				   struct peer_delete_cmd_params *param);
 
+QDF_STATUS (*send_peer_tid_config_cmd)(wmi_unified_t wmi_handle,
+				       uint8_t macaddr[QDF_MAC_ADDR_SIZE],
+				       struct peer_tid_config_params *params);
+
 QDF_STATUS (*send_peer_delete_all_cmd)(
 				wmi_unified_t wmi,
 				struct peer_delete_all_params *param);
