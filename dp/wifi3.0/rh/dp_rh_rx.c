@@ -692,6 +692,7 @@ static QDF_STATUS dp_rx_err_handler_rh(struct dp_soc *soc,
 		dp_rx_decrypt_unecrypt_err_handler_rh(soc, rx_desc->nbuf,
 						      error_code,
 						      rx_desc->pool_id);
+		break;
 	default:
 		dp_err("Invalid error packet rcvd, code: %u", error_code);
 		dp_rx_desc_dump(rx_desc);
