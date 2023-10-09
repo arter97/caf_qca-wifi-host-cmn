@@ -85,6 +85,8 @@
 static const uint32_t multi_svc_ids[] = {WMI_CONTROL_SVC,
 				WMI_CONTROL_SVC_WMAC1,
 				WMI_CONTROL_SVC_WMAC2};
+static bool is_service_enabled_tlv(wmi_unified_t wmi_handle,
+				   uint32_t service_id);
 
 #ifdef ENABLE_HOST_TO_TARGET_CONVERSION
 /*Populate peer_param array whose index as host id and
@@ -2168,6 +2170,9 @@ send_pdev_utf_cmd_tlv(wmi_unified_t wmi_handle,
 	uint16_t chunk_len, total_bytes;
 	uint8_t *bufpos;
 	struct seg_hdr_info segHdrInfo;
+	wmi_pdev_utf_cmd_fixed_param *utf_cmd;
+	uint16_t len;
+	bool is_pdev_id_over_utf;
 
 	bufpos = param->utf_payload;
 	total_bytes = param->len;
@@ -2184,9 +2189,15 @@ send_pdev_utf_cmd_tlv(wmi_unified_t wmi_handle,
 		else
 			chunk_len = param->len;
 
-		buf = wmi_buf_alloc(wmi_handle,
-				    (chunk_len + sizeof(segHdrInfo) +
-				     WMI_TLV_HDR_SIZE));
+		is_pdev_id_over_utf = is_service_enabled_tlv(wmi_handle,
+					WMI_SERVICE_PDEV_PARAM_IN_UTF_WMI);
+		if (is_pdev_id_over_utf)
+			len = chunk_len + sizeof(segHdrInfo) +
+					WMI_TLV_HDR_SIZE + sizeof(*utf_cmd);
+		else
+			len = chunk_len + sizeof(segHdrInfo) + WMI_TLV_HDR_SIZE;
+
+		buf = wmi_buf_alloc(wmi_handle, len);
 		if (!buf)
 			return QDF_STATUS_E_NOMEM;
 
@@ -2198,28 +2209,40 @@ send_pdev_utf_cmd_tlv(wmi_unified_t wmi_handle,
 		segHdrInfo.segmentInfo = segInfo;
 		segHdrInfo.pad = 0;
 
-		wmi_debug("segHdrInfo.len = %d, segHdrInfo.msgref = %d,"
-			 " segHdrInfo.segmentInfo = %d",
-			 segHdrInfo.len, segHdrInfo.msgref,
-			 segHdrInfo.segmentInfo);
+		wmi_debug("segHdrInfo.len = %u, segHdrInfo.msgref = %u, segHdrInfo.segmentInfo = %u",
+			  segHdrInfo.len, segHdrInfo.msgref,
+			  segHdrInfo.segmentInfo);
 
-		wmi_debug("total_bytes %d segNumber %d totalSegments %d"
-			 " chunk len %d", total_bytes, segNumber,
-			 numSegments, chunk_len);
+		wmi_debug("total_bytes %u segNumber %u totalSegments %u chunk len %u",
+			  total_bytes, segNumber, numSegments, chunk_len);
 
 		segNumber++;
 
 		WMITLV_SET_HDR(cmd, WMITLV_TAG_ARRAY_BYTE,
 			       (chunk_len + sizeof(segHdrInfo)));
 		cmd += WMI_TLV_HDR_SIZE;
-		memcpy(cmd, &segHdrInfo, sizeof(segHdrInfo));   /* 4 bytes */
-		WMI_HOST_IF_MSG_COPY_CHAR_ARRAY(&cmd[sizeof(segHdrInfo)],
+		memcpy(cmd, &segHdrInfo, sizeof(segHdrInfo));   /* 4 words */
+		cmd += sizeof(segHdrInfo);
+		WMI_HOST_IF_MSG_COPY_CHAR_ARRAY(cmd,
 						bufpos, chunk_len);
 
+		if (is_pdev_id_over_utf) {
+			cmd += chunk_len;
+			utf_cmd = (wmi_pdev_utf_cmd_fixed_param *)cmd;
+			WMITLV_SET_HDR(&utf_cmd->tlv_header,
+				WMITLV_TAG_STRUC_wmi_pdev_utf_cmd_fixed_param,
+				WMITLV_GET_STRUCT_TLVLEN(
+					wmi_pdev_utf_cmd_fixed_param));
+
+			if (wmi_handle->ops->convert_host_pdev_id_to_target)
+				utf_cmd->pdev_id =
+					wmi_handle->ops->convert_host_pdev_id_to_target(
+							wmi_handle, mac_id);
+
+			wmi_debug("pdev_id %u", utf_cmd->pdev_id);
+		}
 		wmi_mtrace(WMI_PDEV_UTF_CMDID, NO_SESSION, 0);
-		ret = wmi_unified_cmd_send(wmi_handle, buf,
-					   (chunk_len + sizeof(segHdrInfo) +
-					    WMI_TLV_HDR_SIZE),
+		ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 					   WMI_PDEV_UTF_CMDID);
 
 		if (QDF_IS_STATUS_ERROR(ret)) {
@@ -14239,6 +14262,8 @@ static QDF_STATUS extract_pdev_utf_event_tlv(wmi_unified_t wmi_handle,
 {
 	WMI_PDEV_UTF_EVENTID_param_tlvs *param_buf;
 	struct wmi_host_utf_seg_header_info *seg_hdr;
+	wmi_pdev_utf_event_fixed_param *ev_param;
+	bool is_pdev_id_over_utf;
 
 	param_buf = (WMI_PDEV_UTF_EVENTID_param_tlvs *)evt_buf;
 	event->data = param_buf->data;
@@ -14248,11 +14273,25 @@ static QDF_STATUS extract_pdev_utf_event_tlv(wmi_unified_t wmi_handle,
 		wmi_err("Invalid datalen: %d", event->datalen);
 		return QDF_STATUS_E_INVAL;
 	}
-	seg_hdr = (struct wmi_host_utf_seg_header_info *)param_buf->data;
-	/* Set pdev_id=1 until FW adds support to include pdev_id */
-	event->pdev_id = wmi_handle->ops->convert_pdev_id_target_to_host(
+
+	is_pdev_id_over_utf = is_service_enabled_tlv(wmi_handle,
+			WMI_SERVICE_PDEV_PARAM_IN_UTF_WMI);
+	if (is_pdev_id_over_utf && param_buf->fixed_param &&
+			param_buf->num_fixed_param) {
+		ev_param =
+			(wmi_pdev_utf_event_fixed_param *)param_buf->fixed_param;
+		event->pdev_id =
+			wmi_handle->ops->convert_pdev_id_target_to_host(
+							wmi_handle,
+							ev_param->pdev_id);
+	} else {
+		seg_hdr =
+			(struct wmi_host_utf_seg_header_info *)param_buf->data;
+		event->pdev_id =
+			wmi_handle->ops->convert_pdev_id_target_to_host(
 							wmi_handle,
 							seg_hdr->pdev_id);
+	}
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -22861,6 +22900,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 	wmi_service[wmi_service_5ghz_hi_rssi_roam_support] =
 					WMI_SERVICE_5GHZ_HI_RSSI_ROAM_SUPPORT;
 #endif
+	wmi_service[wmi_service_pdev_param_in_utf_wmi] =
+			WMI_SERVICE_PDEV_PARAM_IN_UTF_WMI;
 }
 
 /**
