@@ -747,7 +747,7 @@ bool wifi_pos_get_rsta_sec_ltf_cap(void)
 	return value;
 }
 
-void wifi_pos_set_rsta_11az_ranging_cap(bool val)
+void wifi_pos_set_rsta_11az_ranging_cap(uint32_t val)
 {
 	struct wifi_pos_psoc_priv_obj *wifi_pos_psoc =
 			wifi_pos_get_psoc_priv_obj(wifi_pos_get_psoc());
@@ -762,9 +762,9 @@ void wifi_pos_set_rsta_11az_ranging_cap(bool val)
 	qdf_spin_unlock_bh(&wifi_pos_psoc->wifi_pos_lock);
 }
 
-bool wifi_pos_get_rsta_11az_ranging_cap(void)
+uint32_t wifi_pos_get_rsta_11az_ranging_cap(void)
 {
-	bool value;
+	uint32_t value;
 	struct wifi_pos_psoc_priv_obj *wifi_pos_psoc =
 			wifi_pos_get_psoc_priv_obj(wifi_pos_get_psoc());
 
