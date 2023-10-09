@@ -195,6 +195,15 @@ QDF_STATUS scm_scan_register_mbssid_cb(struct wlan_objmgr_psoc *psoc,
 				       update_mbssid_bcn_prb_rsp cb);
 
 /**
+ * scm_reset_scan_chan_info() - API to reset the scan channel info
+ * @psoc: psoc object
+ * @pdev_id: pdev id of which info need to be reset
+ *
+ * Return: void
+ */
+void scm_reset_scan_chan_info(struct wlan_objmgr_psoc *psoc, uint8_t pdev_id);
+
+/**
  * scm_db_init() - API to init scan db
  * @psoc: psoc
  *

@@ -1687,8 +1687,6 @@ void scm_update_last_scan_time_per_channel(struct wlan_objmgr_vdev *vdev,
 	for (i = 0; i < chan_info->num_chan ; i++) {
 		if (chan_info->ch_scan_info[i].freq == chan_freq) {
 			chan_info->ch_scan_info[i].last_scan_time = time;
-			scm_debug("chan freq %d scan time %u\n",
-				  chan_freq, time);
 			chan_found = true;
 			break;
 		}
@@ -1699,7 +1697,6 @@ void scm_update_last_scan_time_per_channel(struct wlan_objmgr_vdev *vdev,
 		chan_info->ch_scan_info[chan_info->num_chan].last_scan_time =
 									time;
 		chan_info->num_chan++;
-		scm_debug("chan freq %d scan time %u\n", chan_freq, time);
 	}
 }
 
