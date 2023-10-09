@@ -1581,6 +1581,9 @@ QDF_STATUS (*send_wmm_update_cmd)(wmi_unified_t wmi_handle,
 QDF_STATUS (*extract_mgmt_tx_compl_param)(wmi_unified_t wmi_handle,
 		void *evt_buf, wmi_host_mgmt_tx_compl_event *param);
 
+QDF_STATUS (*extract_sched_mode_probe_resp_event)(wmi_unified_t wmi_handle,
+	     void *evt_buf, struct wlan_host_sched_mode_probe_resp_event *resp);
+
 QDF_STATUS (*extract_chan_info_event)(wmi_unified_t wmi_handle, void *evt_buf,
 				   wmi_host_chan_info_event *chan_info);
 
@@ -3330,6 +3333,10 @@ QDF_STATUS
 QDF_STATUS
 (*send_vdev_pn_mgmt_rxfilter_cmd)(wmi_unified_t wmi_handle,
 				  struct vdev_pn_mgmt_rxfilter_params *params);
+
+QDF_STATUS
+(*send_mu_on_off_cmd)(wmi_unified_t wmi_handle,
+		      struct wmi_host_mu_on_off_params *params);
 
 #ifdef WLAN_FEATURE_11BE
 QDF_STATUS (*send_mlo_peer_tid_to_link_map)(

@@ -5570,6 +5570,7 @@ typedef enum {
 #ifdef WLAN_WIFI_RADAR_ENABLE
 	wmi_pdev_wifi_radar_cal_completion_status_event_id,
 #endif
+	wmi_sched_mode_probe_resp_event_id,
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -10493,5 +10494,17 @@ struct wmi_vendor_pdev_event {
 	union wmi_host_pdev_vendor_event_val val;
 };
 #endif /* WLAN_VENDOR_EXTN */
+
+/**
+ * struct wmi_host_mu_on_off_params - mu on off params
+ * @vdev_id: vdev_id
+ * @mu_on_duration: On duration for which mu will be on
+ * @mu_off_duration: Off duration for which mu will be off
+ */
+struct wmi_host_mu_on_off_params {
+	uint8_t vdev_id;
+	uint32_t mu_on_duration;
+	uint32_t mu_off_duration;
+};
 
 #endif /* _WMI_UNIFIED_PARAM_H_ */

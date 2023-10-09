@@ -22639,6 +22639,8 @@ static void populate_tlv_events_id(WMI_EVT_ID *event_ids)
 	event_ids[wmi_scan_event_id] = WMI_SCAN_EVENTID;
 	event_ids[wmi_pdev_tpc_config_event_id] = WMI_PDEV_TPC_CONFIG_EVENTID;
 	event_ids[wmi_chan_info_event_id] = WMI_CHAN_INFO_EVENTID;
+	event_ids[wmi_sched_mode_probe_resp_event_id] =
+		WMI_VDEV_SCHED_MODE_PROBE_RESP_EVENTID;
 	event_ids[wmi_phyerr_event_id] = WMI_PHYERR_EVENTID;
 	event_ids[wmi_pdev_dump_event_id] = WMI_PDEV_DUMP_EVENTID;
 	event_ids[wmi_tx_pause_event_id] = WMI_TX_PAUSE_EVENTID;

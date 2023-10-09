@@ -1498,6 +1498,18 @@ struct wlan_lmac_if_dbam_rx_ops {
 };
 #endif
 
+/**
+ * struct wlan_lmac_if_sched_mode_rx_ops - defines southbound rx callback for
+ * sched mode of deteministic scheduler
+ * @sched_mode_probe_resp_handler: function pointer to rx sched mode response
+ * event from FW.
+ */
+struct wlan_lmac_if_sched_mode_rx_ops {
+	int (*sched_mode_probe_resp_handler)(
+			struct wlan_objmgr_psoc *psoc,
+			struct wlan_host_sched_mode_probe_resp_event *resp);
+};
+
 #ifdef WLAN_FEATURE_GPIO_CFG
 struct gpio_config_params;
 struct gpio_output_params;
@@ -2876,6 +2888,7 @@ struct wlan_lmac_if_green_ap_rx_ops {
  * @twt_rx_ops: twt rx ops
  * @dbam_rx_ops: dbam rx ops
  * @wifi_radar_rx_ops: wifi radar rx ops
+ * @sched_mode_rx_ops: deter sched mode rx ops
  *
  * Callback function tabled to be registered with lmac/wmi.
  * lmac will use the functional table to send events/frames to umac
@@ -2951,6 +2964,7 @@ struct wlan_lmac_if_rx_ops {
 #ifdef WLAN_WIFI_RADAR_ENABLE
 	struct wlan_lmac_if_wifi_radar_rx_ops wifi_radar_rx_ops;
 #endif
+	struct wlan_lmac_if_sched_mode_rx_ops sched_mode_rx_ops;
 };
 
 /* Function pointer to call legacy tx_ops registration in OL/WMA.

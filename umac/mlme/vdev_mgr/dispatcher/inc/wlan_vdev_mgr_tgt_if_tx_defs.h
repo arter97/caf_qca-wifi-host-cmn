@@ -980,4 +980,19 @@ struct sr_prohibit_param {
 	uint8_t vdev_id;
 	bool sr_he_siga_val15_allowed;
 };
+
+/**
+ * struct wlan_host_sched_mode_probe_resp_event - structure to hold probe resp
+ * values returned by FW
+ * @vdev_id: Vdev_id
+ * @hw_link_id: Hw link ID
+ * @tput_mbps_on: tput in mbps for on duration
+ * @tput_mbps_off: tput in mbps for off duration
+ */
+struct wlan_host_sched_mode_probe_resp_event {
+	uint8_t vdev_id;
+	uint8_t hw_link_id;
+	uint32_t tput_mbps_on;
+	uint32_t tput_mbps_off;
+};
 #endif /* __WLAN_VDEV_MGR_TX_OPS_DEFS_H__ */
