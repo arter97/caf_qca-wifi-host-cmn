@@ -28,6 +28,8 @@
 #include <wlan_vdev_mlme_api.h>
 #include "cfg_ucfg_api.h"
 #include <wlan_serialization_api.h>
+#include "wlan_cm_api.h"
+#include "host_diag_core_event.h"
 
 /* CRC polynomial 0xedb88320 */
 static unsigned long const wlan_shortssid_table[] = {
@@ -1706,6 +1708,9 @@ static void wlan_vdev_down_pending(struct wlan_objmgr_pdev *pdev,
 	if (!psoc)
 		return;
 
+	if (wlan_vdev_mlme_is_mlo_bridge_vdev(vdev))
+		return;
+
 	cmd_type = wlan_serialization_get_vdev_active_cmd_type(vdev);
 	wlan_vdev_obj_lock(vdev);
 	if ((wlan_vdev_mlme_is_init_state(vdev) != QDF_STATUS_SUCCESS) ||
@@ -1736,6 +1741,9 @@ static void wlan_vdev_ap_down_pending(struct wlan_objmgr_pdev *pdev,
 		return;
 
 	if (wlan_vdev_mlme_get_opmode(vdev) != QDF_SAP_MODE)
+		return;
+
+	if (wlan_vdev_mlme_is_mlo_bridge_vdev(vdev))
 		return;
 
 	cmd_type = wlan_serialization_get_vdev_active_cmd_type(vdev);
@@ -1867,11 +1875,14 @@ static void wlan_get_connected_vdev_handler(struct wlan_objmgr_psoc *psoc,
 
 	if (context->connected)
 		return;
+
 	op_mode = wlan_vdev_mlme_get_opmode(vdev);
 	if (op_mode != QDF_STA_MODE && op_mode != QDF_P2P_CLIENT_MODE)
 		return;
-	if (wlan_vdev_is_up(vdev) != QDF_STATUS_SUCCESS)
+
+	if (wlan_cm_is_vdev_disconnected(vdev))
 		return;
+
 	if (wlan_vdev_get_bss_peer_mac(vdev, &bss_peer_mac) !=
 	    QDF_STATUS_SUCCESS)
 		return;
@@ -1975,6 +1986,42 @@ bool wlan_get_connected_vdev_by_mld_addr(struct wlan_objmgr_psoc *psoc,
 
 	return context.connected;
 }
+#endif
+
+#if defined(WLAN_FEATURE_11BE)
+enum wlan_phymode
+wlan_eht_chan_phy_mode(uint32_t freq,
+		       uint16_t bw_val,
+		       enum phy_ch_width chan_width)
+{
+	if (wlan_reg_is_24ghz_ch_freq(freq)) {
+		if (bw_val == 20)
+			return WLAN_PHYMODE_11BEG_EHT20;
+		else if (bw_val == 40)
+			return WLAN_PHYMODE_11BEG_EHT40;
+	} else {
+		if (bw_val == 20)
+			return WLAN_PHYMODE_11BEA_EHT20;
+		else if (bw_val == 40)
+			return WLAN_PHYMODE_11BEA_EHT40;
+		else if (bw_val == 80)
+			return WLAN_PHYMODE_11BEA_EHT80;
+		else if (chan_width == CH_WIDTH_160MHZ)
+			return WLAN_PHYMODE_11BEA_EHT160;
+		else if (chan_width == CH_WIDTH_320MHZ)
+			return WLAN_PHYMODE_11BEA_EHT320;
+	}
+	return WLAN_PHYMODE_AUTO;
+}
+#else
+enum wlan_phymode
+wlan_eht_chan_phy_mode(uint32_t freq,
+		       uint16_t bw_val,
+		       enum phy_ch_width chan_width)
+{
+	return WLAN_PHYMODE_AUTO;
+}
+
 #endif
 
 static void wlan_pdev_chan_match(struct wlan_objmgr_pdev *pdev, void *object,

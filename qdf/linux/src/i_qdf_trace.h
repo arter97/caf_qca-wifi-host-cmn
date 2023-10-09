@@ -229,6 +229,8 @@ static inline void __qdf_trace_hexdump_dummy(QDF_MODULE_ID module,
 	__QDF_TRACE_FL(QDF_TRACE_LEVEL_INFO, ## params)
 #define QDF_TRACE_INFO_NO_FL(params...) \
 	__QDF_TRACE_NO_FL(QDF_TRACE_LEVEL_INFO, ## params)
+#define QDF_TRACE_INFO_HIGH_NO_FL(params...) \
+	__QDF_TRACE_NO_FL(QDF_TRACE_LEVEL_INFO_HIGH, ## params)
 #define QDF_TRACE_INFO_RL(params...) \
 	__QDF_TRACE_RL(QDF_TRACE_LEVEL_INFO, ## params)
 #define QDF_TRACE_INFO_RL_NO_FL(params...) \
@@ -240,6 +242,7 @@ static inline void __qdf_trace_hexdump_dummy(QDF_MODULE_ID module,
 #else
 #define QDF_TRACE_INFO(params...) __qdf_trace_noop(params)
 #define QDF_TRACE_INFO_NO_FL(params...) __qdf_trace_noop(params)
+#define QDF_TRACE_INFO_HIGH_NO_FL(params...) __qdf_trace_noop(params)
 #define QDF_TRACE_INFO_RL(params...) __qdf_trace_noop_ret(params)
 #define QDF_TRACE_INFO_RL_NO_FL(params...) __qdf_trace_noop_ret(params)
 #define QDF_VTRACE_INFO(params...) __qdf_trace_noop(params)
@@ -507,13 +510,14 @@ __qdf_minidump_remove(void *addr, size_t size, const char *name)
 }
 
 #elif defined(WLAN_QCOM_MINIDUMP)
-#define MAX_WLAN_MINIDUMP_ENTRIES 4
+#define MAX_WLAN_MINIDUMP_ENTRIES 5
 
 enum minidump_log_type {
 	MD_HTC_CREDIT = 0,
 	MD_WLAN_LOGS,
 	MD_WMI_TX_CMP,
 	MD_HAL_SOC,
+	MD_GWLAN_LOGS,
 };
 
 static const char *minidump_table[MAX_WLAN_MINIDUMP_ENTRIES];
@@ -525,7 +529,8 @@ static int qdf_get_name_idx(const char *name)
 		[MD_HTC_CREDIT] = "htc_credit",
 		[MD_WLAN_LOGS] = "wlan_logs",
 		[MD_WMI_TX_CMP] = "wmi_tx_cmp",
-		[MD_HAL_SOC] = "hal_soc"
+		[MD_HAL_SOC] = "hal_soc",
+		[MD_GWLAN_LOGS] = "gwlan_logging"
 	};
 
 	for (i = 0; i < ARRAY_SIZE(wlan_str); i++) {

@@ -365,10 +365,10 @@ dp_pdev_nbuf_alloc_and_map_replenish(struct dp_soc *dp_soc,
 
 	nbuf_frag_info_t->paddr =
 		qdf_nbuf_get_frag_paddr((nbuf_frag_info_t->virt_addr).nbuf, 0);
-		dp_ipa_handle_rx_buf_smmu_mapping(dp_soc, (qdf_nbuf_t)(
-						  (nbuf_frag_info_t->virt_addr).nbuf),
-						  rx_desc_pool->buf_size,
-						  true, __func__, __LINE__);
+	dp_ipa_handle_rx_buf_smmu_mapping(dp_soc, (qdf_nbuf_t)(
+					  (nbuf_frag_info_t->virt_addr).nbuf),
+					  rx_desc_pool->buf_size,
+					  true, __func__, __LINE__);
 
 	ret = dp_check_paddr(dp_soc, &((nbuf_frag_info_t->virt_addr).nbuf),
 			     &nbuf_frag_info_t->paddr,
@@ -760,8 +760,6 @@ QDF_STATUS __dp_pdev_rx_buffers_no_map_attach(struct dp_soc *soc,
 		if (!rxdma_ring_entry)
 			break;
 
-		qdf_assert_always(rxdma_ring_entry);
-
 		desc_list->rx_desc.nbuf = nbuf;
 		dp_rx_set_reuse_nbuf(&desc_list->rx_desc, nbuf);
 		desc_list->rx_desc.rx_buf_start = nbuf->data;
@@ -1134,16 +1132,6 @@ dp_rx_deliver_raw(struct dp_vdev *vdev, qdf_nbuf_t nbuf_list,
 		DP_STATS_INC(vdev->pdev, rx_raw_pkts, 1);
 		DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer, rx.raw, 1,
 					      qdf_nbuf_len(nbuf), link_id);
-		/*
-		 * reset the chfrag_start and chfrag_end bits in nbuf cb
-		 * as this is a non-amsdu pkt and RAW mode simulation expects
-		 * these bit s to be 0 for non-amsdu pkt.
-		 */
-		if (qdf_nbuf_is_rx_chfrag_start(nbuf) &&
-			 qdf_nbuf_is_rx_chfrag_end(nbuf)) {
-			qdf_nbuf_set_rx_chfrag_start(nbuf, 0);
-			qdf_nbuf_set_rx_chfrag_end(nbuf, 0);
-		}
 
 		nbuf = next;
 	}
@@ -1717,19 +1705,21 @@ void dp_rx_process_invalid_peer_wrapper(struct dp_soc *soc,
  * dp_rx_print_offload_info() - Print offload info from RX TLV
  * @soc: dp soc handle
  * @msdu: MSDU for which the offload info is to be printed
+ * @ofl_info: offload info saved in hal_offload_info structure
  *
  * Return: None
  */
 static void dp_rx_print_offload_info(struct dp_soc *soc,
-				     qdf_nbuf_t msdu)
+				     qdf_nbuf_t msdu,
+				     struct hal_offload_info *ofl_info)
 {
 	dp_verbose_debug("----------------------RX DESC LRO/GRO----------------------");
 	dp_verbose_debug("lro_eligible 0x%x",
 			 QDF_NBUF_CB_RX_LRO_ELIGIBLE(msdu));
 	dp_verbose_debug("pure_ack 0x%x", QDF_NBUF_CB_RX_TCP_PURE_ACK(msdu));
 	dp_verbose_debug("chksum 0x%x", QDF_NBUF_CB_RX_TCP_CHKSUM(msdu));
-	dp_verbose_debug("TCP seq num 0x%x", QDF_NBUF_CB_RX_TCP_SEQ_NUM(msdu));
-	dp_verbose_debug("TCP ack num 0x%x", QDF_NBUF_CB_RX_TCP_ACK_NUM(msdu));
+	dp_verbose_debug("TCP seq num 0x%x", ofl_info->tcp_seq_num);
+	dp_verbose_debug("TCP ack num 0x%x", ofl_info->tcp_ack_num);
 	dp_verbose_debug("TCP window 0x%x", QDF_NBUF_CB_RX_TCP_WIN(msdu));
 	dp_verbose_debug("TCP protocol 0x%x", QDF_NBUF_CB_RX_TCP_PROTO(msdu));
 	dp_verbose_debug("TCP offset 0x%x", QDF_NBUF_CB_RX_TCP_OFFSET(msdu));
@@ -1755,15 +1745,13 @@ void dp_rx_fill_gro_info(struct dp_soc *soc, uint8_t *rx_tlv,
 	QDF_NBUF_CB_RX_TCP_CHKSUM(msdu) =
 			hal_rx_tlv_get_tcp_chksum(soc->hal_soc,
 						  rx_tlv);
-	QDF_NBUF_CB_RX_TCP_SEQ_NUM(msdu) = offload_info.tcp_seq_num;
-	QDF_NBUF_CB_RX_TCP_ACK_NUM(msdu) = offload_info.tcp_ack_num;
 	QDF_NBUF_CB_RX_TCP_WIN(msdu) = offload_info.tcp_win;
 	QDF_NBUF_CB_RX_TCP_PROTO(msdu) = offload_info.tcp_proto;
 	QDF_NBUF_CB_RX_IPV6_PROTO(msdu) = offload_info.ipv6_proto;
 	QDF_NBUF_CB_RX_TCP_OFFSET(msdu) = offload_info.tcp_offset;
 	QDF_NBUF_CB_RX_FLOW_ID(msdu) = offload_info.flow_id;
 
-	dp_rx_print_offload_info(soc, msdu);
+	dp_rx_print_offload_info(soc, msdu, &offload_info);
 }
 #endif /* RECEIVE_OFFLOAD */
 
@@ -1784,13 +1772,16 @@ static inline bool dp_rx_adjust_nbuf_len(struct dp_soc *soc,
 {
 	bool last_nbuf;
 	uint32_t pkt_hdr_size;
+	uint16_t buf_size;
+
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 
 	pkt_hdr_size = soc->rx_pkt_tlv_size + l3_pad_len;
 
-	if ((*mpdu_len + pkt_hdr_size) > RX_DATA_BUFFER_SIZE) {
-		qdf_nbuf_set_pktlen(nbuf, RX_DATA_BUFFER_SIZE);
+	if ((*mpdu_len + pkt_hdr_size) > buf_size) {
+		qdf_nbuf_set_pktlen(nbuf, buf_size);
 		last_nbuf = false;
-		*mpdu_len -= (RX_DATA_BUFFER_SIZE - pkt_hdr_size);
+		*mpdu_len -= (buf_size - pkt_hdr_size);
 	} else {
 		qdf_nbuf_set_pktlen(nbuf, (*mpdu_len + pkt_hdr_size));
 		last_nbuf = true;
@@ -2060,6 +2051,29 @@ dp_rx_deliver_to_stack_ext(struct dp_soc *soc, struct dp_vdev *vdev,
 #endif
 
 #ifdef PEER_CACHE_RX_PKTS
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
+/**
+ * dp_set_nbuf_band() - Set band in nbuf cb
+ * @peer: dp_peer
+ * @nbuf: nbuf
+ *
+ * Return: None
+ */
+static inline void
+dp_set_nbuf_band(struct dp_peer *peer, qdf_nbuf_t nbuf)
+{
+	uint8_t link_id = 0;
+
+	link_id = dp_rx_get_stats_arr_idx_from_link_id(nbuf, peer->txrx_peer);
+	dp_rx_set_nbuf_band(nbuf, peer->txrx_peer, link_id);
+}
+#else
+static inline void
+dp_set_nbuf_band(struct dp_peer *peer, qdf_nbuf_t nbuf)
+{
+}
+#endif
+
 void dp_rx_flush_rx_cached(struct dp_peer *peer, bool drop)
 {
 	struct dp_peer_cached_bufq *bufqi;
@@ -2107,6 +2121,7 @@ void dp_rx_flush_rx_cached(struct dp_peer *peer, bool drop)
 			bufqi->dropped = dp_rx_drop_nbuf_list(peer->vdev->pdev,
 							      cache_buf->buf);
 		} else {
+			dp_set_nbuf_band(peer, cache_buf->buf);
 			/* Flush the cached frames to OSIF DEV */
 			status = data_rx(peer->vdev->osif_vdev, cache_buf->buf);
 			if (status != QDF_STATUS_SUCCESS)
@@ -2344,6 +2359,52 @@ dp_rx_validate_rx_callbacks(struct dp_soc *soc,
 	return QDF_STATUS_SUCCESS;
 }
 
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(RAW_PKT_MLD_ADDR_CONVERSION)
+static void dp_rx_raw_pkt_mld_addr_conv(struct dp_soc *soc,
+					struct dp_vdev *vdev,
+					struct dp_txrx_peer *txrx_peer,
+					qdf_nbuf_t nbuf_head)
+{
+	qdf_nbuf_t nbuf, next;
+	struct dp_peer *peer = NULL;
+	struct ieee80211_frame *wh = NULL;
+
+	if (vdev->rx_decap_type == htt_cmn_pkt_type_native_wifi)
+		return;
+
+	peer = dp_peer_get_ref_by_id(soc, txrx_peer->peer_id,
+				     DP_MOD_ID_RX);
+
+	if (!peer)
+		return;
+
+	if (!IS_MLO_DP_MLD_PEER(peer)) {
+		dp_peer_unref_delete(peer, DP_MOD_ID_RX);
+		return;
+	}
+
+	nbuf = nbuf_head;
+	while (nbuf) {
+		next = nbuf->next;
+		wh = (struct ieee80211_frame *)qdf_nbuf_data(nbuf);
+		qdf_mem_copy(wh->i_addr1, vdev->mld_mac_addr.raw,
+			     QDF_MAC_ADDR_SIZE);
+		qdf_mem_copy(wh->i_addr2, peer->mac_addr.raw,
+			     QDF_MAC_ADDR_SIZE);
+		nbuf = next;
+	}
+
+	dp_peer_unref_delete(peer, DP_MOD_ID_RX);
+}
+#else
+static inline
+void dp_rx_raw_pkt_mld_addr_conv(struct dp_soc *soc,
+				 struct dp_vdev *vdev,
+				 struct dp_txrx_peer *txrx_peer,
+				 qdf_nbuf_t nbuf_head)
+{ }
+#endif
+
 QDF_STATUS dp_rx_deliver_to_stack(struct dp_soc *soc,
 				  struct dp_vdev *vdev,
 				  struct dp_txrx_peer *txrx_peer,
@@ -2356,6 +2417,7 @@ QDF_STATUS dp_rx_deliver_to_stack(struct dp_soc *soc,
 
 	if (qdf_unlikely(vdev->rx_decap_type == htt_cmn_pkt_type_raw) ||
 			(vdev->rx_decap_type == htt_cmn_pkt_type_native_wifi)) {
+		dp_rx_raw_pkt_mld_addr_conv(soc, vdev, txrx_peer, nbuf_head);
 		vdev->osif_rsim_rx_decap(vdev->osif_vdev, &nbuf_head,
 					 &nbuf_tail);
 	}
@@ -2826,6 +2888,37 @@ void dp_rx_deliver_to_stack_no_peer(struct dp_soc *soc, qdf_nbuf_t nbuf)
 #endif /* QCA_HOST_MODE_WIFI_DISABLED */
 
 #ifdef WLAN_SUPPORT_RX_FISA
+QDF_STATUS dp_fisa_config(ol_txrx_soc_handle cdp_soc, uint8_t pdev_id,
+			  enum cdp_fisa_config_id config_id,
+			  union cdp_fisa_config *cfg)
+{
+	struct dp_soc *soc = (struct dp_soc *)cdp_soc;
+	struct dp_pdev *pdev;
+	QDF_STATUS status;
+
+	pdev = dp_get_pdev_from_soc_pdev_id_wifi3(soc, pdev_id);
+	if (!pdev) {
+		dp_err("pdev is NULL for pdev_id %u", pdev_id);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	switch (config_id) {
+	case CDP_FISA_HTT_RX_FISA_CFG:
+		status = dp_htt_rx_fisa_config(pdev, cfg->fisa_config);
+		break;
+	case CDP_FISA_HTT_RX_FSE_OP_CFG:
+		status = dp_htt_rx_flow_fse_operation(pdev, cfg->fse_op_cmd);
+		break;
+	case CDP_FISA_HTT_RX_FSE_SETUP_CFG:
+		status = dp_htt_rx_flow_fst_setup(pdev, cfg->fse_setup_info);
+		break;
+	default:
+		status = QDF_STATUS_E_INVAL;
+	}
+
+	return status;
+}
+
 void dp_rx_skip_tlvs(struct dp_soc *soc, qdf_nbuf_t nbuf, uint32_t l3_padding)
 {
 	QDF_NBUF_CB_RX_PACKET_L3_HDR_PAD(nbuf) = l3_padding;
@@ -2902,14 +2995,23 @@ static QDF_STATUS
 dp_pdev_nbuf_alloc_and_map(struct dp_soc *dp_soc,
 			   struct dp_rx_nbuf_frag_info *nbuf_frag_info_t,
 			   struct dp_pdev *dp_pdev,
-			   struct rx_desc_pool *rx_desc_pool)
+			   struct rx_desc_pool *rx_desc_pool,
+			   bool dp_buf_page_frag_alloc_enable)
 {
 	QDF_STATUS ret = QDF_STATUS_E_FAILURE;
 
-	(nbuf_frag_info_t->virt_addr).nbuf =
-		qdf_nbuf_alloc(dp_soc->osdev, rx_desc_pool->buf_size,
-			       RX_BUFFER_RESERVATION,
-			       rx_desc_pool->buf_alignment, FALSE);
+	if (dp_buf_page_frag_alloc_enable) {
+		(nbuf_frag_info_t->virt_addr).nbuf =
+			qdf_nbuf_frag_alloc(dp_soc->osdev,
+					    rx_desc_pool->buf_size,
+					    RX_BUFFER_RESERVATION,
+					    rx_desc_pool->buf_alignment, FALSE);
+	} else	{
+		(nbuf_frag_info_t->virt_addr).nbuf =
+			qdf_nbuf_alloc(dp_soc->osdev, rx_desc_pool->buf_size,
+				       RX_BUFFER_RESERVATION,
+				       rx_desc_pool->buf_alignment, FALSE);
+	}
 	if (!((nbuf_frag_info_t->virt_addr).nbuf)) {
 		dp_err("nbuf alloc failed");
 		DP_STATS_INC(dp_pdev, replenish.nbuf_alloc_fail, 1);
@@ -2964,12 +3066,16 @@ dp_pdev_rx_buffers_attach(struct dp_soc *dp_soc, uint32_t mac_id,
 	union dp_rx_desc_list_elem_t *tail = NULL;
 	int sync_hw_ptr = 1;
 	uint32_t num_entries_avail;
+	bool dp_buf_page_frag_alloc_enable;
 
 	if (qdf_unlikely(!dp_pdev)) {
 		dp_rx_err("%pK: pdev is null for mac_id = %d",
 			  dp_soc, mac_id);
 		return QDF_STATUS_E_FAILURE;
 	}
+
+	dp_buf_page_frag_alloc_enable =
+	       wlan_cfg_is_dp_buf_page_frag_alloc_enable(dp_soc->wlan_cfg_ctx);
 
 	if (qdf_unlikely(!rxdma_srng)) {
 		DP_STATS_INC(dp_pdev, replenish.rxdma_err, num_req_buffers);
@@ -3046,7 +3152,8 @@ dp_pdev_rx_buffers_attach(struct dp_soc *dp_soc, uint32_t mac_id,
 			else
 				ret = dp_pdev_nbuf_alloc_and_map(dp_soc,
 						&nf_info[nr_nbuf], dp_pdev,
-						rx_desc_pool);
+						rx_desc_pool,
+						dp_buf_page_frag_alloc_enable);
 			if (QDF_IS_STATUS_ERROR(ret))
 				break;
 
@@ -3083,9 +3190,9 @@ dp_pdev_rx_buffers_attach(struct dp_soc *dp_soc, uint32_t mac_id,
 						     rx_desc_pool->owner);
 
 			dp_ipa_handle_rx_buf_smmu_mapping(
-					dp_soc, nbuf,
-					rx_desc_pool->buf_size, true,
-					__func__, __LINE__);
+						dp_soc, nbuf,
+						rx_desc_pool->buf_size, true,
+						__func__, __LINE__);
 
 			dp_audio_smmu_map(dp_soc->osdev,
 					  qdf_mem_paddr_from_dmaaddr(dp_soc->osdev,
@@ -3194,8 +3301,11 @@ QDF_STATUS dp_rx_pdev_desc_pool_init(struct dp_pdev *pdev)
 	struct dp_srng *dp_rxdma_srng;
 	struct rx_desc_pool *rx_desc_pool;
 	uint32_t target_type = hal_get_target_type(soc->hal_soc);
+	uint16_t buf_size;
 
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 	rx_desc_pool = &soc->rx_desc_buf[mac_for_pdev];
+
 	if (wlan_cfg_get_dp_pdev_nss_enabled(pdev->wlan_cfg_ctx)) {
 		/*
 		 * If NSS is enabled, rx_desc_pool is already filled.
@@ -3220,7 +3330,7 @@ QDF_STATUS dp_rx_pdev_desc_pool_init(struct dp_pdev *pdev)
 	wlan_cfg_get_dp_soc_rx_sw_desc_num(soc->wlan_cfg_ctx);
 
 	rx_desc_pool->owner = dp_rx_get_rx_bm_id(soc);
-	rx_desc_pool->buf_size = RX_DATA_BUFFER_SIZE;
+	rx_desc_pool->buf_size = buf_size;
 	rx_desc_pool->buf_alignment = RX_DATA_BUFFER_ALIGNMENT;
 	/* Disable monitor dest processing via frag */
 	if (target_type == TARGET_TYPE_QCN9160) {

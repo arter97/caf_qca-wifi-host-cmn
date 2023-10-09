@@ -103,24 +103,27 @@ void dp_tx_process_htt_completion_rh(struct dp_soc *soc,
  * @soc: Handle to DP Soc structure
  * @num_elem: pool descriptor number
  * @pool_id: pool to allocate
+ * @spcl_tx_desc: if special desc
  *
  * Return: QDF_STATUS_SUCCESS - success, others - failure
  */
 QDF_STATUS dp_tx_desc_pool_init_rh(struct dp_soc *soc,
 				   uint32_t num_elem,
-				   uint8_t pool_id);
+				   uint8_t pool_id,
+				   bool spcl_tx_desc);
 
 /**
  * dp_tx_desc_pool_deinit_rh() - De-initialize Tx Descriptor pool(s)
  * @soc: Handle to DP Soc structure
  * @tx_desc_pool: Tx descriptor pool handler
  * @pool_id: pool to deinit
+ * @spcl_tx_desc: if special desc
  *
  * Return: None.
  */
 void dp_tx_desc_pool_deinit_rh(struct dp_soc *soc,
 			       struct dp_tx_desc_pool_s *tx_desc_pool,
-			       uint8_t pool_id);
+			       uint8_t pool_id, bool spcl_tx_desc);
 
 /**
  * dp_tx_compute_tx_delay_rh() - Compute HW Tx completion delay
@@ -164,4 +167,13 @@ void dp_tx_desc_pool_free_rh(struct dp_soc *soc, uint8_t pool_id);
  * Return: none
  */
 void dp_tx_compl_handler_rh(struct dp_soc *soc, qdf_nbuf_t htt_msg);
+
+/**
+ * dp_flush_tx_ring_rh() - flush tx ring write index
+ * @pdev: dp pdev handle
+ * @ring_id: Tx ring id
+ *
+ * Return: 0 on success and error code on failure
+ */
+int dp_flush_tx_ring_rh(struct dp_pdev *pdev, int ring_id);
 #endif

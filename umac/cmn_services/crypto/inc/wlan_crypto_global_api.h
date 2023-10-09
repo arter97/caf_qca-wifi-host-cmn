@@ -27,6 +27,38 @@
 #include <qdf_crypto.h>
 
 /**
+ * is_valid_keyix() - is key index valid
+ * @keyix: Key index
+ *
+ * Return: true or false
+ */
+bool is_valid_keyix(uint16_t keyix);
+
+/**
+ * is_igtk() - is given key index for IGTK
+ * @keyix: Key index
+ *
+ * Return: true or false
+ */
+bool is_igtk(uint16_t keyix);
+
+/**
+ * is_bigtk() - Is given key index for BIGTK
+ * @keyix: Key index
+ *
+ * Return: true or false
+ */
+bool is_bigtk(uint16_t keyix);
+
+/**
+ * is_gtk() - Is given key index for GTK
+ * @keyix: Key index
+ *
+ * Return: true or false
+ */
+bool is_gtk(uint16_t keyix);
+
+/**
  * wlan_crypto_set_vdev_param() - called by ucfg to set crypto param
  * @vdev: vdev
  * @param: param to be set.
@@ -316,6 +348,18 @@ QDF_STATUS wlan_crypto_wpaie_check(struct wlan_crypto_params *crypto_params,
  */
 QDF_STATUS wlan_crypto_rsnie_check(struct wlan_crypto_params *crypto_params,
 				   const uint8_t *frm);
+
+/**
+ * wlan_crypto_rsnxie_check() - called by mlme to parse rsnx capabilities
+ * @crypto_params: crypto params
+ * @rsnxe: rsnx ie buffer
+ *
+ * This function gets called by mlme to extract rsnx capabilities
+ *
+ * Return: None
+ */
+void wlan_crypto_rsnxie_check(struct wlan_crypto_params *crypto_params,
+			      const uint8_t *rsnxe);
 
 /**
  * wlan_crypto_build_wpaie() - called by mlme to build wpaie
@@ -870,6 +914,21 @@ void wlan_crypto_update_set_key_peer(struct wlan_objmgr_vdev *vdev,
 QDF_STATUS wlan_crypto_validate_key_params(enum wlan_crypto_cipher_type cipher,
 					   uint8_t key_index, uint8_t key_len,
 					   uint8_t seq_len);
+/**
+ * wlan_crypto_save_ml_sta_key - Allocate memory for ml sta key
+ * @psoc: psoc handler
+ * @key_index: key index
+ * @crypto_key: crypto key
+ * @link_addr: link addr
+ * @link_id: link id
+ *
+ * Return: zero on success
+ */
+QDF_STATUS
+wlan_crypto_save_ml_sta_key(struct wlan_objmgr_psoc *psoc,
+			    uint8_t key_index,
+			    struct wlan_crypto_key *crypto_key,
+			    struct qdf_mac_addr *link_addr, uint8_t link_id);
 
 /**
  * wlan_crypto_save_key() - Allocate memory for storing key
@@ -883,6 +942,19 @@ QDF_STATUS wlan_crypto_save_key(struct wlan_objmgr_vdev *vdev,
 				uint8_t key_index,
 				struct wlan_crypto_key *crypto_key);
 
+/**
+ * wlan_crypto_get_ml_sta_link_key() - Get the stored key info
+ *						by link id
+ * @psoc: psoc handler
+ * @key_index: key index
+ * @link_addr: link address
+ * @link_id: link id
+ */
+struct wlan_crypto_key *wlan_crypto_get_ml_sta_link_key(
+				struct wlan_objmgr_psoc *psoc,
+				uint8_t key_index,
+				struct qdf_mac_addr *link_addr,
+				uint8_t link_id);
 /**
  * wlan_crypto_get_key() - Get the stored key information
  * @vdev: vdev object
@@ -904,6 +976,16 @@ struct wlan_crypto_key *wlan_crypto_get_key(struct wlan_objmgr_vdev *vdev,
 QDF_STATUS wlan_crypto_set_key_req(struct wlan_objmgr_vdev *vdev,
 				   struct wlan_crypto_key *req,
 				   enum wlan_crypto_key_type key_type);
+
+/**
+ * wlan_crypto_free_key() - Free the given key
+ * @crypto_key: pointer to the key
+ *
+ * This function frees keys stored in vdev crypto object.
+ *
+ * Return: None
+ */
+void wlan_crypto_free_key(struct wlan_crypto_keys *crypto_key);
 
 /**
  * wlan_crypto_free_vdev_key() - Free keys for vdev

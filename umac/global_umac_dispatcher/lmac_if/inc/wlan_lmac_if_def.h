@@ -59,6 +59,10 @@
 #include <wlan_ipa_public_struct.h>
 #endif
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+#include <wlan_mlo_mgr_link_switch.h>
+#endif
+
 /* Number of dev type: Direct attach and Offload */
 #define MAX_DEV_TYPE 2
 
@@ -263,10 +267,8 @@ struct wlan_lmac_if_global_shmem_local_ops {
 
 	QDF_STATUS (*init_shmem_arena_ctx)(void *arena_vaddr,
 					   size_t arena_len,
-					   uint8_t grp_id,
-					   uint8_t recovery);
-	QDF_STATUS (*deinit_shmem_arena_ctx)(uint8_t grp_id,
-					     uint8_t recovery);
+					   uint8_t grp_id);
+	QDF_STATUS (*deinit_shmem_arena_ctx)(uint8_t grp_id);
 	void *(*get_crash_reason_address)(uint8_t grp_id,
 					  uint8_t chip_id);
 	void *(*get_recovery_mode_address)(uint8_t grp_id,
@@ -686,6 +688,10 @@ struct wlan_lmac_if_p2p_tx_ops {
  * @atf_register_event_handler:   ATF register wmi event handlers
  * @atf_unregister_event_handler: ATF unregister wmi event handlers
  * @atf_set_ppdu_stats:           ATF set ppdu stats to get ATF stats
+ * @atf_send_peer_list_v2:        Send atf list of peers with increased
+ *                                maximum peer support
+ * @atf_set_grouping_v2:          Set atf grouping with increased maximum
+ *                                peer support
  */
 struct wlan_lmac_if_atf_tx_ops {
 	int32_t (*atf_enable_disable)(struct wlan_objmgr_vdev *vdev,
@@ -712,6 +718,12 @@ struct wlan_lmac_if_atf_tx_ops {
 	void (*atf_unregister_event_handler)(struct wlan_objmgr_psoc *psoc);
 	void (*atf_set_ppdu_stats)(struct wlan_objmgr_pdev *pdev,
 				   uint8_t value);
+#ifdef WLAN_ATF_INCREASED_STA
+	int32_t (*atf_send_peer_list_v2)(struct wlan_objmgr_pdev *pdev,
+					 struct pdev_atf_req_v2 *atf_req);
+	int32_t (*atf_set_grouping_v2)(struct wlan_objmgr_pdev *pdev,
+				       struct pdev_atf_ssid_group_req_v2 *req);
+#endif
 };
 #endif
 
@@ -1092,13 +1104,14 @@ struct wlan_lmac_if_ftm_rx_ops {
  * @unregister_master_ext_handler: pointer to unregister ext event handler
  * @set_country_code:
  * @fill_umac_legacy_chanlist:
+ * @set_wait_for_init_cc_response_event: Wake up the thread that is waiting for
+ * the init cc response event.
  * @register_11d_new_cc_handler: pointer to register 11d cc event handler
  * @unregister_11d_new_cc_handler:  pointer to unregister 11d cc event handler
  * @start_11d_scan:
  * @stop_11d_scan:
  * @is_there_serv_ready_extn:
  * @set_user_country_code:
- * @set_country_failed:
  * @register_ch_avoid_event_handler:
  * @unregister_ch_avoid_event_handler:
  * @send_ctl_info: call-back function to send CTL info to firmware
@@ -1119,6 +1132,8 @@ struct wlan_lmac_if_ftm_rx_ops {
  *			rate2power table update event handler.
  * @end_r2p_table_update_wait: Call-back function to end the wait on r2p update
  *			response from fw.
+ * @is_80p80_supported: Callback function to check if the device supports a
+ * 6GHz 80p80 channel.
  */
 struct wlan_lmac_if_reg_tx_ops {
 	QDF_STATUS (*register_master_handler)(struct wlan_objmgr_psoc *psoc,
@@ -1129,6 +1144,8 @@ struct wlan_lmac_if_reg_tx_ops {
 						  void *arg);
 	QDF_STATUS (*unregister_master_ext_handler)
 				(struct wlan_objmgr_psoc *psoc, void *arg);
+	void (*set_wait_for_init_cc_response_event)
+			(struct wlan_objmgr_pdev *pdev, QDF_STATUS status);
 	QDF_STATUS (*set_country_code)(struct wlan_objmgr_psoc *psoc,
 						void *arg);
 	QDF_STATUS (*fill_umac_legacy_chanlist)(struct wlan_objmgr_pdev *pdev,
@@ -1145,7 +1162,6 @@ struct wlan_lmac_if_reg_tx_ops {
 	QDF_STATUS (*set_user_country_code)(struct wlan_objmgr_psoc *psoc,
 					    uint8_t pdev_id,
 					    struct cc_regdmn_s *rd);
-	QDF_STATUS (*set_country_failed)(struct wlan_objmgr_pdev *pdev);
 	QDF_STATUS (*register_ch_avoid_event_handler)(
 			struct wlan_objmgr_psoc *psoc, void *arg);
 	QDF_STATUS (*unregister_ch_avoid_event_handler)(
@@ -1189,6 +1205,7 @@ struct wlan_lmac_if_reg_tx_ops {
 	QDF_STATUS (*end_r2p_table_update_wait)(
 			struct wlan_objmgr_psoc *psoc,
 			uint32_t pdev_id);
+	bool (*is_80p80_supported)(struct wlan_objmgr_pdev *pdev);
 };
 
 /**
@@ -1508,10 +1525,14 @@ struct wlan_lmac_if_son_rx_ops {
  * @unregister_events: function to de-register event handlers with FW
  * @link_set_active: function to send mlo link set active command to FW
  * @request_link_state_info_cmd: function pointer to send link state info
+ * @send_link_set_bss_params_cmd: function pointer to send link set bss cmd
  * @shmem_local_ops: operations specific to WLAN_MLO_GLOBAL_SHMEM_SUPPORT
  * @send_tid_to_link_mapping: function to send T2LM command to FW
  * @send_link_removal_cmd: function to send MLO link removal command to FW
  * @send_vdev_pause: function to send MLO vdev pause to FW
+ * @peer_ptqm_migrate_send: API to send peer ptqm migration request to FW
+ * @send_mlo_link_switch_cnf_cmd: Send link switch status to FW
+ * @send_wsi_link_info_cmd: send WSI link stats to FW
  */
 struct wlan_lmac_if_mlo_tx_ops {
 	QDF_STATUS (*register_events)(struct wlan_objmgr_psoc *psoc);
@@ -1521,6 +1542,9 @@ struct wlan_lmac_if_mlo_tx_ops {
 	QDF_STATUS (*request_link_state_info_cmd)(
 		struct wlan_objmgr_psoc *psoc,
 		struct mlo_link_state_cmd_params *param);
+	QDF_STATUS (*send_link_set_bss_params_cmd)(
+			struct wlan_objmgr_psoc *psoc,
+			struct mlo_link_bss_params *param);
 
 #ifdef WLAN_MLO_GLOBAL_SHMEM_SUPPORT
 	struct wlan_lmac_if_global_shmem_local_ops shmem_local_ops;
@@ -1532,6 +1556,19 @@ struct wlan_lmac_if_mlo_tx_ops {
 		const struct mlo_link_removal_cmd_params *param);
 	QDF_STATUS (*send_vdev_pause)(struct wlan_objmgr_psoc *psoc,
 				      struct mlo_vdev_pause *info);
+#ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
+	QDF_STATUS (*peer_ptqm_migrate_send)(
+					struct wlan_objmgr_vdev *vdev,
+					struct peer_ptqm_migrate_params *param);
+#endif /* QCA_SUPPORT_PRIMARY_LINK_MIGRATE */
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+	QDF_STATUS
+	(*send_mlo_link_switch_cnf_cmd)(struct wlan_objmgr_psoc *psoc,
+					struct wlan_mlo_link_switch_cnf *params);
+#endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
+	QDF_STATUS (*send_wsi_link_info_cmd)(
+				struct wlan_objmgr_pdev *pdev,
+				struct mlo_wsi_link_stats *param);
 };
 
 /**
@@ -1541,6 +1578,10 @@ struct wlan_lmac_if_mlo_tx_ops {
  * @mlo_link_removal_handler: function pointer for MLO link removal handler
  * @process_mlo_link_state_info_event: function pointer for mlo link state
  * @mlo_link_disable_request_handler: function ptr for mlo link disable request
+ * @mlo_link_switch_request_handler: Handler function pointer to deliver link
+ * switch request params from FW to host.
+ * @mlo_link_state_switch_event_handler: Function pointer to handle link state
+ * switch event
  */
 struct wlan_lmac_if_mlo_rx_ops {
 	QDF_STATUS
@@ -1558,6 +1599,14 @@ struct wlan_lmac_if_mlo_rx_ops {
 	QDF_STATUS (*mlo_link_disable_request_handler)(
 			struct wlan_objmgr_psoc *psoc,
 			void *evt_params);
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+	QDF_STATUS
+	(*mlo_link_switch_request_handler)(struct wlan_objmgr_psoc *psoc,
+					   void *evt_params);
+	QDF_STATUS
+	(*mlo_link_state_switch_event_handler)(struct wlan_objmgr_psoc *psoc,
+					       struct mlo_link_switch_state_info *info);
+#endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
 };
 #endif
 
@@ -1633,7 +1682,7 @@ struct wlan_lmac_if_twt_rx_ops {
 };
 #endif
 
-#if defined WLAN_FEATURE_SR
+#ifdef WLAN_FEATURE_SR
 struct wlan_lmac_if_spatial_reuse_tx_ops {
 	QDF_STATUS (*send_cfg)(struct wlan_objmgr_vdev *vdev, uint8_t sr_ctrl,
 			       uint8_t non_srg_max_pd_offset);
@@ -1644,6 +1693,8 @@ struct wlan_lmac_if_spatial_reuse_tx_ops {
 				struct wlan_objmgr_pdev *pdev,
 				bool is_sr_enable, int32_t srg_pd_threshold,
 				int32_t non_srg_pd_threshold);
+	QDF_STATUS (*target_if_sr_update)(struct wlan_objmgr_pdev *pdev,
+					  uint8_t vdev_id, uint32_t val);
 };
 #endif
 
@@ -2056,6 +2107,7 @@ struct wlan_lmac_if_p2p_rx_ops {
  * struct wlan_lmac_if_atf_rx_ops - ATF south bound rx function pointers
  * @atf_get_fmcap:                     Get firmware capability for ATF
  * @atf_get_mode:                      Get mode of ATF
+ * @atf_is_enabled:                    Check atf_mode, fwcap & atf_commit flags
  * @atf_get_msdu_desc:                 Get msdu desc for ATF
  * @atf_get_max_vdevs:                 Get maximum vdevs for a Radio
  * @atf_get_peers:                     Get number of peers for a radio
@@ -2083,10 +2135,14 @@ struct wlan_lmac_if_p2p_rx_ops {
  * @atf_process_tx_ppdu_stats:         Process Tx PPDU stats to get ATF stats
  * @atf_process_rx_ppdu_stats:         Process Rx PPDU stats to get ATF stats
  * @atf_is_stats_enabled:              Check ATF stats enabled or not
+ * @atf_set_fw_max_client_512_support: Set Max Client Support based on WMI
+ *    service bit announcement from FW
  */
 struct wlan_lmac_if_atf_rx_ops {
 	uint32_t (*atf_get_fmcap)(struct wlan_objmgr_psoc *psoc);
 	uint32_t (*atf_get_mode)(struct wlan_objmgr_psoc *psoc);
+	bool (*atf_is_enabled)(struct wlan_objmgr_psoc *psoc,
+			       struct wlan_objmgr_pdev *pdev);
 	uint32_t (*atf_get_msdu_desc)(struct wlan_objmgr_psoc *psoc);
 	uint32_t (*atf_get_max_vdevs)(struct wlan_objmgr_psoc *psoc);
 	uint32_t (*atf_get_peers)(struct wlan_objmgr_psoc *psoc);
@@ -2125,6 +2181,10 @@ struct wlan_lmac_if_atf_rx_ops {
 	void (*atf_process_rx_ppdu_stats)(struct wlan_objmgr_pdev *pdev,
 					  qdf_nbuf_t msg);
 	uint8_t (*atf_is_stats_enabled)(struct wlan_objmgr_pdev *pdev);
+#ifdef WLAN_ATF_INCREASED_STA
+	void (*atf_set_fw_max_client_512_support)(struct wlan_objmgr_psoc *psoc,
+						  uint8_t val);
+#endif
 };
 #endif
 
@@ -2637,7 +2697,8 @@ struct wlan_lmac_if_mlme_rx_ops {
 						struct wlan_objmgr_psoc *psoc,
 						uint8_t vdev_id);
 #ifdef WLAN_FEATURE_DYNAMIC_MAC_ADDR_UPDATE
-	void (*vdev_mgr_set_mac_addr_response)(uint8_t vdev_id, uint8_t status);
+	void (*vdev_mgr_set_mac_addr_response)(struct wlan_objmgr_vdev *vdev,
+					       uint8_t status);
 #endif
 	void (*vdev_mgr_set_max_channel_switch_time)
 		(struct wlan_objmgr_psoc *psoc,

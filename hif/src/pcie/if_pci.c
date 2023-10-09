@@ -2129,7 +2129,7 @@ static int hif_ce_srng_free_irq(struct hif_softc *scn)
 
 		irq = sc->ce_irq_num[ce_id];
 
-		hif_ce_irq_remove_affinity_hint(irq);
+		hif_irq_affinity_remove(irq);
 
 		hif_debug("%s: (ce_id %d, irq %d)", __func__, ce_id, irq);
 
@@ -2156,6 +2156,7 @@ void hif_pci_deconfigure_grp_irq(struct hif_softc *scn)
 							irq,
 							QDF_IRQ_DISABLE_UNLAZY);
 				}
+				hif_irq_affinity_remove(irq);
 				pfrm_free_irq(scn->qdf_dev->dev,
 					      irq, hif_ext_group);
 			}
@@ -2374,19 +2375,16 @@ int hif_pci_bus_suspend(struct hif_softc *scn)
 
 	hif_apps_irqs_disable(GET_HIF_OPAQUE_HDL(scn));
 
-	ret = hif_try_complete_tasks(scn);
-	if (QDF_IS_STATUS_ERROR(ret)) {
-		hif_apps_irqs_enable(GET_HIF_OPAQUE_HDL(scn));
-		return -EBUSY;
-	}
-
 	/*
 	 * In an unlikely case, if draining becomes infinite loop,
 	 * it returns an error, shall abort the bus suspend.
 	 */
 	ret = hif_drain_fw_diag_ce(scn);
-	if (ret) {
-		hif_err("draining fw_diag_ce goes infinite, so abort suspend");
+	if (ret)
+		hif_err("draining fw_diag_ce not got cleaned");
+
+	ret = hif_try_complete_tasks(scn);
+	if (QDF_IS_STATUS_ERROR(ret)) {
 		hif_apps_irqs_enable(GET_HIF_OPAQUE_HDL(scn));
 		return -EBUSY;
 	}
@@ -4149,9 +4147,11 @@ release_mhi_wake:
 	if (ret) {
 		hif_err("pld force wake release failure");
 		HIF_STATS_INC(pci_scn, mhi_force_wake_release_failure, 1);
-		return ret;
+		status = ret;
+	} else {
+		HIF_STATS_INC(pci_scn, mhi_force_wake_release_success, 1);
 	}
-	HIF_STATS_INC(pci_scn, mhi_force_wake_release_success, 1);
+
 release_rtpm_ref:
 	/* Release runtime PM force wake */
 	ret = hif_rtpm_put(HIF_RTPM_PUT_ASYNC, HIF_RTPM_ID_FORCE_WAKE);
@@ -4165,7 +4165,7 @@ release_rtpm_ref:
 
 int hif_force_wake_release(struct hif_opaque_softc *hif_handle)
 {
-	int ret;
+	int ret, status;
 	struct hif_softc *scn = (struct hif_softc *)hif_handle;
 	struct hif_pci_softc *pci_scn = HIF_GET_PCI_SOFTC(scn);
 
@@ -4176,19 +4176,19 @@ int hif_force_wake_release(struct hif_opaque_softc *hif_handle)
 	if (ret) {
 		hif_err("pld force wake release failure");
 		HIF_STATS_INC(pci_scn, mhi_force_wake_release_failure, 1);
-		return ret;
+		goto release_rtpm_ref;
 	}
 	HIF_STATS_INC(pci_scn, mhi_force_wake_release_success, 1);
-
-	/* Release runtime PM force wake */
-	ret = hif_rtpm_put(HIF_RTPM_PUT_ASYNC, HIF_RTPM_ID_FORCE_WAKE);
-	if (ret) {
-		hif_err("runtime pm put failure");
-		return ret;
-	}
-
 	HIF_STATS_INC(pci_scn, soc_force_wake_release_success, 1);
-	return 0;
+
+release_rtpm_ref:
+	/* Release runtime PM force wake */
+	status = hif_rtpm_put(HIF_RTPM_PUT_ASYNC, HIF_RTPM_ID_FORCE_WAKE);
+	if (status) {
+		hif_err("runtime pm put failure: %d", status);
+		return status;
+	}
+	return ret;
 }
 
 #else /* DEVICE_FORCE_WAKE_ENABLE */

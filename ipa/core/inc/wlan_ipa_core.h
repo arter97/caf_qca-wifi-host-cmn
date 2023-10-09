@@ -48,7 +48,7 @@ static inline bool wlan_ipa_uc_is_enabled(struct wlan_ipa_config *ipa_cfg)
 }
 
 /**
- * wlan_ipa_is_opt_wifi_dp_enabled() - Is IPA optional wifi dp enabled?
+ * wlan_ipa_is_opt_wifi_dp_enabled() - Is optional wifi dp enabled from WLAN
  * @ipa_cfg: IPA config
  *
  * Return: true if IPA opt wifi dp is enabled, false otherwise
@@ -157,16 +157,32 @@ struct wlan_ipa_iface_context
 *wlan_ipa_get_iface(struct wlan_ipa_priv *ipa_ctx, uint8_t mode);
 
 /**
+ * wlan_ipa_check_iface_netdev_sessid() - Check IPA interface using netdev
+ * and session id
+ *
+ * @ipa_iface: IPA iface
+ * @net_dev: net dev
+ * @session_id: vdev id
+ *
+ * Return: Result if iface is matching or not
+ */
+int wlan_ipa_check_iface_netdev_sessid(struct wlan_ipa_iface_context *ipa_iface,
+				       qdf_netdev_t net_dev,
+				       uint8_t session_id);
+
+/**
  * wlan_ipa_get_iface_by_mode_netdev() - Get IPA interface
  * @ipa_ctx: IPA context
  * @ndev: Interface netdev pointer
  * @mode: Interface device mode
+ * @session_id: vdev id
  *
  * Return: IPA interface address
  */
 struct wlan_ipa_iface_context *
 wlan_ipa_get_iface_by_mode_netdev(struct wlan_ipa_priv *ipa_ctx,
-				  qdf_netdev_t ndev, uint8_t mode);
+				  qdf_netdev_t ndev, uint8_t mode,
+				  uint8_t session_id);
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)) && \
 	!defined(CONFIG_IPA_WDI_UNIFIED_API)
@@ -628,29 +644,10 @@ void ipa_set_rps_per_vdev(struct wlan_ipa_priv *ipa_ctx, uint8_t vdev_id,
 		ipa_ctx->rps_enable(vdev_id, enable);
 }
 
-/**
- * wlan_ipa_handle_multiple_sap_evt() - Handle multiple SAP connect/disconnect
- * @ipa_ctx: IPA global context
- * @type: IPA event type.
- *
- * This function is used to disable pipes when multiple SAP are connected and
- * enable pipes back when only one SAP is connected.
- *
- * Return: None
- */
-void wlan_ipa_handle_multiple_sap_evt(struct wlan_ipa_priv *ipa_ctx,
-				      qdf_ipa_wlan_event type);
-
 #else
 static inline
 void ipa_set_rps_per_vdev(struct wlan_ipa_priv *ipa_ctx, uint8_t vdev_id,
 			  bool enable)
-{
-}
-
-static inline
-void wlan_ipa_handle_multiple_sap_evt(struct wlan_ipa_priv *ipa_ctx,
-				      qdf_ipa_wlan_event type)
 {
 }
 #endif
@@ -807,6 +804,7 @@ bool wlan_ipa_is_fw_wdi_activated(struct wlan_ipa_priv *ipa_ctx);
  * wlan_ipa_uc_cleanup_sta - disconnect and cleanup sta iface
  * @ipa_ctx: IPA context
  * @net_dev: Interface net device
+ * @session_id: vdev id
  *
  * Send disconnect sta event to IPA driver and cleanup IPA iface
  * if not yet done
@@ -814,7 +812,7 @@ bool wlan_ipa_is_fw_wdi_activated(struct wlan_ipa_priv *ipa_ctx);
  * Return: void
  */
 void wlan_ipa_uc_cleanup_sta(struct wlan_ipa_priv *ipa_ctx,
-			     qdf_netdev_t net_dev);
+			     qdf_netdev_t net_dev, uint8_t session_id);
 
 /**
  * wlan_ipa_uc_disconnect_ap() - send ap disconnect event
@@ -832,11 +830,12 @@ QDF_STATUS wlan_ipa_uc_disconnect_ap(struct wlan_ipa_priv *ipa_ctx,
  * wlan_ipa_cleanup_dev_iface() - Clean up net dev IPA interface
  * @ipa_ctx: IPA context
  * @net_dev: Interface net device
+ * @session_id: vdev id
  *
  * Return: None
  */
 void wlan_ipa_cleanup_dev_iface(struct wlan_ipa_priv *ipa_ctx,
-				qdf_netdev_t net_dev);
+				qdf_netdev_t net_dev, uint8_t session_id);
 
 /**
  * wlan_ipa_uc_ssr_cleanup() - handle IPA UC clean up during SSR
@@ -940,5 +939,29 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_rel_cb(void *ipa_ctx);
 void wlan_ipa_wdi_opt_dpath_notify_flt_rlsd(int result0, int result1);
 
 #endif /* IPA_OPT_WIFI_DP */
+
+#ifdef IPA_WDI3_TX_TWO_PIPES
+/**
+ * wlan_ipa_get_alt_pipe() - Get alt_pipe for vdev_id
+ * @ipa_ctx: IPA context
+ * @vdev_id: vdev_id of the target interface
+ * @alt_pipe: Boolean output to indicate if interface with @vdev_id
+ *	      is using alternate TX pipe or not.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_ipa_get_alt_pipe(struct wlan_ipa_priv *ipa_ctx,
+				 uint8_t vdev_id,
+				 bool *alt_pipe);
+#else /* !IPA_WDI3_TX_TWO_PIPES */
+static inline
+QDF_STATUS wlan_ipa_get_alt_pipe(struct wlan_ipa_priv *ipa_ctx,
+				 uint8_t vdev_id,
+				 bool *alt_pipe)
+{
+	return QDF_STATUS_E_INVAL;
+}
+#endif /* IPA_WDI3_TX_TWO_PIPES */
+
 #endif /* IPA_OFFLOAD */
 #endif /* _WLAN_IPA_CORE_H_ */

@@ -608,13 +608,18 @@ void ucfg_reg_set_afc_no_action(struct wlan_objmgr_psoc *psoc, bool value)
 }
 #endif
 
+#ifdef TARGET_11D_SCAN
 /**
  * ucfg_reg_11d_vdev_delete_update() - update vdev delete to regulatory
- * @vdev: vdev ptr
+ * @psoc: psoc pointer
+ * @op_mode: Operating mode of the deleted vdev
+ * @vdev_id: Vdev id of the deleted vdev
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS ucfg_reg_11d_vdev_delete_update(struct wlan_objmgr_vdev *vdev);
+QDF_STATUS ucfg_reg_11d_vdev_delete_update(struct wlan_objmgr_psoc *psoc,
+					   enum QDF_OPMODE op_mode,
+					   uint32_t vdev_id);
 
 /**
  * ucfg_reg_11d_vdev_created_update() - update vdev create to regulatory
@@ -623,6 +628,32 @@ QDF_STATUS ucfg_reg_11d_vdev_delete_update(struct wlan_objmgr_vdev *vdev);
  * Return: QDF_STATUS
  */
 QDF_STATUS ucfg_reg_11d_vdev_created_update(struct wlan_objmgr_vdev *vdev);
+#else
+static inline
+QDF_STATUS ucfg_reg_11d_vdev_delete_update(struct wlan_objmgr_psoc *psoc,
+					   enum QDF_OPMODE op_mode,
+					   uint32_t vdev_id)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS ucfg_reg_11d_vdev_created_update(struct wlan_objmgr_vdev *vdev)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
+/**
+ * ucfg_reg_update_hal_cap_wireless_modes() - update wireless modes
+ * @psoc: psoc ptr
+ * @modes: value of modes to update
+ * @phy_id: phy id
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS ucfg_reg_update_hal_cap_wireless_modes(struct wlan_objmgr_psoc *psoc,
+					       uint64_t modes, uint8_t phy_id);
 
 /**
  * ucfg_reg_get_hal_reg_cap() - return hal reg cap
@@ -646,15 +677,22 @@ QDF_STATUS ucfg_reg_set_hal_reg_cap(struct wlan_objmgr_psoc *psoc,
 			uint16_t phy_cnt);
 
 /**
- * ucfg_reg_update_hal_reg_cap() - update hal reg cap
+ * ucfg_reg_update_hal_reg_range_caps() - update hal reg frequency range fields
  * @psoc: psoc ptr
- * @wireless_modes: 11AX wireless modes
+ * @low_2g_chan: low 2g channel
+ * @high_2g_chan: high 2g channel
+ * @low_5g_chan: low 5g channel
+ * @high_5g_chan: high 2g channel
  * @phy_id: phy id
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS ucfg_reg_update_hal_reg_cap(struct wlan_objmgr_psoc *psoc,
-				       uint64_t wireless_modes, uint8_t phy_id);
+QDF_STATUS ucfg_reg_update_hal_reg_range_caps(struct wlan_objmgr_psoc *psoc,
+					      uint32_t low_2g_chan,
+					      uint32_t high_2g_chan,
+					      uint32_t low_5g_chan,
+					      uint32_t high_5g_chan,
+					      uint8_t phy_id);
 
 /**
  * ucfg_set_ignore_fw_reg_offload_ind() - API to set ignore regdb offload ind
@@ -768,6 +806,19 @@ QDF_STATUS ucfg_reg_enable_disable_opclass_chans(struct wlan_objmgr_pdev *pdev,
 						 uint8_t *ieee_chan_list,
 						 uint8_t chan_list_size,
 						 bool global_tbl_lookup);
+
+static inline
+bool ucfg_reg_is_user_country_set_allowed(struct wlan_objmgr_psoc *psoc)
+{
+	return true;
+}
+
+static inline
+bool ucfg_reg_is_fcc_constraint_set(struct wlan_objmgr_pdev *pdev)
+{
+	return false;
+}
+
 #else
 static inline QDF_STATUS
 ucfg_reg_enable_disable_opclass_chans(struct wlan_objmgr_pdev *pdev,
@@ -779,6 +830,22 @@ ucfg_reg_enable_disable_opclass_chans(struct wlan_objmgr_pdev *pdev,
 {
 	return QDF_STATUS_E_NOSUPPORT;
 }
-#endif
 
+/**
+ * ucfg_reg_is_user_country_set_allowed() - Checks whether user country is
+ * allowed to set
+ * @psoc: psoc ptr
+ *
+ * Return: bool
+ */
+bool ucfg_reg_is_user_country_set_allowed(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * ucfg_reg_is_fcc_constraint_set() - Check if fcc constraint is set
+ * @pdev: pointer to pdev
+ *
+ * Return: Return true if fcc constraint is set
+ */
+bool ucfg_reg_is_fcc_constraint_set(struct wlan_objmgr_pdev *pdev);
+#endif
 #endif

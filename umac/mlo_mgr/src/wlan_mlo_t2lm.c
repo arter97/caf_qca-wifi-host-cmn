@@ -29,6 +29,7 @@
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_FEATURE_11BE_MLO_ADV_FEATURE)
 #include <wlan_t2lm_api.h>
 #endif
+#include <wlan_mlo_mgr_sta.h>
 
 QDF_STATUS wlan_mlo_parse_t2lm_info(uint8_t *ie,
 				    struct wlan_t2lm_info *t2lm)
@@ -37,7 +38,7 @@ QDF_STATUS wlan_mlo_parse_t2lm_info(uint8_t *ie,
 	enum wlan_t2lm_direction dir;
 	uint8_t *t2lm_control_field;
 	uint16_t t2lm_control;
-	uint8_t link_mapping_presence_ind;
+	uint8_t link_mapping_presence_ind = 0;
 	uint8_t *link_mapping_of_tids;
 	uint8_t tid_num;
 	uint8_t *ie_ptr = NULL;
@@ -188,26 +189,38 @@ QDF_STATUS wlan_mlo_parse_bcn_prbresp_t2lm_ie(
 }
 
 QDF_STATUS wlan_mlo_parse_t2lm_ie(
-		struct wlan_t2lm_onging_negotiation_info *t2lm, uint8_t *ie)
+		struct wlan_t2lm_onging_negotiation_info *t2lm, uint8_t *ie,
+		uint32_t frame_len)
 {
 	struct extn_ie_header *ext_ie_hdr = NULL;
 	QDF_STATUS retval;
 	enum wlan_t2lm_direction dir;
 	struct wlan_t2lm_info t2lm_info;
+	uint32_t ie_len_parsed = 0;
 
 	for (dir = 0; dir < WLAN_T2LM_MAX_DIRECTION; dir++)
 		t2lm->t2lm_info[dir].direction = WLAN_T2LM_INVALID_DIRECTION;
 
 	for (dir = 0; dir < WLAN_T2LM_MAX_DIRECTION; dir++) {
-		if (!ie) {
-			t2lm_err("ie is null");
+		if (!ie || !frame_len) {
+			t2lm_err("ie is null or len is 0");
 			return QDF_STATUS_E_NULL_VALUE;
+		}
+
+		if (frame_len < (ie_len_parsed + sizeof(struct ie_header))) {
+			t2lm_err("Frame length is lesser than parsed T2LM IE header length");
+			return QDF_STATUS_E_PROTO;
 		}
 
 		ext_ie_hdr = (struct extn_ie_header *)ie;
 
 		if (ext_ie_hdr->ie_id == WLAN_ELEMID_EXTN_ELEM &&
 		    ext_ie_hdr->ie_extn_id == WLAN_EXTN_ELEMID_T2LM) {
+			ie_len_parsed += ext_ie_hdr->ie_len + sizeof(struct ie_header);
+			if (frame_len < ie_len_parsed) {
+				t2lm_err("Frame length is lesser than parsed T2LM IE length");
+				return QDF_STATUS_E_PROTO;
+			}
 			qdf_mem_zero(&t2lm_info, sizeof(t2lm_info));
 			retval = wlan_mlo_parse_t2lm_info(ie, &t2lm_info);
 			if (!retval &&
@@ -425,6 +438,7 @@ uint8_t *wlan_mlo_add_t2lm_ie(uint8_t *frm,
  * frame.
  * @t2lm: Pointer to T2LM structure
  * @action_frm: Pointer to action frame
+ * @frame_len: Received frame pointer
  * @category: T2LM action frame category
  *
  * Return: QDF_STATUS
@@ -432,6 +446,7 @@ uint8_t *wlan_mlo_add_t2lm_ie(uint8_t *frm,
 static QDF_STATUS wlan_mlo_parse_t2lm_request_action_frame(
 		struct wlan_t2lm_onging_negotiation_info *t2lm,
 		struct wlan_action_frame *action_frm,
+		uint32_t frame_len,
 		enum wlan_t2lm_category category)
 {
 	uint8_t *t2lm_action_frm;
@@ -455,7 +470,8 @@ static QDF_STATUS wlan_mlo_parse_t2lm_request_action_frame(
 	t2lm->dialog_token = *t2lm_action_frm;
 
 	return wlan_mlo_parse_t2lm_ie(t2lm,
-				      t2lm_action_frm + sizeof(uint8_t));
+				      t2lm_action_frm + sizeof(uint8_t),
+				      frame_len);
 }
 
 /**
@@ -463,6 +479,7 @@ static QDF_STATUS wlan_mlo_parse_t2lm_request_action_frame(
  * action frame.
  * @t2lm: Pointer to T2LM structure
  * @action_frm: Pointer to action frame
+ * @frame_len: Action frame length
  * @category: T2LM action frame category
  *
  * Return: QDF_STATUS
@@ -470,6 +487,7 @@ static QDF_STATUS wlan_mlo_parse_t2lm_request_action_frame(
 static QDF_STATUS wlan_mlo_parse_t2lm_response_action_frame(
 		struct wlan_t2lm_onging_negotiation_info *t2lm,
 		struct wlan_action_frame *action_frm,
+		uint32_t frame_len,
 		enum wlan_t2lm_category category)
 {
 	uint8_t *t2lm_action_frm;
@@ -497,7 +515,8 @@ static QDF_STATUS wlan_mlo_parse_t2lm_response_action_frame(
 	if (t2lm->t2lm_resp_type ==
 			WLAN_T2LM_RESP_TYPE_PREFERRED_TID_TO_LINK_MAPPING) {
 		t2lm_action_frm += sizeof(uint8_t) + sizeof(uint16_t);
-		ret_val = wlan_mlo_parse_t2lm_ie(t2lm, t2lm_action_frm);
+		ret_val = wlan_mlo_parse_t2lm_ie(t2lm, t2lm_action_frm,
+						 frame_len);
 	}
 
 	return ret_val;
@@ -506,6 +525,7 @@ static QDF_STATUS wlan_mlo_parse_t2lm_response_action_frame(
 int wlan_mlo_parse_t2lm_action_frame(
 		struct wlan_t2lm_onging_negotiation_info *t2lm,
 		struct wlan_action_frame *action_frm,
+		uint32_t frame_len,
 		enum wlan_t2lm_category category)
 {
 	QDF_STATUS ret_val = QDF_STATUS_SUCCESS;
@@ -514,13 +534,13 @@ int wlan_mlo_parse_t2lm_action_frame(
 	case WLAN_T2LM_CATEGORY_REQUEST:
 		{
 			ret_val = wlan_mlo_parse_t2lm_request_action_frame(
-					t2lm, action_frm, category);
+					t2lm, action_frm, frame_len, category);
 			return qdf_status_to_os_return(ret_val);
 		}
 	case WLAN_T2LM_CATEGORY_RESPONSE:
 		{
 			ret_val = wlan_mlo_parse_t2lm_response_action_frame(
-					t2lm, action_frm, category);
+					t2lm, action_frm, frame_len, category);
 
 			return qdf_status_to_os_return(ret_val);
 		}
@@ -797,6 +817,12 @@ QDF_STATUS wlan_send_t2lm_info(struct wlan_objmgr_vdev *vdev,
 		co_mld_vdev = wlan_vdev_list[i];
 		if (!co_mld_vdev) {
 			t2lm_err("co_mld_vdev is null");
+			mlo_release_vdev_ref(co_mld_vdev);
+			continue;
+		}
+
+		if (mlo_is_sta_bridge_vdev(co_mld_vdev)) {
+			t2lm_debug("skip co_mld_vdev for bridge sta");
 			mlo_release_vdev_ref(co_mld_vdev);
 			continue;
 		}
@@ -1434,7 +1460,7 @@ wlan_mlo_link_disable_request_handler(struct wlan_objmgr_psoc *psoc,
 							   &vdev_id);
 	if (!is_connected) {
 		t2lm_err("Not connected to peer MLD " QDF_MAC_ADDR_FMT,
-			 params->mld_addr.bytes);
+			 QDF_MAC_ADDR_REF(params->mld_addr.bytes));
 		return QDF_STATUS_E_FAILURE;
 	}
 

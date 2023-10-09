@@ -129,11 +129,30 @@ struct CE_ring_state {
 
 	OS_DMA_MEM_CONTEXT(ce_dmacontext); /* OS Specific DMA context */
 
+	uint32_t flush_count;
 	/*ce ring event */
 	unsigned long event;
 	/* last flushed time stamp */
 	uint64_t last_flush_ts;
 };
+
+#ifdef FEATURE_HIF_DELAYED_REG_WRITE
+/**
+ * struct ce_reg_write_stats - stats to keep track of register writes
+ * @enqueues: writes enqueued to delayed work
+ * @dequeues: writes dequeued from delayed work (not written yet)
+ * @coalesces: writes not enqueued since srng is already queued up
+ * @direct: writes not enqueued and written to register directly
+ * @dequeue_delay: dequeue operation be delayed
+ */
+struct ce_reg_write_stats {
+	uint32_t enqueues;
+	uint32_t dequeues;
+	uint32_t coalesces;
+	uint32_t direct;
+	uint32_t dequeue_delay;
+};
+#endif
 
 /* Copy Engine internal state */
 struct CE_state {
@@ -204,6 +223,12 @@ struct CE_state {
 #endif
 	bool msi_supported;
 	bool batch_intr_supported;
+#ifdef FEATURE_HIF_DELAYED_REG_WRITE
+	struct ce_reg_write_stats wstats;
+	uint8_t reg_write_in_progress;
+	qdf_time_t last_dequeue_time;
+#endif
+	uint32_t ce_wrt_idx_offset;
 };
 
 /* Descriptor rings must be aligned to this boundary */
@@ -550,6 +575,7 @@ union ce_srng_desc {
  * @HIF_IRQ_EVENT: event recorded in the irq before scheduling the bh
  * @HIF_CE_TASKLET_ENTRY: records the start of the ce_tasklet
  * @HIF_CE_TASKLET_RESCHEDULE: records the rescheduling of the wlan_tasklet
+ * @HIF_CE_TASKLET_REAP_REPOLL: records the repoll of the wlan_tasklet
  * @HIF_CE_TASKLET_EXIT: records the exit of the wlan tasklet without reschedule
  * @HIF_CE_REAP_ENTRY: records when we process completion outside of a bh
  * @HIF_CE_REAP_EXIT:  records when we process completion outside of a bh
@@ -586,6 +612,7 @@ enum hif_ce_event_type {
 	HIF_IRQ_EVENT = 0x10,
 	HIF_CE_TASKLET_ENTRY,
 	HIF_CE_TASKLET_RESCHEDULE,
+	HIF_CE_TASKLET_REAP_REPOLL,
 	HIF_CE_TASKLET_EXIT,
 	HIF_CE_REAP_ENTRY,
 	HIF_CE_REAP_EXIT,
@@ -928,5 +955,10 @@ static inline void ce_ring_set_event(struct CE_ring_state *ring, int event)
 static inline int ce_ring_get_clear_event(struct CE_ring_state *ring, int event)
 {
 	return qdf_atomic_test_and_clear_bit(event, &ring->event);
+}
+
+static inline void ce_ring_inc_flush_cnt(struct CE_ring_state *ring)
+{
+	ring->flush_count++;
 }
 #endif /* __COPY_ENGINE_INTERNAL_H__ */

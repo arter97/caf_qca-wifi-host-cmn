@@ -34,7 +34,8 @@
 #include "phyrx_common_user_info.h"
 
 /* TX MONITOR */
-#ifdef WLAN_PKT_CAPTURE_TX_2_0
+#if  defined(WLAN_PKT_CAPTURE_TX_2_0) || \
+defined(WLAN_PKT_CAPTURE_RX_2_0)
 #include "mon_buffer_addr.h"
 /* FES WINDOW OPEN */
 #include "tx_fes_setup.h"

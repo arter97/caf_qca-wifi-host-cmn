@@ -281,9 +281,9 @@ bool ucfg_ipa_is_fw_wdi_activated(struct wlan_objmgr_pdev *pdev)
 qdf_export_symbol(ucfg_ipa_is_fw_wdi_activated);
 
 void ucfg_ipa_uc_cleanup_sta(struct wlan_objmgr_pdev *pdev,
-			     qdf_netdev_t net_dev)
+			     qdf_netdev_t net_dev, uint8_t session_id)
 {
-	return ipa_uc_cleanup_sta(pdev, net_dev);
+	return ipa_uc_cleanup_sta(pdev, net_dev, session_id);
 }
 
 qdf_export_symbol(ucfg_ipa_uc_cleanup_sta);
@@ -297,9 +297,9 @@ QDF_STATUS ucfg_ipa_uc_disconnect_ap(struct wlan_objmgr_pdev *pdev,
 qdf_export_symbol(ucfg_ipa_uc_disconnect_ap);
 
 void ucfg_ipa_cleanup_dev_iface(struct wlan_objmgr_pdev *pdev,
-				qdf_netdev_t net_dev)
+				qdf_netdev_t net_dev, uint8_t session_id)
 {
-	return ipa_cleanup_dev_iface(pdev, net_dev);
+	return ipa_cleanup_dev_iface(pdev, net_dev, session_id);
 }
 
 qdf_export_symbol(ucfg_ipa_cleanup_dev_iface);
@@ -361,3 +361,12 @@ bool ucfg_ipa_is_wds_enabled(void)
 }
 
 qdf_export_symbol(ucfg_ipa_is_wds_enabled);
+
+QDF_STATUS ucfg_ipa_get_alt_pipe(struct wlan_objmgr_pdev *pdev,
+				 uint8_t vdev_id,
+				 bool *alt_pipe)
+{
+	return ipa_get_alt_pipe(pdev, vdev_id, alt_pipe);
+}
+
+qdf_export_symbol(ucfg_ipa_get_alt_pipe);

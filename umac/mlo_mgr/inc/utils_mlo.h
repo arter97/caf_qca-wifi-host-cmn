@@ -29,6 +29,13 @@
 
 #ifdef WLAN_FEATURE_11BE_MLO
 
+#define MLO_LINKSPECIFIC_ASSOC_REQ_FC0  0x00
+#define MLO_LINKSPECIFIC_ASSOC_REQ_FC1  0x00
+#define MLO_LINKSPECIFIC_ASSOC_RESP_FC0 0x10
+#define MLO_LINKSPECIFIC_ASSOC_RESP_FC1 0x00
+#define MLO_LINKSPECIFIC_PROBE_RESP_FC0 0x50
+#define MLO_LINKSPECIFIC_PROBE_RESP_FC1 0x00
+
 /**
  * util_gen_link_assoc_req() - Generate link specific assoc request
  * @frame: Pointer to original association request. This should not contain the
@@ -411,9 +418,12 @@ util_get_bvmlie_mldcap(uint8_t *mlieseq, qdf_size_t mlieseqlen,
  * profile is found, or if none of the per-STA profiles includes a MAC address
  * in the STA Info field (assuming no errors are encountered).
  *
- * Get partner link information in the per-STA profiles present in a Basic
- * variant Multi-Link element. The partner link information is returned only for
- * those per-STA profiles which have a MAC address in the STA Info field.
+ * Get partner link information and NSTR capability information in the
+ * per-STA profiles present in a Basic variant Multi-Link element.
+ * The partner link information is returned only for those per-STA profiles
+ * which have a MAC address in the STA Info field.
+ * The NSTR capability information is returned only for those per-STA profiles
+ * which are Complete per-STA profiles.
  *
  * Return: QDF_STATUS_SUCCESS in the case of success, QDF_STATUS value giving
  * the reason for error in the case of failure

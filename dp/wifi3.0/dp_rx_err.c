@@ -28,6 +28,7 @@
 #include "qdf_nbuf.h"
 #include "dp_rx_defrag.h"
 #include "dp_ipa.h"
+#include "dp_internal.h"
 #ifdef WIFI_MONITOR_SUPPORT
 #include "dp_htt.h"
 #include <dp_mon.h>
@@ -768,11 +769,18 @@ void dp_2k_jump_handle(struct dp_soc *soc, qdf_nbuf_t nbuf, uint8_t *rx_tlv_hdr,
 {
 	struct dp_peer *peer = NULL;
 	struct dp_rx_tid *rx_tid = NULL;
+	struct dp_txrx_peer *txrx_peer;
 	uint32_t frame_mask = FRAME_MASK_IPV4_ARP;
 
 	peer = dp_peer_get_ref_by_id(soc, peer_id, DP_MOD_ID_RX_ERR);
 	if (!peer) {
 		dp_rx_err_info_rl("%pK: peer not found", soc);
+		goto free_nbuf;
+	}
+
+	txrx_peer = dp_get_txrx_peer(peer);
+	if (!txrx_peer) {
+		dp_rx_err_info_rl("%pK: txrx_peer not found", soc);
 		goto free_nbuf;
 	}
 
@@ -812,7 +820,7 @@ void dp_2k_jump_handle(struct dp_soc *soc, qdf_nbuf_t nbuf, uint8_t *rx_tlv_hdr,
 	}
 
 nbuf_deliver:
-	if (dp_rx_deliver_special_frame(soc, peer->txrx_peer, nbuf, frame_mask,
+	if (dp_rx_deliver_special_frame(soc, txrx_peer, nbuf, frame_mask,
 					rx_tlv_hdr)) {
 		DP_STATS_INC(soc, rx.err.rx_2k_jump_to_stack, 1);
 		dp_peer_unref_delete(peer, DP_MOD_ID_RX_ERR);
@@ -878,7 +886,11 @@ dp_rx_null_q_handle_invalid_peer_id_exception(struct dp_soc *soc,
 
 bool dp_rx_check_pkt_len(struct dp_soc *soc, uint32_t pkt_len)
 {
-	if (qdf_unlikely(pkt_len > RX_DATA_BUFFER_SIZE)) {
+	uint16_t buf_size;
+
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
+
+	if (qdf_unlikely(pkt_len > buf_size)) {
 		DP_STATS_INC_PKT(soc, rx.err.rx_invalid_pkt_len,
 				 1, pkt_len);
 		return true;
@@ -1066,7 +1078,10 @@ more_msdu_link_desc:
 						soc,
 						msdu_list.sw_cookie[i]);
 
-		qdf_assert_always(rx_desc);
+		if (dp_assert_always_internal_stat(rx_desc, soc,
+						   rx.err.reo_err_rx_desc_null))
+			continue;
+
 		nbuf = rx_desc->nbuf;
 
 		/*
@@ -1196,6 +1211,18 @@ more_msdu_link_desc:
 			DP_STATS_INC(soc, rx.err.reo_err_oor_sg_count, 1);
 		}
 		head_nbuf = NULL;
+
+		dp_rx_nbuf_set_link_id_from_tlv(soc, qdf_nbuf_data(nbuf), nbuf);
+
+		if (pdev && pdev->link_peer_stats &&
+		    txrx_peer && txrx_peer->is_mld_peer) {
+			link_id = dp_rx_get_stats_arr_idx_from_link_id(
+								nbuf,
+								txrx_peer);
+		}
+
+		if (txrx_peer)
+			dp_rx_set_nbuf_band(nbuf, txrx_peer, link_id);
 
 		switch (err_code) {
 		case HAL_REO_ERR_REGULAR_FRAME_2K_JUMP:
@@ -1540,6 +1567,22 @@ fail:
 	return;
 }
 
+#ifdef WLAN_SUPPORT_RX_FLOW_TAG
+static void dp_rx_peek_trapped_packet(struct dp_soc *soc,
+				      struct dp_vdev *vdev)
+{
+	if (soc->cdp_soc.ol_ops->send_wakeup_trigger)
+		soc->cdp_soc.ol_ops->send_wakeup_trigger(soc->ctrl_psoc,
+				vdev->vdev_id);
+}
+#else
+static void dp_rx_peek_trapped_packet(struct dp_soc *soc,
+				      struct dp_vdev *vdev)
+{
+	return;
+}
+#endif
+
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP) && \
 	defined(WLAN_MCAST_MLO)
 static bool dp_rx_igmp_handler(struct dp_soc *soc,
@@ -1594,6 +1637,9 @@ dp_rx_err_route_hdl(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	struct dp_vdev *vdev;
 	struct hal_rx_msdu_metadata msdu_metadata;
 	bool is_eapol;
+	uint16_t buf_size;
+
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 
 	qdf_nbuf_set_rx_chfrag_start(
 				nbuf,
@@ -1620,9 +1666,7 @@ dp_rx_err_route_hdl(struct dp_soc *soc, qdf_nbuf_t nbuf,
 			goto drop_nbuf;
 
 		/* Set length in nbuf */
-		qdf_nbuf_set_pktlen(
-			nbuf, qdf_min(pkt_len, (uint32_t)RX_DATA_BUFFER_SIZE));
-		qdf_assert_always(nbuf->data == rx_tlv_hdr);
+		qdf_nbuf_set_pktlen(nbuf, qdf_min(pkt_len, (uint32_t)buf_size));
 	}
 
 	/*
@@ -1656,6 +1700,10 @@ dp_rx_err_route_hdl(struct dp_soc *soc, qdf_nbuf_t nbuf,
 		qdf_nbuf_pull_head(nbuf, (msdu_metadata.l3_hdr_pad +
 				   soc->rx_pkt_tlv_size));
 
+	if (hal_rx_msdu_cce_metadata_get(soc->hal_soc, rx_tlv_hdr) ==
+			CDP_STANDBY_METADATA)
+		dp_rx_peek_trapped_packet(soc, vdev);
+
 	QDF_NBUF_CB_RX_PEER_ID(nbuf) = txrx_peer->peer_id;
 	if (dp_rx_igmp_handler(soc, vdev, txrx_peer, nbuf, link_id))
 		return;
@@ -1687,6 +1735,10 @@ dp_rx_err_route_hdl(struct dp_soc *soc, qdf_nbuf_t nbuf,
 			DP_PEER_TO_STACK_INCC_PKT(txrx_peer, 1,
 						  qdf_nbuf_len(nbuf),
 						  vdev->pdev->enhanced_stats_en);
+			DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer,
+						      rx.rx_success, 1,
+						      qdf_nbuf_len(nbuf),
+						      link_id);
 			qdf_nbuf_set_exc_frame(nbuf, 1);
 			qdf_nbuf_set_next(nbuf, NULL);
 
@@ -1788,7 +1840,7 @@ dp_rx_err_ring_record_entry(struct dp_soc *soc, uint64_t paddr,
 }
 #endif
 
-#ifdef HANDLE_RX_REROUTE_ERR
+#if defined(HANDLE_RX_REROUTE_ERR) || defined(REO_EXCEPTION_MSDU_WAR)
 static int dp_rx_err_handle_msdu_buf(struct dp_soc *soc,
 				     hal_ring_desc_t ring_desc)
 {
@@ -1842,7 +1894,9 @@ assert_return:
 	qdf_assert(0);
 	return lmac_id;
 }
+#endif
 
+#ifdef HANDLE_RX_REROUTE_ERR
 static int dp_rx_err_exception(struct dp_soc *soc, hal_ring_desc_t ring_desc)
 {
 	int ret;
@@ -1887,13 +1941,19 @@ static int dp_rx_err_exception(struct dp_soc *soc, hal_ring_desc_t ring_desc)
 	return ret;
 }
 #else /* HANDLE_RX_REROUTE_ERR */
-
+#ifdef REO_EXCEPTION_MSDU_WAR
+static int dp_rx_err_exception(struct dp_soc *soc, hal_ring_desc_t ring_desc)
+{
+	return dp_rx_err_handle_msdu_buf(soc, ring_desc);
+}
+#else	/* REO_EXCEPTION_MSDU_WAR */
 static int dp_rx_err_exception(struct dp_soc *soc, hal_ring_desc_t ring_desc)
 {
 	qdf_assert_always(0);
 
 	return DP_INVALID_LMAC_ID;
 }
+#endif /* REO_EXCEPTION_MSDU_WAR */
 #endif /* HANDLE_RX_REROUTE_ERR */
 
 #ifdef WLAN_MLO_MULTI_CHIP
@@ -1946,6 +2006,26 @@ static bool dp_idle_link_bm_id_check(struct dp_soc *soc, uint8_t rbm,
 }
 #endif
 
+static inline void
+dp_rx_err_dup_frame(struct dp_soc *soc,
+		    struct hal_rx_mpdu_desc_info *mpdu_desc_info)
+{
+	struct dp_txrx_peer *txrx_peer = NULL;
+	dp_txrx_ref_handle txrx_ref_handle = NULL;
+	uint16_t peer_id;
+
+	peer_id =
+		dp_rx_peer_metadata_peer_id_get(soc,
+						mpdu_desc_info->peer_meta_data);
+	txrx_peer = dp_tgt_txrx_peer_get_ref_by_id(soc, peer_id,
+						   &txrx_ref_handle,
+						   DP_MOD_ID_RX_ERR);
+	if (txrx_peer) {
+		DP_STATS_INC(txrx_peer->vdev, rx.duplicate_count, 1);
+		dp_txrx_peer_unref_delete(txrx_ref_handle, DP_MOD_ID_RX_ERR);
+	}
+}
+
 uint32_t
 dp_rx_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
 		  hal_ring_handle_t hal_ring_hdl, uint32_t quota)
@@ -1973,6 +2053,9 @@ dp_rx_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
 	bool sw_pn_check_needed;
 	int max_reap_limit = dp_rx_get_loop_pkt_limit(soc);
 	int i, rx_bufs_reaped_total;
+	uint16_t peer_id;
+	struct dp_txrx_peer *txrx_peer = NULL;
+	dp_txrx_ref_handle txrx_ref_handle = NULL;
 
 	/* Debug -- Remove later */
 	qdf_assert(soc && hal_ring_hdl);
@@ -2163,6 +2246,19 @@ dp_rx_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
 
 			rx_bufs_reaped[mac_id] += count;
 			DP_STATS_INC(soc, rx.rx_frags, 1);
+
+			peer_id = dp_rx_peer_metadata_peer_id_get(soc,
+					mpdu_desc_info.peer_meta_data);
+			txrx_peer =
+				dp_tgt_txrx_peer_get_ref_by_id(soc, peer_id,
+							       &txrx_ref_handle,
+							       DP_MOD_ID_RX_ERR);
+			if (txrx_peer) {
+				DP_STATS_INC(txrx_peer->vdev,
+					     rx.fragment_count, 1);
+				dp_txrx_peer_unref_delete(txrx_ref_handle,
+							  DP_MOD_ID_RX_ERR);
+			}
 			goto next_entry;
 		}
 
@@ -2207,9 +2303,11 @@ process_reo_error_code:
 
 			rx_bufs_reaped[mac_id] += count;
 			break;
+		case HAL_REO_ERR_NON_BA_DUPLICATE:
+			dp_rx_err_dup_frame(soc, &mpdu_desc_info);
+			fallthrough;
 		case HAL_REO_ERR_QUEUE_DESC_INVALID:
 		case HAL_REO_ERR_AMPDU_IN_NON_BA:
-		case HAL_REO_ERR_NON_BA_DUPLICATE:
 		case HAL_REO_ERR_BA_DUPLICATE:
 		case HAL_REO_ERR_BAR_FRAME_NO_BA_SESSION:
 		case HAL_REO_ERR_BAR_FRAME_SN_EQUALS_SSN:
@@ -2636,7 +2734,7 @@ dp_rx_wbm_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
 				dp_rx_err_alert("invalid reo push reason %u",
 						wbm_err.info_bit.reo_psh_rsn);
 				dp_rx_nbuf_free(nbuf);
-				qdf_assert_always(0);
+				dp_assert_always_internal(0);
 			}
 		} else if (wbm_err.info_bit.wbm_err_src ==
 					HAL_RX_WBM_ERR_SRC_RXDMA) {
@@ -2763,7 +2861,7 @@ dp_rx_wbm_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
 				dp_rx_err_alert("invalid rxdma push reason %u",
 						wbm_err.info_bit.rxdma_psh_rsn);
 				dp_rx_nbuf_free(nbuf);
-				qdf_assert_always(0);
+				dp_assert_always_internal(0);
 			}
 		} else {
 			/* Should not come here */

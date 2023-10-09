@@ -182,7 +182,8 @@ QDF_STATUS dp_ipa_handle_rx_buf_smmu_mapping(struct dp_soc *soc,
 	 * operation and nbuf has done ipa smmu map before,
 	 * do ipa smmu unmap as well.
 	 */
-	if (!qdf_atomic_read(&soc->ipa_pipes_enabled)) {
+	if (!(qdf_atomic_read(&soc->ipa_pipes_enabled) &&
+				qdf_atomic_read(&soc->ipa_map_allowed))) {
 		if (!create && qdf_nbuf_is_rx_ipa_smmu_map(nbuf)) {
 			DP_STATS_INC(soc, rx.err.ipa_unmap_no_pipe, 1);
 		} else {
@@ -377,6 +378,21 @@ static QDF_STATUS dp_ipa_handle_rx_buf_pool_smmu_mapping(
 	return QDF_STATUS_SUCCESS;
 }
 #endif /* RX_DESC_MULTI_PAGE_ALLOC */
+
+QDF_STATUS dp_ipa_set_smmu_mapped(struct cdp_soc_t *soc_hdl, int val)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+
+	qdf_atomic_set(&soc->ipa_map_allowed, val);
+	return QDF_STATUS_SUCCESS;
+}
+
+int dp_ipa_get_smmu_mapped(struct cdp_soc_t *soc_hdl)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+
+	return qdf_atomic_read(&soc->ipa_map_allowed);
+}
 
 static QDF_STATUS dp_ipa_get_shared_mem_info(qdf_device_t osdev,
 					     qdf_shared_mem_t *shared_mem,
@@ -629,7 +645,8 @@ static int dp_ipa_tx_alt_pool_attach(struct dp_soc *soc)
 	 */
 	for (tx_buffer_count = 0;
 		tx_buffer_count < max_alloc_count - 1; tx_buffer_count++) {
-		nbuf = qdf_nbuf_alloc(soc->osdev, alloc_size, 0, 256, FALSE);
+		nbuf = qdf_nbuf_frag_alloc(soc->osdev, alloc_size, 0,
+					   256, FALSE);
 		if (!nbuf)
 			break;
 
@@ -1479,7 +1496,8 @@ static int dp_tx_ipa_uc_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 	 */
 	for (tx_buffer_count = 0;
 		tx_buffer_count < max_alloc_count - 1; tx_buffer_count++) {
-		nbuf = qdf_nbuf_alloc(soc->osdev, alloc_size, 0, 256, FALSE);
+		nbuf = qdf_nbuf_frag_alloc(soc->osdev, alloc_size, 0,
+					   256, FALSE);
 		if (!nbuf)
 			break;
 
@@ -2969,11 +2987,32 @@ dp_ipa_set_wdi_hdr_type(qdf_ipa_wdi_hdr_info_t *hdr_info)
 		QDF_IPA_WDI_HDR_INFO_HDR_TYPE(hdr_info) =
 			IPA_HDR_L2_ETHERNET_II;
 }
+
+/**
+ * dp_ipa_setup_meta_data_mask() - Pass meta data mask to IPA
+ * @in: ipa in params
+ *
+ * Pass meta data mask to IPA.
+ *
+ * Return: none
+ */
+static void dp_ipa_setup_meta_data_mask(qdf_ipa_wdi_reg_intf_in_params_t *in)
+{
+	if (ucfg_ipa_is_wds_enabled())
+		QDF_IPA_WDI_REG_INTF_IN_PARAMS_META_DATA_MASK(in) = WLAN_IPA_AST_META_DATA_MASK;
+	else
+		QDF_IPA_WDI_REG_INTF_IN_PARAMS_META_DATA_MASK(in) = WLAN_IPA_META_DATA_MASK;
+}
 #else
 static inline void
 dp_ipa_set_wdi_hdr_type(qdf_ipa_wdi_hdr_info_t *hdr_info)
 {
 	QDF_IPA_WDI_HDR_INFO_HDR_TYPE(hdr_info) = IPA_HDR_L2_ETHERNET_II;
+}
+
+static void dp_ipa_setup_meta_data_mask(qdf_ipa_wdi_reg_intf_in_params_t *in)
+{
+	QDF_IPA_WDI_REG_INTF_IN_PARAMS_META_DATA_MASK(in) = WLAN_IPA_META_DATA_MASK;
 }
 #endif
 
@@ -2994,31 +3033,10 @@ dp_ipa_set_wdi_vlan_hdr_type(qdf_ipa_wdi_hdr_info_t *hdr_info)
 		QDF_IPA_WDI_HDR_INFO_HDR_TYPE(hdr_info) =
 			IPA_HDR_L2_802_1Q;
 }
-
-/**
- * dp_ipa_setup_meta_data_mask() - Pass meta data mask to IPA
- * @in: ipa in params
- *
- * Pass meta data mask to IPA.
- *
- * Return: none
- */
-static void dp_ipa_setup_meta_data_mask(qdf_ipa_wdi_reg_intf_in_params_t *in)
-{
-	if (ucfg_ipa_is_wds_enabled())
-		QDF_IPA_WDI_REG_INTF_IN_PARAMS_META_DATA_MASK(in) = WLAN_IPA_AST_META_DATA_MASK;
-	else
-		QDF_IPA_WDI_REG_INTF_IN_PARAMS_META_DATA_MASK(in) = WLAN_IPA_META_DATA_MASK;
-}
 #else
 static inline void
 dp_ipa_set_wdi_vlan_hdr_type(qdf_ipa_wdi_hdr_info_t *hdr_info)
 { }
-
-static void dp_ipa_setup_meta_data_mask(qdf_ipa_wdi_reg_intf_in_params_t *in)
-{
-	QDF_IPA_WDI_REG_INTF_IN_PARAMS_META_DATA_MASK(in) = WLAN_IPA_META_DATA_MASK;
-}
 #endif
 
 QDF_STATUS dp_ipa_setup_iface(char *ifname, uint8_t *mac_addr,
@@ -3448,8 +3466,12 @@ QDF_STATUS dp_ipa_enable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 
 	qdf_atomic_set(&soc->ipa_pipes_enabled, 1);
 	DP_IPA_EP_SET_TX_DB_PA(soc, ipa_res);
-	dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, pdev, true,
-					       __func__, __LINE__);
+
+	if (!ipa_config_is_opt_wifi_dp_enabled()) {
+		qdf_atomic_set(&soc->ipa_map_allowed, 1);
+		dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, pdev, true,
+						       __func__, __LINE__);
+	}
 
 	result = qdf_ipa_wdi_enable_pipes(hdl);
 	if (result) {
@@ -3458,8 +3480,11 @@ QDF_STATUS dp_ipa_enable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 			  __func__, result);
 		qdf_atomic_set(&soc->ipa_pipes_enabled, 0);
 		DP_IPA_RESET_TX_DB_PA(soc, ipa_res);
-		dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, pdev, false,
-						       __func__, __LINE__);
+		if (qdf_atomic_read(&soc->ipa_map_allowed)) {
+			qdf_atomic_set(&soc->ipa_map_allowed, 0);
+			dp_ipa_handle_rx_buf_pool_smmu_mapping(
+					soc, pdev, false, __func__, __LINE__);
+		}
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -3505,8 +3530,12 @@ QDF_STATUS dp_ipa_disable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	}
 
 	qdf_atomic_set(&soc->ipa_pipes_enabled, 0);
-	dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, pdev, false,
-					       __func__, __LINE__);
+
+	if (!ipa_config_is_opt_wifi_dp_enabled()) {
+		qdf_atomic_set(&soc->ipa_map_allowed, 0);
+		dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, pdev, false,
+						       __func__, __LINE__);
+	}
 
 	return result ? QDF_STATUS_E_FAILURE : QDF_STATUS_SUCCESS;
 }
@@ -3814,8 +3843,11 @@ static qdf_nbuf_t dp_ipa_frag_nbuf_linearize(struct dp_soc *soc,
 	uint32_t nbuf_len = qdf_nbuf_len(nbuf);
 	bool is_nbuf_head = true;
 	uint32_t copy_len = 0;
+	uint16_t buf_size;
 
-	dst_nbuf = qdf_nbuf_alloc(soc->osdev, RX_DATA_BUFFER_SIZE,
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
+
+	dst_nbuf = qdf_nbuf_alloc(soc->osdev, buf_size,
 				  RX_BUFFER_RESERVATION,
 				  RX_DATA_BUFFER_ALIGNMENT, FALSE);
 
@@ -3824,7 +3856,7 @@ static qdf_nbuf_t dp_ipa_frag_nbuf_linearize(struct dp_soc *soc,
 		return NULL;
 	}
 
-	if ((nbuf_len + L3_HEADER_PADDING) > RX_DATA_BUFFER_SIZE) {
+	if ((nbuf_len + L3_HEADER_PADDING) > buf_size) {
 		qdf_nbuf_free(dst_nbuf);
 		dp_err_rl("nbuf is jumbo data");
 		return NULL;
@@ -3915,6 +3947,31 @@ QDF_STATUS dp_ipa_tx_buf_smmu_unmapping(
 	struct dp_pdev *pdev =
 		dp_get_pdev_from_soc_pdev_id_wifi3(soc, pdev_id);
 
+	if (!qdf_mem_smmu_s1_enabled(soc->osdev)) {
+		dp_debug("SMMU S1 disabled");
+		return QDF_STATUS_SUCCESS;
+	}
+
+	if (!pdev) {
+		dp_err("Invalid pdev instance pdev_id:%d", pdev_id);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (__dp_ipa_tx_buf_smmu_mapping(soc, pdev, false, func, line) ||
+	    dp_ipa_tx_alt_buf_smmu_mapping(soc, pdev, false, func, line))
+		return QDF_STATUS_E_FAILURE;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS dp_ipa_rx_buf_pool_smmu_mapping(
+	struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
+	bool create, const char *func, uint32_t line)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct dp_pdev *pdev =
+		dp_get_pdev_from_soc_pdev_id_wifi3(soc, pdev_id);
+
 	if (!pdev) {
 		dp_err("Invalid instance");
 		return QDF_STATUS_E_FAILURE;
@@ -3925,13 +3982,9 @@ QDF_STATUS dp_ipa_tx_buf_smmu_unmapping(
 		return QDF_STATUS_SUCCESS;
 	}
 
-	if (__dp_ipa_tx_buf_smmu_mapping(soc, pdev, false, func, line) ||
-	    dp_ipa_tx_alt_buf_smmu_mapping(soc, pdev, false, func, line))
-		return QDF_STATUS_E_FAILURE;
-
+	dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, pdev, create, func, line);
 	return QDF_STATUS_SUCCESS;
 }
-
 #ifdef IPA_WDS_EASYMESH_FEATURE
 QDF_STATUS dp_ipa_ast_create(struct cdp_soc_t *soc_hdl,
 			     qdf_ipa_ast_info_type_t *data)

@@ -187,8 +187,16 @@ typedef void (*qdf_nbuf_free_t)(__qdf_nbuf_t);
 		QDF_NBUF_CB_TX_FTYPE((skb)) = (type); \
 	} while (0)
 
+#define __qdf_nbuf_set_vdev_xmit_type(skb, type) \
+	do { \
+		QDF_NBUF_CB_PKT_XMIT_TYPE((skb)) = (type); \
+	} while (0)
+
 #define __qdf_nbuf_get_tx_ftype(skb) \
 		 QDF_NBUF_CB_TX_FTYPE((skb))
+
+#define __qdf_nbuf_get_vdev_xmit_type(skb) \
+		 QDF_NBUF_CB_PKT_XMIT_TYPE((skb))
 
 
 #define __qdf_nbuf_set_rx_ftype(skb, type) \
@@ -310,7 +318,7 @@ typedef void (*qdf_nbuf_free_t)(__qdf_nbuf_t);
  * @func: Function name of the call site
  * @line: line number of the call site
  *
- * This allocates an nbuf aligns if needed and reserves some space in the front,
+ * This allocates a nbuf aligns if needed and reserves some space in the front,
  * since the reserve is done after alignment the reserve value if being
  * unaligned will result in an unaligned address.
  *
@@ -346,6 +354,31 @@ __qdf_nbuf_t __qdf_nbuf_alloc_ppe_ds(__qdf_device_t osdev, size_t size,
 #endif /* QCA_DP_NBUF_FAST_PPEDS */
 
 /**
+ * __qdf_nbuf_frag_alloc() - Allocate nbuf in page fragment way.
+ * @osdev: Device handle
+ * @size: Netbuf requested size
+ * @reserve: headroom to start with
+ * @align: Align
+ * @prio: Priority
+ * @func: Function name of the call site
+ * @line: line number of the call site
+ *
+ * This allocates a nbuf aligns if needed and reserves some space in the front,
+ * since the reserve is done after alignment the reserve value if being
+ * unaligned will result in an unaligned address.
+ * It will call into kernel page fragment APIs, long time keeping for scattered
+ * allocations should be considered for avoidance.
+ * This also brings in more probability of page frag allocation failures during
+ * low memory situation. In case of page frag allocation failure, fallback to
+ * non-frag slab allocations.
+ *
+ * Return: nbuf or %NULL if no memory
+ */
+__qdf_nbuf_t
+__qdf_nbuf_frag_alloc(__qdf_device_t osdev, size_t size, int reserve, int align,
+		      int prio, const char *func, uint32_t line);
+
+/**
  * __qdf_nbuf_alloc_no_recycler() - Allocates skb
  * @size: Size to be allocated for skb
  * @reserve: Reserve headroom size
@@ -360,6 +393,32 @@ __qdf_nbuf_t __qdf_nbuf_alloc_ppe_ds(__qdf_device_t osdev, size_t size,
  */
 __qdf_nbuf_t __qdf_nbuf_alloc_no_recycler(size_t size, int reserve, int align,
 					  const char *func, uint32_t line);
+
+/**
+ * __qdf_nbuf_page_frag_alloc() - Allocate nbuf from @pf_cache page
+ *				  fragment cache
+ * @osdev: Device handle
+ * @size: Netbuf requested size
+ * @reserve: headroom to start with
+ * @align: Align
+ * @pf_cache: Reference to page fragment cache
+ * @func: Function name of the call site
+ * @line: line number of the call site
+ *
+ * This allocates a nbuf, aligns if needed and reserves some space in the front,
+ * since the reserve is done after alignment the reserve value if being
+ * unaligned will result in an unaligned address.
+ *
+ * It will call kernel page fragment APIs for allocation of skb->head, prefer
+ * this API for buffers that are allocated and freed only once i.e., for
+ * reusable buffers.
+ *
+ * Return: nbuf or %NULL if no memory
+ */
+__qdf_nbuf_t
+__qdf_nbuf_page_frag_alloc(__qdf_device_t osdev, size_t size, int reserve,
+			   int align, __qdf_frag_cache_t *pf_cache,
+			   const char *func, uint32_t line);
 
 /**
  * __qdf_nbuf_clone() - clone the nbuf (copy is readonly)
@@ -1337,6 +1396,7 @@ static inline uint8_t *__qdf_nbuf_put_tail(struct sk_buff *skb, size_t size)
 	if (skb_tailroom(skb) < size) {
 		if (unlikely(pskb_expand_head(skb, 0,
 			size - skb_tailroom(skb), GFP_ATOMIC))) {
+			__qdf_nbuf_count_dec(skb);
 			dev_kfree_skb_any(skb);
 			return NULL;
 		}
@@ -1839,6 +1899,7 @@ static inline void __qdf_nbuf_set_pktlen(struct sk_buff *skb, uint32_t len)
 				   "SKB tailroom is lessthan requested length."
 				   " tail-room: %u, len: %u, skb->len: %u",
 				   skb_tailroom(skb), len, skb->len);
+				__qdf_nbuf_count_dec(skb);
 				dev_kfree_skb_any(skb);
 			}
 		}
@@ -2269,6 +2330,7 @@ static inline struct sk_buff *
 __qdf_nbuf_realloc_headroom(struct sk_buff *skb, uint32_t headroom)
 {
 	if (pskb_expand_head(skb, headroom, 0, GFP_ATOMIC)) {
+		__qdf_nbuf_count_dec(skb);
 		dev_kfree_skb_any(skb);
 		skb = NULL;
 	}
@@ -2292,6 +2354,7 @@ __qdf_nbuf_realloc_tailroom(struct sk_buff *skb, uint32_t tailroom)
 	/**
 	 * unlikely path
 	 */
+	__qdf_nbuf_count_dec(skb);
 	dev_kfree_skb_any(skb);
 	return NULL;
 }
@@ -2382,6 +2445,7 @@ __qdf_nbuf_expand(struct sk_buff *skb, uint32_t headroom, uint32_t tailroom)
 	if (likely(!pskb_expand_head(skb, headroom, tailroom, GFP_ATOMIC)))
 		return skb;
 
+	__qdf_nbuf_count_dec(skb);
 	dev_kfree_skb_any(skb);
 	return NULL;
 }
@@ -2398,7 +2462,12 @@ __qdf_nbuf_expand(struct sk_buff *skb, uint32_t headroom, uint32_t tailroom)
 static inline struct sk_buff *
 __qdf_nbuf_copy_expand(struct sk_buff *buf, int headroom, int tailroom)
 {
-	return skb_copy_expand(buf, headroom, tailroom, GFP_ATOMIC);
+	struct sk_buff *copy;
+	copy = skb_copy_expand(buf, headroom, tailroom, GFP_ATOMIC);
+	if (copy)
+		__qdf_nbuf_count_inc(copy);
+
+	return copy;
 }
 
 /**
@@ -2777,6 +2846,19 @@ static inline unsigned int __qdf_nbuf_get_end_offset(__qdf_nbuf_t nbuf)
 static inline unsigned int __qdf_nbuf_get_truesize(struct sk_buff *skb)
 {
 	return skb->truesize;
+}
+
+/**
+ * __qdf_nbuf_get_allocsize() - Return the actual size of the skb->head
+ * excluding the header and variable data area
+ * @skb: sk buff
+ *
+ * Return: actual allocated size of network buffer
+ */
+static inline unsigned int __qdf_nbuf_get_allocsize(struct sk_buff *skb)
+{
+	return SKB_WITH_OVERHEAD(skb->truesize) -
+		SKB_DATA_ALIGN(sizeof(struct sk_buff));
 }
 
 #ifdef CONFIG_WLAN_SYSFS_MEM_STATS

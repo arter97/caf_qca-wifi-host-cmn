@@ -32,6 +32,8 @@
 #endif
 
 #define CM_ID_INVALID 0xFFFFFFFF
+#define CM_ID_LSWITCH_BIT 0x10000000
+
 typedef uint32_t wlan_cm_id;
 
 /* Diconnect active timeout */
@@ -76,6 +78,7 @@ struct wlan_cm_wep_key_params {
  *	MAX_WEP_KEYS WEP keys
  * @rsn_caps: rsn caps
  * @mgmt_ciphers: mgmt cipher bitmask
+ * @user_mfp: Management frame protection state configured by user
  */
 struct wlan_cm_connect_crypto_info {
 	uint32_t wpa_versions;
@@ -86,6 +89,7 @@ struct wlan_cm_connect_crypto_info {
 	struct wlan_cm_wep_key_params wep_keys;
 	uint16_t rsn_caps;
 	uint32_t mgmt_ciphers;
+	uint8_t user_mfp;
 };
 
 #ifdef WLAN_FEATURE_FILS_SK
@@ -154,6 +158,8 @@ struct wlan_fils_con_info {
  * @CM_MLO_LINK_VDEV_DISCONNECT: Disconnect req for ML link
  * @CM_MLO_LINK_VDEV_CONNECT: Connect req for ML link
  * @CM_MLO_ROAM_INTERNAL_DISCONNECT: Disconnect req triggered for mlo roaming
+ * @CM_MLO_LINK_SWITCH_CONNECT: Connect req triggered for mlo link switch
+ * @CM_MLO_LINK_SWITCH_DISCONNECT: Disconnect req triggered for mlo link switch
  * @CM_SOURCE_MAX: max value of connection manager source
  * @CM_SOURCE_INVALID: Invalid connection manager req source
  */
@@ -174,6 +180,8 @@ enum wlan_cm_source {
 	CM_MLO_LINK_VDEV_DISCONNECT,
 	CM_MLO_LINK_VDEV_CONNECT,
 	CM_MLO_ROAM_INTERNAL_DISCONNECT,
+	CM_MLO_LINK_SWITCH_CONNECT,
+	CM_MLO_LINK_SWITCH_DISCONNECT,
 	CM_SOURCE_MAX,
 	CM_SOURCE_INVALID = CM_SOURCE_MAX,
 };
@@ -198,7 +206,7 @@ enum wlan_cm_source {
  * for production.
  * @is_wps_connection: if its wps connection
  * @is_osen_connection: if its osen connection
- * @reassoc_in_non_connected: if reassoc received in non connected
+ * @reassoc_in_non_init: if reassoc received in non init state
  * @dot11mode_filter: dot11mode filter used to restrict connection to
  * 11n/11ac/11ax.
  * @sae_pwe: SAE mechanism for PWE derivation
@@ -228,7 +236,7 @@ struct wlan_cm_connect_req {
 	uint8_t force_rsne_override:1,
 		is_wps_connection:1,
 		is_osen_connection:1,
-		reassoc_in_non_connected:1;
+		reassoc_in_non_init:1;
 	enum dot11_mode_filter dot11mode_filter;
 	uint8_t sae_pwe;
 	uint16_t ht_caps;
@@ -673,4 +681,18 @@ enum wlan_cm_active_request_type {
 	CM_ROAM_ACTIVE,
 };
 
+/*
+ * enum MLO_TYPE: ML type of bss
+ * @SLO: Non-ML or Single link ML
+ * @MLSR: Multi link Single Radio, indicates that both links
+ *        have to be on one mac
+ * @MLMR: Multi link Multi Radio, indicates that both links
+ *        can be on different macs
+ */
+enum MLO_TYPE {
+	SLO,
+	MLSR,
+	MLMR,
+	MLO_TYPE_MAX
+};
 #endif /* __WLAN_CM_PUBLIC_STRUCT_H__ */

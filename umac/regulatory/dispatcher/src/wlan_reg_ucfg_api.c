@@ -171,6 +171,16 @@ QDF_STATUS ucfg_reg_set_keep_6ghz_sta_cli_connection(
 	return reg_set_keep_6ghz_sta_cli_connection(pdev,
 						keep_6ghz_sta_cli_connection);
 }
+
+bool ucfg_reg_is_user_country_set_allowed(struct wlan_objmgr_psoc *psoc)
+{
+	return reg_is_user_country_set_allowed(psoc);
+}
+
+bool ucfg_reg_is_fcc_constraint_set(struct wlan_objmgr_pdev *pdev)
+{
+	return reg_is_fcc_constraint_set(pdev);
+}
 #endif
 
 QDF_STATUS ucfg_reg_get_default_country(struct wlan_objmgr_psoc *psoc,
@@ -308,15 +318,27 @@ void ucfg_reg_ch_avoid_ext(struct wlan_objmgr_psoc *psoc,
 }
 #endif
 
-QDF_STATUS ucfg_reg_11d_vdev_delete_update(struct wlan_objmgr_vdev *vdev)
+#ifdef TARGET_11D_SCAN
+QDF_STATUS ucfg_reg_11d_vdev_delete_update(struct wlan_objmgr_psoc *psoc,
+					   enum QDF_OPMODE op_mode,
+					   uint32_t vdev_id)
 {
-	return reg_11d_vdev_delete_update(vdev);
+	return reg_11d_vdev_delete_update(psoc, op_mode, vdev_id);
 }
 
 QDF_STATUS ucfg_reg_11d_vdev_created_update(struct wlan_objmgr_vdev *vdev)
 {
 	return reg_11d_vdev_created_update(vdev);
 }
+#endif
+
+QDF_STATUS ucfg_reg_update_hal_cap_wireless_modes(struct wlan_objmgr_psoc *psoc,
+					       uint64_t modes, uint8_t phy_id)
+{
+	return reg_update_hal_cap_wireless_modes(psoc, modes, phy_id);
+}
+
+qdf_export_symbol(ucfg_reg_update_hal_cap_wireless_modes);
 
 struct wlan_psoc_host_hal_reg_capabilities_ext *ucfg_reg_get_hal_reg_cap(
 				struct wlan_objmgr_psoc *psoc)
@@ -334,13 +356,19 @@ QDF_STATUS ucfg_reg_set_hal_reg_cap(struct wlan_objmgr_psoc *psoc,
 }
 qdf_export_symbol(ucfg_reg_set_hal_reg_cap);
 
-QDF_STATUS ucfg_reg_update_hal_reg_cap(struct wlan_objmgr_psoc *psoc,
-				       uint64_t wireless_modes, uint8_t phy_id)
+QDF_STATUS ucfg_reg_update_hal_reg_range_caps(struct wlan_objmgr_psoc *psoc,
+					      uint32_t low_2g_chan,
+					      uint32_t high_2g_chan,
+					      uint32_t low_5g_chan,
+					      uint32_t high_5g_chan,
+					      uint8_t phy_id)
 {
-	return reg_update_hal_reg_cap(psoc, wireless_modes, phy_id);
+	return reg_update_hal_reg_range_caps(psoc, low_2g_chan,
+				      high_2g_chan, low_5g_chan, high_5g_chan,
+				      phy_id);
 }
 
-qdf_export_symbol(ucfg_reg_update_hal_reg_cap);
+qdf_export_symbol(ucfg_reg_update_hal_reg_range_caps);
 
 #ifdef DISABLE_CHANNEL_LIST
 #ifdef CONFIG_CHAN_FREQ_API

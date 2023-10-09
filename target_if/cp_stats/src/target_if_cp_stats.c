@@ -97,6 +97,26 @@ void target_if_infra_cp_stats_free_stats_event(struct infra_cp_stats_event *ev)
 }
 #endif /* WLAN_SUPPORT_TWT */
 
+static
+void target_if_infra_cp_stats_rrm_sta_stats_event_free(
+					struct infra_cp_stats_event *ev)
+{
+	qdf_mem_free(ev->sta_stats);
+	ev->sta_stats = NULL;
+}
+
+static QDF_STATUS
+target_if_infra_cp_stats_rrm_sta_stats_event_alloc(
+			struct infra_cp_stats_event *ev)
+{
+	ev->sta_stats =
+	qdf_mem_malloc(sizeof(*ev->sta_stats));
+	if (!ev->sta_stats) {
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
 #ifdef CONFIG_WLAN_BMISS
 
 /**
@@ -157,6 +177,7 @@ void target_if_infra_cp_stats_event_free(struct infra_cp_stats_event *ev)
 {
 	target_if_infra_cp_stats_twt_event_free(ev);
 	target_if_infra_cp_stats_bmiss_event_free(ev);
+	target_if_infra_cp_stats_rrm_sta_stats_event_free(ev);
 }
 
 /**
@@ -173,11 +194,15 @@ target_if_infra_cp_stats_event_alloc(struct infra_cp_stats_event *ev)
 	QDF_STATUS status;
 
 	status = target_if_infra_cp_stats_twt_event_alloc(ev);
-	if (status)
+	if (QDF_IS_STATUS_ERROR(status))
 		return QDF_STATUS_E_NOMEM;
 
 	status = target_if_infra_cp_stats_bmiss_event_alloc(ev);
-	if (status)
+	if (QDF_IS_STATUS_ERROR(status))
+		return QDF_STATUS_E_NOMEM;
+
+	status = target_if_infra_cp_stats_rrm_sta_stats_event_alloc(ev);
+	if (QDF_IS_STATUS_ERROR(status))
 		return QDF_STATUS_E_NOMEM;
 
 	return QDF_STATUS_SUCCESS;

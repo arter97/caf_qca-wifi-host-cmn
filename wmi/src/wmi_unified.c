@@ -112,6 +112,12 @@ typedef PREPACK struct {
 /* Allocation of size 2048 bytes */
 #define WMI_WBUFF_POOL_3_SIZE 8
 
+/* wbuff pool buffer lengths in bytes for WMI*/
+#define WMI_WBUFF_LEN_POOL0 256
+#define WMI_WBUFF_LEN_POOL1 512
+#define WMI_WBUFF_LEN_POOL2 1024
+#define WMI_WBUFF_LEN_POOL3 2048
+
 #define RX_DIAG_EVENT_WORK_PROCESS_MAX_COUNT 500
 
 #ifdef WMI_INTERFACE_EVENT_LOGGING
@@ -1762,8 +1768,8 @@ wmi_buf_alloc_debug(wmi_unified_t wmi_handle, uint32_t len,
 		return NULL;
 	}
 
-	wmi_buf = wbuff_buff_get(wmi_handle->wbuff_handle, len, func_name,
-				 line_num);
+	wmi_buf = wbuff_buff_get(wmi_handle->wbuff_handle, WBUFF_MAX_POOL_ID,
+				 len, func_name, line_num);
 	if (!wmi_buf)
 		wmi_buf = qdf_nbuf_alloc_debug(NULL,
 					       roundup(len + WMI_MIN_HEAD_ROOM,
@@ -1804,8 +1810,8 @@ wmi_buf_t wmi_buf_alloc_fl(wmi_unified_t wmi_handle, uint32_t len,
 		return NULL;
 	}
 
-	wmi_buf = wbuff_buff_get(wmi_handle->wbuff_handle, len, __func__,
-				 __LINE__);
+	wmi_buf = wbuff_buff_get(wmi_handle->wbuff_handle, WBUFF_MAX_POOL_ID,
+				 len, __func__, __LINE__);
 	if (!wmi_buf)
 		wmi_buf = qdf_nbuf_alloc_fl(NULL, roundup(len +
 				WMI_MIN_HEAD_ROOM, 4), WMI_MIN_HEAD_ROOM, 4,
@@ -2647,6 +2653,20 @@ static void wmi_mtrace_rx(uint32_t message_id, uint16_t vdev_id, uint32_t data)
 		   mtrace_message_id, vdev_id, data);
 }
 
+#ifdef WLAN_FEATURE_CE_RX_BUFFER_REUSE
+static void wmi_rx_nbuf_free(qdf_nbuf_t nbuf)
+{
+	nbuf = wbuff_buff_put(nbuf);
+	if (nbuf)
+		qdf_nbuf_free(nbuf);
+}
+#else
+static inline void wmi_rx_nbuf_free(qdf_nbuf_t nbuf)
+{
+	return qdf_nbuf_free(nbuf);
+}
+#endif
+
 /**
  * wmi_process_control_rx() - process fw events callbacks
  * @wmi_handle: handle to wmi_unified
@@ -2666,7 +2686,7 @@ static void wmi_process_control_rx(struct wmi_unified *wmi_handle,
 	idx = wmi_unified_get_event_handler_ix(wmi_handle, id);
 	if (qdf_unlikely(idx == A_ERROR)) {
 		wmi_debug("no handler registered for event id 0x%x", id);
-		qdf_nbuf_free(evt_buf);
+		wmi_rx_nbuf_free(evt_buf);
 		return;
 	}
 	wmi_mtrace_rx(id, 0xFF, idx);
@@ -2708,7 +2728,7 @@ static void wmi_process_control_rx(struct wmi_unified *wmi_handle,
 							    evt_buf);
 	} else {
 		wmi_err("Invalid event context %d", exec_ctx);
-		qdf_nbuf_free(evt_buf);
+		wmi_rx_nbuf_free(evt_buf);
 	}
 
 }
@@ -2732,7 +2752,7 @@ static void wmi_control_rx(void *ctx, HTC_PACKET *htc_packet)
 	if (!wmi_handle) {
 		wmi_err("unable to get wmi_handle to Endpoint %d",
 			htc_packet->Endpoint);
-		qdf_nbuf_free(evt_buf);
+		wmi_rx_nbuf_free(evt_buf);
 		return;
 	}
 
@@ -2760,7 +2780,7 @@ static void wmi_control_diag_rx(void *ctx, HTC_PACKET *htc_packet)
 
 	if (!wmi_handle) {
 		wmi_err("unable to get wmi_handle for diag event end point id:%d", htc_packet->Endpoint);
-		qdf_nbuf_free(evt_buf);
+		wmi_rx_nbuf_free(evt_buf);
 		return;
 	}
 
@@ -2788,7 +2808,7 @@ static void wmi_control_dbr_rx(void *ctx, HTC_PACKET *htc_packet)
 	if (!wmi_handle) {
 		wmi_err("unable to get wmi_handle for dbr event endpoint id:%d",
 			htc_packet->Endpoint);
-		qdf_nbuf_free(evt_buf);
+		wmi_rx_nbuf_free(evt_buf);
 		return;
 	}
 
@@ -2966,7 +2986,7 @@ end:
 		wmi_handle->ops->wmi_free_allocated_event(id, &wmi_cmd_struct_ptr);
 #endif
 
-	qdf_nbuf_free(evt_buf);
+	wmi_rx_nbuf_free(evt_buf);
 
 }
 
@@ -3269,18 +3289,27 @@ qdf_export_symbol(wmi_unified_register_module);
 static void wmi_wbuff_register(struct wmi_unified *wmi_handle)
 {
 	struct wbuff_alloc_request wbuff_alloc[4];
+	uint8_t reserve = WMI_MIN_HEAD_ROOM;
 
-	wbuff_alloc[0].slot = WBUFF_POOL_0;
-	wbuff_alloc[0].size = WMI_WBUFF_POOL_0_SIZE;
-	wbuff_alloc[1].slot = WBUFF_POOL_1;
-	wbuff_alloc[1].size = WMI_WBUFF_POOL_1_SIZE;
-	wbuff_alloc[2].slot = WBUFF_POOL_2;
-	wbuff_alloc[2].size = WMI_WBUFF_POOL_2_SIZE;
-	wbuff_alloc[3].slot = WBUFF_POOL_3;
-	wbuff_alloc[3].size = WMI_WBUFF_POOL_3_SIZE;
+	wbuff_alloc[0].pool_id = 0;
+	wbuff_alloc[0].pool_size = WMI_WBUFF_POOL_0_SIZE;
+	wbuff_alloc[0].buffer_size = roundup(WMI_WBUFF_LEN_POOL0 + reserve, 4);
 
-	wmi_handle->wbuff_handle = wbuff_module_register(wbuff_alloc, 4,
-							 WMI_MIN_HEAD_ROOM, 4);
+	wbuff_alloc[1].pool_id = 1;
+	wbuff_alloc[1].pool_size = WMI_WBUFF_POOL_1_SIZE;
+	wbuff_alloc[1].buffer_size = roundup(WMI_WBUFF_LEN_POOL1 + reserve, 4);
+
+	wbuff_alloc[2].pool_id = 2;
+	wbuff_alloc[2].pool_size = WMI_WBUFF_POOL_2_SIZE;
+	wbuff_alloc[2].buffer_size = roundup(WMI_WBUFF_LEN_POOL2 + reserve, 4);
+
+	wbuff_alloc[3].pool_id = 3;
+	wbuff_alloc[3].pool_size = WMI_WBUFF_POOL_3_SIZE;
+	wbuff_alloc[3].buffer_size = roundup(WMI_WBUFF_LEN_POOL3 + reserve, 4);
+
+	wmi_handle->wbuff_handle =
+		wbuff_module_register(wbuff_alloc, QDF_ARRAY_SIZE(wbuff_alloc),
+				      reserve, 4, WBUFF_MODULE_WMI_TX);
 }
 
 /**
@@ -3411,7 +3440,10 @@ void wmi_unified_detach(struct wmi_unified *wmi_handle)
 						&soc->wmi_pdev[i]->event_queue);
 			}
 
-			qdf_flush_work(&soc->wmi_pdev[i]->rx_diag_event_work);
+			qdf_flush_workqueue(0,
+				soc->wmi_pdev[i]->wmi_rx_diag_work_queue);
+			qdf_destroy_workqueue(0,
+				soc->wmi_pdev[i]->wmi_rx_diag_work_queue);
 			buf = qdf_nbuf_queue_remove(
 					&soc->wmi_pdev[i]->diag_event_queue);
 			while (buf) {

@@ -1307,9 +1307,9 @@ static QDF_STATUS dp_rx_defrag_reo_reinject(struct dp_txrx_peer *txrx_peer,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	dp_ipa_handle_rx_buf_smmu_mapping(soc, head, rx_desc_pool->buf_size,
-					  true, __func__, __LINE__);
-
+	dp_ipa_handle_rx_buf_smmu_mapping(soc, head,
+					  rx_desc_pool->buf_size, true,
+					  __func__, __LINE__);
 	dp_audio_smmu_map(soc->osdev,
 			  qdf_mem_paddr_from_dmaaddr(soc->osdev,
 						     QDF_NBUF_CB_PADDR(head)),
@@ -1498,8 +1498,6 @@ QDF_STATUS dp_rx_defrag(struct dp_txrx_peer *txrx_peer, unsigned int tid,
 			cur = tmp_next;
 		}
 
-		/* If success, increment header to be stripped later */
-		hdr_space += dp_f_ccmp.ic_header;
 		break;
 
 	case cdp_sec_type_wep40:
@@ -1518,8 +1516,6 @@ QDF_STATUS dp_rx_defrag(struct dp_txrx_peer *txrx_peer, unsigned int tid,
 			cur = tmp_next;
 		}
 
-		/* If success, increment header to be stripped later */
-		hdr_space += dp_f_wep.ic_header;
 		break;
 	case cdp_sec_type_aes_gcmp:
 	case cdp_sec_type_aes_gcmp_256:
@@ -1535,7 +1531,6 @@ QDF_STATUS dp_rx_defrag(struct dp_txrx_peer *txrx_peer, unsigned int tid,
 			cur = tmp_next;
 		}
 
-		hdr_space += dp_f_gcmp.ic_header;
 		break;
 	default:
 		break;

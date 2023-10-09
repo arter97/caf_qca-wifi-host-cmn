@@ -623,11 +623,6 @@ void hal_dump_reg_write_srng_stats(hal_soc_handle_t hal_soc_hdl)
 	hal_debug("REO2SW3: %s",
 		  hal_fill_reg_write_srng_stats(srng, buf, sizeof(buf)));
 }
-#else
-void hal_dump_reg_write_srng_stats(hal_soc_handle_t hal_soc_hdl)
-{
-}
-#endif
 
 void hal_dump_reg_write_stats(hal_soc_handle_t hal_soc_hdl)
 {
@@ -647,6 +642,16 @@ void hal_dump_reg_write_stats(hal_soc_handle_t hal_soc_hdl)
 		  hist[REG_WRITE_SCHED_DELAY_SUB_5000us],
 		  hist[REG_WRITE_SCHED_DELAY_GT_5000us]);
 }
+#else
+void hal_dump_reg_write_srng_stats(hal_soc_handle_t hal_soc_hdl)
+{
+}
+
+/* TODO: Need separate logic for Evros */
+void hal_dump_reg_write_stats(hal_soc_handle_t hal_soc_hdl)
+{
+}
+#endif
 
 int hal_get_reg_write_pending_work(void *hal_soc)
 {
@@ -830,6 +835,20 @@ static void hal_reg_write_work(void *arg)
 		if (!q_elem->valid)
 			break;
 
+		qdf_rmb();
+		/* buy some more time to make sure all fields
+		 * in q_elem is updated per different CPUs, in
+		 * case wmb/rmb is not taken effect
+		 */
+		if (qdf_unlikely(!q_elem->srng ||
+				 (qdf_atomic_read(&q_elem->ring_id) !=
+				 q_elem->srng->ring_id))) {
+			hal_err_rl("q_elem fields not up to date %d %d",
+				   q_elem->srng->ring_id,
+				   qdf_atomic_read(&q_elem->ring_id));
+			qdf_assert_always(0);
+		}
+
 		q_elem->dequeue_time = qdf_get_log_timestamp();
 		ring_id = q_elem->srng->ring_id;
 		addr = q_elem->addr;
@@ -929,6 +948,7 @@ static void hal_reg_write_enqueue(struct hal_soc *hal_soc,
 
 	q_elem->srng = srng;
 	q_elem->addr = addr;
+	qdf_atomic_set(&q_elem->ring_id, srng->ring_id);
 	q_elem->enqueue_val = value;
 	q_elem->enqueue_time = qdf_get_log_timestamp();
 

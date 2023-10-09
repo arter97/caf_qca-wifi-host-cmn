@@ -22,6 +22,7 @@
 #include "dp_internal.h"
 #include "dp_types.h"
 #include "dp_htt.h"
+#include "dp_rx_mon.h"
 
 #include <dp_mon_filter.h>
 #ifdef WLAN_TX_PKT_CAPTURE_ENH
@@ -33,6 +34,7 @@
 #endif
 
 #define DP_INTR_POLL_TIMER_MS	5
+#define DP_HIST_TRACK_SIZE 50
 
 #define MON_VDEV_TIMER_INIT 0x1
 #define MON_VDEV_TIMER_RUNNING 0x2
@@ -540,7 +542,8 @@ dp_vdev_set_monitor_mode_rings(struct dp_pdev *pdev,
 #endif
 
 #if defined(WDI_EVENT_ENABLE) &&\
-	(defined(QCA_ENHANCED_STATS_SUPPORT) || !defined(REMOVE_PKT_LOG))
+	(defined(QCA_ENHANCED_STATS_SUPPORT) || !defined(REMOVE_PKT_LOG) ||\
+	 defined(WLAN_FEATURE_PKT_CAPTURE_V2))
 /**
  * dp_ppdu_stats_ind_handler() - PPDU stats msg handler
  * @soc:	 HTT SOC handle
@@ -554,7 +557,7 @@ bool dp_ppdu_stats_ind_handler(struct htt_soc *soc,
 			       qdf_nbuf_t htt_t2h_msg);
 #endif
 
-#if defined(QCA_ENHANCED_STATS_SUPPORT) && \
+#if defined(QCA_ENHANCED_STATS_SUPPORT) || \
 	(!defined(WLAN_TX_PKT_CAPTURE_ENH) || defined(WLAN_PKT_CAPTURE_TX_2_0))
 /**
  * dp_ppdu_desc_deliver(): Function to deliver Tx PPDU status descriptor
@@ -683,7 +686,8 @@ struct dp_mon_ops {
 					 struct cdp_pdev_tx_capture_stats *sts);
 #endif
 #if defined(WDI_EVENT_ENABLE) &&\
-	(defined(QCA_ENHANCED_STATS_SUPPORT) || !defined(REMOVE_PKT_LOG))
+	(defined(QCA_ENHANCED_STATS_SUPPORT) || !defined(REMOVE_PKT_LOG) ||\
+	 defined(WLAN_FEATURE_PKT_CAPTURE_V2))
 	bool (*mon_ppdu_stats_ind_handler)(struct htt_soc *soc,
 					   uint32_t *msg_word,
 					   qdf_nbuf_t htt_t2h_msg);
@@ -824,7 +828,8 @@ struct dp_mon_ops {
 				  struct htt_rx_ring_tlv_filter *tlv_filter);
 	void (*rx_packet_length_set)(uint32_t *msg_word,
 				     struct htt_rx_ring_tlv_filter *tlv_filter);
-	void (*rx_wmask_subscribe)(uint32_t *msg_word,
+	void (*rx_wmask_subscribe)(struct dp_soc *soc,
+				   uint32_t *msg_word, int pdev_id,
 				   struct htt_rx_ring_tlv_filter *tlv_filter);
 	void (*rx_pkt_tlv_offset)(uint32_t *msg_word,
 				  struct htt_rx_ring_tlv_filter *tlv_filter);
@@ -1027,9 +1032,25 @@ struct dp_rx_mon_rssi_offset {
 	int32_t rssi_offset;
 };
 
+struct dp_ring_ppdu_id_tracker {
+	uint64_t time_ppdu_id_mon_dest;
+	uint32_t ppdu_id_mon_dest;
+	uint64_t time_ppdu_id_mon_status;
+	uint32_t ppdu_id_mon_status;
+	uint32_t dest_hp;
+	uint32_t dest_tp;
+	int32_t dest_hw_hp;
+	int32_t dest_hw_tp;
+	uint32_t status_hp;
+	uint32_t status_tp;
+	int32_t status_hw_hp;
+	int32_t status_hw_tp;
+};
+
 struct  dp_mon_pdev {
 	/* monitor */
 	bool monitor_configured;
+	uint32_t mon_vdev_id;
 
 	struct dp_mon_filter **filter;	/* Monitor Filter pointer */
 
@@ -1083,9 +1104,18 @@ struct  dp_mon_pdev {
 	 * struct dp_mon_mpdu_list mpdu_list[MAX_MU_USERS];
 	 */
 	struct hal_rx_mon_desc_info *mon_desc;
+	struct dp_ring_ppdu_id_tracker hist_ppdu_id_mon_d[DP_HIST_TRACK_SIZE];
+	struct dp_ring_ppdu_id_tracker hist_ppdu_id_mon_s[DP_HIST_TRACK_SIZE];
+	uint8_t hist_mon_dest_idx;
+	uint8_t hist_mon_status_idx;
 #endif
+	bool set_reset_mon;
+	bool is_bkpressure;
 	/* Flag to hold on to monitor destination ring */
 	bool hold_mon_dest_ring;
+	uint64_t reap_status[DP_MON_STATUS_MAX];
+	uint64_t prev_status[DP_MON_STATUS_MAX];
+	uint64_t status_match[DP_MON_STATUS_MAX];
 
 	/* Flag to indicate monitor rings are initialized */
 	uint8_t pdev_mon_init;
@@ -1825,6 +1855,49 @@ dp_monitor_get_link_desc_pages(struct dp_soc *soc, uint32_t mac_id)
 
 	return &soc->monitor_soc->mon_link_desc_pages[mac_id];
 }
+
+#ifndef WLAN_SOFTUMAC_SUPPORT
+/*
+ * dp_monitor_get_link_desc_ring() - Get link desc ring
+ * @soc: point to soc
+ * @mac_id: mac id
+ *
+ * Return: return point to link desc ring
+ */
+static inline hal_ring_handle_t
+dp_monitor_get_link_desc_ring(struct dp_soc *soc, uint32_t mac_id)
+{
+	return soc->rxdma_mon_desc_ring[mac_id].hal_srng;
+}
+
+static inline uint32_t
+dp_monitor_get_num_link_desc_ring_entries(struct dp_soc *soc, uint32_t mac_id)
+{
+	struct dp_srng *ring;
+
+	ring = &soc->rxdma_mon_desc_ring[mac_id];
+
+	return ring->alloc_size / hal_srng_get_entrysize(soc->hal_soc,
+							 RXDMA_MONITOR_DESC);
+}
+#else
+static inline hal_ring_handle_t
+dp_monitor_get_link_desc_ring(struct dp_soc *soc, uint32_t mac_id)
+{
+	return soc->sw2rxdma_link_ring[mac_id].hal_srng;
+}
+
+static inline uint32_t
+dp_monitor_get_num_link_desc_ring_entries(struct dp_soc *soc, uint32_t mac_id)
+{
+	struct dp_srng *ring;
+
+	ring = &soc->sw2rxdma_link_ring[mac_id];
+
+	return ring->alloc_size / hal_srng_get_entrysize(soc->hal_soc,
+							 SW2RXDMA_LINK_RELEASE);
+}
+#endif
 
 /**
  * dp_monitor_get_total_link_descs() - Get total link descs
@@ -3031,7 +3104,8 @@ dp_monitor_pdev_tx_capture_get_stats(struct dp_soc *soc, struct dp_pdev *pdev,
  * Return: True if buffer should be freed by caller.
  */
 #if defined(WDI_EVENT_ENABLE) &&\
-	(defined(QCA_ENHANCED_STATS_SUPPORT) || !defined(REMOVE_PKT_LOG))
+	(defined(QCA_ENHANCED_STATS_SUPPORT) || !defined(REMOVE_PKT_LOG) ||\
+	 defined(WLAN_FEATURE_PKT_CAPTURE_V2))
 static inline bool dp_monitor_ppdu_stats_ind_handler(struct htt_soc *soc,
 						     uint32_t *msg_word,
 						     qdf_nbuf_t htt_t2h_msg)
@@ -3899,7 +3973,8 @@ void dp_monitor_pdev_reset_scan_spcl_vap_stats_enable(struct dp_pdev *pdev,
 
 #if defined(CONFIG_MON_WORD_BASED_TLV)
 static inline void
-dp_mon_rx_wmask_subscribe(struct dp_soc *soc, uint32_t *msg_word,
+dp_mon_rx_wmask_subscribe(struct dp_soc *soc,
+			  uint32_t *msg_word, int pdev_id,
 			  struct htt_rx_ring_tlv_filter *tlv_filter)
 {
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
@@ -3917,11 +3992,12 @@ dp_mon_rx_wmask_subscribe(struct dp_soc *soc, uint32_t *msg_word,
 		return;
 	}
 
-	monitor_ops->rx_wmask_subscribe(msg_word, tlv_filter);
+	monitor_ops->rx_wmask_subscribe(soc, msg_word, pdev_id, tlv_filter);
 }
 #else
 static inline void
-dp_mon_rx_wmask_subscribe(struct dp_soc *soc, uint32_t *msg_word,
+dp_mon_rx_wmask_subscribe(struct dp_soc *soc,
+			  uint32_t *msg_word, int pdev_id,
 			  struct htt_rx_ring_tlv_filter *tlv_filter)
 {
 }
@@ -4192,6 +4268,27 @@ QDF_STATUS dp_reset_monitor_mode(struct cdp_soc_t *soc_hdl,
 				 uint8_t pdev_id,
 				 uint8_t smart_monitor);
 
+/**
+ * dp_reset_monitor_mode_unlock() - Disable monitor mode with no locks
+ * @soc_hdl: Datapath soc handle
+ * @pdev_id: id of datapath PDEV handle
+ * @smart_monitor: smart monitor flag
+ *
+ * Return: QDF_STATUS
+ */
+#ifdef WIFI_MONITOR_SUPPORT
+QDF_STATUS dp_reset_monitor_mode_unlock(struct cdp_soc_t *soc_hdl,
+					uint8_t pdev_id,
+					uint8_t smart_monitor);
+#else
+QDF_STATUS dp_reset_monitor_mode_unlock(struct cdp_soc_t *soc_hdl,
+					uint8_t pdev_id,
+					uint8_t smart_monitor)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 static inline
 struct dp_mon_ops *dp_mon_ops_get(struct dp_soc *soc)
 {
@@ -4352,7 +4449,15 @@ QDF_STATUS dp_pdev_mon_rings_alloc_2_0(struct dp_pdev *pdev);
  * return: void
  */
 void dp_mon_ops_register_tx_2_0(struct dp_mon_soc *mon_soc);
+#else
+static inline
+void dp_mon_ops_register_tx_2_0(struct dp_mon_soc *mon_soc)
+{
+}
+#endif /* WLAN_PKT_CAPTURE_TX_2_0 */
 
+#if defined(WLAN_PKT_CAPTURE_TX_2_0) || \
+defined(WLAN_PKT_CAPTURE_RX_2_0)
 /**
  * dp_mon_ops_register_2_0(): register monitor ops
  * @mon_soc: monitor soc handle
@@ -4378,12 +4483,23 @@ void dp_mon_cdp_ops_register_2_0(struct cdp_ops *ops);
  */
 void dp_cfr_filter_register_2_0(struct cdp_ops *ops);
 #endif
+void dp_mon_ops_register_cmn_2_0(struct dp_mon_soc *mon_soc);
 #else
-static inline
-void dp_mon_ops_register_tx_2_0(struct dp_mon_soc *mon_soc)
+static inline void
+dp_mon_ops_register_2_0(struct dp_mon_soc *mon_soc)
 {
 }
-#endif /* WLAN_PKT_CAPTURE_TX_2_0 */
+
+static inline void
+dp_mon_cdp_ops_register_2_0(struct cdp_ops *ops)
+{
+}
+
+static inline void
+dp_mon_ops_register_cmn_2_0(struct dp_mon_soc *mon_soc)
+{
+}
+#endif /* WLAN_PKT_CAPTURE_TX_2_0 OR WLAN_PKT_CAPTURE_RX_2_0 */
 
 #ifdef WLAN_PKT_CAPTURE_RX_2_0
 /**
@@ -4441,6 +4557,10 @@ QDF_STATUS dp_pdev_get_rx_mon_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
  */
 bool dp_enable_mon_reap_timer(struct cdp_soc_t *soc_hdl,
 			      enum cdp_mon_reap_source source, bool enable);
+
+QDF_STATUS dp_vdev_set_monitor_mode(struct cdp_soc_t *dp_soc,
+				    uint8_t vdev_id,
+				    uint8_t special_monitor);
 
 #ifdef QCA_ENHANCED_STATS_SUPPORT
 /**
@@ -4798,4 +4918,18 @@ QDF_STATUS dp_local_pkt_capture_tx_config(struct dp_pdev *pdev)
 	return QDF_STATUS_SUCCESS;
 }
 #endif
+
+#ifdef WIFI_MONITOR_SUPPORT
+void
+dp_check_and_dump_full_mon_info(struct dp_soc *soc, struct dp_pdev *pdev,
+				int mac_id, int war);
+#else
+void
+dp_check_and_dump_full_mon_info(struct dp_soc *soc, struct dp_pdev *pdev,
+				int mac_id, int war);
+
+{
+}
+#endif
+
 #endif /* _DP_MON_H_ */

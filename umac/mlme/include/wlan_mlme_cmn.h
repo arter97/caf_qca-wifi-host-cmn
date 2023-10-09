@@ -101,6 +101,8 @@
  * @psoc: psoc pointer
  * @rsp: vendor handoff response pointer
  * @vendor_handoff_context: vendor handoff context
+ *
+ * @mlme_cm_perfd_reset_cpufreq_ctrl_cb: callback to reset CPU min freq
  */
 struct mlme_cm_ops {
 	QDF_STATUS (*mlme_cm_connect_complete_cb)(
@@ -117,7 +119,8 @@ struct mlme_cm_ops {
 					struct wlan_objmgr_vdev *vdev,
 					struct wlan_cm_discon_rsp *rsp);
 	QDF_STATUS (*mlme_cm_disconnect_start_cb)(
-					struct wlan_objmgr_vdev *vdev);
+					struct wlan_objmgr_vdev *vdev,
+					enum wlan_cm_source source);
 #ifdef CONN_MGR_ADV_FEATURE
 	QDF_STATUS (*mlme_cm_roam_sync_cb)(struct wlan_objmgr_vdev *vdev);
 	QDF_STATUS (*mlme_cm_pmksa_candidate_notify_cb)(
@@ -154,6 +157,9 @@ struct mlme_cm_ops {
 	QDF_STATUS (*mlme_cm_get_vendor_handoff_params_cb)(
 				struct wlan_objmgr_psoc *psoc,
 				void *vendor_handoff_context);
+#endif
+#ifdef WLAN_BOOST_CPU_FREQ_IN_ROAM
+	void (*mlme_cm_perfd_reset_cpufreq_ctrl_cb)(void);
 #endif
 };
 
@@ -877,10 +883,12 @@ mlme_cm_osif_disconnect_complete(struct wlan_objmgr_vdev *vdev,
 /**
  * mlme_cm_osif_disconnect_start_ind() - osif Disconnect start indication
  * @vdev: vdev pointer
+ * @source: Source of disconnect
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS mlme_cm_osif_disconnect_start_ind(struct wlan_objmgr_vdev *vdev);
+QDF_STATUS mlme_cm_osif_disconnect_start_ind(struct wlan_objmgr_vdev *vdev,
+					     enum wlan_cm_source source);
 
 #ifdef WLAN_VENDOR_HANDOFF_CONTROL
 /**
@@ -1361,4 +1369,21 @@ void mlme_vdev_reconfig_timer_cb(void *arg);
  * Return: True if reassoc on mlo reconfig link add ie enable
  */
 bool mlme_mlo_is_reconfig_reassoc_enable(struct wlan_objmgr_psoc *psoc);
+
+#ifdef WLAN_BOOST_CPU_FREQ_IN_ROAM
+/**
+ * mlme_cm_osif_perfd_reset_cpufreq() - Function to reset CPU freq
+ *
+ * This function is to reset the CPU freq
+ *
+ * Return: None
+ */
+void mlme_cm_osif_perfd_reset_cpufreq(void);
+#else
+static inline
+void mlme_cm_osif_perfd_reset_cpufreq(void)
+{
+}
+#endif
+
 #endif

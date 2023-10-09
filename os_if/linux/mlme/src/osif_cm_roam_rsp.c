@@ -30,6 +30,7 @@
 #include <wlan_cfg80211.h>
 #include <wlan_cfg80211_scan.h>
 #include "wlan_mlo_mgr_sta.h"
+#include "wlan_mlo_mgr_link_switch.h"
 #ifdef CONN_MGR_ADV_FEATURE
 #include "wlan_mlme_ucfg_api.h"
 #endif
@@ -72,26 +73,24 @@ void osif_copy_roamed_info(struct cfg80211_roam_info *info,
 #endif
 
 #if defined(CFG80211_SINGLE_NETDEV_MULTI_LINK_SUPPORT) && defined(WLAN_FEATURE_11BE_MLO)
-static
-void osif_populate_mlo_info_for_link(struct wlan_objmgr_vdev *vdev,
-				     struct cfg80211_roam_info *roam_info_params,
-				     uint8_t link_id,
-				     struct cfg80211_bss *bss)
+static void
+osif_populate_mlo_info_for_link(struct cfg80211_roam_info *roam_info_params,
+				uint8_t link_id, struct cfg80211_bss *bss,
+				uint8_t *self_link_addr)
 {
 	osif_debug("Link_id :%d", link_id);
 	roam_info_params->valid_links |=  BIT(link_id);
 	roam_info_params->links[link_id].bssid = bss->bssid;
 	roam_info_params->links[link_id].bss = bss;
-	roam_info_params->links[link_id].addr =
-					 wlan_vdev_mlme_get_macaddr(vdev);
+	roam_info_params->links[link_id].addr = self_link_addr;
 }
 
 static void
-osif_populate_partner_links_roam_mlo_params(struct wlan_objmgr_pdev *pdev,
+osif_populate_partner_links_roam_mlo_params(struct wlan_objmgr_vdev *roamed_vdev,
 					    struct wlan_cm_connect_resp *rsp,
 					    struct cfg80211_roam_info *roam_info_params)
 {
-	struct wlan_objmgr_vdev *partner_vdev;
+	struct wlan_objmgr_pdev *pdev;
 	struct mlo_link_info *rsp_partner_info;
 	struct mlo_partner_info assoc_partner_info = {0};
 	struct cfg80211_bss *bss = NULL;
@@ -99,12 +98,17 @@ osif_populate_partner_links_roam_mlo_params(struct wlan_objmgr_pdev *pdev,
 	uint8_t link_id = 0, num_links;
 	int i;
 
+	pdev = wlan_vdev_get_pdev(roamed_vdev);
+	if (!pdev)
+		return;
+
 	qdf_status = osif_get_partner_info_from_mlie(rsp, &assoc_partner_info);
 	if (QDF_IS_STATUS_ERROR(qdf_status))
 		return;
 
 	num_links = rsp->ml_parnter_info.num_partner_links;
 	for (i = 0 ; i < num_links; i++) {
+		struct mlo_link_info *link_info;
 		rsp_partner_info = &rsp->ml_parnter_info.partner_link_info[i];
 
 		qdf_status = osif_get_link_id_from_assoc_ml_ie(rsp_partner_info,
@@ -113,24 +117,27 @@ osif_populate_partner_links_roam_mlo_params(struct wlan_objmgr_pdev *pdev,
 		if (QDF_IS_STATUS_ERROR(qdf_status))
 			continue;
 
-		partner_vdev = wlan_objmgr_get_vdev_by_id_from_pdev(pdev,
-						      rsp_partner_info->vdev_id,
-						      WLAN_MLO_MGR_ID);
-		if (!partner_vdev)
-			continue;
-
-		bss = osif_get_chan_bss_from_kernel(partner_vdev,
-						    rsp_partner_info, rsp);
-		if (!bss) {
-			wlan_objmgr_vdev_release_ref(partner_vdev,
-						     WLAN_MLO_MGR_ID);
+		link_info = mlo_mgr_get_ap_link_by_link_id(
+					roamed_vdev->mlo_dev_ctx,
+					link_id);
+		if (!link_info) {
+			osif_debug("link info not found for link_id:%d",
+				   link_id);
 			continue;
 		}
 
-		osif_populate_mlo_info_for_link(partner_vdev,
-						roam_info_params,
-						link_id, bss);
-		wlan_objmgr_vdev_release_ref(partner_vdev, WLAN_MLO_MGR_ID);
+		bss = osif_get_chan_bss_from_kernel(roamed_vdev,
+						    rsp_partner_info, rsp);
+		if (!bss) {
+			osif_debug("kernel bss not found for link_id:%d",
+				   link_id);
+			continue;
+		}
+
+		osif_populate_mlo_info_for_link(roam_info_params,
+						link_id, bss,
+						link_info->link_addr.bytes);
+		mlo_mgr_osif_update_connect_info(roamed_vdev, link_id);
 	}
 }
 
@@ -172,12 +179,11 @@ static void osif_fill_mlo_roam_params(struct wlan_objmgr_vdev *vdev,
 	}
 
 	assoc_link_id = wlan_vdev_get_link_id(vdev);
-	osif_populate_mlo_info_for_link(vdev, info,
-					assoc_link_id, bss);
+	osif_populate_mlo_info_for_link(info,
+					assoc_link_id, bss,
+					wlan_vdev_mlme_get_macaddr(vdev));
 
-	osif_populate_partner_links_roam_mlo_params(wlan_vdev_get_pdev(vdev),
-						    rsp,
-						    info);
+	osif_populate_partner_links_roam_mlo_params(vdev, rsp, info);
 }
 #else
 static void osif_fill_mlo_roam_params(struct wlan_objmgr_vdev *vdev,
@@ -358,7 +364,8 @@ osif_send_roam_auth_mlo_links_event(struct sk_buff *skb,
 	struct nlattr *mlo_links;
 	struct nlattr *mlo_links_info;
 	struct wlan_objmgr_vdev *link_vdev;
-	uint8_t link_vdev_id;
+	uint8_t link_vdev_id, link_id;
+	struct qdf_mac_addr link_addr;
 
 	if (!vdev)
 		return -EINVAL;
@@ -382,6 +389,8 @@ osif_send_roam_auth_mlo_links_event(struct sk_buff *skb,
 			return -EINVAL;
 		}
 
+		osif_debug("send roam auth for partner link:%d",
+			   rsp->ml_parnter_info.partner_link_info[i].link_id);
 		if (nla_put_u8(skb,
 			       QCA_WLAN_VENDOR_ATTR_MLO_LINK_ID,
 			       rsp->ml_parnter_info.partner_link_info[i].link_id)) {
@@ -396,23 +405,43 @@ osif_send_roam_auth_mlo_links_event(struct sk_buff *skb,
 			return -EINVAL;
 		}
 
-		link_vdev_id = rsp->ml_parnter_info.partner_link_info[i].vdev_id;
-		link_vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc,
-								 link_vdev_id,
-								 WLAN_OSIF_CM_ID);
-		if (!link_vdev) {
-			osif_err("link vdev is null");
-			return -EINVAL;
+		link_vdev_id =
+			rsp->ml_parnter_info.partner_link_info[i].vdev_id;
+		link_id = rsp->ml_parnter_info.partner_link_info[i].link_id;
+
+		/* Standby link */
+		if (link_vdev_id == WLAN_INVALID_VDEV_ID) {
+			struct mlo_link_info *standby_info =
+					mlo_mgr_get_ap_link_by_link_id(
+							vdev->mlo_dev_ctx,
+							link_id);
+			if (standby_info) {
+				link_addr = standby_info->link_addr;
+			} else {
+				osif_err("link addr is null for id:%d",
+					 link_id);
+				return -EINVAL;
+			}
+		} else {
+			link_vdev = wlan_objmgr_get_vdev_by_id_from_psoc(
+							psoc, link_vdev_id,
+							WLAN_OSIF_CM_ID);
+			if (!link_vdev) {
+				osif_err("link vdev is null");
+				return -EINVAL;
+			}
+
+			qdf_copy_macaddr(&link_addr,
+					 (struct qdf_mac_addr *)wlan_vdev_mlme_get_macaddr(link_vdev));
+			wlan_objmgr_vdev_release_ref(link_vdev,
+						     WLAN_OSIF_CM_ID);
 		}
 
 		if (nla_put(skb, QCA_WLAN_VENDOR_ATTR_MLO_LINK_MAC_ADDR,
-			    ETH_ALEN, wlan_vdev_mlme_get_macaddr(link_vdev))) {
+			    ETH_ALEN, link_addr.bytes)) {
 			osif_err("nla put fail");
-			wlan_objmgr_vdev_release_ref(link_vdev,
-						     WLAN_OSIF_CM_ID);
 			return -EINVAL;
 		}
-		wlan_objmgr_vdev_release_ref(link_vdev, WLAN_OSIF_CM_ID);
 		nla_nest_end(skb, mlo_links_info);
 	}
 

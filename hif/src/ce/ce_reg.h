@@ -370,6 +370,12 @@ unsigned int hif_get_dst_ring_read_index(struct hif_softc *scn,
 #define CE_SRC_RING_SZ_SET(scn, CE_ctrl_addr, n) \
 	A_TARGET_WRITE(scn, (CE_ctrl_addr) + SR_SIZE_ADDRESS, (n))
 
+#define CE_IDX_UPD_EN_DMAX_LEN_SET(scn, CE_ctrl_addr, n) \
+	A_TARGET_WRITE(scn, (CE_ctrl_addr) + CE_CTRL1_ADDRESS, \
+	   ((A_TARGET_READ(scn, (CE_ctrl_addr) + \
+	   CE_CTRL1_ADDRESS) & ~CE_CTRL1_DMAX_LENGTH_MASK) | \
+	   CE_CTRL1_DMAX_LENGTH_SET(n) | CE_CTRL1_IDX_UPD_EN))
+
 #define CE_SRC_RING_DMAX_SET(scn, CE_ctrl_addr, n) \
 	A_TARGET_WRITE(scn, (CE_ctrl_addr) + CE_CTRL1_ADDRESS, \
 	   (A_TARGET_READ(scn, (CE_ctrl_addr) + \
@@ -624,17 +630,29 @@ unsigned int hif_get_dst_ring_read_index(struct hif_softc *scn,
 #define NUM_SHADOW_REGISTERS 24
 u32 shadow_sr_wr_ind_addr(struct hif_softc *scn, u32 ctrl_addr);
 u32 shadow_dst_wr_ind_addr(struct hif_softc *scn, u32 ctrl_addr);
+
+#define CE_SRC_WR_IDX_OFFSET_GET(scn, CE_ctrl_addr) \
+	shadow_sr_wr_ind_addr(scn, CE_ctrl_addr)
+#define CE_DST_WR_IDX_OFFSET_GET(scn, CE_ctrl_addr) \
+	shadow_dst_wr_ind_addr(scn, CE_ctrl_addr)
+#else
+#define CE_SRC_WR_IDX_OFFSET_GET(scn, CE_ctrl_addr) \
+	CE_ctrl_addr + SR_WR_INDEX_ADDRESS
+#define CE_DST_WR_IDX_OFFSET_GET(scn, CE_ctrl_addr) \
+	CE_ctrl_addr + DST_WR_INDEX_ADDRESS
 #endif
 
-
-#ifdef ADRASTEA_SHADOW_REGISTERS
+#if defined(FEATURE_HIF_DELAYED_REG_WRITE)
+#define CE_SRC_RING_WRITE_IDX_SET(scn, CE_ctrl_addr, n) \
+	A_TARGET_DELAYED_REG_WRITE(scn, CE_ctrl_addr, n)
+#define CE_DEST_RING_WRITE_IDX_SET(scn, CE_ctrl_addr, n) \
+	A_TARGET_DELAYED_REG_WRITE(scn, CE_ctrl_addr, n)
+#elif defined(ADRASTEA_SHADOW_REGISTERS)
 #define CE_SRC_RING_WRITE_IDX_SET(scn, CE_ctrl_addr, n) \
 	A_TARGET_WRITE(scn, shadow_sr_wr_ind_addr(scn, CE_ctrl_addr), n)
 #define CE_DEST_RING_WRITE_IDX_SET(scn, CE_ctrl_addr, n) \
 	A_TARGET_WRITE(scn, shadow_dst_wr_ind_addr(scn, CE_ctrl_addr), n)
-
 #else
-
 #define CE_SRC_RING_WRITE_IDX_SET(scn, CE_ctrl_addr, n) \
 	A_TARGET_WRITE(scn, (CE_ctrl_addr) + SR_WR_INDEX_ADDRESS, (n))
 #define CE_DEST_RING_WRITE_IDX_SET(scn, CE_ctrl_addr, n) \

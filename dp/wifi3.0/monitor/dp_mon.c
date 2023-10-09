@@ -16,6 +16,7 @@
  */
 #include <dp_types.h>
 #include "dp_rx.h"
+#include "dp_tx.h"
 #include "dp_peer.h"
 #include <dp_htt.h>
 #include <dp_mon_filter.h>
@@ -216,6 +217,29 @@ QDF_STATUS dp_reset_monitor_mode(struct cdp_soc_t *soc_hdl,
 						   pdev_id);
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	struct dp_mon_pdev *mon_pdev;
+
+	if (!pdev)
+		return QDF_STATUS_E_FAILURE;
+
+	mon_pdev = pdev->monitor_pdev;
+	qdf_spin_lock_bh(&mon_pdev->mon_lock);
+	status = dp_reset_monitor_mode_unlock(soc_hdl, pdev_id,
+					      special_monitor);
+	qdf_spin_unlock_bh(&mon_pdev->mon_lock);
+
+	return status;
+}
+
+QDF_STATUS dp_reset_monitor_mode_unlock(struct cdp_soc_t *soc_hdl,
+					uint8_t pdev_id,
+					uint8_t special_monitor)
+{
+	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
+	struct dp_pdev *pdev =
+		dp_get_pdev_from_soc_pdev_id_wifi3((struct dp_soc *)soc,
+						   pdev_id);
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	struct dp_mon_pdev *mon_pdev;
 	struct cdp_mon_ops *cdp_ops;
 
 	if (!pdev)
@@ -223,12 +247,20 @@ QDF_STATUS dp_reset_monitor_mode(struct cdp_soc_t *soc_hdl,
 
 	mon_pdev = pdev->monitor_pdev;
 
-	qdf_spin_lock_bh(&mon_pdev->mon_lock);
-
 	cdp_ops = dp_mon_cdp_ops_get(soc);
-	if (cdp_ops  && cdp_ops->soc_config_full_mon_mode)
+	if (cdp_ops  && cdp_ops->soc_config_full_mon_mode) {
 		cdp_ops->soc_config_full_mon_mode((struct cdp_pdev *)pdev,
 						  DP_FULL_MON_DISABLE);
+		mon_pdev->hold_mon_dest_ring = false;
+		mon_pdev->is_bkpressure = false;
+		mon_pdev->set_reset_mon = false;
+#if defined(QCA_SUPPORT_FULL_MON)
+		if (mon_pdev->mon_desc)
+			qdf_mem_zero(mon_pdev->mon_desc,
+				     sizeof(struct hal_rx_mon_desc_info));
+#endif
+	}
+
 	mon_pdev->mvdev = NULL;
 
 	/*
@@ -263,7 +295,6 @@ QDF_STATUS dp_reset_monitor_mode(struct cdp_soc_t *soc_hdl,
 
 	mon_pdev->monitor_configured = false;
 
-	qdf_spin_unlock_bh(&mon_pdev->mon_lock);
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -460,9 +491,9 @@ dp_scan_spcl_vap_stats_detach(struct dp_mon_vdev *mon_vdev)
  *
  * Return: 0 on success, not 0 on failure
  */
-static QDF_STATUS dp_vdev_set_monitor_mode(struct cdp_soc_t *dp_soc,
-					   uint8_t vdev_id,
-					   uint8_t special_monitor)
+QDF_STATUS dp_vdev_set_monitor_mode(struct cdp_soc_t *dp_soc,
+				    uint8_t vdev_id,
+				    uint8_t special_monitor)
 {
 	struct dp_soc *soc = (struct dp_soc *)dp_soc;
 	struct dp_pdev *pdev;
@@ -1120,13 +1151,11 @@ dp_set_hybrid_pktlog_enable(struct dp_pdev *pdev,
 	struct dp_mon_ops *mon_ops = NULL;
 	uint16_t num_buffers;
 
-	if (mon_pdev->mvdev) {
-		/* Nothing needs to be done if monitor mode is
-		 * enabled
-		 */
-		mon_pdev->pktlog_hybrid_mode = true;
+	/* Nothing needs to be done if monitor mode is
+	 * enabled
+	 */
+	if (mon_pdev->mvdev)
 		return false;
-	}
 
 	mon_ops = dp_mon_ops_get(pdev->soc);
 	if (!mon_ops) {
@@ -1410,8 +1439,9 @@ void dp_pktlogmod_exit(struct dp_pdev *pdev)
 
 #if defined(WDI_EVENT_ENABLE) && defined(QCA_ENHANCED_STATS_SUPPORT)
 #ifdef IPA_OFFLOAD
-void dp_peer_get_tx_rx_stats(struct dp_peer *peer,
-			     struct cdp_interface_peer_stats *peer_stats_intf)
+static void
+dp_peer_get_tx_rx_stats(struct dp_peer *peer,
+			struct cdp_interface_peer_stats *peer_stats_intf)
 {
 	struct dp_rx_tid *rx_tid = NULL;
 	uint8_t i = 0;
@@ -1429,8 +1459,9 @@ void dp_peer_get_tx_rx_stats(struct dp_peer *peer,
 		peer->monitor_peer->stats.tx.tx_ucast_success.bytes;
 }
 #else
-void dp_peer_get_tx_rx_stats(struct dp_peer *peer,
-			     struct cdp_interface_peer_stats *peer_stats_intf)
+static void
+dp_peer_get_tx_rx_stats(struct dp_peer *peer,
+			struct cdp_interface_peer_stats *peer_stats_intf)
 {
 	struct dp_txrx_peer *txrx_peer = NULL;
 	struct dp_peer *tgt_peer = NULL;
@@ -1794,6 +1825,11 @@ dp_enable_enhanced_stats(struct cdp_soc_t *soc, uint8_t pdev_id)
 
 	dp_mon_tx_enable_enhanced_stats(pdev);
 
+	/* reset the tx fast path flag, as enhanced stats are enabled */
+	pdev->tx_fast_flag &= ~DP_TX_DESC_FLAG_SIMPLE;
+	if (dp_soc->hw_txrx_stats_en)
+		pdev->tx_fast_flag &= ~DP_TX_DESC_FLAG_FASTPATH_SIMPLE;
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -1827,6 +1863,7 @@ dp_disable_enhanced_stats(struct cdp_soc_t *soc, uint8_t pdev_id)
 	struct dp_pdev *pdev =
 		dp_get_pdev_from_soc_pdev_id_wifi3((struct dp_soc *)soc,
 						   pdev_id);
+	struct dp_soc *dp_soc = cdp_soc_t_to_dp_soc(soc);
 	struct dp_mon_pdev *mon_pdev;
 
 	if (!pdev || !pdev->monitor_pdev)
@@ -1848,6 +1885,11 @@ dp_disable_enhanced_stats(struct cdp_soc_t *soc, uint8_t pdev_id)
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
 			  FL("Failed to reset enhanced mode filters"));
 	}
+
+	/* set the tx fast path flag, as enhanced stats are disabled */
+	pdev->tx_fast_flag |= DP_TX_DESC_FLAG_SIMPLE;
+	if (dp_soc->hw_txrx_stats_en)
+		pdev->tx_fast_flag |= DP_TX_DESC_FLAG_FASTPATH_SIMPLE;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -3327,7 +3369,9 @@ dp_tx_stats_update(struct dp_pdev *pdev, struct dp_peer *peer,
 	if (mon_ops && mon_ops->mon_tx_stats_update)
 		mon_ops->mon_tx_stats_update(mon_peer, ppdu);
 
-	dp_tx_rate_stats_update(peer, ppdu);
+	if (!ppdu->fixed_rate_used)
+		dp_tx_rate_stats_update(peer, ppdu);
+
 	dp_pdev_telemetry_stats_update(pdev, ppdu);
 
 	dp_peer_stats_notify(pdev, peer);
@@ -3676,6 +3720,8 @@ dp_process_ppdu_stats_user_rate_tlv(struct dp_pdev *pdev,
 	uint32_t tlv_type = HTT_STATS_TLV_TAG_GET(*tag_buf);
 	uint8_t bw, ru_format;
 	uint16_t ru_size;
+	htt_ppdu_stats_user_rate_tlv *stats_buf =
+		(htt_ppdu_stats_user_rate_tlv *)tag_buf;
 
 	ppdu_desc =
 		(struct cdp_tx_completion_ppdu *)qdf_nbuf_data(ppdu_info->nbuf);
@@ -3763,6 +3809,7 @@ dp_process_ppdu_stats_user_rate_tlv(struct dp_pdev *pdev,
 	tag_buf += 2;
 	ppdu_user_desc->punc_pattern_bitmap =
 		HTT_PPDU_STATS_USER_RATE_TLV_PUNC_PATTERN_BITMAP_GET(*tag_buf);
+	ppdu_user_desc->fixed_rate_used = stats_buf->is_min_rate;
 }
 
 /**
@@ -4261,46 +4308,6 @@ add_ppdu_to_sched_list:
 			  ppdu_info_list_elem);
 	mon_pdev->sched_comp_list_depth++;
 }
-
-#ifdef WLAN_FEATURE_PKT_CAPTURE_V2
-static void dp_htt_process_smu_ppdu_stats_tlv(struct dp_soc *soc,
-					      qdf_nbuf_t htt_t2h_msg)
-{
-	uint32_t length;
-	uint8_t tlv_type;
-	uint32_t tlv_length, tlv_expected_size;
-	uint8_t *tlv_buf;
-
-	uint32_t *msg_word = (uint32_t *)qdf_nbuf_data(htt_t2h_msg);
-
-	length = HTT_T2H_PPDU_STATS_PAYLOAD_SIZE_GET(*msg_word);
-
-	msg_word = msg_word + 4;
-
-	while (length > 0) {
-		tlv_buf = (uint8_t *)msg_word;
-		tlv_type = HTT_STATS_TLV_TAG_GET(*msg_word);
-		tlv_length = HTT_STATS_TLV_LENGTH_GET(*msg_word);
-
-		if (tlv_length == 0)
-			break;
-
-		tlv_length += HTT_TLV_HDR_LEN;
-
-		if (tlv_type == HTT_PPDU_STATS_FOR_SMU_TLV) {
-			tlv_expected_size = sizeof(htt_ppdu_stats_for_smu_tlv);
-
-			if (tlv_length >= tlv_expected_size)
-				dp_wdi_event_handler(
-					WDI_EVENT_PKT_CAPTURE_PPDU_STATS,
-					soc, msg_word, HTT_INVALID_VDEV,
-					WDI_NO_VAL, 0);
-		}
-		msg_word = (uint32_t *)((uint8_t *)tlv_buf + tlv_length);
-		length -= (tlv_length);
-	}
-}
-#endif
 
 /**
  * dp_process_ppdu_stats_sch_cmd_status_tlv() - Process schedule command status tlv
@@ -5362,6 +5369,46 @@ static bool dp_tx_ppdu_stats_feat_enable_check(struct dp_pdev *pdev)
 }
 #endif
 
+#ifdef WLAN_FEATURE_PKT_CAPTURE_V2
+static void dp_htt_process_smu_ppdu_stats_tlv(struct dp_soc *soc,
+					      qdf_nbuf_t htt_t2h_msg)
+{
+	uint32_t length;
+	uint8_t tlv_type;
+	uint32_t tlv_length, tlv_expected_size;
+	uint8_t *tlv_buf;
+
+	uint32_t *msg_word = (uint32_t *)qdf_nbuf_data(htt_t2h_msg);
+
+	length = HTT_T2H_PPDU_STATS_PAYLOAD_SIZE_GET(*msg_word);
+
+	msg_word = msg_word + 4;
+
+	while (length > 0) {
+		tlv_buf = (uint8_t *)msg_word;
+		tlv_type = HTT_STATS_TLV_TAG_GET(*msg_word);
+		tlv_length = HTT_STATS_TLV_LENGTH_GET(*msg_word);
+
+		if (tlv_length == 0)
+			break;
+
+		tlv_length += HTT_TLV_HDR_LEN;
+
+		if (tlv_type == HTT_PPDU_STATS_FOR_SMU_TLV) {
+			tlv_expected_size = sizeof(htt_ppdu_stats_for_smu_tlv);
+
+			if (tlv_length >= tlv_expected_size)
+				dp_wdi_event_handler(
+					WDI_EVENT_PKT_CAPTURE_PPDU_STATS,
+					soc, msg_word, HTT_INVALID_VDEV,
+					WDI_NO_VAL, 0);
+		}
+		msg_word = (uint32_t *)((uint8_t *)tlv_buf + tlv_length);
+		length -= (tlv_length);
+	}
+}
+#endif
+
 #if defined(WDI_EVENT_ENABLE)
 #ifdef QCA_ENHANCED_STATS_SUPPORT
 /**
@@ -5434,7 +5481,8 @@ static bool dp_txrx_ppdu_stats_handler(struct dp_soc *soc,
 #endif
 
 #if defined(WDI_EVENT_ENABLE) &&\
-	(defined(QCA_ENHANCED_STATS_SUPPORT) || !defined(REMOVE_PKT_LOG))
+	(defined(QCA_ENHANCED_STATS_SUPPORT) || !defined(REMOVE_PKT_LOG) || \
+	 defined(WLAN_FEATURE_PKT_CAPTURE_V2))
 bool
 dp_ppdu_stats_ind_handler(struct htt_soc *soc,
 			  uint32_t *msg_word,
@@ -5586,6 +5634,8 @@ static void dp_mon_pdev_per_target_config(struct dp_pdev *pdev)
 	switch (target_type) {
 	case TARGET_TYPE_KIWI:
 	case TARGET_TYPE_QCN9224:
+	case TARGET_TYPE_QCA5332:
+	case TARGET_TYPE_QCN6432:
 	case TARGET_TYPE_MANGO:
 		mon_pdev->is_tlv_hdr_64_bit = true;
 		mon_pdev->tlv_hdr_size = HAL_RX_TLV64_HDR_SIZE;
@@ -5889,20 +5939,6 @@ void dp_mon_register_lpc_ops_1_0(struct dp_mon_ops *mon_ops)
 	mon_ops->rx_hdr_length_set = dp_rx_mon_hdr_length_set;
 	dp_mon_register_tx_pkt_enh_ops_1_0(mon_ops);
 }
-
-static void dp_mon_pdev_filter_lpc_init(struct dp_mon_pdev *mon_pdev)
-{
-	if (!mon_pdev)
-		return;
-
-	mon_pdev->mon_filter_mode = MON_FILTER_PASS;
-	mon_pdev->fp_mgmt_filter = FILTER_MGMT_ALL;
-	mon_pdev->fp_ctrl_filter = FILTER_CTRL_ALL;
-	mon_pdev->fp_data_filter = FILTER_DATA_ALL;
-	mon_pdev->mo_mgmt_filter = 0;
-	mon_pdev->mo_ctrl_filter = 0;
-	mon_pdev->mo_data_filter = 0;
-}
 #else
 #if !defined(DISABLE_MON_CONFIG)
 static inline void dp_mon_config_register_ops(struct dp_mon_ops *mon_ops)
@@ -5945,11 +5981,6 @@ void dp_mon_register_lpc_ops_1_0(struct dp_mon_ops *mon_ops)
 
 	mon_ops->rx_hdr_length_set = NULL;
 	dp_mon_register_tx_pkt_enh_ops_1_0(mon_ops);
-}
-
-static void dp_mon_pdev_filter_lpc_init(struct dp_mon_pdev *mon_pdev)
-{
-	dp_mon_pdev_filter_init(mon_pdev);
 }
 #endif
 
@@ -6002,11 +6033,7 @@ QDF_STATUS dp_mon_pdev_init(struct dp_pdev *pdev)
 	mon_pdev->neighbour_peers_added = false;
 	mon_pdev->monitor_configured = false;
 
-	/* Monitor filter init */
-	if (wlan_cfg_get_local_pkt_capture(pdev->soc->wlan_cfg_ctx))
-		dp_mon_pdev_filter_lpc_init(mon_pdev);
-	else
-		dp_mon_pdev_filter_init(mon_pdev);
+	dp_mon_pdev_filter_init(mon_pdev);
 	/*
 	 * initialize ppdu tlv list
 	 */
@@ -6110,14 +6137,15 @@ QDF_STATUS dp_mon_pdev_deinit(struct dp_pdev *pdev)
 	/* detach monitor function */
 	dp_monitor_tx_ppdu_stats_detach(pdev);
 
+	if (mon_ops->mon_lite_mon_dealloc)
+		mon_ops->mon_lite_mon_dealloc(pdev);
+
 	if (mon_ops->rx_mon_buffers_free)
 		mon_ops->rx_mon_buffers_free(pdev);
 	if (mon_ops->rx_mon_desc_pool_deinit)
 		mon_ops->rx_mon_desc_pool_deinit(pdev);
 	dp_mon_rings_deinit(pdev);
 	dp_cal_client_detach(&mon_pdev->cal_client_ctx);
-	if (mon_ops->mon_lite_mon_dealloc)
-		mon_ops->mon_lite_mon_dealloc(pdev);
 	dp_htt_ppdu_stats_detach(pdev);
 	qdf_spinlock_destroy(&mon_pdev->ppdu_stats_lock);
 	dp_neighbour_peers_detach(pdev);
@@ -6126,7 +6154,6 @@ QDF_STATUS dp_mon_pdev_deinit(struct dp_pdev *pdev)
 		mon_ops->tx_mon_filter_dealloc(pdev);
 	if (mon_pdev->filter)
 		dp_mon_filter_dealloc(mon_pdev);
-	dp_mon_rings_deinit(pdev);
 	if (mon_pdev->invalid_mon_peer)
 		qdf_mem_free(mon_pdev->invalid_mon_peer);
 	mon_pdev->is_dp_mon_pdev_initialized = false;
@@ -6472,6 +6499,7 @@ void dp_mon_ops_register(struct dp_soc *soc)
 	case TARGET_TYPE_QCN6122:
 	case TARGET_TYPE_WCN6450:
 		dp_mon_ops_register_1_0(mon_soc);
+		dp_mon_ops_register_cmn_2_0(mon_soc);
 		dp_mon_ops_register_tx_2_0(mon_soc);
 		break;
 	case TARGET_TYPE_QCN9224:
@@ -6931,4 +6959,242 @@ QDF_STATUS dp_mon_soc_detach(struct dp_soc *soc)
 	soc->monitor_soc = NULL;
 	qdf_mem_free(mon_soc);
 	return QDF_STATUS_SUCCESS;
+}
+
+#ifdef QCA_SUPPORT_FULL_MON
+static void print_ring_tracker_stats(struct dp_mon_pdev *mon_pdev,
+				     uint8_t target)
+{
+	struct dp_ring_ppdu_id_tracker *tracker;
+	uint8_t i;
+
+	if (target)
+		tracker = mon_pdev->hist_ppdu_id_mon_s;
+	else
+		tracker = mon_pdev->hist_ppdu_id_mon_d;
+
+	for (i = 0; i < DP_HIST_TRACK_SIZE; i++) {
+		qdf_print("idx: %d dest_ppdu_id: %d dest_time: %lld d_hp: %d ",
+			  i, tracker[i].ppdu_id_mon_dest,
+			  tracker[i].time_ppdu_id_mon_dest,
+			  tracker[i].dest_hp);
+		qdf_print("d_tp: %d d_hw_hp: %d d_hw_tp: %d status_ppdu_id: %d",
+			  tracker[i].dest_tp,
+			  tracker[i].dest_hw_hp,
+			  tracker[i].dest_hw_tp,
+			  tracker[i].ppdu_id_mon_status);
+		qdf_print(" status_time: %lld s_hp: %d s_tp: %d s_hw_hp: %d ",
+			  tracker[i].time_ppdu_id_mon_status,
+			  tracker[i].status_hp,
+			  tracker[i].status_tp,
+			  tracker[i].status_hw_hp);
+		qdf_print("s_hw_tp: %d\n",
+			  tracker[i].status_hw_tp);
+	}
+}
+#else
+static void print_ring_tracker_stats(struct dp_mon_pdev *mon_pdev,
+				     uint8_t target)
+{
+}
+#endif
+
+void
+dp_check_and_dump_full_mon_info(struct dp_soc *soc, struct dp_pdev *pdev,
+				int mac_id, int war)
+{
+	struct dp_mon_soc *mon_soc = soc->monitor_soc;
+	struct dp_mon_pdev *mon_pdev;
+	hal_soc_handle_t hal_soc;
+	uint64_t buf_addr;
+	void *mon_status_srng;
+	void *rxdma_mon_status_ring_entry;
+	struct hal_buf_info hbi;
+	hal_ring_handle_t mon_dest_srng;
+	void *ring_desc;
+	struct hal_rx_mon_desc_info desc_info = {0};
+	struct dp_rx_desc *rx_desc;
+	uint64_t ppdu_id = 0;
+
+	if (!mon_soc) {
+		dp_err("Monitor soc is NULL\n");
+		return;
+	}
+
+	if (!mon_soc->full_mon_mode) {
+		dp_err("Full monitor mode is disable\n");
+		return;
+	}
+
+	/**
+	 * As rx_mon_ring_mask is set but workdone is 0
+	 * there is a more chance backpressure can happen.
+	 * dump the content of rx monitor status and destination ring
+	 * and move to next pointers.
+	 */
+	mon_pdev = pdev->monitor_pdev;
+	if (!mon_pdev) {
+		dp_err("mon_pdev is NULL\n");
+		return;
+	}
+
+	hal_soc = soc->hal_soc;
+
+	if (!war)
+		qdf_spin_lock_bh(&mon_pdev->mon_lock);
+
+	mon_status_srng = soc->rxdma_mon_status_ring[mac_id].hal_srng;
+	if (!mon_status_srng)
+		goto unlock_monitor;
+
+	dp_print_ring_stat_from_hal(soc, &soc->rxdma_mon_status_ring[mac_id],
+				    RXDMA_MONITOR_STATUS);
+	rxdma_mon_status_ring_entry =
+		hal_srng_src_peek_n_get_next(hal_soc, mon_status_srng);
+
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "hold_mon_dest_ring: %d\n", mon_pdev->hold_mon_dest_ring);
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "mon_pdev last_ppdu_id: %d\n", mon_pdev->last_ppdu_id);
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "soc: %d\n", hal_get_target_type(hal_soc));
+
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "reap_status:\n");
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "\t DP_MON_STATUS_NO_DMA : %lld\n",
+		  mon_pdev->reap_status[DP_MON_STATUS_NO_DMA]);
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "\t DP_MON_STATUS_MATCH : %lld\n",
+		  mon_pdev->reap_status[DP_MON_STATUS_MATCH]);
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "\t DP_MON_STATUS_LAG : %lld\n",
+		  mon_pdev->reap_status[DP_MON_STATUS_LAG]);
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "\t DP_MON_STATUS_LEAD : %lld\n",
+		  mon_pdev->reap_status[DP_MON_STATUS_LEAD]);
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "\t DP_MON_STATUS_REPLENISH : %lld\n",
+		  mon_pdev->reap_status[DP_MON_STATUS_REPLENISH]);
+
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "prev_status:\n");
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "\t DP_MON_STATUS_NO_DMA : %lld\n",
+		  mon_pdev->prev_status[DP_MON_STATUS_NO_DMA]);
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "\t DP_MON_STATUS_MATCH : %lld\n",
+		  mon_pdev->prev_status[DP_MON_STATUS_MATCH]);
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "\t DP_MON_STATUS_LAG : %lld\n",
+		  mon_pdev->prev_status[DP_MON_STATUS_LAG]);
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "\t DP_MON_STATUS_LEAD : %lld\n",
+		  mon_pdev->prev_status[DP_MON_STATUS_LEAD]);
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "\t DP_MON_STATUS_REPLENISH : %lld\n",
+		  mon_pdev->prev_status[DP_MON_STATUS_REPLENISH]);
+
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "match_stats:\n");
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "\t DP_MON_STATUS_LAG : %lld\n",
+		  mon_pdev->status_match[DP_MON_STATUS_LAG]);
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "\t DP_MON_STATUS_LEAD : %lld\n",
+		  mon_pdev->status_match[DP_MON_STATUS_LEAD]);
+
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "mismatch: %d\n",
+		  mon_pdev->rx_mon_stats.ppdu_id_mismatch);
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "status_ppdu_drop: %d\n",
+		  mon_pdev->rx_mon_stats.status_ppdu_drop);
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "dest_ppdu_drop: %d\n",
+		  mon_pdev->rx_mon_stats.dest_ppdu_drop);
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "tlv_tag_status_err: %d\n",
+		  mon_pdev->rx_mon_stats.tlv_tag_status_err);
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "status_buf_done_war: %d\n",
+		  mon_pdev->rx_mon_stats.status_buf_done_war);
+
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "soc[%pK] pdev[%pK] mac_id[%d]\n",
+		  soc, pdev, mac_id);
+
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "MON DEST TRACKER STATS:\n");
+	print_ring_tracker_stats(mon_pdev, 0);
+
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "MON STA TRACKER STATS:\n");
+	print_ring_tracker_stats(mon_pdev, 1);
+
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "rxdma_mon_status_ring:\n");
+	if (!rxdma_mon_status_ring_entry) {
+		dp_err("rxdma_mon_status_ring_entry NULL\n");
+		goto dump_mon_destination_ring;
+	}
+
+	buf_addr =
+		(HAL_RX_BUFFER_ADDR_31_0_GET(rxdma_mon_status_ring_entry) |
+		 ((uint64_t)
+		  (HAL_RX_BUFFER_ADDR_39_32_GET(rxdma_mon_status_ring_entry))
+		  << 32));
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "Buffer address : %llx\n", buf_addr);
+	if (!buf_addr)
+		goto dump_mon_destination_ring;
+
+	hal_rx_buf_cookie_rbm_get(soc->hal_soc,
+				  (uint32_t *)rxdma_mon_status_ring_entry,
+				  &hbi);
+
+	print_hex_dump(KERN_ERR, "\tHAL_BUF_INFO: ", DUMP_PREFIX_NONE, 32, 4,
+		       &hbi, sizeof(struct hal_buf_info), false);
+
+	rx_desc = dp_rx_cookie_2_va_mon_status(soc, hbi.sw_cookie);
+	if (!rx_desc) {
+		dp_err("rx_desc is NULL\n");
+		goto dump_mon_destination_ring;
+	}
+
+	print_hex_dump(KERN_ERR, "\tRX_DESC: ", DUMP_PREFIX_NONE, 32, 4,
+		       rx_desc, sizeof(struct dp_rx_desc), false);
+
+dump_mon_destination_ring:
+
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "rxdma_mon_destination_ring:\n");
+	mon_dest_srng = pdev->soc->rxdma_mon_dst_ring[mac_id].hal_srng;
+
+	if (!mon_dest_srng) {
+		dp_err("rxdma_mon_dst_ring hal_srng is NULL\n");
+		goto unlock_monitor;
+	}
+
+	dp_print_ring_stat_from_hal(soc, &soc->rxdma_mon_dst_ring[mac_id],
+				    RXDMA_MONITOR_DST);
+
+	ring_desc = hal_srng_dst_peek(hal_soc, mon_dest_srng);
+	if (!ring_desc)
+		goto unlock_monitor;
+
+	ppdu_id = hal_rx_hw_desc_get_ppduid_get(hal_soc, NULL, ring_desc);
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "Next dest ring ppdu id: %lld\n", ppdu_id);
+	hal_rx_sw_mon_desc_info_get((struct hal_soc *)soc->hal_soc,
+				    ring_desc, &desc_info);
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+		  "Next desc_info ppdu_id: %d\n", desc_info.ppdu_id);
+
+	print_hex_dump(KERN_ERR, "\tDESC_INFO: ", DUMP_PREFIX_NONE, 32, 4,
+		       &desc_info, sizeof(struct hal_rx_mon_desc_info), false);
+
+unlock_monitor:
+	if (!war)
+		qdf_spin_unlock_bh(&mon_pdev->mon_lock);
 }

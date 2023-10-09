@@ -27,6 +27,7 @@
 #include "wlan_cfg80211.h"
 #include "osif_cm_rsp.h"
 #include "wlan_cfg80211_scan.h"
+#include "wlan_mlo_mgr_sta.h"
 
 enum qca_sta_connect_fail_reason_codes
 osif_cm_mac_to_qca_connect_fail_reason(enum wlan_status_code internal_reason)
@@ -355,7 +356,8 @@ osif_cm_disable_netif_queue(struct wlan_objmgr_vdev *vdev)
 static QDF_STATUS
 osif_link_reconfig_notify_cb(struct wlan_objmgr_vdev *vdev)
 {
-	struct vdev_osif_priv *osif_priv = wlan_vdev_get_ospriv(vdev);
+	struct vdev_osif_priv *osif_priv;
+	struct wlan_objmgr_vdev *assoc_vdev;
 	struct wireless_dev *wdev;
 	uint8_t link_id;
 	uint16_t link_mask;
@@ -366,6 +368,13 @@ osif_link_reconfig_notify_cb(struct wlan_objmgr_vdev *vdev)
 	struct qdf_mac_addr ap_mld_mac;
 	QDF_STATUS status;
 
+	assoc_vdev = ucfg_mlo_get_assoc_link_vdev(vdev);
+	if (!assoc_vdev) {
+		osif_err("Failed to get assoc vdev");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	osif_priv = wlan_vdev_get_ospriv(assoc_vdev);
 	if (!osif_priv) {
 		osif_err("Invalid vdev osif priv");
 		return QDF_STATUS_E_INVAL;
@@ -376,7 +385,7 @@ osif_link_reconfig_notify_cb(struct wlan_objmgr_vdev *vdev)
 		osif_err("wdev is null");
 		return QDF_STATUS_E_INVAL;
 	}
-	pdev = wlan_vdev_get_pdev(vdev);
+	pdev = wlan_vdev_get_pdev(assoc_vdev);
 	if (!pdev) {
 		osif_debug("null pdev");
 		return QDF_STATUS_E_INVAL;
@@ -441,15 +450,21 @@ osif_link_reconfig_notify_cb(struct wlan_objmgr_vdev *vdev)
 /**
  * osif_cm_disconnect_start_cb() - Disconnect start callback
  * @vdev: vdev pointer
+ * @source: Disconnect source
  *
  * This callback indicates os_if that disconnection is started
  * so that os_if can stop all the activity on this connection
  *
  * Return: QDF_STATUS
  */
-static QDF_STATUS
-osif_cm_disconnect_start_cb(struct wlan_objmgr_vdev *vdev)
+static QDF_STATUS osif_cm_disconnect_start_cb(struct wlan_objmgr_vdev *vdev,
+					      enum wlan_cm_source source)
 {
+	/* Don't stop netif queues for link switch disconnect */
+	if (source == CM_MLO_LINK_SWITCH_DISCONNECT ||
+	    source == CM_MLO_ROAM_INTERNAL_DISCONNECT)
+		return QDF_STATUS_SUCCESS;
+
 	/* Disable netif queue on disconnect start */
 	return osif_cm_disable_netif_queue(vdev);
 }
@@ -632,6 +647,20 @@ osif_cm_cckm_preauth_cmpl_cb(struct wlan_objmgr_vdev *vdev,
 #endif
 #endif
 
+#ifdef WLAN_BOOST_CPU_FREQ_IN_ROAM
+/**
+ * osif_cm_perfd_reset_cpufreq_ctrl_cb() - Callback to reset CPU freq
+ *
+ * This callback indicates os_if to reset the request to boost CPU freq
+ *
+ * Return: None
+ */
+static void osif_cm_perfd_reset_cpufreq_ctrl_cb(void)
+{
+	osif_cm_perfd_set_cpufreq(false);
+}
+#endif
+
 static struct mlme_cm_ops cm_ops = {
 	.mlme_cm_connect_complete_cb = osif_cm_connect_complete_cb,
 	.mlme_cm_failed_candidate_cb = osif_cm_failed_candidate_cb,
@@ -660,6 +689,10 @@ static struct mlme_cm_ops cm_ops = {
 #ifdef WLAN_VENDOR_HANDOFF_CONTROL
 	.mlme_cm_get_vendor_handoff_params_cb =
 					osif_cm_vendor_handoff_params_cb,
+#endif
+#ifdef WLAN_BOOST_CPU_FREQ_IN_ROAM
+	.mlme_cm_perfd_reset_cpufreq_ctrl_cb =
+				osif_cm_perfd_reset_cpufreq_ctrl_cb,
 #endif
 };
 

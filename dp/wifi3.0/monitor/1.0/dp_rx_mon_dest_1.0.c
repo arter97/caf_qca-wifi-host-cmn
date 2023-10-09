@@ -105,7 +105,6 @@ QDF_STATUS
 dp_rx_mon_link_desc_return(struct dp_pdev *dp_pdev,
 	hal_buff_addrinfo_t buf_addr_info, int mac_id)
 {
-	struct dp_srng *dp_srng;
 	hal_ring_handle_t hal_ring_hdl;
 	hal_soc_handle_t hal_soc;
 	QDF_STATUS status = QDF_STATUS_E_FAILURE;
@@ -113,8 +112,7 @@ dp_rx_mon_link_desc_return(struct dp_pdev *dp_pdev,
 
 	hal_soc = dp_pdev->soc->hal_soc;
 
-	dp_srng = &dp_pdev->soc->rxdma_mon_desc_ring[mac_id];
-	hal_ring_hdl = dp_srng->hal_srng;
+	hal_ring_hdl = dp_monitor_get_link_desc_ring(dp_pdev->soc, mac_id);
 
 	qdf_assert(hal_ring_hdl);
 
@@ -1034,6 +1032,159 @@ dp_mon_dest_srng_drop_for_mac(struct dp_pdev *pdev, uint32_t mac_id,
 
 	return reap_cnt;
 }
+#else
+#if defined(QCA_SUPPORT_FULL_MON) && defined(WIFI_MONITOR_SUPPORT)
+uint32_t
+dp_mon_dest_srng_drop_for_mac(struct dp_pdev *pdev, uint32_t mac_id)
+{
+	struct dp_soc *soc = pdev->soc;
+	hal_rxdma_desc_t rxdma_dst_ring_desc;
+	hal_soc_handle_t hal_soc;
+	void *mon_dst_srng;
+	union dp_rx_desc_list_elem_t *head = NULL;
+	union dp_rx_desc_list_elem_t *tail = NULL;
+	uint32_t rx_bufs_used = 0;
+	void *rx_msdu_link_desc;
+	uint16_t num_msdus;
+	struct hal_rx_msdu_list msdu_list;
+	qdf_nbuf_t nbuf = NULL;
+	uint32_t i;
+	uint8_t bm_action = HAL_BM_ACTION_PUT_IN_IDLE_LIST;
+	uint32_t rx_link_buf_info[HAL_RX_BUFFINFO_NUM_DWORDS];
+	struct rx_desc_pool *rx_desc_pool = NULL;
+	uint32_t reap_cnt = 0;
+	struct dp_mon_pdev *mon_pdev;
+	struct hal_rx_mon_desc_info *desc_info;
+
+	if (qdf_unlikely(!soc || !soc->hal_soc))
+		return reap_cnt;
+
+	mon_dst_srng = dp_rxdma_get_mon_dst_ring(pdev, mac_id);
+
+	if (qdf_unlikely(!mon_dst_srng || !hal_srng_initialized(mon_dst_srng)))
+		return reap_cnt;
+
+	hal_soc = soc->hal_soc;
+	mon_pdev = pdev->monitor_pdev;
+	desc_info = mon_pdev->mon_desc;
+
+	rx_desc_pool = dp_rx_get_mon_desc_pool(soc, mac_id, pdev->pdev_id);
+
+	while ((rxdma_dst_ring_desc =
+		hal_srng_dst_peek(hal_soc, mon_dst_srng))) {
+		qdf_mem_zero(desc_info, sizeof(struct hal_rx_mon_desc_info));
+		hal_rx_sw_mon_desc_info_get((struct hal_soc *)soc->hal_soc,
+					    (void *)rxdma_dst_ring_desc,
+					    (void *)desc_info);
+
+		if (desc_info->end_of_ppdu) {
+			rxdma_dst_ring_desc =
+				hal_srng_dst_get_next(hal_soc, mon_dst_srng);
+			continue;
+		}
+
+		do {
+			rx_msdu_link_desc =
+				dp_rx_cookie_2_mon_link_desc(pdev,
+							     &desc_info->
+							     link_desc,
+							     mac_id);
+
+			if (qdf_unlikely(!rx_msdu_link_desc)) {
+				mon_pdev->rx_mon_stats.mon_link_desc_invalid++;
+				goto next_entry;
+			}
+
+			hal_rx_msdu_list_get(soc->hal_soc, rx_msdu_link_desc,
+					     &msdu_list, &num_msdus);
+
+			for (i = 0; i < num_msdus; i++) {
+				struct dp_rx_desc *rx_desc;
+				qdf_dma_addr_t buf_paddr;
+
+				rx_desc =
+					dp_rx_get_mon_desc(soc, msdu_list.
+							   sw_cookie[i]);
+
+				if (qdf_unlikely(!rx_desc)) {
+					mon_pdev->rx_mon_stats.
+							mon_rx_desc_invalid++;
+					continue;
+				}
+
+				nbuf = DP_RX_MON_GET_NBUF_FROM_DESC(rx_desc);
+				buf_paddr =
+					 dp_rx_mon_get_paddr_from_desc(rx_desc);
+
+				if (qdf_unlikely(!rx_desc->in_use || !nbuf ||
+						 msdu_list.paddr[i] !=
+						 buf_paddr)) {
+					mon_pdev->rx_mon_stats.
+							mon_nbuf_sanity_err++;
+					continue;
+				}
+				rx_bufs_used++;
+
+				if (!rx_desc->unmapped) {
+					dp_rx_mon_buffer_unmap(soc, rx_desc,
+							       rx_desc_pool->
+							       buf_size);
+					rx_desc->unmapped = 1;
+				}
+
+				dp_rx_mon_buffer_free(rx_desc);
+				dp_rx_add_to_free_desc_list(&head, &tail,
+							    rx_desc);
+
+				if (!(msdu_list.msdu_info[i].msdu_flags &
+				      HAL_MSDU_F_MSDU_CONTINUATION))
+					desc_info->msdu_count--;
+			}
+
+			/*
+			 * Store the current link buffer into to the local
+			 * structure to be  used for release purpose.
+			 */
+			hal_rxdma_buff_addr_info_set(soc->hal_soc,
+						     rx_link_buf_info,
+						     desc_info->link_desc.paddr,
+						     desc_info->link_desc.
+						     sw_cookie,
+						     desc_info->link_desc.rbm);
+
+			hal_rx_mon_next_link_desc_get(soc->hal_soc,
+						      rx_msdu_link_desc,
+						      &desc_info->link_desc);
+			if (dp_rx_monitor_link_desc_return(pdev,
+							   (hal_buff_addrinfo_t)
+							   rx_link_buf_info,
+							   mac_id, bm_action) !=
+			    QDF_STATUS_SUCCESS)
+				dp_info_rl("monitor link desc return failed");
+		} while (desc_info->link_desc.paddr);
+
+next_entry:
+		reap_cnt++;
+		rxdma_dst_ring_desc = hal_srng_dst_get_next(hal_soc,
+							    mon_dst_srng);
+	}
+
+	if (rx_bufs_used) {
+		dp_rx_buffers_replenish(soc, mac_id,
+					dp_rxdma_get_mon_buf_ring(pdev, mac_id),
+					rx_desc_pool,
+					rx_bufs_used, &head, &tail, false);
+	}
+
+	return reap_cnt;
+}
+#else
+uint32_t
+dp_mon_dest_srng_drop_for_mac(struct dp_pdev *pdev, uint32_t mac_id)
+{
+	return 0;
+}
+#endif
 #endif
 
 static void
@@ -1186,6 +1337,108 @@ dp_rx_mon_check_n_drop_mpdu(struct dp_pdev *pdev, uint32_t mac_id,
 #endif
 #endif
 
+#ifdef WLAN_SOFTUMAC_SUPPORT
+static void dp_mon_hw_link_desc_bank_free(struct dp_soc *soc, uint32_t mac_id)
+{
+	struct qdf_mem_multi_page_t *pages;
+
+	pages = dp_monitor_get_link_desc_pages(soc, mac_id);
+	if (!pages) {
+		dp_err("can not get mon link desc pages");
+		QDF_ASSERT(0);
+		return;
+	}
+
+	if (pages->dma_pages) {
+		wlan_minidump_remove((void *)
+				     pages->dma_pages->page_v_addr_start,
+				     pages->num_pages * pages->page_size,
+				     soc->ctrl_psoc,
+				     WLAN_MD_DP_SRNG_SW2RXDMA_LINK_RING,
+				     "mon hw_link_desc_bank");
+		dp_desc_multi_pages_mem_free(soc, QDF_DP_HW_LINK_DESC_TYPE,
+					     pages, 0, false);
+	}
+}
+
+static QDF_STATUS
+dp_mon_hw_link_desc_bank_alloc(struct dp_soc *soc, uint32_t mac_id)
+{
+	struct qdf_mem_multi_page_t *pages;
+	uint32_t *total_link_descs, total_mem_size;
+	uint32_t num_entries;
+	uint32_t max_alloc_size = wlan_cfg_max_alloc_size(soc->wlan_cfg_ctx);
+	int link_desc_size = hal_get_link_desc_size(soc->hal_soc);
+	int link_desc_align = hal_get_link_desc_align(soc->hal_soc);
+	uint8_t minidump_str[MINIDUMP_STR_SIZE];
+
+	pages = dp_monitor_get_link_desc_pages(soc, mac_id);
+	if (!pages) {
+		dp_err("can not get mon link desc pages");
+		QDF_ASSERT(0);
+		return QDF_STATUS_E_FAULT;
+	}
+
+	/* If link descriptor banks are allocated, return from here */
+	if (pages->num_pages)
+		return QDF_STATUS_SUCCESS;
+
+	num_entries = dp_monitor_get_num_link_desc_ring_entries(soc, mac_id);
+	total_link_descs = dp_monitor_get_total_link_descs(soc, mac_id);
+	qdf_str_lcopy(minidump_str, "mon_link_desc_bank",
+		      MINIDUMP_STR_SIZE);
+
+	/* Round up to power of 2 */
+	*total_link_descs = 1;
+	while (*total_link_descs < num_entries)
+		*total_link_descs <<= 1;
+
+	dp_init_info("%pK: total_link_descs: %u, link_desc_size: %d",
+		     soc, *total_link_descs, link_desc_size);
+
+	total_mem_size =  *total_link_descs * link_desc_size;
+	total_mem_size += link_desc_align;
+
+	dp_init_info("%pK: total_mem_size: %d", soc, total_mem_size);
+
+	dp_set_max_page_size(pages, max_alloc_size);
+	dp_desc_multi_pages_mem_alloc(soc, QDF_DP_HW_LINK_DESC_TYPE,
+				      pages, link_desc_size,
+				      *total_link_descs, 0, false);
+
+	if (!pages->num_pages) {
+		dp_err("Multi page alloc fail for mon hw link desc pool");
+		return QDF_STATUS_E_FAULT;
+	}
+
+	wlan_minidump_log(pages->dma_pages->page_v_addr_start,
+			  pages->num_pages * pages->page_size,
+			  soc->ctrl_psoc,
+			  WLAN_MD_DP_SRNG_SW2RXDMA_LINK_RING,
+			  "mon hw_link_desc_bank");
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static void
+dp_mon_link_desc_ring_replenish(struct dp_soc *soc, int mac_id)
+{
+	dp_link_desc_ring_replenish(soc, mac_id);
+}
+#else
+static QDF_STATUS
+dp_mon_hw_link_desc_bank_alloc(struct dp_soc *soc, uint32_t mac_id)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static void
+dp_mon_hw_link_desc_bank_free(struct dp_soc *soc, uint32_t mac_id) {}
+
+static void
+dp_mon_link_desc_ring_replenish(struct dp_soc *soc, int mac_id) {}
+#endif
+
 static void
 dp_rx_pdev_mon_cmn_desc_pool_free(struct dp_pdev *pdev, int mac_id)
 {
@@ -1194,6 +1447,7 @@ dp_rx_pdev_mon_cmn_desc_pool_free(struct dp_pdev *pdev, int mac_id)
 	int mac_for_pdev = dp_get_lmac_id_for_pdev_id(soc, mac_id, pdev_id);
 
 	dp_rx_pdev_mon_status_desc_pool_free(pdev, mac_for_pdev);
+	dp_mon_hw_link_desc_bank_free(soc, mac_for_pdev);
 	dp_rx_pdev_mon_dest_desc_pool_free(pdev, mac_for_pdev);
 }
 
@@ -1201,7 +1455,7 @@ void dp_rx_pdev_mon_desc_pool_free(struct dp_pdev *pdev)
 {
 	int mac_id;
 
-	for (mac_id = 0; mac_id < NUM_RXDMA_RINGS_PER_PDEV; mac_id++)
+	for (mac_id = 0; mac_id < NUM_RXDMA_STATUS_RINGS_PER_PDEV; mac_id++)
 		dp_rx_pdev_mon_cmn_desc_pool_free(pdev, mac_id);
 }
 
@@ -1222,7 +1476,7 @@ dp_rx_pdev_mon_desc_pool_deinit(struct dp_pdev *pdev)
 {
 	int mac_id;
 
-	for (mac_id = 0; mac_id < NUM_RXDMA_RINGS_PER_PDEV; mac_id++)
+	for (mac_id = 0; mac_id < NUM_RXDMA_STATUS_RINGS_PER_PDEV; mac_id++)
 		dp_rx_pdev_mon_cmn_desc_pool_deinit(pdev, mac_id);
 	qdf_spinlock_destroy(&pdev->monitor_pdev->mon_lock);
 }
@@ -1235,6 +1489,7 @@ dp_rx_pdev_mon_cmn_desc_pool_init(struct dp_pdev *pdev, int mac_id)
 
 	mac_for_pdev = dp_get_lmac_id_for_pdev_id(soc, mac_id, pdev->pdev_id);
 	dp_rx_pdev_mon_status_desc_pool_init(pdev, mac_for_pdev);
+	dp_mon_link_desc_ring_replenish(soc, mac_for_pdev);
 
 	dp_rx_pdev_mon_dest_desc_pool_init(pdev, mac_for_pdev);
 }
@@ -1244,7 +1499,7 @@ dp_rx_pdev_mon_desc_pool_init(struct dp_pdev *pdev)
 {
 	int mac_id;
 
-	for (mac_id = 0; mac_id < NUM_RXDMA_RINGS_PER_PDEV; mac_id++)
+	for (mac_id = 0; mac_id < NUM_RXDMA_STATUS_RINGS_PER_PDEV; mac_id++)
 		dp_rx_pdev_mon_cmn_desc_pool_init(pdev, mac_id);
 	qdf_spinlock_create(&pdev->monitor_pdev->mon_lock);
 }
@@ -1326,12 +1581,23 @@ dp_rx_pdev_mon_cmn_desc_pool_alloc(struct dp_pdev *pdev, int mac_id)
 		goto fail;
 	}
 
+	/* Allocate hw link desc bank for monitor mode for
+	 * SOFTUMAC architecture.
+	 */
+	status = dp_mon_hw_link_desc_bank_alloc(soc, mac_for_pdev);
+	if (!QDF_IS_STATUS_SUCCESS(status)) {
+		dp_err("dp_mon_hw_link_desc_bank_alloc() failed");
+		goto mon_status_dealloc;
+	}
+
 	status = dp_rx_pdev_mon_dest_desc_pool_alloc(pdev, mac_for_pdev);
 	if (!QDF_IS_STATUS_SUCCESS(status))
-		goto mon_status_dealloc;
+		goto link_desc_bank_free;
 
 	return status;
 
+link_desc_bank_free:
+	dp_mon_hw_link_desc_bank_free(soc, mac_for_pdev);
 mon_status_dealloc:
 	dp_rx_pdev_mon_status_desc_pool_free(pdev, mac_for_pdev);
 fail:
@@ -1344,7 +1610,7 @@ dp_rx_pdev_mon_desc_pool_alloc(struct dp_pdev *pdev)
 	QDF_STATUS status;
 	int mac_id, count;
 
-	for (mac_id = 0; mac_id < NUM_RXDMA_RINGS_PER_PDEV; mac_id++) {
+	for (mac_id = 0; mac_id < NUM_RXDMA_STATUS_RINGS_PER_PDEV; mac_id++) {
 		status = dp_rx_pdev_mon_cmn_desc_pool_alloc(pdev, mac_id);
 		if (!QDF_IS_STATUS_SUCCESS(status)) {
 			dp_rx_mon_dest_err("%pK: %d failed",
@@ -1847,6 +2113,15 @@ dp_rx_mon_frag_restitch_mpdu_from_msdus(struct dp_soc *soc,
 	 * packet in RAW mode.
 	 */
 	if (buf_info.is_decap_raw == 1) {
+		if (qdf_unlikely(mon_pdev->ppdu_info.rx_status.rs_fcs_err)) {
+			hdr_desc = hal_rx_desc_get_80211_hdr(soc->hal_soc, rx_desc);
+			wh = (struct ieee80211_frame *)hdr_desc;
+			if ((wh->i_fc[0] & QDF_IEEE80211_FC0_VERSION_MASK) !=
+			    QDF_IEEE80211_FC0_VERSION_0) {
+				DP_STATS_INC(dp_pdev, dropped.mon_ver_err, 1);
+				return NULL;
+			}
+		}
 		dp_rx_mon_fraglist_prepare(head_msdu, tail_msdu);
 		goto mpdu_stitch_done;
 	}

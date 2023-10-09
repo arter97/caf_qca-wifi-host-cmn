@@ -352,7 +352,8 @@ void dp_tx_mon_buf_desc_pool_free(struct dp_soc *soc)
 		dp_get_be_mon_soc_from_dp_mon_soc(mon_soc);
 
 	if (mon_soc_be)
-		dp_mon_desc_pool_free(&mon_soc_be->tx_desc_mon);
+		dp_mon_desc_pool_free(soc, &mon_soc_be->tx_desc_mon,
+				      DP_MON_TX_DESC_POOL_TYPE);
 }
 
 QDF_STATUS dp_tx_mon_soc_init_2_0(struct dp_soc *soc)
@@ -406,7 +407,8 @@ dp_tx_mon_buf_desc_pool_alloc(struct dp_soc *soc)
 	tx_mon_desc_pool = &mon_soc_be->tx_desc_mon;
 
 	qdf_print("%s:%d tx mon buf desc pool entries: %d", __func__, __LINE__, entries);
-	return dp_mon_desc_pool_alloc(entries, tx_mon_desc_pool);
+	return dp_mon_desc_pool_alloc(soc, DP_MON_TX_DESC_POOL_TYPE,
+				      entries, tx_mon_desc_pool);
 }
 
 void
@@ -950,6 +952,58 @@ dp_tx_lite_mon_filtering(struct dp_pdev *pdev,
 #endif
 
 #ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
+/**
+ * dp_tx_mon_lpc_type_filtering() - Additional filtering for lpc
+ * @pdev: Pointer to physical device
+ * @tx_ppdu_info: pointer to dp_tx_ppdu_info structure
+ * @buf: qdf nbuf structure of buffer
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS
+dp_tx_mon_lpc_type_filtering(struct dp_pdev *pdev,
+			     struct dp_tx_ppdu_info *tx_ppdu_info,
+			     qdf_nbuf_t buf)
+{
+	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	qdf_nbuf_t nbuf;
+	struct ieee80211_frame_min_one *wh;
+	uint16_t mgmt_filter, ctrl_filter, data_filter, type;
+
+	if (qdf_unlikely(!IS_LOCAL_PKT_CAPTURE_RUNNING(mon_pdev,
+			is_local_pkt_capture_running)))
+		return QDF_STATUS_E_ABORTED;
+
+	if (dp_tx_mon_nbuf_get_num_frag(buf)) {
+		wh = (struct ieee80211_frame_min_one *)qdf_nbuf_get_frag_addr(buf, 0);
+	} else {
+		nbuf = qdf_nbuf_get_ext_list(buf);
+		if (nbuf)
+			wh = (struct ieee80211_frame_min_one *)qdf_nbuf_data(nbuf);
+		else
+			return QDF_STATUS_E_ABORTED;
+	}
+
+	mgmt_filter = mon_pdev->fp_mgmt_filter;
+	ctrl_filter = mon_pdev->fp_ctrl_filter;
+	data_filter = mon_pdev->fp_data_filter;
+
+	type = (wh->i_fc[0] & IEEE80211_FC0_TYPE_MASK);
+
+	switch (type) {
+	case QDF_IEEE80211_FC0_TYPE_MGT:
+		return mgmt_filter ? QDF_STATUS_SUCCESS : QDF_STATUS_E_ABORTED;
+	case QDF_IEEE80211_FC0_TYPE_CTL:
+		return ctrl_filter ? QDF_STATUS_SUCCESS : QDF_STATUS_E_ABORTED;
+	case QDF_IEEE80211_FC0_TYPE_DATA:
+		return data_filter ? QDF_STATUS_SUCCESS : QDF_STATUS_E_ABORTED;
+	default:
+		return QDF_STATUS_E_ABORTED;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
 static int
 dp_tx_handle_local_pkt_capture(struct dp_pdev *pdev, qdf_nbuf_t nbuf)
 {
@@ -974,6 +1028,15 @@ dp_tx_handle_local_pkt_capture(struct dp_pdev *pdev, qdf_nbuf_t nbuf)
 {
 	return 0;
 }
+
+static inline QDF_STATUS
+dp_tx_mon_lpc_type_filtering(struct dp_pdev *pdev,
+			     struct dp_tx_ppdu_info *tx_ppdu_info,
+			     qdf_nbuf_t buf)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
 #endif
 
 /**
@@ -1059,7 +1122,8 @@ dp_tx_mon_send_per_usr_mpdu(struct dp_pdev *pdev,
 				&ppdu_info->hal_txmon.rx_user_status[user_idx];
 
 		if (dp_tx_lite_mon_filtering(pdev, ppdu_info, buf,
-					     ++mpdu_count)) {
+					     ++mpdu_count) ||
+		    dp_tx_mon_lpc_type_filtering(pdev, ppdu_info, buf)) {
 			qdf_nbuf_free(buf);
 			continue;
 		}
@@ -1401,7 +1465,7 @@ void dp_tx_ppdu_stats_detach_2_0(struct dp_pdev *pdev)
 }
 #endif /* WLAN_TX_PKT_CAPTURE_ENH_BE */
 
-#if (defined(WIFI_MONITOR_SUPPORT) && !defined(WLAN_TX_PKT_CAPTURE_ENH_BE))
+#if (defined(WIFI_MONITOR_SUPPORT) && defined(WLAN_TX_MON_CORE_DEBUG))
 /*
  * dp_config_enh_tx_core_monitor_2_0()- API to validate core framework
  * @pdev_handle: DP_PDEV handle

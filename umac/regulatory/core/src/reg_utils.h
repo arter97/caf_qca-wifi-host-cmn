@@ -201,12 +201,30 @@ QDF_STATUS reg_set_fcc_constraint(struct wlan_objmgr_pdev *pdev,
 bool reg_get_fcc_constraint(struct wlan_objmgr_pdev *pdev, uint32_t freq);
 
 /**
+ * reg_is_fcc_constraint_set() - Check if FCC constraint set
+ * @pdev: physical dev to get
+ *
+ * Return: True if FCC constraint is set, else false.
+ */
+bool reg_is_fcc_constraint_set(struct wlan_objmgr_pdev *pdev);
+
+/**
  * reg_is_6ghz_band_set - Check if 6 GHz band set
  * @pdev: Pointer to pdev
  *
  * Return: True if 6 GHz band set else return flase
  */
 bool reg_is_6ghz_band_set(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * reg_is_user_country_set_allowed() - Checks whether user country is allowed
+ * to set
+ * @psoc: psoc ptr
+ *
+ * Return: bool
+ */
+bool reg_is_user_country_set_allowed(struct wlan_objmgr_psoc *psoc);
+
 /**
  * reg_read_current_country() - Get the current regulatory country
  * @psoc: The physical SoC to get current country from
@@ -505,6 +523,12 @@ bool reg_is_6ghz_band_set(struct wlan_objmgr_pdev *pdev)
 	return true;
 }
 
+static inline
+bool reg_is_user_country_set_allowed(struct wlan_objmgr_psoc *psoc)
+{
+	return true;
+}
+
 static inline enum reg_6g_ap_type
 reg_decide_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev)
 {
@@ -630,5 +654,4 @@ reg_get_6ghz_cli_pwr_type_per_ap_pwr_type(
 				enum reg_6g_ap_type ap_pwr_type,
 				enum supported_6g_pwr_types *cli_pwr_type);
 #endif
-
 #endif

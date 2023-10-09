@@ -798,6 +798,11 @@ void dfs_translate_radar_params(struct wlan_dfs *dfs,
 	if (!dfs_is_true_160mhz_supported(dfs))
 		return;
 
+	if (dfs->dfs_is_radar_found_chan_freq_eq_center_freq) {
+		dfs_debug(dfs, WLAN_DEBUG_DFS, "There is no radar translation required for chips where HALPHY reports the exact radar found chan's center freq\n");
+		return;
+	}
+
 	if (radar_found->detector_id == dfs_get_agile_detector_id(dfs)) {
 		dfs_translate_radar_params_for_agile_chan(dfs, radar_found);
 		return;
@@ -885,6 +890,31 @@ dfs_radar_action_for_hw_mode_switch(struct wlan_dfs *dfs,
 }
 
 #ifdef CONFIG_CHAN_FREQ_API
+#ifdef MOBILE_DFS_SUPPORT
+static uint8_t
+dfs_find_radar_full_bw_channels(struct wlan_dfs *dfs,
+				struct radar_found_info *radar_found,
+				uint16_t *freq_list)
+{
+	uint8_t num_channels = 0;
+
+	if (radar_found->is_full_bw_nol)
+		num_channels =
+			dfs_get_bonding_channel_without_seg_info_for_freq
+			(dfs->dfs_curchan, freq_list);
+
+	return num_channels;
+}
+#else
+static uint8_t
+dfs_find_radar_full_bw_channels(struct wlan_dfs *dfs,
+				struct radar_found_info *radar_found,
+				uint16_t *freq_list)
+{
+	return 0;
+}
+#endif
+
 uint8_t
 dfs_find_radar_affected_channels(struct wlan_dfs *dfs,
 				 struct radar_found_info *radar_found,
@@ -892,6 +922,11 @@ dfs_find_radar_affected_channels(struct wlan_dfs *dfs,
 				 uint32_t freq_center)
 {
 	uint8_t num_channels;
+
+	num_channels = dfs_find_radar_full_bw_channels(dfs, radar_found,
+						       freq_list);
+	if (num_channels)
+		return num_channels;
 
 	if (dfs->dfs_bangradar_type == DFS_BANGRADAR_FOR_ALL_SUBCHANS)
 		num_channels =
@@ -978,6 +1013,9 @@ uint16_t dfs_generate_radar_bitmap(struct wlan_dfs *dfs,
 		bits <<= 1;
 	}
 
+	if (!dfs_radar_bitmap)
+		dfs_debug(dfs, WLAN_DEBUG_DFS_ALWAYS, "Radar bitmap is zero");
+
 	return dfs_radar_bitmap;
 }
 #endif
@@ -1057,18 +1095,6 @@ dfs_process_radar_ind_on_home_chan(struct wlan_dfs *dfs,
 							freq_list,
 							freq_center);
 
-	if (dfs->dfs_use_puncture) {
-		bool is_ignore_radar_puncture = false;
-
-		dfs_handle_radar_puncturing(dfs,
-					    &dfs_radar_bitmap,
-					    freq_list,
-					    num_channels,
-					    &is_ignore_radar_puncture);
-		if (is_ignore_radar_puncture)
-			goto exit;
-	}
-
 	if (!dfs->dfs_use_nol) {
 		if (!dfs->dfs_is_offload_enabled)
 			dfs_disable_radar_and_flush_pulses(dfs);
@@ -1080,6 +1106,18 @@ dfs_process_radar_ind_on_home_chan(struct wlan_dfs *dfs,
 
 	dfs_reset_bangradar(dfs);
 
+	if (dfs->dfs_use_puncture && !dfs->dfs_is_stadfs_enabled) {
+		bool is_ignore_radar_puncture = false;
+
+		dfs_handle_radar_puncturing(dfs,
+					    &dfs_radar_bitmap,
+					    freq_list,
+					    num_channels,
+					    &is_ignore_radar_puncture);
+		if (is_ignore_radar_puncture)
+			goto exit;
+	}
+
 	status = dfs_radar_add_channel_list_to_nol_for_freq(dfs,
 							    freq_list,
 							    nol_freq_list,
@@ -1089,6 +1127,8 @@ dfs_process_radar_ind_on_home_chan(struct wlan_dfs *dfs,
 			"radar event received on invalid channel");
 		goto exit;
 	}
+
+	dfs_mlme_set_tx_flag(dfs->dfs_pdev_obj, false);
 
 	/*
 	 * If precac is running and the radar found in secondary

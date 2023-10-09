@@ -465,6 +465,8 @@ typedef bool (*qdf_irqlocked_func_t)(void *);
  * @QDF_MODULE_ID_LL_SAP: LL SAP module ID
  * @QDF_MODULE_ID_ANY: anything
  * @QDF_MODULE_ID_COHOSTED_BSS : Co-hosted BSS module ID
+ * @QDF_MODULE_ID_TELEMETRY_AGENT: Telemetry Agent Module ID
+ * @QDF_MODULE_ID_RF_PATH_SWITCH: RF path switch Module ID
  * @QDF_MODULE_ID_MAX: Max place holder module ID
  *
  * New module ID needs to be added in qdf trace along with this enum.
@@ -543,7 +545,7 @@ typedef enum {
 	QDF_MODULE_ID_DP,
 	QDF_MODULE_ID_HAL,
 	QDF_MODULE_ID_SOC,
-	QDF_MODULE_ID_OS_IF,
+	QDF_MODULE_ID_OS_IF = 72,
 	QDF_MODULE_ID_TARGET_IF,
 	QDF_MODULE_ID_SCHEDULER,
 	QDF_MODULE_ID_MGMT_TXRX,
@@ -551,7 +553,7 @@ typedef enum {
 	QDF_MODULE_ID_PMO,
 	QDF_MODULE_ID_P2P,
 	QDF_MODULE_ID_POLICY_MGR,
-	QDF_MODULE_ID_CONFIG,
+	QDF_MODULE_ID_CONFIG = 80,
 	QDF_MODULE_ID_REGULATORY,
 	QDF_MODULE_ID_SA_API,
 	QDF_MODULE_ID_NAN,
@@ -559,7 +561,7 @@ typedef enum {
 	QDF_MODULE_ID_SON,
 	QDF_MODULE_ID_SPECTRAL,
 	QDF_MODULE_ID_OBJ_MGR,
-	QDF_MODULE_ID_NSS,
+	QDF_MODULE_ID_NSS = 88,
 	QDF_MODULE_ID_ROAM_DEBUG,
 	QDF_MODULE_ID_CDP,
 	QDF_MODULE_ID_DIRECT_BUF_RX,
@@ -567,7 +569,7 @@ typedef enum {
 	QDF_MODULE_ID_GREEN_AP,
 	QDF_MODULE_ID_FTM,
 	QDF_MODULE_ID_FD,
-	QDF_MODULE_ID_OCB,
+	QDF_MODULE_ID_OCB = 96,
 	QDF_MODULE_ID_IPA,
 	QDF_MODULE_ID_CP_STATS,
 	QDF_MODULE_ID_ACTION_OUI,
@@ -575,7 +577,7 @@ typedef enum {
 	QDF_MODULE_ID_MBSSIE,
 	QDF_MODULE_ID_FWOL,
 	QDF_MODULE_ID_SM_ENGINE,
-	QDF_MODULE_ID_CMN_MLME,
+	QDF_MODULE_ID_CMN_MLME = 104,
 	QDF_MODULE_ID_BSSCOLOR,
 	QDF_MODULE_ID_CFR,
 	QDF_MODULE_ID_DP_TX_CAPTURE,
@@ -583,7 +585,7 @@ typedef enum {
 	QDF_MODULE_ID_DENYLIST_MGR,
 	QDF_MODULE_ID_QLD,
 	QDF_MODULE_ID_DYNAMIC_MODE_CHG,
-	QDF_MODULE_ID_COEX,
+	QDF_MODULE_ID_COEX = 112,
 	QDF_MODULE_ID_FTM_TIME_SYNC,
 	QDF_MODULE_ID_PKT_CAPTURE,
 	QDF_MODULE_ID_MON_FILTER,
@@ -591,7 +593,7 @@ typedef enum {
 	QDF_MODULE_ID_RPTR,
 	QDF_MODULE_ID_6GHZ,
 	QDF_MODULE_ID_IOT_SIM,
-	QDF_MODULE_ID_IFMGR,
+	QDF_MODULE_ID_IFMGR = 120,
 	QDF_MODULE_ID_MSCS,
 	QDF_MODULE_ID_GPIO,
 	QDF_MODULE_ID_DIAG,
@@ -599,7 +601,7 @@ typedef enum {
 	QDF_MODULE_ID_DP_TX,
 	QDF_MODULE_ID_DP_RX,
 	QDF_MODULE_ID_DP_STATS,
-	QDF_MODULE_ID_DP_HTT,
+	QDF_MODULE_ID_DP_HTT = 128,
 	QDF_MODULE_ID_DP_PEER,
 	QDF_MODULE_ID_DP_RX_ERROR,
 	QDF_MODULE_ID_DP_HTT_TX_STATS,
@@ -607,7 +609,7 @@ typedef enum {
 	QDF_MODULE_ID_DP_RX_MON_DEST,
 	QDF_MODULE_ID_DP_REO,
 	QDF_MODULE_ID_DP_TX_COMP,
-	QDF_MODULE_ID_DP_VDEV,
+	QDF_MODULE_ID_DP_VDEV = 136,
 	QDF_MODULE_ID_DP_CDP,
 	QDF_MODULE_ID_TSO,
 	QDF_MODULE_ID_ME,
@@ -615,7 +617,7 @@ typedef enum {
 	QDF_MODULE_ID_DBDC_REP,
 	QDF_MODULE_ID_EXT_AP,
 	QDF_MODULE_ID_MLO,
-	QDF_MODULE_ID_MLOIE,
+	QDF_MODULE_ID_MLOIE = 144,
 	QDF_MODULE_ID_MBSS,
 	QDF_MODULE_ID_MON,
 	QDF_MODULE_ID_MGMT_RX_REO,
@@ -623,7 +625,7 @@ typedef enum {
 	QDF_MODULE_ID_WIFI_RADAR,
 	QDF_MODULE_ID_TWT,
 	QDF_MODULE_ID_DP_UMAC_RESET,
-	QDF_MODULE_ID_WLAN_PRE_CAC,
+	QDF_MODULE_ID_WLAN_PRE_CAC = 152,
 	QDF_MODULE_ID_T2LM,
 	QDF_MODULE_ID_DP_SAWF,
 	QDF_MODULE_ID_SCS,
@@ -631,9 +633,11 @@ typedef enum {
 	QDF_MODULE_ID_QMI,
 	QDF_MODULE_ID_SOUNDING,
 	QDF_MODULE_ID_SAWF,
-	QDF_MODULE_ID_EPCS,
+	QDF_MODULE_ID_EPCS = 160,
 	QDF_MODULE_ID_LL_SAP,
 	QDF_MODULE_ID_COHOSTED_BSS,
+	QDF_MODULE_ID_TELEMETRY_AGENT,
+	QDF_MODULE_ID_RF_PATH_SWITCH,
 	QDF_MODULE_ID_ANY,
 	QDF_MODULE_ID_MAX,
 } QDF_MODULE_ID;
@@ -976,17 +980,12 @@ QDF_STATUS qdf_uint64_parse(const char *int_str, uint64_t *out_int);
  * If the feature CONFIG_WLAN_TRACE_HIDE_MAC_ADDRESS is enabled,
  * then the requirement is to hide 2nd, 3rd and 4th octet of the
  * MAC address in the kernel logs and driver logs.
- * But other management interfaces like ioctl, debugfs, sysfs,
- * wext, unit test code or non-production simulator sw (iot_sim)
- * should continue to log the full mac address.
  *
- * Developers must use QDF_FULL_MAC_FMT instead of "%pM",
+ * Developers must use QDF_MAC_ADDR_FMT instead of "%pM",
  * as this macro helps avoid accidentally breaking the feature
  * CONFIG_WLAN_TRACE_HIDE_MAC_ADDRESS if enabled and code auditing
  * becomes easy.
  */
-#define QDF_FULL_MAC_FMT "%pM"
-#define QDF_FULL_MAC_REF(a) (a)
 
 #if defined(WLAN_TRACE_HIDE_MAC_ADDRESS)
 #define QDF_MAC_ADDR_FMT "%02x:**:**:**:%02x:%02x"
@@ -1600,6 +1599,14 @@ enum qdf_suspend_type {
  * @QDF_FLUSH_LOGS : Recovery needed when sending flush completion to userspace
  * @QDF_WMI_CMD_SENT_DURING_SUSPEND: WMI command is received when target is
  * suspended
+ * @QDF_VDEV_MAC_ADDR_UPDATE_RESPONSE_TIMED_OUT: VDEV MAC address update
+ * request for Link switch timedout.
+ * @QDF_MGMT_RX_REO_INCONSISTENT_SNAPSHOT: Inconsistent management Rx reorder
+ * snapshots
+ * @QDF_MGMT_RX_REO_OUT_OF_ORDER_PKT: Reception of management packet with out
+ * of order packet counter values
+ * @QDF_MGMT_RX_REO_ZERO_DURATION_PKT: Reception of management packet with zero
+ * packet duration
  */
 enum qdf_hang_reason {
 	QDF_REASON_UNSPECIFIED,
@@ -1637,6 +1644,10 @@ enum qdf_hang_reason {
 	QDF_DEL_SELF_STA_FAILED,
 	QDF_FLUSH_LOGS,
 	QDF_WMI_CMD_SENT_DURING_SUSPEND,
+	QDF_VDEV_MAC_ADDR_UPDATE_RESPONSE_TIMED_OUT,
+	QDF_MGMT_RX_REO_INCONSISTENT_SNAPSHOT,
+	QDF_MGMT_RX_REO_OUT_OF_ORDER_PKT,
+	QDF_MGMT_RX_REO_ZERO_DURATION_PKT,
 };
 
 /**
@@ -1804,6 +1815,7 @@ enum qdf_iommu_attr {
 /**
  * enum qdf_dp_desc_type - source type for multiple pages allocation
  * @QDF_DP_TX_DESC_TYPE: DP SW TX descriptor
+ * @QDF_DP_TX_SPCL_DESC_TYPE: DP SW TX special descriptor
  * @QDF_DP_TX_PPEDS_DESC_TYPE: DP PPE-DS Tx descriptor
  * @QDF_DP_TX_EXT_DESC_TYPE: DP TX msdu extension descriptor
  * @QDF_DP_TX_EXT_DESC_LINK_TYPE: DP link descriptor for msdu ext_desc
@@ -1822,6 +1834,7 @@ enum qdf_iommu_attr {
  */
 enum qdf_dp_desc_type {
 	QDF_DP_TX_DESC_TYPE,
+	QDF_DP_TX_SPCL_DESC_TYPE,
 	QDF_DP_TX_PPEDS_DESC_TYPE,
 	QDF_DP_TX_EXT_DESC_TYPE,
 	QDF_DP_TX_EXT_DESC_LINK_TYPE,

@@ -783,10 +783,12 @@ struct dp_htt_rx_flow_fst_operation {
  * struct dp_htt_rx_fisa_cfg - Rx fisa config
  * @pdev_id: DP Pdev identifier
  * @fisa_timeout: fisa aggregation timeout
+ * @max_aggr_supported: FISA max MSDU aggregation supported
  */
 struct dp_htt_rx_fisa_cfg {
 	uint8_t pdev_id;
 	uint32_t fisa_timeout;
+	uint8_t max_aggr_supported;
 };
 
 /**
@@ -1206,10 +1208,14 @@ QDF_STATUS htt_h2t_rx_cce_super_rule_setup(struct htt_soc *htt_soc,
  * struct dp_peer_info - Primary Peer information
  * @primary_peer_id: Primary peer id
  * @chip_id: Chip id of primary peer
+ * @hw_peer_id: ast hash index
+ * @ast_hash: ast hash value
  */
 struct dp_peer_info {
 	uint16_t primary_peer_id;
 	uint8_t chip_id;
+	uint16_t hw_peer_id;
+	uint16_t ast_hash;
 };
 
 /**

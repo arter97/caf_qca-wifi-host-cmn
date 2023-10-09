@@ -76,7 +76,10 @@ target_if_populate_report_static_gen2(
 	struct spectralsim_report *report,
 	enum phy_ch_width width)
 {
-	qdf_assert_always(report);
+	if (!report) {
+		spectral_err("report pointer is null.");
+		goto bad;
+	}
 
 	switch (width) {
 	case CH_WIDTH_20MHZ:
@@ -178,8 +181,9 @@ target_if_populate_report_static_gen2(
 		break;
 
 	default:
-		spectral_err("Unhandled width. Please correct. Asserting");
-		qdf_assert_always(0);
+		spectral_err("Unhandled width enum: %d. Please correct.",
+			     width);
+		goto bad;
 	}
 
 	return 0;
@@ -203,8 +207,10 @@ target_if_populate_report_static_gen3(
 	struct spectralsim_report *report,
 	enum phy_ch_width width)
 {
-	qdf_assert_always(report);
-
+	if (!report) {
+		spectral_err("report pointer is null");
+		goto bad;
+	}
 	switch (width) {
 	case CH_WIDTH_20MHZ:
 		report->data = NULL;
@@ -306,8 +312,9 @@ target_if_populate_report_static_gen3(
 		break;
 
 	default:
-		spectral_err("Unhandled width. Please correct. Asserting");
-		qdf_assert_always(0);
+		spectral_err("Unhandled width enum: %d. Please correct.",
+			     width);
+		goto bad;
 	}
 
 	return 0;
@@ -359,7 +366,10 @@ target_if_populate_reportset_static(
 	int ret = 0;
 	struct spectralsim_report *report = NULL;
 
-	qdf_assert_always(reportset);
+	if (!reportset) {
+		spectral_err("reportset pointer is null.");
+		goto bad;
+	}
 
 	reportset->headreport = NULL;
 	reportset->curr_report = NULL;
@@ -436,8 +446,9 @@ target_if_populate_reportset_static(
 		break;
 
 	default:
-		spectral_err("Unhandled width. Please rectify.");
-		qdf_assert_always(0);
+		spectral_err("Unhandled width enum: %d. Please correct.",
+			     width);
+		goto bad;
 	};
 
 	reportset->curr_report = reportset->headreport;
@@ -573,24 +584,42 @@ OS_TIMER_FUNC(target_if_spectral_sim_phyerrdelivery_handler)
 	struct target_if_spectral_ops *p_sops;
 
 	OS_GET_TIMER_ARG(spectral, struct target_if_spectral *);
-	qdf_assert_always(spectral);
+	if (!spectral) {
+		spectral_err("spectral pointer is null.");
+		return;
+	}
 
 	p_sops = GET_TARGET_IF_SPECTRAL_OPS(spectral);
-	qdf_assert_always(spectral);
+	if (!p_sops) {
+		spectral_err("p_sops pointer is null.");
+		return;
+	}
 
 	simctx = (struct spectralsim_context *)spectral->simctx;
-	qdf_assert_always(simctx);
+	if (!simctx) {
+		spectral_err("simctx pointer is null.");
+		return;
+	}
 
 	if (!simctx->is_active)
 		return;
 
 	curr_reportset = simctx->curr_reportset;
-	qdf_assert_always(curr_reportset);
+	if (!curr_reportset) {
+		spectral_err("curr_reportset pointer is null.");
+		return;
+	}
 
 	curr_report = curr_reportset->curr_report;
-	qdf_assert_always(curr_report);
+	if (!curr_report) {
+		spectral_err("curr_report pointer is null.");
+		return;
+	}
 
-	qdf_assert_always(curr_reportset->headreport);
+	if (!curr_reportset->headreport) {
+		spectral_err("curr_reportset->headreport pointer is null.");
+		return;
+	}
 
 	/*
 	 * We use a simulation TSF since in offload architectures we can't
@@ -633,7 +662,10 @@ target_if_spectral_sim_attach(struct target_if_spectral *spectral)
 {
 	struct spectralsim_context *simctx = NULL;
 
-	qdf_assert_always(spectral);
+	if (!spectral) {
+		spectral_err("Spectral simulation: spectral pointer is null.")
+		return -EPERM;
+	}
 
 	simctx = (struct spectralsim_context *)
 	    qdf_mem_malloc(sizeof(struct spectralsim_context));
@@ -674,10 +706,16 @@ target_if_spectral_sim_detach(struct target_if_spectral *spectral)
 {
 	struct spectralsim_context *simctx = NULL;
 
-	qdf_assert_always(spectral);
+	if (!spectral) {
+		spectral_err("spectral pointer is null.");
+		return;
+	}
 
 	simctx = (struct spectralsim_context *)spectral->simctx;
-	qdf_assert_always(simctx);
+	if (!simctx) {
+		spectral_err("simctx pointer is null.");
+		return;
+	}
 
 	qdf_timer_free(&simctx->ssim_pherrdelivery_timer);
 
@@ -695,10 +733,15 @@ target_if_spectral_sops_sim_is_active(void *arg)
 	struct spectralsim_context *simctx = NULL;
 
 	spectral = (struct target_if_spectral *)arg;
-	qdf_assert_always(spectral);
-
+	if (!spectral) {
+		spectral_err("Spectral simulation: spectral pointer is null");
+		return 0;
+	}
 	simctx = (struct spectralsim_context *)spectral->simctx;
-	qdf_assert_always(simctx);
+	if (!simctx) {
+		spectral_err("Spectral simulation: simctx pointer is null");
+		return 0;
+	}
 
 	return simctx->is_active;
 }
@@ -711,10 +754,15 @@ target_if_spectral_sops_sim_is_enabled(void *arg)
 	struct spectralsim_context *simctx = NULL;
 
 	spectral = (struct target_if_spectral *)arg;
-	qdf_assert_always(spectral);
-
+	if (!spectral) {
+		spectral_err("Spectral simulation: spectral pointer is null");
+		return 0;
+	}
 	simctx = (struct spectralsim_context *)spectral->simctx;
-	qdf_assert_always(simctx);
+	if (!simctx) {
+		spectral_err("Spectral simulation: simctx pointer is null");
+		return 0;
+	}
 
 	return simctx->is_enabled;
 }
@@ -727,10 +775,15 @@ target_if_spectral_sops_sim_start_scan(void *arg)
 	struct spectralsim_context *simctx = NULL;
 
 	spectral = (struct target_if_spectral *)arg;
-	qdf_assert_always(spectral);
-
+	if (!spectral) {
+		spectral_err("Spectral simulation: spectral pointer is null");
+		return 0;
+	}
 	simctx = (struct spectralsim_context *)spectral->simctx;
-	qdf_assert_always(simctx);
+	if (!simctx) {
+		spectral_err("Spectral simulation: simctx pointer is null");
+		return 0;
+	}
 
 	if (!simctx->curr_reportset) {
 		spectral_err("Spectral simulation: No current report set configured  - unable to start simulated Spectral scan");
@@ -775,10 +828,15 @@ target_if_spectral_sops_sim_stop_scan(void *arg)
 	struct spectralsim_context *simctx = NULL;
 
 	spectral = (struct target_if_spectral *)arg;
-	qdf_assert_always(spectral);
-
+	if (!spectral) {
+		spectral_err("Spectral simulation: spectral pointer is null");
+		return 0;
+	}
 	simctx = (struct spectralsim_context *)spectral->simctx;
-	qdf_assert_always(simctx);
+	if (!simctx) {
+		spectral_err("Spectral simulation: simctx pointer is null");
+		return 0;
+	}
 
 	qdf_timer_stop(&simctx->ssim_pherrdelivery_timer);
 
@@ -852,16 +910,24 @@ target_if_spectral_sops_sim_configure_params(
 	uint8_t bw;
 	struct spectralsim_reportset *des_headreportset = NULL;
 	struct spectralsim_reportset *temp_reportset = NULL;
-	bool is_invalid_width = false;
 	struct wlan_objmgr_vdev *vdev = NULL;
 
-	qdf_assert_always(params);
+	if (!params) {
+		spectral_err("Spectral simulation: params pointer is null.")
+		return 0;
+	}
 	target_if_log_sim_spectral_params(params);
-	spectral = (struct target_if_spectral *)arg;
-	qdf_assert_always(spectral);
 
+	spectral = (struct target_if_spectral *)arg;
+	if (!spectral) {
+		spectral_err("Spectral simulation: spectral pointer is null");
+		return 0;
+	}
 	simctx = (struct spectralsim_context *)spectral->simctx;
-	qdf_assert_always(simctx);
+	if (!simctx) {
+		spectral_err("Spectral simulation: simctx pointer is null");
+		return 0;
+	}
 
 	vdev = target_if_spectral_get_vdev(spectral, smode);
 	if (!vdev) {
@@ -888,19 +954,14 @@ target_if_spectral_sops_sim_configure_params(
 		des_headreportset = simctx->bw80_80_headreportset;
 		break;
 	case CH_WIDTH_INVALID:
-		spectral_err("Spectral simulation: Invalid width configured - not proceeding with param config.");
-		is_invalid_width = true;
 	default:
-		spectral_err("Spectral simulation: Unknown width %u...asserting",
+		spectral_err("Spectral simulation: Invalid width: %d configured - not proceeding with param config.",
 			     bw);
-		qdf_assert_always(0);
-		break;
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_SPECTRAL_ID);
+		return 0;
 	}
 
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_SPECTRAL_ID);
-
-	if (is_invalid_width)
-		return 0;
 
 	if (!des_headreportset) {
 		spectral_warn("Spectral simulation: No simulation data present for configured bandwidth/PHY mode - unable to proceed  with param config.");
@@ -941,14 +1002,19 @@ target_if_spectral_sops_sim_get_params(
 {
 	struct target_if_spectral *spectral = NULL;
 	struct spectralsim_context *simctx = NULL;
-
-	qdf_assert_always(params);
-
 	spectral = (struct target_if_spectral *)arg;
-	qdf_assert_always(spectral);
+
+	if (!param || !spectral) {
+		spectral_err("Spectral simulation: null params, param %pK, spectral %pK.",
+			     param, spectral);
+		return 0;
+	}
 
 	simctx = (struct spectralsim_context *)spectral->simctx;
-	qdf_assert_always(simctx);
+	if (!simctx) {
+		spectral_err("Spectral simulation: simctx pointer is null.");
+		return 0;
+	}
 
 	if (!simctx->curr_reportset) {
 		spectral_warn("Spectral simulation: No configured reportset found.");

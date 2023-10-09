@@ -341,7 +341,7 @@ struct wlan_objmgr_psoc_nif {
 	struct wlan_objmgr_psoc_user_config user_config;
 };
 
-/*
+/**
  * struct wlan_objmgr_psoc_objmgr - psoc object manager sub structure
  * @psoc_id:              The PSOC's numeric Id
  * @wlan_pdev_count:      PDEV count
@@ -359,9 +359,6 @@ struct wlan_objmgr_psoc_nif {
  * @ref_cnt:              Ref count
  * @ref_id_dbg:           Array to track Ref count
  * @qdf_dev:              QDF Device
- *
- * NB: not using kernel-doc format since the kernel-doc script doesn't
- *     handle the qdf_bitmap() macro
  */
 struct wlan_objmgr_psoc_objmgr {
 	uint8_t psoc_id;
@@ -470,10 +467,18 @@ struct wlan_psoc_host_hal_reg_capabilities_ext {
  * from service ready ext2 event.
  * @phy_id: phy id starts with 0
  * @wireless_modes_ext: REGDMN MODE, see REGDMN_MODE_ enum
+ * @low_2ghz_chan_ext: 2 GHz channel low
+ * @high_2ghz_chan_ext: 2 GHz channel High
+ * @low_5ghz_chan_ext: 5 GHz channel low
+ * @high_5ghz_chan_ext: 5 GHz channel High
  */
 struct wlan_psoc_host_hal_reg_capabilities_ext2 {
 	uint32_t phy_id;
 	uint64_t wireless_modes_ext;
+	uint32_t low_2ghz_chan_ext;
+	uint32_t high_2ghz_chan_ext;
+	uint32_t low_5ghz_chan_ext;
+	uint32_t high_5ghz_chan_ext;
 };
 
 /*

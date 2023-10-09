@@ -256,6 +256,8 @@ enum HOST_TWT_ENABLE_STATUS {
  * @HOST_ADD_TWT_STATUS_ROAM_IN_PROGRESS: Roaming in progress
  * @HOST_ADD_TWT_STATUS_CHAN_SW_IN_PROGRESS: Channel switch in progress
  * @HOST_ADD_TWT_STATUS_SCAN_IN_PROGRESS: Scan is in progress
+ * @HOST_ADD_TWT_STATUS_LINK_SWITCH_IN_PROGRESS: Link switch is in progress
+ * @HOST_ADD_TWT_STATUS_UNSUPPORTED_MODE_MLMR: MLMR mode is not supported
  */
 enum HOST_ADD_TWT_STATUS {
 	HOST_ADD_TWT_STATUS_OK,
@@ -273,6 +275,8 @@ enum HOST_ADD_TWT_STATUS {
 	HOST_ADD_TWT_STATUS_ROAM_IN_PROGRESS,
 	HOST_ADD_TWT_STATUS_CHAN_SW_IN_PROGRESS,
 	HOST_ADD_TWT_STATUS_SCAN_IN_PROGRESS,
+	HOST_ADD_TWT_STATUS_LINK_SWITCH_IN_PROGRESS,
+	HOST_ADD_TWT_STATUS_UNSUPPORTED_MODE_MLMR,
 };
 
 /**
@@ -364,7 +368,7 @@ struct twt_ack_complete_event_param {
  * @peer_mac: MAC address of node
  * @event_type: Indicates TWT session type (SETUP/TEARDOWN/UPDATE)
  * @flow_id: TWT flow identifier established with TWT peer
- * @bcast:  If this is a broacast TWT session
+ * @bcast:  If this is a broadcast TWT session
  * @trig: If the TWT session is trigger enabled
  * @announ: If the flow type is announced/unannounced
  * @protection: If the TWT protection field is set
@@ -527,6 +531,8 @@ enum HOST_TWT_GET_STATS_STATUS {
  * @HOST_TWT_ADD_STATUS_ROAM_IN_PROGRESS: Roaming in progress
  * @HOST_TWT_ADD_STATUS_CHAN_SW_IN_PROGRESS: Channel switch in progress
  * @HOST_TWT_ADD_STATUS_SCAN_IN_PROGRESS: Scan is in progress
+ * @HOST_TWT_ADD_STATUS_LINK_SWITCH_IN_PROGRESS: link switch is in progress
+ * @HOST_TWT_ADD_STATUS_UNSUPPORTED_MODE_MLMR: MLMR not supported
  */
 enum HOST_TWT_ADD_STATUS {
 	HOST_TWT_ADD_STATUS_OK,
@@ -544,6 +550,8 @@ enum HOST_TWT_ADD_STATUS {
 	HOST_TWT_ADD_STATUS_ROAM_IN_PROGRESS,
 	HOST_TWT_ADD_STATUS_CHAN_SW_IN_PROGRESS,
 	HOST_TWT_ADD_STATUS_SCAN_IN_PROGRESS,
+	HOST_TWT_ADD_STATUS_LINK_SWITCH_IN_PROGRESS,
+	HOST_TWT_ADD_STATUS_UNSUPPORTED_MODE_MLMR,
 };
 
 /**
@@ -907,10 +915,12 @@ enum HOST_TWT_NEXT_WORK_ACTION {
  * struct twt_work_params
  * @peer_macaddr: peer mac address
  * @dialog_id: Dialog ID
+ * @is_ps_disabled: Whether power save is disabled or not.
  */
 struct twt_work_params {
 	struct qdf_mac_addr peer_macaddr;
 	uint32_t dialog_id;
+	bool is_ps_disabled;
 };
 #ifdef WLAN_SUPPORT_BCAST_TWT
 /**
@@ -1051,6 +1061,14 @@ enum twt_traffic_ac {
 	TWT_AC_BE  = 2,
 	TWT_AC_BK  = 3,
 	TWT_AC_MAX = 4,
+};
+
+/**
+ * enum twt_disable_reason - twt disable/enable reason
+ * @REASON_PMO_SUSPEND: reason is suspended
+ */
+enum twt_disable_reason {
+	REASON_PMO_SUSPEND  = 0x1,
 };
 
 #endif /* _WLAN_TWT_PUBLIC_STRUCTS_H_ */

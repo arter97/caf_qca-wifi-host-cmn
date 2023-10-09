@@ -25,8 +25,9 @@
 #include <dp_mon_filter.h>
 #include <dp_htt.h>
 #include <dp_mon.h>
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 #include <dp_tx_mon_2.0.h>
-
+#endif
 #define DP_MON_RING_FILL_LEVEL_DEFAULT 2048
 #define DP_MON_DATA_BUFFER_SIZE     2048
 #define DP_MON_DESC_MAGIC 0xdeadabcd
@@ -236,6 +237,8 @@ struct dp_mon_desc_pool {
  * @lite_mon_tx_config: tx litemon config
  * @prev_rxmon_desc: prev destination desc
  * @prev_rxmon_cookie: prev rxmon cookie
+ * @prev_rxmon_pkt_desc: prev packet buff desc
+ * @prev_rxmon_pkt_cookie: prev packet buff desc cookie
  * @ppdu_info_cache: PPDU info cache
  * @total_free_elem: total free element in queue
  * @rx_tlv_logger: Rx TLV logger struct
@@ -243,10 +246,12 @@ struct dp_mon_desc_pool {
 struct dp_mon_pdev_be {
 	struct dp_mon_pdev mon_pdev;
 	struct dp_mon_filter_be **filter_be;
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 	uint8_t tx_mon_mode;
 	uint8_t tx_mon_filter_length;
 	struct dp_pdev_tx_monitor_be tx_monitor_be;
 	struct dp_tx_monitor_drop_stats tx_stats;
+#endif
 	qdf_spinlock_t rx_mon_wq_lock;
 	qdf_workqueue_t *rx_mon_workqueue;
 	qdf_work_t rx_mon_work;
@@ -263,6 +268,8 @@ struct dp_mon_pdev_be {
 #endif
 	void *prev_rxmon_desc;
 	uint32_t prev_rxmon_cookie;
+	void *prev_rxmon_pkt_desc;
+	uint32_t prev_rxmon_pkt_cookie;
 	qdf_kmem_cache_t ppdu_info_cache;
 	uint32_t total_free_elem;
 #ifdef MONITOR_TLV_RECORDING_ENABLE
@@ -326,21 +333,29 @@ void dp_mon_desc_pool_deinit(struct dp_mon_desc_pool *mon_desc_pool);
 
 /**
  * dp_mon_desc_pool_free()- monitor descriptor pool free
+ * @soc: DP soc handle
  * @mon_desc_pool: mon desc pool
+ * @ctx_type: DP context type
  *
  * Return: None
  *
  */
-void dp_mon_desc_pool_free(struct dp_mon_desc_pool *mon_desc_pool);
+void dp_mon_desc_pool_free(struct dp_soc *soc,
+			   struct dp_mon_desc_pool *mon_desc_pool,
+			   enum dp_ctxt_type ctx_type);
 
 /**
  * dp_mon_desc_pool_alloc() - Monitor descriptor pool alloc
+ * @soc: DP soc handle
+ * @ctx_type: DP context type
  * @pool_size: Pool size
  * @mon_desc_pool: mon desc pool
  *
  * Return: non-zero for failure, zero for success
  */
-QDF_STATUS dp_mon_desc_pool_alloc(uint32_t pool_size,
+QDF_STATUS dp_mon_desc_pool_alloc(struct dp_soc *soc,
+				  enum dp_ctxt_type ctx_type,
+				  uint32_t pool_size,
 				  struct dp_mon_desc_pool *mon_desc_pool);
 
 /**
@@ -451,7 +466,8 @@ void __dp_mon_add_to_free_desc_list(union dp_mon_desc_list_elem_t **head,
 				    struct dp_mon_desc *new,
 				    const char *func_name)
 {
-	qdf_assert(head && new);
+	if (!(head && new))
+		return;
 
 	new->buf_addr = NULL;
 	new->in_use = 0;
@@ -533,7 +549,6 @@ qdf_size_t dp_mon_get_context_size_be(enum dp_context_type context_type)
 }
 #endif
 
-#ifdef WLAN_PKT_CAPTURE_TX_2_0
 /**
  * dp_get_be_mon_soc_from_dp_mon_soc() - get dp_mon_soc_be from dp_mon_soc
  * @soc: dp_mon_soc pointer
@@ -557,7 +572,6 @@ struct dp_mon_pdev_be *dp_get_be_mon_pdev_from_dp_mon_pdev(struct dp_mon_pdev *m
 {
 	return (struct dp_mon_pdev_be *)mon_pdev;
 }
-#endif
 
 #ifdef QCA_ENHANCED_STATS_SUPPORT
 /*

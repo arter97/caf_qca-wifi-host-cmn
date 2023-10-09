@@ -37,6 +37,9 @@
 #endif
 #include <qdf_pkt_add_timestamp.h>
 #include "dp_ipa.h"
+#ifdef IPA_OFFLOAD
+#include <wlan_ipa_obj_mgmt_api.h>
+#endif
 
 #define DP_INVALID_VDEV_ID 0xFF
 
@@ -69,13 +72,10 @@ int dp_tx_proxy_arp(struct dp_vdev *vdev, qdf_nbuf_t nbuf);
 #define DP_TX_DESC_FLAG_FLUSH		0x2000
 #define DP_TX_DESC_FLAG_TRAFFIC_END_IND	0x4000
 #define DP_TX_DESC_FLAG_RMNET		0x8000
-/*
- * Since the Tx descriptor flag is of only 16-bit and no more bit is free for
- * any new flag, therefore for time being overloading PPEDS flag with that of
- * FLUSH flag and FLAG_FAST with TDLS which is not enabled for WIN.
- */
-#define DP_TX_DESC_FLAG_PPEDS		0x2000
-#define DP_TX_DESC_FLAG_FAST		0x100
+#define DP_TX_DESC_FLAG_FASTPATH_SIMPLE 0x10000
+#define DP_TX_DESC_FLAG_PPEDS		0x20000
+#define DP_TX_DESC_FLAG_FAST		0x40000
+#define DP_TX_DESC_FLAG_SPECIAL         0x80000
 
 #define DP_TX_EXT_DESC_FLAG_METADATA_VALID 0x1
 
@@ -210,6 +210,7 @@ struct dp_tx_queue {
  * @skip_hp_update : Skip HP update for TSO segments and update in last segment
  * @buf_len:
  * @payload_addr:
+ * @driver_ingress_ts: driver ingress timestamp
  *
  * This structure holds the complete MSDU information needed to program the
  * Hardware TCL and MSDU extension descriptors for different frame types
@@ -240,6 +241,9 @@ struct dp_tx_msdu_info_s {
 #ifdef QCA_DP_TX_RMNET_OPTIMIZATION
 	uint16_t buf_len;
 	uint8_t *payload_addr;
+#endif
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+	qdf_ktime_t driver_ingress_ts;
 #endif
 };
 
@@ -273,6 +277,26 @@ void dp_tx_deinit_pair_by_index(struct dp_soc *soc, int index);
 void
 dp_tx_comp_process_desc_list(struct dp_soc *soc,
 			     struct dp_tx_desc_s *comp_head, uint8_t ring_id);
+
+/**
+ * dp_tx_comp_process_desc_list_fast() - Tx complete fast sw descriptor handler
+ * @soc: core txrx main context
+ * @head_desc: software descriptor head pointer
+ * @tail_desc: software descriptor tail pointer
+ * @ring_id: ring number
+ * @fast_desc_count: Total descriptor count in the list
+ *
+ * This function will process batch of descriptors reaped by dp_tx_comp_handler
+ * and append the list of descriptors to the freelist
+ *
+ * Return: none
+ */
+void
+dp_tx_comp_process_desc_list_fast(struct dp_soc *soc,
+				  struct dp_tx_desc_s *head_desc,
+				  struct dp_tx_desc_s *tail_desc,
+				  uint8_t ring_id,
+				  uint32_t fast_desc_count);
 
 /**
  * dp_tx_comp_free_buf() - Free nbuf associated with the Tx Descriptor
@@ -429,6 +453,84 @@ dp_ppeds_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc)
 	return NULL;
 }
 #endif
+
+/**
+ * dp_get_updated_tx_desc() - get updated tx_desc value
+ * @psoc: psoc object
+ * @pool_num: Tx desc pool Id
+ * @current_desc: Current Tx Desc value
+ *
+ * In Lowmem profiles the number of Tx desc in 4th pool is reduced to quarter
+ * for memory optimizations via this flag DP_TX_DESC_POOL_OPTIMIZE
+ *
+ * Return: Updated Tx Desc value
+ */
+#ifdef DP_TX_DESC_POOL_OPTIMIZE
+static inline uint32_t dp_get_updated_tx_desc(struct cdp_ctrl_objmgr_psoc *psoc,
+					      uint8_t pool_num,
+					      uint32_t current_desc)
+{
+	if (pool_num == 3)
+		return cfg_get(psoc, CFG_DP_TX_DESC_POOL_3);
+	else
+		return current_desc;
+}
+#else
+static inline uint32_t dp_get_updated_tx_desc(struct cdp_ctrl_objmgr_psoc *psoc,
+					      uint8_t pool_num,
+					      uint32_t current_desc)
+{
+	return current_desc;
+}
+#endif
+
+#ifdef DP_TX_EXT_DESC_POOL_OPTIMIZE
+/**
+ * dp_tx_ext_desc_pool_override() - Override tx ext desc pool Id
+ * @desc_pool_id: Desc pool Id
+ *
+ * For low mem profiles the number of ext_tx_desc_pool is reduced to 1.
+ * Since in Tx path the desc_pool_id is filled based on CPU core,
+ * dp_tx_ext_desc_pool_override will return the desc_pool_id as 0 for lowmem
+ * profiles.
+ *
+ * Return: updated tx_ext_desc_pool Id
+ */
+static inline uint8_t dp_tx_ext_desc_pool_override(uint8_t desc_pool_id)
+{
+	return 0;
+}
+
+/**
+ * dp_get_ext_tx_desc_pool_num() - get the number of ext_tx_desc pool
+ * @soc: core txrx main context
+ *
+ * For lowmem profiles the number of ext_tx_desc pool is reduced to 1 for
+ * memory optimizations.
+ * Based on this flag DP_TX_EXT_DESC_POOL_OPTIMIZE dp_get_ext_tx_desc_pool_num
+ * will return reduced desc_pool value 1 for low mem profile and for the other
+ * profiles it will return the same value as tx_desc pool.
+ *
+ * Return: number of ext_tx_desc pool
+ */
+
+static inline uint8_t dp_get_ext_tx_desc_pool_num(struct dp_soc *soc)
+{
+	return 1;
+}
+
+#else
+static inline uint8_t dp_tx_ext_desc_pool_override(uint8_t desc_pool_id)
+{
+	return desc_pool_id;
+}
+
+static inline uint8_t dp_get_ext_tx_desc_pool_num(struct dp_soc *soc)
+{
+	return wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
+}
+#endif
+
 #ifndef QCA_HOST_MODE_WIFI_DISABLED
 /**
  * dp_tso_soc_attach() - TSO Attach handler
@@ -848,12 +950,26 @@ static inline void dp_tx_get_queue(struct dp_vdev *vdev,
 }
 #endif
 #else
+#ifdef WLAN_TX_PKT_CAPTURE_ENH
+static inline void dp_tx_get_queue(struct dp_vdev *vdev,
+				   qdf_nbuf_t nbuf, struct dp_tx_queue *queue)
+{
+	if (qdf_unlikely(vdev->is_override_rbm_id))
+		queue->ring_id = vdev->rbm_id;
+	else
+		queue->ring_id = qdf_get_cpu();
+
+	queue->desc_pool_id = queue->ring_id;
+}
+#else
 static inline void dp_tx_get_queue(struct dp_vdev *vdev,
 				   qdf_nbuf_t nbuf, struct dp_tx_queue *queue)
 {
 	queue->ring_id = qdf_get_cpu();
 	queue->desc_pool_id = queue->ring_id;
 }
+
+#endif
 #endif
 
 /**
@@ -881,7 +997,8 @@ static inline void dp_tx_get_queue(struct dp_vdev *vdev,
 {
 	/* get flow id */
 	queue->desc_pool_id = DP_TX_GET_DESC_POOL_ID(vdev);
-	if (vdev->pdev->soc->wlan_cfg_ctx->ipa_enabled)
+	if (vdev->pdev->soc->wlan_cfg_ctx->ipa_enabled &&
+	    !ipa_config_is_opt_wifi_dp_enabled())
 		queue->ring_id = DP_TX_GET_RING_ID(vdev);
 	else
 		queue->ring_id = (qdf_nbuf_get_queue_mapping(nbuf) %
@@ -1411,7 +1528,7 @@ dp_tx_hw_desc_update_evt(uint8_t *hal_tx_desc_cached,
 }
 #endif
 
-#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(WLAN_CONFIG_TX_DELAY)
+#if defined(WLAN_FEATURE_TSF_AUTO_REPORT) || defined(WLAN_CONFIG_TX_DELAY)
 /**
  * dp_tx_compute_hw_delay_us() - Compute hardware Tx completion delay
  * @ts: Tx completion status
@@ -1476,6 +1593,42 @@ bool dp_tx_pkt_tracepoints_enabled(void)
 		qdf_trace_dp_tx_comp_pkt_enabled());
 }
 
+#ifdef QCA_SUPPORT_DP_GLOBAL_CTX
+static inline
+struct dp_tx_desc_pool_s *dp_get_tx_desc_pool(struct dp_soc *soc,
+					      uint8_t pool_id)
+{
+	struct dp_global_context *dp_global = NULL;
+
+	dp_global = wlan_objmgr_get_global_ctx();
+	return dp_global->tx_desc[soc->arch_id][pool_id];
+}
+
+static inline
+struct dp_tx_desc_pool_s *dp_get_spcl_tx_desc_pool(struct dp_soc *soc,
+						   uint8_t pool_id)
+{
+	struct dp_global_context *dp_global = NULL;
+
+	dp_global = wlan_objmgr_get_global_ctx();
+	return dp_global->spcl_tx_desc[soc->arch_id][pool_id];
+}
+#else
+static inline
+struct dp_tx_desc_pool_s *dp_get_tx_desc_pool(struct dp_soc *soc,
+					      uint8_t pool_id)
+{
+	return &soc->tx_desc[pool_id];
+}
+
+static inline
+struct dp_tx_desc_pool_s *dp_get_spcl_tx_desc_pool(struct dp_soc *soc,
+						   uint8_t pool_id)
+{
+	return &soc->tx_desc[pool_id];
+}
+#endif
+
 #ifdef DP_TX_TRACKING
 /**
  * dp_tx_desc_set_timestamp() - set timestamp in tx descriptor
@@ -1534,7 +1687,8 @@ bool dp_tx_desc_set_ktimestamp(struct dp_vdev *vdev,
 	    qdf_unlikely(vdev->pdev->soc->wlan_cfg_ctx->pext_stats_enabled) ||
 	    qdf_unlikely(dp_tx_pkt_tracepoints_enabled()) ||
 	    qdf_unlikely(vdev->pdev->soc->peerstats_enabled) ||
-	    qdf_unlikely(dp_is_vdev_tx_delay_stats_enabled(vdev))) {
+	    qdf_unlikely(dp_is_vdev_tx_delay_stats_enabled(vdev)) ||
+	    qdf_unlikely(wlan_cfg_is_peer_jitter_stats_enabled(vdev->pdev->soc->wlan_cfg_ctx))) {
 		tx_desc->timestamp = qdf_ktime_real_get();
 		return true;
 	}
@@ -1548,7 +1702,8 @@ bool dp_tx_desc_set_ktimestamp(struct dp_vdev *vdev,
 	if (qdf_unlikely(vdev->pdev->delay_stats_flag) ||
 	    qdf_unlikely(vdev->pdev->soc->wlan_cfg_ctx->pext_stats_enabled) ||
 	    qdf_unlikely(dp_tx_pkt_tracepoints_enabled()) ||
-	    qdf_unlikely(vdev->pdev->soc->peerstats_enabled)) {
+	    qdf_unlikely(vdev->pdev->soc->peerstats_enabled) ||
+	    qdf_unlikely(wlan_cfg_is_peer_jitter_stats_enabled(vdev->pdev->soc->wlan_cfg_ctx))) {
 		tx_desc->timestamp = qdf_ktime_real_get();
 		return true;
 	}
@@ -1639,63 +1794,6 @@ static inline bool is_spl_packet(qdf_nbuf_t nbuf)
 
 #ifdef QCA_SUPPORT_DP_GLOBAL_CTX
 /**
- * is_dp_spl_tx_limit_reached - Check if the packet is a special packet to allow
- * allocation if allocated tx descriptors are within the global max limit
- * and pdev max limit.
- * @vdev: DP vdev handle
- * @nbuf: network buffer
- *
- * Return: true if allocated tx descriptors reached max configured value, else
- * false
- */
-static inline bool
-is_dp_spl_tx_limit_reached(struct dp_vdev *vdev, qdf_nbuf_t nbuf)
-{
-	struct dp_pdev *pdev = vdev->pdev;
-	struct dp_soc *soc = pdev->soc;
-	struct dp_global_context *dp_global;
-	uint32_t global_tx_desc_allowed;
-
-	dp_global = wlan_objmgr_get_global_ctx();
-	global_tx_desc_allowed =
-		wlan_cfg_get_num_global_tx_desc(soc->wlan_cfg_ctx);
-
-	if (is_spl_packet(nbuf)) {
-		if (dp_tx_get_global_desc_in_use(dp_global) >=
-				global_tx_desc_allowed)
-			return true;
-
-		if (qdf_atomic_read(&pdev->num_tx_outstanding) >=
-			pdev->num_tx_allowed)
-			return true;
-
-		return false;
-	}
-
-	return true;
-}
-
-static inline bool
-__dp_tx_limit_check(struct dp_soc *soc)
-{
-	struct dp_global_context *dp_global;
-	uint32_t global_tx_desc_allowed;
-	uint32_t global_tx_desc_reg_allowed;
-	uint32_t global_tx_desc_spcl_allowed;
-
-	dp_global = wlan_objmgr_get_global_ctx();
-	global_tx_desc_allowed =
-		wlan_cfg_get_num_global_tx_desc(soc->wlan_cfg_ctx);
-	global_tx_desc_spcl_allowed =
-		wlan_cfg_get_num_global_spcl_tx_desc(soc->wlan_cfg_ctx);
-	global_tx_desc_reg_allowed = global_tx_desc_allowed -
-					global_tx_desc_spcl_allowed;
-
-	return (dp_tx_get_global_desc_in_use(dp_global) >=
-					global_tx_desc_reg_allowed);
-}
-
-/**
  * dp_tx_limit_check - Check if allocated tx descriptors reached
  * global max reg limit and pdev max reg limit for regular packets. Also check
  * if the limit is reached for special packets.
@@ -1709,27 +1807,12 @@ __dp_tx_limit_check(struct dp_soc *soc)
 static inline bool
 dp_tx_limit_check(struct dp_vdev *vdev, qdf_nbuf_t nbuf)
 {
-	struct dp_pdev *pdev = vdev->pdev;
-	struct dp_soc *soc = pdev->soc;
+	return false;
+}
 
-	if (__dp_tx_limit_check(soc)) {
-		if (is_dp_spl_tx_limit_reached(vdev, nbuf)) {
-			dp_tx_info("queued packets are more than max tx, drop the frame");
-			DP_STATS_INC(vdev, tx_i.dropped.desc_na.num, 1);
-			return true;
-		}
-	}
-
-	if (qdf_atomic_read(&pdev->num_tx_outstanding) >=
-			pdev->num_reg_tx_allowed) {
-		if (is_dp_spl_tx_limit_reached(vdev, nbuf)) {
-			dp_tx_info("queued packets are more than max tx, drop the frame");
-			DP_STATS_INC(vdev, tx_i.dropped.desc_na.num, 1);
-			DP_STATS_INC(vdev,
-				     tx_i.dropped.desc_na_exc_outstand.num, 1);
-			return true;
-		}
-	}
+static inline bool
+__dp_tx_limit_check(struct dp_soc *soc)
+{
 	return false;
 }
 #else
@@ -1835,16 +1918,6 @@ dp_tx_exception_limit_check(struct dp_vdev *vdev)
 }
 
 #ifdef QCA_SUPPORT_DP_GLOBAL_CTX
-static inline void
-__dp_tx_outstanding_inc(struct dp_soc *soc)
-{
-	struct dp_global_context *dp_global;
-
-	dp_global = wlan_objmgr_get_global_ctx();
-
-	qdf_atomic_inc(&dp_global->global_descriptor_in_use);
-}
-
 /**
  * dp_tx_outstanding_inc - Inc outstanding tx desc values on global and pdev
  * @pdev: DP pdev handle
@@ -1854,20 +1927,18 @@ __dp_tx_outstanding_inc(struct dp_soc *soc)
 static inline void
 dp_tx_outstanding_inc(struct dp_pdev *pdev)
 {
-	__dp_tx_outstanding_inc(pdev->soc);
-	qdf_atomic_inc(&pdev->num_tx_outstanding);
-	dp_update_tx_desc_stats(pdev);
+}
+
+static inline void
+__dp_tx_outstanding_inc(struct dp_soc *soc)
+{
 }
 
 static inline void
 __dp_tx_outstanding_dec(struct dp_soc *soc)
 {
-	struct dp_global_context *dp_global;
-
-	dp_global = wlan_objmgr_get_global_ctx();
-
-	qdf_atomic_dec(&dp_global->global_descriptor_in_use);
 }
+
 /**
  * dp_tx_outstanding_dec - Dec outstanding tx desc values on global and pdev
  * @pdev: DP pdev handle
@@ -1877,13 +1948,19 @@ __dp_tx_outstanding_dec(struct dp_soc *soc)
 static inline void
 dp_tx_outstanding_dec(struct dp_pdev *pdev)
 {
-	struct dp_soc *soc = pdev->soc;
-
-	__dp_tx_outstanding_dec(soc);
-	qdf_atomic_dec(&pdev->num_tx_outstanding);
-	dp_update_tx_desc_stats(pdev);
 }
 
+/**
+ * dp_tx_outstanding_sub - Subtract outstanding tx desc values on pdev
+ * @pdev: DP pdev handle
+ * @count: count of descs to subtract from outstanding
+ *
+ * Return: void
+ */
+static inline void
+dp_tx_outstanding_sub(struct dp_pdev *pdev, uint32_t count)
+{
+}
 #else
 
 static inline void
@@ -1926,6 +2003,36 @@ dp_tx_outstanding_dec(struct dp_pdev *pdev)
 
 	__dp_tx_outstanding_dec(soc);
 	qdf_atomic_dec(&pdev->num_tx_outstanding);
+	dp_update_tx_desc_stats(pdev);
+}
+
+/**
+ * __dp_tx_outstanding_sub - Sub outstanding tx desc values from soc
+ * @soc: DP soc handle
+ * @count: count of descs to subtract from outstanding
+ *
+ * Return: void
+ */
+static inline void
+__dp_tx_outstanding_sub(struct dp_soc *soc, uint32_t count)
+{
+	qdf_atomic_sub(count, &soc->num_tx_outstanding);
+}
+
+/**
+ * dp_tx_outstanding_sub - Subtract outstanding tx desc values on pdev
+ * @pdev: DP pdev handle
+ * @count: count of descs to subtract from outstanding
+ *
+ * Return: void
+ */
+static inline void
+dp_tx_outstanding_sub(struct dp_pdev *pdev, uint32_t count)
+{
+	struct dp_soc *soc = pdev->soc;
+
+	__dp_tx_outstanding_sub(soc, count);
+	qdf_atomic_sub(count, &pdev->num_tx_outstanding);
 	dp_update_tx_desc_stats(pdev);
 }
 #endif /* QCA_SUPPORT_DP_GLOBAL_CTX */
@@ -1972,6 +2079,25 @@ dp_tx_outstanding_dec(struct dp_pdev *pdev)
 	qdf_atomic_dec(&pdev->num_tx_outstanding);
 	dp_update_tx_desc_stats(pdev);
 }
+
+static inline void
+__dp_tx_outstanding_sub(struct dp_soc *soc, uint32_t count)
+{
+}
+
+/**
+ * dp_tx_outstanding_sub - Subtract outstanding tx desc values on pdev
+ * @pdev: DP pdev handle
+ * @count: count of descs to subtract from outstanding
+ *
+ * Return: void
+ */
+static inline void
+dp_tx_outstanding_sub(struct dp_pdev *pdev, uint32_t count)
+{
+	qdf_atomic_sub(count, &pdev->num_tx_outstanding);
+	dp_update_tx_desc_stats(pdev);
+}
 #endif //QCA_TX_LIMIT_CHECK
 
 /**
@@ -1993,7 +2119,7 @@ static inline uint32_t dp_tx_get_pkt_len(struct dp_tx_desc_s *tx_desc)
 {
 	return tx_desc->frm_type == dp_tx_frm_tso ?
 		tx_desc->msdu_ext_desc->tso_desc->seg.total_len :
-		qdf_nbuf_len(tx_desc->nbuf);
+		tx_desc->length;
 }
 
 #ifdef FEATURE_RUNTIME_PM
@@ -2007,5 +2133,67 @@ static inline int dp_get_rtpm_tput_policy_requirement(struct dp_soc *soc)
 {
 	return 0;
 }
+#endif
+#if defined WLAN_FEATURE_11BE_MLO && defined DP_MLO_LINK_STATS_SUPPORT
+/**
+ * dp_tx_set_nbuf_band() - Set band info in nbuf cb
+ * @nbuf: nbuf pointer
+ * @txrx_peer: txrx_peer pointer
+ * @link_id: Peer Link ID
+ *
+ * Returen: None
+ */
+static inline void
+dp_tx_set_nbuf_band(qdf_nbuf_t nbuf, struct dp_txrx_peer *txrx_peer,
+		    uint8_t link_id)
+{
+	qdf_nbuf_tx_set_band(nbuf, txrx_peer->band[link_id]);
+}
+#else
+static inline void
+dp_tx_set_nbuf_band(qdf_nbuf_t nbuf, struct dp_txrx_peer *txrx_peer,
+		    uint8_t link_id)
+{
+}
+#endif
+
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+/**
+ * dp_tx_latency_stats_fetch() - fetch transmit latency statistics for
+ * specified link mac address
+ * @soc_hdl: Handle to struct dp_soc
+ * @vdev_id: vdev id
+ * @mac: link mac address of remote peer
+ * @latency: buffer to hold per-link transmit latency statistics
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+dp_tx_latency_stats_fetch(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+			  uint8_t *mac, struct cdp_tx_latency *latency);
+
+/**
+ * dp_tx_latency_stats_config() - config transmit latency statistics for
+ * specified vdev
+ * @soc_hdl: Handle to struct dp_soc
+ * @vdev_id: vdev id
+ * @cfg: configuration for transmit latency statistics
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+dp_tx_latency_stats_config(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+			   struct cdp_tx_latency_config *cfg);
+
+/**
+ * dp_tx_latency_stats_register_cb() - register transmit latency statistics
+ * callback
+ * @handle: Handle to struct dp_soc
+ * @cb: callback function for transmit latency statistics
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_tx_latency_stats_register_cb(struct cdp_soc_t *handle,
+					   cdp_tx_latency_cb cb);
 #endif
 #endif

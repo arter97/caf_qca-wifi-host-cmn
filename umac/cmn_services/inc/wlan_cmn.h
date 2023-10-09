@@ -549,6 +549,8 @@ enum wlan_phymode {
 	((mode) == WLAN_PHYMODE_11AXG_HE40)  || \
 	((mode) == WLAN_PHYMODE_11AXG_HE40PLUS)  || \
 	((mode) == WLAN_PHYMODE_11AXG_HE40MINUS); })
+
+#define IS_WLAN_PHYMODE_EHT(_mode) 0
 #endif
 
 #define IS_WLAN_PHYMODE_HT(_mode) ({typeof(_mode) mode = (_mode); \
@@ -716,10 +718,14 @@ struct wlan_ssid {
 #define PSOC_HOST_MAX_NUM_SS (8)
 #define PSOC_HOST_MAX_PHY_SIZE (3)
 #define PSOC_HOST_MAX_MAC_SIZE (2)
-#define PSOC_MAX_HW_MODE (3)
-#define PSOC_MAX_MAC_PHY_CAP (5)
+#define PSOC_MAX_HW_MODE (4)
+#define PSOC_MAX_MAC_PHY_CAP (8)
 #define PSOC_MAX_PHY_REG_CAP (3)
 #define PSOC_MAX_CHAINMASK_TABLES (5)
+
+#ifdef WLAN_RCC_ENHANCED_AOA_SUPPORT
+#define PSOC_MAX_NUM_AGC_GAIN_TBLS 8
+#endif
 
 #ifdef WLAN_FEATURE_11BE
 #define PSOC_HOST_MAX_EHT_MAC_SIZE 1

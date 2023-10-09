@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015, 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -74,6 +74,16 @@ bool ucfg_cm_is_vdev_roaming(struct wlan_objmgr_vdev *vdev)
 	return cm_is_vdev_roaming(vdev);
 }
 
+void ucfg_cm_free_wep_key_params(struct wlan_cm_connect_req *req)
+{
+	cm_free_wep_key_params(req);
+}
+
+void ucfg_cm_free_connect_req(struct wlan_cm_connect_req *req)
+{
+	cm_free_connect_req(req);
+}
+
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 bool ucfg_cm_is_vdev_roam_started(struct wlan_objmgr_vdev *vdev)
 {
@@ -110,7 +120,9 @@ enum band_info ucfg_cm_get_connected_band(struct wlan_objmgr_vdev *vdev)
 
 	if (wlan_reg_is_24ghz_ch_freq(sta_freq))
 		return BAND_2G;
-	else if (wlan_reg_is_5ghz_ch_freq(sta_freq))
+	else if (wlan_reg_is_5ghz_ch_freq(sta_freq) ||
+		 wlan_reg_is_6ghz_chan_freq(sta_freq))
+		/* BAND_5G covers 6 GHz frequencies as well */
 		return BAND_5G;
 	else	/* If station is not connected return as BAND_ALL */
 		return BAND_ALL;

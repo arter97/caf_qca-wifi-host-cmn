@@ -245,12 +245,15 @@ uint32_t dp_rx_process_li(struct dp_intr *int_ctx,
 	uint32_t dsf;
 	uint32_t max_ast;
 	uint64_t current_time = 0;
+	uint16_t buf_size;
 
 	DP_HIST_INIT();
 
 	qdf_assert_always(soc && hal_ring_hdl);
 	hal_soc = soc->hal_soc;
 	qdf_assert_always(hal_soc);
+
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 
 	scn = soc->hif_handle;
 	intr_id = int_ctx->dp_intr_id;
@@ -344,7 +347,6 @@ more_data:
 			if (qdf_unlikely(rx_desc && rx_desc->nbuf)) {
 				qdf_assert_always(!rx_desc->unmapped);
 				dp_rx_nbuf_unmap(soc, rx_desc, reo_ring_num);
-				rx_desc->unmapped = 1;
 				dp_rx_buffer_pool_nbuf_free(soc, rx_desc->nbuf,
 							    rx_desc->pool_id);
 				dp_rx_add_to_free_desc_list(
@@ -408,7 +410,7 @@ more_data:
 				 * reap this MPDU
 				 */
 				if ((msdu_desc_info.msdu_len /
-				     (RX_DATA_BUFFER_SIZE -
+				     (buf_size -
 				      soc->rx_pkt_tlv_size) + 1) >
 				    num_pending) {
 					DP_STATS_INC(soc,
@@ -495,7 +497,6 @@ more_data:
 		 * in case double skb unmap happened.
 		 */
 		dp_rx_nbuf_unmap(soc, rx_desc, reo_ring_num);
-		rx_desc->unmapped = 1;
 		DP_RX_PROCESS_NBUF(soc, nbuf_head, nbuf_tail, ebuf_head,
 				   ebuf_tail, rx_desc);
 
@@ -909,6 +910,9 @@ done:
 				  nbuf);
 		DP_PEER_STATS_FLAT_INC_PKT(txrx_peer, to_stack, 1,
 					   QDF_NBUF_CB_RX_PKT_LEN(nbuf));
+		DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer,
+					      rx.rx_success, 1,
+					      QDF_NBUF_CB_RX_PKT_LEN(nbuf), 0);
 		if (qdf_unlikely(txrx_peer->in_twt))
 			DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer,
 						      rx.to_stack_twt, 1,
@@ -1141,10 +1145,10 @@ dp_rx_wbm_err_reap_desc_li(struct dp_intr *int_ctx, struct dp_soc *soc,
 		/* XXX */
 		buf_type = HAL_RX_WBM_BUF_TYPE_GET(ring_desc);
 
-		/*
-		 * For WBM ring, expect only MSDU buffers
-		 */
-		qdf_assert_always(buf_type == HAL_RX_WBM_BUF_TYPE_REL_BUF);
+		if (dp_assert_always_internal_stat(
+				buf_type == HAL_RX_WBM_BUF_TYPE_REL_BUF,
+				soc, rx.err.wbm_err_buf_rel_type))
+			continue;
 
 		wbm_err_src = hal_rx_wbm_err_src_get(hal_soc, ring_desc);
 		qdf_assert((wbm_err_src == HAL_RX_WBM_ERR_SRC_RXDMA) ||
@@ -1157,7 +1161,9 @@ dp_rx_wbm_err_reap_desc_li(struct dp_intr *int_ctx, struct dp_soc *soc,
 			continue;
 		}
 
-		qdf_assert_always(rx_desc);
+		if (dp_assert_always_internal_stat(rx_desc, soc,
+						   rx.err.rx_desc_null))
+			continue;
 
 		if (!dp_rx_desc_check_magic(rx_desc)) {
 			dp_rx_err_err("%pk: Invalid rx_desc %pk",
@@ -1342,6 +1348,9 @@ dp_rx_null_q_desc_handle_li(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	uint16_t sa_idx = 0;
 	bool is_eapol = 0;
 	bool enh_flag;
+	uint16_t buf_size;
+
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 
 	qdf_nbuf_set_rx_chfrag_start(
 				nbuf,
@@ -1359,6 +1368,7 @@ dp_rx_null_q_desc_handle_li(struct dp_soc *soc, qdf_nbuf_t nbuf,
 			      hal_rx_msdu_end_sa_is_valid_get(soc->hal_soc,
 							      rx_tlv_hdr));
 
+	tid = hal_rx_tid_get(soc->hal_soc, rx_tlv_hdr);
 	hal_rx_msdu_metadata_get(soc->hal_soc, rx_tlv_hdr, &msdu_metadata);
 	msdu_len = hal_rx_msdu_start_msdu_len_get(soc->hal_soc, rx_tlv_hdr);
 	pkt_len = msdu_len + msdu_metadata.l3_hdr_pad + soc->rx_pkt_tlv_size;
@@ -1368,9 +1378,7 @@ dp_rx_null_q_desc_handle_li(struct dp_soc *soc, qdf_nbuf_t nbuf,
 			goto drop_nbuf;
 
 		/* Set length in nbuf */
-		qdf_nbuf_set_pktlen(
-			nbuf, qdf_min(pkt_len, (uint32_t)RX_DATA_BUFFER_SIZE));
-		qdf_assert_always(nbuf->data == rx_tlv_hdr);
+		qdf_nbuf_set_pktlen(nbuf, qdf_min(pkt_len, (uint32_t)buf_size));
 	}
 
 	/*
@@ -1512,15 +1520,28 @@ dp_rx_null_q_desc_handle_li(struct dp_soc *soc, qdf_nbuf_t nbuf,
 		struct dp_peer *peer;
 		struct dp_rx_tid *rx_tid;
 
-		tid = hal_rx_tid_get(soc->hal_soc, rx_tlv_hdr);
 		peer = dp_peer_get_ref_by_id(soc, txrx_peer->peer_id,
 					     DP_MOD_ID_RX_ERR);
 		if (peer) {
 			rx_tid = &peer->rx_tid[tid];
 			qdf_spin_lock_bh(&rx_tid->tid_lock);
-			if (!peer->rx_tid[tid].hw_qdesc_vaddr_unaligned)
-				dp_rx_tid_setup_wifi3(peer, tid, 1,
-						      IEEE80211_SEQ_MAX);
+			if (!peer->rx_tid[tid].hw_qdesc_vaddr_unaligned) {
+			/* For Mesh peer, if on one of the mesh AP the
+			 * mesh peer is not deleted, the new addition of mesh
+			 * peer on other mesh AP doesn't do BA negotiation
+			 * leading to mismatch in BA windows.
+			 * To avoid this send max BA window during init.
+			 */
+				if (qdf_unlikely(vdev->mesh_vdev) ||
+				    qdf_unlikely(txrx_peer->nawds_enabled))
+					dp_rx_tid_setup_wifi3(
+						peer, tid,
+						hal_get_rx_max_ba_window(soc->hal_soc,tid),
+						IEEE80211_SEQ_MAX);
+				else
+					dp_rx_tid_setup_wifi3(peer, tid, 1,
+							      IEEE80211_SEQ_MAX);
+			}
 			qdf_spin_unlock_bh(&rx_tid->tid_lock);
 			/* IEEE80211_SEQ_MAX indicates invalid start_seq */
 			dp_peer_unref_delete(peer, DP_MOD_ID_RX_ERR);
@@ -1556,6 +1577,7 @@ dp_rx_null_q_desc_handle_li(struct dp_soc *soc, qdf_nbuf_t nbuf,
 		goto drop_nbuf;
 
 	if (qdf_unlikely(vdev->rx_decap_type == htt_cmn_pkt_type_raw)) {
+		qdf_nbuf_set_raw_frame(nbuf, 1);
 		qdf_nbuf_set_next(nbuf, NULL);
 		dp_rx_deliver_raw(vdev, nbuf, txrx_peer, 0);
 	} else {
@@ -1563,6 +1585,10 @@ dp_rx_null_q_desc_handle_li(struct dp_soc *soc, qdf_nbuf_t nbuf,
 		qdf_nbuf_set_next(nbuf, NULL);
 		DP_PEER_TO_STACK_INCC_PKT(txrx_peer, 1, qdf_nbuf_len(nbuf),
 					  enh_flag);
+
+		DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer,
+					      rx.rx_success, 1,
+					      qdf_nbuf_len(nbuf), 0);
 		/*
 		 * Update the protocol tag in SKB based on
 		 * CCE metadata
@@ -1594,6 +1620,18 @@ dp_rx_null_q_desc_handle_li(struct dp_soc *soc, qdf_nbuf_t nbuf,
 		}
 
 		qdf_nbuf_set_exc_frame(nbuf, 1);
+
+		if (qdf_unlikely(vdev->multipass_en)) {
+			if (dp_rx_multipass_process(txrx_peer, nbuf,
+						    tid) == false) {
+				DP_PEER_PER_PKT_STATS_INC
+					(txrx_peer,
+					 rx.multipass_rx_pkt_drop,
+					 1, link_id);
+				goto drop_nbuf;
+			}
+		}
+
 		dp_rx_deliver_to_osif_stack(soc, vdev, txrx_peer, nbuf, NULL,
 					    is_eapol);
 	}

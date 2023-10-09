@@ -173,9 +173,11 @@ struct wlan_srng_cfg {
  * @int_timer_threshold_rx:
  * @int_batch_threshold_other:
  * @int_timer_threshold_other:
- * @int_timer_threshold_mon:
+ * @int_batch_threshold_mon_dest: Batch threshold counter for monitor dest
+ * @int_timer_threshold_mon_dest: Timer threshold counter for monitor dest
  * @tx_ring_size:
  * @time_control_bp:
+ * @rx_buffer_size: skb size
  * @qref_control_size: list size for memory history arrays
  * @tx_comp_ring_size:
  * @tx_comp_ring_size_nss:
@@ -289,6 +291,8 @@ struct wlan_srng_cfg {
  *                           pool support
  * @is_rx_refill_buff_pool_enabled: flag to enable/disable RX refill buffer
  *                           pool support
+ * @enable_dp_buf_page_frag_alloc: Flag to control DP allocation from page frag
+ *				   cache.
  * @rx_refill_buff_pool_size: RX refill buffer pool size
  * @rx_pending_high_threshold: threshold of starting pkt drop
  * @rx_pending_low_threshold: threshold of stopping pkt drop
@@ -328,6 +332,7 @@ struct wlan_srng_cfg {
  * @txmon_sw_peer_filtering: TxMON sw peer filtering support
  * @num_rxdma_status_rings_per_pdev: Num RXDMA status rings
  * @tx_capt_max_mem_allowed: Max memory for Tx packet capture
+ * @tx_capt_rbm_id: Return Buffer Manager ID to be used for Tx packet capture
  * @sawf_enabled:  Is SAWF enabled
  * @sawf_stats: SAWF Statistics
  * @mpdu_retry_threshold_1: MPDU retry threshold 1 to increment tx bad count
@@ -343,6 +348,10 @@ struct wlan_srng_cfg {
  * @local_pkt_capture: flag indicating enable/disable of local packet capture
  * @special_frame_msk: Special frame mask
  * @rx_rr: rx round robin enable / disable
+ * @umac_reset_buffer_window: Buffer time to check if umac reset was in progress
+ *                            during this window, configured time is in
+ *                            milliseconds.
+ * @fw_ast_indication_disable: Disable AST
  */
 struct wlan_cfg_dp_soc_ctxt {
 	int num_int_ctxts;
@@ -374,9 +383,11 @@ struct wlan_cfg_dp_soc_ctxt {
 	int int_timer_threshold_rx;
 	int int_batch_threshold_other;
 	int int_timer_threshold_other;
-	int int_timer_threshold_mon;
+	int int_batch_threshold_mon_dest;
+	int int_timer_threshold_mon_dest;
 	int tx_ring_size;
 	int time_control_bp;
+	int rx_buffer_size;
 	int qref_control_size;
 	int tx_comp_ring_size;
 	int tx_comp_ring_size_nss;
@@ -467,8 +478,6 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint16_t rx_flow_max_search;
 	uint8_t *rx_toeplitz_hash_key;
 	uint8_t pktlog_buffer_size;
-	uint8_t is_rx_fisa_enabled;
-	bool is_rx_fisa_lru_del_enabled;
 	bool is_tso_desc_attach_defer;
 	uint32_t delayed_replenish_entries;
 	uint32_t reo_rings_mapping;
@@ -476,6 +485,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	bool pext_stats_enabled;
 	bool is_rx_buff_pool_enabled;
 	bool is_rx_refill_buff_pool_enabled;
+	bool enable_dp_buf_page_frag_alloc;
 	int rx_refill_buff_pool_size;
 	uint32_t rx_pending_high_threshold;
 	uint32_t rx_pending_low_threshold;
@@ -527,6 +537,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint8_t num_rxdma_status_rings_per_pdev;
 #ifdef WLAN_TX_PKT_CAPTURE_ENH
 	uint32_t tx_capt_max_mem_allowed;
+	uint8_t tx_capt_rbm_id[MAX_PDEV_CNT];
 #endif
 #ifdef CONFIG_SAWF
 	bool sawf_enabled;
@@ -551,6 +562,10 @@ struct wlan_cfg_dp_soc_ctxt {
 #ifdef WLAN_SUPPORT_RX_FLOW_TAG
 	bool rx_rr;
 #endif
+#ifdef DP_UMAC_HW_RESET_SUPPORT
+	uint32_t umac_reset_buffer_window;
+#endif
+	bool fw_ast_indication_disable;
 };
 
 /**
@@ -564,6 +579,7 @@ struct wlan_cfg_dp_soc_ctxt {
  * @num_mac_rings: Number of mac rings
  * @nss_enabled: 1 - NSS enabled, 0 - NSS disabled
  * @dma_tx_mon_buf_ring_size: Tx monitor BUF Ring size
+ * @sw2rxdma_link_ring_size: SW2RXDMA link ring size
  */
 struct wlan_cfg_dp_pdev_ctxt {
 	int rx_dma_buf_ring_size;
@@ -575,6 +591,7 @@ struct wlan_cfg_dp_pdev_ctxt {
 	int num_mac_rings;
 	int nss_enabled;
 	int dma_tx_mon_buf_ring_size;
+	int sw2rxdma_link_ring_size;
 };
 
 /**
@@ -1525,12 +1542,22 @@ int wlan_cfg_get_int_batch_threshold_other(struct wlan_cfg_dp_soc_ctxt *cfg);
 int wlan_cfg_get_int_timer_threshold_other(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
- * wlan_cfg_get_int_timer_threshold_mon - Get int mitigation cfg for mon srngs
+ * wlan_cfg_get_int_batch_threshold_mon_dest - Get interrupt mitigation cfg for
+ * monitor destination srng
+ * @cfg: soc configuration context
+ *
+ * Return: Batch threshold
+ */
+int wlan_cfg_get_int_batch_threshold_mon_dest(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_get_int_timer_threshold_mon_dest - Get interrupt mitigation cfg for
+ * monitor destination srngs
  * @cfg: soc configuration context
  *
  * Return: Timer threshold
  */
-int wlan_cfg_get_int_timer_threshold_mon(struct wlan_cfg_dp_soc_ctxt *cfg);
+int wlan_cfg_get_int_timer_threshold_mon_dest(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
  * wlan_cfg_get_checksum_offload - Get checksum offload enable or disable status
@@ -1581,6 +1608,14 @@ void wlan_cfg_set_tx_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg,
  * Return: interval time
  */
 int wlan_cfg_time_control_bp(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_rx_buffer_size - Get buffer size for skb
+ * @cfg: soc configuration context
+ *
+ * Return: buffer size
+ */
+int wlan_cfg_rx_buffer_size(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
  * wlan_cfg_qref_control_size - Get debug array size
@@ -1976,26 +2011,6 @@ void wlan_cfg_fill_interrupt_mask(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
 				  bool umac_reset_support);
 
 /**
- * wlan_cfg_is_rx_fisa_enabled() - Get Rx FISA enabled flag
- *
- *
- * @cfg: soc configuration context
- *
- * Return: true if enabled, false otherwise.
- */
-bool wlan_cfg_is_rx_fisa_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
-
-/**
- * wlan_cfg_is_rx_fisa_lru_del_enabled() - Get Rx FISA LRU del enabled flag
- *
- *
- * @cfg: soc configuration context
- *
- * Return: true if enabled, false otherwise.
- */
-bool wlan_cfg_is_rx_fisa_lru_del_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
-
-/**
  * wlan_cfg_is_rx_buffer_pool_enabled() - Get RX buffer pool enabled flag
  *
  *
@@ -2014,6 +2029,18 @@ bool wlan_cfg_is_rx_buffer_pool_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
  * Return: true if enabled, false otherwise.
  */
 bool wlan_cfg_is_rx_refill_buffer_pool_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_is_dp_buf_page_frag_alloc_enable() - Get nbuf allocations from page
+ *						 frags.
+ *
+ * @cfg: soc configuration context
+ *
+ * Return: true if enabled, false otherwise.
+ */
+
+bool
+wlan_cfg_is_dp_buf_page_frag_alloc_enable(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 #ifdef WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL
 /**
@@ -2407,6 +2434,14 @@ wlan_cfg_get_dp_soc_tx_mon_buf_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg);
 int wlan_cfg_get_dma_rx_mon_dest_ring_size(struct wlan_cfg_dp_pdev_ctxt *cfg);
 
 /**
+ * wlan_cfg_get_dma_sw2rxdma_link_ring_size() - SW2RXDMA link ring size
+ * @cfg:  Configuration Handle
+ *
+ * Return: Size of SW2RXDMA link ring size
+ */
+int wlan_cfg_get_dma_sw2rxdma_link_ring_size(struct wlan_cfg_dp_pdev_ctxt *cfg);
+
+/**
  * wlan_cfg_get_dma_tx_mon_dest_ring_size() - Tx MON dest ring size
  * @cfg:  Configuration Handle
  *
@@ -2568,6 +2603,26 @@ wlan_cfg_get_tx_capt_max_mem(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return cfg->tx_capt_max_mem_allowed;
 }
+
+/**
+ * wlan_cfg_get_tx_capt_rbm_id - Get RBM_ID to be used for tx capture feature
+ * @cfg: Configuration Handle
+ * @idx: Pdev_id
+ *
+ * Return: Return Buffer manager id to be used
+ */
+static inline int
+wlan_cfg_get_tx_capt_rbm_id(struct wlan_cfg_dp_soc_ctxt *cfg, uint8_t idx)
+{
+	if (idx >= MAX_PDEV_CNT) {
+		qdf_err("!!! pdev index is greater than expected");
+		qdf_assert(0);
+		/* resetting idx to zero */
+		idx = 0;
+	}
+
+	return cfg->tx_capt_rbm_id[idx];
+}
 #endif /* WLAN_TX_PKT_CAPTURE_ENH */
 
 #ifdef DP_TX_PACKET_INSPECT_FOR_ILP
@@ -2645,4 +2700,41 @@ bool wlan_cfg_get_local_pkt_capture(struct wlan_cfg_dp_soc_ctxt *cfg)
  */
 uint32_t
 wlan_cfg_get_special_frame_cfg(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+#ifdef DP_UMAC_HW_RESET_SUPPORT
+/**
+ * wlan_cfg_get_umac_reset_buffer_window_ms() - Get umac reset buffer window
+ * @cfg: soc configuration context
+ *
+ * Return: Umac reset buffer window in milliseconds
+ */
+uint32_t
+wlan_cfg_get_umac_reset_buffer_window_ms(struct wlan_cfg_dp_soc_ctxt *cfg);
+#else
+static inline uint32_t
+wlan_cfg_get_umac_reset_buffer_window_ms(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return 0;
+}
+#endif /* DP_UMAC_HW_RESET_SUPPORT */
+
+/**
+ * wlan_cfg_set_ast_indication_disable - Set AST disable
+ *
+ * @cfg: soc configuration context
+ * @val: value to be set
+ *
+ * Return: void
+ */
+void wlan_cfg_set_ast_indication_disable(struct wlan_cfg_dp_soc_ctxt *cfg,
+					 bool val);
+
+/**
+ * wlan_cfg_get_ast_indication_disable - Get AST disable
+ *
+ * @cfg: soc configuration context
+ *
+ * Return: true or false
+ */
+bool wlan_cfg_get_ast_indication_disable(struct wlan_cfg_dp_soc_ctxt *cfg);
 #endif /*__WLAN_CFG_H*/

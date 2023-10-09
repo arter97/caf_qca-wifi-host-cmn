@@ -20,6 +20,7 @@
 #include <qdf_types.h>
 struct dp_soc;
 
+#define	DP_UMAC_RESET_NOTIFY_DONE	20
 /**
  * enum umac_reset_action - Actions supported by the UMAC reset
  * @UMAC_RESET_ACTION_NONE: No action
@@ -65,7 +66,7 @@ enum umac_reset_action {
 /**
  * enum umac_reset_state - States required by the UMAC reset state machine
  * @UMAC_RESET_STATE_WAIT_FOR_TRIGGER: Waiting for trigger event
- * @UMAC_RESET_STATE_DO_TRIGGER_RECEIVED: Receivd the DO_TRIGGER event
+ * @UMAC_RESET_STATE_DO_TRIGGER_RECEIVED: Received the DO_TRIGGER event
  * @UMAC_RESET_STATE_HOST_TRIGGER_DONE: Host completed handling Trigger event
  * @UMAC_RESET_STATE_WAIT_FOR_DO_PRE_RESET: Waiting for the DO_PRE_RESET event
  * @UMAC_RESET_STATE_DO_PRE_RESET_RECEIVED: Received the DO_PRE_RESET event
@@ -219,7 +220,7 @@ struct dp_soc_umac_reset_ctx {
 	enum umac_reset_state current_state;
 	uint32_t shmem_exp_magic_num;
 	struct umac_reset_rx_actions rx_actions;
-	enum umac_reset_rx_event pending_action;
+	enum umac_reset_action pending_action;
 	struct dp_intr_bkp *intr_ctx_bkp;
 	qdf_nbuf_t nbuf_list;
 	bool skel_enable;

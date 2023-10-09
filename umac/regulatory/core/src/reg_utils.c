@@ -460,6 +460,10 @@ QDF_STATUS reg_check_if_6g_pwr_type_supp_for_chan(
 	}
 
 	sup_idx = reg_convert_enum_to_6g_idx(chan_idx);
+	if (sup_idx >= NUM_6GHZ_CHANNELS) {
+		reg_err("Invalid channel");
+		return QDF_STATUS_E_NOSUPPORT;
+	}
 
 	if (QDF_IS_STATUS_ERROR(reg_get_6ghz_cli_pwr_type_per_ap_pwr_type(
 					pdev, pwr_type, &cli_pwr_type)))
@@ -493,6 +497,37 @@ reg_get_best_6g_power_type(struct wlan_objmgr_psoc *psoc,
 	if (!pdev_priv_obj) {
 		reg_err("pdev priv obj null");
 		return QDF_STATUS_E_FAILURE;
+	}
+
+	/*
+	 * If AP doesn't advertise 6 GHz power type or advertised invalid power
+	 * type, select VLP power type if VLP rules are present for the
+	 * connection channel, if not select LPI power type if LPI rules are
+	 * present for connection channel, otherwise don't connect.
+	 */
+	if (ap_pwr_type < REG_INDOOR_AP ||
+	    ap_pwr_type >= REG_CURRENT_MAX_AP_TYPE) {
+		if (QDF_IS_STATUS_SUCCESS(
+			reg_check_if_6g_pwr_type_supp_for_chan(pdev,
+							REG_VERY_LOW_POWER_AP,
+							chan_idx))) {
+			reg_debug("Invalid AP power type: %d , selected power type: %d",
+				  ap_pwr_type, REG_VERY_LOW_POWER_AP);
+			*pwr_type_6g = REG_VERY_LOW_POWER_AP;
+			return QDF_STATUS_SUCCESS;
+		} else if (QDF_IS_STATUS_SUCCESS(
+				reg_check_if_6g_pwr_type_supp_for_chan(pdev,
+								REG_INDOOR_AP,
+								chan_idx))) {
+			reg_debug("Invalid AP power type: %d , selected power type: %d",
+				  ap_pwr_type, REG_INDOOR_AP);
+			*pwr_type_6g = REG_INDOOR_AP;
+			return QDF_STATUS_SUCCESS;
+		} else {
+			reg_err("Invalid AP power type: %d, couldn't find suitable power type",
+				ap_pwr_type);
+			return QDF_STATUS_E_NOSUPPORT;
+		}
 	}
 
 	if (pdev_priv_obj->reg_rules.num_of_6g_client_reg_rules[ap_pwr_type] &&
@@ -702,7 +737,7 @@ QDF_STATUS reg_set_band(struct wlan_objmgr_pdev *pdev, uint32_t band_bitmap)
 	 * request 6 GHz band might be enabled/disabled. Hence reset
 	 * reg_set_keep_6ghz_sta_cli_connection flag.
 	 */
-	if (!wlan_reg_is_6ghz_band_set(pdev)) {
+	if (!reg_is_6ghz_band_set(pdev)) {
 		status = reg_set_keep_6ghz_sta_cli_connection(pdev, false);
 		if (QDF_IS_STATUS_ERROR(status))
 			return status;
@@ -894,7 +929,6 @@ QDF_STATUS reg_set_fcc_constraint(struct wlan_objmgr_pdev *pdev,
 	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
 	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
 	struct wlan_objmgr_psoc *psoc;
-	QDF_STATUS status;
 
 	pdev_priv_obj = reg_get_pdev_obj(pdev);
 	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
@@ -924,11 +958,7 @@ QDF_STATUS reg_set_fcc_constraint(struct wlan_objmgr_pdev *pdev,
 	psoc_priv_obj->set_fcc_channel = fcc_constraint;
 	pdev_priv_obj->set_fcc_channel = fcc_constraint;
 
-	reg_compute_pdev_current_chan_list(pdev_priv_obj);
-
-	status = reg_send_scheduler_msg_sb(psoc, pdev);
-
-	return status;
+	return QDF_STATUS_SUCCESS;
 }
 
 bool reg_is_6ghz_band_set(struct wlan_objmgr_pdev *pdev)
@@ -959,6 +989,41 @@ bool reg_get_fcc_constraint(struct wlan_objmgr_pdev *pdev, uint32_t freq)
 
 	if (freq != CHAN_12_CENT_FREQ && freq != CHAN_13_CENT_FREQ)
 		return false;
+
+	if (!pdev_priv_obj->set_fcc_channel)
+		return false;
+
+	return true;
+}
+
+bool reg_is_user_country_set_allowed(struct wlan_objmgr_psoc *psoc)
+{
+	struct wlan_regulatory_psoc_priv_obj *psoc_reg;
+
+	psoc_reg = reg_get_psoc_obj(psoc);
+	if (!IS_VALID_PSOC_REG_OBJ(psoc_reg)) {
+		reg_err("psoc reg component is NULL");
+		return false;
+	}
+
+	if (!psoc_reg->user_ctry_priority &&
+	    psoc_reg->enable_11d_supp_original) {
+		reg_err_rl("country set from userspace is not allowed");
+		return false;
+	}
+
+	return true;
+}
+
+bool reg_is_fcc_constraint_set(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg component is NULL");
+		return false;
+	}
 
 	if (!pdev_priv_obj->set_fcc_channel)
 		return false;

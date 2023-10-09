@@ -300,7 +300,7 @@ struct htc_endpoint_credit_dist {
 #define IS_EP_ACTIVE(epDist)  ((epDist)->DistFlags & HTC_EP_ACTIVE)
 #define SET_EP_ACTIVE(epDist) (epDist)->DistFlags |= HTC_EP_ACTIVE
 
-/* credit distribution code that is passed into the distrbution function,
+/* credit distribution code that is passed into the distribution function,
  * there are mandatory and optional codes that must be handled
  */
 enum htc_credit_dist_reason {
@@ -398,6 +398,7 @@ struct htc_endpoint_stats {
  * @HTC_LINK_VOTE_NDP_USER_ID: ndp user id
  * @HTC_LINK_VOTE_SAP_DFS_USER_ID: sap dfs user id
  * @HTC_LINK_VOTE_STA_USER_ID: sta user id
+ * @HTC_LINK_VOTE_DIRECT_LINK_USER_ID: Direct link user ID
  * @HTC_LINK_VOTE_INVALID_MAX_USER_ID: max user id
  */
 enum htc_link_vote_user_id {
@@ -407,6 +408,7 @@ enum htc_link_vote_user_id {
 	HTC_LINK_VOTE_NDP_USER_ID = 3,
 	HTC_LINK_VOTE_SAP_DFS_USER_ID = 4,
 	HTC_LINK_VOTE_STA_USER_ID = 5,
+	HTC_LINK_VOTE_DIRECT_LINK_USER_ID = 6,
 	HTC_LINK_VOTE_INVALID_MAX_USER_ID
 };
 

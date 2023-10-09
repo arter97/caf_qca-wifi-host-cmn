@@ -31,8 +31,8 @@
 
 #define HTT_T2H_MSG_BUF_REINIT(_buf, dev)				\
 	do {								\
-		QDF_NBUF_CB_PADDR(_buf) -= (HTC_HEADER_LEN +		\
-					HTC_HDR_ALIGNMENT_PADDING);	\
+		qdf_nbuf_push_head(_buf, (HTC_HEADER_LEN) +		\
+				   HTC_HDR_ALIGNMENT_PADDING);		\
 		qdf_nbuf_init_fast((_buf));				\
 		qdf_mem_dma_sync_single_for_device(dev,			\
 					(QDF_NBUF_CB_PADDR(_buf)),	\
@@ -424,11 +424,11 @@ dp_htt_t2h_msg_handler_fast(void *context, qdf_nbuf_t *cmpl_msdus,
 			dp_htt_t2h_msg_handler(context, &htc_pkt);
 			break;
 		}
+		}
 
 		/* Re-initialize the indication buffer */
 		HTT_T2H_MSG_BUF_REINIT(htt_t2h_msg, soc->osdev);
 		qdf_nbuf_set_pktlen(htt_t2h_msg, 0);
-		}
 	}
 }
 

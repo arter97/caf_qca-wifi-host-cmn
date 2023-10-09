@@ -484,6 +484,7 @@ bool ipa_is_fw_wdi_activated(struct wlan_objmgr_pdev *pdev);
  * ipa_uc_cleanup_sta() - disconnect and cleanup sta iface
  * @pdev: pdev obj
  * @net_dev: Interface net device
+ * @session_id: vdev id
  *
  * Send disconnect sta event to IPA driver and cleanup IPA iface,
  * if not yet done
@@ -491,7 +492,7 @@ bool ipa_is_fw_wdi_activated(struct wlan_objmgr_pdev *pdev);
  * Return: void
  */
 void ipa_uc_cleanup_sta(struct wlan_objmgr_pdev *pdev,
-			qdf_netdev_t net_dev);
+			qdf_netdev_t net_dev, uint8_t session_id);
 
 /**
  * ipa_uc_disconnect_ap() - send ap disconnect event
@@ -509,11 +510,12 @@ QDF_STATUS ipa_uc_disconnect_ap(struct wlan_objmgr_pdev *pdev,
  * ipa_cleanup_dev_iface() - Clean up net dev IPA interface
  * @pdev: pdev obj
  * @net_dev: Interface net device
+ * @session_id: vdev_id
  *
  * Return: None
  */
 void ipa_cleanup_dev_iface(struct wlan_objmgr_pdev *pdev,
-			   qdf_netdev_t net_dev);
+			   qdf_netdev_t net_dev, uint8_t session_id);
 
 /**
  * ipa_uc_ssr_cleanup() - handle IPA UC cleanup during SSR
@@ -602,6 +604,19 @@ void ipa_init_deinit_unlock(void);
  * Return: true if WDS is enabled otherwise false
  */
 bool ipa_is_wds_enabled(void);
+
+/**
+ * ipa_get_alt_pipe() - Get alt_pipe for vdev_id
+ * @pdev: pdev obj
+ * @vdev_id: vdev_id of the target interface
+ * @alt_pipe: Boolean output to indicate if interface with @vdev_id
+ *	      is using alternate TX pipe or not.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS ipa_get_alt_pipe(struct wlan_objmgr_pdev *pdev,
+			    uint8_t vdev_id,
+			    bool *alt_pipe);
 
 #else /* Not IPA_OFFLOAD */
 typedef QDF_STATUS (*wlan_ipa_softap_xmit)(qdf_nbuf_t nbuf, qdf_netdev_t dev);

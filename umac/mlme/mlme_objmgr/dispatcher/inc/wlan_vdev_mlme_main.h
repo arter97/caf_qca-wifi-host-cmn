@@ -227,5 +227,16 @@ QDF_STATUS wlan_mlme_psoc_disable(struct wlan_objmgr_psoc *psoc);
 QDF_STATUS wlan_vdev_mlme_send_set_mac_addr(struct qdf_mac_addr mac_addr,
 					    struct qdf_mac_addr mld_addr,
 					    struct wlan_objmgr_vdev *vdev);
+
+/**
+ * wlan_vdev_mlme_notify_set_mac_addr_response() - Notify FW set mac address
+ * response.
+ * @vdev: VDEV object manager.
+ * @resp_status: FW response status.
+ *
+ * Return: void
+ */
+void wlan_vdev_mlme_notify_set_mac_addr_response(struct wlan_objmgr_vdev *vdev,
+						 uint8_t resp_status);
 #endif
 #endif

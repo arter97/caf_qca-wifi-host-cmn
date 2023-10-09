@@ -209,6 +209,8 @@ struct target_version_info {
  * @device_mode: Global Device mode
  * @sbs_lower_band_end_freq: sbs lower band end frequency
  * @health_mon_param: health monitor params
+ * @aux_dev_caps: aux device capability
+ * @aoa_caps: aoa capabilities from target
  */
 struct tgt_info {
 	struct host_fw_ver version;
@@ -248,6 +250,10 @@ struct tgt_info {
 #ifdef HEALTH_MON_SUPPORT
 	struct wmi_health_mon_params health_mon_param;
 #endif /* HEALTH_MON_SUPPORT */
+	struct wlan_psoc_host_aux_dev_caps *aux_dev_caps;
+#ifdef WLAN_RCC_ENHANCED_AOA_SUPPORT
+	struct wlan_psoc_host_rcc_enh_aoa_caps_ext2 *aoa_caps;
+#endif /* WLAN_RCC_ENHANCED_AOA_SUPPORT */
 };
 
 /**
@@ -518,6 +524,18 @@ QDF_STATUS target_if_free_pdev_tgt_info(struct wlan_objmgr_pdev *pdev);
 QDF_STATUS target_if_alloc_psoc_tgt_info(struct wlan_objmgr_psoc *psoc);
 
 /**
+ * target_if_psoc_tgt_info_mem_free() - free memory which attached in
+ *                                      psoc tgt info
+ * @tgt_psoc_info: target psoc info object
+ *
+ * API to free allocated memory for target_psoc_info
+ *
+ * Return: SUCCESS on successful memory deallocation or Failure
+ */
+QDF_STATUS target_if_psoc_tgt_info_mem_free(
+		struct target_psoc_info *tgt_psoc_info);
+
+/**
  * target_if_free_psoc_tgt_info() - free psoc tgt info
  * @psoc: pointer to psoc
  *
@@ -598,6 +616,17 @@ bool target_is_tgt_type_qcn6432(uint32_t target_type);
  * Return: true if the target_type is QCN7605, else false.
  */
 bool target_is_tgt_type_qcn7605(uint32_t target_type);
+
+/**
+ * target_if_is_vdev_valid - vdev id is valid or not
+ * @vdev_id: vdev id
+ *
+ * Return: true or false
+ */
+static inline bool target_if_is_vdev_valid(uint8_t vdev_id)
+{
+	return (vdev_id < WLAN_UMAC_PSOC_MAX_VDEVS ? true : false);
+}
 
 /**
  * target_psoc_set_wlan_init_status() - set info wlan_init_status
@@ -1439,6 +1468,24 @@ static inline struct wlan_psoc_host_service_ext_param
 }
 
 /**
+ * target_psoc_get_service_ext2_param() - get service_ext2_param
+ * @psoc_info:  pointer to structure target_psoc_info
+ *
+ * API to get service_ext2_param
+ *
+ * Return: structure pointer to wlan_psoc_host_service_ext2_param
+ */
+static inline struct wlan_psoc_host_service_ext2_param
+		*target_psoc_get_service_ext2_param
+		(struct target_psoc_info *psoc_info)
+{
+	if (!psoc_info)
+		return NULL;
+
+	return &psoc_info->info.service_ext2_param;
+}
+
+/**
  * target_psoc_get_num_dbr_ring_caps() - get no of dbr_ring_caps
  * @psoc_info:  pointer to structure target_psoc_info
  *
@@ -1457,6 +1504,26 @@ static inline uint32_t target_psoc_get_num_dbr_ring_caps
 
 	return psoc_info->info.service_ext2_param.num_dbr_ring_caps;
 }
+
+/**
+ * target_psoc_get_aoa_caps() - get aoa_caps
+ * @psoc_info:  pointer to structure target_psoc_info
+ *
+ * API to get aoa_caps
+ *
+ * Return: structure pointer to wlan_psoc_host_rcc_enh_aoa_caps_ext2
+ */
+#ifdef WLAN_RCC_ENHANCED_AOA_SUPPORT
+static inline
+struct wlan_psoc_host_rcc_enh_aoa_caps_ext2 *target_psoc_get_aoa_caps
+		(struct target_psoc_info *psoc_info)
+{
+	if (!psoc_info)
+		return NULL;
+
+	return psoc_info->info.aoa_caps;
+}
+#endif /* WLAN_RCC_ENHANCED_AOA_SUPPORT */
 
 /**
  * target_psoc_get_num_scan_radio_caps() - get no of scan_radio_caps
@@ -2513,6 +2580,38 @@ static inline int32_t target_psoc_get_num_hw_modes
 	return tgt_hdl->info.service_ext_param.num_hw_modes;
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO
+static inline
+uint32_t target_psoc_get_num_max_mlo_link(struct target_psoc_info *tgt_hdl)
+{
+	if (!tgt_hdl)
+		return 0;
+
+	return tgt_hdl->info.service_ext2_param.num_max_mlo_link_per_ml_bss_supp;
+}
+
+static inline
+uint16_t target_if_res_cfg_get_num_max_mlo_link(struct target_psoc_info *tgt_hdl)
+{
+	if (!tgt_hdl)
+		return 0;
+
+	return tgt_hdl->info.wlan_res_cfg.num_max_mlo_link_per_ml_bss;
+}
+#else
+static inline
+uint32_t target_psoc_get_num_max_mlo_link(struct target_psoc_info *tgt_hdl)
+{
+	return 0;
+}
+
+static inline
+uint16_t target_if_res_cfg_get_num_max_mlo_link(struct target_psoc_info *tgt_hdl)
+{
+	return 0;
+}
+#endif
+
 #ifdef WLAN_SUPPORT_TWT
 #ifdef WLAN_TWT_AP_PDEV_COUNT_NUM_PHY
 static inline void target_if_set_twt_ap_pdev_count
@@ -2961,4 +3060,52 @@ static inline void target_if_set_reo_shared_qref_feature(struct wlan_objmgr_psoc
 }
 #endif
 
+/**
+ * target_if_phy_ch_width_to_wmi_chan_width() - convert host ch_width to fw format
+ *
+ * @ch_width: enum phy_ch_width
+ *
+ * Convert host driver chan width value to fw recognizable value.
+ *
+ * return: wmi_host_channel_width
+ */
+wmi_host_channel_width
+target_if_phy_ch_width_to_wmi_chan_width(enum phy_ch_width ch_width);
+
+/**
+ * target_if_wmi_chan_width_to_phy_ch_width() - convert channel width from
+ * wmi_host_channel_width to phy_ch_width
+ *
+ * @ch_width: wmi_host_channel_width
+ *
+ * return: phy_ch_width
+ */
+enum phy_ch_width
+target_if_wmi_chan_width_to_phy_ch_width(wmi_host_channel_width ch_width);
+
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+static inline void target_if_set_num_max_mlo_link(struct wlan_objmgr_psoc *psoc,
+						  struct tgt_info *info)
+{
+	struct target_psoc_info *tgt_hdl;
+	uint16_t value;
+
+	tgt_hdl = wlan_psoc_get_tgt_if_handle(psoc);
+	if (!tgt_hdl)
+		return;
+
+	if (!target_psoc_get_num_max_mlo_link(tgt_hdl))
+		value = WLAN_MAX_ML_DEFAULT_LINK;
+	else
+		value = QDF_MIN(target_psoc_get_num_max_mlo_link(tgt_hdl),
+				info->wlan_res_cfg.num_max_mlo_link_per_ml_bss);
+
+	info->wlan_res_cfg.num_max_mlo_link_per_ml_bss = value;
+}
+#else
+static inline void target_if_set_num_max_mlo_link(struct wlan_objmgr_psoc *psoc,
+						  struct tgt_info *info)
+{
+}
+#endif
 #endif

@@ -337,6 +337,8 @@ enum qcn_attribute_id {
 
 #define WLAN_MAX_SRP_IE_LEN                      21
 #define WLAN_MAX_MUEDCA_IE_LEN                   14
+#define WLAN_MIN_HECAP_IE_LEN                    22
+#define WLAN_MAX_HECAP_IE_LEN                    55
 #define WLAN_MAX_HE_6G_CAP_IE_LEN                3
 #define WLAN_MAX_HEOP_IE_LEN                     16
 #define WLAN_HEOP_OUI_TYPE                       "\x24"
@@ -828,6 +830,7 @@ enum extn_element_ie {
  * accordingly.
  *
  * @REASON_PROP_START: Start of prop reason code
+ * @REASON_FW_TRIGGERED_LINK_SWITCH: Link Switch from active to standby link
  * @REASON_HOST_TRIGGERED_LINK_DELETE: Dynamic link removal
  * @REASON_OCI_MISMATCH: Reason OCI Mismatch happens
  * @REASON_HOST_TRIGGERED_ROAM_FAILURE: Reason host triggered roam failed
@@ -920,7 +923,8 @@ enum wlan_reason_code {
 	 * REASON_PROP_START and decrease the value of REASON_PROP_START
 	 * accordingly.
 	 */
-	REASON_PROP_START = 65516,
+	REASON_PROP_START = 65515,
+	REASON_FW_TRIGGERED_LINK_SWITCH = 65516,
 	REASON_HOST_TRIGGERED_LINK_DELETE = 65517,
 	REASON_OCI_MISMATCH = 65518,
 	REASON_HOST_TRIGGERED_ROAM_FAILURE  = 65519,
@@ -940,6 +944,7 @@ enum wlan_reason_code {
 	REASON_BEACON_MISSED = 65533,
 	REASON_USER_TRIGGERED_ROAM_FAILURE = 65534,
 	REASON_HOST_TRIGGERED_SILENT_DEAUTH = 65535,
+	/* Do not add any reason code below this */
 };
 
 /**
@@ -1207,6 +1212,7 @@ enum wlan_status_code {
 #define WLAN_ASE_SHA256_PSK              0x100
 #define WLAN_ASE_WPS                     0x200
 
+#define RSN_CAP_MFP_DISABLED 0x00
 #define RSN_CAP_MFP_CAPABLE 0x80
 #define RSN_CAP_MFP_REQUIRED 0x40
 
@@ -1806,6 +1812,8 @@ struct wlan_ie_vhtop {
 #define WLAN_HE_MACCAP_LEN 6
 #define WLAN_HE_PHYCAP_LEN 11
 #define WLAN_HE_MAX_MCS_MAPS 3
+#define WLAN_HE_MCS_MAP_LEN 2
+#define WLAN_INVALID_RX_MCS_MAP 0xFFFF
 /**
  * struct wlan_ie_hecaps - HT capabilities
  * @elem_id: HE caps IE
@@ -2108,6 +2116,10 @@ struct wlan_ie_bw_ind {
 
 #ifdef WLAN_FEATURE_11BE_MLO
 #define WLAN_MLO_MAX_VDEVS 2
+
+#ifndef WLAN_MAX_ML_BSS_LINKS
+#define WLAN_MAX_ML_BSS_LINKS 3
+#endif
 
 /* Size in octets of the BSS Parameters Change Count (sub)field */
 #define WLAN_ML_BSSPARAMCHNGCNT_SIZE                    1

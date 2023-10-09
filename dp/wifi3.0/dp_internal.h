@@ -201,6 +201,34 @@ static const enum cdp_packet_type hal_2_dp_pkt_type_map[HAL_DOT11_MAX] = {
 	[HAL_DOT11N_GF] = DOT11_MAX,
 };
 
+#ifdef GLOBAL_ASSERT_AVOIDANCE
+#define dp_assert_always_internal_stat(_expr, _handle, _field) \
+	(qdf_unlikely(!(_expr)) ? ((_handle)->stats._field++, true) : false)
+
+#define dp_assert_always_internal_ds_stat(_expr, _handle, _field) \
+				((_handle)->ppeds_stats._field++)
+
+static inline bool dp_assert_always_internal(bool expr)
+{
+	return !expr;
+}
+#else
+static inline bool __dp_assert_always_internal(bool expr)
+{
+	qdf_assert_always(expr);
+
+	return false;
+}
+
+#define dp_assert_always_internal(_expr) __dp_assert_always_internal(_expr)
+
+#define dp_assert_always_internal_stat(_expr, _handle, _field) \
+				dp_assert_always_internal(_expr)
+
+#define dp_assert_always_internal_ds_stat(_expr, _handle, _field) \
+				dp_assert_always_internal(_expr)
+#endif
+
 #ifdef WLAN_FEATURE_11BE
 /**
  * dp_get_mcs_array_index_by_pkt_type_mcs() - get the destination mcs index
@@ -679,6 +707,18 @@ dp_monitor_get_link_desc_pages(struct dp_soc *soc, uint32_t mac_id)
 	return NULL;
 }
 
+static inline struct dp_srng*
+dp_monitor_get_link_desc_ring(struct dp_soc *soc, uint32_t mac_id)
+{
+	return NULL;
+}
+
+static inline uint32_t
+dp_monitor_get_num_link_desc_ring_entries(struct dp_soc *soc)
+{
+	return 0;
+}
+
 static inline uint32_t *
 dp_monitor_get_total_link_descs(struct dp_soc *soc, uint32_t mac_id)
 {
@@ -958,7 +998,8 @@ dp_mon_rx_enable_mpdu_logging(struct dp_soc *soc, uint32_t *msg_word,
 }
 
 static inline void
-dp_mon_rx_wmask_subscribe(struct dp_soc *soc, uint32_t *msg_word,
+dp_mon_rx_wmask_subscribe(struct dp_soc *soc,
+			  uint32_t *msg_word, int pdev_id,
 			  struct htt_rx_ring_tlv_filter *tlv_filter)
 {
 }
@@ -1424,6 +1465,8 @@ static inline int dp_log2_ceil(unsigned int value)
 	unsigned int tmp = value;
 	int log2 = -1;
 
+	if (qdf_unlikely(value == 0))
+		return 0;
 	while (tmp) {
 		log2++;
 		tmp >>= 1;
@@ -1967,6 +2010,8 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		\
 		_tgtobj->rx.multicast.num += _srcobj->rx.multicast.num; \
 		_tgtobj->rx.multicast.bytes += _srcobj->rx.multicast.bytes; \
+		_tgtobj->rx.rx_success.num += _srcobj->rx.rx_success.num;\
+		_tgtobj->rx.rx_success.bytes += _srcobj->rx.rx_success.bytes;\
 		_tgtobj->rx.bcast.num += _srcobj->rx.bcast.num; \
 		_tgtobj->rx.bcast.bytes += _srcobj->rx.bcast.bytes; \
 		_tgtobj->rx.unicast.num += _srcobj->rx.unicast.num; \
@@ -2014,6 +2059,10 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 			_tgtobj->rx.rcvd_reo[i].num += \
 					 _srcobj->rx.rcvd_reo[i].num; \
 			_tgtobj->rx.rcvd_reo[i].bytes += \
+					_srcobj->rx.rcvd_reo[i].bytes; \
+			_tgtobj->rx.rcvd.num += \
+					 _srcobj->rx.rcvd_reo[i].num; \
+			_tgtobj->rx.rcvd.bytes += \
 					_srcobj->rx.rcvd_reo[i].bytes; \
 		} \
 		for (i = 0; i < CDP_MAX_LMACS; i++) { \
@@ -2340,6 +2389,13 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		_tgtobj->rx_i.routed_eapol_pkt.bytes += \
 					_srcobj->rx_i.routed_eapol_pkt.bytes; \
 	} while (0)
+
+#define DP_UPDATE_VDEV_STATS(_tgtobj, _srcobj) \
+	do { \
+		DP_UPDATE_INGRESS_STATS(_tgtobj, _srcobj); \
+		DP_UPDATE_VDEV_STATS_FOR_UNMAPPED_PEERS(_tgtobj, _srcobj); \
+	} while (0)
+
 /**
  * dp_peer_find_attach() - Allocates memory for peer objects
  * @soc: SoC handle
@@ -2712,6 +2768,15 @@ void dp_reo_desc_freelist_destroy(struct dp_soc *soc);
 void dp_reset_rx_reo_tid_queue(struct dp_soc *soc, void *hw_qdesc_vaddr,
 			       uint32_t size);
 
+
+static inline void dp_umac_reset_trigger_pre_reset_notify_cb(struct dp_soc *soc)
+{
+	notify_pre_reset_fw_callback callback = soc->notify_fw_callback;
+
+	if (callback)
+		callback(soc);
+}
+
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 /**
  * dp_umac_reset_complete_umac_recovery() - Complete Umac reset session
@@ -2796,7 +2861,10 @@ QDF_STATUS dp_mlo_umac_reset_stats_print(struct dp_soc *soc)
 	return QDF_STATUS_SUCCESS;
 }
 #endif
-
+#else
+static inline void dp_umac_reset_trigger_pre_reset_notify_cb(struct dp_soc *soc)
+{
+}
 #endif
 
 #if defined(DP_UMAC_HW_RESET_SUPPORT) && defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
@@ -2809,12 +2877,14 @@ QDF_STATUS dp_mlo_umac_reset_stats_print(struct dp_soc *soc)
 QDF_STATUS dp_umac_reset_notify_asserted_soc(struct dp_soc *soc);
 
 /**
- * dp_umac_reset_is_inprogress() - Check if umac reset is in progress
+ * dp_get_umac_reset_in_progress_state() - API to check umac reset in progress
+ * state
  * @psoc: dp soc handle
  *
- * Return: true if umac reset is in progress, else false.
+ * Return: umac reset state
  */
-bool dp_umac_reset_is_inprogress(struct cdp_soc_t *psoc);
+enum cdp_umac_reset_state
+dp_get_umac_reset_in_progress_state(struct cdp_soc_t *psoc);
 #else
 static inline
 QDF_STATUS dp_umac_reset_notify_asserted_soc(struct dp_soc *soc)
@@ -2822,10 +2892,10 @@ QDF_STATUS dp_umac_reset_notify_asserted_soc(struct dp_soc *soc)
 	return QDF_STATUS_SUCCESS;
 }
 
-static inline
-bool dp_umac_reset_is_inprogress(struct cdp_soc_t *psoc)
+static inline enum cdp_umac_reset_state
+dp_get_umac_reset_in_progress_state(struct cdp_soc_t *psoc)
 {
-	return false;
+	return CDP_UMAC_RESET_NOT_IN_PROGRESS;
 }
 #endif
 
@@ -3151,6 +3221,28 @@ void dp_print_peer_stats(struct dp_peer *peer,
  */
 void
 dp_print_pdev_tx_stats(struct dp_pdev *pdev);
+
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MCAST_MLO)
+/**
+ * dp_print_vdev_mlo_mcast_tx_stats(): Print vdev level mlo mcast tx stats
+ * @vdev: DP_VDEV Handle
+ *
+ * Return:void
+ */
+void
+dp_print_vdev_mlo_mcast_tx_stats(struct dp_vdev *vdev);
+#else
+/**
+ * dp_print_vdev_mlo_mcast_tx_stats(): Print vdev level mlo mcast tx stats
+ * @vdev: DP_VDEV Handle
+ *
+ * Return:void
+ */
+static inline
+void dp_print_vdev_mlo_mcast_tx_stats(struct dp_vdev *vdev)
+{
+}
+#endif
 
 /**
  * dp_print_pdev_rx_stats(): Print Pdev level RX stats
@@ -3914,7 +4006,7 @@ struct cdp_soc_t *dp_soc_to_cdp_soc_t(struct dp_soc *psoc)
 	return (struct cdp_soc_t *)psoc;
 }
 
-#if defined(WLAN_SUPPORT_RX_FLOW_TAG) || defined(WLAN_SUPPORT_RX_FISA)
+#if defined(WLAN_SUPPORT_RX_FLOW_TAG)
 /**
  * dp_rx_flow_get_fse_stats() - Retrieve a flow's statistics
  * @pdev: pdev handle
@@ -3966,16 +4058,6 @@ QDF_STATUS dp_rx_fst_attach(struct dp_soc *soc, struct dp_pdev *pdev);
 void dp_rx_fst_detach(struct dp_soc *soc, struct dp_pdev *pdev);
 
 /**
- * dp_rx_flow_send_fst_fw_setup() - Program FST parameters in FW/HW post-attach
- * @soc: SoC handle
- * @pdev: Pdev handle
- *
- * Return: Success when fst parameters are programmed in FW, error otherwise
- */
-QDF_STATUS dp_rx_flow_send_fst_fw_setup(struct dp_soc *soc,
-					struct dp_pdev *pdev);
-
-/**
  * dp_mon_rx_update_rx_flow_tag_stats() - Update a mon flow's statistics
  * @pdev: pdev handle
  * @flow_id: flow index (truncated hash) in the Rx FST
@@ -3984,33 +4066,18 @@ QDF_STATUS dp_rx_flow_send_fst_fw_setup(struct dp_soc *soc,
  */
 QDF_STATUS
 dp_mon_rx_update_rx_flow_tag_stats(struct dp_pdev *pdev, uint32_t flow_id);
+#endif
 
-#else /* !((WLAN_SUPPORT_RX_FLOW_TAG) || defined(WLAN_SUPPORT_RX_FISA)) */
-
+#ifdef WLAN_SUPPORT_RX_FLOW_TAG
 /**
- * dp_rx_fst_attach() - Initialize Rx FST and setup necessary parameters
+ * dp_rx_flow_send_fst_fw_setup() - Program FST parameters in FW/HW post-attach
  * @soc: SoC handle
  * @pdev: Pdev handle
  *
- * Return: Handle to flow search table entry
+ * Return: Success when fst parameters are programmed in FW, error otherwise
  */
-static inline
-QDF_STATUS dp_rx_fst_attach(struct dp_soc *soc, struct dp_pdev *pdev)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-/**
- * dp_rx_fst_detach() - De-initialize Rx FST
- * @soc: SoC handle
- * @pdev: Pdev handle
- *
- * Return: None
- */
-static inline
-void dp_rx_fst_detach(struct dp_soc *soc, struct dp_pdev *pdev)
-{
-}
+QDF_STATUS dp_rx_flow_send_fst_fw_setup(struct dp_soc *soc,
+					struct dp_pdev *pdev);
 #endif
 
 /**
@@ -4127,16 +4194,6 @@ void dp_update_num_mac_rings_for_dbs(struct dp_soc *soc,
 
 
 #if defined(WLAN_SUPPORT_RX_FISA)
-void dp_rx_dump_fisa_table(struct dp_soc *soc);
-
-/**
- * dp_print_fisa_stats() - Print FISA stats
- * @soc: DP soc handle
- *
- * Return: None
- */
-void dp_print_fisa_stats(struct dp_soc *soc);
-
 /**
  * dp_rx_fst_update_cmem_params() - Update CMEM FST params
  * @soc:		DP SoC context
@@ -4149,34 +4206,20 @@ void dp_print_fisa_stats(struct dp_soc *soc);
 void dp_rx_fst_update_cmem_params(struct dp_soc *soc, uint16_t num_entries,
 				  uint32_t cmem_ba_lo, uint32_t cmem_ba_hi);
 
-void
-dp_rx_fst_update_pm_suspend_status(struct dp_soc *soc, bool suspended);
-
 /**
- * dp_rx_fst_requeue_wq() - Re-queue pending work queue tasks
- * @soc:		DP SoC context
- *
- * Return: None
+ * dp_fisa_config() - FISA config handler
+ * @cdp_soc: CDP SoC handle
+ * @pdev_id: PDEV ID
+ * @config_id: FISA config ID
+ * @cfg: FISA config msg data
  */
-void dp_rx_fst_requeue_wq(struct dp_soc *soc);
+QDF_STATUS dp_fisa_config(ol_txrx_soc_handle cdp_soc, uint8_t pdev_id,
+			  enum cdp_fisa_config_id config_id,
+			  union cdp_fisa_config *cfg);
 #else
 static inline void
 dp_rx_fst_update_cmem_params(struct dp_soc *soc, uint16_t num_entries,
 			     uint32_t cmem_ba_lo, uint32_t cmem_ba_hi)
-{
-}
-
-static inline void
-dp_rx_fst_update_pm_suspend_status(struct dp_soc *soc, bool suspended)
-{
-}
-
-static inline void
-dp_rx_fst_requeue_wq(struct dp_soc *soc)
-{
-}
-
-static inline void dp_print_fisa_stats(struct dp_soc *soc)
 {
 }
 #endif /* WLAN_SUPPORT_RX_FISA */
@@ -5014,6 +5057,9 @@ void dp_rx_err_send_pktlog(struct dp_soc *soc, struct dp_pdev *pdev,
 	uint16_t msdu_len, nbuf_len;
 	uint8_t *rx_tlv_hdr;
 	struct hal_rx_msdu_metadata msdu_metadata;
+	uint16_t buf_size;
+
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 
 	if (qdf_unlikely(packetdump_cb)) {
 		rx_tlv_hdr = qdf_nbuf_data(nbuf);
@@ -5031,8 +5077,7 @@ void dp_rx_err_send_pktlog(struct dp_soc *soc, struct dp_pdev *pdev,
 
 		if (set_pktlen) {
 			msdu_len = nbuf_len + skip_size;
-			qdf_nbuf_set_pktlen(nbuf, qdf_min(msdu_len,
-					    (uint16_t)RX_DATA_BUFFER_SIZE));
+			qdf_nbuf_set_pktlen(nbuf, qdf_min(msdu_len, buf_size));
 		}
 
 		qdf_nbuf_pull_head(nbuf, skip_size);
@@ -5424,4 +5469,85 @@ void dp_tx_remove_vlan_tag(struct dp_vdev *vdev, qdf_nbuf_t nbuf);
  * Return: None.
  */
 void dp_print_per_link_stats(struct cdp_soc_t *soc_hdl, uint8_t vdev_id);
+
+/**
+ * dp_get_ring_stats_from_hal(): get hal level ring pointer values
+ * @soc: DP_SOC handle
+ * @srng: DP_SRNG handle
+ * @ring_type: srng src/dst ring
+ * @_tailp: pointer to tail of ring
+ * @_headp: pointer to head of ring
+ * @_hw_headp: pointer to head of ring in HW
+ * @_hw_tailp: pointer to tail of ring in HW
+ *
+ * Return: void
+ */
+static inline void
+dp_get_ring_stats_from_hal(struct dp_soc *soc,  struct dp_srng *srng,
+			   enum hal_ring_type ring_type,
+			   uint32_t *_tailp, uint32_t *_headp,
+			   int32_t *_hw_headp, int32_t *_hw_tailp)
+{
+	uint32_t tailp;
+	uint32_t headp;
+	int32_t hw_headp = -1;
+	int32_t hw_tailp = -1;
+	struct hal_soc *hal_soc;
+
+	if (soc && srng && srng->hal_srng) {
+		hal_soc = (struct hal_soc *)soc->hal_soc;
+		hal_get_sw_hptp(soc->hal_soc, srng->hal_srng, &tailp, &headp);
+		*_headp = headp;
+		*_tailp = tailp;
+
+		hal_get_hw_hptp(soc->hal_soc, srng->hal_srng, &hw_headp,
+				&hw_tailp, ring_type);
+		*_hw_headp = hw_headp;
+		*_hw_tailp = hw_tailp;
+	}
+}
+
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+/**
+ * dp_h2t_tx_latency_stats_cfg_msg_send(): send HTT message for tx latency
+ * stats config to FW
+ * @dp_soc: DP SOC handle
+ * @vdev_id: vdev id
+ * @enable: indicates enablement of the feature
+ * @period: statistical period for transmit latency in terms of ms
+ * @granularity: granularity for tx latency distribution
+ *
+ * return: QDF STATUS
+ */
+QDF_STATUS
+dp_h2t_tx_latency_stats_cfg_msg_send(struct dp_soc *dp_soc, uint16_t vdev_id,
+				     bool enable, uint32_t period,
+				     uint32_t granularity);
+
+/**
+ * dp_tx_latency_stats_update_cca() - update transmit latency statistics for
+ * CCA
+ * @soc: dp soc handle
+ * @peer_id: peer id
+ * @granularity: granularity of distribution
+ * @distribution: distribution of transmit latency statistics
+ * @avg: average of CCA latency(in microseconds) within a cycle
+ *
+ * Return: None
+ */
+void
+dp_tx_latency_stats_update_cca(struct dp_soc *soc, uint16_t peer_id,
+			       uint32_t granularity, uint32_t *distribution,
+			       uint32_t avg);
+
+/**
+ * dp_tx_latency_stats_report() - report transmit latency statistics for each
+ * vdev of specified pdev
+ * @soc: dp soc handle
+ * @pdev: dp pdev Handle
+ *
+ * Return: None
+ */
+void dp_tx_latency_stats_report(struct dp_soc *soc, struct dp_pdev *pdev);
+#endif
 #endif /* #ifndef _DP_INTERNAL_H_ */

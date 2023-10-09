@@ -256,7 +256,6 @@ static void hal_rx_dump_msdu_end_tlv_kiwi(void *msduend,
 			"reo_destination_indication :%x "
 			"flow_idx :%x "
 			"use_ppe :%x "
-			"__reserved_g_0003 :%x "
 			"vlan_ctag_stripped :%x "
 			"vlan_stag_stripped :%x "
 			"fragment_flag :%x "
@@ -289,7 +288,6 @@ static void hal_rx_dump_msdu_end_tlv_kiwi(void *msduend,
 			msdu_end->reo_destination_indication,
 			msdu_end->flow_idx,
 			msdu_end->use_ppe,
-			msdu_end->__reserved_g_0003,
 			msdu_end->vlan_ctag_stripped,
 			msdu_end->vlan_stag_stripped,
 			msdu_end->fragment_flag,
@@ -825,7 +823,7 @@ static inline void hal_rx_dump_pkt_hdr_tlv_kiwi(struct rx_pkt_tlvs *pkt_tlvs,
 	hal_verbose_debug("\n---------------\n"
 			  "rx_pkt_hdr_tlv\n"
 			  "---------------\n"
-			  "phy_ppdu_id %lld ",
+			  "phy_ppdu_id 0x%x ",
 			  pkt_hdr_tlv->phy_ppdu_id);
 
 	hal_verbose_hex_dump(pkt_hdr_tlv->rx_pkt_hdr,
@@ -1968,7 +1966,7 @@ hal_get_tsf_time_kiwi(hal_soc_handle_t hal_soc_hdl, uint32_t tsf_id,
 	uint64_t global_time_low_offset, global_time_high_offset;
 	uint64_t tsf_offset_low, tsf_offset_hi;
 	uint64_t fw_time, global_time, sync_time;
-	enum hal_scratch_reg_enum tsf_enum_low, tsf_enum_high;
+	enum hal_scratch_reg_enum tsf_enum_low = 0, tsf_enum_high = 0;
 
 	if (hif_force_wake_request(soc->hif_handle))
 		return;
@@ -2821,6 +2819,7 @@ struct hal_hw_srng_config hw_srng_table_kiwi[] = {
 	{0},
 #endif
 	{ /* SW2RXDMA_NEW */ 0},
+	{ /* SW2RXDMA_LINK_RELEASE */ 0},
 };
 
 /**

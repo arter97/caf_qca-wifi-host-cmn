@@ -25,6 +25,7 @@
 #include <wlan_objmgr_psoc_obj.h>
 #include <wlan_objmgr_global_obj.h>
 #include <wlan_lmac_if_def.h>
+#include <wlan_twt_public_structs.h>
 
 #define twt_alert(params...) \
 	QDF_TRACE_FATAL(QDF_MODULE_ID_TWT, params)
@@ -118,6 +119,26 @@ QDF_STATUS
 wlan_set_peer_twt_capabilities(struct wlan_objmgr_psoc *psoc,
 			       struct qdf_mac_addr *peer_mac,
 			       uint8_t peer_cap);
+/**
+ * wlan_twt_psoc_set_pmo_enable() - twt psoc set enable
+ * @psoc: psoc handle
+ * @reason: twt enable reason
+ *
+ * return: QDF_STATUS
+ */
+QDF_STATUS
+wlan_twt_psoc_set_pmo_enable(struct wlan_objmgr_psoc *psoc,
+			     enum twt_disable_reason reason);
+/**
+ * wlan_twt_psoc_set_pmo_disable() - twt psoc set disable
+ * @psoc: psoc handle
+ * @reason: twt disable reason
+ *
+ *  return: QDF_STATUS
+ */
+QDF_STATUS
+wlan_twt_psoc_set_pmo_disable(struct wlan_objmgr_psoc *psoc,
+			      enum twt_disable_reason reason);
 
 #else
 static inline
@@ -151,5 +172,13 @@ QDF_STATUS wlan_set_peer_twt_capabilities(struct wlan_objmgr_psoc *psoc,
 {
 	return QDF_STATUS_SUCCESS;
 }
+
+QDF_STATUS
+wlan_twt_psoc_set_pmo_enable(struct wlan_objmgr_psoc *psoc,
+			     enum twt_disable_reason reason);
+
+QDF_STATUS
+wlan_twt_psoc_set_pmo_disable(struct wlan_objmgr_psoc *psoc,
+			      enum twt_disable_reason reason);
 #endif
 #endif /* _WLAN_TWT_API_H_ */

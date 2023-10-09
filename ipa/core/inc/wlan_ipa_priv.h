@@ -76,7 +76,7 @@
 #define WLAN_IPA_MAX_STA_COUNT              41
 #endif
 
-#define WLAN_IPA_RX_PIPE                    WLAN_IPA_MAX_IFACE
+#define WLAN_IPA_RX_PIPE                    (WLAN_IPA_MAX_SYSBAM_PIPE - 1)
 #define WLAN_IPA_ENABLE_MASK                BIT(0)
 #define WLAN_IPA_PRE_FILTER_ENABLE_MASK     BIT(1)
 #define WLAN_IPA_IPV6_ENABLE_MASK           BIT(2)
@@ -123,6 +123,8 @@
  * @WLAN_IPA_UC_OPCODE_UC_READY: IPA UC ready indication
  * @WLAN_IPA_FILTER_RSV_NOTIFY: OPT WIFI DP filter reserve notification
  * @WLAN_IPA_FILTER_REL_NOTIFY: OPT WIFI DP filter release notification
+ * @WLAN_IPA_SMMU_MAP: IPA SMMU map call
+ * @WLAN_IPA_SMMU_UNMAP: IPA SMMU unmap call
  * @WLAN_IPA_UC_OPCODE_MAX: IPA UC max operation code
  */
 enum wlan_ipa_uc_op_code {
@@ -139,6 +141,8 @@ enum wlan_ipa_uc_op_code {
 	WLAN_IPA_UC_OPCODE_UC_READY = 8,
 	WLAN_IPA_FILTER_RSV_NOTIFY = 9,
 	WLAN_IPA_FILTER_REL_NOTIFY = 10,
+	WLAN_IPA_SMMU_MAP = 11,
+	WLAN_IPA_SMMU_UNMAP = 12,
 	/* keep this last */
 	WLAN_IPA_UC_OPCODE_MAX
 };
@@ -374,6 +378,7 @@ struct wlan_ipa_priv;
  * @stats: Interface stats
  * @bssid: BSSID. valid only for sta iface ctx
  * @is_authenticated: is peer authenticated
+ * @alt_pipe: Indicate whether the interface uses alternate TX pipe
  */
 struct wlan_ipa_iface_context {
 	struct wlan_ipa_priv *ipa_ctx;
@@ -393,6 +398,9 @@ struct wlan_ipa_iface_context {
 	struct wlan_ipa_iface_stats stats;
 	struct qdf_mac_addr bssid;
 	uint8_t is_authenticated;
+#ifdef IPA_WDI3_TX_TWO_PIPES
+	bool alt_pipe;
+#endif
 };
 
 /**
@@ -784,6 +792,7 @@ struct wlan_ipa_priv {
 #ifdef IPA_OPT_WIFI_DP
 	struct wifi_dp_flt_setup dp_cce_super_rule_flt_param;
 	qdf_event_t ipa_flt_evnt;
+	qdf_wake_lock_t opt_dp_wake_lock;
 #endif
 };
 

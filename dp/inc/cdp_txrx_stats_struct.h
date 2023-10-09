@@ -190,7 +190,11 @@
 #define CDP_SNR_UPDATE_AVG(x, y) x = CDP_SNR_AVG((x), CDP_SNR_IN((y)))
 
 /*Max SU EVM count */
+#ifdef QCA_MONITOR_2_0_SUPPORT
+#define DP_RX_MAX_SU_EVM_COUNT 256
+#else
 #define DP_RX_MAX_SU_EVM_COUNT 32
+#endif
 
 #define WDI_EVENT_BASE 0x100
 
@@ -1245,7 +1249,7 @@ struct cdp_delay_tid_stats {
  * @bytes: total no of bytes
  */
 struct cdp_pkt_info {
-	uint32_t num;
+	uint64_t num;
 	uint64_t bytes;
 };
 
@@ -1549,6 +1553,7 @@ struct protocol_trace_count {
  * @wme_ac_type_bytes: Wireless Multimedia Type Bytes Count
  * @tx_ucast_total: Total tx unicast count
  * @tx_ucast_success: Total tx unicast success count
+ * @fragment_count: Fragment packet count
  */
 struct cdp_tx_stats {
 	struct cdp_pkt_info comp_pkt;
@@ -1674,12 +1679,14 @@ struct cdp_tx_stats {
 	uint64_t wme_ac_type_bytes[WME_AC_MAX];
 	struct cdp_pkt_info tx_ucast_total;
 	struct cdp_pkt_info tx_ucast_success;
+	uint32_t fragment_count;
 };
 
 /**
  * struct cdp_rx_stats - rx Level Stats
  * @to_stack: Total packets sent up the stack
  * @rcvd_reo:  Packets received on the reo ring
+ * @rcvd: Total packets received
  * @rx_lmac: Packets received on which lmac
  * @unicast: Total unicast packets
  * @multicast: Total multicast packets
@@ -1688,6 +1695,7 @@ struct cdp_tx_stats {
  * @nawds_mcast_drop: Total multicast packets
  * @mec_drop: Total MEC packets dropped
  * @ppeds_drop: Total DS packets dropped
+ * @rx_success: Total rx success count
  * @last_rx_ts: last timestamp in jiffies when RX happened
  * @intra_bss: Intra-bss statistics
  * @intra_bss.pkts: Intra BSS packets received
@@ -1767,10 +1775,13 @@ struct cdp_tx_stats {
  * @inval_link_id_pkt_cnt: Counter to capture Invalid Link Id
  * @wme_ac_type_bytes: Wireless Multimedia type Byte Count
  * @rx_total: Total rx count
+ * @duplicate_count: Duplicate packets count
+ * @fragment_count: Fragment packet count
  */
 struct cdp_rx_stats {
 	struct cdp_pkt_info to_stack;
 	struct cdp_pkt_info rcvd_reo[CDP_MAX_RX_RINGS];
+	struct cdp_pkt_info rcvd;
 	struct cdp_pkt_info rx_lmac[CDP_MAX_LMACS];
 	struct cdp_pkt_info unicast;
 	struct cdp_pkt_info multicast;
@@ -1779,6 +1790,7 @@ struct cdp_rx_stats {
 	uint32_t nawds_mcast_drop;
 	struct cdp_pkt_info mec_drop;
 	struct cdp_pkt_info ppeds_drop;
+	struct cdp_pkt_info rx_success;
 	unsigned long last_rx_ts;
 	struct {
 		struct cdp_pkt_info pkts;
@@ -1864,6 +1876,8 @@ struct cdp_rx_stats {
 #ifdef IPA_OFFLOAD
 	struct cdp_pkt_info rx_total;
 #endif
+	uint32_t duplicate_count;
+	uint32_t fragment_count;
 };
 
 /**
@@ -1921,6 +1935,9 @@ struct cdp_rx_stats {
  * @cce_classified_raw:Number of raw packets classified by CCE
  * @sniffer_rcvd: Number of packets received with ppdu cookie
  * @tso_stats:
+ * @mlo_mcast: mlo mcast packet counters
+ * @mlo_mcast.send_pkt_count: MLO mcast send packet counter
+ * @mlo_mcast.fail_pkt_count: MLO mcast failed packet counter
  */
 struct cdp_tx_ingress_stats {
 	struct cdp_pkt_info rcvd;
@@ -1989,6 +2006,12 @@ struct cdp_tx_ingress_stats {
 	uint32_t cce_classified_raw;
 	struct cdp_pkt_info sniffer_rcvd;
 	struct cdp_tso_stats tso_stats;
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MCAST_MLO)
+	struct {
+		uint32_t send_pkt_count;
+		uint32_t fail_pkt_count;
+	} mlo_mcast;
+#endif
 };
 
 /**
@@ -3179,6 +3202,7 @@ struct cdp_pdev_stats {
 		/* Monitor mode related */
 		uint32_t mon_rx_drop;
 		uint32_t mon_radiotap_update_err;
+		uint32_t mon_ver_err;
 	} dropped;
 
 	struct {

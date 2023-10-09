@@ -39,7 +39,7 @@
 
 #define CM_ID_MASK                  0x0000FFFF
 
-#define CM_ID_GET_PREFIX(cm_id)     cm_id & 0xFF000000
+#define CM_ID_GET_PREFIX(cm_id)     cm_id & 0x0F000000
 #define CM_VDEV_ID_SHIFT            16
 #define CM_VDEV_ID_MASK             0x00FF0000
 #define CM_ID_GET_VDEV_ID(cm_id) (cm_id & CM_VDEV_ID_MASK) >> CM_VDEV_ID_SHIFT
@@ -255,6 +255,7 @@ QDF_STATUS cm_connect_rsp(struct wlan_objmgr_vdev *vdev,
 QDF_STATUS cm_notify_connect_complete(struct cnx_mgr *cm_ctx,
 				      struct wlan_cm_connect_resp *resp,
 				      bool acquire_lock);
+
 /**
  * cm_connect_complete() - This API would be called after connect complete
  * request from the serialization.
@@ -1134,6 +1135,28 @@ cm_connect_rsp_get_mld_addr_or_bssid(struct wlan_cm_connect_resp *resp,
 }
 #endif
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+/**
+ * cm_standby_link_update_mlme_by_bssid() - update the scan mlme info for
+ * standby_link
+ * @vdev: Object manager vdev
+ * @assoc_state: association state
+ * @ssid: SSID of the connection
+ *
+ * Return: void
+ */
+void cm_standby_link_update_mlme_by_bssid(struct wlan_objmgr_vdev *vdev,
+					  uint32_t assoc_state,
+					  struct wlan_ssid ssid);
+#else
+static inline void
+cm_standby_link_update_mlme_by_bssid(struct wlan_objmgr_vdev *vdev,
+				     uint32_t assoc_state,
+				     struct wlan_ssid ssid)
+{
+}
+#endif
+
 /**
  * cm_get_cm_id_by_scan_id() - Get cm id by matching the scan id
  * @cm_ctx: connection manager context
@@ -1314,7 +1337,6 @@ bool cm_is_connect_req_reassoc(struct wlan_cm_connect_req *req);
 QDF_STATUS cm_get_rnr(struct wlan_objmgr_vdev *vdev, wlan_cm_id cm_id,
 		      struct reduced_neighbor_report *rnr);
 
-#ifdef CONN_MGR_ADV_FEATURE
 /**
  * cm_free_connect_rsp_ies() - Function to free all connection IEs.
  * @connect_rsp: pointer to connect rsp
@@ -1325,6 +1347,48 @@ QDF_STATUS cm_get_rnr(struct wlan_objmgr_vdev *vdev, wlan_cm_id cm_id,
  */
 void cm_free_connect_rsp_ies(struct wlan_cm_connect_resp *connect_rsp);
 
+/**
+ * cm_free_connect_req() - Function to free up connect request and its sub memory.
+ * @connect_req: pointer to connect req
+ *
+ * Function to free up connect request and its sub memory.
+ *
+ * Return: void
+ */
+void cm_free_connect_req(struct wlan_cm_connect_req *connect_req);
+
+/**
+ * cm_free_connect_rsp() - Function to free up connect response and its sub memory.
+ * @connect_rsp: pointer to connect rsp
+ *
+ * Function to free up connect response and its sub memory.
+ *
+ * Return: void
+ */
+void cm_free_connect_rsp(struct wlan_cm_connect_resp *connect_rsp);
+
+/**
+ * cm_free_connect_req_param() - Function to free up connect request sub memory.
+ * @req: pointer to connect req
+ *
+ * Function to free up connect request sub memory parameters.
+ *
+ * Return: void
+ */
+void cm_free_connect_req_param(struct wlan_cm_connect_req *req);
+
+/**
+ * cm_free_wep_key_params() - Function to free up connect request wep key params
+ * sub memory
+ * @req: pointer to connect req
+ *
+ * Function to free up connect request wep key params sub memory.
+ *
+ * Return: void
+ */
+void cm_free_wep_key_params(struct wlan_cm_connect_req *req);
+
+#ifdef CONN_MGR_ADV_FEATURE
 /**
  * cm_store_first_candidate_rsp() - store the connection failure response
  * @cm_ctx: connection manager context
@@ -1369,11 +1433,6 @@ cm_get_first_candidate_rsp(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id,
 void cm_store_n_send_failed_candidate(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id);
 #else
 static inline
-void cm_free_connect_rsp_ies(struct wlan_cm_connect_resp *connect_rsp)
-{
-}
-
-static inline
 void cm_store_first_candidate_rsp(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id,
 				  struct wlan_cm_connect_resp *resp)
 {
@@ -1384,4 +1443,26 @@ void cm_store_n_send_failed_candidate(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id)
 {
 }
 #endif /* CONN_MGR_ADV_FEATURE */
+
+#ifdef WLAN_FEATURE_11BE_MLO
+/**
+ * cm_bss_mlo_type() - Check if the scan entry is of MLO type
+ * @psoc: Pointer to psoc
+ * @entry: scan cache entry
+ * @scan_list: list of scan entries to look for if @entry is of ML type
+ *
+ * Return: MLO AP type: SLO, MLMR or EMLSR.
+ */
+enum MLO_TYPE cm_bss_mlo_type(struct wlan_objmgr_psoc *psoc,
+			      struct scan_cache_entry *entry,
+			      qdf_list_t *scan_list);
+#else
+static inline enum MLO_TYPE
+cm_bss_mlo_type(struct wlan_objmgr_psoc *psoc,
+		struct scan_cache_entry *entry,
+		qdf_list_t *scan_list)
+{
+	return SLO;
+}
+#endif
 #endif /* __WLAN_CM_MAIN_API_H__ */

@@ -43,7 +43,9 @@
 #ifdef BYPASS_OL_OPS
 #include <target_if_dp.h>
 #endif
-
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
+#include "reg_services_common.h"
+#endif
 #ifdef FEATURE_AST
 #ifdef BYPASS_OL_OPS
 /**
@@ -267,6 +269,54 @@ QDF_STATUS dp_peer_ast_table_attach(struct dp_soc *soc)
 }
 
 /**
+ * dp_find_peer_by_macaddr() - Finding the peer from mac address provided.
+ * @soc: soc handle
+ * @mac_addr: MAC address to be used to find peer
+ * @vdev_id: VDEV id
+ * @mod_id: MODULE ID
+ *
+ * Return: struct dp_peer
+ */
+struct dp_peer *dp_find_peer_by_macaddr(struct dp_soc *soc, uint8_t *mac_addr,
+					uint8_t vdev_id, enum dp_mod_id mod_id)
+{
+	bool ast_ind_disable = wlan_cfg_get_ast_indication_disable(
+							    soc->wlan_cfg_ctx);
+	struct cdp_peer_info peer_info = {0};
+
+	if ((!soc->ast_offload_support) || (!ast_ind_disable)) {
+		struct dp_ast_entry *ast_entry = NULL;
+		uint16_t peer_id;
+
+		qdf_spin_lock_bh(&soc->ast_lock);
+
+		if (vdev_id == DP_VDEV_ALL)
+			ast_entry = dp_peer_ast_hash_find_soc(soc, mac_addr);
+		else
+			ast_entry = dp_peer_ast_hash_find_by_vdevid
+						(soc, mac_addr, vdev_id);
+
+		if (!ast_entry) {
+			qdf_spin_unlock_bh(&soc->ast_lock);
+			dp_err("NULL ast entry");
+			return NULL;
+		}
+
+		peer_id = ast_entry->peer_id;
+		qdf_spin_unlock_bh(&soc->ast_lock);
+
+		if (peer_id == HTT_INVALID_PEER)
+			return NULL;
+
+		return dp_peer_get_ref_by_id(soc, peer_id, mod_id);
+	}
+
+	DP_PEER_INFO_PARAMS_INIT(&peer_info, vdev_id, mac_addr, false,
+				 CDP_WILD_PEER_TYPE);
+	return dp_peer_hash_find_wrapper(soc, &peer_info, mod_id);
+}
+
+/**
  * dp_peer_find_map_attach() - allocate memory for peer_id_to_obj_map
  * @soc: soc handle
  *
@@ -484,6 +534,17 @@ void dp_peer_find_hash_remove(struct dp_soc *soc, struct dp_peer *peer)
 	} else {
 		dp_err("unknown peer type %d", peer->peer_type);
 	}
+}
+
+uint8_t dp_get_peer_link_id(struct dp_peer *peer)
+{
+	uint8_t link_id;
+
+	link_id = IS_MLO_DP_LINK_PEER(peer) ? peer->link_id + 1 : 0;
+	if (link_id < 1 || link_id > DP_MAX_MLO_LINKS)
+		link_id = 0;
+
+	return link_id;
 }
 #else
 static QDF_STATUS dp_peer_find_hash_attach(struct dp_soc *soc)
@@ -1287,19 +1348,6 @@ void dp_peer_map_ipa_evt(struct dp_soc *soc, struct dp_peer *peer,
 }
 #endif
 
-/**
- * dp_peer_host_add_map_ast() - Add ast entry with HW AST Index
- * @soc: SoC handle
- * @peer_id: peer id from firmware
- * @mac_addr: MAC address of ast node
- * @hw_peer_id: HW AST Index returned by target in peer map event
- * @vdev_id: vdev id for VAP to which the peer belongs to
- * @ast_hash: ast hash value in HW
- * @is_wds: flag to indicate peer map event for WDS ast entry
- *
- * Return: QDF_STATUS code
- */
-static inline
 QDF_STATUS dp_peer_host_add_map_ast(struct dp_soc *soc, uint16_t peer_id,
 				    uint8_t *mac_addr, uint16_t hw_peer_id,
 				    uint8_t vdev_id, uint16_t ast_hash,
@@ -2636,7 +2684,7 @@ dp_rx_mlo_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 	 * on chip ID obtained from mlo peer_map event
 	 */
 	for (i = 0; i < DP_MAX_MLO_LINKS; i++) {
-		if (mlo_link_info[i].peer_chip_id == dp_mlo_get_chip_id(soc)) {
+		if (mlo_link_info[i].peer_chip_id == dp_get_chip_id(soc)) {
 			vdev_id = mlo_link_info[i].vdev_id;
 			break;
 		}
@@ -2928,9 +2976,9 @@ dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 	if (peer->txrx_peer) {
 		struct cdp_txrx_peer_params_update params = {0};
 
-		params.osif_vdev = (void *)vdev->osif_vdev;
+		params.vdev_id = vdev->vdev_id;
 		params.peer_mac = peer->mac_addr.raw;
-		params.chip_id = dp_mlo_get_chip_id(soc);
+		params.chip_id = dp_get_chip_id(soc);
 		params.pdev_id = vdev->pdev->pdev_id;
 
 		dp_wdi_event_handler(WDI_EVENT_PEER_UNMAP, soc,
@@ -3021,6 +3069,73 @@ dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 	dp_peer_unref_delete(peer, DP_MOD_ID_CONFIG);
 }
 
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
+/**
+ * dp_freq_to_band() - Convert frequency to band
+ * @freq: peer frequency
+ *
+ * Return: band for input frequency
+ */
+static inline
+enum dp_bands dp_freq_to_band(qdf_freq_t freq)
+{
+	if (REG_IS_24GHZ_CH_FREQ(freq))
+		return DP_BAND_2GHZ;
+	else if (REG_IS_5GHZ_FREQ(freq) || REG_IS_49GHZ_FREQ(freq))
+		return DP_BAND_5GHZ;
+	else if (REG_IS_6GHZ_FREQ(freq))
+		return DP_BAND_6GHZ;
+	return DP_BAND_INVALID;
+}
+
+void dp_map_link_id_band(struct dp_peer *peer)
+{
+	struct dp_txrx_peer *txrx_peer = NULL;
+	enum dp_bands band;
+
+	txrx_peer = dp_get_txrx_peer(peer);
+	if (txrx_peer) {
+		band = dp_freq_to_band(peer->freq);
+		txrx_peer->band[peer->link_id + 1] = band;
+		dp_info("Band(Freq: %u): %u mapped to Link ID: %u",
+			peer->freq, band, peer->link_id);
+	} else {
+		dp_info("txrx_peer NULL for peer: " QDF_MAC_ADDR_FMT,
+			QDF_MAC_ADDR_REF(peer->mac_addr.raw));
+	}
+}
+
+QDF_STATUS
+dp_rx_peer_ext_evt(struct dp_soc *soc, struct dp_peer_ext_evt_info *info)
+{
+	struct dp_peer *peer = NULL;
+	struct cdp_peer_info peer_info = { 0 };
+
+	QDF_ASSERT(info->peer_id <= soc->max_peer_id);
+
+	DP_PEER_INFO_PARAMS_INIT(&peer_info, info->vdev_id, info->peer_mac_addr,
+				 false, CDP_LINK_PEER_TYPE);
+	peer = dp_peer_hash_find_wrapper(soc, &peer_info, DP_MOD_ID_CONFIG);
+
+	if (!peer) {
+		dp_err("peer NULL, id %u, MAC " QDF_MAC_ADDR_FMT ", vdev_id %u",
+		       info->peer_id, QDF_MAC_ADDR_REF(info->peer_mac_addr),
+		       info->vdev_id);
+
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	peer->link_id = info->link_id;
+	peer->link_id_valid = info->link_id_valid;
+
+	if (peer->freq)
+		dp_map_link_id_band(peer);
+
+	dp_peer_unref_delete(peer, DP_MOD_ID_CONFIG);
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 #ifdef WLAN_FEATURE_11BE_MLO
 void dp_rx_mlo_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id)
 {

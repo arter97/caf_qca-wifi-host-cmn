@@ -43,6 +43,30 @@
 #define CHECK_SHADOW_REGISTERS false
 #endif
 
+/*
+ * Indices for stats
+ */
+enum RING_USAGE {
+	RING_USAGE_100,
+	RING_USAGE_GREAT_90,
+	RING_USAGE_70_TO_90,
+	RING_USAGE_50_TO_70,
+	RING_USAGE_LESS_50,
+	RING_USAGE_MAX,
+};
+
+/*
+ * Structure for tracking ring utilization
+ */
+struct ring_util_stats {
+	uint32_t util[RING_USAGE_MAX];
+};
+
+#define RING_USAGE_100_PERCENTAGE 100
+#define RING_USAGE_50_PERCENTAGE   50
+#define RING_USAGE_70_PERCENTAGE   70
+#define RING_USAGE_90_PERCENTAGE   90
+
 /* calculate the register address offset from bar0 of shadow register x */
 #if defined(QCA_WIFI_QCA6390) || defined(QCA_WIFI_QCA6490) || \
     defined(QCA_WIFI_KIWI)
@@ -3233,6 +3257,39 @@ uint32_t hal_get_ring_usage(
 	return ring_usage;
 }
 
+/*
+ * hal_update_ring_util_stats - API for tracking ring utlization
+ * @hal_soc: Opaque HAL SOC handle
+ * @hal_ring_hdl: Source ring pointer
+ * @ring_type: Ring type
+ * @ring_util_stats: Ring utilisation structure
+ */
+static inline
+void hal_update_ring_util(void *hal_soc, hal_ring_handle_t hal_ring_hdl,
+			  enum hal_ring_type ring_type,
+			  struct ring_util_stats *ring_utilisation)
+{
+	uint32_t tailp, headp, ring_usage;
+
+	hal_get_sw_hptp(hal_soc, hal_ring_hdl, &tailp, &headp);
+	ring_usage = hal_get_ring_usage(hal_ring_hdl, ring_type, &headp,
+					&tailp);
+
+	if (ring_usage == RING_USAGE_100_PERCENTAGE) {
+		ring_utilisation->util[RING_USAGE_100]++;
+	} else if (ring_usage > RING_USAGE_90_PERCENTAGE) {
+		ring_utilisation->util[RING_USAGE_GREAT_90]++;
+	} else if ((ring_usage > RING_USAGE_70_PERCENTAGE) &&
+		   (ring_usage <= RING_USAGE_90_PERCENTAGE)) {
+		ring_utilisation->util[RING_USAGE_70_TO_90]++;
+	} else if ((ring_usage > RING_USAGE_50_PERCENTAGE) &&
+		   (ring_usage <= RING_USAGE_70_PERCENTAGE)) {
+		ring_utilisation->util[RING_USAGE_50_TO_70]++;
+	} else {
+		ring_utilisation->util[RING_USAGE_LESS_50]++;
+	}
+}
+
 /**
  * hal_cmem_write() - function for CMEM buffer writing
  * @hal_soc_hdl: HAL SOC handle
@@ -3448,6 +3505,25 @@ uint16_t hal_srng_dst_get_hpidx(hal_ring_handle_t hal_ring_hdl)
 	uint32_t hp = *(volatile uint32_t *)(srng->u.dst_ring.hp_addr);
 
 	return hp / srng->entry_size;
+}
+
+/**
+ * hal_srng_batch_threshold_irq_enabled() - check if srng batch count
+ *                                          threshold irq enabled
+ * @hal_ring_hdl: srng handle
+ *
+ * Return: true if enabled, false if not.
+ */
+static inline
+bool hal_srng_batch_threshold_irq_enabled(hal_ring_handle_t hal_ring_hdl)
+{
+	struct hal_srng *srng = (struct hal_srng *)hal_ring_hdl;
+
+	if (srng->intr_batch_cntr_thres_entries &&
+	    srng->flags & HAL_SRNG_MSI_INTR)
+		return true;
+	else
+		return false;
 }
 
 #ifdef FEATURE_DIRECT_LINK

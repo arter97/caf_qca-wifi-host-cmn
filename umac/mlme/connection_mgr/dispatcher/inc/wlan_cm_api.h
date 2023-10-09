@@ -205,6 +205,30 @@ bool wlan_cm_is_vdev_disconnected(struct wlan_objmgr_vdev *vdev);
  */
 bool wlan_cm_is_vdev_roaming(struct wlan_objmgr_vdev *vdev);
 
+/**
+ * wlan_cm_free_connect_req() - free up connect request and its sub memory
+ * @connect_req: Connect request
+ *
+ * Return: void
+ */
+void wlan_cm_free_connect_req(struct wlan_cm_connect_req *connect_req);
+
+/**
+ * wlan_cm_free_connect_resp() - free up connect response and its sub memory
+ * @connect_rsp: Connect response
+ *
+ * Return: void
+ */
+void wlan_cm_free_connect_resp(struct wlan_cm_connect_resp *connect_rsp);
+
+/**
+ * wlan_cm_free_connect_req_param() - free up connect request sub memory
+ * @req: Connect request
+ *
+ * Return: void
+ */
+void wlan_cm_free_connect_req_param(struct wlan_cm_connect_req *req);
+
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 /**
  * wlan_cm_is_vdev_roam_started() - check if vdev is in roaming state and
@@ -585,4 +609,17 @@ wlan_cm_check_mlo_roam_auth_status(struct wlan_objmgr_vdev *vdev)
 	return false;
 }
 #endif
+
+/**
+ * wlan_cm_bss_mlo_type() - Check if the scan entry is of MLO type
+ * @psoc: Pointer to psoc
+ * @entry: scan cache entry
+ * @scan_list: list of scan entries to look for if @entry is of ML type
+ *
+ * Return: MLO AP type: SLO, MLMR or EMLSR.
+ */
+enum MLO_TYPE
+wlan_cm_bss_mlo_type(struct wlan_objmgr_psoc *psoc,
+		     struct scan_cache_entry *entry,
+		     qdf_list_t *scan_list);
 #endif /* __WLAN_CM_UCFG_API_H */

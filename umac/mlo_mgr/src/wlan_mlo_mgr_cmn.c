@@ -41,9 +41,9 @@ void is_mlo_all_links_up(struct wlan_mlo_dev_context *mldev)
 /* STA: Loop through all the associated vdev status. */
 }
 
-struct wlan_objmgr_vdev *mlo_get_vdev_by_link_id(
-			struct wlan_objmgr_vdev *vdev,
-			uint8_t link_id)
+struct wlan_objmgr_vdev *mlo_get_vdev_by_link_id(struct wlan_objmgr_vdev *vdev,
+						 uint8_t link_id,
+						 wlan_objmgr_ref_dbgid id)
 {
 	struct wlan_mlo_dev_context *dev_ctx;
 	int i;
@@ -64,8 +64,7 @@ struct wlan_objmgr_vdev *mlo_get_vdev_by_link_id(
 		    link_id) {
 			if (wlan_objmgr_vdev_try_get_ref(
 						dev_ctx->wlan_vdev_list[i],
-						WLAN_MLO_MGR_ID) ==
-							QDF_STATUS_SUCCESS)
+						id) == QDF_STATUS_SUCCESS)
 				partner_vdev = dev_ctx->wlan_vdev_list[i];
 
 			break;
@@ -99,6 +98,27 @@ QDF_STATUS mlo_unreg_mlme_ext_cb(struct mlo_mgr_context *ctx)
 	ctx->mlme_ops = NULL;
 	return QDF_STATUS_SUCCESS;
 }
+
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+QDF_STATUS wlan_mlo_mgr_register_osif_ext_ops(struct mlo_mgr_context *mlo_ctx,
+					      struct mlo_osif_ext_ops *ops)
+{
+	if (!ops || !mlo_ctx)
+		return QDF_STATUS_E_FAILURE;
+
+	mlo_ctx->osif_ops = ops;
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS wlan_mlo_mgr_unregister_osif_ext_ops(struct mlo_mgr_context *mlo_ctx)
+{
+	if (!mlo_ctx)
+		return QDF_STATUS_E_FAILURE;
+
+	mlo_ctx->osif_ops = NULL;
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 
 QDF_STATUS mlo_mlme_clone_sta_security(struct wlan_objmgr_vdev *vdev,
 				       struct wlan_cm_connect_req *req)
@@ -641,6 +661,8 @@ mlo_link_set_active_resp_vdev_handler(struct wlan_objmgr_psoc *psoc,
 	struct wlan_objmgr_vdev *vdev = obj;
 	struct mlo_link_set_active_resp *event = arg;
 
+	if (event->evt_handled)
+		return;
 	req = wlan_serialization_get_active_cmd(wlan_vdev_get_psoc(vdev),
 						wlan_vdev_get_id(vdev),
 						WLAN_SER_CMD_SET_MLO_LINK);
@@ -651,6 +673,7 @@ mlo_link_set_active_resp_vdev_handler(struct wlan_objmgr_psoc *psoc,
 		req->ctx.set_mlo_link_cb(vdev, req->ctx.cb_arg, event);
 
 	mlo_release_ser_link_set_active_cmd(vdev);
+	event->evt_handled = true;
 }
 
 QDF_STATUS
@@ -660,6 +683,9 @@ mlo_process_link_set_active_resp(struct wlan_objmgr_psoc *psoc,
 	wlan_objmgr_iterate_obj_list(psoc, WLAN_VDEV_OP,
 				     mlo_link_set_active_resp_vdev_handler,
 				     event, true, WLAN_MLO_MGR_ID);
+	if (!event->evt_handled)
+		mlo_debug("link set resp evt not handled");
+
 	return QDF_STATUS_SUCCESS;
 }
 

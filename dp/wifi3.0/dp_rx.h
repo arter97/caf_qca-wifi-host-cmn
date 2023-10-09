@@ -589,7 +589,7 @@ struct dp_rx_desc *dp_get_rx_mon_status_desc_from_cookie(struct dp_soc *soc,
 	struct rx_desc_pool *rx_desc_pool;
 	union dp_rx_desc_list_elem_t *rx_desc_elem;
 
-	if (qdf_unlikely(pool_id >= NUM_RXDMA_RINGS_PER_PDEV))
+	if (qdf_unlikely(pool_id >= NUM_RXDMA_STATUS_RINGS_PER_PDEV))
 		return NULL;
 
 	rx_desc_pool = &pool[pool_id];
@@ -2438,10 +2438,31 @@ dp_rx_nbuf_set_link_id_from_tlv(struct dp_soc *soc, uint8_t *tlv_hdr,
 	if (soc->arch_ops.dp_rx_peer_set_link_id)
 		soc->arch_ops.dp_rx_peer_set_link_id(nbuf, peer_metadata);
 }
+
+/**
+ * dp_rx_set_nbuf_band() - Set band info in nbuf cb
+ * @nbuf: nbuf pointer
+ * @txrx_peer: txrx_peer pointer
+ * @link_id: Peer Link ID
+ *
+ * Returen: None
+ */
+static inline void
+dp_rx_set_nbuf_band(qdf_nbuf_t nbuf, struct dp_txrx_peer *txrx_peer,
+		    uint8_t link_id)
+{
+	qdf_nbuf_rx_set_band(nbuf, txrx_peer->band[link_id]);
+}
 #else
 static inline void
 dp_rx_nbuf_set_link_id_from_tlv(struct dp_soc *soc, uint8_t *tlv_hdr,
 				qdf_nbuf_t nbuf)
+{
+}
+
+static inline void
+dp_rx_set_nbuf_band(qdf_nbuf_t nbuf, struct dp_txrx_peer *txrx_peer,
+		    uint8_t link_id)
 {
 }
 #endif
@@ -2745,10 +2766,10 @@ void dp_rx_nbuf_unmap(struct dp_soc *soc,
 	dp_ipa_handle_rx_buf_smmu_mapping(soc, rx_desc->nbuf,
 					  rx_desc_pool->buf_size,
 					  false, __func__, __LINE__);
-
 	qdf_nbuf_unmap_nbytes_single(soc->osdev, rx_desc->nbuf,
 				     QDF_DMA_FROM_DEVICE,
 				     rx_desc_pool->buf_size);
+	rx_desc->unmapped = 1;
 
 	dp_ipa_reo_ctx_buf_mapping_unlock(soc, reo_ring_num);
 }
@@ -2760,7 +2781,8 @@ void dp_rx_nbuf_unmap_pool(struct dp_soc *soc,
 {
 	dp_audio_smmu_unmap(soc->osdev, QDF_NBUF_CB_PADDR(nbuf),
 			    rx_desc_pool->buf_size);
-	dp_ipa_handle_rx_buf_smmu_mapping(soc, nbuf, rx_desc_pool->buf_size,
+	dp_ipa_handle_rx_buf_smmu_mapping(soc, nbuf,
+					  rx_desc_pool->buf_size,
 					  false, __func__, __LINE__);
 	qdf_nbuf_unmap_nbytes_single(soc->osdev, nbuf, QDF_DMA_FROM_DEVICE,
 				     rx_desc_pool->buf_size);
@@ -3084,6 +3106,38 @@ void
 dp_rx_set_wbm_err_info_in_nbuf(struct dp_soc *soc,
 			       qdf_nbuf_t nbuf,
 			       union hal_wbm_err_info_u wbm_err);
+
+#if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
+static inline uint8_t
+dp_rx_get_defrag_bm_id(struct dp_soc *soc)
+{
+	return DP_DEFRAG_RBM(soc->wbm_sw0_bm_id);
+}
+
+static inline uint8_t
+dp_rx_get_rx_bm_id(struct dp_soc *soc)
+{
+	return DP_WBM2SW_RBM(soc->wbm_sw0_bm_id);
+}
+#else
+static inline uint8_t
+dp_rx_get_rx_bm_id(struct dp_soc *soc)
+{
+	struct wlan_cfg_dp_soc_ctxt *cfg_ctx = soc->wlan_cfg_ctx;
+	uint8_t wbm2_sw_rx_rel_ring_id;
+
+	wbm2_sw_rx_rel_ring_id = wlan_cfg_get_rx_rel_ring_id(cfg_ctx);
+
+	return HAL_RX_BUF_RBM_SW_BM(soc->wbm_sw0_bm_id,
+				    wbm2_sw_rx_rel_ring_id);
+}
+
+static inline uint8_t
+dp_rx_get_defrag_bm_id(struct dp_soc *soc)
+{
+	return dp_rx_get_rx_bm_id(soc);
+}
+#endif
 
 #ifndef WLAN_SOFTUMAC_SUPPORT /* WLAN_SOFTUMAC_SUPPORT */
 /**
@@ -3460,38 +3514,6 @@ dp_rx_mark_first_packet_after_wow_wakeup(struct dp_pdev *pdev,
 }
 #endif
 
-#if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
-static inline uint8_t
-dp_rx_get_defrag_bm_id(struct dp_soc *soc)
-{
-	return DP_DEFRAG_RBM(soc->wbm_sw0_bm_id);
-}
-
-static inline uint8_t
-dp_rx_get_rx_bm_id(struct dp_soc *soc)
-{
-	return DP_WBM2SW_RBM(soc->wbm_sw0_bm_id);
-}
-#else
-static inline uint8_t
-dp_rx_get_rx_bm_id(struct dp_soc *soc)
-{
-	struct wlan_cfg_dp_soc_ctxt *cfg_ctx = soc->wlan_cfg_ctx;
-	uint8_t wbm2_sw_rx_rel_ring_id;
-
-	wbm2_sw_rx_rel_ring_id = wlan_cfg_get_rx_rel_ring_id(cfg_ctx);
-
-	return HAL_RX_BUF_RBM_SW_BM(soc->wbm_sw0_bm_id,
-				    wbm2_sw_rx_rel_ring_id);
-}
-
-static inline uint8_t
-dp_rx_get_defrag_bm_id(struct dp_soc *soc)
-{
-	return dp_rx_get_rx_bm_id(soc);
-}
-#endif
-
 #else
 static inline QDF_STATUS
 dp_rx_link_desc_return_by_addr(struct dp_soc *soc,
@@ -3509,14 +3531,9 @@ static inline void dp_rx_wbm_sg_list_deinit(struct dp_soc *soc)
 {
 }
 
-static inline uint8_t
-dp_rx_get_defrag_bm_id(struct dp_soc *soc)
-{
-	return 0;
-}
-
-static inline uint8_t
-dp_rx_get_rx_bm_id(struct dp_soc *soc)
+static inline uint32_t
+dp_rxdma_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
+		     uint32_t mac_id, uint32_t quota)
 {
 	return 0;
 }
