@@ -151,6 +151,15 @@ uint16_t wlan_reg_get_max_chwidth(struct wlan_objmgr_pdev *pdev,
 enum phy_ch_width
 wlan_reg_get_next_lower_bandwidth(enum phy_ch_width ch_width);
 
+/**
+ * wlan_reg_get_next_higher_bandwidth() - Get next higher bandwdith
+ * @ch_width: channel bandwdith
+ *
+ * Return: Return next higher bandwidth of input channel bandwidth
+ */
+enum phy_ch_width
+wlan_reg_get_next_higher_bandwidth(enum phy_ch_width ch_width);
+
 #ifdef CONFIG_REG_CLIENT
 /**
  * wlan_reg_is_freq_indoor_in_secondary_list() - Check if the input frequency is

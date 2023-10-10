@@ -886,6 +886,12 @@ wlan_reg_get_next_lower_bandwidth(enum phy_ch_width ch_width)
 	return get_next_lower_bandwidth(ch_width);
 }
 
+enum phy_ch_width
+wlan_reg_get_next_higher_bandwidth(enum phy_ch_width ch_width)
+{
+	return reg_get_next_higher_bandwidth(ch_width);
+}
+
 #ifdef CONFIG_REG_CLIENT
 bool wlan_reg_is_freq_indoor_in_secondary_list(struct wlan_objmgr_pdev *pdev,
 					       qdf_freq_t freq)

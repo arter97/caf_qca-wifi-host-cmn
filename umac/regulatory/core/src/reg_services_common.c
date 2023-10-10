@@ -429,6 +429,30 @@ reg_get_bonded_chan_entry(qdf_freq_t freq,
 
 #endif /*CONFIG_CHAN_FREQ_API*/
 
+/* For a given chan_width, provide the next higher chan_width */
+static const enum phy_ch_width next_higher_bw[] = {
+	[CH_WIDTH_20MHZ] = CH_WIDTH_40MHZ,
+	[CH_WIDTH_40MHZ] = CH_WIDTH_80MHZ,
+	[CH_WIDTH_80MHZ] = CH_WIDTH_160MHZ,
+	[CH_WIDTH_5MHZ]  = CH_WIDTH_10MHZ,
+	[CH_WIDTH_10MHZ] = CH_WIDTH_20MHZ,
+#ifdef WLAN_FEATURE_11BE
+	[CH_WIDTH_160MHZ] = CH_WIDTH_320MHZ,
+	[CH_WIDTH_320MHZ]   = CH_WIDTH_INVALID
+#else
+	[CH_WIDTH_80P80MHZ] = CH_WIDTH_160MHZ,
+	[CH_WIDTH_160MHZ] = CH_WIDTH_INVALID
+#endif
+};
+
+enum phy_ch_width reg_get_next_higher_bandwidth(enum phy_ch_width ch_width)
+{
+	if (ch_width >= CH_WIDTH_20MHZ && ch_width <= CH_WIDTH_320MHZ)
+	    return next_higher_bw[ch_width];
+	else
+	    return CH_WIDTH_INVALID;
+}
+
 enum phy_ch_width get_next_lower_bandwidth(enum phy_ch_width ch_width)
 {
 	static const enum phy_ch_width get_next_lower_bw[] = {
@@ -445,7 +469,10 @@ enum phy_ch_width get_next_lower_bandwidth(enum phy_ch_width ch_width)
 		[CH_WIDTH_5MHZ] = CH_WIDTH_INVALID
 	};
 
-	return get_next_lower_bw[ch_width];
+	if (ch_width >= CH_WIDTH_20MHZ && ch_width <= CH_WIDTH_320MHZ)
+	    return get_next_lower_bw[ch_width];
+	else
+	    return CH_WIDTH_INVALID;
 }
 
 const struct chan_map channel_map_us[NUM_CHANNELS] = {
