@@ -12347,6 +12347,8 @@ static struct cdp_cmn_ops dp_ops_cmn = {
 	.cfgmgr_get_soc_info = dp_cfgmgr_get_soc_info,
 	.cfgmgr_get_vdev_info = dp_cfgmgr_get_vdev_info,
 	.cfgmgr_get_peer_info = dp_cfgmgr_get_peer_info,
+	.cfgmgr_get_vdev_create_evt_info = dp_cfgmgr_get_vdev_create_evt_info,
+	.cfgmgr_get_peer_create_evt_info = dp_cfgmgr_get_peer_create_evt_info,
 #endif
 };
 

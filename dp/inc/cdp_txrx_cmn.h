@@ -3476,5 +3476,55 @@ int cdp_cfgmgr_get_peer_info(struct cdp_soc_t *soc, uint8_t soc_id,
 
 	return soc->ops->cmn_drv_ops->cfgmgr_get_peer_info(soc, soc_id, ev_buf);
 }
+
+/*
+ * cdp_cfgmgr_get_vdev_create_evt_info - get vdev create info of a soc for dpdk
+ * @soc: soc handle
+ * @vdev_id: vdev id
+ * @ev_buf: pointer to fill vdev info
+ *
+ * Return: 0 if info filled successful, error otherwise
+ */
+static inline
+int cdp_cfgmgr_get_vdev_create_evt_info(struct cdp_soc_t *soc, uint8_t vdev_id,
+					struct dpdk_wlan_vdev_create_info *ev_buf)
+{
+	if (!soc) {
+		dp_cdp_debug("Invalid Instance");
+		return -EINVAL;
+	}
+
+	if (!soc->ops->cmn_drv_ops ||
+	    !soc->ops->cmn_drv_ops->cfgmgr_get_vdev_create_evt_info)
+		return -EINVAL;
+
+	return soc->ops->cmn_drv_ops->cfgmgr_get_vdev_create_evt_info(
+						soc, vdev_id, ev_buf);
+}
+
+/*
+ * cdp_cfgmgr_get_peer_create_evt_info - get peer create info of a soc for dpdk
+ * @soc: soc handle
+ * @peer_id: peer id
+ * @ev_buf: pointer to fill peer info
+ *
+ * Return: 0 if info filled successful, error otherwise
+ */
+static inline
+int cdp_cfgmgr_get_peer_create_evt_info(struct cdp_soc_t *soc, uint16_t peer_id,
+					struct dpdk_wlan_peer_create_info *ev_buf)
+{
+	if (!soc) {
+		dp_cdp_debug("Invalid Instance");
+		return -EINVAL;
+	}
+
+	if (!soc->ops->cmn_drv_ops ||
+	    !soc->ops->cmn_drv_ops->cfgmgr_get_peer_create_evt_info)
+		return -EINVAL;
+
+	return soc->ops->cmn_drv_ops->cfgmgr_get_peer_create_evt_info(
+						soc, peer_id, ev_buf);
+}
 #endif
 #endif /* _CDP_TXRX_CMN_H_ */

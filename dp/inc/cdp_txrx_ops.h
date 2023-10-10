@@ -758,6 +758,12 @@ struct cdp_cmn_ops {
 				    struct dpdk_wlan_vdev_info_event *ev_buf);
 	int (*cfgmgr_get_peer_info)(struct cdp_soc_t *soc_hdl, uint8_t soc_id,
 				    struct dpdk_wlan_peer_info *ev_buf);
+	int (*cfgmgr_get_vdev_create_evt_info)(
+				struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+				struct dpdk_wlan_vdev_create_info *ev_buf);
+	int (*cfgmgr_get_peer_create_evt_info)(
+				struct cdp_soc_t *soc_hdl, uint16_t peer_id,
+				struct dpdk_wlan_peer_create_info *ev_buf);
 #endif
 };
 
