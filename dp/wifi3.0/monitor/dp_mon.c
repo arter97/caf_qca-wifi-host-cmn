@@ -38,9 +38,7 @@
 #ifdef QCA_SUPPORT_LITE_MONITOR
 #include "dp_lite_mon.h"
 #endif
-#ifdef CONFIG_LITHIUM
 #include "dp_mon_1.0.h"
-#endif
 #ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
 #include "dp_mon_2.0.h"
 #include "dp_mon_filter_2.0.h"
@@ -1530,6 +1528,76 @@ QDF_STATUS dp_peer_stats_notify(struct dp_pdev *dp_pdev, struct dp_peer *peer)
 	}
 
 	return QDF_STATUS_SUCCESS;
+}
+#endif
+
+#ifdef FEATURE_NAC_RSSI
+/**
+ * dp_rx_nac_filter() - Function to perform filtering of non-associated
+ * clients
+ * @pdev: DP pdev handle
+ * @rx_pkt_hdr: Rx packet Header
+ *
+ * Return: dp_vdev*
+ */
+static
+struct dp_vdev *dp_rx_nac_filter(struct dp_pdev *pdev,
+				 uint8_t *rx_pkt_hdr)
+{
+	struct ieee80211_frame *wh;
+	struct dp_neighbour_peer *peer = NULL;
+	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+
+	wh = (struct ieee80211_frame *)rx_pkt_hdr;
+
+	if ((wh->i_fc[1] & IEEE80211_FC1_DIR_MASK) != IEEE80211_FC1_DIR_TODS)
+		return NULL;
+
+	qdf_spin_lock_bh(&mon_pdev->neighbour_peer_mutex);
+	TAILQ_FOREACH(peer, &mon_pdev->neighbour_peers_list,
+		      neighbour_peer_list_elem) {
+		if (qdf_mem_cmp(&peer->neighbour_peers_macaddr.raw[0],
+				wh->i_addr2, QDF_MAC_ADDR_SIZE) == 0) {
+			dp_rx_debug("%pK: NAC configuration matched for mac-%2x:%2x:%2x:%2x:%2x:%2x",
+				    pdev->soc,
+				    peer->neighbour_peers_macaddr.raw[0],
+				    peer->neighbour_peers_macaddr.raw[1],
+				    peer->neighbour_peers_macaddr.raw[2],
+				    peer->neighbour_peers_macaddr.raw[3],
+				    peer->neighbour_peers_macaddr.raw[4],
+				    peer->neighbour_peers_macaddr.raw[5]);
+
+				qdf_spin_unlock_bh(&mon_pdev->neighbour_peer_mutex);
+
+			return mon_pdev->mvdev;
+		}
+	}
+	qdf_spin_unlock_bh(&mon_pdev->neighbour_peer_mutex);
+
+	return NULL;
+}
+
+QDF_STATUS dp_filter_neighbour_peer(struct dp_pdev *pdev,
+				    uint8_t *rx_pkt_hdr)
+{
+	struct dp_vdev *vdev = NULL;
+	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+
+	if (mon_pdev->filter_neighbour_peers) {
+		/* Next Hop scenario not yet handle */
+		vdev = dp_rx_nac_filter(pdev, rx_pkt_hdr);
+		if (vdev) {
+			dp_rx_mon_deliver(pdev->soc, pdev->pdev_id,
+					  pdev->invalid_peer_head_msdu,
+					  pdev->invalid_peer_tail_msdu);
+
+			pdev->invalid_peer_head_msdu = NULL;
+			pdev->invalid_peer_tail_msdu = NULL;
+			return QDF_STATUS_SUCCESS;
+		}
+	}
+
+	return QDF_STATUS_E_FAILURE;
 }
 #endif
 

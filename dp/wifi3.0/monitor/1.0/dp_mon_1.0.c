@@ -171,7 +171,7 @@ dp_soc_config_full_mon_mode(struct cdp_pdev *cdp_pdev,
 }
 #endif
 
-#if !defined(DISABLE_MON_CONFIG) && defined(CONFIG_LITHIUM)
+#if !defined(DISABLE_MON_CONFIG)
 void dp_flush_monitor_rings(struct dp_soc *soc)
 {
 	struct dp_pdev *pdev = soc->pdev_list[0];
@@ -773,7 +773,7 @@ static void dp_mon_neighbour_peer_add_ast(struct dp_pdev *pdev,
 	}
 }
 
-#if !defined(DISABLE_MON_CONFIG) && defined(CONFIG_LITHIUM)
+#if !defined(DISABLE_MON_CONFIG)
 #if defined(DP_CON_MON)
 QDF_STATUS dp_mon_htt_srng_setup_1_0(struct dp_soc *soc,
 				     struct dp_pdev *pdev,
@@ -1304,76 +1304,6 @@ dp_config_for_nac_rssi(struct cdp_soc_t *cdp_soc,
 }
 #endif
 
-#ifdef FEATURE_NAC_RSSI
-/**
- * dp_rx_nac_filter() - Function to perform filtering of non-associated
- * clients
- * @pdev: DP pdev handle
- * @rx_pkt_hdr: Rx packet Header
- *
- * Return: dp_vdev*
- */
-static
-struct dp_vdev *dp_rx_nac_filter(struct dp_pdev *pdev,
-				 uint8_t *rx_pkt_hdr)
-{
-	struct ieee80211_frame *wh;
-	struct dp_neighbour_peer *peer = NULL;
-	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
-
-	wh = (struct ieee80211_frame *)rx_pkt_hdr;
-
-	if ((wh->i_fc[1] & IEEE80211_FC1_DIR_MASK) != IEEE80211_FC1_DIR_TODS)
-		return NULL;
-
-	qdf_spin_lock_bh(&mon_pdev->neighbour_peer_mutex);
-	TAILQ_FOREACH(peer, &mon_pdev->neighbour_peers_list,
-		      neighbour_peer_list_elem) {
-		if (qdf_mem_cmp(&peer->neighbour_peers_macaddr.raw[0],
-				wh->i_addr2, QDF_MAC_ADDR_SIZE) == 0) {
-			dp_rx_debug("%pK: NAC configuration matched for mac-%2x:%2x:%2x:%2x:%2x:%2x",
-				    pdev->soc,
-				    peer->neighbour_peers_macaddr.raw[0],
-				    peer->neighbour_peers_macaddr.raw[1],
-				    peer->neighbour_peers_macaddr.raw[2],
-				    peer->neighbour_peers_macaddr.raw[3],
-				    peer->neighbour_peers_macaddr.raw[4],
-				    peer->neighbour_peers_macaddr.raw[5]);
-
-			qdf_spin_unlock_bh(&mon_pdev->neighbour_peer_mutex);
-
-			return mon_pdev->mvdev;
-		}
-	}
-	qdf_spin_unlock_bh(&mon_pdev->neighbour_peer_mutex);
-
-	return NULL;
-}
-
-QDF_STATUS dp_filter_neighbour_peer(struct dp_pdev *pdev,
-				    uint8_t *rx_pkt_hdr)
-{
-	struct dp_vdev *vdev = NULL;
-	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
-
-	if (mon_pdev->filter_neighbour_peers) {
-		/* Next Hop scenario not yet handle */
-		vdev = dp_rx_nac_filter(pdev, rx_pkt_hdr);
-		if (vdev) {
-			dp_rx_mon_deliver(pdev->soc, pdev->pdev_id,
-					  pdev->invalid_peer_head_msdu,
-					  pdev->invalid_peer_tail_msdu);
-
-			pdev->invalid_peer_head_msdu = NULL;
-			pdev->invalid_peer_tail_msdu = NULL;
-			return QDF_STATUS_SUCCESS;
-		}
-	}
-
-	return QDF_STATUS_E_FAILURE;
-}
-#endif
-
 /**
  * dp_mon_register_feature_ops_1_0() - register feature ops
  *
@@ -1628,7 +1558,6 @@ struct cdp_mon_ops dp_ops_mon_1_0 = {
 #endif /* WLAN_FEATURE_LOCAL_PKT_CAPTURE */
 };
 
-#ifdef CONFIG_LITHIUM
 #ifdef QCA_MONITOR_OPS_PER_SOC_SUPPORT
 void dp_mon_ops_register_1_0(struct dp_mon_soc *mon_soc)
 {
@@ -1679,5 +1608,4 @@ void dp_mon_cdp_ops_register_1_0(struct cdp_ops *ops)
 {
 	ops->mon_ops = &dp_ops_mon_1_0;
 }
-#endif
 #endif

@@ -1762,7 +1762,7 @@ dp_mon_process(struct dp_soc *soc, struct dp_intr *int_ctx,
  *         QDF_STATUS_E_INVAL in error
  */
 #ifdef QCA_MCOPY_SUPPORT
-QDF_STATUS
+static inline QDF_STATUS
 dp_send_mgmt_packet_to_stack(struct dp_soc *soc,
 			     qdf_nbuf_t nbuf,
 			     struct dp_pdev *pdev)
@@ -1807,7 +1807,7 @@ dp_send_mgmt_packet_to_stack(struct dp_soc *soc,
 	return QDF_STATUS_SUCCESS;
 }
 #else
-QDF_STATUS
+static inline QDF_STATUS
 dp_send_mgmt_packet_to_stack(struct dp_soc *soc,
 			     qdf_nbuf_t nbuf,
 			     struct dp_pdev *pdev)
@@ -1858,6 +1858,94 @@ QDF_STATUS dp_rx_mon_process_dest_pktlog(struct dp_soc *soc,
 		}
 	}
 	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS dp_rx_mon_deliver(struct dp_soc *soc, uint32_t mac_id,
+			     qdf_nbuf_t head_msdu, qdf_nbuf_t tail_msdu)
+{
+	struct dp_pdev *pdev = dp_get_pdev_for_lmac_id(soc, mac_id);
+	struct cdp_mon_status *rs;
+	qdf_nbuf_t mon_skb, skb_next;
+	qdf_nbuf_t mon_mpdu = NULL;
+	struct dp_mon_vdev *mon_vdev;
+	struct dp_mon_pdev *mon_pdev;
+
+	if (!pdev)
+		goto mon_deliver_fail;
+
+	mon_pdev = pdev->monitor_pdev;
+	rs = &mon_pdev->rx_mon_recv_status;
+
+	if (!mon_pdev->mvdev && !mon_pdev->mcopy_mode &&
+	    !mon_pdev->rx_pktlog_cbf)
+		goto mon_deliver_fail;
+
+	/* restitch mon MPDU for delivery via monitor interface */
+	mon_mpdu = dp_rx_mon_restitch_mpdu(soc, mac_id, head_msdu,
+					   tail_msdu, rs);
+
+	/* If MPDU restitch fails, free buffers*/
+	if (!mon_mpdu) {
+		dp_info("MPDU restitch failed, free buffers");
+		goto mon_deliver_fail;
+	}
+
+	dp_rx_mon_process_dest_pktlog(soc, mac_id, mon_mpdu);
+
+	/* monitor vap cannot be present when mcopy is enabled
+	 * hence same skb can be consumed
+	 */
+	if (mon_pdev->mcopy_mode)
+		return dp_send_mgmt_packet_to_stack(soc, mon_mpdu, pdev);
+
+	if (mon_pdev->mvdev &&
+	    mon_pdev->mvdev->osif_vdev &&
+	    mon_pdev->mvdev->monitor_vdev &&
+	    mon_pdev->mvdev->monitor_vdev->osif_rx_mon) {
+		mon_vdev = mon_pdev->mvdev->monitor_vdev;
+
+		mon_pdev->ppdu_info.rx_status.ppdu_id =
+			mon_pdev->ppdu_info.com_info.ppdu_id;
+		mon_pdev->ppdu_info.rx_status.device_id = soc->device_id;
+		mon_pdev->ppdu_info.rx_status.chan_noise_floor =
+			pdev->chan_noise_floor;
+		dp_handle_tx_capture(soc, pdev, mon_mpdu);
+
+		if (!qdf_nbuf_update_radiotap(&mon_pdev->ppdu_info.rx_status,
+					      mon_mpdu,
+					      qdf_nbuf_headroom(mon_mpdu))) {
+			DP_STATS_INC(pdev, dropped.mon_radiotap_update_err, 1);
+			qdf_nbuf_free(mon_mpdu);
+			return QDF_STATUS_E_INVAL;
+		}
+
+		dp_rx_mon_update_pf_tag_to_buf_headroom(soc, mon_mpdu);
+		mon_vdev->osif_rx_mon(mon_pdev->mvdev->osif_vdev,
+				      mon_mpdu,
+				      &mon_pdev->ppdu_info.rx_status);
+	} else {
+		dp_rx_mon_dest_debug("%pK: mon_mpdu=%pK monitor_vdev %pK osif_vdev %pK"
+				     , soc, mon_mpdu, mon_pdev->mvdev,
+				     (mon_pdev->mvdev ? mon_pdev->mvdev->osif_vdev
+				     : NULL));
+		qdf_nbuf_free(mon_mpdu);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	return QDF_STATUS_SUCCESS;
+
+mon_deliver_fail:
+	mon_skb = head_msdu;
+	while (mon_skb) {
+		skb_next = qdf_nbuf_next(mon_skb);
+
+		 dp_rx_mon_dest_debug("%pK: [%s][%d] mon_skb=%pK len %u",
+				      soc,  __func__, __LINE__, mon_skb, mon_skb->len);
+
+		qdf_nbuf_free(mon_skb);
+		mon_skb = skb_next;
+	}
+	return QDF_STATUS_E_INVAL;
 }
 
 QDF_STATUS dp_rx_mon_deliver_non_std(struct dp_soc *soc,

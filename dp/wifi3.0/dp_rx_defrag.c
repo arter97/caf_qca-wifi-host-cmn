@@ -19,7 +19,7 @@
 
 #include "hal_hw_headers.h"
 #ifndef RX_DEFRAG_DO_NOT_REINJECT
-#if !defined(DP_BE_WAR) && defined(CONFIG_LITHIUM)
+#ifndef DP_BE_WAR
 #include "li/hal_li_rx.h"
 #endif
 #endif
