@@ -5743,8 +5743,7 @@ void dp_tx_update_connectivity_stats(struct dp_soc *soc,
 
 	qdf_assert(tx_desc);
 
-	if (!vdev ||
-	    !vdev->osif_vdev ||
+	if (!vdev || vdev->delete.pending || !vdev->osif_vdev ||
 	    !vdev->stats_cb)
 		return;
 
