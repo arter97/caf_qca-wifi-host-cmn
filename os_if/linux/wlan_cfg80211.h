@@ -637,6 +637,32 @@ void wlan_cfg80211_ch_switch_notify(struct net_device *dev,
 	cfg80211_ch_switch_notify(dev, chandef, link_id,
 				  puncture_bitmap);
 }
+
+/**
+ * wlan_cfg80211_ch_switch_started_notify() - Channel switch started
+ * notification
+ * @dev: pointer to net device
+ * @chandef: pointer to structure cfg80211_chan_def
+ * @link_id: link id
+ * @count: number of TBTT's until the channel switch event.
+ * @quiet: flag attribute specifying that transmission
+ * must be blocked on the current channel (before the channel switch
+ * operation). Also included in the channel switch started event if quiet
+ * was requested by the AP.
+ * @puncture_bitmap: puncture bitmap
+ *
+ * Return: None
+ */
+static inline
+void wlan_cfg80211_ch_switch_started_notify(struct net_device *dev,
+					    struct cfg80211_chan_def *chandef,
+					    unsigned int link_id,
+					    uint8_t count, bool quiet,
+					    uint16_t puncture_bitmap)
+{
+	cfg80211_ch_switch_started_notify(dev, chandef, link_id,
+					  count, quiet, puncture_bitmap);
+}
 #else
 static inline
 void wlan_cfg80211_ch_switch_notify(struct net_device *dev,
@@ -645,6 +671,32 @@ void wlan_cfg80211_ch_switch_notify(struct net_device *dev,
 				    uint16_t puncture_bitmap)
 {
 	cfg80211_ch_switch_notify(dev, chandef, link_id);
+}
+
+/**
+ * wlan_cfg80211_ch_switch_started_notify() - Channel switch started
+ * notification
+ * @dev: pointer to net device
+ * @chandef: pointer to structure cfg80211_chan_def
+ * @link_id: link id
+ * @count: number of TBTT's until the channel switch event.
+ * @quiet: flag attribute specifying that transmission
+ * must be blocked on the current channel (before the channel switch
+ * operation). Also included in the channel switch started event if quiet
+ * was requested by the AP.
+ * @puncture_bitmap: puncture bitmap
+ *
+ * Return: None
+ */
+static inline
+void wlan_cfg80211_ch_switch_started_notify(struct net_device *dev,
+					    struct cfg80211_chan_def *chandef,
+					    unsigned int link_id,
+					    uint8_t count, bool quiet,
+					    uint16_t puncture_bitmap)
+{
+	cfg80211_ch_switch_started_notify(dev, chandef, link_id,
+					  count, quiet);
 }
 #endif
 #else
@@ -655,6 +707,31 @@ void wlan_cfg80211_ch_switch_notify(struct net_device *dev,
 				    uint16_t puncture_bitmap)
 {
 	cfg80211_ch_switch_notify(dev, chandef);
+}
+
+/**
+ * wlan_cfg80211_ch_switch_started_notify() - Channel switch started
+ * notification
+ * @dev: pointer to net device
+ * @chandef: pointer to structure cfg80211_chan_def
+ * @link_id: link id
+ * @count: number of TBTT's until the channel switch event.
+ * @quiet: flag attribute specifying that transmission
+ * must be blocked on the current channel (before the channel switch
+ * operation). Also included in the channel switch started event if quiet
+ * was requested by the AP.
+ * @puncture_bitmap: puncture bitmap
+ *
+ * Return: None
+ */
+static inline
+void wlan_cfg80211_ch_switch_started_notify(struct net_device *dev,
+					    struct cfg80211_chan_def *chandef,
+					    unsigned int link_id,
+					    uint8_t count, bool quiet,
+					    uint16_t puncture_bitmap)
+{
+	cfg80211_ch_switch_started_notify(dev, chandef, count);
 }
 #endif
 
