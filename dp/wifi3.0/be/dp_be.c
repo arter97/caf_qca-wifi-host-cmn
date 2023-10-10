@@ -190,6 +190,11 @@ static void dp_soc_cfg_attach_be(struct dp_soc *soc)
 	/* this is used only when dmac mode is enabled */
 	soc->num_rx_refill_buf_rings = 1;
 
+	/*
+	 * do not allocate TCL credit ring for BE as we already have
+	 * 4 TCL_DATA rings
+	 */
+	soc->init_tcl_cmd_cred_ring = false;
 	soc->wlan_cfg_ctx->notify_frame_support =
 				DP_MARK_NOTIFY_FRAME_SUPPORT;
 }
