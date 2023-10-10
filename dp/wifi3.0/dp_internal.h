@@ -3505,6 +3505,14 @@ void dp_print_soc_interrupt_stats(struct dp_soc *soc);
  */
 
 void dp_print_tx_ppeds_stats(struct dp_soc *soc);
+
+/* REO destination ring's watermark mask */
+#define DP_SRNG_WM_MASK_REO_DST  BIT(REO_DST)
+/* TX completion ring's watermark mask */
+#define DP_SRNG_WM_MASK_TX_COMP  BIT(WBM2SW_RELEASE)
+/* All srng's watermark mask */
+#define DP_SRNG_WM_MASK_ALL  0xFFFFFFFF
+
 #ifdef WLAN_DP_SRNG_USAGE_WM_TRACKING
 /**
  * dp_dump_srng_high_wm_stats() - Print the ring usage high watermark stats

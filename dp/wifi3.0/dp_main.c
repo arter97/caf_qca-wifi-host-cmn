@@ -7206,6 +7206,10 @@ static inline void dp_srng_clear_ring_usage_wm_stats(struct dp_soc *soc)
 	for (ring = 0; ring < soc->num_reo_dest_rings; ring++)
 		hal_srng_clear_ring_usage_wm_locked(soc->hal_soc,
 					    soc->reo_dest_ring[ring].hal_srng);
+
+	for (ring = 0; ring < soc->num_tx_comp_rings; ring++)
+		hal_srng_clear_ring_usage_wm_locked(soc->hal_soc,
+					soc->tx_comp_ring[ring].hal_srng);
 }
 #else
 static inline void dp_srng_clear_ring_usage_wm_stats(struct dp_soc *soc)
@@ -7812,7 +7816,7 @@ dp_print_host_stats(struct dp_vdev *vdev,
 		break;
 	case TXRX_SRNG_USAGE_WM_STATS:
 		/* Dump usage watermark stats for all SRNGs */
-		dp_dump_srng_high_wm_stats(soc, 0xFF);
+		dp_dump_srng_high_wm_stats(soc, DP_SRNG_WM_MASK_ALL);
 		break;
 	case TXRX_PEER_STATS:
 		dp_print_per_link_stats((struct cdp_soc_t *)pdev->soc,
@@ -10154,7 +10158,9 @@ static QDF_STATUS dp_txrx_dump_stats(struct cdp_soc_t *psoc, uint16_t value,
 		dp_print_reg_write_stats(soc);
 		dp_pdev_print_tx_delay_stats(soc);
 		/* Dump usage watermark stats for core TX/RX SRNGs */
-		dp_dump_srng_high_wm_stats(soc, (1 << REO_DST));
+		dp_dump_srng_high_wm_stats(soc,
+					   DP_SRNG_WM_MASK_REO_DST |
+					   DP_SRNG_WM_MASK_TX_COMP);
 		if (soc->cdp_soc.ol_ops->dp_print_fisa_stats)
 			soc->cdp_soc.ol_ops->dp_print_fisa_stats(
 						CDP_FISA_STATS_ID_ERR_STATS);
