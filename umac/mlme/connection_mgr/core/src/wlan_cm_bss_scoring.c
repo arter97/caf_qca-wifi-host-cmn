@@ -2291,6 +2291,27 @@ static int cm_calculate_ml_scores(struct wlan_objmgr_psoc *psoc,
 	return score;
 }
 
+static bool
+cm_check_and_update_bssid_hint_entry_bss_score(struct scan_cache_entry *entry,
+					       struct scoring_cfg *score_config,
+					       struct qdf_mac_addr *bssid_hint,
+					       uint8_t ml_flag)
+{
+	if (!score_config->is_bssid_hint_priority)
+		return false;
+
+	if (!bssid_hint || !qdf_is_macaddr_equal(bssid_hint, &entry->bssid))
+		return false;
+
+	entry->bss_score = CM_BEST_CANDIDATE_MAX_BSS_SCORE;
+	mlme_nofl_debug("%s("QDF_MAC_ADDR_FMT" freq %d): rssi %d BSSID hint given, give max score %d",
+			IS_ASSOC_LINK(ml_flag) ? "Candidate" : "Partner",
+			QDF_MAC_ADDR_REF(entry->bssid.bytes),
+			entry->channel.chan_freq, entry->rssi_raw,
+			CM_BEST_CANDIDATE_MAX_BSS_SCORE);
+	return true;
+}
+
 /**
  * cm_calculate_bss_score() - Calculate score of AP or 1 link of MLO AP
  * @psoc: Pointer to psoc object
@@ -2361,41 +2382,45 @@ static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 	score_config = &mlme_psoc_obj->psoc_cfg.score_config;
 	weight_config = &score_config->weight_config;
 
-	if (score_config->is_bssid_hint_priority && bssid_hint &&
-	    qdf_is_macaddr_equal(bssid_hint, &entry->bssid)) {
-		entry->bss_score = CM_BEST_CANDIDATE_MAX_BSS_SCORE;
-		mlme_nofl_debug("%s("QDF_MAC_ADDR_FMT" freq %d): rssi %d BSSID hint given, give max score %d",
-				IS_ASSOC_LINK(ml_flag) ? "Candidate" : "Partner",
-				QDF_MAC_ADDR_REF(entry->bssid.bytes),
-				entry->channel.chan_freq, entry->rssi_raw,
-				CM_BEST_CANDIDATE_MAX_BSS_SCORE);
-		return CM_BEST_CANDIDATE_MAX_BSS_SCORE;
-	}
-
 	bss_mlo_type = cm_bss_mlo_type(psoc, entry, scan_list);
 	if (score_config->vendor_roam_score_algorithm) {
 		score = cm_calculate_etp_score(psoc, entry, phy_config,
 					       bss_mlo_type, ml_flag);
 		entry->bss_score = score;
-		if (bss_mlo_type == MLMR) {
+		if (bss_mlo_type == MLMR)
 			cm_sort_vendor_algo_mlo_bss_entry(psoc, entry,
 							  phy_config, scan_list,
 							  bss_mlo_type);
-		}
+		if (cm_check_and_update_bssid_hint_entry_bss_score(entry,
+								   score_config,
+								   bssid_hint,
+								   ml_flag))
+			return CM_BEST_CANDIDATE_MAX_BSS_SCORE;
+
 		mlme_nofl_debug("Candidate score("QDF_MAC_ADDR_FMT" freq %d): rssi %d score %d",
 				QDF_MAC_ADDR_REF(entry->bssid.bytes),
 				entry->channel.chan_freq,
 				entry->rssi_raw, entry->bss_score);
+
 		return score;
 	}
 
 	if (wlan_cm_is_eht_allowed_for_current_security(psoc, entry)) {
 		ml_score += cm_calculate_ml_scores(psoc, entry, score_config,
-						phy_config, scan_list,
-						ml_flag, bss_mlo_type,
-						pcl_chan_weight);
+						   phy_config, scan_list,
+						   ml_flag, bss_mlo_type,
+						   pcl_chan_weight);
 		score += ml_score;
 	}
+
+	/*
+	 * Check if the given entry matches with the BSSID Hint after
+	 * calculating ML Scores as the cm_calculate_ml_scores() also sorts
+	 * the partner links based on hw mode capabilities & link scores
+	 */
+	if (cm_check_and_update_bssid_hint_entry_bss_score(entry, score_config,
+							   bssid_hint, ml_flag))
+		return CM_BEST_CANDIDATE_MAX_BSS_SCORE;
 
 	pcl_score = cm_calculate_pcl_score(psoc, pcl_chan_weight,
 					   weight_config->pcl_weightage);
