@@ -530,6 +530,14 @@ QDF_STATUS wlan_reg_read_default_country(struct wlan_objmgr_psoc *psoc,
 				   uint8_t *country);
 
 /**
+ * wlan_get_next_lower_bandwidth() - Get next lower bandwidth
+ * @ch_width: Channel width
+ *
+ * Return: Channel width
+ */
+enum phy_ch_width wlan_get_next_lower_bandwidth(enum phy_ch_width ch_width);
+
+/**
  * wlan_reg_get_max_5g_bw_from_country_code() - Get the max 5G
  * bandwidth from country code
  * @pdev: pdev pointer
