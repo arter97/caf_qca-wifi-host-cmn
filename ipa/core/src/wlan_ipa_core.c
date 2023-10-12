@@ -4055,6 +4055,13 @@ void wlan_ipa_opt_dp_deinit(struct wlan_ipa_priv *ipa_ctx)
 
 	if (ipa_ctx->opt_wifi_datapath && ipa_config_is_opt_wifi_dp_enabled())
 		qdf_wake_lock_destroy(&ipa_ctx->opt_dp_wake_lock);
+
+	if (cdp_ipa_get_smmu_mapped(ipa_ctx->dp_soc)) {
+		cdp_ipa_set_smmu_mapped(ipa_ctx->dp_soc, 0);
+		cdp_ipa_rx_buf_smmu_pool_mapping(ipa_ctx->dp_soc,
+						 ipa_ctx->dp_pdev_id,
+						 false, __func__, __LINE__);
+	}
 }
 
 #else
@@ -4974,8 +4981,8 @@ void wlan_ipa_wdi_opt_dpath_notify_flt_rsvd(bool response)
 		smmu_msg->op_code = WLAN_IPA_SMMU_MAP;
 		uc_op_work = &ipa_ctx->uc_op_work[WLAN_IPA_SMMU_MAP];
 		uc_op_work->msg = smmu_msg;
-		qdf_sched_work(0, &uc_op_work->work);
 		cdp_ipa_set_smmu_mapped(ipa_ctx->dp_soc, 1);
+		qdf_sched_work(0, &uc_op_work->work);
 	}
 
 	notify_msg = qdf_mem_malloc(sizeof(*notify_msg));
@@ -5011,6 +5018,10 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_cb(
 	pdev_id = ipa_obj->dp_pdev_id;
 	psoc = wlan_pdev_get_psoc(pdev);
 	wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
+	if (!wmi_handle) {
+		ipa_err("Unable to get wmi handle");
+		return QDF_STATUS_FILT_REQ_ERROR;
+	}
 
 	/* Hold wakelock */
 	qdf_wake_lock_acquire(&ipa_obj->opt_dp_wake_lock,
@@ -5018,7 +5029,14 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_cb(
 	ipa_info("opt_dp: Wakelock acquired");
 	qdf_pm_system_wakeup();
 
-	ipa_info("Target suspend state %d", qdf_atomic_read(&wmi_handle->is_target_suspended));
+	response = cdp_ipa_pcie_link_up(ipa_obj->dp_soc);
+	if (response) {
+		ipa_err("opt_dp: Pcie link up fail %d", response);
+		goto error_pcie_link_up;
+	}
+
+	ipa_info("opt_dp :Target suspend state %d",
+		 qdf_atomic_read(&wmi_handle->is_target_suspended));
 	while (qdf_atomic_read(&wmi_handle->is_target_suspended) &&
 	       wait_cnt < OPT_DP_TARGET_RESUME_WAIT_COUNT) {
 		qdf_sleep(OPT_DP_TARGET_RESUME_WAIT_TIMEOUT_MS);
@@ -5029,9 +5047,6 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_cb(
 		ipa_err("Wifi is suspended. Reject request");
 		goto error;
 	}
-
-	response = cdp_ipa_pcie_link_up(ipa_obj->dp_soc);
-	ipa_info("opt_dp: Pcie link up status %d", response);
 
 	/* Disable Low power features before filter reservation */
 	ipa_info("opt_dp: Disable low power features to reserve filter");
@@ -5055,6 +5070,8 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_cb(
 	return cdp_ipa_rx_cce_super_rule_setup(ipa_obj->dp_soc, dp_flt_params);
 
 error:
+	cdp_ipa_pcie_link_down(ipa_obj->dp_soc);
+error_pcie_link_up:
 	qdf_wake_lock_release(&ipa_obj->opt_dp_wake_lock,
 			      WIFI_POWER_EVENT_WAKELOCK_OPT_WIFI_DP);
 	return QDF_STATUS_FILT_REQ_ERROR;
@@ -5338,8 +5355,8 @@ void wlan_ipa_wdi_opt_dpath_notify_flt_rlsd(int flt0_rslt, int flt1_rslt)
 		smmu_msg->op_code = WLAN_IPA_SMMU_UNMAP;
 		uc_op_work = &ipa_ctx->uc_op_work[WLAN_IPA_SMMU_UNMAP];
 		uc_op_work->msg = smmu_msg;
-		qdf_sched_work(0, &uc_op_work->work);
 		cdp_ipa_set_smmu_mapped(ipa_ctx->dp_soc, 0);
+		qdf_sched_work(0, &uc_op_work->work);
 	} else {
 		ipa_err("IPA SMMU not mapped!!");
 	}
