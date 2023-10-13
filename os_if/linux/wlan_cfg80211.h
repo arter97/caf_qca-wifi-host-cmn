@@ -597,7 +597,6 @@ static inline void wlan_cfg80211_unregister_netdevice(struct net_device *dev)
 #endif
 
 #ifdef CFG80211_SINGLE_NETDEV_MULTI_LINK_SUPPORT
-#if LINUX_VERSION_CODE > KERNEL_VERSION(5, 15, 78)
 #ifdef CFG80211_RU_PUNCT_NOTIFY
 static inline
 void wlan_cfg80211_ch_switch_notify(struct net_device *dev,
@@ -614,15 +613,6 @@ void wlan_cfg80211_ch_switch_notify(struct net_device *dev,
 				    struct cfg80211_chan_def *chandef,
 				    unsigned int link_id,
 				    uint16_t puncture_bitmap)
-{
-	cfg80211_ch_switch_notify(dev, chandef, link_id);
-}
-#endif
-#else
-static inline
-void wlan_cfg80211_ch_switch_notify(struct net_device *dev,
-				    struct cfg80211_chan_def *chandef,
-				    unsigned int link_id)
 {
 	cfg80211_ch_switch_notify(dev, chandef, link_id);
 }
