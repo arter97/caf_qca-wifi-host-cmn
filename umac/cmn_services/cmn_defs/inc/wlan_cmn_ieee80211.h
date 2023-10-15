@@ -198,6 +198,8 @@
 
 #define WLAN_MAX_SRP_IE_LEN                      21
 #define WLAN_MAX_MUEDCA_IE_LEN                   14
+#define WLAN_MIN_HECAP_IE_LEN                    22
+#define WLAN_MAX_HECAP_IE_LEN                    55
 #define WLAN_MAX_HE_6G_CAP_IE_LEN                3
 #define WLAN_MAX_HEOP_IE_LEN                     16
 
@@ -504,6 +506,7 @@ enum element_ie {
  * @WLAN_EXTN_ELEMID_MUEDCA: MU-EDCA IE
  * @WLAN_EXTN_ELEMID_HE_6G_CAP: HE 6GHz Band Capabilities IE
  * @WLAN_EXTN_ELEMID_SRP:    spatial reuse parameter IE
+ * @WLAN_EXTN_ELEMID_OCI:    OCI IE
  * @WLAN_EXTN_ELEMID_NONINHERITANCE: Non inheritance IE
  * @WLAN_EXTN_ELEMID_MULTI_LINK: Multi link IE
  * @WLAN_EXTN_ELEMID_EHTCAP: EHT Capabilities IE
@@ -515,6 +518,7 @@ enum extn_element_ie {
 	WLAN_EXTN_ELEMID_HEOP        = 36,
 	WLAN_EXTN_ELEMID_MUEDCA      = 38,
 	WLAN_EXTN_ELEMID_SRP         = 39,
+	WLAN_EXTN_ELEMID_OCI         = 54,
 	WLAN_EXTN_ELEMID_NONINHERITANCE = 56,
 	WLAN_EXTN_ELEMID_HE_6G_CAP   = 59,
 	WLAN_EXTN_ELEMID_ESP         = 11,
@@ -1423,6 +1427,8 @@ struct wlan_ie_vhtop {
 #define WLAN_HE_MACCAP_LEN 6
 #define WLAN_HE_PHYCAP_LEN 11
 #define WLAN_HE_MAX_MCS_MAPS 3
+#define WLAN_HE_MCS_MAP_LEN 2
+#define WLAN_INVALID_RX_MCS_MAP 0xFFFF
 /**
  * struct wlan_ie_hecaps - HT capabilities
  * @elem_id: HE caps IE

@@ -680,11 +680,13 @@ struct sk_buff *__qdf_nbuf_frag_alloc(qdf_device_t osdev, size_t size,
 	struct sk_buff *skb;
 	unsigned long offset;
 	int flags = GFP_KERNEL & ~__GFP_DIRECT_RECLAIM;
+	bool atomic = false;
 
 	if (align)
 		size += (align - 1);
 
 	if (in_interrupt() || irqs_disabled() || in_atomic()) {
+		atomic = true;
 		flags = GFP_ATOMIC;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)
 		/*
@@ -698,7 +700,14 @@ struct sk_buff *__qdf_nbuf_frag_alloc(qdf_device_t osdev, size_t size,
 	}
 
 	skb = __netdev_alloc_skb(NULL, size, flags);
+	if (skb)
+		goto skb_alloc;
 
+	/* 32k page frag alloc failed, try page slab allocation */
+	if (likely(!atomic))
+		flags |= __GFP_DIRECT_RECLAIM;
+
+	skb = alloc_skb(size, flags);
 	if (skb)
 		goto skb_alloc;
 
