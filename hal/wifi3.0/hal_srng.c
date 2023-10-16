@@ -1465,6 +1465,27 @@ void hal_srng_dst_init_hp(struct hal_soc_handle *hal_soc,
 
 qdf_export_symbol(hal_srng_dst_init_hp);
 
+void hal_srng_dst_update_hp_addr(struct hal_soc_handle *hal_soc,
+				 hal_ring_handle_t hal_ring_hdl)
+{
+	struct hal_srng *srng = (struct hal_srng *)hal_ring_hdl;
+	int32_t hw_hp;
+	int32_t hw_tp;
+
+	if (!srng)
+		return;
+
+	if (srng->u.dst_ring.hp_addr) {
+		hal_get_hw_hptp(hal_soc, hal_ring_hdl, &hw_hp, &hw_tp,
+				WBM2SW_RELEASE);
+		*srng->u.dst_ring.hp_addr = hw_hp;
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
+			  "hw_hp=%d", hw_hp);
+	}
+}
+
+qdf_export_symbol(hal_srng_dst_update_hp_addr);
+
 /**
  * hal_srng_hw_init - Private function to initialize SRNG HW
  * @hal: HAL SOC handle
