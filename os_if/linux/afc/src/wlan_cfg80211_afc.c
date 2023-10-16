@@ -25,7 +25,6 @@
 #include <wlan_reg_ucfg_api.h>
 #include <wlan_objmgr_pdev_obj.h>
 #include <wlan_osif_priv.h>
-#include <wlan_hdd_object_manager.h>
 #include <wlan_afc_ucfg_api.h>
 
 /* Maximum AFC data length can pass to target limited by platform driver */
