@@ -206,6 +206,8 @@ typedef void dp_ptnr_soc_iter_func(struct dp_soc *ptnr_soc, void *arg,
 #define DP_ALL_VDEV_ITER 3
 #define IS_LINK_VDEV_ITER_REQUIRED(type) (type & DP_LINK_VDEV_ITER)
 #define IS_BRIDGE_VDEV_ITER_REQUIRED(type) (type & DP_BRIDGE_VDEV_ITER)
+#define DP_VDEV_ITERATE_ALL 1
+#define DP_VDEV_ITERATE_SKIP_SELF 0
 #endif
 
 enum rx_pktlog_mode {
@@ -2332,11 +2334,13 @@ struct dp_arch_ops {
 
 	QDF_STATUS (*dp_tx_desc_pool_init)(struct dp_soc *soc,
 					   uint32_t num_elem,
-					   uint8_t pool_id);
+					   uint8_t pool_id,
+					   bool spcl_tx_desc);
 	void (*dp_tx_desc_pool_deinit)(
 				struct dp_soc *soc,
 				struct dp_tx_desc_pool_s *tx_desc_pool,
-				uint8_t pool_id);
+				uint8_t pool_id,
+				bool spcl_tx_desc);
 
 	QDF_STATUS (*dp_rx_desc_pool_init)(struct dp_soc *soc,
 					   struct rx_desc_pool *rx_desc_pool,
@@ -4095,7 +4099,7 @@ struct dp_vdev {
 #ifdef WIFI_MONITOR_SUPPORT
 	struct dp_mon_vdev *monitor_vdev;
 #endif
-#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(WLAN_CONFIG_TX_DELAY)
+#if defined(WLAN_FEATURE_TSF_AUTO_REPORT) || defined(WLAN_CONFIG_TX_DELAY)
 	/* Delta between TQM clock and TSF clock */
 	uint32_t delta_tsf;
 #endif
@@ -4970,6 +4974,9 @@ struct dp_peer {
 
 	/* AST hash value for peer in HW */
 	uint16_t ast_hash;
+
+	/* Peer Frequency */
+	uint32_t freq;
 };
 
 /**

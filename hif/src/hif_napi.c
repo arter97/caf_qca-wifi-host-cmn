@@ -969,6 +969,7 @@ void hif_print_napi_stats(struct hif_opaque_softc *hif_ctx)
 						  napi_stats->napi_polls,
 						  napi_stats->napi_completes,
 						  napi_stats->napi_workdone,
+						  napi_stats->time_limit_reached,
 						  qdf_do_div(napi_stats->napi_max_poll_time, 1000),
 						  hist_str);
 			}

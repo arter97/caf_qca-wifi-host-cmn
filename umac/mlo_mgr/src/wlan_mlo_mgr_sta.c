@@ -268,7 +268,7 @@ mlo_send_link_disconnect(struct wlan_objmgr_vdev *vdev,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	if (!assoc_vdev) {
+	if (!assoc_vdev && mlo_mgr_is_link_switch_supported(vdev)) {
 		if (!wlan_mlo_mgr_is_link_switch_on_assoc_vdev(vdev))
 			return QDF_STATUS_E_FAILURE;
 
@@ -390,6 +390,7 @@ void mlo_mld_clear_mlo_cap(struct wlan_objmgr_vdev *vdev)
 		wlan_vdev_mlme_clear_mlo_vdev(mlo_dev_ctx->wlan_vdev_list[i]);
 		wlan_vdev_mlme_clear_mlo_link_vdev(mlo_dev_ctx->wlan_vdev_list[i]);
 	}
+	mlo_clear_bridge_sta_ctx(vdev);
 }
 
 void ucfg_mlo_mld_clear_mlo_cap(struct wlan_objmgr_vdev *vdev)
@@ -1050,12 +1051,17 @@ static QDF_STATUS ml_activate_pend_disconn_req_cb(struct scheduler_msg *msg)
 
 	mlo_dev_ctx = vdev->mlo_dev_ctx;
 	sta_ctx = mlo_dev_ctx->sta_ctx;
+	if (!sta_ctx || !sta_ctx->disconn_req)
+		goto release_ref;
+
 	mlo_disconnect_req(vdev, sta_ctx->disconn_req->source,
 			   sta_ctx->disconn_req->reason_code,
 			   &sta_ctx->disconn_req->bssid, false);
 
 	qdf_mem_free(sta_ctx->disconn_req);
 	sta_ctx->disconn_req = NULL;
+
+release_ref:
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLO_MGR_ID);
 
 	return QDF_STATUS_SUCCESS;
@@ -1886,7 +1892,6 @@ bool mlo_is_sta_csa_synced(struct wlan_mlo_dev_context *mlo_dev_ctx,
 		if (link_id == sta_ctx->mlo_csa_param[i].link_id &&
 		    (sta_ctx->mlo_csa_param[i].valid_csa_param ||
 		     sta_ctx->mlo_csa_param[i].mlo_csa_synced)) {
-			mlo_dev_lock_release(mlo_dev_ctx);
 			sta_csa_synced =
 				sta_ctx->mlo_csa_param[i].mlo_csa_synced;
 			break;

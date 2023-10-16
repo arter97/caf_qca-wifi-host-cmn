@@ -77,6 +77,8 @@ struct dp_mlo_mpass_buf {
 	HTT_TX_WBM_COMPLETION_V2_SCH_CMD_ID_GET(_var)
 #define DP_TX_WBM_COMPLETION_V3_ACK_FRAME_RSSI_GET(_var) \
 	HTT_TX_WBM_COMPLETION_V2_ACK_FRAME_RSSI_GET(_var)
+#define DP_TX_WBM_COMPLETION_V3_TRANSMIT_CNT_VALID_GET(_var) \
+	HTT_TX_WBM_COMPLETION_V2_TRANSMIT_CNT_VALID_GET(_var)
 
 extern uint8_t sec_type_map[MAX_CDP_SEC_TYPE];
 
@@ -285,6 +287,12 @@ void dp_tx_process_htt_completion_be(struct dp_soc *soc,
 	}
 
 	pdev = tx_desc->pdev;
+	if (qdf_unlikely(!pdev)) {
+		dp_tx_comp_warn("The pdev in TX desc is NULL, dropped.");
+		dp_tx_comp_warn("tx_status: %u", tx_status);
+		tx_desc->flags |= DP_TX_DESC_FLAG_TX_COMP_ERR;
+		goto release_tx_desc;
+	}
 
 	if (qdf_unlikely(tx_desc->pdev->is_pdev_down)) {
 		dp_tx_comp_info_rl("pdev in down state %d", tx_desc->id);
@@ -310,6 +318,7 @@ void dp_tx_process_htt_completion_be(struct dp_soc *soc,
 	case HTT_TX_FW2WBM_TX_STATUS_TTL:
 	{
 		uint8_t tid;
+		uint8_t transmit_cnt_valid = 0;
 
 		if (DP_TX_WBM_COMPLETION_V3_VALID_GET(htt_desc[3])) {
 			ts.peer_id =
@@ -329,6 +338,14 @@ void dp_tx_process_htt_completion_be(struct dp_soc *soc,
 		ts.ack_frame_rssi =
 			DP_TX_WBM_COMPLETION_V3_ACK_FRAME_RSSI_GET(
 					htt_desc[2]);
+
+		transmit_cnt_valid =
+			DP_TX_WBM_COMPLETION_V3_TRANSMIT_CNT_VALID_GET(
+					htt_desc[3]);
+		if (transmit_cnt_valid)
+			ts.transmit_cnt =
+				HTT_TX_WBM_COMPLETION_V3_TRANSMIT_COUNT_GET(
+						htt_desc[1]);
 
 		ts.tsf = htt_desc[4];
 		ts.first_msdu = 1;
@@ -664,7 +681,8 @@ dp_tx_mlo_mcast_multipass_handler(struct dp_soc *soc,
 		dp_mlo_iter_ptnr_vdev(be_soc, be_vdev,
 				      dp_tx_mlo_mcast_multipass_lookup,
 				      &mpass_buf, DP_MOD_ID_TX,
-				      DP_ALL_VDEV_ITER);
+				      DP_ALL_VDEV_ITER,
+				      DP_VDEV_ITERATE_SKIP_SELF);
 		/*
 		 * Do not drop the frame when vlan_id doesn't match.
 		 * Send the frame as it is.
@@ -700,7 +718,8 @@ dp_tx_mlo_mcast_multipass_handler(struct dp_soc *soc,
 		dp_mlo_iter_ptnr_vdev(be_soc, be_vdev,
 				      dp_tx_mlo_mcast_multipass_send,
 				      &mpass_buf_copy, DP_MOD_ID_TX,
-				      DP_LINK_VDEV_ITER);
+				      DP_LINK_VDEV_ITER,
+				      DP_VDEV_ITERATE_SKIP_SELF);
 
 		/* send frame on mcast primary vdev */
 		dp_tx_mlo_mcast_multipass_send(be_vdev, vdev, &mpass_buf_copy);
@@ -713,7 +732,8 @@ dp_tx_mlo_mcast_multipass_handler(struct dp_soc *soc,
 
 	dp_mlo_iter_ptnr_vdev(be_soc, be_vdev,
 			      dp_tx_mlo_mcast_multipass_send,
-			      &mpass_buf, DP_MOD_ID_TX, DP_LINK_VDEV_ITER);
+			      &mpass_buf, DP_MOD_ID_TX, DP_LINK_VDEV_ITER,
+			      DP_VDEV_ITERATE_SKIP_SELF);
 	dp_tx_mlo_mcast_multipass_send(be_vdev, vdev, &mpass_buf);
 
 	if (qdf_unlikely(be_vdev->mlo_dev_ctxt->seq_num > MAX_GSN_NUM))
@@ -809,7 +829,8 @@ void dp_tx_mlo_mcast_handler_be(struct dp_soc *soc,
 	/* send frame on partner vdevs */
 	dp_mlo_iter_ptnr_vdev(be_soc, be_vdev,
 			      dp_tx_mlo_mcast_pkt_send,
-			      nbuf, DP_MOD_ID_REINJECT, DP_LINK_VDEV_ITER);
+			      nbuf, DP_MOD_ID_REINJECT, DP_LINK_VDEV_ITER,
+			      DP_VDEV_ITERATE_SKIP_SELF);
 
 	/* send frame on mcast primary vdev */
 	dp_tx_mlo_mcast_pkt_send(be_vdev, vdev, nbuf);
@@ -893,7 +914,8 @@ dp_tx_mlo_mcast_send_be(struct dp_soc *soc, struct dp_vdev *vdev,
 			dp_mlo_iter_ptnr_vdev(be_soc, be_vdev,
 					      dp_tx_mlo_mcast_enhance_be,
 					      nbuf, DP_MOD_ID_TX,
-					      DP_ALL_VDEV_ITER);
+					      DP_ALL_VDEV_ITER,
+					      DP_VDEV_ITERATE_SKIP_SELF);
 			qdf_nbuf_free(nbuf);
 			return NULL;
 		}
@@ -1605,11 +1627,11 @@ void dp_tx_update_bank_profile(struct dp_soc_be *be_soc,
 
 QDF_STATUS dp_tx_desc_pool_init_be(struct dp_soc *soc,
 				   uint32_t num_elem,
-				   uint8_t pool_id)
+				   uint8_t pool_id,
+				   bool spcl_tx_desc)
 {
 	struct dp_tx_desc_pool_s *tx_desc_pool;
 	struct dp_hw_cookie_conversion_t *cc_ctx;
-	struct dp_soc_be *be_soc;
 	struct dp_spt_page_desc *page_desc;
 	struct dp_tx_desc_s *tx_desc;
 	uint32_t ppt_idx = 0;
@@ -1620,10 +1642,13 @@ QDF_STATUS dp_tx_desc_pool_init_be(struct dp_soc *soc,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	be_soc = dp_get_be_soc_from_dp_soc(soc);
-	tx_desc_pool = &soc->tx_desc[pool_id];
-	cc_ctx  = &be_soc->tx_cc_ctx[pool_id];
-
+	if (spcl_tx_desc) {
+		tx_desc_pool = dp_get_spcl_tx_desc_pool(soc, pool_id);
+		cc_ctx  = dp_get_spcl_tx_cookie_t(soc, pool_id);
+	} else {
+		tx_desc_pool = dp_get_tx_desc_pool(soc, pool_id);;
+		cc_ctx  = dp_get_tx_cookie_t(soc, pool_id);
+	}
 	tx_desc = tx_desc_pool->freelist;
 	page_desc = &cc_ctx->page_desc_base[0];
 	while (tx_desc) {
@@ -1656,15 +1681,16 @@ QDF_STATUS dp_tx_desc_pool_init_be(struct dp_soc *soc,
 
 void dp_tx_desc_pool_deinit_be(struct dp_soc *soc,
 			       struct dp_tx_desc_pool_s *tx_desc_pool,
-			       uint8_t pool_id)
+			       uint8_t pool_id, bool spcl_tx_desc)
 {
 	struct dp_spt_page_desc *page_desc;
-	struct dp_soc_be *be_soc;
 	int i = 0;
 	struct dp_hw_cookie_conversion_t *cc_ctx;
 
-	be_soc = dp_get_be_soc_from_dp_soc(soc);
-	cc_ctx  = &be_soc->tx_cc_ctx[pool_id];
+	if (spcl_tx_desc)
+		cc_ctx  = dp_get_spcl_tx_cookie_t(soc, pool_id);
+	else
+		cc_ctx  = dp_get_tx_cookie_t(soc, pool_id);
 
 	for (i = 0; i < cc_ctx->total_page_num; i++) {
 		page_desc = &cc_ctx->page_desc_base[i];

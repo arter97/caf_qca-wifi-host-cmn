@@ -26,6 +26,8 @@
 #include <qdf_util.h>
 #include <wlan_mlo_mgr_cmn.h>
 #include <wlan_mlo_mgr_setup.h>
+#include <qdf_platform.h>
+#include <qdf_types.h>
 
 static struct mgmt_rx_reo_context *g_rx_reo_ctx[WLAN_MAX_MLO_GROUPS];
 
@@ -199,6 +201,7 @@ handle_out_of_order_pkt_ctr(struct mgmt_rx_reo_frame_descriptor *desc,
 
 /**
  * check_and_handle_zero_frame_duration() - Check and handle zero duration error
+ * @pdev: Pointer to pdev object
  * @desc: Pointer to frame descriptor
  *
  * API to check for zero duration management frames. Host will be able to
@@ -208,7 +211,8 @@ handle_out_of_order_pkt_ctr(struct mgmt_rx_reo_frame_descriptor *desc,
  * Return: QDF_STATUS
  */
 static QDF_STATUS
-check_and_handle_zero_frame_duration(struct mgmt_rx_reo_frame_descriptor *desc)
+check_and_handle_zero_frame_duration(struct wlan_objmgr_pdev *pdev,
+				     struct mgmt_rx_reo_frame_descriptor *desc)
 {
 	struct mgmt_rx_reo_params *reo_params;
 
@@ -341,6 +345,7 @@ handle_out_of_order_pkt_ctr(struct mgmt_rx_reo_frame_descriptor *desc,
 
 /**
  * check_and_handle_zero_frame_duration() - Check and handle zero duration error
+ * @pdev: Pointer to pdev object
  * @desc: Pointer to frame descriptor
  *
  * API to check for zero duration management frames and assert.
@@ -348,7 +353,8 @@ handle_out_of_order_pkt_ctr(struct mgmt_rx_reo_frame_descriptor *desc,
  * Return: QDF_STATUS
  */
 static QDF_STATUS
-check_and_handle_zero_frame_duration(struct mgmt_rx_reo_frame_descriptor *desc)
+check_and_handle_zero_frame_duration(struct wlan_objmgr_pdev *pdev,
+				     struct mgmt_rx_reo_frame_descriptor *desc)
 {
 	struct mgmt_rx_reo_params *reo_params;
 
@@ -374,7 +380,9 @@ check_and_handle_zero_frame_duration(struct mgmt_rx_reo_frame_descriptor *desc)
 				   reo_params->link_id, reo_params->valid,
 				   reo_params->mgmt_pkt_ctr,
 				   reo_params->global_timestamp);
-		qdf_assert_always(0);
+		mgmt_rx_reo_err("Triggering self recovery, zero duration pkt");
+		qdf_trigger_self_recovery(wlan_pdev_get_psoc(pdev),
+					  QDF_MGMT_RX_REO_ZERO_DURATION_PKT);
 
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -4307,6 +4315,7 @@ mgmt_rx_reo_egress_list_init(struct mgmt_rx_reo_egress_list *egress_list)
 
 /**
  * check_frame_sanity() - Check the sanity of a given management frame
+ * @pdev: Pointer to pdev object
  * @desc: Pointer to frame descriptor
  *
  * API to check the sanity of a given management frame. This API checks for the
@@ -4318,7 +4327,8 @@ mgmt_rx_reo_egress_list_init(struct mgmt_rx_reo_egress_list *egress_list)
  * Return: QDF_STATUS
  */
 static QDF_STATUS
-check_frame_sanity(struct mgmt_rx_reo_frame_descriptor *desc)
+check_frame_sanity(struct wlan_objmgr_pdev *pdev,
+		   struct mgmt_rx_reo_frame_descriptor *desc)
 {
 	QDF_STATUS status;
 
@@ -4333,7 +4343,7 @@ check_frame_sanity(struct mgmt_rx_reo_frame_descriptor *desc)
 		return status;
 	}
 
-	status = check_and_handle_zero_frame_duration(desc);
+	status = check_and_handle_zero_frame_duration(pdev, desc);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		mgmt_rx_reo_warn_rl("Drop frame with zero duration");
 		return status;
@@ -4455,7 +4465,8 @@ failure_debug:
 	mgmt_rx_reo_err("Last Pkt valid = %u, pkt_ctr = %u, ts = %u",
 			host_ss->valid, host_ss->mgmt_pkt_ctr,
 			host_ss->global_timestamp);
-	qdf_assert_always(0);
+	mgmt_rx_reo_err("Triggering self recovery, out of order pkt");
+	qdf_trigger_self_recovery(psoc, QDF_MGMT_RX_REO_OUT_OF_ORDER_PKT);
 
 	return QDF_STATUS_E_FAILURE;
 }
@@ -5353,7 +5364,7 @@ wlan_mgmt_rx_reo_algo_entry(struct wlan_objmgr_pdev *pdev,
 	if (QDF_IS_STATUS_ERROR(ret))
 		goto failure;
 
-	ret = check_frame_sanity(desc);
+	ret = check_frame_sanity(pdev, desc);
 	if (QDF_IS_STATUS_ERROR(ret))
 		goto failure;
 

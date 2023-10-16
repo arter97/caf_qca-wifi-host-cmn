@@ -361,3 +361,12 @@ bool ucfg_ipa_is_wds_enabled(void)
 }
 
 qdf_export_symbol(ucfg_ipa_is_wds_enabled);
+
+QDF_STATUS ucfg_ipa_get_alt_pipe(struct wlan_objmgr_pdev *pdev,
+				 uint8_t vdev_id,
+				 bool *alt_pipe)
+{
+	return ipa_get_alt_pipe(pdev, vdev_id, alt_pipe);
+}
+
+qdf_export_symbol(ucfg_ipa_get_alt_pipe);

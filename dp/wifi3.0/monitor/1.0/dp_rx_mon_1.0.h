@@ -120,6 +120,19 @@ dp_rx_pdev_mon_buf_desc_pool_init(struct dp_pdev *pdev, uint32_t mac_id)
 uint32_t
 dp_mon_dest_srng_drop_for_mac(struct dp_pdev *pdev, uint32_t mac_id,
 			      bool force_flush);
+#else
+#ifdef QCA_SUPPORT_FULL_MON
+/**
+ * dp_mon_dest_srng_drop_for_mac() - Drop the mon dest ring packets for
+ *  a given mac
+ * @pdev: DP pdev
+ * @mac_id: mac id
+ *
+ * Return: None
+ */
+uint32_t
+dp_mon_dest_srng_drop_for_mac(struct dp_pdev *pdev, uint32_t mac_id);
+#endif
 #endif
 
 /**

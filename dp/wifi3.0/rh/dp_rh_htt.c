@@ -424,11 +424,11 @@ dp_htt_t2h_msg_handler_fast(void *context, qdf_nbuf_t *cmpl_msdus,
 			dp_htt_t2h_msg_handler(context, &htc_pkt);
 			break;
 		}
+		}
 
 		/* Re-initialize the indication buffer */
 		HTT_T2H_MSG_BUF_REINIT(htt_t2h_msg, soc->osdev);
 		qdf_nbuf_set_pktlen(htt_t2h_msg, 0);
-		}
 	}
 }
 

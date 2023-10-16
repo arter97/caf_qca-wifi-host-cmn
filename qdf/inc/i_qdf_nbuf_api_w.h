@@ -265,6 +265,11 @@ static inline uint8_t qdf_nbuf_get_lmac_id(qdf_nbuf_t buf)
 	return 0;
 }
 
+static inline uint16_t qdf_nbuf_get_mpdu_seq_num(qdf_nbuf_t buf)
+{
+	return 0;
+}
+
 /**
  * qdf_nbuf_tx_set_band() - Set band in nbuf cb
  * @nbuf: nbuf pointer

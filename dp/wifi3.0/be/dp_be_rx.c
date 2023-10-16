@@ -516,6 +516,7 @@ done:
 		rx_tlv_hdr = qdf_nbuf_data(nbuf);
 		vdev_id = QDF_NBUF_CB_RX_VDEV_ID(nbuf);
 		peer_id = dp_rx_get_peer_id_be(nbuf);
+		dp_rx_set_mpdu_seq_number_be(nbuf, rx_tlv_hdr);
 
 		if (dp_rx_is_list_ready(deliver_list_head, vdev, txrx_peer,
 					peer_id, vdev_id)) {
@@ -1364,6 +1365,11 @@ dp_rx_intrabss_ucast_check_be(qdf_nbuf_t nbuf,
 	if (!qdf_nbuf_is_intra_bss(nbuf))
 		return false;
 
+	if (!be_vdev->mlo_dev_ctxt) {
+		params->tx_vdev_id = ta_peer->vdev->vdev_id;
+		return true;
+	}
+
 	hal_rx_tlv_get_dest_chip_pmac_id(rx_tlv_hdr,
 					 &dest_chip_id,
 					 &dest_chip_pmac_id);
@@ -1396,13 +1402,14 @@ dp_rx_intrabss_ucast_check_be(qdf_nbuf_t nbuf,
 			params->tx_vdev_id = ta_peer->vdev->vdev_id;
 		else
 			params->tx_vdev_id =
-				be_vdev->partner_vdev_list[dest_chip_id]
+				be_vdev->mlo_dev_ctxt->vdev_list[dest_chip_id]
 							  [dest_chip_pmac_id];
 		return true;
 	}
 
 	params->tx_vdev_id =
-		be_vdev->partner_vdev_list[dest_chip_id][dest_chip_pmac_id];
+		be_vdev->mlo_dev_ctxt->vdev_list[dest_chip_id]
+						[dest_chip_pmac_id];
 
 	return true;
 }
@@ -1490,14 +1497,19 @@ dp_rx_intrabss_ucast_check_be(qdf_nbuf_t nbuf,
 		goto rel_da_peer;
 	}
 
+	if (!be_vdev->mlo_dev_ctxt)
+		ret = false;
+		goto rel_da_peer;
+	}
+
 	/* MLO specific Intra-BSS check */
 	if (dp_rx_intrabss_fwd_mlo_allow(ta_peer, da_peer)) {
 		/* use dest chip id for legacy dest peer */
 		if (!(da_peer_id & HAL_RX_DA_IDX_ML_PEER_MASK)) {
-			if (!(be_vdev->partner_vdev_list[dest_chip_id][0] ==
-			      params->tx_vdev_id) &&
-			    !(be_vdev->partner_vdev_list[dest_chip_id][1] ==
-			      params->tx_vdev_id)) {
+			if (!(be_vdev->mlo_dev_ctxt->vdev_list[dest_chip_id][0]
+			      == params->tx_vdev_id) &&
+			    !(be_vdev->mlo_dev_ctxt->vdev_list[dest_chip_id][1]
+			      == params->tx_vdev_id)) {
 				/*dp_soc_unref_delete(soc);*/
 				goto rel_da_peer;
 			}

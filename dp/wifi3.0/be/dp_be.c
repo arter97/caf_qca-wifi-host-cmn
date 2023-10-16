@@ -851,19 +851,208 @@ void dp_reo_shared_qaddr_detach(struct dp_soc *soc)
 				soc->reo_qref.non_mlo_reo_qref_table_paddr, 0);
 }
 
+#ifdef QCA_SUPPORT_DP_GLOBAL_CTX
+static void dp_soc_tx_cookie_detach_be(struct dp_soc *soc)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	int i = 0;
+	struct dp_global_context *dp_global;
+
+	dp_global = wlan_objmgr_get_global_ctx();
+
+	dp_global->tx_cookie_ctx_alloc_cnt--;
+	if (dp_global->tx_cookie_ctx_alloc_cnt == 0) {
+		for (i = 0; i < MAX_TXDESC_POOLS; i++) {
+			dp_hw_cookie_conversion_detach(be_soc,
+						       dp_global->tx_cc_ctx[i]);
+			qdf_mem_free(dp_global->tx_cc_ctx[i]);
+		}
+	}
+
+	dp_global->spcl_tx_cookie_ctx_alloc_cnt--;
+	if (dp_global->spcl_tx_cookie_ctx_alloc_cnt == 0) {
+		for (i = 0; i < MAX_TXDESC_POOLS; i++) {
+			dp_hw_cookie_conversion_detach(
+					be_soc,
+					dp_global->spcl_tx_cc_ctx[i]);
+			qdf_mem_free(dp_global->spcl_tx_cc_ctx[i]);
+		}
+	}
+}
+
+static QDF_STATUS dp_soc_tx_cookie_attach_be(struct dp_soc *soc)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	struct dp_hw_cookie_conversion_t *cc_ctx;
+	struct dp_global_context *dp_global;
+	struct dp_hw_cookie_conversion_t *spcl_cc_ctx;
+	uint32_t num_entries;
+	int i = 0;
+	QDF_STATUS qdf_status;
+
+	dp_global = wlan_objmgr_get_global_ctx();
+	if (dp_global->tx_cookie_ctx_alloc_cnt == 0) {
+		for (i = 0; i < MAX_TXDESC_POOLS; i++) {
+			dp_global->tx_cc_ctx[i] =
+				qdf_mem_malloc(
+				sizeof(struct dp_hw_cookie_conversion_t));
+			cc_ctx = dp_global->tx_cc_ctx[i];
+			num_entries =
+				wlan_cfg_get_num_tx_desc(soc->wlan_cfg_ctx);
+			qdf_status =
+				dp_hw_cookie_conversion_attach(
+						be_soc,
+						cc_ctx,
+						num_entries,
+						QDF_DP_TX_DESC_TYPE, i);
+			if (!QDF_IS_STATUS_SUCCESS(qdf_status))
+				return QDF_STATUS_E_FAILURE;
+		}
+	}
+	dp_global->tx_cookie_ctx_alloc_cnt++;
+
+	if (dp_global->spcl_tx_cookie_ctx_alloc_cnt == 0) {
+		for (i = 0; i < MAX_TXDESC_POOLS; i++) {
+			dp_global->spcl_tx_cc_ctx[i] =
+				qdf_mem_malloc(
+				sizeof(struct dp_hw_cookie_conversion_t));
+			spcl_cc_ctx = dp_global->spcl_tx_cc_ctx[i];
+			num_entries =
+				wlan_cfg_get_num_tx_spl_desc(soc->wlan_cfg_ctx);
+			qdf_status =
+				dp_hw_cookie_conversion_attach(
+						be_soc,
+						spcl_cc_ctx,
+						num_entries,
+						QDF_DP_TX_SPCL_DESC_TYPE, i);
+			if (!QDF_IS_STATUS_SUCCESS(qdf_status))
+				return QDF_STATUS_E_FAILURE;
+		}
+	}
+	dp_global->spcl_tx_cookie_ctx_alloc_cnt++;
+	return QDF_STATUS_SUCCESS;
+}
+
+static void dp_soc_tx_cookie_deinit_be(struct dp_soc *soc)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	struct dp_global_context *dp_global;
+	int i = 0;
+
+	dp_global = wlan_objmgr_get_global_ctx();
+
+	for (i = 0; i < MAX_TXDESC_POOLS; i++)
+		dp_hw_cookie_conversion_deinit(
+				be_soc,
+				dp_global->tx_cc_ctx[i]);
+	for (i = 0; i < MAX_TXDESC_POOLS; i++)
+		dp_hw_cookie_conversion_deinit(be_soc,
+					       dp_global->spcl_tx_cc_ctx[i]);
+}
+
+static QDF_STATUS dp_soc_tx_cookie_init_be(struct dp_soc *soc)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	struct dp_global_context *dp_global;
+	struct dp_hw_cookie_conversion_t *cc_ctx;
+	struct dp_hw_cookie_conversion_t *spcl_cc_ctx;
+	QDF_STATUS qdf_status;
+	int i = 0;
+
+	dp_global = wlan_objmgr_get_global_ctx();
+	for (i = 0; i < MAX_TXDESC_POOLS; i++) {
+		cc_ctx = dp_global->tx_cc_ctx[i];
+		qdf_status =
+			dp_hw_cookie_conversion_init(be_soc,
+						     cc_ctx);
+		if (!QDF_IS_STATUS_SUCCESS(qdf_status))
+			return QDF_STATUS_E_FAILURE;
+	}
+	for (i = 0; i < MAX_TXDESC_POOLS; i++) {
+		spcl_cc_ctx = dp_global->spcl_tx_cc_ctx[i];
+		qdf_status =
+			dp_hw_cookie_conversion_init(be_soc,
+						     spcl_cc_ctx);
+		if (!QDF_IS_STATUS_SUCCESS(qdf_status))
+			return QDF_STATUS_E_FAILURE;
+	}
+	return QDF_STATUS_SUCCESS;
+}
+#else
+static void dp_soc_tx_cookie_detach_be(struct dp_soc *soc)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	int i = 0;
+
+	for (i = 0; i < MAX_TXDESC_POOLS; i++) {
+		dp_hw_cookie_conversion_detach(
+				be_soc,
+				&be_soc->tx_cc_ctx[i]);
+	}
+}
+
+static QDF_STATUS dp_soc_tx_cookie_attach_be(struct dp_soc *soc)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	uint32_t num_entries;
+	int i = 0;
+	QDF_STATUS qdf_status;
+
+	for (i = 0; i < MAX_TXDESC_POOLS; i++) {
+		num_entries = wlan_cfg_get_num_tx_desc(soc->wlan_cfg_ctx);
+		qdf_status =
+			dp_hw_cookie_conversion_attach(
+					be_soc,
+					&be_soc->tx_cc_ctx[i],
+					num_entries,
+					QDF_DP_TX_DESC_TYPE, i);
+		if (!QDF_IS_STATUS_SUCCESS(qdf_status))
+			return QDF_STATUS_E_FAILURE;
+	}
+	return QDF_STATUS_SUCCESS;
+}
+
+static void dp_soc_tx_cookie_deinit_be(struct dp_soc *soc)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	int i = 0;
+
+	for (i = 0; i < MAX_TXDESC_POOLS; i++)
+		dp_hw_cookie_conversion_deinit(
+				be_soc,
+				&be_soc->tx_cc_ctx[i]);
+}
+
+static QDF_STATUS dp_soc_tx_cookie_init_be(struct dp_soc *soc)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	int i = 0;
+	QDF_STATUS qdf_status;
+
+	for (i = 0; i < MAX_TXDESC_POOLS; i++) {
+		qdf_status =
+			dp_hw_cookie_conversion_init(
+					be_soc,
+					&be_soc->tx_cc_ctx[i]);
+		if (!QDF_IS_STATUS_SUCCESS(qdf_status))
+			return QDF_STATUS_E_FAILURE;
+	}
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 static QDF_STATUS dp_soc_detach_be(struct dp_soc *soc)
 {
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
-	dp_mlo_dev_obj_t mlo_dev_obj = dp_get_mlo_dev_list_obj(be_soc);
+	dp_mlo_dev_obj_t mlo_dev_obj;
 	int i = 0;
 
 	dp_soc_ppeds_detach_be(soc);
 	dp_reo_shared_qaddr_detach(soc);
-	dp_mlo_dev_ctxt_list_detach_wrapper(mlo_dev_obj);
 
-	for (i = 0; i < MAX_TXDESC_POOLS; i++)
-		dp_hw_cookie_conversion_detach(be_soc,
-					       &be_soc->tx_cc_ctx[i]);
+	mlo_dev_obj = dp_get_mlo_dev_list_obj(be_soc);
+	dp_mlo_dev_ctxt_list_detach_wrapper(mlo_dev_obj);
+	dp_soc_tx_cookie_detach_be(soc);
 
 	for (i = 0; i < MAX_RXDESC_POOLS; i++)
 		dp_hw_cookie_conversion_detach(be_soc,
@@ -915,6 +1104,7 @@ static void dp_rx_fst_get_ref_be(void)
 	if (dp_global)
 		qdf_atomic_inc(&dp_global->rx_fst_ref_cnt);
 }
+
 #else
 static void dp_set_rx_fst_be(struct dp_rx_fst *fst)
 {
@@ -975,17 +1165,6 @@ dp_mlo_mcast_deinit(struct dp_soc *soc, struct dp_vdev *vdev)
 {
 }
 #endif
-static void dp_mlo_init_ptnr_list(struct dp_vdev *vdev)
-{
-	struct dp_vdev_be *be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
-
-	qdf_mem_set(be_vdev->partner_vdev_list,
-		    WLAN_MAX_MLO_CHIPS * WLAN_MAX_MLO_LINKS_PER_SOC,
-		    CDP_INVALID_VDEV_ID);
-	qdf_mem_set(be_vdev->bridge_vdev_list,
-		    WLAN_MAX_MLO_CHIPS * WLAN_MAX_MLO_LINKS_PER_SOC,
-		    CDP_INVALID_VDEV_ID);
-}
 
 static void dp_get_rx_hash_key_be(struct dp_soc *soc,
 				  struct cdp_lro_hash_config *lro_hash)
@@ -1032,12 +1211,17 @@ dp_attach_vdev_list_in_mlo_dev_ctxt(struct dp_soc_be *be_soc,
 	qdf_spin_unlock_bh(&mlo_dev_ctxt->vdev_list_lock);
 }
 
-static inline void
+static inline QDF_STATUS
 dp_detach_vdev_list_in_mlo_dev_ctxt(struct dp_soc_be *be_soc,
 				    struct dp_vdev *vdev,
 				    struct dp_mlo_dev_ctxt *mlo_dev_ctxt)
 {
 	uint8_t pdev_id = vdev->pdev->pdev_id;
+
+	if (mlo_dev_ctxt->vdev_list[be_soc->mlo_chip_id][pdev_id] ==
+	    CDP_INVALID_VDEV_ID) {
+		return QDF_STATUS_E_INVAL;
+	}
 
 	qdf_spin_lock_bh(&mlo_dev_ctxt->vdev_list_lock);
 	if (vdev->is_bridge_vdev) {
@@ -1049,6 +1233,8 @@ dp_detach_vdev_list_in_mlo_dev_ctxt(struct dp_soc_be *be_soc,
 	}
 	mlo_dev_ctxt->vdev_count--;
 	qdf_spin_unlock_bh(&mlo_dev_ctxt->vdev_list_lock);
+
+	return QDF_STATUS_SUCCESS;
 }
 #endif /* WLAN_DP_MLO_DEV_CTX */
 #else
@@ -1059,10 +1245,6 @@ dp_mlo_mcast_init(struct dp_soc *soc, struct dp_vdev *vdev)
 
 static inline void
 dp_mlo_mcast_deinit(struct dp_soc *soc, struct dp_vdev *vdev)
-{
-}
-
-static void dp_mlo_init_ptnr_list(struct dp_vdev *vdev)
 {
 }
 
@@ -1080,7 +1262,7 @@ dp_attach_vdev_list_in_mlo_dev_ctxt(struct dp_soc_be *be_soc,
 {
 }
 
-static inline void
+static inline QDF_STATUS
 dp_detach_vdev_list_in_mlo_dev_ctxt(struct dp_soc_be *be_soc,
 				    struct dp_vdev *vdev,
 				    struct dp_mlo_dev_ctxt *mlo_dev_ctxt)
@@ -1097,8 +1279,9 @@ static QDF_STATUS dp_soc_attach_be(struct dp_soc *soc,
 	uint32_t max_tx_rx_desc_num, num_spt_pages;
 	uint32_t num_entries;
 	int i = 0;
-	dp_mlo_dev_obj_t mlo_dev_obj = dp_get_mlo_dev_list_obj(be_soc);
+	dp_mlo_dev_obj_t mlo_dev_obj;
 
+	mlo_dev_obj = dp_get_mlo_dev_list_obj(be_soc);
 	max_tx_rx_desc_num = WLAN_CFG_NUM_TX_DESC_MAX * MAX_TXDESC_POOLS +
 		WLAN_CFG_RX_SW_DESC_NUM_SIZE_MAX * MAX_RXDESC_POOLS +
 		WLAN_CFG_NUM_PPEDS_TX_DESC_MAX * MAX_PPE_TXDESC_POOLS;
@@ -1132,16 +1315,9 @@ static QDF_STATUS dp_soc_attach_be(struct dp_soc *soc,
 	if (!QDF_IS_STATUS_SUCCESS(qdf_status))
 		goto fail;
 
-	for (i = 0; i < MAX_TXDESC_POOLS; i++) {
-		num_entries = wlan_cfg_get_num_tx_desc(soc->wlan_cfg_ctx);
-		qdf_status =
-			dp_hw_cookie_conversion_attach(be_soc,
-						       &be_soc->tx_cc_ctx[i],
-						       num_entries,
-						       QDF_DP_TX_DESC_TYPE, i);
-		if (!QDF_IS_STATUS_SUCCESS(qdf_status))
-			goto fail;
-	}
+	qdf_status = dp_soc_tx_cookie_attach_be(soc);
+	if (!QDF_IS_STATUS_SUCCESS(qdf_status))
+		goto fail;
 
 	for (i = 0; i < MAX_RXDESC_POOLS; i++) {
 		num_entries =
@@ -1172,9 +1348,7 @@ static QDF_STATUS dp_soc_deinit_be(struct dp_soc *soc)
 	dp_ppeds_stop_soc_be(soc);
 
 	dp_tx_deinit_bank_profiles(be_soc);
-	for (i = 0; i < MAX_TXDESC_POOLS; i++)
-		dp_hw_cookie_conversion_deinit(be_soc,
-					       &be_soc->tx_cc_ctx[i]);
+	dp_soc_tx_cookie_deinit_be(soc);
 
 	for (i = 0; i < MAX_RXDESC_POOLS; i++)
 		dp_hw_cookie_conversion_deinit(be_soc,
@@ -1217,13 +1391,9 @@ static void *dp_soc_init_be(struct dp_soc *soc, HTC_HANDLE htc_handle,
 
 	dp_ppeds_init_soc_be(soc);
 
-	for (i = 0; i < MAX_TXDESC_POOLS; i++) {
-		qdf_status =
-			dp_hw_cookie_conversion_init(be_soc,
-						     &be_soc->tx_cc_ctx[i]);
-		if (!QDF_IS_STATUS_SUCCESS(qdf_status))
-			goto fail;
-	}
+	qdf_status = dp_soc_tx_cookie_init_be(soc);
+	if (!QDF_IS_STATUS_SUCCESS(qdf_status))
+		goto fail;
 
 	for (i = 0; i < MAX_RXDESC_POOLS; i++) {
 		qdf_status =
@@ -1320,7 +1490,6 @@ static QDF_STATUS dp_vdev_attach_be(struct dp_soc *soc, struct dp_vdev *vdev)
 	}
 
 	dp_mlo_mcast_init(soc, vdev);
-	dp_mlo_init_ptnr_list(vdev);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1337,7 +1506,6 @@ static QDF_STATUS dp_vdev_detach_be(struct dp_soc *soc, struct dp_vdev *vdev)
 		dp_mlo_mcast_deinit(soc, vdev);
 
 	dp_tx_put_bank_profile(be_soc, be_vdev);
-	dp_clr_mlo_ptnr_list(soc, vdev);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -2586,7 +2754,8 @@ static void dp_txrx_set_mlo_mcast_primary_vdev_param_be(
 				      dp_mlo_mcast_reset_pri_mcast,
 				      (void *)&be_vdev->mcast_primary,
 				      DP_MOD_ID_TX_MCAST,
-				      DP_LINK_VDEV_ITER);
+				      DP_LINK_VDEV_ITER,
+				      DP_VDEV_ITERATE_SKIP_SELF);
 
 		params.chip_id = be_soc->mlo_chip_id;
 		params.pdev_id = be_vdev->vdev.pdev->pdev_id;
@@ -2631,7 +2800,8 @@ static void dp_txrx_set_mlo_mcast_primary_vdev_param_be(
 				      dp_mlo_mcast_reset_pri_mcast,
 				      (void *)&be_vdev->mcast_primary,
 				      DP_MOD_ID_TX_MCAST,
-				      DP_LINK_VDEV_ITER);
+				      DP_LINK_VDEV_ITER,
+				      DP_VDEV_ITERATE_SKIP_SELF);
 
 		params.chip_id = be_soc->mlo_chip_id;
 		params.pdev_id = vdev->pdev->pdev_id;
@@ -2882,8 +3052,9 @@ dp_get_mlo_dev_ctx_by_mld_mac_addr(struct dp_soc_be *be_soc,
 {
 	struct dp_mlo_dev_ctxt *mld_cur = NULL;
 	struct dp_mlo_dev_ctxt *tmp_mld_cur = NULL;
-	dp_mlo_dev_obj_t mlo_dev_obj = dp_get_mlo_dev_list_obj(be_soc);
+	dp_mlo_dev_obj_t mlo_dev_obj;
 
+	mlo_dev_obj = dp_get_mlo_dev_list_obj(be_soc);
 	if (!mlo_dev_obj) {
 		dp_err("DP Global MLO Context is NULL");
 		return NULL;
@@ -2923,8 +3094,9 @@ QDF_STATUS dp_mlo_dev_ctxt_create(struct cdp_soc_t *soc_hdl,
 	struct dp_mlo_dev_ctxt *mlo_dev_ctxt = NULL;
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
-	dp_mlo_dev_obj_t mlo_dev_obj = dp_get_mlo_dev_list_obj(be_soc);
+	dp_mlo_dev_obj_t mlo_dev_obj;
 
+	mlo_dev_obj = dp_get_mlo_dev_list_obj(be_soc);
 	if (!mlo_dev_obj) {
 		dp_err("DP Global MLO Context is NULL");
 		return QDF_STATUS_E_FAILURE;
@@ -2987,8 +3159,9 @@ QDF_STATUS dp_mlo_dev_ctxt_destroy(struct cdp_soc_t *soc_hdl,
 	struct dp_mlo_dev_ctxt *mlo_dev_ctxt = NULL;
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
-	dp_mlo_dev_obj_t mlo_dev_obj = dp_get_mlo_dev_list_obj(be_soc);
+	dp_mlo_dev_obj_t mlo_dev_obj;
 
+	mlo_dev_obj = dp_get_mlo_dev_list_obj(be_soc);
 	if (!mlo_dev_obj) {
 		dp_err("DP Global MLO Context is NULL");
 		return QDF_STATUS_E_INVAL;
@@ -3059,11 +3232,6 @@ QDF_STATUS dp_mlo_dev_ctxt_vdev_attach(struct cdp_soc_t *soc_hdl,
 
 	/* ref for holding MLO ctxt in be_vdev */
 	dp_mlo_dev_get_ref(mlo_dev_ctxt, DP_MOD_ID_CHILD);
-	/* Save vdev stats in MLO dev ctx */
-	dp_update_mlo_ctxt_stats(&mlo_dev_ctxt->stats, &vdev->stats);
-
-	/* reset vdev stats to zero */
-	qdf_mem_set(&vdev->stats, sizeof(struct cdp_vdev_stats), 0);
 
 	/* unref for mlo ctxt taken at the start of this function */
 	dp_mlo_dev_ctxt_unref_delete(mlo_dev_ctxt, DP_MOD_ID_MLO_DEV);
@@ -3113,8 +3281,20 @@ QDF_STATUS dp_mlo_dev_ctxt_vdev_detach(struct cdp_soc_t *soc_hdl,
 		dp_mlo_dev_get_ref(mlo_dev_ctxt, DP_MOD_ID_MLO_DEV);
 	}
 
-	dp_detach_vdev_list_in_mlo_dev_ctxt(be_soc, vdev, mlo_dev_ctxt);
+	if (dp_detach_vdev_list_in_mlo_dev_ctxt(be_soc, vdev, mlo_dev_ctxt)
+	    != QDF_STATUS_SUCCESS) {
+		dp_mlo_dev_ctxt_unref_delete(mlo_dev_ctxt, DP_MOD_ID_MLO_DEV);
+		dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
+		return QDF_STATUS_SUCCESS;
+	}
+
 	be_vdev->mlo_dev_ctxt = NULL;
+
+	/* Save vdev stats in MLO dev ctx */
+	dp_update_mlo_ctxt_stats(&mlo_dev_ctxt->stats, &vdev->stats);
+
+	/* reset vdev stats to zero */
+	qdf_mem_set(&vdev->stats, sizeof(struct cdp_vdev_stats), 0);
 
 	/* unref for mlo ctxt removed from be_vdev*/
 	dp_mlo_dev_ctxt_unref_delete(mlo_dev_ctxt, DP_MOD_ID_CHILD);

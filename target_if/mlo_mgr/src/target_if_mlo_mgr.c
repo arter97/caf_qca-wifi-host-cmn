@@ -655,6 +655,25 @@ static inline void target_if_fill_provisioned_links(
 		     &t2lm->ieee_link_map_tid,
 		     sizeof(uint16_t) * T2LM_MAX_NUM_TIDS);
 }
+
+/**
+ * target_if_fill_timer() - API to fill the t2lm timer values
+ * @params: Pointer to T2LM params structure
+ * @t2lm: Pointer to T2LM info structure
+ *
+ * Return: none
+ */
+static inline void
+target_if_fill_timer(struct wmi_host_tid_to_link_map_params *params,
+		     struct wlan_t2lm_info *t2lm)
+{
+	if (t2lm->mapping_switch_time_present)
+		params->mapping_switch_time = t2lm->mapping_switch_time;
+
+	if (t2lm->expected_duration_present)
+		params->expected_duration = t2lm->expected_duration;
+}
+
 #else
 static inline void target_if_fill_provisioned_links(
 		struct wmi_host_tid_to_link_map_params *params,
@@ -663,6 +682,12 @@ static inline void target_if_fill_provisioned_links(
 	qdf_mem_copy(&params->t2lm_info[params->num_dir].t2lm_provisioned_links,
 		     &t2lm->hw_link_map_tid,
 		     sizeof(uint16_t) * T2LM_MAX_NUM_TIDS);
+}
+
+static inline void
+target_if_fill_timer(struct wmi_host_tid_to_link_map_params *params,
+		     struct wlan_t2lm_info *t2lm)
+{
 }
 #endif
 
@@ -701,6 +726,14 @@ target_if_mlo_send_tid_to_link_mapping(struct wlan_objmgr_vdev *vdev,
 
 	if (!params.t2lm_info[params.num_dir].default_link_mapping)
 		target_if_fill_provisioned_links(&params, t2lm);
+
+	target_if_fill_timer(&params, t2lm);
+	t2lm_debug("mapping_switch_time_present %d MST %d",
+		   t2lm->mapping_switch_time_present,
+		   params.mapping_switch_time);
+	t2lm_debug("expected_switch_time_present %d EDT %d",
+		   t2lm->expected_duration_present,
+		   params.expected_duration);
 
 	t2lm_debug("num_dir:%d direction:%d default_link_mapping:%d",
 		   params.num_dir, params.t2lm_info[params.num_dir].direction,
@@ -756,6 +789,43 @@ target_if_request_ml_link_state_info(struct wlan_objmgr_psoc *psoc,
 	status = wmi_send_mlo_link_state_request_cmd(wmi_handle, &params);
 	return status;
 }
+
+#ifdef WLAN_WSI_STATS_SUPPORT
+static QDF_STATUS
+target_if_mlo_send_wsi_link_info_cmd(struct wlan_objmgr_pdev *pdev,
+				     struct mlo_wsi_link_stats *param)
+{
+	struct wmi_unified *wmi_handle;
+	struct wmi_wsi_stats_info_params params = {0};
+
+	if (!pdev) {
+		target_if_err("null pdev");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+	wmi_handle = get_wmi_unified_hdl_from_pdev(pdev);
+	if (!wmi_handle) {
+		target_if_err("null handle");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	params.pdev_id = pdev->pdev_objmgr.wlan_pdev_id;
+	params.wsi_ingress_load_info = param->ingress_cnt;
+	params.wsi_egress_load_info = param->egress_cnt;
+
+	target_if_debug("pdev id %d, ingress %d, egress %d", params.pdev_id,
+			params.wsi_ingress_load_info,
+			params.wsi_egress_load_info);
+
+	return wmi_unified_config_wsi_stats_info_cmd_send(wmi_handle, &params);
+}
+#else
+static QDF_STATUS
+target_if_mlo_send_wsi_link_info_cmd(struct wlan_objmgr_pdev *pdev,
+				     struct mlo_wsi_link_stats *param)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 
 QDF_STATUS target_if_mlo_send_link_removal_cmd(
 		struct wlan_objmgr_psoc *psoc,
@@ -878,6 +948,9 @@ target_if_mlo_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 	mlo_tx_ops->send_vdev_pause = target_if_mlo_send_vdev_pause;
 
 	target_if_mlo_register_link_switch_cnf_handler(mlo_tx_ops);
+
+	mlo_tx_ops->send_wsi_link_info_cmd =
+		target_if_mlo_send_wsi_link_info_cmd;
 
 	target_if_mlo_register_peer_ptqm_migrate_send(mlo_tx_ops);
 	return QDF_STATUS_SUCCESS;

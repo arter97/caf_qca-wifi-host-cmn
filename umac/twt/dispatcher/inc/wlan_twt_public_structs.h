@@ -915,10 +915,12 @@ enum HOST_TWT_NEXT_WORK_ACTION {
  * struct twt_work_params
  * @peer_macaddr: peer mac address
  * @dialog_id: Dialog ID
+ * @is_ps_disabled: Whether power save is disabled or not.
  */
 struct twt_work_params {
 	struct qdf_mac_addr peer_macaddr;
 	uint32_t dialog_id;
+	bool is_ps_disabled;
 };
 #ifdef WLAN_SUPPORT_BCAST_TWT
 /**

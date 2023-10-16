@@ -706,8 +706,7 @@ uint32_t dp_service_srngs(void *dp_ctx, uint32_t dp_budget, int cpu)
 budget_done:
 	qdf_atomic_clear_bit(cpu, &soc->service_rings_running);
 
-	if (soc->notify_fw_callback)
-		soc->notify_fw_callback(soc);
+	dp_umac_reset_trigger_pre_reset_notify_cb(soc);
 
 	return dp_budget - budget;
 }
@@ -1207,9 +1206,6 @@ QDF_STATUS dp_hw_link_desc_ring_alloc(struct dp_soc *soc)
 
 		soc->wbm_idle_scatter_buf_size =
 			hal_idle_list_scatter_buf_size(soc->hal_soc);
-		hal_idle_scatter_buf_num_entries(
-					soc->hal_soc,
-					soc->wbm_idle_scatter_buf_size);
 		num_scatter_bufs = hal_idle_list_num_scatter_bufs(
 					soc->hal_soc, total_mem_size,
 					soc->wbm_idle_scatter_buf_size);
@@ -1453,23 +1449,39 @@ static void dp_soc_disable_unused_mac_intr_mask(struct dp_soc *soc,
 
 	grp_mask = &soc->wlan_cfg_ctx->int_host2rxdma_ring_mask[0];
 	group_number = dp_srng_find_ring_in_mask(mac_num, grp_mask);
-	wlan_cfg_set_host2rxdma_ring_mask(soc->wlan_cfg_ctx,
-					  group_number, 0x0);
+	if (group_number < 0)
+		dp_init_debug("%pK: ring not part of any group; ring_type: RXDMA_BUF, mac_num %d",
+			      soc, mac_num);
+	else
+		wlan_cfg_set_host2rxdma_ring_mask(soc->wlan_cfg_ctx,
+						  group_number, 0x0);
 
 	grp_mask = &soc->wlan_cfg_ctx->int_rx_mon_ring_mask[0];
 	group_number = dp_srng_find_ring_in_mask(mac_num, grp_mask);
-	wlan_cfg_set_rx_mon_ring_mask(soc->wlan_cfg_ctx,
-				      group_number, 0x0);
+	if (group_number < 0)
+		dp_init_debug("%pK: ring not part of any group; ring_type: RXDMA_MONITOR_DST, mac_num %d",
+			      soc, mac_num);
+	else
+		wlan_cfg_set_rx_mon_ring_mask(soc->wlan_cfg_ctx,
+					      group_number, 0x0);
 
 	grp_mask = &soc->wlan_cfg_ctx->int_rxdma2host_ring_mask[0];
 	group_number = dp_srng_find_ring_in_mask(mac_num, grp_mask);
-	wlan_cfg_set_rxdma2host_ring_mask(soc->wlan_cfg_ctx,
-					  group_number, 0x0);
+	if (group_number < 0)
+		dp_init_debug("%pK: ring not part of any group; ring_type: RXDMA_DST, mac_num %d",
+			      soc, mac_num);
+	else
+		wlan_cfg_set_rxdma2host_ring_mask(soc->wlan_cfg_ctx,
+						  group_number, 0x0);
 
 	grp_mask = &soc->wlan_cfg_ctx->int_host2rxdma_mon_ring_mask[0];
 	group_number = dp_srng_find_ring_in_mask(mac_num, grp_mask);
-	wlan_cfg_set_host2rxdma_mon_ring_mask(soc->wlan_cfg_ctx,
-					      group_number, 0x0);
+	if (group_number < 0)
+		dp_init_debug("%pK: ring not part of any group; ring_type: RXDMA_MONITOR_BUF, mac_num %d",
+			      soc, mac_num);
+	else
+		wlan_cfg_set_host2rxdma_mon_ring_mask(soc->wlan_cfg_ctx,
+						      group_number, 0x0);
 }
 
 #ifdef IPA_OFFLOAD

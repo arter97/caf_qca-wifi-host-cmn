@@ -172,6 +172,7 @@ struct mlo_chip_info {
  * @dp_handle: pointer to DP ML context
  * @chip_info: chip specific info of the soc
  * @tsf_sync_enabled: MLO TSF sync is enabled at FW or not
+ * @wsi_stats_info_support: WSI stats support at FW or not
  */
 struct mlo_setup_info {
 	uint8_t ml_grp_id;
@@ -192,6 +193,7 @@ struct mlo_setup_info {
 	struct cdp_mlo_ctxt *dp_handle;
 	struct mlo_chip_info chip_info;
 	bool tsf_sync_enabled;
+	uint8_t wsi_stats_info_support;
 };
 
 /**
@@ -208,9 +210,29 @@ struct mlo_state_params {
 
 #endif
 
+/**
+ * enum wlan_mlo_link_switch_notify_reason - Enum for link switch notifier
+ *                                           callback trigger reason.
+ * @MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_PRE_SER: Prior to start of
+ *                                                   link switch and prior to
+ *                                                   serializing link switch.
+ * @MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_POST_SER: Prior to link switch start
+ *                                                    but link switch is
+ *                                                    serialized
+ * @MLO_LINK_SWITCH_NOTIFY_REASON_STOP_FAILURE: Link switch failure notify
+ * @MLO_LINK_SWITCH_NOTIFY_REASON_STOP_SUCCESS: Link switch success notify
+ */
+enum wlan_mlo_link_switch_notify_reason {
+	MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_PRE_SER,
+	MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_POST_SER,
+	MLO_LINK_SWITCH_NOTIFY_REASON_STOP_FAILURE,
+	MLO_LINK_SWITCH_NOTIFY_REASON_STOP_SUCCESS,
+};
+
 typedef QDF_STATUS
 (*mlo_mgr_link_switch_notifier_cb)(struct wlan_objmgr_vdev *vdev,
-				   struct wlan_mlo_link_switch_req *lswitch_req);
+				   struct wlan_mlo_link_switch_req *lswitch_req,
+				   enum wlan_mlo_link_switch_notify_reason notify_reason);
 
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 /*
@@ -264,6 +286,45 @@ mlo_mgr_unregister_link_switch_notifier(enum wlan_umac_comp_id comp_id)
 }
 #endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
 
+/*
+ * struct mlo_wsi_link_stats - MLO ingress/egress counters of PSOC
+ * @ingress_cnt:  Ingress counter
+ * @egress_cnt:  Egress counter
+ * @send_wmi_cmd: To indicate whether WMI command to be sent or not
+ */
+struct mlo_wsi_link_stats {
+	uint32_t ingress_cnt;
+	uint32_t egress_cnt;
+	bool  send_wmi_cmd;
+};
+
+/*
+ * struct mlo_wsi_psoc_grp - MLO WSI PSOC group
+ * @psoc_order:  PSOC list in WSI loop order
+ * @num_psoc: num psoc in the group
+ */
+struct mlo_wsi_psoc_grp {
+	uint32_t psoc_order[WLAN_OBJMGR_MAX_DEVICES];
+	uint32_t num_psoc;
+};
+
+#define MLO_WSI_MAX_MLO_GRPS 2
+#define MLO_WSI_PSOC_ID_MAX 0xFF
+
+/*
+ * struct mlo_wsi_info - MLO ingress/egress link context per-PSOC
+ * @mlo_psoc_grp: PSOC IDs for different MLO groups
+ * @num_psoc: Total num psoc
+ * @link_stats: Ingress and Egress counts for PSOCs
+ * @block_wmi_cmd: Blocks WMI command
+ */
+struct mlo_wsi_info {
+	struct mlo_wsi_psoc_grp mlo_psoc_grp[MLO_WSI_MAX_MLO_GRPS];
+	uint32_t num_psoc;
+	struct mlo_wsi_link_stats link_stats[WLAN_OBJMGR_MAX_DEVICES];
+	uint8_t block_wmi_cmd;
+};
+
 /**
  * struct mlo_mgr_context - MLO manager context
  * @ml_dev_list_lock: ML DEV list lock
@@ -282,6 +343,7 @@ mlo_mgr_unregister_link_switch_notifier(enum wlan_umac_comp_id comp_id)
  * @mlo_forced_primary_umac_id: Force Primary UMAC ID
  * @force_non_assoc_prim_umac: Force non-assoc link to be primary umac
  * @lswitch_notifier: Link switch notifier callbacks
+ * @wsi_info: WSI stats info
  */
 struct mlo_mgr_context {
 #ifdef WLAN_MLO_USE_SPINLOCK
@@ -312,6 +374,7 @@ struct mlo_mgr_context {
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 	struct wlan_mlo_link_switch_notifier lswitch_notifier[WLAN_UMAC_COMP_ID_MAX];
 #endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
+	struct mlo_wsi_info *wsi_info;
 };
 
 /**
@@ -598,6 +661,7 @@ struct emlsr_capability {
  * @ml_partner_info: mlo partner link info
  * @emlsr_cap: EMLSR capabilities info
  * @link_force_ctx: set link force mode context
+ * @ml_link_control_mode: link control mode configured via user space
  */
 struct wlan_mlo_sta {
 	qdf_bitmap(wlan_connect_req_links, WLAN_UMAC_MLO_MAX_VDEVS);
@@ -627,6 +691,7 @@ struct wlan_mlo_sta {
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 	struct wlan_link_force_context link_force_ctx;
 #endif
+	uint8_t ml_link_control_mode;
 };
 
 /**
@@ -690,6 +755,7 @@ struct wlan_mlo_link_mac_update {
  * @mld_addr: MLO device MAC address
  * @wlan_vdev_list: list of vdevs associated with this MLO connection
  * @wlan_bridge_vdev_list: list of bridge vdevs associated with this MLO
+ * @wlan_bridge_vdev_count: number of elements in the bridge vdev list
  * @bridge_sta_ctx: bridge sta context
  * @wlan_vdev_count: number of elements in the vdev list
  * @mlo_peer_list: list peers in this MLO connection
@@ -716,6 +782,7 @@ struct wlan_mlo_dev_context {
 	struct wlan_mlo_bridge_sta *bridge_sta_ctx;
 #endif
 	uint16_t wlan_vdev_count;
+	uint16_t wlan_bridge_vdev_count;
 	struct wlan_mlo_peer_list mlo_peer_list;
 	uint16_t wlan_max_mlo_peer_count;
 #ifdef WLAN_MLO_USE_SPINLOCK

@@ -644,6 +644,22 @@ static void reg_modify_super_chan_list_for_indoor_channels(
 	}
 }
 
+/**
+ * reg_get_6g_chan_idx_for_freq() - Get 6 GHz channel index for given frequency
+ *
+ * @freq: Given frequency
+ *
+ * Return: 6 GHz channel index corresponding to the given frequency.
+ */
+static uint16_t
+reg_get_6g_chan_idx_for_freq(qdf_freq_t freq)
+{
+	enum channel_enum freq_idx;
+
+	freq_idx = reg_get_chan_enum_for_freq(freq);
+	return reg_convert_enum_to_6g_idx(freq_idx);
+}
+
 static void
 reg_dis_6g_chan_in_super_chan_list(struct wlan_objmgr_pdev *pdev,
 				   struct super_chan_info *chan_info,
@@ -677,9 +693,9 @@ reg_dis_6g_chan_in_super_chan_list(struct wlan_objmgr_pdev *pdev,
 		reg_get_active_6ghz_freq_range_with_fcc_set(pdev_priv_obj,
 							    bonded_chan);
 	if (bonded_chan->start_freq && bonded_chan->end_freq) {
-		active_6g_start = reg_get_chan_enum_for_freq(
+		active_6g_start = reg_get_6g_chan_idx_for_freq(
 						bonded_chan->start_freq);
-		active_6g_end = reg_get_chan_enum_for_freq(
+		active_6g_end = reg_get_6g_chan_idx_for_freq(
 						bonded_chan->end_freq);
 	}
 
@@ -4612,9 +4628,15 @@ __reg_process_master_chan_list_ext(struct cur_regulatory_info *regulat_info)
 		mas_chan_list_6g_ap[i] =
 			this_mchan_params->mas_chan_list_6g_ap[i];
 
-		for (j = 0; j < REG_MAX_CLIENT_TYPE; j++)
+		qdf_mem_zero(mas_chan_list_6g_ap[i],
+			     NUM_6GHZ_CHANNELS * sizeof(struct regulatory_channel));
+
+		for (j = 0; j < REG_MAX_CLIENT_TYPE; j++) {
 			mas_chan_list_6g_client[i][j] =
 				this_mchan_params->mas_chan_list_6g_client[i][j];
+			qdf_mem_zero(mas_chan_list_6g_client[i][j],
+				     NUM_6GHZ_CHANNELS * sizeof(struct regulatory_channel));
+		}
 	}
 
 	reg_init_channel_map(regulat_info->dfs_region);
