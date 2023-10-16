@@ -77,6 +77,16 @@ QDF_STATUS wmi_send_mlo_link_removal_cmd(
 		const struct mlo_link_removal_cmd_params *param);
 
 /**
+ * wmi_send_mlo_vdev_pause() - Send WMI command for MLO vdev pause
+ * @wmi: wmi handle
+ * @info: MLO vdev pause information
+ *
+ * Return: QDF_STATUS_SUCCESS of operation
+ */
+QDF_STATUS wmi_send_mlo_vdev_pause(wmi_unified_t wmi,
+				   struct mlo_vdev_pause *info);
+
+/**
  * wmi_extract_mlo_link_removal_evt_fixed_param() - Extract fixed parameters TLV
  * from the MLO link removal WMI  event
  * @wmi_handle: wmi handle
@@ -192,6 +202,19 @@ QDF_STATUS wmi_extract_mlo_link_state_info_event(
 			void *evt_buf,
 			struct ml_link_state_info_event *params);
 
+/**
+ * wmi_extract_mlo_link_disable_request_evt() - Extract fixed parameters TLV
+ * from the MLO link disable request WMI event
+ * @wmi: wmi handle
+ * @buf: pointer to event buffer
+ * @params: MLO link disable request event parameters
+ *
+ * Return: QDF_STATUS_SUCCESS of operation
+ */
+QDF_STATUS wmi_extract_mlo_link_disable_request_evt(
+		struct wmi_unified *wmi,
+		void *buf,
+		struct mlo_link_disable_request_evt_params *params);
 #endif /* WLAN_FEATURE_11BE */
 
 #endif /*_WMI_UNIFIED_11BE_API_H_*/

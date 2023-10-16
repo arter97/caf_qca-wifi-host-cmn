@@ -593,6 +593,20 @@ struct hif_event_history {
 };
 
 /**
+ * hif_desc_history_log_register() - Register hif_event_desc_history buffers
+ *
+ * Return: None
+ */
+void hif_desc_history_log_register(void);
+
+/**
+ * hif_desc_history_log_unregister() - Unregister hif_event_desc_history
+ *
+ * Return: None
+ */
+void hif_desc_history_log_unregister(void);
+
+/**
  * hif_hist_record_event() - Record one datapath event in history
  * @hif_ctx: HIF opaque context
  * @event: DP event entry
@@ -653,6 +667,13 @@ static inline void hif_record_event(struct hif_opaque_softc *hif_ctx,
 }
 
 #else
+static inline void hif_desc_history_log_register(void)
+{
+}
+
+static inline void hif_desc_history_log_unregister(void)
+{
+}
 
 static inline void hif_record_event(struct hif_opaque_softc *hif_ctx,
 				    uint8_t intr_grp_id,
@@ -802,6 +823,8 @@ struct htc_callbacks {
  * @get_bandwidth_level: Query current bandwidth level for the driver
  * @prealloc_get_consistent_mem_unligned: get prealloc unaligned consistent mem
  * @prealloc_put_consistent_mem_unligned: put unaligned consistent mem to pool
+ * @prealloc_get_multi_pages: get prealloc multi pages memory
+ * @prealloc_put_multi_pages: put prealloc multi pages memory back to pool
  * This Structure provides callback pointer for HIF to query hdd for driver
  * states.
  */
@@ -817,6 +840,13 @@ struct hif_driver_state_callbacks {
 						       qdf_dma_addr_t *paddr,
 						       uint32_t ring_type);
 	void (*prealloc_put_consistent_mem_unaligned)(void *vaddr);
+	void (*prealloc_get_multi_pages)(uint32_t desc_type,
+					 qdf_size_t elem_size,
+					 uint16_t elem_num,
+					 struct qdf_mem_multi_page_t *pages,
+					 bool cacheable);
+	void (*prealloc_put_multi_pages)(uint32_t desc_type,
+					 struct qdf_mem_multi_page_t *pages);
 };
 
 /* This API detaches the HTC layer from the HIF device */
@@ -2360,12 +2390,29 @@ void hif_latency_detect_credit_record_time(
 
 void hif_latency_detect_timer_start(struct hif_opaque_softc *hif_ctx);
 void hif_latency_detect_timer_stop(struct hif_opaque_softc *hif_ctx);
-void hif_tasklet_latency(struct hif_softc *scn, bool from_timer);
-void hif_credit_latency(struct hif_softc *scn, bool from_timer);
 void hif_check_detection_latency(struct hif_softc *scn,
 				 bool from_timer,
 				 uint32_t bitmap_type);
 void hif_set_enable_detection(struct hif_opaque_softc *hif_ctx, bool value);
+
+/**
+ * hif_tasklet_latency_record_exec() - record execute time and
+ * check the latency
+ * @scn: HIF opaque context
+ * @idx: CE id
+ *
+ * Return: None
+ */
+void hif_tasklet_latency_record_exec(struct hif_softc *scn, int idx);
+
+/**
+ * hif_tasklet_latency_record_sched() - record schedule time of a tasklet
+ * @scn: HIF opaque context
+ * @idx: CE id
+ *
+ * Return: None
+ */
+void hif_tasklet_latency_record_sched(struct hif_softc *scn, int idx);
 #else
 static inline
 void hif_latency_detect_timer_start(struct hif_opaque_softc *hif_ctx)
@@ -2388,6 +2435,14 @@ void hif_check_detection_latency(struct hif_softc *scn,
 
 static inline
 void hif_set_enable_detection(struct hif_opaque_softc *hif_ctx, bool value)
+{}
+
+static inline
+void hif_tasklet_latency_record_exec(struct hif_softc *scn, int idx)
+{}
+
+static inline
+void hif_tasklet_latency_record_sched(struct hif_softc *scn, int idx)
 {}
 #endif
 

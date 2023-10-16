@@ -88,6 +88,11 @@ struct htt_dbgfs_cfg {
 /* Reserve for HTT Stats OBSS PD support: 6th bit */
 #define DBG_STATS_COOKIE_HTT_OBSS BIT(6)
 
+#define DP_MAX_VLAN_IDS 4096
+#define DP_VLAN_UNTAGGED 0
+#define DP_VLAN_TAGGED_MULTICAST 1
+#define DP_VLAN_TAGGED_UNICAST 2
+
 /**
  * Bitmap of HTT PPDU TLV types for Default mode
  */
@@ -3611,6 +3616,13 @@ static inline QDF_STATUS dp_soc_swlm_detach(struct dp_soc *soc)
 }
 #endif /* !WLAN_DP_FEATURE_SW_LATENCY_MGR */
 
+#ifndef WLAN_DP_PROFILE_SUPPORT
+static inline void wlan_dp_soc_cfg_sync_profile(struct cdp_soc_t *cdp_soc) {}
+
+static inline void wlan_dp_pdev_cfg_sync_profile(struct cdp_soc_t *cdp_soc,
+						 uint8_t pdev_id) {}
+#endif
+
 /**
  * dp_get_peer_id(): function to get peer id by mac
  * @soc: Datapath soc handle
@@ -3683,7 +3695,7 @@ void dp_context_free_mem(struct dp_soc *soc, enum dp_ctxt_type ctxt_type,
  * Return: None
  */
 void dp_desc_multi_pages_mem_alloc(struct dp_soc *soc,
-				   enum dp_desc_type desc_type,
+				   enum qdf_dp_desc_type desc_type,
 				   struct qdf_mem_multi_page_t *pages,
 				   size_t element_size,
 				   uint32_t element_num,
@@ -3705,7 +3717,7 @@ void dp_desc_multi_pages_mem_alloc(struct dp_soc *soc,
  * Return: None
  */
 void dp_desc_multi_pages_mem_free(struct dp_soc *soc,
-				  enum dp_desc_type desc_type,
+				  enum qdf_dp_desc_type desc_type,
 				  struct qdf_mem_multi_page_t *pages,
 				  qdf_dma_context_t memctxt,
 				  bool cacheable);
@@ -3727,7 +3739,7 @@ void dp_context_free_mem(struct dp_soc *soc, enum dp_ctxt_type ctxt_type,
 
 static inline
 void dp_desc_multi_pages_mem_alloc(struct dp_soc *soc,
-				   enum dp_desc_type desc_type,
+				   enum qdf_dp_desc_type desc_type,
 				   struct qdf_mem_multi_page_t *pages,
 				   size_t element_size,
 				   uint32_t element_num,
@@ -3740,7 +3752,7 @@ void dp_desc_multi_pages_mem_alloc(struct dp_soc *soc,
 
 static inline
 void dp_desc_multi_pages_mem_free(struct dp_soc *soc,
-				  enum dp_desc_type desc_type,
+				  enum qdf_dp_desc_type desc_type,
 				  struct qdf_mem_multi_page_t *pages,
 				  qdf_dma_context_t memctxt,
 				  bool cacheable)
@@ -4584,4 +4596,15 @@ dp_cfg_event_record_peer_setup_evt(struct dp_soc *soc,
  * Return: none
  */
 void dp_soc_interrupt_detach(struct cdp_soc_t *txrx_soc);
+
+#ifdef QCA_MULTIPASS_SUPPORT
+/**
+ * dp_tx_remove_vlan_tag() - Remove 4 bytes of vlan tag
+ * @vdev: DP vdev handle
+ * @nbuf: network buffer
+ *
+ * Return: void
+ */
+void dp_tx_remove_vlan_tag(struct dp_vdev *vdev, qdf_nbuf_t nbuf);
+#endif
 #endif /* #ifndef _DP_INTERNAL_H_ */

@@ -2189,7 +2189,7 @@ static void mlo_process_link_remove(struct wlan_objmgr_vdev *vdev,
 	/* Link delete triggered from AP,
 	 * start timer with tbtt count * beacon interval
 	 */
-	tbtt_count = link_info->delete_timer;
+	tbtt_count = link_info->ap_removal_timer;
 	bcn_int = mlo_get_bcn_interval_by_bssid(
 			wlan_vdev_get_pdev(vdev),
 			wlan_peer_get_macaddr(bss_peer));
@@ -2379,5 +2379,33 @@ err_release_refs:
 
 	for (i = 0; i < vdev_count; i++)
 		mlo_release_vdev_ref(wlan_vdev_list[i]);
+}
+
+void
+wlan_mlo_send_vdev_pause(struct wlan_objmgr_psoc *psoc,
+			 struct wlan_objmgr_vdev *vdev,
+			 uint16_t session_id,
+			 uint16_t vdev_pause_dur)
+{
+	struct wlan_lmac_if_mlo_tx_ops *mlo_tx_ops;
+	struct mlo_vdev_pause vdev_pause_info;
+	QDF_STATUS status = QDF_STATUS_E_FAILURE;
+
+	mlo_tx_ops = &psoc->soc_cb.tx_ops->mlo_ops;
+	if (!mlo_tx_ops) {
+		mlo_err("tx_ops is null!");
+		return;
+	}
+
+	if (!mlo_tx_ops->send_vdev_pause) {
+		mlo_err("send_vdev_pause is null");
+		return;
+	}
+
+	vdev_pause_info.vdev_id = session_id;
+	vdev_pause_info.vdev_pause_duration = vdev_pause_dur;
+	status = mlo_tx_ops->send_vdev_pause(psoc, &vdev_pause_info);
+	if (QDF_IS_STATUS_ERROR(status))
+		mlo_err("Failed to send vdev pause to FW");
 }
 #endif

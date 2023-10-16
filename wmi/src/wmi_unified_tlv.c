@@ -432,6 +432,7 @@ static const uint32_t pdev_param_tlv[] = {
 	PARAM_MAP(pdev_param_cts2self_for_p2p_go_config,
 		  PDEV_PARAM_CTS2SELF_FOR_P2P_GO_CONFIG),
 	PARAM_MAP(pdev_param_txpower_reason_sar, PDEV_PARAM_TXPOWER_REASON_SAR),
+	PARAM_MAP(pdev_param_pcie_config, PDEV_PARAM_PCIE_CONFIG),
 };
 
 /* Populate vdev_param array whose index is host param, value is target param */
@@ -6652,6 +6653,7 @@ static QDF_STATUS send_process_ll_stats_get_cmd_tlv(wmi_unified_t wmi_handle,
 	wmi_buf_t buf;
 	uint8_t *buf_ptr;
 	int ret;
+	bool is_link_stats_over_qmi;
 
 	len = sizeof(*cmd);
 	buf = wmi_buf_alloc(wmi_handle, len);
@@ -6680,8 +6682,20 @@ static QDF_STATUS send_process_ll_stats_get_cmd_tlv(wmi_unified_t wmi_handle,
 		 QDF_MAC_ADDR_REF(get_req->peer_macaddr.bytes));
 
 	wmi_mtrace(WMI_REQUEST_LINK_STATS_CMDID, cmd->vdev_id, 0);
-	ret = wmi_unified_cmd_send_pm_chk(wmi_handle, buf, len,
-					  WMI_REQUEST_LINK_STATS_CMDID, true);
+	is_link_stats_over_qmi = is_service_enabled_tlv(
+			wmi_handle,
+			WMI_SERVICE_UNIFIED_LL_GET_STA_OVER_QMI_SUPPORT);
+
+	if (is_link_stats_over_qmi) {
+		ret = wmi_unified_cmd_send_over_qmi(
+					wmi_handle, buf, len,
+					WMI_REQUEST_LINK_STATS_CMDID);
+	} else {
+		ret = wmi_unified_cmd_send_pm_chk(
+					wmi_handle, buf, len,
+					WMI_REQUEST_LINK_STATS_CMDID, true);
+	}
+
 	if (ret) {
 		wmi_buf_free(buf);
 		return QDF_STATUS_E_FAILURE;
@@ -14145,6 +14159,22 @@ extract_hw_bdf_status(wmi_service_ready_ext2_event_fixed_param *ev)
 	}
 }
 
+#ifdef QCA_MULTIPASS_SUPPORT
+static void
+extract_multipass_sap_cap(struct wlan_psoc_host_service_ext2_param *param,
+			  uint32_t target_cap_flag)
+{
+	param->is_multipass_sap =
+	WMI_TARGET_CAP_MULTIPASS_SAP_SUPPORT_GET(target_cap_flag);
+}
+#else
+static void
+extract_multipass_sap_cap(struct wlan_psoc_host_service_ext2_param *param,
+			  uint32_t target_cap_flag)
+{
+}
+#endif
+
 /**
  * extract_service_ready_ext2_tlv() - extract service ready ext2 params from
  * event
@@ -14188,11 +14218,15 @@ extract_service_ready_ext2_tlv(wmi_unified_t wmi_handle, uint8_t *event,
 	param->num_msdu_idx_qtype_map =
 				param_buf->num_htt_msdu_idx_to_qtype_map;
 
-	if (param_buf->nan_cap)
+	if (param_buf->nan_cap) {
 		param->max_ndp_sessions =
 			param_buf->nan_cap->max_ndp_sessions;
-	else
+		param->max_nan_pairing_sessions =
+			param_buf->nan_cap->max_pairing_sessions;
+	} else {
 		param->max_ndp_sessions = 0;
+		param->max_nan_pairing_sessions = 0;
+	}
 
 	param->preamble_puncture_bw_cap = ev->preamble_puncture_bw;
 	param->num_scan_radio_caps = param_buf->num_wmi_scan_radio_caps;
@@ -14205,6 +14239,9 @@ extract_service_ready_ext2_tlv(wmi_unified_t wmi_handle, uint8_t *event,
 	param->max_users_ul_mumimo = WMI_MAX_USER_PER_PPDU_UL_MUMIMO_GET(
 						ev->max_user_per_ppdu_mumimo);
 	param->target_cap_flags = ev->target_cap_flags;
+
+	extract_multipass_sap_cap(param, ev->target_cap_flags);
+
 	extract_ul_mumimo_support(param);
 	wmi_debug("htt peer data :%d", ev->target_cap_flags);
 
@@ -20486,7 +20523,7 @@ struct wmi_ops tlv_ops =  {
 };
 
 #ifdef WLAN_FEATURE_11BE_MLO
-static void populate_tlv_events_id_mlo(uint32_t *event_ids)
+static void populate_tlv_events_id_mlo(WMI_EVT_ID *event_ids)
 {
 	event_ids[wmi_mlo_setup_complete_event_id] =
 			WMI_MLO_SETUP_COMPLETE_EVENTID;
@@ -20502,9 +20539,11 @@ static void populate_tlv_events_id_mlo(uint32_t *event_ids)
 			WMI_MLO_LINK_REMOVAL_EVENTID;
 	event_ids[wmi_mlo_link_state_info_eventid] =
 			WMI_MLO_VDEV_LINK_INFO_EVENTID;
+	event_ids[wmi_mlo_link_disable_request_eventid] =
+			WMI_MLO_LINK_DISABLE_REQUEST_EVENTID;
 }
 #else /* WLAN_FEATURE_11BE_MLO */
-static inline void populate_tlv_events_id_mlo(uint32_t *event_ids)
+static inline void populate_tlv_events_id_mlo(WMI_EVT_ID *event_ids)
 {
 }
 #endif /* WLAN_FEATURE_11BE_MLO */
@@ -20515,7 +20554,7 @@ static inline void populate_tlv_events_id_mlo(uint32_t *event_ids)
  *
  * Return: None
  */
-static void populate_tlv_events_id(uint32_t *event_ids)
+static void populate_tlv_events_id(WMI_EVT_ID *event_ids)
 {
 	event_ids[wmi_service_ready_event_id] = WMI_SERVICE_READY_EVENTID;
 	event_ids[wmi_ready_event_id] = WMI_READY_EVENTID;

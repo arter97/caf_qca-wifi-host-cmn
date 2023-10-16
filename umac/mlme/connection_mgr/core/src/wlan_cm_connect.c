@@ -1547,9 +1547,22 @@ cm_handle_connect_req_in_non_init_state(struct cnx_mgr *cm_ctx,
 					struct cm_connect_req *cm_req,
 					enum wlan_cm_sm_state cm_state_substate)
 {
-	if (cm_state_substate != WLAN_CM_S_CONNECTED &&
-	    cm_is_connect_req_reassoc(&cm_req->req)) {
-		cm_req->req.reassoc_in_non_connected = true;
+	/*
+	 * Connect re-assoc req should have been received in one of the
+	 * following states:
+	 * a) SB disconnect in progress
+	 * b) Roam start/Roam sync in progress
+	 * c) Reassoc
+	 * d) Connected state with LFR3 disabled
+	 * e) Invalid Roam request
+	 *
+	 * In this case, set reassoc_in_non_init flag, so that disconnect can
+	 * be notified to the upper layers if connect request fails. This is
+	 * required by upper layers to clear the connection state of the
+	 * previous connection.
+	 */
+	if (cm_is_connect_req_reassoc(&cm_req->req)) {
+		cm_req->req.reassoc_in_non_init = true;
 		mlme_debug(CM_PREFIX_FMT "Reassoc received in %d state",
 			   CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev),
 					 cm_req->cm_id),
@@ -1730,6 +1743,7 @@ static QDF_STATUS cm_get_valid_candidate(struct cnx_mgr *cm_ctx,
 	uint8_t vdev_id = wlan_vdev_get_id(cm_ctx->vdev);
 	bool use_same_candidate = false;
 	int32_t akm;
+	struct qdf_mac_addr *pmksa_mac;
 
 	psoc = wlan_vdev_get_psoc(cm_ctx->vdev);
 	if (!psoc) {
@@ -1855,9 +1869,19 @@ flush_single_pmk:
 	 */
 	if (prev_candidate && !use_same_candidate &&
 	    util_scan_entry_single_pmk(psoc, prev_candidate->entry) &&
-	    QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_SAE))
-		cm_delete_pmksa_for_single_pmk_bssid(cm_ctx,
-						&prev_candidate->entry->bssid);
+	    QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_SAE)) {
+		pmksa_mac = &prev_candidate->entry->bssid;
+		cm_delete_pmksa_for_single_pmk_bssid(cm_ctx, pmksa_mac);
+
+		/* If the candidate is ML capable, the PMKSA entry might
+		 * exist with it's MLD address, so check and purge the
+		 * PMKSA entry with MLD address for ML candidate.
+		 */
+		pmksa_mac = (struct qdf_mac_addr *)
+				util_scan_entry_mldaddr(prev_candidate->entry);
+		if (pmksa_mac)
+			cm_delete_pmksa_for_single_pmk_bssid(cm_ctx, pmksa_mac);
+	}
 
 	if (same_candidate_used)
 		*same_candidate_used = use_same_candidate;
@@ -1988,11 +2012,19 @@ void cm_fill_vdev_crypto_params(struct cnx_mgr *cm_ctx,
 				   req->crypto.rsn_caps);
 }
 
+static QDF_STATUS
+cm_if_mgr_inform_connect_active(struct wlan_objmgr_vdev *vdev)
+{
+	return if_mgr_deliver_event(vdev, WLAN_IF_MGR_EV_CONNECT_ACTIVE, NULL);
+}
+
 QDF_STATUS cm_connect_active(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 {
 	struct cm_req *cm_req;
 	QDF_STATUS status;
 	struct wlan_cm_connect_req *req;
+
+	cm_if_mgr_inform_connect_active(cm_ctx->vdev);
 
 	cm_ctx->active_cm_id = *cm_id;
 	cm_req = cm_get_req_by_cm_id(cm_ctx, *cm_id);
@@ -2482,16 +2514,16 @@ cm_clear_vdev_mlo_cap(struct wlan_objmgr_vdev *vdev)
 #endif /*WLAN_FEATURE_11BE_MLO*/
 
 /**
- * cm_is_connect_id_reassoc_in_non_connected()
+ * cm_is_connect_id_reassoc_in_non_init()
  * @cm_ctx: connection manager context
  * @cm_id: cm id
  *
- * If connect req is a reassoc req and received in not connected state
+ * If connect req is a reassoc req and received in non init state
  *
  * Return: bool
  */
-static bool cm_is_connect_id_reassoc_in_non_connected(struct cnx_mgr *cm_ctx,
-						      wlan_cm_id cm_id)
+static bool cm_is_connect_id_reassoc_in_non_init(struct cnx_mgr *cm_ctx,
+						 wlan_cm_id cm_id)
 {
 	qdf_list_node_t *cur_node = NULL, *next_node = NULL;
 	struct cm_req *cm_req;
@@ -2508,7 +2540,7 @@ static bool cm_is_connect_id_reassoc_in_non_connected(struct cnx_mgr *cm_ctx,
 		cm_req = qdf_container_of(cur_node, struct cm_req, node);
 
 		if (cm_req->cm_id == cm_id) {
-			if (cm_req->connect_req.req.reassoc_in_non_connected)
+			if (cm_req->connect_req.req.reassoc_in_non_init)
 				is_reassoc = true;
 			cm_req_lock_release(cm_ctx);
 			return is_reassoc;
@@ -2576,7 +2608,7 @@ QDF_STATUS cm_notify_connect_complete(struct cnx_mgr *cm_ctx,
 	 */
 	if (QDF_IS_STATUS_ERROR(resp->connect_status) &&
 	    sm_state == WLAN_CM_S_INIT &&
-	    cm_is_connect_id_reassoc_in_non_connected(cm_ctx, resp->cm_id)) {
+	    cm_is_connect_id_reassoc_in_non_init(cm_ctx, resp->cm_id)) {
 		resp->send_disconnect = true;
 		mlme_debug(CM_PREFIX_FMT "Set send disconnect to true to indicate disconnect instead of connect resp",
 			   CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev),
@@ -2670,6 +2702,7 @@ QDF_STATUS cm_connect_rsp(struct wlan_objmgr_vdev *vdev,
 	QDF_STATUS qdf_status;
 	wlan_cm_id cm_id;
 	uint32_t prefix;
+	struct qdf_mac_addr pmksa_mac = QDF_MAC_ADDR_ZERO_INIT;
 
 	cm_ctx = cm_get_cm_ctx(vdev);
 	if (!cm_ctx)
@@ -2686,6 +2719,8 @@ QDF_STATUS cm_connect_rsp(struct wlan_objmgr_vdev *vdev,
 		goto post_err;
 	}
 
+	cm_connect_rsp_get_mld_addr_or_bssid(resp, &pmksa_mac);
+
 	if (QDF_IS_STATUS_SUCCESS(resp->connect_status)) {
 		/*
 		 * On successful connection to sae single pmk AP,
@@ -2693,7 +2728,7 @@ QDF_STATUS cm_connect_rsp(struct wlan_objmgr_vdev *vdev,
 		 */
 		if (cm_is_cm_id_current_candidate_single_pmk(cm_ctx, cm_id))
 			wlan_crypto_selective_clear_sae_single_pmk_entries(vdev,
-								&resp->bssid);
+								&pmksa_mac);
 		qdf_status =
 			cm_sm_deliver_event(vdev,
 					    WLAN_CM_SM_EV_CONNECT_SUCCESS,
@@ -2714,7 +2749,7 @@ QDF_STATUS cm_connect_rsp(struct wlan_objmgr_vdev *vdev,
 	 * the same stale PMKID. when connection is tried again with this AP.
 	 */
 	if (resp->status_code == STATUS_INVALID_PMKID)
-		cm_delete_pmksa_for_bssid(cm_ctx, &resp->bssid);
+		cm_delete_pmksa_for_bssid(cm_ctx, &pmksa_mac);
 
 	/* In case of failure try with next candidate */
 	qdf_status =
@@ -2729,7 +2764,7 @@ QDF_STATUS cm_connect_rsp(struct wlan_objmgr_vdev *vdev,
 	 * entry in case of post failure.
 	 */
 	if (cm_is_cm_id_current_candidate_single_pmk(cm_ctx, cm_id))
-		cm_delete_pmksa_for_single_pmk_bssid(cm_ctx, &resp->bssid);
+		cm_delete_pmksa_for_single_pmk_bssid(cm_ctx, &pmksa_mac);
 post_err:
 	/*
 	 * If there is a event posting error it means the SM state is not in

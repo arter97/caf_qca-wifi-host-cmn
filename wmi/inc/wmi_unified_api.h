@@ -703,6 +703,34 @@ static inline bool wmi_get_runtime_pm_inprogress(wmi_unified_t wmi_handle)
 }
 #endif
 
+/**
+ * wmi_set_wow_enable_ack_failed() - set wow enable ack failed status
+ *     if wow enable ack failed, which means host and fw have some problem
+ *     to exchange wmi cmd. set indication here and block wmi cmds.
+ *     the cmds can be sent again after wmi re-init in subsystem recovery.
+ * @wmi_handle: wmi context
+ *
+ * return: none
+ */
+void wmi_set_wow_enable_ack_failed(wmi_unified_t wmi_handle);
+
+/**
+ * wmi_clear_wow_enable_ack_failed() - clear wow enable ack failed status
+ *     explicitly clear this status when wmi close of SSR
+ * @wmi_handle: wmi context
+ *
+ * return: none
+ */
+void wmi_clear_wow_enable_ack_failed(wmi_unified_t wmi_handle);
+
+/**
+ * wmi_has_wow_enable_ack_failed() - get wow enable ack failed status
+ * @wmi_handle: wmi context
+ *
+ * Return: true if wow enable ack already failed. other false
+ */
+bool wmi_has_wow_enable_ack_failed(wmi_unified_t wmi_handle);
+
 void *wmi_unified_get_soc_handle(struct wmi_unified *wmi_handle);
 
 void *wmi_unified_get_pdev_handle(struct wmi_soc *soc, uint32_t pdev_idx);

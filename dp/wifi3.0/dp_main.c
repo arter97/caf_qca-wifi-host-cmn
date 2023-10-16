@@ -54,6 +54,9 @@
 #include "qdf_mem.h"   /* qdf_mem_malloc,free */
 #include "cfg_ucfg_api.h"
 #include <wlan_module_ids.h>
+#ifdef QCA_MULTIPASS_SUPPORT
+#include <enet.h>
+#endif
 
 #ifdef QCA_LL_TX_FLOW_CONTROL_V2
 #include "cdp_txrx_flow_ctrl_v2.h"
@@ -92,6 +95,9 @@ cdp_dump_flow_pool_info(struct cdp_soc_t *soc)
 #endif
 #ifdef WLAN_DP_FEATURE_SW_LATENCY_MGR
 #include <wlan_dp_swlm.h>
+#endif
+#ifdef WLAN_DP_PROFILE_SUPPORT
+#include <wlan_dp_main.h>
 #endif
 #ifdef CONFIG_SAWF_DEF_QUEUES
 #include "dp_sawf.h"
@@ -2158,7 +2164,7 @@ static inline void dp_srng_mem_free_consistent(struct dp_soc *soc,
 }
 
 void dp_desc_multi_pages_mem_alloc(struct dp_soc *soc,
-				   enum dp_desc_type desc_type,
+				   enum qdf_dp_desc_type desc_type,
 				   struct qdf_mem_multi_page_t *pages,
 				   size_t element_size,
 				   uint32_t element_num,
@@ -2190,7 +2196,7 @@ end:
 }
 
 void dp_desc_multi_pages_mem_free(struct dp_soc *soc,
-				  enum dp_desc_type desc_type,
+				  enum qdf_dp_desc_type desc_type,
 				  struct qdf_mem_multi_page_t *pages,
 				  qdf_dma_context_t memctxt,
 				  bool cacheable)
@@ -3750,7 +3756,7 @@ void dp_hw_link_desc_pool_banks_free(struct dp_soc *soc, uint32_t mac_id)
 				     soc->ctrl_psoc,
 				     WLAN_MD_DP_SRNG_WBM_IDLE_LINK,
 				     "hw_link_desc_bank");
-		dp_desc_multi_pages_mem_free(soc, DP_HW_LINK_DESC_TYPE,
+		dp_desc_multi_pages_mem_free(soc, QDF_DP_HW_LINK_DESC_TYPE,
 					     pages, 0, false);
 	}
 }
@@ -3852,7 +3858,7 @@ QDF_STATUS dp_hw_link_desc_pool_banks_alloc(struct dp_soc *soc, uint32_t mac_id)
 		     soc, total_mem_size);
 
 	dp_set_max_page_size(pages, max_alloc_size);
-	dp_desc_multi_pages_mem_alloc(soc, DP_HW_LINK_DESC_TYPE,
+	dp_desc_multi_pages_mem_alloc(soc, QDF_DP_HW_LINK_DESC_TYPE,
 				      pages,
 				      link_desc_size,
 				      *total_link_descs,
@@ -5902,19 +5908,22 @@ QDF_STATUS dp_pdev_attach_wifi3(struct cdp_soc_t *txrx_soc,
 		goto fail1;
 	}
 
-	/*
-	 * set nss pdev config based on soc config
-	 */
-	nss_cfg = wlan_cfg_get_dp_soc_nss_cfg(soc_cfg_ctx);
-	wlan_cfg_set_dp_pdev_nss_enabled(pdev->wlan_cfg_ctx,
-					 (nss_cfg & (1 << pdev_id)));
-
 	pdev->soc = soc;
 	pdev->pdev_id = pdev_id;
 	soc->pdev_list[pdev_id] = pdev;
 
 	pdev->lmac_id = wlan_cfg_get_hw_mac_idx(soc->wlan_cfg_ctx, pdev_id);
 	soc->pdev_count++;
+
+	/*sync DP pdev cfg items with profile support after cfg_pdev_attach*/
+	wlan_dp_pdev_cfg_sync_profile((struct cdp_soc_t *)soc, pdev_id);
+
+	/*
+	 * set nss pdev config based on soc config
+	 */
+	nss_cfg = wlan_cfg_get_dp_soc_nss_cfg(soc_cfg_ctx);
+	wlan_cfg_set_dp_pdev_nss_enabled(pdev->wlan_cfg_ctx,
+					 (nss_cfg & (1 << pdev_id)));
 
 	/* Allocate memory for pdev srng rings */
 	if (dp_pdev_srng_alloc(pdev)) {
@@ -7205,6 +7214,7 @@ static QDF_STATUS dp_vdev_attach_wifi3(struct cdp_soc_t *cdp_soc,
 	enum wlan_op_mode op_mode = vdev_info->op_mode;
 	enum wlan_op_subtype subtype = vdev_info->subtype;
 	uint8_t vdev_stats_id = vdev_info->vdev_stats_id;
+	enum QDF_OPMODE qdf_opmode = vdev_info->qdf_opmode;
 
 	vdev_context_size =
 		soc->arch_ops.txrx_get_context_size(DP_CONTEXT_TYPE_VDEV);
@@ -7232,6 +7242,7 @@ static QDF_STATUS dp_vdev_attach_wifi3(struct cdp_soc_t *cdp_soc,
 	vdev->opmode = op_mode;
 	vdev->subtype = subtype;
 	vdev->osdev = soc->osdev;
+	vdev->qdf_opmode = qdf_opmode;
 
 	vdev->osif_rx = NULL;
 	vdev->osif_rsim_rx_decap = NULL;
@@ -10624,6 +10635,9 @@ static QDF_STATUS dp_set_peer_param(struct cdp_soc_t *cdp_soc,  uint8_t vdev_id,
 		txrx_peer->nawds_enabled = val.cdp_peer_param_nawds;
 		break;
 	case CDP_CONFIG_ISOLATION:
+		dp_info("Peer " QDF_MAC_ADDR_FMT " vdev_id %d, isolation %d",
+			QDF_MAC_ADDR_REF(peer_mac), vdev_id,
+			val.cdp_peer_param_isolation);
 		dp_set_peer_isolation(txrx_peer, val.cdp_peer_param_isolation);
 		break;
 	case CDP_CONFIG_IN_TWT:
@@ -10684,6 +10698,10 @@ static QDF_STATUS dp_get_pdev_param(struct cdp_soc_t *cdp_soc, uint8_t pdev_id,
 	case CDP_MONITOR_FREQUENCY:
 		val->cdp_pdev_param_mon_freq =
 			dp_monitor_get_chan_freq((struct dp_pdev *)pdev);
+		break;
+	case CDP_CONFIG_RXDMA_BUF_RING_SIZE:
+		val->cdp_rxdma_buf_ring_size =
+			wlan_cfg_get_rx_dma_buf_ring_size(((struct dp_pdev *)pdev)->wlan_cfg_ctx);
 		break;
 	default:
 		return QDF_STATUS_E_FAILURE;
@@ -10815,6 +10833,10 @@ static QDF_STATUS dp_set_pdev_param(struct cdp_soc_t *cdp_soc, uint8_t pdev_id,
 	case CDP_CONFIG_UNDECODED_METADATA_CAPTURE_ENABLE:
 		return dp_monitor_config_undecoded_metadata_capture(pdev,
 				val.cdp_pdev_param_undecoded_metadata_enable);
+		break;
+	case CDP_CONFIG_RXDMA_BUF_RING_SIZE:
+		wlan_cfg_set_rx_dma_buf_ring_size(pdev->wlan_cfg_ctx,
+						  val.cdp_rxdma_buf_ring_size);
 		break;
 	default:
 		return QDF_STATUS_E_INVAL;
@@ -11080,6 +11102,8 @@ dp_set_vdev_param(struct cdp_soc_t *cdp_soc, uint8_t vdev_id,
 		break;
 	case CDP_UPDATE_MULTIPASS:
 		vdev->multipass_en = val.cdp_vdev_param_update_multipass;
+		dp_info("vdev %d Multipass enable %d", vdev_id,
+			vdev->multipass_en);
 		break;
 	case CDP_TX_ENCAP_TYPE:
 		vdev->tx_encap_type = val.cdp_vdev_param_tx_encap;
@@ -11246,6 +11270,40 @@ dp_set_psoc_param(struct cdp_soc_t *cdp_soc,
 		wlan_cfg_set_sawf_stats_config(wlan_cfg_ctx,
 					       val.cdp_sawf_stats);
 		break;
+	case CDP_CFG_TX_DESC_NUM:
+		wlan_cfg_set_num_tx_desc(wlan_cfg_ctx,
+					 val.cdp_tx_desc_num);
+		break;
+	case CDP_CFG_TX_EXT_DESC_NUM:
+		wlan_cfg_set_num_tx_ext_desc(wlan_cfg_ctx,
+					     val.cdp_tx_ext_desc_num);
+		break;
+	case CDP_CFG_TX_RING_SIZE:
+		wlan_cfg_set_tx_ring_size(wlan_cfg_ctx,
+					  val.cdp_tx_ring_size);
+		break;
+	case CDP_CFG_TX_COMPL_RING_SIZE:
+		wlan_cfg_set_tx_comp_ring_size(wlan_cfg_ctx,
+					       val.cdp_tx_comp_ring_size);
+		break;
+	case CDP_CFG_RX_SW_DESC_NUM:
+		wlan_cfg_set_dp_soc_rx_sw_desc_num(wlan_cfg_ctx,
+						   val.cdp_rx_sw_desc_num);
+		break;
+	case CDP_CFG_REO_DST_RING_SIZE:
+		wlan_cfg_set_reo_dst_ring_size(wlan_cfg_ctx,
+					       val.cdp_reo_dst_ring_size);
+		break;
+	case CDP_CFG_RXDMA_REFILL_RING_SIZE:
+		wlan_cfg_set_dp_soc_rxdma_refill_ring_size(wlan_cfg_ctx,
+					val.cdp_rxdma_refill_ring_size);
+		break;
+#ifdef WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL
+	case CDP_CFG_RX_REFILL_POOL_NUM:
+		wlan_cfg_set_rx_refill_buf_pool_size(wlan_cfg_ctx,
+						val.cdp_rx_refill_buf_pool_size);
+		break;
+#endif
 	default:
 		break;
 	}
@@ -11256,7 +11314,7 @@ dp_set_psoc_param(struct cdp_soc_t *cdp_soc,
 /*
  * dp_get_psoc_param: function to get parameters in soc
  * @cdp_soc : DP soc handle
- * @param: parameter type to be set
+ * @param: parameter type to be get
  * @val: address of buffer
  *
  * return: status
@@ -11266,18 +11324,21 @@ static QDF_STATUS dp_get_psoc_param(struct cdp_soc_t *cdp_soc,
 				    cdp_config_param_type *val)
 {
 	struct dp_soc *soc = (struct dp_soc *)cdp_soc;
+	struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx;
 
 	if (!soc)
 		return QDF_STATUS_E_FAILURE;
 
+	wlan_cfg_ctx = soc->wlan_cfg_ctx;
+
 	switch (param) {
 	case CDP_CFG_PEER_EXT_STATS:
 		val->cdp_psoc_param_pext_stats =
-			wlan_cfg_is_peer_ext_stats_enabled(soc->wlan_cfg_ctx);
+			wlan_cfg_is_peer_ext_stats_enabled(wlan_cfg_ctx);
 		break;
 	case CDP_CFG_VDEV_STATS_HW_OFFLOAD:
 		val->cdp_psoc_param_vdev_stats_hw_offload =
-			wlan_cfg_get_vdev_stats_hw_offload_config(soc->wlan_cfg_ctx);
+			wlan_cfg_get_vdev_stats_hw_offload_config(wlan_cfg_ctx);
 		break;
 	case CDP_UMAC_RST_SKEL_ENABLE:
 		val->cdp_umac_rst_skel = dp_umac_rst_skel_enable_get(soc);
@@ -11286,6 +11347,38 @@ static QDF_STATUS dp_get_psoc_param(struct cdp_soc_t *cdp_soc,
 		val->cdp_psoc_param_ppeds_enabled =
 			wlan_cfg_get_dp_soc_is_ppeds_enabled(soc->wlan_cfg_ctx);
 		break;
+	case CDP_CFG_TX_DESC_NUM:
+		val->cdp_tx_desc_num = wlan_cfg_get_num_tx_desc(wlan_cfg_ctx);
+		break;
+	case CDP_CFG_TX_EXT_DESC_NUM:
+		val->cdp_tx_ext_desc_num =
+			wlan_cfg_get_num_tx_ext_desc(wlan_cfg_ctx);
+		break;
+	case CDP_CFG_TX_RING_SIZE:
+		val->cdp_tx_ring_size = wlan_cfg_tx_ring_size(wlan_cfg_ctx);
+		break;
+	case CDP_CFG_TX_COMPL_RING_SIZE:
+		val->cdp_tx_comp_ring_size =
+			wlan_cfg_tx_comp_ring_size(wlan_cfg_ctx);
+		break;
+	case CDP_CFG_RX_SW_DESC_NUM:
+		val->cdp_rx_sw_desc_num =
+			wlan_cfg_get_dp_soc_rx_sw_desc_num(wlan_cfg_ctx);
+		break;
+	case CDP_CFG_REO_DST_RING_SIZE:
+		val->cdp_reo_dst_ring_size =
+			wlan_cfg_get_reo_dst_ring_size(wlan_cfg_ctx);
+		break;
+	case CDP_CFG_RXDMA_REFILL_RING_SIZE:
+		val->cdp_rxdma_refill_ring_size =
+			wlan_cfg_get_dp_soc_rxdma_refill_ring_size(wlan_cfg_ctx);
+		break;
+#ifdef WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL
+	case CDP_CFG_RX_REFILL_POOL_NUM:
+		val->cdp_rx_refill_buf_pool_size =
+			wlan_cfg_get_rx_refill_buf_pool_size(wlan_cfg_ctx);
+		break;
+#endif
 	default:
 		dp_warn("Invalid param");
 		break;
@@ -14086,7 +14179,7 @@ bool dp_evaluate_update_tx_ilp_config(struct cdp_soc_t *soc_hdl,
 		HTT_MSDUQ_INDEX_CUSTOM_PRIO_1,
 		msdu_idx_map_arr[HTT_MSDUQ_INDEX_CUSTOM_PRIO_1]);
 
-	if (HTT_MSDU_QTYPE_LATENCY_TOLERANT ==
+	if (HTT_MSDU_QTYPE_USER_SPECIFIED ==
 	    msdu_idx_map_arr[HTT_MSDUQ_INDEX_CUSTOM_PRIO_1])
 		enable_tx_ilp = true;
 
@@ -14836,20 +14929,20 @@ dp_txrx_ext_stats_request(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 static void dp_rx_hw_stats_cb(struct dp_soc *soc, void *cb_ctxt,
 			      union hal_reo_status *reo_status)
 {
-	struct dp_req_rx_hw_stats_t *rx_hw_stats = cb_ctxt;
 	struct hal_reo_queue_status *queue_status = &reo_status->queue_status;
 	bool is_query_timeout;
 
 	qdf_spin_lock_bh(&soc->rx_hw_stats_lock);
-	is_query_timeout = rx_hw_stats->is_query_timeout;
+	is_query_timeout = soc->rx_hw_stats->is_query_timeout;
 	/* free the cb_ctxt if all pending tid stats query is received */
-	if (qdf_atomic_dec_and_test(&rx_hw_stats->pending_tid_stats_cnt)) {
+	if (qdf_atomic_dec_and_test(&soc->rx_hw_stats->pending_tid_stats_cnt)) {
 		if (!is_query_timeout) {
 			qdf_event_set(&soc->rx_hw_stats_event);
 			soc->is_last_stats_ctx_init = false;
 		}
 
-		qdf_mem_free(rx_hw_stats);
+		qdf_mem_free(soc->rx_hw_stats);
+		soc->rx_hw_stats = NULL;
 	}
 
 	if (queue_status->header.status != HAL_REO_CMD_SUCCESS) {
@@ -14883,10 +14976,15 @@ dp_request_rx_hw_stats(struct cdp_soc_t *soc_hdl, uint8_t vdev_id)
 						     DP_MOD_ID_CDP);
 	struct dp_peer *peer = NULL;
 	QDF_STATUS status;
-	struct dp_req_rx_hw_stats_t *rx_hw_stats;
 	int rx_stats_sent_cnt = 0;
 	uint32_t last_rx_mpdu_received;
 	uint32_t last_rx_mpdu_missed;
+
+	if (soc->rx_hw_stats) {
+		dp_err_rl("Stats already requested");
+		status = QDF_STATUS_E_ALREADY;
+		goto out;
+	}
 
 	if (!vdev) {
 		dp_err("vdev is null for vdev_id: %u", vdev_id);
@@ -14902,9 +15000,9 @@ dp_request_rx_hw_stats(struct cdp_soc_t *soc_hdl, uint8_t vdev_id)
 		goto out;
 	}
 
-	rx_hw_stats = qdf_mem_malloc(sizeof(*rx_hw_stats));
+	soc->rx_hw_stats = qdf_mem_malloc(sizeof(*soc->rx_hw_stats));
 
-	if (!rx_hw_stats) {
+	if (!soc->rx_hw_stats) {
 		dp_err("malloc failed for hw stats structure");
 		status = QDF_STATUS_E_INVAL;
 		goto out;
@@ -14920,17 +15018,18 @@ dp_request_rx_hw_stats(struct cdp_soc_t *soc_hdl, uint8_t vdev_id)
 
 	dp_debug("HW stats query start");
 	rx_stats_sent_cnt =
-		dp_peer_rxtid_stats(peer, dp_rx_hw_stats_cb, rx_hw_stats);
+		dp_peer_rxtid_stats(peer, dp_rx_hw_stats_cb, soc->rx_hw_stats);
 	if (!rx_stats_sent_cnt) {
 		dp_err("no tid stats sent successfully");
-		qdf_mem_free(rx_hw_stats);
+		qdf_mem_free(soc->rx_hw_stats);
+		soc->rx_hw_stats = NULL;
 		qdf_spin_unlock_bh(&soc->rx_hw_stats_lock);
 		status = QDF_STATUS_E_INVAL;
 		goto out;
 	}
-	qdf_atomic_set(&rx_hw_stats->pending_tid_stats_cnt,
+	qdf_atomic_set(&soc->rx_hw_stats->pending_tid_stats_cnt,
 		       rx_stats_sent_cnt);
-	rx_hw_stats->is_query_timeout = false;
+	soc->rx_hw_stats->is_query_timeout = false;
 	soc->is_last_stats_ctx_init = true;
 	qdf_spin_unlock_bh(&soc->rx_hw_stats_lock);
 
@@ -14940,11 +15039,13 @@ dp_request_rx_hw_stats(struct cdp_soc_t *soc_hdl, uint8_t vdev_id)
 
 	qdf_spin_lock_bh(&soc->rx_hw_stats_lock);
 	if (status != QDF_STATUS_SUCCESS) {
-		dp_info("partial rx hw stats event collected with %d",
-			qdf_atomic_read(
-				&rx_hw_stats->pending_tid_stats_cnt));
-		if (soc->is_last_stats_ctx_init)
-			rx_hw_stats->is_query_timeout = true;
+		if (soc->rx_hw_stats) {
+			dp_info("partial rx hw stats event collected with %d",
+				qdf_atomic_read(
+				  &soc->rx_hw_stats->pending_tid_stats_cnt));
+			if (soc->is_last_stats_ctx_init)
+				soc->rx_hw_stats->is_query_timeout = true;
+		}
 		/**
 		 * If query timeout happened, use the last saved stats
 		 * for this time query.
@@ -15231,6 +15332,9 @@ static struct cdp_ipa_ops dp_ops_ipa = {
 	.ipa_rx_intrabss_fwd = dp_ipa_rx_intrabss_fwd,
 	.ipa_tx_buf_smmu_mapping = dp_ipa_tx_buf_smmu_mapping,
 	.ipa_tx_buf_smmu_unmapping = dp_ipa_tx_buf_smmu_unmapping,
+	.ipa_rx_buf_smmu_pool_mapping = dp_ipa_rx_buf_pool_smmu_mapping,
+	.ipa_set_smmu_mapped = dp_ipa_set_smmu_mapped,
+	.ipa_get_smmu_mapped = dp_ipa_get_smmu_mapped,
 #ifdef IPA_OPT_WIFI_DP
 	.ipa_rx_super_rule_setup = dp_ipa_rx_super_rule_setup,
 	.ipa_pcie_link_up = dp_ipa_pcie_link_up,
@@ -15600,6 +15704,10 @@ dp_soc_attach(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 		dp_err("wlan_cfg_ctx failed\n");
 		goto fail2;
 	}
+
+	/*sync DP soc cfg items with profile support after cfg_soc_attach*/
+	wlan_dp_soc_cfg_sync_profile((struct cdp_soc_t *)soc);
+
 	dp_soc_cfg_attach(soc);
 
 	if (dp_hw_link_desc_pool_banks_alloc(soc, WLAN_INVALID_PDEV_ID)) {
@@ -17532,3 +17640,100 @@ void dp_destroy_direct_link_refill_ring(struct cdp_soc_t *soc_hdl,
 	dp_srng_free(soc, &pdev->rx_refill_buf_ring4);
 }
 #endif
+
+#ifdef QCA_MULTIPASS_SUPPORT
+QDF_STATUS dp_set_vlan_groupkey(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+				uint16_t vlan_id, uint16_t group_key)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct dp_vdev *vdev = dp_vdev_get_ref_by_id(soc, vdev_id,
+						     DP_MOD_ID_TX_MULTIPASS);
+	QDF_STATUS status;
+
+	dp_info("Try: vdev_id %d, vdev %pK, multipass_en %d, vlan_id %d, group_key %d",
+		vdev_id, vdev, vdev ? vdev->multipass_en : 0, vlan_id,
+		group_key);
+	if (!vdev || !vdev->multipass_en) {
+		status = QDF_STATUS_E_INVAL;
+		goto fail;
+	}
+
+	if (!vdev->iv_vlan_map) {
+		uint16_t vlan_map_size = (sizeof(uint16_t)) * DP_MAX_VLAN_IDS;
+
+		vdev->iv_vlan_map = (uint16_t *)qdf_mem_malloc(vlan_map_size);
+		if (!vdev->iv_vlan_map) {
+			QDF_TRACE_ERROR(QDF_MODULE_ID_DP, "iv_vlan_map");
+			status = QDF_STATUS_E_NOMEM;
+			goto fail;
+		}
+
+		/*
+		 * 0 is invalid group key.
+		 * Initilalize array with invalid group keys.
+		 */
+		qdf_mem_zero(vdev->iv_vlan_map, vlan_map_size);
+	}
+
+	if (vlan_id >= DP_MAX_VLAN_IDS) {
+		status = QDF_STATUS_E_INVAL;
+		goto fail;
+	}
+
+	dp_info("Successful setting: vdev_id %d, vlan_id %d, group_key %d",
+		vdev_id, vlan_id, group_key);
+	vdev->iv_vlan_map[vlan_id] = group_key;
+	status = QDF_STATUS_SUCCESS;
+fail:
+	if (vdev)
+		dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_TX_MULTIPASS);
+	return status;
+}
+
+void dp_tx_remove_vlan_tag(struct dp_vdev *vdev, qdf_nbuf_t nbuf)
+{
+	struct vlan_ethhdr veth_hdr;
+	struct vlan_ethhdr *veh = (struct vlan_ethhdr *)nbuf->data;
+
+	/*
+	 * Extract VLAN header of 4 bytes:
+	 * Frame Format : {dst_addr[6], src_addr[6], 802.1Q header[4],
+	 *		   EtherType[2], Payload}
+	 * Before Removal : xx xx xx xx xx xx xx xx xx xx xx xx 81 00 00 02
+	 *		    08 00 45 00 00...
+	 * After Removal  : xx xx xx xx xx xx xx xx xx xx xx xx 08 00 45 00
+	 *		    00...
+	 */
+	qdf_mem_copy(&veth_hdr, veh, sizeof(veth_hdr));
+	qdf_nbuf_pull_head(nbuf, ETHERTYPE_VLAN_LEN);
+	veh = (struct vlan_ethhdr *)nbuf->data;
+	qdf_mem_copy(veh, &veth_hdr, 2 * QDF_MAC_ADDR_SIZE);
+}
+
+void dp_tx_vdev_multipass_deinit(struct dp_vdev *vdev)
+{
+	struct dp_txrx_peer *txrx_peer = NULL;
+
+	qdf_spin_lock_bh(&vdev->mpass_peer_mutex);
+	TAILQ_FOREACH(txrx_peer, &vdev->mpass_peer_list, mpass_peer_list_elem)
+		qdf_err("Peers present in mpass list : %d", txrx_peer->peer_id);
+	qdf_spin_unlock_bh(&vdev->mpass_peer_mutex);
+
+	if (vdev->iv_vlan_map) {
+		qdf_mem_free(vdev->iv_vlan_map);
+		vdev->iv_vlan_map = NULL;
+	}
+
+	qdf_spinlock_destroy(&vdev->mpass_peer_mutex);
+}
+
+void dp_peer_multipass_list_init(struct dp_vdev *vdev)
+{
+	/*
+	 * vdev->iv_vlan_map is allocated when the first configuration command
+	 * is issued to avoid unnecessary allocation for regular mode VAP.
+	 */
+	TAILQ_INIT(&vdev->mpass_peer_list);
+	qdf_spinlock_create(&vdev->mpass_peer_mutex);
+}
+#endif /* QCA_MULTIPASS_SUPPORT */

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2014, 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -54,7 +54,8 @@ typedef void (*HTC_TARGET_FAILURE)(void *Instance, QDF_STATUS Status);
 struct htc_init_info {
 	void *pContext;         /* context for target notifications */
 	void (*TargetFailure)(void *Instance, QDF_STATUS Status);
-	void (*TargetSendSuspendComplete)(void *ctx, bool is_nack);
+	void (*TargetSendSuspendComplete)(void *ctx, bool is_nack,
+					  uint16_t reason_code);
 	void (*target_initial_wakeup_cb)(void *cb_ctx);
 	void *target_psoc;
 	uint32_t cfg_wmi_credit_cnt;
@@ -397,6 +398,7 @@ struct htc_endpoint_stats {
  * @HTC_LINK_VOTE_NDP_USER_ID: ndp user id
  * @HTC_LINK_VOTE_SAP_DFS_USER_ID: sap dfs user id
  * @HTC_LINK_VOTE_STA_USER_ID: sta user id
+ * @HTC_LINK_VOTE_DIRECT_LINK_USER_ID: Direct link user ID
  * @HTC_LINK_VOTE_INVALID_MAX_USER_ID: max user id
  */
 enum htc_link_vote_user_id {
@@ -406,6 +408,7 @@ enum htc_link_vote_user_id {
 	HTC_LINK_VOTE_NDP_USER_ID = 3,
 	HTC_LINK_VOTE_SAP_DFS_USER_ID = 4,
 	HTC_LINK_VOTE_STA_USER_ID = 5,
+	HTC_LINK_VOTE_DIRECT_LINK_USER_ID = 6,
 	HTC_LINK_VOTE_INVALID_MAX_USER_ID
 };
 

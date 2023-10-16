@@ -462,32 +462,6 @@ enum dp_ctxt_type {
 };
 
 /**
- * enum dp_desc_type - source type for multiple pages allocation
- * @DP_TX_DESC_TYPE: DP SW TX descriptor
- * @DP_TX_PPEDS_DESC_TYPE: DP PPE-DS Tx descriptor
- * @DP_TX_EXT_DESC_TYPE: DP TX msdu extension descriptor
- * @DP_TX_EXT_DESC_LINK_TYPE: DP link descriptor for msdu ext_desc
- * @DP_TX_TSO_DESC_TYPE: DP TX TSO descriptor
- * @DP_TX_TSO_NUM_SEG_TYPE: DP TX number of segments
- * @DP_RX_DESC_BUF_TYPE: DP RX SW descriptor
- * @DP_RX_DESC_STATUS_TYPE: DP RX SW descriptor for monitor status
- * @DP_HW_LINK_DESC_TYPE: DP HW link descriptor
- * @DP_HW_CC_SPT_PAGE_TYPE: DP pages for HW CC secondary page table
- */
-enum dp_desc_type {
-	DP_TX_DESC_TYPE,
-	DP_TX_PPEDS_DESC_TYPE,
-	DP_TX_EXT_DESC_TYPE,
-	DP_TX_EXT_DESC_LINK_TYPE,
-	DP_TX_TSO_DESC_TYPE,
-	DP_TX_TSO_NUM_SEG_TYPE,
-	DP_RX_DESC_BUF_TYPE,
-	DP_RX_DESC_STATUS_TYPE,
-	DP_HW_LINK_DESC_TYPE,
-	DP_HW_CC_SPT_PAGE_TYPE,
-};
-
-/**
  * struct rx_desc_pool
  * @pool_size: number of RX descriptor in the pool
  * @elem_size: Element size
@@ -515,7 +489,7 @@ struct rx_desc_pool {
 	uint16_t buf_size;
 	uint8_t buf_alignment;
 	bool rx_mon_dest_frag_enable;
-	enum dp_desc_type desc_type;
+	enum qdf_dp_desc_type desc_type;
 };
 
 /**
@@ -2625,6 +2599,7 @@ struct dp_soc {
 	struct htt_t2h_stats htt_stats;
 
 	void *external_txrx_handle; /* External data path handle */
+	qdf_atomic_t ipa_map_allowed;
 #ifdef IPA_OFFLOAD
 	struct ipa_dp_tx_rsc ipa_uc_tx_rsc;
 #ifdef IPA_WDI3_TX_TWO_PIPES
@@ -2651,6 +2626,7 @@ struct dp_soc {
 	qdf_event_t rx_hw_stats_event;
 	qdf_spinlock_t rx_hw_stats_lock;
 	bool is_last_stats_ctx_init;
+	struct dp_req_rx_hw_stats_t *rx_hw_stats;
 #endif /* WLAN_FEATURE_STATS_EXT */
 
 	/* Indicates HTT map/unmap versions*/
@@ -3763,6 +3739,8 @@ struct dp_vdev {
 	/* Flag to indicate if to_fw should be set for tx pkts on this vdev */
 	bool to_fw;
 #endif
+	/* QDF VDEV operating mode  */
+	enum QDF_OPMODE qdf_opmode;
 };
 
 enum {
@@ -4750,6 +4728,8 @@ struct dp_rx_fst {
 	bool fst_in_cmem;
 	qdf_atomic_t pm_suspended;
 	bool fst_wq_defer;
+	/* Hash based routing supported */
+	bool rx_hash_enabled;
 };
 
 #endif /* WLAN_SUPPORT_RX_FISA */

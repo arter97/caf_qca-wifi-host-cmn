@@ -1396,6 +1396,10 @@ QDF_STATUS (*send_peer_update_wds_entry_cmd)(wmi_unified_t wmi_handle,
 		struct peer_update_wds_entry_params *param);
 #endif
 
+QDF_STATUS (*send_peer_vlan_config_cmd)(wmi_unified_t wmi,
+					uint8_t peer_addr[QDF_MAC_ADDR_SIZE],
+					struct peer_vlan_config_param *param);
+
 #ifdef WMI_AP_SUPPORT
 
 QDF_STATUS (*send_set_ctl_table_cmd)(wmi_unified_t wmi_handle,
@@ -1493,10 +1497,6 @@ QDF_STATUS
 QDF_STATUS (*set_rx_pkt_type_routing_tag_cmd)(
 	wmi_unified_t wmi_hdl, struct wmi_rx_pkt_protocol_routing_info *param);
 #endif /* WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG */
-
-QDF_STATUS (*send_peer_vlan_config_cmd)(wmi_unified_t wmi,
-					uint8_t peer_addr[QDF_MAC_ADDR_SIZE],
-					struct peer_vlan_config_param *param);
 
 #ifdef WLAN_SUPPORT_FILS
 QDF_STATUS (*extract_swfda_vdev_id)(wmi_unified_t wmi_handle, void *evt_buf,
@@ -3043,6 +3043,10 @@ QDF_STATUS
 				struct mlo_link_set_active_param *param);
 
 QDF_STATUS
+(*send_mlo_vdev_pause)(wmi_unified_t wmi_handle,
+		       struct mlo_vdev_pause *info);
+
+QDF_STATUS
 (*extract_mlo_link_set_active_resp)(wmi_unified_t wmi_handle,
 				    void *evt_buf,
 				    struct mlo_link_set_active_resp *resp);
@@ -3070,6 +3074,11 @@ QDF_STATUS (*extract_mgmt_rx_mlo_link_removal_info)(
 		void *buf,
 		struct mgmt_rx_mlo_link_removal_info *link_removal_info,
 		int num_link_removal_info);
+
+QDF_STATUS (*extract_mlo_link_disable_request_evt_param)(
+		struct wmi_unified *wmi_handle,
+		void *buf,
+		struct mlo_link_disable_request_evt_params *params);
 #endif
 
 #ifdef WLAN_FEATURE_SON
@@ -3304,6 +3313,7 @@ struct wmi_unified {
 	qdf_atomic_t runtime_pm_inprogress;
 #endif
 	qdf_atomic_t is_wow_bus_suspended;
+	qdf_atomic_t is_wow_enable_ack_failed;
 	bool tag_crash_inject;
 	bool tgt_force_assert_enable;
 	enum wmi_target_type target_type;

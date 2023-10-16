@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -1422,6 +1422,16 @@ void wlan_objmgr_vdev_peer_freed_notify(struct wlan_objmgr_vdev *vdev)
 	}
 }
 
+QDF_STATUS
+wlan_vdev_get_bss_peer_mac_for_pmksa(struct wlan_objmgr_vdev *vdev,
+				     struct qdf_mac_addr *bss_peer_mac)
+{
+	if (wlan_vdev_mlme_is_mlo_vdev(vdev))
+		return wlan_vdev_get_bss_peer_mld_mac(vdev, bss_peer_mac);
+
+	return wlan_vdev_get_bss_peer_mac(vdev, bss_peer_mac);
+}
+
 QDF_STATUS wlan_vdev_get_bss_peer_mac(struct wlan_objmgr_vdev *vdev,
 				      struct qdf_mac_addr *bss_peer_mac)
 {
@@ -1522,6 +1532,7 @@ void wlan_vdev_mlme_set_mlo_vdev(struct wlan_objmgr_vdev *vdev)
 	wlan_pdev_inc_mlo_vdev_count(pdev);
 
 	wlan_release_vdev_mlo_lock(vdev);
+	obj_mgr_debug("Set MLO flag: vdev_id: %d", wlan_vdev_get_id(vdev));
 }
 
 void wlan_vdev_mlme_clear_mlo_vdev(struct wlan_objmgr_vdev *vdev)
@@ -1550,6 +1561,7 @@ void wlan_vdev_mlme_clear_mlo_vdev(struct wlan_objmgr_vdev *vdev)
 	wlan_pdev_dec_mlo_vdev_count(pdev);
 
 	wlan_release_vdev_mlo_lock(vdev);
+	obj_mgr_debug("Clear MLO flag: vdev_id: %d", wlan_vdev_get_id(vdev));
 }
 
 void wlan_vdev_mlme_set_mlo_link_vdev(struct wlan_objmgr_vdev *vdev)
@@ -1569,6 +1581,7 @@ void wlan_vdev_mlme_set_mlo_link_vdev(struct wlan_objmgr_vdev *vdev)
 	wlan_vdev_mlme_feat_ext2_cap_set(vdev, WLAN_VDEV_FEXT2_MLO_STA_LINK);
 
 	wlan_release_vdev_mlo_lock(vdev);
+	obj_mgr_debug("Set MLO link flag: vdev_id: %d", wlan_vdev_get_id(vdev));
 }
 
 void wlan_vdev_mlme_clear_mlo_link_vdev(struct wlan_objmgr_vdev *vdev)
@@ -1588,5 +1601,7 @@ void wlan_vdev_mlme_clear_mlo_link_vdev(struct wlan_objmgr_vdev *vdev)
 	wlan_vdev_mlme_feat_ext2_cap_clear(vdev, WLAN_VDEV_FEXT2_MLO_STA_LINK);
 
 	wlan_release_vdev_mlo_lock(vdev);
+	obj_mgr_debug("Clear MLO link flag: vdev_id: %d",
+		      wlan_vdev_get_id(vdev));
 }
 #endif /* WLAN_FEATURE_11BE_MLO */

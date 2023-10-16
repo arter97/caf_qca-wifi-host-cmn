@@ -81,6 +81,9 @@ enum wlan_t2lm_direction {
  * @ieee_link_map_tid: Indicates ieee link id mapping of all the TIDS
  * @hw_link_map_tid: Indicates hw link id mapping of all the TIDS
  * @timer_started: flag to check if T2LM timer is started for this T2LM IE
+ * @link_mapping_size: value 1 indicates the length of Link Mapping Of TIDn
+ *                     field is 1 octet, value 0 indicates the length of the
+ *                     Link Mapping of TIDn field is 2 octets
  */
 struct wlan_t2lm_info {
 	enum wlan_t2lm_direction direction;
@@ -92,6 +95,7 @@ struct wlan_t2lm_info {
 	uint16_t ieee_link_map_tid[T2LM_MAX_NUM_TIDS];
 	uint16_t hw_link_map_tid[T2LM_MAX_NUM_TIDS];
 	bool timer_started;
+	bool link_mapping_size;
 };
 
 /**
@@ -440,11 +444,13 @@ QDF_STATUS wlan_mlo_dev_t2lm_notify_link_update(
  * wlan_mlo_parse_t2lm_ie() - API to parse the T2LM IE
  * @t2lm: Pointer to T2LM structure
  * @ie: Pointer to T2LM IE
+ * @frame_len: Action Frame length
  *
  * Return: QDF_STATUS
  */
 QDF_STATUS wlan_mlo_parse_t2lm_ie(
-	struct wlan_t2lm_onging_negotiation_info *t2lm, uint8_t *ie);
+	struct wlan_t2lm_onging_negotiation_info *t2lm, uint8_t *ie,
+	uint32_t frame_len);
 
 /**
  * wlan_mlo_add_t2lm_ie() - API to add TID-to-link mapping IE
@@ -474,6 +480,7 @@ QDF_STATUS wlan_mlo_vdev_tid_to_link_map_event(
  * wlan_mlo_parse_t2lm_action_frame() - API to parse T2LM action frame
  * @t2lm: Pointer to T2LM structure
  * @action_frm: Pointer to action frame
+ * @frame_len: Action frame length
  * @category: T2LM action frame category
  *
  * Return: 0 - success, else failure
@@ -481,6 +488,7 @@ QDF_STATUS wlan_mlo_vdev_tid_to_link_map_event(
 int wlan_mlo_parse_t2lm_action_frame(
 		struct wlan_t2lm_onging_negotiation_info *t2lm,
 		struct wlan_action_frame *action_frm,
+		uint32_t frame_len,
 		enum wlan_t2lm_category category);
 
 /**
@@ -608,6 +616,7 @@ QDF_STATUS wlan_process_bcn_prbrsp_t2lm_ie(struct wlan_objmgr_vdev *vdev,
  */
 QDF_STATUS wlan_send_tid_to_link_mapping(struct wlan_objmgr_vdev *vdev,
 					 struct wlan_t2lm_info *t2lm);
+
 /**
  * wlan_get_t2lm_mapping_status() - API to get T2LM info
  * @vdev: Pointer to vdev
@@ -630,10 +639,10 @@ QDF_STATUS wlan_get_t2lm_mapping_status(struct wlan_objmgr_vdev *vdev,
 QDF_STATUS
 wlan_send_peer_level_tid_to_link_mapping(struct wlan_objmgr_vdev *vdev,
 					 struct wlan_objmgr_peer *peer);
-
 #else
 static inline QDF_STATUS wlan_mlo_parse_t2lm_ie(
-	struct wlan_t2lm_onging_negotiation_info *t2lm, uint8_t *ie)
+	struct wlan_t2lm_onging_negotiation_info *t2lm, uint8_t *ie,
+	uint32_t frame_len)
 {
 	return QDF_STATUS_E_FAILURE;
 }
@@ -650,6 +659,7 @@ static inline
 int wlan_mlo_parse_t2lm_action_frame(
 		struct wlan_t2lm_onging_negotiation_info *t2lm,
 		struct wlan_action_frame *action_frm,
+		uint32_t frame_len,
 		enum wlan_t2lm_category category)
 {
 	return 0;
@@ -762,4 +772,42 @@ wlan_send_peer_level_tid_to_link_mapping(struct wlan_objmgr_vdev *vdev,
 	return QDF_STATUS_SUCCESS;
 }
 #endif /* WLAN_FEATURE_11BE */
+
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_FEATURE_11BE_MLO_ADV_FEATURE)
+/**
+ * wlan_clear_peer_level_tid_to_link_mapping() - API to clear peer level T2LM
+ * info negotiated using action frames to FW.
+ *
+ * @vdev: Pointer to vdev
+ *
+ * Return: none
+ */
+void
+wlan_clear_peer_level_tid_to_link_mapping(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * wlan_mlo_link_disable_request_handler() - API to handle mlo link disable
+ * request handler.
+ *
+ * @psoc: Pointer to psoc
+ * @evt_params: MLO Link disable request params
+ *
+ * Return QDF_STATUS
+ */
+QDF_STATUS
+wlan_mlo_link_disable_request_handler(struct wlan_objmgr_psoc *psoc,
+				      void *evt_params);
+#else
+static inline void
+wlan_clear_peer_level_tid_to_link_mapping(struct wlan_objmgr_vdev *vdev)
+{
+}
+
+static inline QDF_STATUS
+wlan_mlo_link_disable_request_handler(struct wlan_objmgr_psoc *psoc,
+				      void *evt_params)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+#endif
 #endif /* _WLAN_MLO_T2LM_H_ */

@@ -278,14 +278,13 @@ enum hal_srng_ring_id {
 	/* LMAC rings - The following set will be replicated for each LMAC */
 	HAL_SRNG_LMAC1_ID_START = 184,
 	HAL_SRNG_WMAC1_SW2RXDMA0_BUF0 = HAL_SRNG_LMAC1_ID_START,
+	HAL_SRNG_WMAC1_SW2RXDMA1_BUF,
 #ifdef IPA_OFFLOAD
 	HAL_SRNG_WMAC1_SW2RXDMA0_BUF1,
-	HAL_SRNG_WMAC1_SW2RXDMA0_BUF2,
 #ifdef IPA_WDI3_VLAN_SUPPORT
-	HAL_SRNG_WMAC1_SW2RXDMA0_BUF3,
+	HAL_SRNG_WMAC1_SW2RXDMA0_BUF2,
 #endif
 #endif
-	HAL_SRNG_WMAC1_SW2RXDMA1_BUF,
 #ifdef FEATURE_DIRECT_LINK
 	HAL_SRNG_WMAC1_RX_DIRECT_LINK_SW_REFILL_RING,
 #endif
@@ -1262,7 +1261,7 @@ struct hal_hw_txrx_ops {
 	uint32_t (*hal_txmon_status_get_num_users)(void *tx_tlv_hdr,
 						   uint8_t *num_users);
 #endif /* QCA_MONITOR_2_0_SUPPORT */
-	void (*hal_reo_shared_qaddr_setup)(hal_soc_handle_t hal_soc_hdl);
+	QDF_STATUS (*hal_reo_shared_qaddr_setup)(hal_soc_handle_t hal_soc_hdl);
 	void (*hal_reo_shared_qaddr_init)(hal_soc_handle_t hal_soc_hdl,
 					  int qref_reset);
 	void (*hal_reo_shared_qaddr_detach)(hal_soc_handle_t hal_soc_hdl);

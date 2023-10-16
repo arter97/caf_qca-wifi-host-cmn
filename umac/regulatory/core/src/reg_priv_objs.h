@@ -100,6 +100,25 @@ struct ctry_change_cbk_entry {
 	reg_ctry_change_callback cbk;
 };
 
+/**
+ * typedef reg_is_chan_connected_callback() - Regulatory callback to check if
+ *                                            channel is connected
+ * @psoc: Pointer to psoc object
+ * @opmode: vdev operating mode
+ * @freq: Frequency
+ */
+typedef bool (*reg_is_chan_connected_callback)(
+		struct wlan_objmgr_psoc *psoc,
+		enum QDF_OPMODE opmode,
+		uint32_t      freq);
+
+/* struct is_chan_connected_cbk_entry - Is channel connected callback entry
+ * @cbk: Callback
+ */
+struct is_chan_connected_cbk_entry {
+	reg_is_chan_connected_callback cbk;
+};
+
 #ifdef CONFIG_REG_CLIENT
 #define MAX_INDOOR_LIST_SIZE 3
 
@@ -133,6 +152,7 @@ struct indoor_concurrency_list {
  * @six_ghz_supported: whether 6ghz is supported
  * @five_dot_nine_ghz_supported: whether 5.9ghz is supported
  *	(service bit WMI_SERVICE_5_DOT_9GHZ_SUPPORT)
+ * @conn_chan_cb:
  * @enable_5dot9_ghz_chan_in_master_mode: 5.9 GHz channel support in
  *	master mode (ini fcc_5dot9_ghz_chan_in_master_mode)
  * @retain_nol_across_regdmn_update: Retain the NOL list across the regdomain
@@ -202,6 +222,7 @@ struct wlan_regulatory_psoc_priv_obj {
 	bool user_ctry_priority;
 	bool user_ctry_set;
 	struct chan_change_cbk_entry cbk_list[REG_MAX_CHAN_CHANGE_CBKS];
+	struct is_chan_connected_cbk_entry conn_chan_cb;
 	uint8_t num_chan_change_cbks;
 	struct ctry_change_cbk_entry cc_cbk;
 	uint8_t ch_avoid_ind;
@@ -299,6 +320,7 @@ struct wlan_regulatory_psoc_priv_obj {
  * @p2p_indoor_ch_support: Allow P2P GO in indoor channels
  * @fcc_rules_ptr : Value of fcc channel frequency and tx_power list received
  * from firmware
+ * @keep_6ghz_sta_cli_connection: Keep current STA/P2P client connection
  */
 struct wlan_regulatory_pdev_priv_obj {
 	struct regulatory_channel cur_chan_list[NUM_CHANNELS];
@@ -381,6 +403,7 @@ struct wlan_regulatory_pdev_priv_obj {
 	struct cur_fcc_rule fcc_rules_ptr[MAX_NUM_FCC_RULES];
 	struct indoor_concurrency_list indoor_list[MAX_INDOOR_LIST_SIZE];
 #endif
+	bool keep_6ghz_sta_cli_connection;
 };
 
 /**
