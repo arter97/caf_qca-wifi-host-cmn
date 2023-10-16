@@ -565,8 +565,10 @@ cm_fill_connect_resp_from_req(struct wlan_objmgr_vdev *vdev,
 
 	if (candidate)
 		resp->freq = candidate->entry->channel.chan_freq;
-	else
+	else if (req->chan_freq)
 		resp->freq = req->chan_freq;
+	else
+		resp->freq = req->chan_freq_hint;
 
 	resp->ssid = req->ssid;
 	resp->is_wps_connection = req->is_wps_connection;
