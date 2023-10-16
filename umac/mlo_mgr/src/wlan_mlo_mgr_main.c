@@ -979,6 +979,7 @@ static inline void mlo_t2lm_ctx_init(struct wlan_mlo_dev_context *ml_dev,
 	t2lm->link_mapping_size = 0;
 
 	wlan_mlo_t2lm_timer_init(vdev);
+	wlan_mlo_t2lm_register_link_update_notify_handler(ml_dev);
 }
 
 /**
@@ -1248,12 +1249,16 @@ static inline void mlo_ptqm_migration_deinit(
  * mlo_t2lm_ctx_deinit() - API to deinitialize the t2lm context with the default
  * values.
  * @vdev: Pointer to vdev structure
+ * @ml_dev: Pointer to mlo dev context
  *
  * Return: None
  */
-static inline void mlo_t2lm_ctx_deinit(struct wlan_objmgr_vdev *vdev)
+static inline void mlo_t2lm_ctx_deinit(struct wlan_objmgr_vdev *vdev,
+				       struct wlan_mlo_dev_context *ml_dev)
 {
 	wlan_mlo_t2lm_timer_deinit(vdev);
+	wlan_unregister_t2lm_link_update_notify_handler(
+			ml_dev, ml_dev->t2lm_ctx.link_update_callback_index);
 }
 
 /**
@@ -1366,7 +1371,7 @@ static QDF_STATUS mlo_dev_ctx_deinit(struct wlan_objmgr_vdev *vdev)
 
 		mlo_ptqm_migration_deinit(ml_dev);
 		mlo_mgr_link_switch_deinit(ml_dev);
-		mlo_t2lm_ctx_deinit(vdev);
+		mlo_t2lm_ctx_deinit(vdev, ml_dev);
 		mlo_epcs_ctx_deinit(ml_dev);
 
 		/* Destroy DP MLO Device Context */
