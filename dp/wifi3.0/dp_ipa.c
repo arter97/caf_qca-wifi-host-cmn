@@ -1059,6 +1059,23 @@ static void dp_ipa_tx_comp_ring_init_hp(struct dp_soc *soc,
 			     res->tx_alt_comp_doorbell_vaddr);
 }
 
+static void
+dp_ipa_tx_comp_ring_update_hp_addr(struct dp_soc *soc,
+				   struct dp_ipa_resources *res)
+{
+	hal_ring_handle_t wbm_srng;
+
+	/* Ring doorbell to WBM2IPA ring with current HW HP value */
+	wbm_srng = soc->tx_comp_ring[IPA_TX_COMP_RING_IDX].hal_srng;
+	hal_srng_dst_update_hp_addr(soc->hal_soc, wbm_srng);
+
+	if (!res->tx_alt_comp_doorbell_paddr)
+		return;
+
+	wbm_srng = soc->tx_comp_ring[IPA_TX_ALT_COMP_RING_IDX].hal_srng;
+	hal_srng_dst_update_hp_addr(soc->hal_soc, wbm_srng);
+}
+
 static void dp_ipa_set_tx_doorbell_paddr(struct dp_soc *soc,
 					 struct dp_ipa_resources *ipa_res)
 {
@@ -1253,6 +1270,17 @@ static inline void dp_ipa_tx_comp_ring_init_hp(struct dp_soc *soc,
 
 	hal_srng_dst_init_hp(soc->hal_soc, wbm_srng,
 			     res->tx_comp_doorbell_vaddr);
+}
+
+static void
+dp_ipa_tx_comp_ring_update_hp_addr(struct dp_soc *soc,
+				   struct dp_ipa_resources *res)
+{
+	hal_ring_handle_t wbm_srng;
+
+	/* Ring doorbell to WBM2IPA ring with current HW HP value */
+	wbm_srng = soc->tx_comp_ring[IPA_TX_COMP_RING_IDX].hal_srng;
+	hal_srng_dst_update_hp_addr(soc->hal_soc, wbm_srng);
 }
 
 static void dp_ipa_set_tx_doorbell_paddr(struct dp_soc *soc,
@@ -3500,6 +3528,8 @@ QDF_STATUS dp_ipa_enable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	if (soc->ipa_first_tx_db_access) {
 		dp_ipa_tx_comp_ring_init_hp(soc, ipa_res);
 		soc->ipa_first_tx_db_access = false;
+	} else {
+		dp_ipa_tx_comp_ring_update_hp_addr(soc, ipa_res);
 	}
 
 	return QDF_STATUS_SUCCESS;
