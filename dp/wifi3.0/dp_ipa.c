@@ -1024,6 +1024,19 @@ static void dp_ipa_set_pipe_db(struct dp_ipa_resources *res,
 		QDF_IPA_WDI_CONN_OUT_PARAMS_TX_UC_ALT_DB_PA(out);
 }
 
+#ifdef QCA_IPA_LL_TX_FLOW_CONTROL
+static void dp_ipa_setup_iface_session_id(qdf_ipa_wdi_reg_intf_in_params_t *in,
+					  uint8_t session_id)
+{
+	bool is_2g_iface = session_id & IPA_SESSION_ID_SHIFT;
+
+	session_id = session_id >> IPA_SESSION_ID_SHIFT;
+	dp_debug("session_id %u is_2g_iface %d", session_id, is_2g_iface);
+
+	QDF_IPA_WDI_REG_INTF_IN_PARAMS_META_DATA(in) = htonl(session_id);
+	QDF_IPA_WDI_REG_INTF_IN_PARAMS_IS_TX1_USED(in) = is_2g_iface;
+}
+#else
 static void dp_ipa_setup_iface_session_id(qdf_ipa_wdi_reg_intf_in_params_t *in,
 					  uint8_t session_id)
 {
@@ -1035,6 +1048,7 @@ static void dp_ipa_setup_iface_session_id(qdf_ipa_wdi_reg_intf_in_params_t *in,
 	QDF_IPA_WDI_REG_INTF_IN_PARAMS_META_DATA(in) = htonl(session_id << 16);
 	QDF_IPA_WDI_REG_INTF_IN_PARAMS_IS_TX1_USED(in) = is_2g_iface;
 }
+#endif
 
 static void dp_ipa_tx_comp_ring_init_hp(struct dp_soc *soc,
 					struct dp_ipa_resources *res)
@@ -3047,10 +3061,19 @@ dp_ipa_set_wdi_hdr_type(qdf_ipa_wdi_hdr_info_t *hdr_info)
 	QDF_IPA_WDI_HDR_INFO_HDR_TYPE(hdr_info) = IPA_HDR_L2_ETHERNET_II;
 }
 
+#ifdef QCA_IPA_LL_TX_FLOW_CONTROL
 static void dp_ipa_setup_meta_data_mask(qdf_ipa_wdi_reg_intf_in_params_t *in)
 {
-	QDF_IPA_WDI_REG_INTF_IN_PARAMS_META_DATA_MASK(in) = WLAN_IPA_META_DATA_MASK;
+	QDF_IPA_WDI_REG_INTF_IN_PARAMS_META_DATA_MASK(in) =
+		WLAN_IPA_AST_META_DATA_MASK;
 }
+#else
+static void dp_ipa_setup_meta_data_mask(qdf_ipa_wdi_reg_intf_in_params_t *in)
+{
+	QDF_IPA_WDI_REG_INTF_IN_PARAMS_META_DATA_MASK(in) =
+		WLAN_IPA_META_DATA_MASK;
+}
+#endif
 #endif
 
 #ifdef IPA_WDI3_VLAN_SUPPORT
