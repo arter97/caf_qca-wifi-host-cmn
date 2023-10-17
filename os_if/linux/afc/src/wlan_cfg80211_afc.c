@@ -864,7 +864,7 @@ static struct afc_resp_extracted *extract_afc_resp(struct nlattr **attr)
 	if (attr[QCA_WLAN_VENDOR_ATTR_AFC_RESP_DATA]) {
 		nl = attr[QCA_WLAN_VENDOR_ATTR_AFC_RESP_DATA];
 		afc_rsp->json_data = qdf_mem_malloc(nla_len(nl));
-		if (!afc_rsp)
+		if (!afc_rsp->json_data)
 			goto fail;
 
 		afc_rsp->json_len = nla_len(nl);
