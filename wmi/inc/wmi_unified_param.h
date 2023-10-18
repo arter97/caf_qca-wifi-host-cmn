@@ -6466,6 +6466,9 @@ typedef enum {
 #endif
 	wmi_service_fisa_dynamic_msdu_aggr_size_support,
 	wmi_service_radar_flags_support,
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+	wmi_service_5ghz_hi_rssi_roam_support,
+#endif
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
