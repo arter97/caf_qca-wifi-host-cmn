@@ -763,7 +763,7 @@ static inline void dp_rx_rate_stats_update(struct dp_peer *peer,
 	ppdu->rix = rix;
 	ppdu_user->rix = rix;
 	DP_STATS_UPD(mon_peer, rx.last_rx_rate, ratekbps);
-	if (qdf_unlikely(dp_mon_eval_avg_rate_filter(peer, ratekbps,
+	if (qdf_likely(dp_mon_eval_avg_rate_filter(peer, ratekbps,
 					mon_peer->stats.rx.avg_rx_rate))) {
 		mon_peer->stats.rx.avg_rx_rate =
 			dp_ath_rate_lpf(mon_peer->stats.rx.avg_rx_rate,
