@@ -52,7 +52,8 @@ QDF_STATUS cm_check_and_prepare_roam_req(struct cnx_mgr *cm_ctx,
 {
 	QDF_STATUS status;
 	struct wlan_cm_connect_req *req;
-	struct qdf_mac_addr bssid, bss_mld_addr;
+	struct qdf_mac_addr bssid;
+	struct qdf_mac_addr bss_mld_addr = {0};
 	struct wlan_ssid ssid;
 	struct cm_req *cm_req, *req_ptr;
 	qdf_freq_t freq = 0;
