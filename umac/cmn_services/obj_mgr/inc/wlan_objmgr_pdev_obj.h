@@ -212,6 +212,7 @@ struct wlan_beacon_process {
  * @max_peer_count:    Max Peer count
  * @temp_peer_count:   Temporary peer count
  * @max_monitor_vdev_count: Max monitor vdev count
+ * @max_bridge_vdev_count: Max bridge vdev count
  * @wlan_psoc:         back pointer to PSOC, its attached to
  * @ref_cnt:           Ref count
  * @ref_id_dbg:        Array to track Ref count
@@ -229,6 +230,7 @@ struct wlan_objmgr_pdev_objmgr {
 	uint16_t max_peer_count;
 	uint16_t temp_peer_count;
 	uint8_t max_monitor_vdev_count;
+	uint8_t max_bridge_vdev_count;
 	struct wlan_objmgr_psoc *wlan_psoc;
 	qdf_atomic_t ref_cnt;
 	qdf_atomic_t ref_id_dbg[WLAN_REF_ID_MAX];
@@ -1250,6 +1252,36 @@ static inline uint16_t wlan_pdev_get_max_monitor_vdev_count(
 		struct wlan_objmgr_pdev *pdev)
 {
 	return pdev->pdev_objmgr.max_monitor_vdev_count;
+}
+
+/**
+ * wlan_pdev_set_max_bridge_vdev_count() - set max bridge vdev count
+ * @pdev: PDEV object
+ * @count: Max bridge vdev count
+ *
+ * API to set max bridge vdev count of PDEV
+ *
+ * Return: void
+ */
+static inline void wlan_pdev_set_max_bridge_vdev_count(
+		struct wlan_objmgr_pdev *pdev,
+		uint16_t count)
+{
+	pdev->pdev_objmgr.max_bridge_vdev_count = count;
+}
+
+/**
+ * wlan_pdev_get_max_bridge_vdev_count() - get max bridge vdev count
+ * @pdev: PDEV object
+ *
+ * API to get max bridge vdev count of PDEV
+ *
+ * Return: max bridge vdev count
+ */
+static inline uint16_t wlan_pdev_get_max_bridge_vdev_count(
+		struct wlan_objmgr_pdev *pdev)
+{
+	return pdev->pdev_objmgr.max_bridge_vdev_count;
 }
 
 /**
