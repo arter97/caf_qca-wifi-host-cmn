@@ -347,6 +347,7 @@ struct mlo_wsi_info {
  * @last_mlo_peer_id: Previously allocated ML peer ID
  * @setup_info: Pointer to MLO setup_info of all groups
  * @total_grp: Total number of MLO groups
+ * @tsf_sync_enabled: MLO TSF sync is enabled at FW or not
  * @mlme_ops: MLO MLME callback function pointers
  * @osif_ops: MLO to OSIF callback function pointers
  * @msgq_ctx: Context switch mgr
@@ -374,6 +375,8 @@ struct mlo_mgr_context {
 #ifdef WLAN_MLO_MULTI_CHIP
 	struct mlo_setup_info *setup_info;
 	uint8_t total_grp;
+#elif defined(WLAN_FEATURE_11BE_MLO) && !defined(WLAN_MLO_MULTI_CHIP)
+	bool tsf_sync_enabled;
 #endif
 	struct mlo_mlme_ext_ops *mlme_ops;
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE

@@ -283,6 +283,45 @@ void mlo_update_tsf_sync_support(struct wlan_objmgr_psoc *psoc,
  */
 bool mlo_pdev_derive_bridge_link_pdevs(struct wlan_objmgr_pdev *pdev,
 				       struct wlan_objmgr_pdev **pdev_list);
+#elif defined(WLAN_FEATURE_11BE_MLO) && !defined(WLAN_MLO_MULTI_CHIP)
+static inline void mlo_setup_init(uint8_t total_grp)
+{
+}
+
+static inline void mlo_setup_deinit(void)
+{
+}
+
+static inline bool
+mlo_vdevs_check_single_soc(struct wlan_objmgr_vdev **wlan_vdev_list,
+			   uint8_t vdev_count)
+{
+	return true;
+}
+
+static inline
+QDF_STATUS mlo_check_all_pdev_state(struct wlan_objmgr_psoc *psoc,
+				    uint32_t state)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+bool mlo_psoc_get_grp_id(struct wlan_objmgr_psoc *psoc, uint8_t *grp_id)
+{
+	return 0;
+}
+
+void mlo_update_tsf_sync_support(struct wlan_objmgr_psoc *psoc,
+				 bool tsf_sync_enab);
+
+/**
+ * mlo_get_tsf_sync_support() - API to get TSF sync support per MLO
+ *
+ * Return: None
+ */
+bool mlo_get_tsf_sync_support(void);
+
 #else
 static inline void mlo_setup_init(uint8_t total_grp)
 {

@@ -28,6 +28,7 @@
 #include "cdp_txrx_mlo.h"
 #endif
 #include "wlan_mlo_mgr_peer.h"
+#include "wlan_mlo_mgr_setup.h"
 
 #ifdef WLAN_MLO_MULTI_CHIP
 bool mlo_ap_vdev_attach(struct wlan_objmgr_vdev *vdev,
@@ -820,4 +821,22 @@ void mlo_peer_populate_mesh_params(
 	}
 	mlo_peer_lock_release(ml_peer);
 }
+#endif
+
+#if defined(WLAN_FEATURE_11BE_MLO) && !defined(WLAN_MLO_MULTI_CHIP)
+void mlo_update_tsf_sync_support(struct wlan_objmgr_psoc *psoc,
+				 bool tsf_sync_enable)
+{
+	struct mlo_mgr_context *mlo_ctx = wlan_objmgr_get_mlo_ctx();
+
+	mlo_ctx->tsf_sync_enabled = tsf_sync_enable;
+}
+
+bool mlo_get_tsf_sync_support(void)
+{
+	struct mlo_mgr_context *mlo_ctx = wlan_objmgr_get_mlo_ctx();
+
+	return mlo_ctx->tsf_sync_enabled;
+}
+
 #endif
