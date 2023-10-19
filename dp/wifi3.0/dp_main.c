@@ -812,6 +812,21 @@ dp_peer_send_wds_disconnect(struct dp_soc *soc, struct dp_peer *peer)
 		}
 	}
 }
+#elif defined(IPA_OFFLOAD) && defined(QCA_SUPPORT_WDS_EXTENDED)
+static void
+dp_peer_send_wds_disconnect(struct dp_soc *soc, struct dp_peer *peer)
+{
+	struct dp_ast_entry *ase = NULL;
+	struct dp_ast_entry *temp_ase;
+
+	DP_PEER_ITERATE_ASE_LIST(peer, ase, temp_ase) {
+		if (ase->type == CDP_TXRX_AST_TYPE_WDS)
+			if (soc->cdp_soc.ol_ops->peer_unmap_event)
+				soc->cdp_soc.ol_ops->peer_unmap_event(soc->ctrl_psoc,
+								      ase->peer_id, ase->vdev_id,
+								      ase->mac_addr.raw);
+	}
+}
 #elif defined(FEATURE_AST)
 static void
 dp_peer_send_wds_disconnect(struct dp_soc *soc, struct dp_peer *peer)
