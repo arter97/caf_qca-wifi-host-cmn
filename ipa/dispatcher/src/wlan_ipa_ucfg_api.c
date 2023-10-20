@@ -370,3 +370,18 @@ QDF_STATUS ucfg_ipa_get_alt_pipe(struct wlan_objmgr_pdev *pdev,
 }
 
 qdf_export_symbol(ucfg_ipa_get_alt_pipe);
+
+bool ucfg_ipa_set_perf_level_bw_enabled(struct wlan_objmgr_pdev *pdev)
+{
+	return ipa_set_perf_level_bw_enabled(pdev);
+}
+
+qdf_export_symbol(ucfg_ipa_set_perf_level_bw_enabled);
+
+void ucfg_ipa_set_perf_level_bw(struct wlan_objmgr_pdev *pdev,
+				enum wlan_ipa_bw_level lvl)
+{
+	ipa_set_perf_level_bw(pdev, lvl);
+}
+
+qdf_export_symbol(ucfg_ipa_set_perf_level_bw);

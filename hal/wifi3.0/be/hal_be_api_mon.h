@@ -108,6 +108,9 @@ defined(QCA_SINGLE_WIFI_3_0)
 
 
 #define RX_MON_MPDU_START_WMASK               0x07F0
+#define RX_MON_MPDU_END_WMASK                 0x7
+#define RX_MON_MPDU_START_WMASK_V2            0x007F0
+#define RX_MON_MPDU_END_WMASK_V2              0xFF
 #define RX_MON_MSDU_END_WMASK                 0x0AE1
 #define RX_MON_PPDU_END_USR_STATS_WMASK       0xB7E
 
@@ -3393,8 +3396,8 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 				      RECEIVE_RSSI_INFO_PREAMBLE_RSSI_INFO_DETAILS);
 
 		ppdu_info->rx_status.rssi_comb =
-			HAL_RX_GET_64(rx_tlv,
-				      PHYRX_RSSI_LEGACY, RSSI_COMB);
+				hal_rx_phy_legacy_get_rssi(hal_soc_hdl, rx_tlv);
+
 		ppdu_info->rx_status.bw = hal->ops->hal_rx_get_tlv(rx_tlv);
 		ppdu_info->rx_status.he_re = 0;
 
@@ -3574,6 +3577,7 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 			HAL_RX_GET_64(rx_tlv, RX_MPDU_END,
 				      FCS_ERR);
 
+		ppdu_info->mpdu_info[user_id].fcs_err = ppdu_info->fcs_err;
 		hal_rx_record_tlv_info(ppdu_info, tlv_tag);
 		return HAL_TLV_STATUS_MPDU_END;
 	case WIFIRX_MSDU_END_E: {

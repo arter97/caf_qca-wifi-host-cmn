@@ -196,10 +196,23 @@ qdf_export_symbol(qdf_wake_up_process);
 #if ((defined(WLAN_HOST_ARCH_ARM) && !WLAN_HOST_ARCH_ARM) || \
 	LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0) || \
 	defined(BACKPORTED_EXPORT_SAVE_STACK_TRACE_TSK_ARM)) && \
-	defined(CONFIG_STACKTRACE) && !defined(CONFIG_ARCH_STACKWALK)
+	defined(CONFIG_STACKTRACE)
 #define QDF_PRINT_TRACE_COUNT 32
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 2, 0))
+#ifdef CONFIG_ARCH_STACKWALK
+void qdf_print_thread_trace(qdf_thread_t *thread)
+{
+	const int spaces = 4;
+	struct task_struct *task = thread;
+	unsigned long entries[QDF_PRINT_TRACE_COUNT] = {0};
+	unsigned int nr_entries = 0;
+	unsigned int max_entries = QDF_PRINT_TRACE_COUNT;
+	int skip = 0;
+
+	nr_entries = stack_trace_save_tsk(task, entries, max_entries, skip);
+	stack_trace_print(entries, nr_entries, spaces);
+}
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 2, 0))
 void qdf_print_thread_trace(qdf_thread_t *thread)
 {
 	const int spaces = 4;

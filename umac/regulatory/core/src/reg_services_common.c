@@ -3917,7 +3917,7 @@ reg_skip_invalid_chan_freq(struct wlan_objmgr_pdev *pdev,
 				}
 
 				if (!(enable_srd_chan & srd_mask) &&
-				    reg_is_etsi13_srd_chan_for_freq(
+				    reg_is_etsi_srd_chan_for_freq(
 					pdev, res_msg[chan_enum].freq)) {
 					res_msg[chan_enum].iface_mode_mask &=
 						~(iface_mode);
@@ -6197,6 +6197,9 @@ bool reg_is_same_band_freqs(qdf_freq_t freq1, qdf_freq_t freq2)
 
 enum reg_wifi_band reg_freq_to_band(qdf_freq_t freq)
 {
+	if (!freq)
+		return REG_BAND_UNKNOWN;
+
 	if (REG_IS_24GHZ_CH_FREQ(freq))
 		return REG_BAND_2G;
 	else if (REG_IS_5GHZ_FREQ(freq) || REG_IS_49GHZ_FREQ(freq))

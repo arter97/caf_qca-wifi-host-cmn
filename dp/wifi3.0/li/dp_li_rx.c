@@ -245,15 +245,12 @@ uint32_t dp_rx_process_li(struct dp_intr *int_ctx,
 	uint32_t dsf;
 	uint32_t max_ast;
 	uint64_t current_time = 0;
-	uint16_t buf_size;
 
 	DP_HIST_INIT();
 
 	qdf_assert_always(soc && hal_ring_hdl);
 	hal_soc = soc->hal_soc;
 	qdf_assert_always(hal_soc);
-
-	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 
 	scn = soc->hif_handle;
 	intr_id = int_ctx->dp_intr_id;
@@ -410,7 +407,7 @@ more_data:
 				 * reap this MPDU
 				 */
 				if ((msdu_desc_info.msdu_len /
-				     (buf_size -
+				     (RX_DATA_BUFFER_SIZE -
 				      soc->rx_pkt_tlv_size) + 1) >
 				    num_pending) {
 					DP_STATS_INC(soc,
@@ -1348,9 +1345,6 @@ dp_rx_null_q_desc_handle_li(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	uint16_t sa_idx = 0;
 	bool is_eapol = 0;
 	bool enh_flag;
-	uint16_t buf_size;
-
-	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 
 	qdf_nbuf_set_rx_chfrag_start(
 				nbuf,
@@ -1378,7 +1372,8 @@ dp_rx_null_q_desc_handle_li(struct dp_soc *soc, qdf_nbuf_t nbuf,
 			goto drop_nbuf;
 
 		/* Set length in nbuf */
-		qdf_nbuf_set_pktlen(nbuf, qdf_min(pkt_len, (uint32_t)buf_size));
+		qdf_nbuf_set_pktlen(
+			nbuf, qdf_min(pkt_len, (uint32_t)RX_DATA_BUFFER_SIZE));
 	}
 
 	/*

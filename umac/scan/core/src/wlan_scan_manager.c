@@ -470,6 +470,7 @@ end:
 		 & SCAN_FLAG_EXT_DBS_SCAN_POLICY_MASK);
 }
 
+
 /**
  * scm_update_passive_dwell_time() - update dwell passive time
  * @vdev: vdev object
@@ -1109,6 +1110,27 @@ scm_req_update_dwell_time_as_per_scan_mode(
 }
 
 /**
+ * scm_update_aux_scan_ctrl_ext_flag() - update aux scan policy
+ * @req: pointer to scan request
+ *
+ * Set aux scan bits in scan_ctrl_ext_flag value depending on scan type.
+ *
+ * Return: None
+ */
+
+static void
+scm_update_aux_scan_ctrl_ext_flag(struct scan_start_request  *req)
+{
+	if (req->scan_req.scan_policy_low_span)
+		req->scan_req.scan_ctrl_flags_ext |= SCAN_FLAG_EXT_AUX_FAST_SCAN;
+	else if (req->scan_req.scan_policy_low_power)
+		req->scan_req.scan_ctrl_flags_ext |= SCAN_FLAG_EXT_AUX_FAST_SCAN;
+	else if (req->scan_req.scan_policy_high_accuracy)
+		req->scan_req.scan_ctrl_flags_ext |=
+					SCAN_FLAG_EXT_AUX_RELIABLE_SCAN;
+}
+
+/**
  * scm_scan_req_update_params() - update scan req params depending on modes
  * and scan type.
  * @vdev: vdev object pointer
@@ -1125,6 +1147,7 @@ scm_scan_req_update_params(struct wlan_objmgr_vdev *vdev,
 	struct chan_list *custom_chan_list;
 	struct wlan_objmgr_pdev *pdev;
 	uint8_t pdev_id;
+	struct wlan_objmgr_psoc *psoc;
 
 	/* Ensure correct number of probes are sent on active channel */
 	if (!req->scan_req.repeat_probe_time)
@@ -1202,6 +1225,10 @@ scm_scan_req_update_params(struct wlan_objmgr_vdev *vdev,
 	}
 
 	scm_update_dbs_scan_ctrl_ext_flag(req);
+
+	psoc = wlan_vdev_get_psoc(vdev);
+	if (wlan_scan_get_aux_support(psoc))
+		scm_update_aux_scan_ctrl_ext_flag(req);
 
 	/*
 	 * No need to update conncurrency parmas if req is passive scan on

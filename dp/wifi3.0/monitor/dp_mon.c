@@ -1087,6 +1087,8 @@ dp_print_pdev_rx_mon_stats(struct dp_pdev *pdev)
 		       rx_mon_stats->mpdu_ppdu_id_mismatch_drop);
 	DP_PRINT_STATS("mpdu_decap_type_invalid = %u",
 		       rx_mon_stats->mpdu_decap_type_invalid);
+	DP_PRINT_STATS("pending_desc_count = %u",
+		       rx_mon_stats->pending_desc_count);
 	stat_ring_ppdu_ids =
 		(uint32_t *)qdf_mem_malloc(sizeof(uint32_t) * MAX_PPDU_ID_HIST);
 	dest_ring_ppdu_ids =
@@ -6400,10 +6402,17 @@ void dp_mon_peer_get_stats(struct dp_peer *peer, void *arg,
 		DP_UPDATE_MON_STATS(peer_stats, mon_peer_stats);
 		break;
 	}
-	case UPDATE_VDEV_STATS:
+	case UPDATE_VDEV_STATS_MLD:
 	{
 		struct cdp_vdev_stats *vdev_stats =
 						(struct cdp_vdev_stats *)arg;
+		DP_UPDATE_MON_STATS(vdev_stats, mon_peer_stats);
+		break;
+	}
+	case UPDATE_VDEV_STATS:
+	{
+		struct dp_vdev_stats *vdev_stats =
+						(struct dp_vdev_stats *)arg;
 		DP_UPDATE_MON_STATS(vdev_stats, mon_peer_stats);
 		break;
 	}
@@ -6465,6 +6474,12 @@ dp_mon_peer_get_stats_param(struct dp_peer *peer, enum cdp_peer_stats_type type,
 		break;
 	case cdp_peer_rx_snr:
 		buf->rx_snr = mon_peer->stats.rx.snr;
+		break;
+	case cdp_peer_rx_avg_rate:
+		buf->rx_rate_avg = mon_peer->stats.rx.rnd_avg_rx_rate;
+		break;
+	case cdp_peer_tx_avg_rate:
+		buf->tx_rate_avg = mon_peer->stats.tx.rnd_avg_tx_rate;
 		break;
 	default:
 		dp_err("Invalid stats type: %u requested", type);

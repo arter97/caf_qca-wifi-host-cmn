@@ -18,6 +18,7 @@
 #include "qdf_module.h"
 #include "dp_types.h"
 #include "hal_rx_flow.h"
+#include "qdf_ssr_driver_dump.h"
 
 /**
  * hal_rx_flow_get_cmem_fse() - Get FSE from CMEM
@@ -380,6 +381,7 @@ hal_rx_fst_attach(hal_soc_handle_t hal_soc_hdl,
 	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
 		  "HAL FST allocation %pK %d * %d\n", fst,
 		  fst->max_entries, fst_entry_size);
+	qdf_ssr_driver_dump_register_region("hal_rx_fst", fst, sizeof(*fst));
 
 	if (fst_cmem_base == 0) {
 		/* FST is in DDR */
@@ -394,6 +396,10 @@ hal_rx_fst_attach(hal_soc_handle_t hal_soc_hdl,
 			qdf_mem_free(fst);
 			return NULL;
 		}
+		qdf_ssr_driver_dump_register_region("dp_fisa_hw_fse_table",
+						    fst->base_vaddr,
+						    (fst->max_entries *
+						     fst_entry_size));
 
 		*hal_fst_base_paddr = (uint64_t)fst->base_paddr;
 	} else {
@@ -425,7 +431,10 @@ void hal_rx_fst_detach(hal_soc_handle_t hal_soc_hdl, struct hal_rx_fst *rx_fst,
 	if (!rx_fst || !qdf_dev)
 		return;
 
+	qdf_ssr_driver_dump_unregister_region("hal_rx_fst");
+
 	if (fst_cmem_base == 0 && rx_fst->base_vaddr) {
+		qdf_ssr_driver_dump_unregister_region("dp_fisa_hw_fse_table");
 		qdf_mem_free_consistent(qdf_dev, qdf_dev->dev,
 					rx_fst->max_entries *
 					rx_fst->fst_entry_size,

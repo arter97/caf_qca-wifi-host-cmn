@@ -485,6 +485,7 @@ static QDF_STATUS cm_update_vdev_mlme_macaddr(struct cnx_mgr *cm_ctx,
 	if (req->cur_candidate->entry->ie_list.multi_link_bv &&
 	    !qdf_is_macaddr_zero(mac) &&
 	    wlan_cm_is_eht_allowed_for_current_security(
+					wlan_vdev_get_psoc(cm_ctx->vdev),
 					req->cur_candidate->entry)) {
 		wlan_vdev_obj_lock(cm_ctx->vdev);
 		/* Use link address for ML connection */
@@ -637,6 +638,7 @@ static void cm_create_bss_peer(struct cnx_mgr *cm_ctx,
 				      &eht_capab);
 	if (eht_capab && wlan_vdev_mlme_is_mlo_vdev(cm_ctx->vdev) &&
 	    wlan_cm_is_eht_allowed_for_current_security(
+					wlan_vdev_get_psoc(cm_ctx->vdev),
 					req->cur_candidate->entry)) {
 		cm_set_vdev_link_id(cm_ctx, req);
 		wlan_mlo_init_cu_bpcc(cm_ctx->vdev);
@@ -1748,7 +1750,7 @@ cm_handle_connect_req_in_non_init_state(struct cnx_mgr *cm_ctx,
 	}
 
 	/* Reject any link switch connect request while in non-init state */
-	if (cm_req->req.source == CM_MLO_LINK_SWITCH_CONNECT) {
+	if (cm_is_link_switch_connect_req(cm_req)) {
 		mlme_info(CM_PREFIX_FMT "Ignore connect req from source %d state %d",
 			  CM_PREFIX_REF(vdev_id, cm_req->cm_id),
 			  cm_req->req.source, cm_state_substate);
@@ -1900,7 +1902,7 @@ QDF_STATUS cm_connect_start(struct cnx_mgr *cm_ctx,
 		return QDF_STATUS_SUCCESS;
 	}
 
-	if (cm_req->req.source == CM_MLO_LINK_SWITCH_CONNECT) {
+	if (cm_is_link_switch_connect_req(cm_req)) {
 		/* The error handling has to be different here.not corresponds
 		 * to connect req serialization now.
 		 */
@@ -1952,6 +1954,8 @@ cm_modify_partner_info_based_on_dbs_or_sbs_mode(struct wlan_objmgr_vdev *vdev,
 				best_partner_idx_2g = i;
 			else
 				best_partner_idx_5g = i;
+
+			break;
 		}
 	}
 
@@ -2922,11 +2926,22 @@ static void cm_osif_connect_complete(struct cnx_mgr *cm_ctx,
 	QDF_STATUS status = QDF_STATUS_E_FAILURE;
 	struct wlan_cm_connect_resp *connect_rsp = resp;
 
+	/* Currently, driver only notifies the first candidate failure to upper
+	 * layers, to post disconnect rsp to clear kernel connected state, need
+	 * copy send_disconnect flag from last candidate to first candidate.
+	 */
 	if (QDF_IS_STATUS_ERROR(resp->connect_status)) {
 		status = cm_get_first_candidate_rsp(cm_ctx, resp->cm_id,
 						    &first_failure_resp);
-		if (QDF_IS_STATUS_SUCCESS(status))
+		if (QDF_IS_STATUS_SUCCESS(status)) {
 			connect_rsp = &first_failure_resp;
+			if (resp->send_disconnect) {
+				connect_rsp->send_disconnect = resp->send_disconnect;
+				mlme_debug(CM_PREFIX_FMT "sent disconnect rsp for first candidate",
+					   CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev),
+							 resp->cm_id));
+			}
+		}
 	}
 
 	mlme_cm_osif_connect_complete(cm_ctx->vdev, connect_rsp);
@@ -2975,7 +2990,7 @@ QDF_STATUS cm_notify_connect_complete(struct cnx_mgr *cm_ctx,
 					  resp->connect_status);
 	cm_inform_dlm_connect_complete(cm_ctx->vdev, resp);
 	if (QDF_IS_STATUS_ERROR(resp->connect_status) &&
-	    sm_state == WLAN_CM_S_INIT && !(resp->cm_id & CM_ID_LSWITCH_BIT))
+	    sm_state == WLAN_CM_S_INIT && !cm_is_link_switch_connect_resp(resp))
 		cm_clear_vdev_mlo_cap(cm_ctx->vdev);
 
 	return QDF_STATUS_SUCCESS;
@@ -3037,7 +3052,7 @@ QDF_STATUS cm_connect_complete(struct cnx_mgr *cm_ctx,
 				 resp->cm_id));
 	cm_remove_cmd(cm_ctx, &resp->cm_id);
 
-	if (resp->cm_id & CM_ID_LSWITCH_BIT) {
+	if (cm_is_link_switch_connect_resp(resp)) {
 		cm_reset_active_cm_id(cm_ctx->vdev, resp->cm_id);
 		mlo_mgr_link_switch_connect_done(cm_ctx->vdev,
 						 resp->connect_status);

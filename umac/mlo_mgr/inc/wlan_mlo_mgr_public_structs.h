@@ -57,6 +57,11 @@
 #define WLAN_UMAC_MLO_ASSOC_MAX_SUPPORTED_LINKS 1
 #endif
 
+/* Default Initialization value for Max Recommended Simultaneous Links */
+#ifndef WLAN_UMAC_MLO_RECOM_MAX_SIMULT_LINKS_DEFAULT
+#define WLAN_UMAC_MLO_RECOM_MAX_SIMULT_LINKS_DEFAULT 2
+#endif
+
 /* Max PEER support */
 #define MAX_MLO_PEER 512
 
@@ -651,6 +656,16 @@ struct emlsr_capability {
 #endif
 
 /**
+ * struct wlan_mlo_sta_assoc_pending_list - MLO sta assoc pending list entry
+ * @peer_list: MLO peer list
+ * @list_lock: lock to access members of structure
+ */
+struct wlan_mlo_sta_assoc_pending_list {
+	qdf_list_t peer_list;
+	qdf_spinlock_t list_lock;
+};
+
+/**
  * struct wlan_mlo_sta - MLO sta additional info
  * @wlan_connect_req_links: list of vdevs selected for connection with the MLAP
  * @wlan_connected_links: list of vdevs associated with this MLO connection
@@ -711,6 +726,7 @@ struct wlan_mlo_sta {
  * @mlo_ap_lock: lock to sync VDEV SM event
  * @mlo_vdev_quiet_bmap: Bitmap of vdevs for which quiet ie needs to enabled
  * @mlo_vdev_up_bmap: Bitmap of vdevs for which sync complete can be dispatched
+ * @assoc_list: MLO sta assoc pending list entry (for FT-over-DS)
  */
 struct wlan_mlo_ap {
 	uint8_t num_ml_vdevs;
@@ -722,6 +738,7 @@ struct wlan_mlo_ap {
 #endif
 	qdf_bitmap(mlo_vdev_quiet_bmap, WLAN_UMAC_MLO_MAX_VDEVS);
 	qdf_bitmap(mlo_vdev_up_bmap, WLAN_UMAC_MLO_MAX_VDEVS);
+	struct wlan_mlo_sta_assoc_pending_list assoc_list;
 };
 
 /**
@@ -781,6 +798,7 @@ struct wlan_mlo_link_mac_update {
  * @ptqm_migrate_timer: timer for ptqm migration
  * @mlo_peer_id_bmap: mlo_peer_id bitmap for ptqm migration
  * @link_ctx: link related information
+ * @mlo_max_recom_simult_links: Max Recommended Simultaneous Links
  */
 struct wlan_mlo_dev_context {
 	qdf_list_node_t node;
@@ -813,6 +831,7 @@ struct wlan_mlo_dev_context {
 	qdf_bitmap(mlo_peer_id_bmap, MAX_MLO_PEER_ID);
 #endif
 	struct mlo_link_switch_context *link_ctx;
+	uint8_t mlo_max_recom_simult_links;
 };
 
 /**
@@ -1608,4 +1627,16 @@ struct peer_entry_ptqm_migrate_event_params {
 	enum primary_link_peer_migration_evenr_status status;
 };
 #endif /* QCA_SUPPORT_PRIMARY_LINK_MIGRATE */
+
+/**
+ * struct wlan_mlo_sta_entry - MLO sta entry
+ * @mac_node: QDF list mac_node member
+ * @peer_mld_addr: MLO peer MAC address
+ */
+
+struct wlan_mlo_sta_entry {
+	qdf_list_node_t mac_node;
+	struct qdf_mac_addr peer_mld_addr;
+};
+
 #endif

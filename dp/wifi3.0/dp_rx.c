@@ -239,7 +239,7 @@ dp_pdev_frag_alloc_and_map(struct dp_soc *dp_soc,
 	QDF_STATUS ret = QDF_STATUS_E_FAILURE;
 
 	(nbuf_frag_info_t->virt_addr).vaddr =
-			qdf_frag_alloc(NULL, rx_desc_pool->buf_size);
+			qdf_frag_alloc(&rx_desc_pool->pf_cache, rx_desc_pool->buf_size);
 
 	if (!((nbuf_frag_info_t->virt_addr).vaddr)) {
 		dp_err("Frag alloc failed");
@@ -757,8 +757,10 @@ QDF_STATUS __dp_pdev_rx_buffers_no_map_attach(struct dp_soc *soc,
 					       rx_desc_pool->buf_size);
 		rxdma_ring_entry = (struct dp_buffer_addr_info *)
 			hal_srng_src_get_next(soc->hal_soc, rxdma_srng);
-		if (!rxdma_ring_entry)
+		if (!rxdma_ring_entry) {
+			qdf_nbuf_free(nbuf);
 			break;
+		}
 
 		desc_list->rx_desc.nbuf = nbuf;
 		dp_rx_set_reuse_nbuf(&desc_list->rx_desc, nbuf);
@@ -1772,16 +1774,13 @@ static inline bool dp_rx_adjust_nbuf_len(struct dp_soc *soc,
 {
 	bool last_nbuf;
 	uint32_t pkt_hdr_size;
-	uint16_t buf_size;
-
-	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 
 	pkt_hdr_size = soc->rx_pkt_tlv_size + l3_pad_len;
 
-	if ((*mpdu_len + pkt_hdr_size) > buf_size) {
-		qdf_nbuf_set_pktlen(nbuf, buf_size);
+	if ((*mpdu_len + pkt_hdr_size) > RX_DATA_BUFFER_SIZE) {
+		qdf_nbuf_set_pktlen(nbuf, RX_DATA_BUFFER_SIZE);
 		last_nbuf = false;
-		*mpdu_len -= (buf_size - pkt_hdr_size);
+		*mpdu_len -= (RX_DATA_BUFFER_SIZE - pkt_hdr_size);
 	} else {
 		qdf_nbuf_set_pktlen(nbuf, (*mpdu_len + pkt_hdr_size));
 		last_nbuf = true;
@@ -2013,7 +2012,7 @@ static inline int dp_rx_drop_nbuf_list(struct dp_pdev *pdev,
  *
  * Return: true if packet is delivered to netdev per STA.
  */
-static inline bool
+bool
 dp_rx_deliver_to_stack_ext(struct dp_soc *soc, struct dp_vdev *vdev,
 			   struct dp_txrx_peer *txrx_peer, qdf_nbuf_t nbuf_head)
 {
@@ -3234,6 +3233,8 @@ void dp_rx_enable_mon_dest_frag(struct rx_desc_pool *rx_desc_pool,
 	rx_desc_pool->rx_mon_dest_frag_enable = is_mon_dest_desc;
 	if (is_mon_dest_desc)
 		dp_alert("Feature DP_RX_MON_MEM_FRAG for mon_dest is enabled");
+	else
+		qdf_frag_cache_drain(&rx_desc_pool->pf_cache);
 }
 #else
 void dp_rx_enable_mon_dest_frag(struct rx_desc_pool *rx_desc_pool,
@@ -3301,11 +3302,8 @@ QDF_STATUS dp_rx_pdev_desc_pool_init(struct dp_pdev *pdev)
 	struct dp_srng *dp_rxdma_srng;
 	struct rx_desc_pool *rx_desc_pool;
 	uint32_t target_type = hal_get_target_type(soc->hal_soc);
-	uint16_t buf_size;
 
-	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 	rx_desc_pool = &soc->rx_desc_buf[mac_for_pdev];
-
 	if (wlan_cfg_get_dp_pdev_nss_enabled(pdev->wlan_cfg_ctx)) {
 		/*
 		 * If NSS is enabled, rx_desc_pool is already filled.
@@ -3330,7 +3328,7 @@ QDF_STATUS dp_rx_pdev_desc_pool_init(struct dp_pdev *pdev)
 	wlan_cfg_get_dp_soc_rx_sw_desc_num(soc->wlan_cfg_ctx);
 
 	rx_desc_pool->owner = dp_rx_get_rx_bm_id(soc);
-	rx_desc_pool->buf_size = buf_size;
+	rx_desc_pool->buf_size = RX_DATA_BUFFER_SIZE;
 	rx_desc_pool->buf_alignment = RX_DATA_BUFFER_ALIGNMENT;
 	/* Disable monitor dest processing via frag */
 	if (target_type == TARGET_TYPE_QCN9160) {

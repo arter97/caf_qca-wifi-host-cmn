@@ -831,6 +831,18 @@ hal_rx_tlv_first_mpdu_get_li(uint8_t *buf)
 	return first_mpdu;
 }
 
+/**
+ * hal_rx_phy_legacy_get_rssi_li() - API to get RSSI from TLV
+ *                                   WIFIPHYRX_RSSI_LEGACY_E
+ * @buf: pointer to the start of WIFIPHYRX_RSSI_LEGACY_E TLV
+ *
+ * Return: value of RSSI
+ */
+static inline int8_t hal_rx_phy_legacy_get_rssi_li(uint8_t *buf)
+{
+	return HAL_RX_GET(buf, PHYRX_RSSI_LEGACY_35, RSSI_COMB);
+}
+
 /*
  * hal_rx_msdu_get_keyid_li(): API to get the key id if the decrypted packet
  * from rx_msdu_end
@@ -1146,4 +1158,6 @@ void hal_hw_txrx_default_ops_attach_li(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_get_idle_link_bm_id = hal_get_idle_link_bm_id_li;
 	hal_soc->ops->hal_rx_get_phy_ppdu_id_size =
 						hal_rx_get_phy_ppdu_id_size_li;
+	hal_soc->ops->hal_rx_phy_legacy_get_rssi =
+						hal_rx_phy_legacy_get_rssi_li;
 }

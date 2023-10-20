@@ -638,34 +638,36 @@ wlan_reg_get_best_6g_power_type(struct wlan_objmgr_psoc *psoc,
 
 #ifdef CONFIG_CHAN_FREQ_API
 /**
- * wlan_reg_is_etsi13_srd_chan_for_freq() - Checks if the ch is ETSI13 srd ch
+ * wlan_reg_is_etsi_srd_chan_for_freq() - Checks if the ch is
+ * ETSI13/ETSI18/ETSI20 srd ch
  * or not
  * @pdev: pdev ptr
  * @freq: channel center frequency
  *
  * Return: true or false
  */
-bool wlan_reg_is_etsi13_srd_chan_for_freq(struct wlan_objmgr_pdev *pdev,
-					  qdf_freq_t freq);
+bool wlan_reg_is_etsi_srd_chan_for_freq(struct wlan_objmgr_pdev *pdev,
+					qdf_freq_t freq);
 #endif /*CONFIG_CHAN_FREQ_API*/
 
 /**
- * wlan_reg_is_etsi13_regdmn() - Checks if current reg domain is ETSI13 or not
+ * wlan_reg_is_etsi_regdmn() - Check if current reg domain is
+ * ETSI13/ETSI18/ETSI20 or not
  * @pdev: pdev ptr
  *
  * Return: true or false
  */
-bool wlan_reg_is_etsi13_regdmn(struct wlan_objmgr_pdev *pdev);
+bool wlan_reg_is_etsi_regdmn(struct wlan_objmgr_pdev *pdev);
 
 /**
- * wlan_reg_is_etsi13_srd_chan_allowed_master_mode() - Checks if regdmn is
+ * wlan_reg_is_etsi_srd_chan_allowed_master_mode() - Checks if regdmn is
  * ETSI13 and SRD channels are allowed in master mode or not.
  *
  * @pdev: pdev ptr
  *
  * Return: true or false
  */
-bool wlan_reg_is_etsi13_srd_chan_allowed_master_mode(struct wlan_objmgr_pdev
+bool wlan_reg_is_etsi_srd_chan_allowed_master_mode(struct wlan_objmgr_pdev
 						     *pdev);
 #endif
 

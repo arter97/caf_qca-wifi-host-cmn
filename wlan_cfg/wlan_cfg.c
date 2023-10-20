@@ -4172,6 +4172,9 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	wlan_cfg_ctx->pkt_capture_mode = cfg_get(psoc, CFG_PKT_CAPTURE_MODE) &
 						 PKT_CAPTURE_MODE_DATA_ONLY;
 #endif
+#ifdef WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL
+	wlan_cfg_ctx->rx_refill_buff_pool_size = DP_RX_REFILL_BUFF_POOL_SIZE;
+#endif
 	wlan_cfg_ctx->num_rxdma_dst_rings_per_pdev = NUM_RXDMA_RINGS_PER_PDEV;
 	wlan_cfg_ctx->num_rxdma_status_rings_per_pdev =
 					NUM_RXDMA_STATUS_RINGS_PER_PDEV;
@@ -4230,7 +4233,6 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 
 	wlan_cfg_ctx->tx_ring_size = cfg_get(psoc, CFG_DP_TX_RING_SIZE);
 	wlan_cfg_ctx->time_control_bp = cfg_get(psoc, CFG_DP_TIME_CONTROL_BP);
-	wlan_cfg_ctx->rx_buffer_size = cfg_get(psoc, CFG_DP_RX_BUFFER_SIZE);
 	wlan_cfg_ctx->qref_control_size =
 					cfg_get(psoc, CFG_DP_QREF_CONTROL_SIZE);
 	wlan_cfg_ctx->tx_comp_ring_size = cfg_get(psoc,
@@ -4851,13 +4853,6 @@ int wlan_cfg_time_control_bp(struct wlan_cfg_dp_soc_ctxt *cfg)
 	return cfg->time_control_bp;
 }
 
-int wlan_cfg_rx_buffer_size(struct wlan_cfg_dp_soc_ctxt *cfg)
-{
-	return cfg->rx_buffer_size;
-}
-
-qdf_export_symbol(wlan_cfg_rx_buffer_size);
-
 int wlan_cfg_qref_control_size(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return cfg->qref_control_size;
@@ -4949,6 +4944,12 @@ int wlan_cfg_get_num_global_spcl_tx_desc(struct wlan_cfg_dp_soc_ctxt *cfg)
 int wlan_cfg_get_num_tx_desc(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return cfg->num_tx_desc;
+}
+
+
+void wlan_cfg_set_num_tx_spl_desc(struct wlan_cfg_dp_soc_ctxt *cfg, int num_desc)
+{
+	cfg->num_tx_spl_desc = num_desc;
 }
 
 int wlan_cfg_get_num_tx_spl_desc(struct wlan_cfg_dp_soc_ctxt *cfg)
@@ -5918,3 +5919,15 @@ bool wlan_cfg_get_ast_indication_disable(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return cfg->fw_ast_indication_disable;
 }
+
+#ifdef WLAN_SUPPORT_DPDK
+int wlan_cfg_get_dp_soc_dpdk_cfg(struct cdp_ctrl_objmgr_psoc *psoc)
+{
+	return cfg_get(psoc, CFG_DPDK_WIFI);
+}
+#else
+int wlan_cfg_get_dp_soc_dpdk_cfg(struct cdp_ctrl_objmgr_psoc *psoc)
+{
+	return 0;
+}
+#endif

@@ -1871,10 +1871,10 @@ static QDF_STATUS send_vdev_up_cmd_tlv(wmi_unified_t wmi,
 
 	wmi_debug("VDEV_UP");
 	wmi_debug("vdev_id %d aid %d profile idx %d count %d bssid "
-		  QDF_MAC_ADDR_FMT,
+		  QDF_MAC_ADDR_FMT " trans bssid " QDF_MAC_ADDR_FMT,
 		  params->vdev_id, params->assoc_id,
 		  params->profile_idx, params->profile_num,
-		  QDF_MAC_ADDR_REF(bssid));
+		  QDF_MAC_ADDR_REF(bssid), QDF_MAC_ADDR_REF(params->trans_bssid));
 	buf = wmi_buf_alloc(wmi, len);
 	if (!buf)
 		return QDF_STATUS_E_NOMEM;
@@ -2832,6 +2832,8 @@ static QDF_STATUS send_crash_inject_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->delay_time_ms = param->delay_time_ms;
 
 	wmi_mtrace(WMI_FORCE_FW_HANG_CMDID, NO_SESSION, 0);
+	wmi_info("type:%d delay_time_ms:%d current_time:%ld",
+		 cmd->type, cmd->delay_time_ms, qdf_mc_timer_get_system_time());
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 		WMI_FORCE_FW_HANG_CMDID);
 	if (ret) {
@@ -4105,6 +4107,8 @@ static QDF_STATUS send_scan_start_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->ie_len = params->extraie.len;
 	cmd->n_probes = params->n_probes;
 	cmd->scan_ctrl_flags_ext = params->scan_ctrl_flags_ext;
+	WMI_SCAN_MLD_PARAM_MLD_ID_SET(cmd->mld_parameter, params->mld_id);
+	wmi_debug("MLD ID: %u", cmd->mld_parameter);
 
 	if (params->scan_random.randomize)
 		wmi_copy_scan_random_mac(params->scan_random.mac_addr,
@@ -15997,6 +16001,14 @@ static bool is_management_record_tlv(uint32_t cmd_id)
 	}
 }
 
+static bool is_force_fw_hang_cmd_tlv(uint32_t cmd_id)
+{
+	if (cmd_id == WMI_FORCE_FW_HANG_CMDID)
+		return true;
+
+	return false;
+}
+
 static bool is_diag_event_tlv(uint32_t event_id)
 {
 	if (WMI_DIAG_EVENTID == event_id)
@@ -19697,10 +19709,13 @@ extract_roam_trigger_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 				btm_data->btm_mbo_assoc_retry_timeout;
 			trig->btm_trig_data.token =
 				(uint16_t)btm_data->btm_req_dialog_token;
-			trig->btm_trig_data.band =
-				WMI_GET_MLO_BAND(scan_info->flags);
-			if (trig->btm_trig_data.band != WMI_MLO_BAND_NO_MLO)
-				trig->btm_trig_data.is_mlo = true;
+			if (scan_info) {
+				trig->btm_trig_data.band =
+					WMI_GET_MLO_BAND(scan_info->flags);
+				if (trig->btm_trig_data.band !=
+						WMI_MLO_BAND_NO_MLO)
+					trig->btm_trig_data.is_mlo = true;
+			}
 		} else if (src_data) {
 			trig->btm_trig_data.btm_request_mode =
 					src_data->btm_request_mode;
@@ -19718,10 +19733,13 @@ extract_roam_trigger_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 					src_data->btm_mbo_assoc_retry_timeout;
 			trig->btm_trig_data.token =
 				src_data->btm_req_dialog_token;
-			trig->btm_trig_data.band =
-				WMI_GET_MLO_BAND(scan_info->flags);
-			if (trig->btm_trig_data.band != WMI_MLO_BAND_NO_MLO)
-				trig->btm_trig_data.is_mlo = true;
+			if (scan_info) {
+				trig->btm_trig_data.band =
+					WMI_GET_MLO_BAND(scan_info->flags);
+				if (trig->btm_trig_data.band !=
+						WMI_MLO_BAND_NO_MLO)
+					trig->btm_trig_data.is_mlo = true;
+			}
 			if ((btm_idx +
 				trig->btm_trig_data.candidate_list_count) <=
 			    param_buf->num_roam_btm_request_candidate_info)
@@ -21472,6 +21490,7 @@ struct wmi_ops tlv_ops =  {
 				send_wlan_profile_hist_intvl_cmd_tlv,
 	.is_management_record = is_management_record_tlv,
 	.is_diag_event = is_diag_event_tlv,
+	.is_force_fw_hang_cmd = is_force_fw_hang_cmd_tlv,
 #ifdef WLAN_FEATURE_ACTION_OUI
 	.send_action_oui_cmd = send_action_oui_cmd_tlv,
 #endif
@@ -22819,6 +22838,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 					WMI_SERVICE_PER_LINK_STATS_SUPPORT;
 	wmi_service[wmi_service_pdev_wsi_stats_info_support] =
 			WMI_SERVICE_PDEV_WSI_STATS_INFO_SUPPORT;
+	wmi_service[wmi_service_mlo_tid_to_link_mapping_support] =
+		WMI_SERVICE_MLO_TID_TO_LINK_MAPPING_SUPPORT;
 #endif
 	wmi_service[wmi_service_aux_mac_support] = WMI_SERVICE_AUX_MAC_SUPPORT;
 #ifdef WLAN_ATF_INCREASED_STA
@@ -22889,6 +22910,7 @@ void wmi_tlv_attach(wmi_unified_t wmi_handle)
 	wmi_gpio_attach_tlv(wmi_handle);
 	wmi_11be_attach_tlv(wmi_handle);
 	wmi_coap_attach_tlv(wmi_handle);
+	wmi_mlme_attach_tlv(wmi_handle);
 }
 qdf_export_symbol(wmi_tlv_attach);
 

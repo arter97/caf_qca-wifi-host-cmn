@@ -1042,13 +1042,15 @@ static void mlo_send_teardown_req(struct wlan_objmgr_psoc *psoc,
 
 			if (tx_ops && tx_ops->mops.target_if_mlo_teardown_req) {
 				mlo_info(
-				"Trigger Teardown  with Pdev %d Psoc id %d link idx %d Umac reset %d for Mode 1",
+				"Trigger Teardown with Pdev id: %d Psoc id: %d link idx: %d Umac reset: %d Standby Active: %d",
 				wlan_objmgr_pdev_get_pdev_id(temp_pdev),
 				wlan_psoc_get_id(wlan_pdev_get_psoc(temp_pdev)),
-				link_idx, umac_reset);
+				link_idx, umac_reset,
+				temp_pdev->standby_active);
 				tx_ops->mops.target_if_mlo_teardown_req(
 						setup_info->pdev_list[link_idx],
-						reason, umac_reset);
+						reason, umac_reset,
+						temp_pdev->standby_active);
 			}
 		}
 	} else {
@@ -1058,7 +1060,7 @@ static void mlo_send_teardown_req(struct wlan_objmgr_psoc *psoc,
 					continue;
 				tx_ops->mops.target_if_mlo_teardown_req(
 						setup_info->pdev_list[link_idx],
-						reason, 0);
+						reason, 0, 0);
 			}
 	}
 }

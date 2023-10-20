@@ -56,7 +56,7 @@ osif_validate_disconnect_and_reset_src_id(struct vdev_osif_priv *osif_priv,
 	qdf_spinlock_acquire(&osif_priv->cm_info.cmd_id_lock);
 	if (rsp->req.req.source == CM_INTERNAL_DISCONNECT ||
 	    rsp->req.req.source == CM_MLO_ROAM_INTERNAL_DISCONNECT ||
-	    rsp->req.req.source == CM_MLO_LINK_SWITCH_DISCONNECT) {
+	    ucfg_cm_is_link_switch_disconnect_resp(rsp)) {
 		osif_debug("ignore internal disconnect");
 		status = QDF_STATUS_E_INVAL;
 		goto rel_lock;

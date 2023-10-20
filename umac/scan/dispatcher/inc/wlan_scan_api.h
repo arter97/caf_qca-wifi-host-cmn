@@ -541,4 +541,15 @@ QDF_STATUS
 wlan_scan_get_mld_addr_by_link_addr(struct wlan_objmgr_pdev *pdev,
 				    struct qdf_mac_addr *link_addr,
 				    struct qdf_mac_addr *mld_mac_addr);
+
+/**
+ * wlan_scan_get_aux_support() - get aux scan policy
+ * @psoc: psoc object
+ *
+ * Set aux scan bits in scan_ctrl_ext_flag value depending on scan type.
+ *
+ * Return: true/false
+ */
+bool wlan_scan_get_aux_support(struct wlan_objmgr_psoc *psoc);
+
 #endif

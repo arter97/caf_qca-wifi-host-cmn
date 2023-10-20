@@ -1261,6 +1261,7 @@ struct wmi_host_link_bss_params {
  * @bssid: AP link address
  * @chan: Wlan channel information
  * @mac_addr: Self mac addresses
+ * @rec_max_simultaneous_links: Max recommended simultaneous links
  */
 struct peer_assoc_mlo_params {
 	uint32_t mlo_enabled:1,
@@ -1294,6 +1295,7 @@ struct peer_assoc_mlo_params {
 	struct qdf_mac_addr bssid;
 	struct wlan_channel chan;
 	struct qdf_mac_addr mac_addr;
+	uint8_t rec_max_simultaneous_links;
 };
 
 /**
@@ -6081,6 +6083,8 @@ typedef enum {
 		   VDEV_PARAM_RTT_11AZ_NTB_MIN_TIME_BW_MEAS),
 	VDEV_PARAM(vdev_param_disable_2g_twt,
 		   VDEV_PARAM_DISABLE_2G_TWT),
+	VDEV_PARAM(vdev_param_disable_twt_info_frame,
+		   VDEV_PARAM_DISABLE_TWT_INFO_FRAME),
 	vdev_param_max,
 } wmi_conv_vdev_param_id;
 
@@ -6454,6 +6458,7 @@ typedef enum {
 	wmi_service_n_link_mlo_support,
 	wmi_service_per_link_stats_support,
 	wmi_service_pdev_wsi_stats_info_support,
+	wmi_service_mlo_tid_to_link_mapping_support,
 #endif
 	wmi_service_aux_mac_support,
 #ifdef WLAN_ATF_INCREASED_STA

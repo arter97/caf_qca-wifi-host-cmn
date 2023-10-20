@@ -128,17 +128,19 @@ static QDF_STATUS wlan_mgmt_txrx_psoc_obj_destroy_notification(
 
 	mgmt_txrx_debug("deleting mgmt txrx psoc obj, mgmt txrx ctx: %pK, psoc: %pK",
 			mgmt_txrx_psoc_ctx, psoc);
-	if (wlan_objmgr_psoc_component_obj_detach(psoc,
-				WLAN_UMAC_COMP_MGMT_TXRX, mgmt_txrx_psoc_ctx)
-			!= QDF_STATUS_SUCCESS) {
-		mgmt_txrx_err("Failed to detach mgmt txrx ctx in psoc ctx");
-		return QDF_STATUS_E_FAILURE;
-	}
 
 	status = wlan_mgmt_rx_reo_psoc_obj_destroy_notification(psoc);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		mgmt_txrx_err("Failed to run mgmt Rx REO psoc destroy handler");
 		return status;
+	}
+
+	if (wlan_objmgr_psoc_component_obj_detach(psoc,
+						  WLAN_UMAC_COMP_MGMT_TXRX,
+						  mgmt_txrx_psoc_ctx)
+			!= QDF_STATUS_SUCCESS) {
+		mgmt_txrx_err("Failed to detach mgmt txrx ctx in psoc ctx");
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	qdf_spinlock_destroy(&mgmt_txrx_psoc_ctx->mgmt_txrx_psoc_ctx_lock);
@@ -297,17 +299,19 @@ static QDF_STATUS wlan_mgmt_txrx_pdev_obj_destroy_notification(
 
 	mgmt_txrx_debug("deleting mgmt txrx pdev obj, mgmt txrx ctx: %pK, pdev: %pK",
 			mgmt_txrx_pdev_ctx, pdev);
-	if (wlan_objmgr_pdev_component_obj_detach(pdev,
-				WLAN_UMAC_COMP_MGMT_TXRX, mgmt_txrx_pdev_ctx)
-			!= QDF_STATUS_SUCCESS) {
-		mgmt_txrx_err("Failed to detach mgmt txrx ctx in pdev ctx");
-		return QDF_STATUS_E_FAILURE;
-	}
 
 	status = wlan_mgmt_rx_reo_pdev_obj_destroy_notification(
 						pdev, mgmt_txrx_pdev_ctx);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		mgmt_txrx_err("Failed to destroy mgmt Rx REO pdev object");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (wlan_objmgr_pdev_component_obj_detach(pdev,
+						  WLAN_UMAC_COMP_MGMT_TXRX,
+						  mgmt_txrx_pdev_ctx)
+			!= QDF_STATUS_SUCCESS) {
+		mgmt_txrx_err("Failed to detach mgmt txrx ctx in pdev ctx");
 		return QDF_STATUS_E_FAILURE;
 	}
 

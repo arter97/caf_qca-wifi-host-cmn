@@ -752,6 +752,7 @@ dp_rx_mon_process_ppdu_info(struct dp_pdev *pdev,
 
 			mpdu_meta = (struct hal_rx_mon_mpdu_info *)qdf_nbuf_data(mpdu);
 
+			ppdu_info->rx_status.rs_fcs_err = mpdu_meta->fcs_err;
 			if (dp_lite_mon_is_rx_enabled(mon_pdev)) {
 				status = dp_lite_mon_rx_mpdu_process(pdev, ppdu_info,
 								     mpdu, mpdu_idx, user);
@@ -800,6 +801,7 @@ dp_rx_mon_process_ppdu_info(struct dp_pdev *pdev,
 				if (status != QDF_STATUS_SUCCESS)
 					dp_mon_free_parent_nbuf(mon_pdev, mpdu);
 			}
+			ppdu_info->rx_status.rs_fcs_err = false;
 		}
 	}
 
@@ -932,6 +934,15 @@ dp_rx_mon_handle_full_mon(struct dp_pdev *pdev,
 	mpdu_meta = (struct hal_rx_mon_mpdu_info *)qdf_nbuf_data(mpdu);
 
 	if (mpdu_meta->decap_type == HAL_HW_RX_DECAP_FORMAT_RAW) {
+		if (qdf_unlikely(ppdu_info->rx_status.rs_fcs_err)) {
+			hdr_desc = qdf_nbuf_get_frag_addr(mpdu, 0);
+			wh = (struct ieee80211_frame *)hdr_desc;
+			if ((wh->i_fc[0] & QDF_IEEE80211_FC0_VERSION_MASK) !=
+			    QDF_IEEE80211_FC0_VERSION_0) {
+				DP_STATS_INC(pdev, dropped.mon_ver_err, 1);
+				return QDF_STATUS_E_FAILURE;
+			}
+		}
 		qdf_nbuf_trim_add_frag_size(mpdu,
 					    qdf_nbuf_get_nr_frags(mpdu) - 1,
 					    -HAL_RX_FCS_LEN, 0);
@@ -1818,7 +1829,6 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 		mpdu_meta = (struct hal_rx_mon_mpdu_info *)qdf_nbuf_data(nbuf);
 		mpdu_meta->mpdu_length_err = mpdu_info->mpdu_length_err;
 		mpdu_meta->fcs_err = mpdu_info->fcs_err;
-		ppdu_info->rx_status.rs_fcs_err = mpdu_info->fcs_err;
 		mpdu_meta->overflow_err = mpdu_info->overflow_err;
 		mpdu_meta->decrypt_err = mpdu_info->decrypt_err;
 		mpdu_meta->full_pkt = mpdu_info->full_pkt;
@@ -1973,6 +1983,38 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 				    << 32);
 
 	return ppdu_info;
+}
+
+/**
+ * dp_mon_pdev_flush_desc() - Flush status and packet desc during deinit
+ *
+ * @pdev: DP pdev handle
+ *
+ * Return
+ */
+static QDF_STATUS dp_mon_pdev_flush_desc(struct dp_pdev *pdev)
+{
+	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	struct dp_mon_pdev_be *mon_pdev_be;
+
+	if (qdf_unlikely(!mon_pdev)) {
+		dp_mon_debug("monitor pdev is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
+
+	qdf_spin_lock_bh(&mon_pdev->mon_lock);
+
+	if (mon_pdev_be->desc_count) {
+		mon_pdev->rx_mon_stats.pending_desc_count +=
+						mon_pdev_be->desc_count;
+		dp_rx_mon_flush_status_buf_queue(pdev);
+	}
+
+	qdf_spin_unlock_bh(&mon_pdev->mon_lock);
+
+	return QDF_STATUS_SUCCESS;
 }
 
 #ifdef WLAN_FEATURE_11BE_MLO
@@ -2413,6 +2455,8 @@ QDF_STATUS dp_mon_pdev_ext_deinit_2_0(struct dp_pdev *pdev)
 	struct dp_mon_pdev_be *mon_pdev_be =
 			dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
 
+	dp_mon_pdev_flush_desc(pdev);
+
 	if (!mon_pdev_be->rx_mon_workqueue)
 		return QDF_STATUS_E_FAILURE;
 
@@ -2572,6 +2616,8 @@ void dp_mon_rx_print_advanced_stats_2_0(struct dp_soc *soc,
 		       rx_mon_stats->rx_hdr_invalid_cnt);
 	DP_PRINT_STATS("invalid_dma_length Received = %d",
 		       rx_mon_stats->invalid_dma_length);
+	DP_PRINT_STATS("pending_desc_count= %d",
+		       mon_pdev->rx_mon_stats.pending_desc_count);
 }
 #endif
 

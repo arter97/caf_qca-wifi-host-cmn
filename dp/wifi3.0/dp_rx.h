@@ -2329,25 +2329,27 @@ void dp_rx_cksum_offload(struct dp_pdev *pdev,
 			cksum.l4_result = QDF_NBUF_RX_CKSUM_TCP_UDP_UNNECESSARY;
 			if (qdf_nbuf_is_ipv4_udp_pkt(nbuf) ||
 			    qdf_nbuf_is_ipv4_tcp_pkt(nbuf)) {
-				if (qdf_likely(!tcp_udp_csum_er))
+				if (qdf_likely(!tcp_udp_csum_er)) {
 					cksum.csum_level = 1;
-				else
-					DP_STATS_INCC(pdev,
-						      err.tcp_udp_csum_err, 1,
-						      tcp_udp_csum_er);
+				} else {
+					cksum.l4_result =
+						QDF_NBUF_RX_CKSUM_NONE;
+					DP_STATS_INC(pdev,
+						     err.tcp_udp_csum_err, 1);
+				}
 			}
 		} else {
-			DP_STATS_INCC(pdev, err.ip_csum_err, 1, ip_csum_err);
+			DP_STATS_INC(pdev, err.ip_csum_err, 1);
 		}
 	} else if (qdf_nbuf_is_ipv6_udp_pkt(nbuf) ||
 		   qdf_nbuf_is_ipv6_tcp_pkt(nbuf)) {
-		if (qdf_likely(!tcp_udp_csum_er))
+		if (qdf_likely(!ip_csum_err && !tcp_udp_csum_er))
 			cksum.l4_result = QDF_NBUF_RX_CKSUM_TCP_UDP_UNNECESSARY;
-		else
-			DP_STATS_INCC(pdev, err.tcp_udp_csum_err, 1,
-				      tcp_udp_csum_er);
-	} else {
-		cksum.l4_result = QDF_NBUF_RX_CKSUM_NONE;
+		else if (ip_csum_err) {
+			DP_STATS_INC(pdev, err.ip_csum_err, 1);
+		} else {
+			DP_STATS_INC(pdev, err.tcp_udp_csum_err, 1);
+		}
 	}
 
 	qdf_nbuf_set_rx_cksum(nbuf, &cksum);
@@ -3478,6 +3480,20 @@ dp_rx_is_list_ready(qdf_nbuf_t nbuf_head,
 
 	return false;
 }
+
+/**
+ * dp_rx_deliver_to_stack_ext() - Deliver to netdev per sta
+ * @soc: core txrx main context
+ * @vdev: vdev
+ * @txrx_peer: txrx peer
+ * @nbuf_head: skb list head
+ *
+ * Return: true if packet is delivered to netdev per STA.
+ */
+bool
+dp_rx_deliver_to_stack_ext(struct dp_soc *soc, struct dp_vdev *vdev,
+			   struct dp_txrx_peer *txrx_peer,
+			   qdf_nbuf_t nbuf_head);
 #else
 static inline bool
 dp_rx_is_list_ready(qdf_nbuf_t nbuf_head,

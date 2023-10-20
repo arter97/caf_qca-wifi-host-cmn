@@ -229,6 +229,24 @@ void wlan_cm_free_connect_resp(struct wlan_cm_connect_resp *connect_rsp);
  */
 void wlan_cm_free_connect_req_param(struct wlan_cm_connect_req *req);
 
+/**
+ * wlan_cm_is_link_switch_disconnect_resp() - Check if the disconnect response
+ * is for link switch request.
+ * @resp: Connection manager disconnect response.
+ *
+ * Return: bool
+ */
+bool wlan_cm_is_link_switch_disconnect_resp(struct wlan_cm_discon_rsp *resp);
+
+/**
+ * wlan_cm_is_link_switch_connect_resp() - Check if the connect response if for
+ * link switch request.
+ * @resp: Connection manager connect response.
+ *
+ * Return: bool
+ */
+bool wlan_cm_is_link_switch_connect_resp(struct wlan_cm_connect_resp *resp);
+
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 /**
  * wlan_cm_is_vdev_roam_started() - check if vdev is in roaming state and
@@ -349,6 +367,28 @@ wlan_cm_connect_resp_fill_mld_addr_from_vdev_id(struct wlan_objmgr_psoc *psoc,
  */
 bool wlan_cm_get_active_connect_req(struct wlan_objmgr_vdev *vdev,
 				    struct wlan_cm_vdev_connect_req *req);
+
+/**
+ * wlan_cm_is_first_candidate_connect_attempt() - Check whether it is
+ * the first attempt for the current AP after receiving connect request
+ * @vdev: vdev pointer
+ *
+ * Return: True if it is the first connecting attempt on a candidate.
+ * Otherwise return false
+ */
+bool wlan_cm_is_first_candidate_connect_attempt(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * wlan_cm_get_active_connect_req_param() - API to fetch connect request
+ * parameter.
+ * @vdev: vdev pointer
+ * @req: Connection request parameter buffer to be filled
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wlan_cm_get_active_connect_req_param(struct wlan_objmgr_vdev *vdev,
+				     struct wlan_cm_connect_req *req);
 
 #ifdef WLAN_FEATURE_HOST_ROAM
 /**

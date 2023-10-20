@@ -2992,6 +2992,28 @@ cdp_wds_ext_get_peer_osif_handle(
 			(soc, vdev_id, mac, osif_peer);
 }
 
+/**
+ * cdp_wds_ext_set_bit() - set wds-ext peer bit
+ * @soc: soc handle
+ * @mac: peer mac address
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS
+cdp_wds_ext_set_bit(ol_txrx_soc_handle soc, uint8_t *mac)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance");
+		QDF_BUG(0);
+		return QDF_STATUS_E_FAULT;
+	}
+
+	if (!soc->ops->cmn_drv_ops ||
+	    !soc->ops->cmn_drv_ops->set_wds_ext_peer_bit)
+		return QDF_STATUS_E_FAULT;
+
+	return soc->ops->cmn_drv_ops->set_wds_ext_peer_bit(soc, mac);
+}
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
 
 /**
@@ -3354,4 +3376,28 @@ QDF_STATUS cdp_mlo_dev_ctxt_detach(ol_txrx_soc_handle soc,
 	return QDF_STATUS_SUCCESS;
 }
 #endif /* WLAN_FEATURE_11BE_MLO */
+
+#ifdef WLAN_SUPPORT_DPDK
+/*
+ * cdp_dpdk_get_ring_info - get dp ring info for dpdk
+ * @soc: soc handle
+ * @uio_info: pointer to fill dp ring info
+ *
+ * Return: none
+ */
+static inline void cdp_dpdk_get_ring_info(ol_txrx_soc_handle soc,
+					  qdf_uio_info_t *uio_info)
+{
+	if (!soc) {
+		dp_cdp_debug("Invalid Instance");
+		return;
+	}
+
+	if (!soc->ops->cmn_drv_ops ||
+	    !soc->ops->cmn_drv_ops->dpdk_get_ring_info)
+		return;
+
+	soc->ops->cmn_drv_ops->dpdk_get_ring_info(soc, uio_info);
+}
+#endif
 #endif /* _CDP_TXRX_CMN_H_ */

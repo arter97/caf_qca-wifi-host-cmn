@@ -654,7 +654,7 @@ bool reg_is_dsrc_freq(qdf_freq_t freq)
 }
 #endif  /*CONFIG_CHAN_FREQ_API*/
 #else
-bool reg_is_etsi13_regdmn(struct wlan_objmgr_pdev *pdev)
+bool reg_is_etsi_regdmn(struct wlan_objmgr_pdev *pdev)
 {
 	struct cur_regdmn_info cur_reg_dmn;
 	QDF_STATUS status;
@@ -665,25 +665,25 @@ bool reg_is_etsi13_regdmn(struct wlan_objmgr_pdev *pdev)
 		return false;
 	}
 
-	return reg_etsi13_regdmn(cur_reg_dmn.dmn_id_5g);
+	return reg_etsi_regdmn(cur_reg_dmn.dmn_id_5g);
 }
 
 #ifdef CONFIG_CHAN_FREQ_API
-bool reg_is_etsi13_srd_chan_for_freq(struct wlan_objmgr_pdev *pdev,
-				     uint16_t freq)
+bool reg_is_etsi_srd_chan_for_freq(struct wlan_objmgr_pdev *pdev,
+				   uint16_t freq)
 {
 	if (!REG_IS_5GHZ_FREQ(freq))
 		return false;
 
-	if (!(freq >= REG_ETSI13_SRD_START_FREQ &&
-	      freq <= REG_ETSI13_SRD_END_FREQ))
+	if (!(freq >= REG_ETSI_SRD_START_FREQ &&
+	      freq <= REG_ETSI_SRD_END_FREQ))
 		return false;
 
-	return reg_is_etsi13_regdmn(pdev);
+	return reg_is_etsi_regdmn(pdev);
 }
 #endif /* CONFIG_CHAN_FREQ_API */
 
-bool reg_is_etsi13_srd_chan_allowed_master_mode(struct wlan_objmgr_pdev *pdev)
+bool reg_is_etsi_srd_chan_allowed_master_mode(struct wlan_objmgr_pdev *pdev)
 {
 	struct wlan_objmgr_psoc *psoc;
 	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
@@ -701,7 +701,7 @@ bool reg_is_etsi13_srd_chan_allowed_master_mode(struct wlan_objmgr_pdev *pdev)
 	}
 
 	return psoc_priv_obj->enable_srd_chan_in_master_mode &&
-	       reg_is_etsi13_regdmn(pdev);
+	       reg_is_etsi_regdmn(pdev);
 }
 #endif
 

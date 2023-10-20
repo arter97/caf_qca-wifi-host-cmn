@@ -897,6 +897,23 @@ struct dp_ast_entry *dp_peer_ast_hash_find_soc(struct dp_soc *soc,
 					       uint8_t *ast_mac_addr);
 
 /**
+ * dp_peer_ast_hash_find_soc_by_type() - Find AST entry by MAC address
+ * and AST type
+ * @soc: SoC handle
+ * @ast_mac_addr: Mac address
+ * @type: AST entry type
+ *
+ * It assumes caller has taken the ast lock to protect the access to
+ * AST hash table
+ *
+ * Return: AST entry
+ */
+struct dp_ast_entry *dp_peer_ast_hash_find_soc_by_type(
+					struct dp_soc *soc,
+					uint8_t *ast_mac_addr,
+					enum cdp_txrx_ast_entry_type type);
+
+/**
  * dp_peer_ast_get_pdev_id() - get pdev_id from the ast entry
  * @soc: SoC handle
  * @ast_entry: AST entry of the node
@@ -1964,8 +1981,8 @@ struct dp_peer *dp_peer_get_tgt_peer_hash_find(struct dp_soc *soc,
 			ta_peer = peer;
 		}
 	} else {
-		dp_peer_err("fail to find peer:" QDF_MAC_ADDR_FMT,
-			    QDF_MAC_ADDR_REF(peer_mac));
+		dp_peer_err("fail to find peer:" QDF_MAC_ADDR_FMT " vdev_id: %u",
+			    QDF_MAC_ADDR_REF(peer_mac), vdev_id);
 	}
 
 	return ta_peer;

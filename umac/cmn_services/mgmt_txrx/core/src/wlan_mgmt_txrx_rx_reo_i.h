@@ -1111,7 +1111,7 @@ mgmt_rx_reo_get_context_from_ingress_list
  */
 static inline struct mgmt_rx_reo_context *
 mgmt_rx_reo_get_context_from_egress_list
-			(const struct mgmt_rx_reo_ingress_list *egress_list) {
+			(const struct mgmt_rx_reo_egress_list *egress_list) {
 	if (!egress_list) {
 		mgmt_rx_reo_err("Egress list is null");
 		return NULL;

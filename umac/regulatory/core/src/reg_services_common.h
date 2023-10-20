@@ -58,14 +58,13 @@
 #ifdef CONFIG_49GHZ_CHAN
 #define REG_MIN_49GHZ_CH_FREQ channel_map[MIN_49GHZ_CHANNEL].center_freq
 #define REG_MAX_49GHZ_CH_FREQ channel_map[MAX_49GHZ_CHANNEL].center_freq
-#else
-#define REG_MIN_49GHZ_CH_FREQ 0
-#define REG_MAX_49GHZ_CH_FREQ 0
-#endif /* CONFIG_49GHZ_CHAN */
-
 #define REG_IS_49GHZ_FREQ(freq) \
 	(((freq) >= REG_MIN_49GHZ_CH_FREQ) &&   \
 	((freq) <= REG_MAX_49GHZ_CH_FREQ))
+
+#else
+#define REG_IS_49GHZ_FREQ(freq) false
+#endif /* CONFIG_49GHZ_CHAN */
 
 
 #define REG_IS_5GHZ_FREQ(freq) \
