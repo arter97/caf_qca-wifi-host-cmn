@@ -828,6 +828,7 @@ enum extn_element_ie {
  * accordingly.
  *
  * @REASON_PROP_START: Start of prop reason code
+ * @REASON_FW_TRIGGERED_LINK_SWITCH: Link Switch from active to standby link
  * @REASON_HOST_TRIGGERED_LINK_DELETE: Dynamic link removal
  * @REASON_OCI_MISMATCH: Reason OCI Mismatch happens
  * @REASON_HOST_TRIGGERED_ROAM_FAILURE: Reason host triggered roam failed
@@ -920,7 +921,8 @@ enum wlan_reason_code {
 	 * REASON_PROP_START and decrease the value of REASON_PROP_START
 	 * accordingly.
 	 */
-	REASON_PROP_START = 65516,
+	REASON_PROP_START = 65515,
+	REASON_FW_TRIGGERED_LINK_SWITCH = 65516,
 	REASON_HOST_TRIGGERED_LINK_DELETE = 65517,
 	REASON_OCI_MISMATCH = 65518,
 	REASON_HOST_TRIGGERED_ROAM_FAILURE  = 65519,
@@ -940,6 +942,7 @@ enum wlan_reason_code {
 	REASON_BEACON_MISSED = 65533,
 	REASON_USER_TRIGGERED_ROAM_FAILURE = 65534,
 	REASON_HOST_TRIGGERED_SILENT_DEAUTH = 65535,
+	/* Do not add any reason code below this */
 };
 
 /**
@@ -2108,6 +2111,10 @@ struct wlan_ie_bw_ind {
 
 #ifdef WLAN_FEATURE_11BE_MLO
 #define WLAN_MLO_MAX_VDEVS 2
+
+#ifndef WLAN_MAX_ML_BSS_LINKS
+#define WLAN_MAX_ML_BSS_LINKS 3
+#endif
 
 /* Size in octets of the BSS Parameters Change Count (sub)field */
 #define WLAN_ML_BSSPARAMCHNGCNT_SIZE                    1

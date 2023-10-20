@@ -450,15 +450,21 @@ osif_link_reconfig_notify_cb(struct wlan_objmgr_vdev *vdev)
 /**
  * osif_cm_disconnect_start_cb() - Disconnect start callback
  * @vdev: vdev pointer
+ * @source: Disconnect source
  *
  * This callback indicates os_if that disconnection is started
  * so that os_if can stop all the activity on this connection
  *
  * Return: QDF_STATUS
  */
-static QDF_STATUS
-osif_cm_disconnect_start_cb(struct wlan_objmgr_vdev *vdev)
+static QDF_STATUS osif_cm_disconnect_start_cb(struct wlan_objmgr_vdev *vdev,
+					      enum wlan_cm_source source)
 {
+	/* Don't stop netif queues for link switch disconnect */
+	if (source == CM_MLO_LINK_SWITCH_DISCONNECT ||
+	    source == CM_MLO_ROAM_INTERNAL_DISCONNECT)
+		return QDF_STATUS_SUCCESS;
+
 	/* Disable netif queue on disconnect start */
 	return osif_cm_disable_netif_queue(vdev);
 }

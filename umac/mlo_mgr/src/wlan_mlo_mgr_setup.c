@@ -144,6 +144,7 @@ static void mlo_set_soc_list(uint8_t grp_id, struct wlan_objmgr_psoc *psoc)
 		if (mlo_ctx->setup_info[grp_id].soc_id_list[idx] ==
 				psoc->soc_objmgr.psoc_id) {
 			mlo_ctx->setup_info[grp_id].soc_list[idx] = psoc;
+			mlo_wsi_link_info_update_soc(psoc, grp_id);
 		}
 	}
 }
@@ -475,6 +476,8 @@ void mlo_setup_init(uint8_t total_grp)
 	mlo_ctx->setup_info[0].ml_grp_id = 0;
 	for (id = 0; id < total_grp; id++) {
 		mlo_ctx->setup_info[id].tsf_sync_enabled = true;
+		mlo_ctx->setup_info[id].wsi_stats_info_support = 0xff;
+
 		if (qdf_event_create(&mlo_ctx->setup_info[id].event) !=
 							QDF_STATUS_SUCCESS)
 			mlo_err("Unable to create teardown event");
@@ -1022,7 +1025,7 @@ static void mlo_send_teardown_req(struct wlan_objmgr_psoc *psoc,
 	setup_info = &mlo_ctx->setup_info[grp_id];
 	tot_links = setup_info->tot_links;
 
-	if (reason == WMI_MLO_TEARDOWN_REASON_MODE1_SSR) {
+	if (reason == WMI_HOST_MLO_TEARDOWN_REASON_MODE1_SSR) {
 		for (link_idx = 0; link_idx < tot_links; link_idx++) {
 			umac_reset = 0;
 			temp_pdev = setup_info->pdev_list[link_idx];
@@ -1124,7 +1127,7 @@ QDF_STATUS mlo_link_teardown_link(struct wlan_objmgr_psoc *psoc,
 	/* Trigger MLO teardown */
 	mlo_send_teardown_req(psoc, grp_id, reason);
 
-	if (reason == WMI_MLO_TEARDOWN_REASON_SSR) {
+	if (reason == WMI_HOST_MLO_TEARDOWN_REASON_SSR) {
 		/* do not wait for teardown event completion here for SSR */
 		return QDF_STATUS_SUCCESS;
 	}
@@ -1142,6 +1145,49 @@ QDF_STATUS mlo_link_teardown_link(struct wlan_objmgr_psoc *psoc,
 }
 
 qdf_export_symbol(mlo_link_teardown_link);
+
+void mlo_update_wsi_stats_info_support(struct wlan_objmgr_psoc *psoc,
+				       bool wsi_stats_info_support)
+{
+	uint8_t ml_grp_id;
+	struct mlo_mgr_context *mlo_ctx = wlan_objmgr_get_mlo_ctx();
+	struct mlo_setup_info *mlo_setup;
+
+	ml_grp_id = wlan_mlo_get_psoc_group_id(psoc);
+	if ((ml_grp_id ==  WLAN_MLO_GROUP_INVALID) ||
+	    (ml_grp_id < 0)) {
+		mlo_err("Invalid ML Grp ID %d", ml_grp_id);
+		return;
+	}
+
+	mlo_setup = &mlo_ctx->setup_info[ml_grp_id];
+	if (mlo_setup->wsi_stats_info_support == 0xFF)
+		mlo_setup->wsi_stats_info_support = wsi_stats_info_support;
+	else
+		mlo_setup->wsi_stats_info_support &= wsi_stats_info_support;
+}
+
+qdf_export_symbol(mlo_update_wsi_stats_info_support);
+
+uint8_t mlo_get_wsi_stats_info_support(struct wlan_objmgr_psoc *psoc)
+{
+	uint8_t ml_grp_id;
+	struct mlo_mgr_context *mlo_ctx = wlan_objmgr_get_mlo_ctx();
+	struct mlo_setup_info *mlo_setup;
+
+	ml_grp_id = wlan_mlo_get_psoc_group_id(psoc);
+	if ((ml_grp_id ==  WLAN_MLO_GROUP_INVALID) ||
+	    (ml_grp_id < 0)) {
+		mlo_err("Invalid ML Grp ID %d", ml_grp_id);
+		return 0;
+	}
+
+	mlo_setup = &mlo_ctx->setup_info[ml_grp_id];
+	if (mlo_setup->wsi_stats_info_support == 0xFF)
+		return 0;
+
+	return mlo_setup->wsi_stats_info_support;
+}
 
 void mlo_update_tsf_sync_support(struct wlan_objmgr_psoc *psoc,
 				 bool tsf_sync_enab)
@@ -1161,4 +1207,94 @@ void mlo_update_tsf_sync_support(struct wlan_objmgr_psoc *psoc,
 }
 
 qdf_export_symbol(mlo_update_tsf_sync_support);
+
+bool mlo_pdev_derive_bridge_link_pdevs(struct wlan_objmgr_pdev *pdev,
+				       struct wlan_objmgr_pdev **pdev_list)
+{
+	struct wlan_objmgr_psoc *psoc;
+	struct wlan_objmgr_psoc *grp_soc_list[MAX_MLO_CHIPS];
+	struct wlan_objmgr_pdev *tmp_pdev;
+	uint8_t tot_grp_socs;
+	uint8_t grp_id;
+	uint8_t psoc_id, tmp_psoc_id;
+	uint8_t idx;
+	uint8_t is_adjacent;
+	QDF_STATUS status;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+
+	/* Initialize pdev list to NULL by default */
+	for (idx = 0; idx < MLO_MAX_BRIDGE_LINKS_PER_MLD; idx++)
+		pdev_list[idx] = NULL;
+
+	if (!mlo_psoc_get_grp_id(psoc, &grp_id)) {
+		qdf_err("Unable to get group id");
+		return false;
+	}
+
+	/* Get the total SOCs in the MLO group */
+	tot_grp_socs = mlo_setup_get_total_socs(grp_id);
+	if (!tot_grp_socs || tot_grp_socs > MAX_MLO_CHIPS) {
+		qdf_err("Unable to get total SOCs");
+		return false;
+	}
+	qdf_info("Total SOCs in MLO group%d: %d", grp_id, tot_grp_socs);
+
+	/* Get the SOC list in the MLO group */
+	mlo_get_soc_list(grp_soc_list, grp_id, tot_grp_socs,
+			 WLAN_MLO_GROUP_DEFAULT_SOC_LIST);
+
+	psoc_id = wlan_psoc_get_id(psoc);
+
+	/*
+	 * Check the current pdev for num bridge links created and
+	 * add to the pdev list if possible otherwise find opposite pdev
+	 */
+	if (wlan_pdev_get_mlo_bridge_vdev_count(pdev)
+	    < MLO_MAX_BRIDGE_LINKS_PER_RADIO)
+		pdev_list[0] = pdev;
+
+	/*
+	 * Iterate over the MLO group SOC list
+	 * and get the pdevs for bridge links
+	 */
+	for (idx = 0; idx < tot_grp_socs; idx++) {
+		if (!grp_soc_list[idx])
+			continue;
+
+		if (grp_soc_list[idx] == psoc)
+			continue;
+
+		/* Skip the pdev if bridge link quota is over */
+		tmp_pdev = grp_soc_list[idx]->soc_objmgr.wlan_pdev_list[0];
+
+		if (wlan_pdev_get_mlo_bridge_vdev_count(tmp_pdev)
+		    >= MLO_MAX_BRIDGE_LINKS_PER_RADIO)
+			continue;
+
+		tmp_psoc_id = wlan_psoc_get_id(grp_soc_list[idx]);
+
+		qdf_info("Checking adjacency of soc %d and %d",
+			 psoc_id, tmp_psoc_id);
+		status = mlo_chip_adjacent(psoc_id, tmp_psoc_id, &is_adjacent);
+		if (status != QDF_STATUS_SUCCESS) {
+			qdf_info("Check adjacency failed");
+			return false;
+		}
+
+		if (is_adjacent) {
+			if (!pdev_list[1])
+				pdev_list[1] = tmp_pdev;
+		} else if (!pdev_list[0]) {
+			pdev_list[0] = tmp_pdev;
+		}
+
+		if (pdev_list[0] && pdev_list[1])
+			return true;
+	}
+
+	return false;
+}
+
+qdf_export_symbol(mlo_pdev_derive_bridge_link_pdevs);
 #endif /*WLAN_MLO_MULTI_CHIP*/

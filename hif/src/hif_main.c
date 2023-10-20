@@ -400,6 +400,11 @@ static const struct qwlan_hw qwlan_hw_list[] = {
 		.name = "WCN6750_V1",
 	},
 	{
+		.id = WCN6750_V2,
+		.subid = 0,
+		.name = "WCN6750_V2",
+	},
+	{
 		.id = WCN6450_V1,
 		.subid = 0,
 		.name = "WCN6450_V1",
@@ -772,7 +777,8 @@ QDF_STATUS hif_unregister_recovery_notifier(struct hif_softc *hif_handle)
 }
 #endif
 
-#ifdef HIF_CPU_PERF_AFFINE_MASK
+#if defined(HIF_CPU_PERF_AFFINE_MASK) || \
+	defined(FEATURE_ENABLE_CE_DP_IRQ_AFFINE)
 /**
  * __hif_cpu_hotplug_notify() - CPU hotplug event handler
  * @context: HIF context
@@ -1302,6 +1308,8 @@ struct hif_opaque_softc *hif_open(qdf_device_t qdf_ctx,
 	hif_latency_detect_init(scn);
 	hif_affinity_mgr_init(scn, psoc);
 	hif_init_direct_link_rcv_pipe_num(scn);
+	hif_ce_desc_history_log_register(scn);
+	hif_desc_history_log_register();
 
 out:
 	return GET_HIF_OPAQUE_HDL(scn);
@@ -1340,6 +1348,8 @@ void hif_close(struct hif_opaque_softc *hif_ctx)
 		return;
 	}
 
+	hif_desc_history_log_unregister();
+	hif_ce_desc_history_log_unregister();
 	hif_latency_detect_deinit(scn);
 
 	if (scn->athdiag_procfs_inited) {
@@ -1698,6 +1708,7 @@ static void hif_reg_write_work(void *arg)
 		if (!q_elem->valid)
 			break;
 
+		qdf_rmb();
 		q_elem->dequeue_time = qdf_get_log_timestamp();
 		ring_id = q_elem->ce_state->id;
 		offset = q_elem->offset;
@@ -3339,4 +3350,17 @@ hif_affinity_mgr_init_grp_irq(struct hif_softc *scn, int grp_id,
 	cfg->last_affined_away = 0;
 	cfg->update_requested = false;
 }
+#endif
+
+#if defined(HIF_CPU_PERF_AFFINE_MASK) || \
+	defined(FEATURE_ENABLE_CE_DP_IRQ_AFFINE)
+void hif_config_irq_set_perf_affinity_hint(
+	struct hif_opaque_softc *hif_ctx)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
+
+	hif_config_irq_affinity(scn);
+}
+
+qdf_export_symbol(hif_config_irq_set_perf_affinity_hint);
 #endif

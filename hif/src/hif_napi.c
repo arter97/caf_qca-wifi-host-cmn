@@ -969,6 +969,7 @@ void hif_print_napi_stats(struct hif_opaque_softc *hif_ctx)
 						  napi_stats->napi_polls,
 						  napi_stats->napi_completes,
 						  napi_stats->napi_workdone,
+						  napi_stats->time_limit_reached,
 						  qdf_do_div(napi_stats->napi_max_poll_time, 1000),
 						  hist_str);
 			}
@@ -1025,6 +1026,7 @@ void hif_print_napi_stats(struct hif_opaque_softc *hif_ctx)
 }
 #endif
 
+#ifdef HIF_LATENCY_PROFILE_ENABLE
 void hif_clear_napi_stats(struct hif_opaque_softc *hif_ctx)
 {
 	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
@@ -1041,6 +1043,12 @@ void hif_clear_napi_stats(struct hif_opaque_softc *hif_ctx)
 				    sizeof(napii->sched_latency_stats), 0);
 	}
 }
+#else
+inline void hif_clear_napi_stats(struct hif_opaque_softc *hif_ctx)
+{
+}
+#endif /* HIF_LATENCY_PROFILE_ENABLE */
+
 #else
 static inline void
 hif_napi_update_service_start_time(struct qca_napi_info *napi_info)

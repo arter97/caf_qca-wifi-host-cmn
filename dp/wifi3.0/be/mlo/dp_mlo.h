@@ -47,6 +47,8 @@
  * @rx_fst: pointer to rx_fst handle
  * @rx_fst_ref_cnt: ref count of rx_fst
  * @grp_umac_reset_ctx: UMAC reset context at mlo group level
+ * @mlo_dev_list: list of MLO device context
+ * @mlo_dev_list_lock: lock to protect MLO device ctxt
  */
 struct dp_mlo_ctxt {
 	struct cdp_ctrl_mlo_mgr *ctrl_ctxt;
@@ -68,6 +70,9 @@ struct dp_mlo_ctxt {
 #ifdef DP_UMAC_HW_RESET_SUPPORT
 	struct dp_soc_mlo_umac_reset_ctx grp_umac_reset_ctx;
 #endif
+	/* MLO device ctxt list */
+	TAILQ_HEAD(, dp_mlo_dev_ctxt) mlo_dev_list;
+	qdf_spinlock_t mlo_dev_list_lock;
 };
 
 /**
@@ -217,4 +222,41 @@ int32_t dp_mlo_get_delta_tqm_wrt_mlo_offset(struct dp_soc *soc);
 QDF_STATUS
 dp_get_interface_stats_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 			  void *buf, bool is_aggregate);
+
+/*
+ * dp_mlo_debug_print_ptnr_info() - print partner info
+ * @vdev: DP VDEV
+ *
+ * Return: none
+ */
+void dp_mlo_debug_print_ptnr_info(struct dp_vdev *vdev);
+
+/*
+ * dp_mlo_get_chip_id() - return MLO chip id
+ * @soc: DP soc
+ *
+ * Return: chip_id
+ */
+uint8_t dp_mlo_get_chip_id(struct dp_soc *soc);
+
+/*
+ * dp_mlo_link_peer_hash_find_by_chip_id() - returns mlo link peer on chip_id
+ *			      peer_hash_table matching vdev_id and mac_address
+ * @soc: partner soc handle in MLO
+ * @peer_mac_addr: peer mac address
+ * @mac_addr_is_aligned: is mac addr aligned
+ * @vdev_id: vdev_id
+ * @chip_id: mlo_chip_id
+ * @mod_id: id of module requesting reference
+ *
+ * return: peer in success
+ *         NULL in failure
+ */
+struct dp_peer *
+dp_mlo_link_peer_hash_find_by_chip_id(struct dp_soc *soc,
+				      uint8_t *peer_mac_addr,
+				      int mac_addr_is_aligned,
+				      uint8_t vdev_id,
+				      uint8_t chip_id,
+				      enum dp_mod_id mod_id);
 #endif /* __DP_MLO_H */

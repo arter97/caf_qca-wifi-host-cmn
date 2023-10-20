@@ -761,8 +761,6 @@ QDF_STATUS __dp_pdev_rx_buffers_no_map_attach(struct dp_soc *soc,
 		if (!rxdma_ring_entry)
 			break;
 
-		qdf_assert_always(rxdma_ring_entry);
-
 		desc_list->rx_desc.nbuf = nbuf;
 		dp_rx_set_reuse_nbuf(&desc_list->rx_desc, nbuf);
 		desc_list->rx_desc.rx_buf_start = nbuf->data;
@@ -1135,16 +1133,6 @@ dp_rx_deliver_raw(struct dp_vdev *vdev, qdf_nbuf_t nbuf_list,
 		DP_STATS_INC(vdev->pdev, rx_raw_pkts, 1);
 		DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer, rx.raw, 1,
 					      qdf_nbuf_len(nbuf), link_id);
-		/*
-		 * reset the chfrag_start and chfrag_end bits in nbuf cb
-		 * as this is a non-amsdu pkt and RAW mode simulation expects
-		 * these bit s to be 0 for non-amsdu pkt.
-		 */
-		if (qdf_nbuf_is_rx_chfrag_start(nbuf) &&
-			 qdf_nbuf_is_rx_chfrag_end(nbuf)) {
-			qdf_nbuf_set_rx_chfrag_start(nbuf, 0);
-			qdf_nbuf_set_rx_chfrag_end(nbuf, 0);
-		}
 
 		nbuf = next;
 	}
@@ -1718,19 +1706,21 @@ void dp_rx_process_invalid_peer_wrapper(struct dp_soc *soc,
  * dp_rx_print_offload_info() - Print offload info from RX TLV
  * @soc: dp soc handle
  * @msdu: MSDU for which the offload info is to be printed
+ * @ofl_info: offload info saved in hal_offload_info structure
  *
  * Return: None
  */
 static void dp_rx_print_offload_info(struct dp_soc *soc,
-				     qdf_nbuf_t msdu)
+				     qdf_nbuf_t msdu,
+				     struct hal_offload_info *ofl_info)
 {
 	dp_verbose_debug("----------------------RX DESC LRO/GRO----------------------");
 	dp_verbose_debug("lro_eligible 0x%x",
 			 QDF_NBUF_CB_RX_LRO_ELIGIBLE(msdu));
 	dp_verbose_debug("pure_ack 0x%x", QDF_NBUF_CB_RX_TCP_PURE_ACK(msdu));
 	dp_verbose_debug("chksum 0x%x", QDF_NBUF_CB_RX_TCP_CHKSUM(msdu));
-	dp_verbose_debug("TCP seq num 0x%x", QDF_NBUF_CB_RX_TCP_SEQ_NUM(msdu));
-	dp_verbose_debug("TCP ack num 0x%x", QDF_NBUF_CB_RX_TCP_ACK_NUM(msdu));
+	dp_verbose_debug("TCP seq num 0x%x", ofl_info->tcp_seq_num);
+	dp_verbose_debug("TCP ack num 0x%x", ofl_info->tcp_ack_num);
 	dp_verbose_debug("TCP window 0x%x", QDF_NBUF_CB_RX_TCP_WIN(msdu));
 	dp_verbose_debug("TCP protocol 0x%x", QDF_NBUF_CB_RX_TCP_PROTO(msdu));
 	dp_verbose_debug("TCP offset 0x%x", QDF_NBUF_CB_RX_TCP_OFFSET(msdu));
@@ -1756,15 +1746,13 @@ void dp_rx_fill_gro_info(struct dp_soc *soc, uint8_t *rx_tlv,
 	QDF_NBUF_CB_RX_TCP_CHKSUM(msdu) =
 			hal_rx_tlv_get_tcp_chksum(soc->hal_soc,
 						  rx_tlv);
-	QDF_NBUF_CB_RX_TCP_SEQ_NUM(msdu) = offload_info.tcp_seq_num;
-	QDF_NBUF_CB_RX_TCP_ACK_NUM(msdu) = offload_info.tcp_ack_num;
 	QDF_NBUF_CB_RX_TCP_WIN(msdu) = offload_info.tcp_win;
 	QDF_NBUF_CB_RX_TCP_PROTO(msdu) = offload_info.tcp_proto;
 	QDF_NBUF_CB_RX_IPV6_PROTO(msdu) = offload_info.ipv6_proto;
 	QDF_NBUF_CB_RX_TCP_OFFSET(msdu) = offload_info.tcp_offset;
 	QDF_NBUF_CB_RX_FLOW_ID(msdu) = offload_info.flow_id;
 
-	dp_rx_print_offload_info(soc, msdu);
+	dp_rx_print_offload_info(soc, msdu, &offload_info);
 }
 #endif /* RECEIVE_OFFLOAD */
 
@@ -2061,6 +2049,29 @@ dp_rx_deliver_to_stack_ext(struct dp_soc *soc, struct dp_vdev *vdev,
 #endif
 
 #ifdef PEER_CACHE_RX_PKTS
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
+/**
+ * dp_set_nbuf_band() - Set band in nbuf cb
+ * @peer: dp_peer
+ * @nbuf: nbuf
+ *
+ * Return: None
+ */
+static inline void
+dp_set_nbuf_band(struct dp_peer *peer, qdf_nbuf_t nbuf)
+{
+	uint8_t link_id = 0;
+
+	link_id = dp_rx_get_stats_arr_idx_from_link_id(nbuf, peer->txrx_peer);
+	dp_rx_set_nbuf_band(nbuf, peer->txrx_peer, link_id);
+}
+#else
+static inline void
+dp_set_nbuf_band(struct dp_peer *peer, qdf_nbuf_t nbuf)
+{
+}
+#endif
+
 void dp_rx_flush_rx_cached(struct dp_peer *peer, bool drop)
 {
 	struct dp_peer_cached_bufq *bufqi;
@@ -2108,6 +2119,7 @@ void dp_rx_flush_rx_cached(struct dp_peer *peer, bool drop)
 			bufqi->dropped = dp_rx_drop_nbuf_list(peer->vdev->pdev,
 							      cache_buf->buf);
 		} else {
+			dp_set_nbuf_band(peer, cache_buf->buf);
 			/* Flush the cached frames to OSIF DEV */
 			status = data_rx(peer->vdev->osif_vdev, cache_buf->buf);
 			if (status != QDF_STATUS_SUCCESS)

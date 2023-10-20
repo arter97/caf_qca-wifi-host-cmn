@@ -1404,7 +1404,7 @@ QDF_STATUS target_if_register_regulatory_tx_ops(
 
 	reg_ops->fill_umac_legacy_chanlist = NULL;
 
-	reg_ops->set_country_failed = NULL;
+	reg_ops->set_wait_for_init_cc_response_event = NULL;
 
 	target_if_register_acs_trigger_for_afc(reg_ops);
 
@@ -1453,6 +1453,8 @@ QDF_STATUS target_if_register_regulatory_tx_ops(
 		tgt_if_regulatory_unregister_rate2power_table_update_handler;
 
 	reg_ops->end_r2p_table_update_wait = NULL;
+
+	reg_ops->is_80p80_supported = NULL;
 
 	return QDF_STATUS_SUCCESS;
 }

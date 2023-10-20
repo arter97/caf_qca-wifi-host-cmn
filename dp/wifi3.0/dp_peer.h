@@ -48,6 +48,25 @@
 	__QDF_TRACE_FL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_DP_PEER, ## params)
 #define dp_peer_debug(params...) QDF_TRACE_DEBUG(QDF_MODULE_ID_DP_PEER, params)
 
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
+/**
+ * enum dp_bands - WiFi Band
+ *
+ * @DP_BAND_INVALID: Invalid band
+ * @DP_BAND_2GHZ: 2GHz link
+ * @DP_BAND_5GHZ: 5GHz link
+ * @DP_BAND_6GHZ: 6GHz link
+ * @DP_BAND_UNKNOWN: Unknown band
+ */
+enum dp_bands {
+	DP_BAND_INVALID = 0,
+	DP_BAND_2GHZ = 1,
+	DP_BAND_5GHZ = 2,
+	DP_BAND_6GHZ = 3,
+	DP_BAND_UNKNOWN = 4,
+};
+#endif
+
 void check_free_list_for_invalid_flush(struct dp_soc *soc);
 
 static inline
@@ -1316,6 +1335,17 @@ void dp_soc_wds_detach(struct dp_soc *soc);
 QDF_STATUS dp_peer_ast_table_attach(struct dp_soc *soc);
 
 /**
+ * dp_find_peer_by_macaddr() - Finding the peer from mac address provided.
+ * @soc: soc handle
+ * @mac_addr: MAC address to be used to find peer
+ * @vdev_id: VDEV id
+ * @mod_id: MODULE ID
+ *
+ * Return: struct dp_peer
+ */
+struct dp_peer *dp_find_peer_by_macaddr(struct dp_soc *soc, uint8_t *mac_addr,
+					uint8_t vdev_id, enum dp_mod_id mod_id);
+/**
  * dp_peer_ast_hash_attach() - Allocate and initialize AST Hash Table
  * @soc: SoC handle
  *
@@ -1517,17 +1547,33 @@ void dp_mlo_peer_delete(struct dp_soc *soc, struct dp_peer *peer, void *arg);
 	((link_peer)->mld_peer)
 
 #ifdef WLAN_MLO_MULTI_CHIP
-uint8_t dp_mlo_get_chip_id(struct dp_soc *soc);
+static inline uint8_t dp_get_chip_id(struct dp_soc *soc)
+{
+	if (soc->arch_ops.mlo_get_chip_id)
+		return soc->arch_ops.mlo_get_chip_id(soc);
 
-struct dp_peer *
+	return 0;
+}
+
+static inline struct dp_peer *
 dp_link_peer_hash_find_by_chip_id(struct dp_soc *soc,
 				  uint8_t *peer_mac_addr,
 				  int mac_addr_is_aligned,
 				  uint8_t vdev_id,
 				  uint8_t chip_id,
-				  enum dp_mod_id mod_id);
+				  enum dp_mod_id mod_id)
+{
+	if (soc->arch_ops.mlo_link_peer_find_hash_find_by_chip_id)
+		return soc->arch_ops.mlo_link_peer_find_hash_find_by_chip_id
+							(soc, peer_mac_addr,
+							 mac_addr_is_aligned,
+							 vdev_id, chip_id,
+							 mod_id);
+
+	return NULL;
+}
 #else
-static inline uint8_t dp_mlo_get_chip_id(struct dp_soc *soc)
+static inline uint8_t dp_get_chip_id(struct dp_soc *soc)
 {
 	return 0;
 }
@@ -1693,7 +1739,7 @@ void dp_mld_peer_add_link_peer(struct dp_peer *mld_peer,
 			link_peer_info->is_valid = true;
 			link_peer_info->vdev_id = link_peer->vdev->vdev_id;
 			link_peer_info->chip_id =
-				dp_mlo_get_chip_id(link_peer->vdev->pdev->soc);
+				dp_get_chip_id(link_peer->vdev->pdev->soc);
 			mld_peer->num_links++;
 			break;
 		}
@@ -2223,7 +2269,7 @@ void dp_mlo_peer_authorize(struct dp_soc *soc,
 {
 }
 
-static inline uint8_t dp_mlo_get_chip_id(struct dp_soc *soc)
+static inline uint8_t dp_get_chip_id(struct dp_soc *soc)
 {
 	return 0;
 }
@@ -2510,5 +2556,20 @@ QDF_STATUS dp_peer_host_add_map_ast(struct dp_soc *soc, uint16_t peer_id,
 				    uint8_t *mac_addr, uint16_t hw_peer_id,
 				    uint8_t vdev_id, uint16_t ast_hash,
 				    uint8_t is_wds);
+#endif
+
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
+/**
+ * dp_map_link_id_band: Set link id to band mapping in txrx_peer
+ * @peer: dp peer pointer
+ *
+ * Return: None
+ */
+void dp_map_link_id_band(struct dp_peer *peer);
+#else
+static inline
+void dp_map_link_id_band(struct dp_peer *peer)
+{
+}
 #endif
 #endif /* _DP_PEER_H_ */

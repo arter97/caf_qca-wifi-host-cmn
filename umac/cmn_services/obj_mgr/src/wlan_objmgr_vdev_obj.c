@@ -32,7 +32,7 @@
 #include "wlan_objmgr_vdev_obj_i.h"
 #include <wlan_utility.h>
 #include <wlan_osif_priv.h>
-
+#include "cdp_txrx_cmn.h"
 
 /*
  * APIs to Create/Delete Global object APIs
@@ -143,6 +143,7 @@ struct wlan_objmgr_vdev *wlan_objmgr_vdev_obj_create(
 	wlan_objmgr_vdev_status_handler stat_handler;
 	void *arg;
 	QDF_STATUS obj_status;
+	struct qdf_mac_addr *mld_addr;
 
 	if (!pdev) {
 		obj_mgr_err("pdev is NULL");
@@ -236,6 +237,7 @@ struct wlan_objmgr_vdev *wlan_objmgr_vdev_obj_create(
 		vdev->vdev_objmgr.max_peer_count =
 				wlan_pdev_get_max_peer_count(pdev);
 
+	wlan_vdev_init_skip_pumac_cnt(vdev);
 	if (params->legacy_osif)
 		vdev->vdev_nif.osdev->legacy_osif_priv = params->legacy_osif;
 
@@ -290,22 +292,47 @@ struct wlan_objmgr_vdev *wlan_objmgr_vdev_obj_create(
 
 	obj_mgr_debug("Created vdev %d", vdev->vdev_objmgr.vdev_id);
 
+	/* Attach DP vdev to DP MLO dev ctx */
+	mld_addr = (struct qdf_mac_addr *)wlan_vdev_mlme_get_mldaddr(vdev);
+
+	if (!qdf_is_macaddr_zero(mld_addr)) {
+		/* only for MLO vdev's */
+		if (cdp_mlo_dev_ctxt_attach(
+				wlan_psoc_get_dp_handle(psoc),
+				wlan_vdev_get_id(vdev),
+				(uint8_t *)mld_addr)
+				!= QDF_STATUS_SUCCESS) {
+			obj_mgr_err("Fail to attach vdev to DP MLO Dev ctxt");
+			wlan_objmgr_vdev_obj_delete(vdev);
+			return NULL;
+		}
+	}
+
 	return vdev;
 }
 qdf_export_symbol(wlan_objmgr_vdev_obj_create);
 
 static QDF_STATUS wlan_objmgr_vdev_obj_destroy(struct wlan_objmgr_vdev *vdev)
 {
-	uint8_t id;
+	int8_t id;
 	wlan_objmgr_vdev_destroy_handler handler;
 	QDF_STATUS obj_status;
 	void *arg;
 	uint8_t vdev_id;
+	struct wlan_objmgr_psoc *psoc = NULL;
+	struct qdf_mac_addr *mld_addr;
 
 	if (!vdev) {
 		obj_mgr_err("vdev is NULL");
 		return QDF_STATUS_E_FAILURE;
 	}
+
+	psoc = wlan_vdev_get_psoc(vdev);
+	if (!psoc) {
+		obj_mgr_err("Failed to get psoc");
+		return QDF_STATUS_E_FAILURE;
+	}
+
 	wlan_objmgr_notify_destroy(vdev, WLAN_VDEV_OP);
 
 	vdev_id = wlan_vdev_get_id(vdev);
@@ -322,8 +349,23 @@ static QDF_STATUS wlan_objmgr_vdev_obj_destroy(struct wlan_objmgr_vdev *vdev)
 	wlan_minidump_remove(vdev, sizeof(*vdev), wlan_vdev_get_psoc(vdev),
 			     WLAN_MD_OBJMGR_VDEV, "wlan_objmgr_vdev");
 
-	/* Invoke registered destroy handlers */
-	for (id = 0; id < WLAN_UMAC_MAX_COMPONENTS; id++) {
+	/* Detach DP vdev from DP MLO Device Context */
+	mld_addr = (struct qdf_mac_addr *)wlan_vdev_mlme_get_mldaddr(vdev);
+
+	if (!qdf_is_macaddr_zero(mld_addr)) {
+		/* only for MLO vdev's */
+		if (cdp_mlo_dev_ctxt_detach(wlan_psoc_get_dp_handle(psoc),
+					    wlan_vdev_get_id(vdev),
+					    (uint8_t *)mld_addr)
+					    != QDF_STATUS_SUCCESS) {
+			obj_mgr_err("Failed to detach DP vdev from DP MLO Dev ctxt");
+			QDF_BUG(0);
+			return QDF_STATUS_E_FAILURE;
+		}
+	}
+
+	/* Invoke registered destroy handlers in reverse order of creation */
+	for (id = WLAN_UMAC_COMP_ID_MAX - 1; id >= 0; id--) {
 		handler = g_umac_glb_obj->vdev_destroy_handler[id];
 		arg = g_umac_glb_obj->vdev_destroy_handler_arg[id];
 		if (handler &&
@@ -1528,6 +1570,16 @@ bool wlan_vdev_mlme_is_mlo_vdev(struct wlan_objmgr_vdev *vdev)
 
 qdf_export_symbol(wlan_vdev_mlme_is_mlo_vdev);
 
+#ifdef WLAN_MLO_MULTI_CHIP
+bool wlan_vdev_mlme_is_mlo_bridge_vdev(struct wlan_objmgr_vdev *vdev)
+{
+	if (!vdev)
+		return false;
+
+	return vdev->vdev_objmgr.mlo_bridge_vdev;
+}
+#endif
+
 void wlan_vdev_mlme_set_epcs_flag(struct wlan_objmgr_vdev *vdev, bool flag)
 {
 	if (!vdev) {
@@ -1546,6 +1598,27 @@ bool wlan_vdev_mlme_get_epcs_flag(struct wlan_objmgr_vdev *vdev)
 	}
 
 	return vdev->vdev_mlme.epcs_enable;
+}
+
+void wlan_vdev_mlme_set_user_dis_eht_flag(struct wlan_objmgr_vdev *vdev,
+					  bool flag)
+{
+	if (!vdev) {
+		obj_mgr_err("vdev is NULL");
+		return;
+	}
+
+	vdev->vdev_mlme.user_disable_eht = flag;
+}
+
+bool wlan_vdev_mlme_get_user_dis_eht_flag(struct wlan_objmgr_vdev *vdev)
+{
+	if (!vdev) {
+		obj_mgr_err("vdev is NULL");
+		return false;
+	}
+
+	return vdev->vdev_mlme.user_disable_eht;
 }
 
 void wlan_vdev_mlme_set_mlo_vdev(struct wlan_objmgr_vdev *vdev)

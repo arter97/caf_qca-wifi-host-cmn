@@ -48,11 +48,14 @@ dp_rx_mon_packet_length_set(uint32_t *msg_word,
 
 /**
  * dp_rx_mon_word_mask_subscribe() - Setup rx monitor word mask subscription
+ * @soc: soc handle
  * @msg_word: msg word
+ * @pdev_id: id of dp pdev handle
  * @tlv_filter: rx ring filter configuration
  */
 void
-dp_rx_mon_word_mask_subscribe(uint32_t *msg_word,
+dp_rx_mon_word_mask_subscribe(struct dp_soc *soc,
+			      uint32_t *msg_word, int pdev_id,
 			      struct htt_rx_ring_tlv_filter *tlv_filter);
 
 /**
@@ -144,6 +147,7 @@ void dp_mon_filter_setup_rx_mon_mode_2_0(struct dp_pdev *pdev);
  */
 void dp_mon_filter_reset_rx_mon_mode_2_0(struct dp_pdev *pdev);
 
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 /**
  * dp_mon_filter_setup_tx_mon_mode_2_0() - Setup the Tx monitor mode filter
  * @pdev: DP pdev handle
@@ -155,6 +159,18 @@ void dp_mon_filter_setup_tx_mon_mode_2_0(struct dp_pdev *pdev);
  * @pdev: DP pdev handle
  */
 void dp_mon_filter_reset_tx_mon_mode_2_0(struct dp_pdev *pdev);
+#else
+static inline void
+dp_mon_filter_setup_tx_mon_mode_2_0(struct dp_pdev *pdev)
+{
+}
+
+static inline void
+dp_mon_filter_reset_tx_mon_mode_2_0(struct dp_pdev *pdev)
+{
+}
+
+#endif
 
 #ifdef WDI_EVENT_ENABLE
 /**
@@ -286,7 +302,10 @@ QDF_STATUS dp_mon_filter_alloc_2_0(struct dp_pdev *pdev);
 void dp_mon_filter_reset_rx_lite_mon(struct dp_mon_pdev_be *be_mon_pdev);
 
 void dp_mon_filter_setup_rx_lite_mon(struct dp_mon_pdev_be *be_mon_pdev);
+#endif
 
+#if defined(QCA_SUPPORT_LITE_MONITOR) && \
+defined(WLAN_PKT_CAPTURE_TX_2_0)
 /**
  * dp_mon_filter_reset_tx_lite_mon() - Reset tx lite monitor filter
  * @be_mon_pdev: physical mon device handle
@@ -302,6 +321,16 @@ void dp_mon_filter_reset_tx_lite_mon(struct dp_mon_pdev_be *be_mon_pdev);
  * Return: Null
  */
 void dp_mon_filter_setup_tx_lite_mon(struct dp_pdev *pdev);
+#else
+static inline void
+dp_mon_filter_reset_tx_lite_mon(struct dp_mon_pdev_be *be_mon_pdev)
+{
+}
+
+static inline void
+dp_mon_filter_setup_tx_lite_mon(struct dp_pdev *pdev)
+{
+}
 #endif
 
 #ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE

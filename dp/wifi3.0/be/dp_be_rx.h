@@ -188,6 +188,9 @@ dp_rx_desc_sw_cc_check(struct dp_soc *soc,
 }
 #endif /* DP_FEATURE_HW_COOKIE_CONVERSION && DP_HW_COOKIE_CONVERT_EXCEPTION */
 
+struct dp_rx_desc *dp_rx_desc_ppeds_cookie_2_va(struct dp_soc *soc,
+						unsigned long cookie);
+
 #define DP_PEER_METADATA_OFFLOAD_GET_BE(_peer_metadata)		(0)
 
 #define HTT_RX_PEER_META_DATA_FIELD_GET(_var, _field_s, _field_m) \
@@ -664,6 +667,13 @@ dp_rx_peer_mdata_link_id_get_be(uint32_t peer_metadata)
 #endif /* DP_MLO_LINK_STATS_SUPPORT */
 
 static inline void
+dp_rx_set_mpdu_seq_number_be(qdf_nbuf_t nbuf, uint8_t *rx_tlv_hdr)
+{
+	QDF_NBUF_CB_RX_MPDU_SEQ_NUM(nbuf) =
+		hal_rx_mpdu_sequence_number_get_be(rx_tlv_hdr);
+}
+
+static inline void
 dp_rx_set_link_id_be(qdf_nbuf_t nbuf, uint32_t peer_mdata)
 {
 	uint8_t logical_link_id;
@@ -786,6 +796,11 @@ dp_rx_wbm_err_msdu_continuation_get(struct dp_soc *soc,
 #else
 static inline void
 dp_rx_set_link_id_be(qdf_nbuf_t nbuf, uint32_t peer_mdata)
+{
+}
+
+static inline void
+dp_rx_set_mpdu_seq_number_be(qdf_nbuf_t nbuf, uint8_t *rx_tlv_hdr)
 {
 }
 

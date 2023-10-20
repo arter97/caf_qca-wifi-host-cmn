@@ -759,6 +759,7 @@ static inline bool hif_tasklet_schedule(struct hif_opaque_softc *hif_ctx,
 }
 
 #ifdef WLAN_FEATURE_WMI_DIAG_OVER_CE7
+#define CE_LOOP_MAX_COUNT	20
 /**
  * ce_poll_reap_by_id() - reap the available frames from CE by polling per ce_id
  * @scn: hif context
@@ -773,6 +774,7 @@ static int ce_poll_reap_by_id(struct hif_softc *scn, enum ce_id_type ce_id)
 {
 	struct HIF_CE_state *hif_ce_state = (struct HIF_CE_state *)scn;
 	struct CE_state *CE_state = scn->ce_id_to_state[ce_id];
+	int i;
 
 	if (scn->ce_latency_stats)
 		hif_record_tasklet_exec_entry_ts(scn, ce_id);
@@ -780,13 +782,23 @@ static int ce_poll_reap_by_id(struct hif_softc *scn, enum ce_id_type ce_id)
 	hif_record_ce_desc_event(scn, ce_id, HIF_CE_REAP_ENTRY,
 				 NULL, NULL, -1, 0);
 
-	ce_per_engine_service(scn, ce_id);
+	for (i = 0; i < CE_LOOP_MAX_COUNT; i++) {
+		ce_per_engine_service(scn, ce_id);
+
+		if (ce_check_rx_pending(CE_state))
+			hif_record_ce_desc_event(scn, ce_id,
+						 HIF_CE_TASKLET_REAP_REPOLL,
+						 NULL, NULL, -1, 0);
+		else
+			break;
+	}
 
 	/*
 	 * In an unlikely case, if frames are still pending to reap,
 	 * could be an infinite loop, so return -EBUSY.
 	 */
-	if (ce_check_rx_pending(CE_state))
+	if (ce_check_rx_pending(CE_state) &&
+	    i == CE_LOOP_MAX_COUNT)
 		return -EBUSY;
 
 	hif_record_ce_desc_event(scn, ce_id, HIF_CE_REAP_EXIT,
@@ -907,12 +919,12 @@ irqreturn_t ce_dispatch_interrupt(int ce_id,
 		return IRQ_NONE;
 	}
 
-	hif_irq_disable(scn, ce_id);
-
 	if (!TARGET_REGISTER_ACCESS_ALLOWED(scn)) {
 		ce_interrupt_unlock(ce_state);
 		return IRQ_HANDLED;
 	}
+
+	hif_irq_disable(scn, ce_id);
 
 	hif_record_ce_desc_event(scn, ce_id, HIF_IRQ_EVENT,
 				NULL, NULL, 0, 0);

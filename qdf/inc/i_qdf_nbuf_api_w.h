@@ -265,4 +265,56 @@ static inline uint8_t qdf_nbuf_get_lmac_id(qdf_nbuf_t buf)
 	return 0;
 }
 
+static inline uint16_t qdf_nbuf_get_mpdu_seq_num(qdf_nbuf_t buf)
+{
+	return 0;
+}
+
+/**
+ * qdf_nbuf_tx_set_band() - Set band in nbuf cb
+ * @nbuf: nbuf pointer
+ * @band: peer band
+ *
+ * Return: None
+ */
+static inline void
+qdf_nbuf_tx_set_band(qdf_nbuf_t nbuf, uint8_t band)
+{
+}
+
+/**
+ * qdf_nbuf_tx_get_band() - Get band from nbuf cb
+ * @nbuf: nbuf pointer
+ *
+ * Return: Band
+ */
+static inline uint8_t
+qdf_nbuf_tx_get_band(qdf_nbuf_t nbuf)
+{
+	return 0;
+}
+
+/**
+ * qdf_nbuf_rx_set_band() - Set band in nbuf cb
+ * @nbuf: nbuf pointer
+ * @band: peer band
+ *
+ * Return: None
+ */
+static inline void
+qdf_nbuf_rx_set_band(qdf_nbuf_t nbuf, uint8_t band)
+{
+}
+
+/**
+ * qdf_nbuf_rx_get_band() - Get band from nbuf cb
+ * @nbuf: nbuf pointer
+ *
+ * Return: Band
+ */
+static inline uint8_t
+qdf_nbuf_rx_get_band(qdf_nbuf_t nbuf)
+{
+	return 0;
+}
 #endif /* _QDF_NBUF_W_H */

@@ -44,7 +44,7 @@ typedef struct tx_fes_status_prot hal_tx_fes_status_prot_t;
 typedef struct pcu_ppdu_setup_init hal_pcu_ppdu_setup_t;
 #endif
 
-#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(WLAN_CONFIG_TX_DELAY)
+#if defined(WLAN_FEATURE_TSF_AUTO_REPORT) || defined(WLAN_CONFIG_TX_DELAY)
 static inline void
 hal_tx_comp_get_buffer_timestamp_be(void *desc,
 				    struct hal_tx_completion_status *ts)
@@ -52,13 +52,13 @@ hal_tx_comp_get_buffer_timestamp_be(void *desc,
 	ts->buffer_timestamp = HAL_TX_DESC_GET(desc, WBM2SW_COMPLETION_RING_TX,
 					       BUFFER_TIMESTAMP);
 }
-#else /* !WLAN_FEATURE_TSF_UPLINK_DELAY || WLAN_CONFIG_TX_DELAY */
+#else /* !(WLAN_FEATURE_TSF_AUTO_REPORT || WLAN_CONFIG_TX_DELAY) */
 static inline void
 hal_tx_comp_get_buffer_timestamp_be(void *desc,
 				    struct hal_tx_completion_status *ts)
 {
 }
-#endif /* WLAN_FEATURE_TSF_UPLINK_DELAY || CONFIG_SAWF */
+#endif /* WLAN_FEATURE_TSF_AUTO_REPORT || WLAN_CONFIG_TX_DELAY */
 
 /**
  * hal_tx_comp_get_status_generic_be() - TQM Release reason
@@ -350,7 +350,7 @@ hal_txmon_is_mon_buf_addr_tlv_generic_be(void *tx_tlv_hdr)
 {
 	uint32_t tlv_tag;
 
-	tlv_tag = HAL_RX_GET_USER_TLV64_TYPE(tx_tlv_hdr);
+	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(tx_tlv_hdr);
 
 	if (WIFIMON_BUFFER_ADDR_E == tlv_tag)
 		return true;
@@ -1559,9 +1559,9 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 	uint32_t status = HAL_MON_TX_STATUS_PPDU_NOT_DONE;
 	void *tx_tlv;
 
-	tlv_tag = HAL_RX_GET_USER_TLV64_TYPE(tx_tlv_hdr);
-	tlv_user_id = HAL_RX_GET_USER_TLV64_USERID(tx_tlv_hdr);
-	tlv_len = HAL_RX_GET_USER_TLV64_LEN(tx_tlv_hdr);
+	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(tx_tlv_hdr);
+	tlv_user_id = HAL_RX_GET_USER_TLV32_USERID(tx_tlv_hdr);
+	tlv_len = HAL_RX_GET_USER_TLV32_LEN(tx_tlv_hdr);
 
 	tx_tlv = (uint8_t *)tx_tlv_hdr + HAL_RX_TLV64_HDR_SIZE;
 

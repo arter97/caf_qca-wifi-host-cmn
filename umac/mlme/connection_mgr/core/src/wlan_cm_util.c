@@ -29,12 +29,14 @@
 #endif
 #include "wlan_cm_roam.h"
 #include <qdf_platform.h>
+#include <wlan_mlo_mgr_link_switch.h>
 
 static uint32_t cm_get_prefix_for_cm_id(enum wlan_cm_source source) {
 	switch (source) {
 	case CM_OSIF_CONNECT:
 	case CM_OSIF_CFG_CONNECT:
 	case CM_MLO_LINK_VDEV_CONNECT:
+	case CM_MLO_LINK_SWITCH_CONNECT:
 		return CONNECT_REQ_PREFIX;
 	case CM_ROAMING_HOST:
 	case CM_ROAMING_FW:
@@ -58,6 +60,9 @@ wlan_cm_id cm_get_cm_id(struct cnx_mgr *cm_ctx, enum wlan_cm_source source)
 	cm_id = (cm_id & CM_ID_MASK);
 	cm_id = CM_ID_SET_VDEV_ID(cm_id, vdev_id);
 	cm_id = (cm_id | prefix);
+	if (source == CM_MLO_LINK_SWITCH_DISCONNECT ||
+	    source == CM_MLO_LINK_SWITCH_CONNECT)
+		cm_id |= CM_ID_LSWITCH_BIT;
 
 	return cm_id;
 }
@@ -594,6 +599,14 @@ cm_handle_connect_flush(struct cnx_mgr *cm_ctx, struct cm_req *cm_req)
 	cm_fill_connect_resp_from_req(cm_ctx->vdev, resp, cm_req);
 
 	cm_notify_connect_complete(cm_ctx, resp, 0);
+
+	/* For link switch connect request, notify MLO mgr */
+	if (resp->cm_id & CM_ID_LSWITCH_BIT) {
+		cm_reset_active_cm_id(cm_ctx->vdev, resp->cm_id);
+		mlo_mgr_link_switch_connect_done(cm_ctx->vdev,
+						 resp->connect_status);
+	}
+
 	qdf_mem_free(resp);
 }
 
@@ -623,6 +636,13 @@ cm_handle_disconnect_flush(struct cnx_mgr *cm_ctx, struct cm_req *cm_req)
 	 * was already in serialization active queue and thus wasn't flushed.
 	 */
 	mlme_cm_osif_disconnect_complete(cm_ctx->vdev, &resp);
+
+	if (resp.req.cm_id & CM_ID_LSWITCH_BIT) {
+		cm_reset_active_cm_id(cm_ctx->vdev, resp.req.cm_id);
+		mlo_mgr_link_switch_disconnect_done(cm_ctx->vdev,
+						    QDF_STATUS_E_ABORTED,
+						    true);
+	}
 }
 
 void cm_remove_cmd_from_serialization(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id)
@@ -1130,6 +1150,11 @@ void cm_remove_cmd(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id_to_remove)
 	status = cm_delete_req_from_list(cm_ctx, cm_id);
 	if (QDF_IS_STATUS_ERROR(status))
 		return;
+
+	if (cm_id & CM_ID_LSWITCH_BIT) {
+		mlme_debug("Skip cmd remove for link switch connect/disconnect");
+		return;
+	}
 
 	cm_remove_cmd_from_serialization(cm_ctx, cm_id);
 }
@@ -1728,8 +1753,6 @@ cm_get_pcl_chan_weigtage_for_sta(struct wlan_objmgr_pdev *pdev,
 				 struct pcl_freq_weight_list *pcl_lst,
 				 struct wlan_objmgr_vdev *vdev)
 {
-	enum QDF_OPMODE opmode = QDF_STA_MODE;
-	enum policy_mgr_con_mode pm_mode;
 	uint32_t num_entries = 0;
 	uint8_t vdev_id;
 	QDF_STATUS status;
@@ -1739,16 +1762,15 @@ cm_get_pcl_chan_weigtage_for_sta(struct wlan_objmgr_pdev *pdev,
 
 	vdev_id = wlan_vdev_get_id(vdev);
 
-	if (policy_mgr_map_concurrency_mode(&opmode, &pm_mode)) {
-		status = policy_mgr_get_pcl(wlan_pdev_get_psoc(pdev), pm_mode,
-					    pcl_lst->pcl_freq_list,
-					    &num_entries,
-					    pcl_lst->pcl_weight_list,
-					    NUM_CHANNELS, vdev_id);
-		if (QDF_IS_STATUS_ERROR(status))
-			return;
-		pcl_lst->num_of_pcl_channels = num_entries;
-	}
+	status = policy_mgr_get_pcl(wlan_pdev_get_psoc(pdev),
+				    PM_STA_MODE,
+				    pcl_lst->pcl_freq_list,
+				    &num_entries,
+				    pcl_lst->pcl_weight_list,
+				    NUM_CHANNELS, vdev_id);
+	if (QDF_IS_STATUS_ERROR(status))
+		return;
+	pcl_lst->num_of_pcl_channels = num_entries;
 }
 
 void cm_calculate_scores(struct cnx_mgr *cm_ctx,

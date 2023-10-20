@@ -34,7 +34,8 @@
 #define hal_alert(params...) QDF_TRACE_FATAL(QDF_MODULE_ID_HAL, params)
 #define hal_err(params...) QDF_TRACE_ERROR(QDF_MODULE_ID_HAL, params)
 #define hal_warn(params...) QDF_TRACE_WARN(QDF_MODULE_ID_HAL, params)
-#define hal_info(params...) QDF_TRACE_INFO(QDF_MODULE_ID_HAL, params)
+#define hal_info(params...) \
+	__QDF_TRACE_FL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_HAL, ## params)
 #define hal_debug(params...) QDF_TRACE_DEBUG(QDF_MODULE_ID_HAL, params)
 
 #define hal_alert_rl(params...) QDF_TRACE_FATAL_RL(QDF_MODULE_ID_HAL, params)
@@ -497,6 +498,7 @@ typedef struct hal_ring_handle *hal_ring_handle_t;
  * @work_scheduled_time: work scheduled time (qdf_log_timestamp)
  * @dequeue_time: dequeue time (qdf_log_timestamp)
  * @cpu_id: record cpuid when schedule work
+ * @ring_id: saved srng id
  */
 struct hal_reg_write_q_elem {
 	struct hal_srng *srng;
@@ -508,6 +510,7 @@ struct hal_reg_write_q_elem {
 	qdf_time_t work_scheduled_time;
 	qdf_time_t dequeue_time;
 	int cpu_id;
+	qdf_atomic_t ring_id;
 };
 
 /**
@@ -1136,9 +1139,12 @@ struct hal_hw_txrx_ops {
 	uint8_t (*hal_rx_get_tlv)(void *rx_tlv);
 	void (*hal_rx_proc_phyrx_other_receive_info_tlv)(void *rx_tlv_hdr,
 							void *ppdu_info_handle);
-	void (*hal_rx_dump_msdu_start_tlv)(void *msdu_start, uint8_t dbg_level);
-	void (*hal_rx_dump_msdu_end_tlv)(void *msdu_end,
-					 uint8_t dbg_level);
+	void (*hal_rx_dump_msdu_end_tlv)(void *pkt_tlvs, uint8_t dbg_level);
+	void (*hal_rx_dump_rx_attention_tlv)(void *pkt_tlvs, uint8_t dbg_level);
+	void (*hal_rx_dump_msdu_start_tlv)(void *pkt_tlvs, uint8_t dbg_level);
+	void (*hal_rx_dump_mpdu_start_tlv)(void *pkt_tlvs, uint8_t dbg_level);
+	void (*hal_rx_dump_mpdu_end_tlv)(void *pkt_tlvs, uint8_t dbg_level);
+	void (*hal_rx_dump_pkt_hdr_tlv)(void *pkt_tlvs, uint8_t dbg_level);
 	uint32_t (*hal_get_link_desc_size)(void);
 	uint32_t (*hal_rx_mpdu_start_tid_get)(uint8_t *buf);
 	uint32_t (*hal_rx_msdu_start_reception_type_get)(uint8_t *buf);
@@ -1157,8 +1163,6 @@ struct hal_hw_txrx_ops {
 
 	void (*hal_rx_wbm_err_info_get)(void *wbm_desc,
 				void *wbm_er_info);
-	void (*hal_rx_dump_mpdu_start_tlv)(void *mpdustart,
-						uint8_t dbg_level);
 
 	void (*hal_tx_set_pcp_tid_map)(struct hal_soc *hal_soc, uint8_t *map);
 	void (*hal_tx_update_pcp_tid_map)(struct hal_soc *hal_soc, uint8_t pcp,

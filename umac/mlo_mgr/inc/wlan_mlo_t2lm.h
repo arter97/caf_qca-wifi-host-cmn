@@ -395,6 +395,8 @@ typedef QDF_STATUS (*wlan_mlo_t2lm_link_update_handler)(
  * @tsf: time sync func value received via beacon
  * @link_update_handler: handler to update T2LM link
  * @is_valid_handler: T2LM handler is valid or not
+ * @mst_start_tsf: calculated mapping switch start tsf
+ * @mst_end_tsf: calculated mapping switch end tsf
  */
 struct wlan_t2lm_context {
 	struct wlan_mlo_t2lm_ie established_t2lm;
@@ -409,6 +411,10 @@ struct wlan_t2lm_context {
 	wlan_mlo_t2lm_link_update_handler
 		link_update_handler[MAX_T2LM_HANDLERS];
 	bool is_valid_handler[MAX_T2LM_HANDLERS];
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+	uint64_t mst_start_tsf;
+	uint64_t mst_end_tsf;
+#endif
 };
 
 #ifdef WLAN_FEATURE_11BE
@@ -552,11 +558,13 @@ QDF_STATUS wlan_mlo_dev_t2lm_notify_link_update(
  * wlan_mlo_parse_t2lm_ie() - API to parse the T2LM IE
  * @t2lm: Pointer to T2LM structure
  * @ie: Pointer to T2LM IE
+ * @frame_len: Action Frame length
  *
  * Return: QDF_STATUS
  */
 QDF_STATUS wlan_mlo_parse_t2lm_ie(
-	struct wlan_t2lm_onging_negotiation_info *t2lm, uint8_t *ie);
+	struct wlan_t2lm_onging_negotiation_info *t2lm, uint8_t *ie,
+	uint32_t frame_len);
 
 /**
  * wlan_mlo_add_t2lm_ie() - API to add TID-to-link mapping IE
@@ -586,6 +594,7 @@ QDF_STATUS wlan_mlo_vdev_tid_to_link_map_event(
  * wlan_mlo_parse_t2lm_action_frame() - API to parse T2LM action frame
  * @t2lm: Pointer to T2LM structure
  * @action_frm: Pointer to action frame
+ * @frame_len: Action frame length
  * @category: T2LM action frame category
  *
  * Return: 0 - success, else failure
@@ -593,6 +602,7 @@ QDF_STATUS wlan_mlo_vdev_tid_to_link_map_event(
 int wlan_mlo_parse_t2lm_action_frame(
 		struct wlan_t2lm_onging_negotiation_info *t2lm,
 		struct wlan_action_frame *action_frm,
+		uint32_t frame_len,
 		enum wlan_t2lm_category category);
 
 /**
@@ -745,7 +755,8 @@ wlan_send_peer_level_tid_to_link_mapping(struct wlan_objmgr_vdev *vdev,
 					 struct wlan_objmgr_peer *peer);
 #else
 static inline QDF_STATUS wlan_mlo_parse_t2lm_ie(
-	struct wlan_t2lm_onging_negotiation_info *t2lm, uint8_t *ie)
+	struct wlan_t2lm_onging_negotiation_info *t2lm, uint8_t *ie,
+	uint32_t frame_len)
 {
 	return QDF_STATUS_E_FAILURE;
 }
@@ -762,6 +773,7 @@ static inline
 int wlan_mlo_parse_t2lm_action_frame(
 		struct wlan_t2lm_onging_negotiation_info *t2lm,
 		struct wlan_action_frame *action_frm,
+		uint32_t frame_len,
 		enum wlan_t2lm_category category)
 {
 	return 0;

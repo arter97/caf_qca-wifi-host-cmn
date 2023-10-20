@@ -166,14 +166,30 @@ static QDF_STATUS wlan_mgmt_txrx_pdev_obj_create_notification(
 {
 	struct mgmt_txrx_priv_pdev_context *mgmt_txrx_pdev_ctx;
 	struct mgmt_txrx_stats_t *mgmt_txrx_stats;
+	struct wlan_objmgr_psoc *psoc;
+	uint8_t pdev_id;
+	uint8_t psoc_id;
 	QDF_STATUS status;
 
 	if (!pdev) {
 		mgmt_txrx_err("pdev context passed is NULL");
 		status = QDF_STATUS_E_INVAL;
 		goto err_return;
-
 	}
+
+	psoc = wlan_pdev_get_psoc(pdev);
+
+	if (!psoc) {
+		mgmt_txrx_err("psoc context in pdev is NULL");
+		status = QDF_STATUS_E_INVAL;
+		goto err_return;
+	}
+
+	pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
+
+	psoc_id = wlan_psoc_get_id(psoc);
+
+	mgmt_txrx_debug("enter pdev_id:%d psoc_id:%d", pdev_id, psoc_id);
 
 	mgmt_txrx_pdev_ctx = qdf_mem_malloc(sizeof(*mgmt_txrx_pdev_ctx));
 	if (!mgmt_txrx_pdev_ctx) {
@@ -182,6 +198,8 @@ static QDF_STATUS wlan_mgmt_txrx_pdev_obj_create_notification(
 	}
 
 	mgmt_txrx_pdev_ctx->pdev = pdev;
+
+	mgmt_txrx_debug("pool init pdev_id:%d psoc_id:%d", pdev_id, psoc_id);
 
 	status = wlan_mgmt_txrx_desc_pool_init(mgmt_txrx_pdev_ctx);
 	if (status != QDF_STATUS_SUCCESS) {
@@ -198,9 +216,14 @@ static QDF_STATUS wlan_mgmt_txrx_pdev_obj_create_notification(
 	}
 	mgmt_txrx_pdev_ctx->mgmt_txrx_stats = mgmt_txrx_stats;
 
+	mgmt_txrx_debug("lock create pdev_id:%d psoc_id:%d", pdev_id, psoc_id);
+
 	qdf_wake_lock_create(&mgmt_txrx_pdev_ctx->wakelock_tx_cmp,
 			     "mgmt_txrx tx_cmp");
 	qdf_runtime_lock_init(&mgmt_txrx_pdev_ctx->wakelock_tx_runtime_cmp);
+
+	mgmt_txrx_debug("notification create pdev_id:%d psoc_id:%d",
+			pdev_id, psoc_id);
 
 	status = wlan_mgmt_rx_reo_pdev_obj_create_notification(
 					pdev, mgmt_txrx_pdev_ctx);
@@ -208,6 +231,8 @@ static QDF_STATUS wlan_mgmt_txrx_pdev_obj_create_notification(
 		mgmt_txrx_err("Failed to create mgmt Rx REO pdev object");
 		goto err_mgmt_rx_reo_attach;
 	}
+
+	mgmt_txrx_debug("obj attach pdev_id:%d psoc_id:%d", pdev_id, psoc_id);
 
 	if (wlan_objmgr_pdev_component_obj_attach(pdev,
 			WLAN_UMAC_COMP_MGMT_TXRX,

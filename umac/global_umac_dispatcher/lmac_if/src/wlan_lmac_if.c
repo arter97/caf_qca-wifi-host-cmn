@@ -206,6 +206,7 @@ wlan_lmac_if_atf_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 	/* ATF rx ops */
 	atf_rx_ops->atf_get_fmcap = tgt_atf_get_fmcap;
 	atf_rx_ops->atf_get_mode = tgt_atf_get_mode;
+	atf_rx_ops->atf_is_enabled = tgt_atf_is_enabled;
 	atf_rx_ops->atf_get_msdu_desc = tgt_atf_get_msdu_desc;
 	atf_rx_ops->atf_get_max_vdevs = tgt_atf_get_max_vdevs;
 	atf_rx_ops->atf_get_peers = tgt_atf_get_peers;
@@ -975,6 +976,20 @@ wlan_lmac_if_umac_ftm_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 #endif
 
 #ifdef WLAN_FEATURE_11BE_MLO
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+static inline void
+wlan_lmac_if_mlo_rx_link_switch_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
+{
+	rx_ops->mlo_rx_ops.mlo_link_switch_request_handler =
+					mlo_mgr_link_switch_request_params;
+}
+#else
+static inline void
+wlan_lmac_if_mlo_rx_link_switch_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
+{
+}
+#endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
+
 /**
  * wlan_lmac_if_mlo_mgr_rx_ops_register() - API to register mlo mgr Rx Ops
  * @rx_ops: pointer to lmac rx ops
@@ -995,6 +1010,8 @@ wlan_lmac_if_mlo_mgr_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 		wlan_handle_ml_link_state_info_event;
 	rx_ops->mlo_rx_ops.mlo_link_disable_request_handler =
 		wlan_mlo_link_disable_request_handler;
+
+	wlan_lmac_if_mlo_rx_link_switch_ops_register(rx_ops);
 }
 #else
 static void

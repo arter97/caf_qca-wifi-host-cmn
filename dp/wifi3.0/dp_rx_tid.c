@@ -1152,6 +1152,10 @@ static void dp_peer_rx_tids_init(struct dp_peer *peer)
 
 void dp_peer_rx_tid_setup(struct dp_peer *peer)
 {
+	struct dp_soc *soc = peer->vdev->pdev->soc;
+	struct dp_txrx_peer *txrx_peer = dp_get_txrx_peer(peer);
+	struct dp_vdev *vdev = peer->vdev;
+
 	dp_peer_rx_tids_init(peer);
 
 	/* Setup default (non-qos) rx tid queue */
@@ -1159,9 +1163,19 @@ void dp_peer_rx_tid_setup(struct dp_peer *peer)
 
 	/* Setup rx tid queue for TID 0.
 	 * Other queues will be setup on receiving first packet, which will cause
-	 * NULL REO queue error
+	 * NULL REO queue error. For Mesh peer, if on one of the mesh AP the
+	 * mesh peer is not deleted, the new addition of mesh peer on other mesh AP
+	 * doesn't do BA negotiation leading to mismatch in BA windows.
+	 * To avoid this send max BA window during init.
 	 */
-	dp_rx_tid_setup_wifi3(peer, 0, 1, 0);
+	if (qdf_unlikely(vdev->mesh_vdev) ||
+	    qdf_unlikely(txrx_peer->nawds_enabled))
+		dp_rx_tid_setup_wifi3(
+				peer, 0,
+				hal_get_rx_max_ba_window(soc->hal_soc, 0),
+				0);
+	else
+		dp_rx_tid_setup_wifi3(peer, 0, 1, 0);
 
 	/*
 	 * Setup the rest of TID's to handle LFR

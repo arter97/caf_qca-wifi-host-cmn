@@ -19,7 +19,8 @@
 #define _HAL_BE_API_MON_H_
 
 #include "hal_be_hw_headers.h"
-#ifdef WLAN_PKT_CAPTURE_TX_2_0
+#if defined(WLAN_PKT_CAPTURE_TX_2_0) || \
+defined(WLAN_PKT_CAPTURE_RX_2_0)
 #include <mon_ingress_ring.h>
 #include <mon_destination_ring.h>
 #include <mon_drop.h>
@@ -31,6 +32,7 @@
 #include <hal_api_mon.h>
 
 #if defined(WLAN_PKT_CAPTURE_TX_2_0) || \
+defined(WLAN_PKT_CAPTURE_RX_2_0) || \
 defined(QCA_SINGLE_WIFI_3_0)
 #define HAL_MON_BUFFER_ADDR_INFO_0_BUFFER_ADDR_31_0_OFFSET 0x00000000
 #define HAL_MON_BUFFER_ADDR_INFO_0_BUFFER_ADDR_31_0_LSB 0
@@ -73,6 +75,7 @@ defined(QCA_SINGLE_WIFI_3_0)
 		(HAL_MON_MON_INGRESS_RING_BUFFER_VIRT_ADDR_63_32_OFFSET >> 2))) = \
 		((vaddr_hi) << HAL_MON_MON_INGRESS_RING_BUFFER_VIRT_ADDR_63_32_LSB) & \
 		HAL_MON_MON_INGRESS_RING_BUFFER_VIRT_ADDR_63_32_MASK)
+#endif
 
 #define UNIFIED_RXPCU_PPDU_END_INFO_8_RX_PPDU_DURATION_OFFSET \
 	RXPCU_PPDU_END_INFO_RX_PPDU_DURATION_OFFSET
@@ -102,7 +105,7 @@ defined(QCA_SINGLE_WIFI_3_0)
 	PHYRX_RSSI_LEGACY_PRE_RSSI_INFO_DETAILS_RSSI_PRI20_CHAIN0_OFFSET
 #define UNIFIED_PHYRX_RSSI_LEGACY_19_RECEIVE_RSSI_INFO_PREAMBLE_RSSI_INFO_DETAILS_OFFSET \
 	PHYRX_RSSI_LEGACY_PREAMBLE_RSSI_INFO_DETAILS_RSSI_PRI20_CHAIN0_OFFSET
-#endif
+
 
 #define RX_MON_MPDU_START_WMASK               0x07F0
 #define RX_MON_MSDU_END_WMASK                 0x0AE1
@@ -707,7 +710,9 @@ struct hal_mon_buf_addr_status {
 	uint32_t tlv64_padding;
 };
 
-#ifdef WLAN_PKT_CAPTURE_TX_2_0
+#if defined(WLAN_PKT_CAPTURE_TX_2_0) || \
+defined(WLAN_PKT_CAPTURE_RX_2_0)
+
 /**
  * hal_be_get_mon_dest_status() - Get monitor descriptor status
  * @hal_soc: HAL Soc handle
@@ -949,7 +954,8 @@ hal_update_frame_type_cnt(hal_rx_mon_mpdu_start_t *rx_mpdu_start,
 }
 #endif
 
-#ifdef WLAN_PKT_CAPTURE_TX_2_0
+#if defined(WLAN_PKT_CAPTURE_TX_2_0) || \
+defined(WLAN_PKT_CAPTURE_RX_2_0)
 /**
  * hal_mon_buff_addr_info_set() - set desc address in cookie
  * @hal_soc_hdl: HAL Soc handle
@@ -975,6 +981,9 @@ void hal_mon_buff_addr_info_set(hal_soc_handle_t hal_soc_hdl,
 	HAL_MON_VADDR_LO_SET(mon_entry, vaddr_lo);
 	HAL_MON_VADDR_HI_SET(mon_entry, vaddr_hi);
 }
+#endif
+
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 
 /* TX monitor */
 #define TX_MON_STATUS_BUF_SIZE 2048
@@ -1472,7 +1481,6 @@ hal_txmon_get_word_mask(hal_soc_handle_t hal_soc_hdl,
 
 	return false;
 }
-#endif
 
 /**
  * hal_txmon_is_mon_buf_addr_tlv() - api to find packet buffer addr tlv
@@ -1512,6 +1520,7 @@ hal_txmon_populate_packet_info(hal_soc_handle_t hal_soc_hdl,
 
 	hal_soc->ops->hal_txmon_populate_packet_info(tx_tlv_hdr, packet_info);
 }
+#endif
 
 static inline uint32_t
 hal_rx_parse_u_sig_cmn(struct hal_soc *hal_soc, void *rx_tlv,
@@ -2360,8 +2369,9 @@ hal_rx_status_get_mon_buf_addr(uint8_t *rx_tlv,
 {
 	struct mon_buffer_addr *addr = (struct mon_buffer_addr *)rx_tlv;
 
-	ppdu_info->packet_info.sw_cookie = (((uint64_t)qdf_le32_to_cpu(addr->buffer_virt_addr_63_32) << 32) |
-					    qdf_le32_to_cpu(addr->buffer_virt_addr_31_0));
+	ppdu_info->packet_info.sw_cookie =
+			(((uint64_t)addr->buffer_virt_addr_63_32 << 32) |
+			(addr->buffer_virt_addr_31_0));
 	/* HW DMA length is '-1' of actual DMA length*/
 	ppdu_info->packet_info.dma_length = addr->dma_length + 1;
 	ppdu_info->packet_info.msdu_continuation = addr->msdu_continuation;
@@ -2496,14 +2506,11 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 	struct hal_rx_ppdu_info *ppdu_info =
 			(struct hal_rx_ppdu_info *)ppduinfo;
 
-	tlv_tag = HAL_RX_GET_USER_TLV64_TYPE(rx_tlv_hdr);
-	user_id = HAL_RX_GET_USER_TLV64_USERID(rx_tlv_hdr);
-	tlv_len = HAL_RX_GET_USER_TLV64_LEN(rx_tlv_hdr);
+	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(rx_tlv_hdr);
+	user_id = HAL_RX_GET_USER_TLV32_USERID(rx_tlv_hdr);
+	tlv_len = HAL_RX_GET_USER_TLV32_LEN(rx_tlv_hdr);
 
 	rx_tlv = (uint8_t *)rx_tlv_hdr + HAL_RX_TLV_HDR_SIZE;
-
-	qdf_trace_hex_dump(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-			   rx_tlv, tlv_len);
 
 	ppdu_info->user_id = user_id;
 	switch (tlv_tag) {
@@ -2553,9 +2560,6 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 		break;
 
 	case WIFIRX_PPDU_END_E:
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-			  "[%s][%d] ppdu_end_e len=%d",
-			  __func__, __LINE__, tlv_len);
 		/* This is followed by sub-TLVs of PPDU_END */
 		ppdu_info->rx_state = HAL_RX_MON_PPDU_END;
 		break;
@@ -3415,29 +3419,21 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 					   RECEIVE_RSSI_INFO,
 					   RSSI_PRI20_CHAIN0);
 		ppdu_info->rx_status.rssi[0] = rssi_value;
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-			  "RSSI_PRI20_CHAIN0: %d\n", rssi_value);
 
 		rssi_value = HAL_RX_GET_64(rssi_info_tlv,
 					   RECEIVE_RSSI_INFO,
 					   RSSI_PRI20_CHAIN1);
 		ppdu_info->rx_status.rssi[1] = rssi_value;
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-			  "RSSI_PRI20_CHAIN1: %d\n", rssi_value);
 
 		rssi_value = HAL_RX_GET_64(rssi_info_tlv,
 					   RECEIVE_RSSI_INFO,
 					   RSSI_PRI20_CHAIN2);
 		ppdu_info->rx_status.rssi[2] = rssi_value;
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-			  "RSSI_PRI20_CHAIN2: %d\n", rssi_value);
 
 		rssi_value = HAL_RX_GET_64(rssi_info_tlv,
 					   RECEIVE_RSSI_INFO,
 					   RSSI_PRI20_CHAIN3);
 		ppdu_info->rx_status.rssi[3] = rssi_value;
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-			  "RSSI_PRI20_CHAIN3: %d\n", rssi_value);
 
 #ifdef DP_BE_NOTYET_WAR
 		// TODO - this is not preset for kiwi
@@ -3445,30 +3441,22 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 					   RECEIVE_RSSI_INFO,
 					   RSSI_PRI20_CHAIN4);
 		ppdu_info->rx_status.rssi[4] = rssi_value;
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-			  "RSSI_PRI20_CHAIN4: %d\n", rssi_value);
 
 		rssi_value = HAL_RX_GET_64(rssi_info_tlv,
 					   RECEIVE_RSSI_INFO,
 					   RSSI_PRI20_CHAIN5);
 		ppdu_info->rx_status.rssi[5] = rssi_value;
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-			  "RSSI_PRI20_CHAIN5: %d\n", rssi_value);
 
 		rssi_value = HAL_RX_GET_64(rssi_info_tlv,
 					   RECEIVE_RSSI_INFO,
 					   RSSI_PRI20_CHAIN6);
 		ppdu_info->rx_status.rssi[6] = rssi_value;
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-			  "RSSI_PRI20_CHAIN6: %d\n", rssi_value);
 
 		rssi_value = HAL_RX_GET_64(rssi_info_tlv,
 					   RECEIVE_RSSI_INFO,
 					   RSSI_PRI20_CHAIN7);
 		ppdu_info->rx_status.rssi[7] = rssi_value;
 #endif
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-			  "RSSI_PRI20_CHAIN7: %d\n", rssi_value);
 		break;
 	}
 	case WIFIPHYRX_OTHER_RECEIVE_INFO_E:
@@ -3638,9 +3626,6 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 	}
 
 	hal_rx_record_tlv_info(ppdu_info, tlv_tag);
-	qdf_trace_hex_dump(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-			   rx_tlv, tlv_len);
-
 	return HAL_TLV_STATUS_PPDU_NOT_DONE;
 }
 
@@ -3686,9 +3671,9 @@ hal_rx_status_aggr_tlv(struct hal_soc *hal_soc, void *rx_tlv_hdr,
 	uint32_t tlv_tag, user_id, tlv_len;
 	void *rx_tlv;
 
-	tlv_tag = HAL_RX_GET_USER_TLV64_TYPE(rx_tlv_hdr);
-	user_id = HAL_RX_GET_USER_TLV64_USERID(rx_tlv_hdr);
-	tlv_len = HAL_RX_GET_USER_TLV64_LEN(rx_tlv_hdr);
+	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(rx_tlv_hdr);
+	user_id = HAL_RX_GET_USER_TLV32_USERID(rx_tlv_hdr);
+	tlv_len = HAL_RX_GET_USER_TLV32_LEN(rx_tlv_hdr);
 
 	rx_tlv = (uint8_t *)rx_tlv_hdr + HAL_RX_TLV_HDR_SIZE;
 
@@ -3712,9 +3697,9 @@ hal_rx_status_start_new_aggr_tlv(struct hal_soc *hal_soc, void *rx_tlv_hdr,
 {
 	uint32_t tlv_tag, user_id, tlv_len;
 
-	tlv_tag = HAL_RX_GET_USER_TLV64_TYPE(rx_tlv_hdr);
-	user_id = HAL_RX_GET_USER_TLV64_USERID(rx_tlv_hdr);
-	tlv_len = HAL_RX_GET_USER_TLV64_LEN(rx_tlv_hdr);
+	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(rx_tlv_hdr);
+	user_id = HAL_RX_GET_USER_TLV32_USERID(rx_tlv_hdr);
+	tlv_len = HAL_RX_GET_USER_TLV32_LEN(rx_tlv_hdr);
 
 	ppdu_info->tlv_aggr.in_progress = 1;
 	ppdu_info->tlv_aggr.tlv_tag = tlv_tag;
@@ -3733,9 +3718,9 @@ hal_rx_status_get_tlv_info_wrapper_be(void *rx_tlv_hdr, void *ppduinfo,
 	struct hal_rx_ppdu_info *ppdu_info =
 			(struct hal_rx_ppdu_info *)ppduinfo;
 
-	tlv_tag = HAL_RX_GET_USER_TLV64_TYPE(rx_tlv_hdr);
-	user_id = HAL_RX_GET_USER_TLV64_USERID(rx_tlv_hdr);
-	tlv_len = HAL_RX_GET_USER_TLV64_LEN(rx_tlv_hdr);
+	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(rx_tlv_hdr);
+	user_id = HAL_RX_GET_USER_TLV32_USERID(rx_tlv_hdr);
+	tlv_len = HAL_RX_GET_USER_TLV32_LEN(rx_tlv_hdr);
 
 	/*
 	 * Handle the case where aggregation is in progress

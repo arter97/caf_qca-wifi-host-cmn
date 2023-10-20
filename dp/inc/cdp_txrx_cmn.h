@@ -175,8 +175,18 @@ typedef void (*ipa_uc_op_cb_type)(uint8_t *op_msg,
 /* Global level structure for win contexts */
 struct dp_global_context {
 	struct dp_rx_fst *fst_ctx;
+	struct dp_tx_desc_pool_s *tx_desc[2][4];
+	struct dp_hw_cookie_conversion_t *tx_cc_ctx[4];
+	struct dp_tx_desc_pool_s *spcl_tx_desc[2][4];
+	struct dp_hw_cookie_conversion_t *spcl_tx_cc_ctx[4];
 	qdf_atomic_t rx_fst_ref_cnt;
 	qdf_atomic_t global_descriptor_in_use;
+	int tx_cookie_ctx_alloc_cnt;
+	int tx_desc_pool_alloc_cnt[2];
+	int tx_desc_pool_init_cnt[2];
+	int spcl_tx_cookie_ctx_alloc_cnt;
+	int spcl_tx_desc_pool_alloc_cnt[2];
+	int spcl_tx_desc_pool_init_cnt[2];
 };
 
 /**
@@ -200,6 +210,7 @@ static inline QDF_STATUS cdp_global_ctx_init(void)
 	if (!dp_global)
 		return QDF_STATUS_E_FAILURE;
 
+	qdf_mem_zero(dp_global, sizeof(*dp_global));
 	wlan_objmgr_set_global_ctx(dp_global);
 	qdf_atomic_set(&dp_global->global_descriptor_in_use, 0);
 	dp_global->fst_ctx = NULL;
@@ -3213,4 +3224,134 @@ static inline uint64_t cdp_get_fst_cem_base(ol_txrx_soc_handle soc,
 
 	return soc->ops->cmn_drv_ops->get_fst_cmem_base(soc, size);
 }
+
+#if defined(WLAN_FEATURE_11BE_MLO)
+/*
+ * cdp_mlo_dev_ctxt_create - DP MLO Device context create
+ * @soc: soc handle
+ * @mld_mac_addr: MLD MAC Address
+ *
+ * return: QDF_STATUS
+ */
+static inline
+QDF_STATUS cdp_mlo_dev_ctxt_create(ol_txrx_soc_handle soc,
+				   uint8_t *mld_mac_addr)
+{
+	if (!soc || !soc->ops) {
+		QDF_BUG(0);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!soc->ops->cmn_mlo_ops ||
+	    !soc->ops->cmn_mlo_ops->mlo_dev_ctxt_create)
+		return QDF_STATUS_E_FAILURE;
+
+	return soc->ops->cmn_mlo_ops->mlo_dev_ctxt_create(soc, mld_mac_addr);
+}
+
+/*
+ * cdp_mlo_dev_ctxt_destroy - DP MLO Device context destroy
+ * @soc: soc handle
+ * @mld_mac_addr: MLD MAC Address
+ *
+ * return: QDF_STATUS
+ */
+static inline
+QDF_STATUS cdp_mlo_dev_ctxt_destroy(ol_txrx_soc_handle soc,
+				    uint8_t *mld_mac_addr)
+{
+	if (!soc || !soc->ops) {
+		QDF_BUG(0);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!soc->ops->cmn_mlo_ops ||
+	    !soc->ops->cmn_mlo_ops->mlo_dev_ctxt_destroy)
+		return QDF_STATUS_E_FAILURE;
+
+	return soc->ops->cmn_mlo_ops->mlo_dev_ctxt_destroy(soc, mld_mac_addr);
+}
+
+/*
+ * cdp_mlo_dev_ctxt_attach - DP MLO Device context attach vdev
+ * @soc: soc handle
+ * @vdev_id: vdev id
+ * @mld_mac_addr: MLD MAC Address
+ *
+ * return: QDF_STATUS
+ */
+static inline
+QDF_STATUS cdp_mlo_dev_ctxt_attach(ol_txrx_soc_handle soc,
+				   uint8_t vdev_id,
+				   uint8_t *mld_mac_addr)
+{
+	if (!soc || !soc->ops) {
+		QDF_BUG(0);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!soc->ops->cmn_mlo_ops ||
+	    !soc->ops->cmn_mlo_ops->mlo_dev_ctxt_attach)
+		return QDF_STATUS_E_FAILURE;
+
+	return soc->ops->cmn_mlo_ops->mlo_dev_ctxt_attach(soc, vdev_id,
+							  mld_mac_addr);
+}
+
+/*
+ * cdp_mlo_dev_ctxt_detach - DP MLO Device context detach vdev
+ * @soc: soc handle
+ * @vdev_id: vdev id
+ * @mld_mac_addr: MLD MAC Address
+ *
+ * return: QDF_STATUS
+ */
+static inline
+QDF_STATUS cdp_mlo_dev_ctxt_detach(ol_txrx_soc_handle soc,
+				   uint8_t vdev_id,
+				   uint8_t *mld_mac_addr)
+{
+	if (!soc || !soc->ops) {
+		QDF_BUG(0);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!soc->ops->cmn_mlo_ops ||
+	    !soc->ops->cmn_mlo_ops->mlo_dev_ctxt_detach)
+		return QDF_STATUS_E_FAILURE;
+
+	return soc->ops->cmn_mlo_ops->mlo_dev_ctxt_detach(soc, vdev_id,
+							  mld_mac_addr);
+}
+#else
+static inline
+QDF_STATUS cdp_mlo_dev_ctxt_create(ol_txrx_soc_handle soc,
+				   uint8_t *mld_mac_addr)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS cdp_mlo_dev_ctxt_destroy(ol_txrx_soc_handle soc,
+				    uint8_t *mld_mac_addr)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS cdp_mlo_dev_ctxt_attach(ol_txrx_soc_handle soc,
+				   uint8_t vdev_id,
+				   uint8_t *mld_mac_addr)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS cdp_mlo_dev_ctxt_detach(ol_txrx_soc_handle soc,
+				   uint8_t vdev_id,
+				   uint8_t *mld_mac_addr)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* WLAN_FEATURE_11BE_MLO */
 #endif /* _CDP_TXRX_CMN_H_ */

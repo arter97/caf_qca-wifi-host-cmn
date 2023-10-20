@@ -148,8 +148,6 @@ enum cdp_peer_txq_flush_policy {
  * struct cdp_mlo_ops - MLO ops for multichip
  * @mlo_soc_setup: setup DP mlo for SOC
  * @mlo_soc_teardown: teardown DP mlo for SOC
- * @update_mlo_ptnr_list:
- * @clear_mlo_ptnr_list:
  * @mlo_setup_complete: indication to DP that all SOCs mlo is setup
  * @mlo_update_delta_tsf2: update delta tsf2 for link
  * @mlo_update_delta_tqm: update delta tqm for SOC
@@ -164,11 +162,6 @@ struct cdp_mlo_ops {
 	void (*mlo_soc_teardown)(struct cdp_soc_t *cdp_soc,
 				 struct cdp_mlo_ctxt *mlo_ctxt,
 				 bool is_force_down);
-	QDF_STATUS (*update_mlo_ptnr_list)(struct cdp_soc_t *soc_hdl,
-					   int8_t *vdev_ids, uint8_t num_vdevs,
-					   uint8_t vdev_id);
-	QDF_STATUS (*clear_mlo_ptnr_list)(struct cdp_soc_t *soc_hdl,
-					  uint8_t vdev_id);
 	void (*mlo_setup_complete)(struct cdp_mlo_ctxt *mlo_ctxt);
 	struct cdp_mlo_ctxt *(*mlo_ctxt_attach)(struct cdp_ctrl_mlo_mgr *m_ctx);
 	void (*mlo_ctxt_detach)(struct cdp_mlo_ctxt *mlo_ctxt);
@@ -182,6 +175,28 @@ struct cdp_mlo_ops {
 	QDF_STATUS (*mlo_get_mld_vdev_stats)(struct cdp_soc_t *soc,
 					     uint8_t vdev_id, void *buf,
 					     bool link_vdev_only);
+};
+#endif
+
+#if defined(WLAN_FEATURE_11BE_MLO)
+/**
+ * struct cdp_cmn_mlo_ops - CDP common MLO ops
+ * @mlo_dev_ctxt_create: MLO device context create
+ * @mlo_dev_ctxt_attach: MLO device context attach
+ * @mlo_dev_ctxt_detach: MLO device context detach
+ * @mlo_dev_ctxt_destroy: MLO device context destroy
+ */
+struct cdp_cmn_mlo_ops {
+	QDF_STATUS (*mlo_dev_ctxt_create)(struct cdp_soc_t *soc,
+					  uint8_t *mld_mac_addr);
+	QDF_STATUS (*mlo_dev_ctxt_attach)(struct cdp_soc_t *soc,
+					  uint8_t vdev_id,
+					  uint8_t *mld_mac_addr);
+	QDF_STATUS (*mlo_dev_ctxt_detach)(struct cdp_soc_t *soc,
+					  uint8_t vdev_id,
+					  uint8_t *mld_mac_addr);
+	QDF_STATUS (*mlo_dev_ctxt_destroy)(struct cdp_soc_t *soc,
+					   uint8_t *mld_mac_addr);
 };
 #endif
 
@@ -932,7 +947,7 @@ struct cdp_ctrl_ops {
 
 #endif
 
-#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(WLAN_CONFIG_TX_DELAY)
+#if defined(WLAN_FEATURE_TSF_AUTO_REPORT) || defined(WLAN_CONFIG_TX_DELAY)
 	void (*txrx_set_delta_tsf)(struct cdp_soc_t *soc, uint8_t vdev_id,
 				   uint32_t delta_tsf);
 #endif
@@ -1148,6 +1163,7 @@ struct cdp_mon_ops {
  * @txrx_update_pdev_stats:
  * @txrx_get_peer_stats_param:
  * @txrx_get_peer_stats:
+ * @txrx_get_peer_stats_based_on_peer_type:
  * @txrx_get_per_link_stats:
  * @txrx_get_soc_stats:
  * @txrx_reset_peer_ald_stats:
@@ -1249,6 +1265,12 @@ struct cdp_host_stats_ops {
 		(*txrx_get_peer_stats)(struct cdp_soc_t *soc, uint8_t vdev_id,
 				       uint8_t *peer_mac,
 				       struct cdp_peer_stats *peer_stats);
+	QDF_STATUS
+		(*txrx_get_peer_stats_based_on_peer_type)(struct cdp_soc_t *soc,
+							  uint8_t vdev_id,
+							  uint8_t *peer_mac,
+							  struct cdp_peer_stats *peer_stats,
+							  enum cdp_peer_type peer_type);
 	QDF_STATUS
 		(*txrx_get_per_link_stats)(struct cdp_soc_t *soc,
 					   uint8_t vdev_id, uint8_t *peer_mac,
@@ -2543,6 +2565,9 @@ struct cdp_ops {
 #endif
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 	struct cdp_mlo_ops  *mlo_ops;
+#endif
+#if defined(WLAN_FEATURE_11BE_MLO)
+	struct cdp_cmn_mlo_ops  *cmn_mlo_ops;
 #endif
 #ifdef CONFIG_SAWF_DEF_QUEUES
 	struct cdp_sawf_ops  *sawf_ops;

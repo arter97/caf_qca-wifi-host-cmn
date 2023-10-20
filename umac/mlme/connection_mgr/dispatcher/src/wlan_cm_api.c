@@ -563,3 +563,10 @@ wlan_cm_check_mlo_roam_auth_status(struct wlan_objmgr_vdev *vdev)
 }
 #endif
 #endif
+enum MLO_TYPE
+wlan_cm_bss_mlo_type(struct wlan_objmgr_psoc *psoc,
+		     struct scan_cache_entry *entry,
+		     qdf_list_t *scan_list)
+{
+	return cm_bss_mlo_type(psoc, entry, scan_list);
+}

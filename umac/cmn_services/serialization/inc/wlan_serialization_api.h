@@ -199,6 +199,8 @@ typedef QDF_STATUS (*wlan_ser_umac_cmd_cb)(void *umac_cmd);
  * @WLAN_SER_CMD_PDEV_CSA_RESTART: Cmd to CSA restart all AP VDEVs of a PDEV
  * @WLAN_SER_CMD_VDEV_ROAM: Cmd to roam a STA VDEV
  * @WLAN_SER_CMD_SET_MLO_LINK: Cmd to force mlo link active/inactive
+ * @WLAN_SER_CMD_MLO_VDEV_LINK_SWITCH: Cmd to serialize link switch operation
+ * @WLAN_SER_CMD_SAP_BW_UPDATE: Cmd to serialize SAP BW update operation
  * @WLAN_SER_CMD_MAX: Max enumeration
  */
 enum wlan_serialization_cmd_type {
@@ -233,6 +235,8 @@ enum wlan_serialization_cmd_type {
 	WLAN_SER_CMD_PDEV_CSA_RESTART,
 	WLAN_SER_CMD_VDEV_ROAM,
 	WLAN_SER_CMD_SET_MLO_LINK,
+	WLAN_SER_CMD_MLO_VDEV_LINK_SWITCH,
+	WLAN_SER_CMD_SAP_BW_UPDATE,
 	WLAN_SER_CMD_MAX
 };
 

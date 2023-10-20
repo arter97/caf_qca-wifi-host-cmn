@@ -139,6 +139,12 @@ int hif_rtpm_log_debug_stats(void *s, enum hif_rtpm_fill_type type)
 	hif_rtpm_print(type, &index, s, "%30s: %llu\n", "Last Busy timestamp",
 		       gp_hif_rtpm_ctx->stats.last_busy_ts);
 
+	hif_rtpm_print(type, &index, s, "%30s: %llu\n", "Last resume request timestamp",
+		       gp_hif_rtpm_ctx->stats.request_resume_ts);
+
+	hif_rtpm_print(type, &index, s, "%30s: %d\n", "Last resume request by",
+		       gp_hif_rtpm_ctx->stats.request_resume_id);
+
 	hif_rtpm_print(type, &index, s, "%30s: %ps\n", "Last Busy Marker",
 		       gp_hif_rtpm_ctx->stats.last_busy_marker);
 
@@ -424,11 +430,16 @@ void hif_rtpm_close(struct hif_softc *scn)
 	hif_info_high("Runtime PM context detached");
 }
 
+void hif_set_enable_rpm(struct hif_opaque_softc *hif_hdl)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_hdl);
+
+	gp_hif_rtpm_ctx->enable_rpm = scn->hif_config.enable_runtime_pm;
+}
+
 void hif_rtpm_start(struct hif_softc *scn)
 {
 	uint32_t mode = hif_get_conparam(scn);
-
-	gp_hif_rtpm_ctx->enable_rpm = scn->hif_config.enable_runtime_pm;
 
 	if (!gp_hif_rtpm_ctx->enable_rpm) {
 		hif_info_high("RUNTIME PM is disabled in ini");
@@ -983,16 +994,14 @@ void hif_rtpm_request_resume(void)
 void hif_rtpm_check_and_request_resume(void)
 {
 	hif_rtpm_suspend_lock();
-	if (qdf_atomic_read(&gp_hif_rtpm_ctx->pm_state) >=
-			HIF_RTPM_STATE_SUSPENDING) {
+	if (qdf_atomic_read(&gp_hif_rtpm_ctx->pm_state) ==
+			HIF_RTPM_STATE_SUSPENDED) {
 		hif_rtpm_suspend_unlock();
 		__hif_rtpm_request_resume(gp_hif_rtpm_ctx->dev);
 		gp_hif_rtpm_ctx->stats.request_resume_ts =
 						qdf_get_log_timestamp();
 		gp_hif_rtpm_ctx->stats.request_resume_id = HIF_RTPM_ID_RESERVED;
 	} else {
-		__hif_rtpm_mark_last_busy(gp_hif_rtpm_ctx->dev);
-		gp_hif_rtpm_ctx->stats.last_busy_ts = qdf_get_log_timestamp();
 		hif_rtpm_suspend_unlock();
 	}
 }

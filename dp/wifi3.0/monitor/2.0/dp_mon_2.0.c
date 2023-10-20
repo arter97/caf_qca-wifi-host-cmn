@@ -598,7 +598,10 @@ QDF_STATUS dp_mon_soc_init_2_0(struct dp_soc *soc)
 	}
 
 	mon_soc_be->tx_mon_ring_fill_level = 0;
-	mon_soc_be->rx_mon_ring_fill_level = DP_MON_RING_FILL_LEVEL_DEFAULT;
+	if (soc->rxdma_mon_buf_ring[0].num_entries < DP_MON_RING_FILL_LEVEL_DEFAULT)
+		mon_soc_be->rx_mon_ring_fill_level = soc->rxdma_mon_buf_ring[0].num_entries;
+	else
+		mon_soc_be->rx_mon_ring_fill_level = DP_MON_RING_FILL_LEVEL_DEFAULT;
 
 	mon_soc_be->is_dp_mon_soc_initialized = true;
 	return QDF_STATUS_SUCCESS;
@@ -1259,7 +1262,7 @@ dp_mon_register_feature_ops_2_0(struct dp_soc *soc)
 	mon_ops->mon_config_enh_tx_capture = dp_config_enh_tx_monitor_2_0;
 	mon_ops->mon_tx_peer_filter = dp_peer_set_tx_capture_enabled_2_0;
 #endif
-#if (defined(WIFI_MONITOR_SUPPORT) && !defined(WLAN_TX_PKT_CAPTURE_ENH_BE))
+#if (defined(WIFI_MONITOR_SUPPORT) && defined(WLAN_TX_MON_CORE_DEBUG))
 	mon_ops->mon_peer_tid_peer_id_update = NULL;
 	mon_ops->mon_tx_capture_debugfs_init = NULL;
 	mon_ops->mon_tx_add_to_comp_queue = NULL;
@@ -1321,7 +1324,7 @@ dp_mon_register_feature_ops_2_0(struct dp_soc *soc)
 				dp_mon_filter_setup_rx_pkt_log_cbf_2_0;
 	mon_ops->mon_filter_reset_rx_pkt_log_cbf =
 				dp_mon_filter_reset_rx_pktlog_cbf_2_0;
-#ifdef BE_PKTLOG_SUPPORT
+#if defined(BE_PKTLOG_SUPPORT) && defined(WLAN_PKT_CAPTURE_TX_2_0)
 	mon_ops->mon_filter_setup_pktlog_hybrid =
 				dp_mon_filter_setup_pktlog_hybrid_2_0;
 	mon_ops->mon_filter_reset_pktlog_hybrid =
@@ -1440,7 +1443,7 @@ struct dp_mon_ops monitor_ops_2_0 = {
 	.mon_tx_ppdu_stats_detach = dp_tx_ppdu_stats_detach_2_0,
 	.mon_peer_tx_capture_filter_check = NULL,
 #endif
-#if (defined(WIFI_MONITOR_SUPPORT) && !defined(WLAN_TX_PKT_CAPTURE_ENH_BE))
+#if (defined(WIFI_MONITOR_SUPPORT) && defined(WLAN_TX_MON_CORE_DEBUG))
 	.mon_tx_ppdu_stats_attach = NULL,
 	.mon_tx_ppdu_stats_detach = NULL,
 	.mon_peer_tx_capture_filter_check = NULL,
@@ -1452,8 +1455,10 @@ struct dp_mon_ops monitor_ops_2_0 = {
 	.mon_lite_mon_vdev_delete = dp_lite_mon_vdev_delete,
 	.mon_lite_mon_disable_rx = dp_lite_mon_disable_rx,
 	.mon_lite_mon_is_rx_adv_filter_enable = dp_lite_mon_is_rx_adv_filter_enable,
+#ifdef QCA_KMEM_CACHE_SUPPORT
 	.mon_rx_ppdu_info_cache_create = dp_rx_mon_ppdu_info_cache_create,
 	.mon_rx_ppdu_info_cache_destroy = dp_rx_mon_ppdu_info_cache_destroy,
+#endif
 	.mon_rx_pdev_tlv_logger_init = dp_mon_pdev_tlv_logger_init,
 	.mon_rx_pdev_tlv_logger_deinit = dp_mon_pdev_tlv_logger_deinit,
 };
@@ -1501,6 +1506,21 @@ struct cdp_mon_ops dp_ops_mon_2_0 = {
 #endif /* WLAN_FEATURE_LOCAL_PKT_CAPTURE */
 };
 
+#if defined(WLAN_PKT_CAPTURE_TX_2_0) || \
+defined(WLAN_PKT_CAPTURE_RX_2_0)
+void dp_mon_ops_register_cmn_2_0(struct dp_mon_soc *mon_soc)
+{
+	struct dp_mon_ops *mon_ops = mon_soc->mon_ops;
+
+	if (!mon_ops) {
+		dp_err("tx 2.0 ops registration failed");
+		return;
+	}
+	mon_ops->tx_mon_filter_alloc = dp_mon_filter_alloc_2_0;
+	mon_ops->tx_mon_filter_dealloc = dp_mon_filter_dealloc_2_0;
+}
+#endif
+
 #ifdef WLAN_PKT_CAPTURE_TX_2_0
 void dp_mon_ops_register_tx_2_0(struct dp_mon_soc *mon_soc)
 {
@@ -1511,8 +1531,6 @@ void dp_mon_ops_register_tx_2_0(struct dp_mon_soc *mon_soc)
 		return;
 	}
 	mon_ops->tx_mon_filter_update = dp_tx_mon_filter_update_2_0;
-	mon_ops->tx_mon_filter_alloc = dp_mon_filter_alloc_2_0;
-	mon_ops->tx_mon_filter_dealloc = dp_mon_filter_dealloc_2_0;
 #ifndef DISABLE_MON_CONFIG
 	mon_ops->mon_tx_process = dp_tx_mon_process_2_0;
 	mon_ops->print_txmon_ring_stat = dp_tx_mon_print_ring_stat_2_0;
@@ -1557,6 +1575,7 @@ void dp_mon_ops_register_2_0(struct dp_mon_soc *mon_soc)
 	mon_soc->mon_ops = mon_ops;
 	dp_mon_ops_register_tx_2_0(mon_soc);
 	dp_mon_ops_register_rx_2_0(mon_soc);
+	dp_mon_ops_register_cmn_2_0(mon_soc);
 }
 
 void dp_mon_cdp_ops_register_2_0(struct cdp_ops *ops)

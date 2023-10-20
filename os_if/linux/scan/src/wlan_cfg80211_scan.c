@@ -108,8 +108,8 @@ static void wlan_fill_scan_rand_attrs(struct wlan_objmgr_vdev *vdev,
 	*randomize = true;
 	memcpy(addr, mac_addr, QDF_MAC_ADDR_SIZE);
 	memcpy(mask, mac_addr_mask, QDF_MAC_ADDR_SIZE);
-	osif_debug("Random mac addr: "QDF_MAC_ADDR_FMT" and Random mac mask: "QDF_FULL_MAC_FMT,
-		   QDF_MAC_ADDR_REF(addr), QDF_FULL_MAC_REF(mask));
+	osif_debug("Random mac addr: "QDF_MAC_ADDR_FMT" and Random mac mask: "QDF_MAC_ADDR_FMT,
+		   QDF_MAC_ADDR_REF(addr), QDF_MAC_ADDR_REF(mask));
 }
 
 /**
@@ -280,12 +280,7 @@ static void wlan_cfg80211_pno_callback(struct wlan_objmgr_vdev *vdev,
 #ifdef WLAN_POLICY_MGR_ENABLE
 static bool wlan_cfg80211_is_ap_go_present(struct wlan_objmgr_psoc *psoc)
 {
-	return policy_mgr_mode_specific_connection_count(psoc,
-							  PM_SAP_MODE,
-							  NULL) ||
-		policy_mgr_mode_specific_connection_count(psoc,
-							  PM_P2P_GO_MODE,
-							  NULL);
+	return policy_mgr_get_beaconing_mode_count(psoc, NULL);
 }
 
 static QDF_STATUS wlan_cfg80211_is_chan_ok_for_dnbs(
@@ -1622,11 +1617,7 @@ int wlan_cfg80211_scan(struct wlan_objmgr_vdev *vdev,
 
 	if (request->n_channels) {
 #ifdef WLAN_POLICY_MGR_ENABLE
-		bool ap_or_go_present =
-			policy_mgr_mode_specific_connection_count(
-			     psoc, PM_SAP_MODE, NULL) ||
-			     policy_mgr_mode_specific_connection_count(
-			     psoc, PM_P2P_GO_MODE, NULL);
+		bool ap_or_go_present = wlan_cfg80211_is_ap_go_present(psoc);
 #endif
 		for (i = 0; i < request->n_channels; i++) {
 			c_freq = request->channels[i]->center_freq;

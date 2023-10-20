@@ -36,6 +36,12 @@ ucfg_infra_cp_stats_register_resp_cb(struct wlan_objmgr_psoc *psoc,
 }
 
 QDF_STATUS
+ucfg_infra_cp_stats_deregister_resp_cb(struct wlan_objmgr_psoc *psoc)
+{
+	return wlan_cp_stats_infra_cp_deregister_resp_cb(psoc);
+}
+
+QDF_STATUS
 ucfg_send_infra_cp_stats_request(struct wlan_objmgr_vdev *vdev,
 				 struct infra_cp_stats_cmd_info *req)
 {

@@ -750,6 +750,7 @@ enum wlan_op_subtype {
  * @subtype: subtype of the vdev
  * @qdf_opmode: Operation mode of the vdev
  * @mld_mac_addr: MLD mac addr of the current vdev.
+ * @is_bridge_vap: current vdev is bridge vap or not.
  */
 struct cdp_vdev_info {
 	uint8_t *vdev_mac_addr;
@@ -760,6 +761,9 @@ struct cdp_vdev_info {
 	enum QDF_OPMODE qdf_opmode;
 #ifdef WLAN_FEATURE_11BE_MLO
 	uint8_t *mld_mac_addr;
+#ifdef WLAN_MLO_MULTI_CHIP
+	bool is_bridge_vap;
+#endif
 #endif
 };
 
@@ -1293,6 +1297,7 @@ struct cdp_soc_t {
  * @CDP_CONFIG_ISOLATION: Enable isolation
  * @CDP_CONFIG_IN_TWT: In TWT session or not
  * @CDP_CONFIG_MLD_PEER_VDEV: Change MLD peer's vdev
+ * @CDP_CONFIG_PEER_FREQ: Set peer frequency
  */
 enum cdp_peer_param_type {
 	CDP_CONFIG_NAWDS,
@@ -1300,6 +1305,7 @@ enum cdp_peer_param_type {
 	CDP_CONFIG_ISOLATION,
 	CDP_CONFIG_IN_TWT,
 	CDP_CONFIG_MLD_PEER_VDEV,
+	CDP_CONFIG_PEER_FREQ,
 };
 
 /**
@@ -1385,6 +1391,7 @@ enum cdp_pdev_param_type {
  * @cdp_peer_param_isolation: Enable isolation
  * @cdp_peer_param_in_twt: in TWT session or not
  * @cdp_peer_param_nac: Enable nac
+ * @cdp_peer_param_freq: Peer frequency
  *
  * @cdp_vdev_param_nawds: set nawds enable/disable
  * @cdp_vdev_param_mcast_en: enable/disable multicast enhancement
@@ -1471,6 +1478,7 @@ enum cdp_pdev_param_type {
  * @fisa_params.rx_toeplitz_hash_key: RX hash key
  * @rx_pkt_tlv_size: RX packet TLV size
  * @cdp_ast_indication_disable: AST indication disable
+ * @cdp_psoc_param_mlo_oper_mode: mlo operation mode
  */
 typedef union cdp_config_param_t {
 	/* peer params */
@@ -1478,6 +1486,7 @@ typedef union cdp_config_param_t {
 	bool cdp_peer_param_isolation;
 	uint8_t cdp_peer_param_nac;
 	bool cdp_peer_param_in_twt;
+	uint32_t cdp_peer_param_freq;
 
 	/* vdev params */
 	bool cdp_vdev_param_wds;
@@ -1583,6 +1592,7 @@ typedef union cdp_config_param_t {
 	} fisa_params;
 	uint16_t rx_pkt_tlv_size;
 	bool cdp_ast_indication_disable;
+	uint8_t cdp_psoc_param_mlo_oper_mode;
 } cdp_config_param_type;
 
 /**
@@ -1753,6 +1763,7 @@ enum cdp_vdev_param_type {
  * @CDP_CFG_FISA_PARAMS: FISA params
  * @CDP_RX_PKT_TLV_SIZE: RX pkt tlv size
  * @CDP_CFG_AST_INDICATION_DISABLE: AST indication disable
+ * @CDP_CFG_GET_MLO_OPER_MODE: Get MLO operation mode
  */
 enum cdp_psoc_param_type {
 	CDP_ENABLE_RATE_STATS,
@@ -1780,6 +1791,7 @@ enum cdp_psoc_param_type {
 	CDP_CFG_FISA_PARAMS,
 	CDP_RX_PKT_TLV_SIZE,
 	CDP_CFG_AST_INDICATION_DISABLE,
+	CDP_CFG_GET_MLO_OPER_MODE,
 };
 
 #ifdef CONFIG_AP_PLATFORM
@@ -2146,6 +2158,7 @@ struct cdp_delayed_tx_completion_ppdu_user {
  * @mpdu_bytes: accumulated bytes per mpdu for mem limit feature
  * @punc_mode: puncutured mode to indicate punctured bw
  * @punc_pattern_bitmap: bitmap indicating punctured pattern
+ * @fixed_rate_used: flag to indicate fixed rate TX
  * @mprot_type: medium protection type
  * @msduq_bitmap: msduq bitmap
  * @rts_success: rts success
@@ -2253,7 +2266,8 @@ struct cdp_tx_completion_ppdu_user {
 	uint16_t phy_tx_time_us;
 	uint32_t mpdu_bytes;
 	uint8_t punc_mode;
-	uint16_t punc_pattern_bitmap;
+	uint32_t punc_pattern_bitmap:16,
+		fixed_rate_used:1;
 	uint32_t msduq_bitmap;
 	uint8_t mprot_type:3,
 		rts_success:1,
@@ -3229,13 +3243,13 @@ struct cdp_pdev_attach_params {
 /*
  * cdp_txrx_peer_params_update
  *
- * @osif_vdev: Handle for OS shim virtual device
+ * @vdev_id: VDEV ID
  * @peer_mac: Peer mac address
  * @chip_id: CHIP ID
  * @pdev_id: PDEV ID
  */
 struct cdp_txrx_peer_params_update {
-	void	*osif_vdev;
+	uint8_t	vdev_id;
 	uint8_t	*peer_mac;
 	uint8_t	chip_id;
 	uint8_t	pdev_id;

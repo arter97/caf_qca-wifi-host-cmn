@@ -63,6 +63,7 @@ struct qdf_mem_dma_page_t {
  * @cacheable_pages: page information storage in case of cacheable memory
  * @page_size: page size
  * @is_mem_prealloc: flag for multiple pages pre-alloc or not
+ * @contiguous_dma_pages: flag for contiguous dma pages or not
  */
 struct qdf_mem_multi_page_t {
 	uint16_t num_element_per_page;
@@ -72,6 +73,9 @@ struct qdf_mem_multi_page_t {
 	qdf_size_t page_size;
 #ifdef DP_MEM_PRE_ALLOC
 	uint8_t is_mem_prealloc;
+#endif
+#ifdef ALLOC_CONTIGUOUS_MULTI_PAGE
+	bool contiguous_dma_pages;
 #endif
 };
 
@@ -737,17 +741,16 @@ static inline void qdf_mempool_free(qdf_device_t osdev, qdf_mempool_t pool,
 
 /**
  * qdf_kmem_cache_create() - OS abstraction for cache creation
- * @cache_name: Cache name
- * @size: Size of the object to be created
+ * @c: Cache name
+ * @z: Size of the object to be created
  *
  * Return: Cache address on successful creation, else NULL
  */
-static inline qdf_kmem_cache_t
-qdf_kmem_cache_create(const char *cache_name,
-		      qdf_size_t size)
-{
-	return __qdf_kmem_cache_create(cache_name, size);
-}
+#ifdef QCA_KMEM_CACHE_SUPPORT
+#define qdf_kmem_cache_create(c, z) __qdf_kmem_cache_create(c, z)
+#else
+#define qdf_kmem_cache_create(c, z) NULL
+#endif
 
 /**
  * qdf_kmem_cache_destroy() - OS abstraction for cache destruction

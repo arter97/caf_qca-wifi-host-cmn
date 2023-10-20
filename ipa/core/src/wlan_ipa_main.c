@@ -737,7 +737,7 @@ bool ipa_is_fw_wdi_activated(struct wlan_objmgr_pdev *pdev)
 }
 
 void ipa_uc_cleanup_sta(struct wlan_objmgr_pdev *pdev,
-			qdf_netdev_t net_dev)
+			qdf_netdev_t net_dev, uint8_t session_id)
 {
 	struct wlan_ipa_priv *ipa_obj;
 
@@ -752,7 +752,7 @@ void ipa_uc_cleanup_sta(struct wlan_objmgr_pdev *pdev,
 		return;
 	}
 
-	return wlan_ipa_uc_cleanup_sta(ipa_obj, net_dev);
+	return wlan_ipa_uc_cleanup_sta(ipa_obj, net_dev, session_id);
 }
 
 QDF_STATUS ipa_uc_disconnect_ap(struct wlan_objmgr_pdev *pdev,
@@ -773,7 +773,7 @@ QDF_STATUS ipa_uc_disconnect_ap(struct wlan_objmgr_pdev *pdev,
 }
 
 void ipa_cleanup_dev_iface(struct wlan_objmgr_pdev *pdev,
-			   qdf_netdev_t net_dev)
+			   qdf_netdev_t net_dev, uint8_t session_id)
 {
 	struct wlan_ipa_priv *ipa_obj;
 
@@ -786,7 +786,7 @@ void ipa_cleanup_dev_iface(struct wlan_objmgr_pdev *pdev,
 		return;
 	}
 
-	return wlan_ipa_cleanup_dev_iface(ipa_obj, net_dev);
+	return wlan_ipa_cleanup_dev_iface(ipa_obj, net_dev, session_id);
 }
 
 void ipa_uc_ssr_cleanup(struct wlan_objmgr_pdev *pdev)
@@ -947,3 +947,25 @@ bool ipa_is_wds_enabled(void)
 {
 	return g_ipa_config ? g_ipa_config->ipa_wds : 0;
 }
+
+QDF_STATUS ipa_get_alt_pipe(struct wlan_objmgr_pdev *pdev,
+			    uint8_t vdev_id,
+			    bool *alt_pipe)
+{
+	struct wlan_ipa_priv *ipa_obj;
+
+	if (!ipa_config_is_enabled())
+		return QDF_STATUS_E_INVAL;
+
+	if (!ipa_cb_is_ready())
+		return QDF_STATUS_E_INVAL;
+
+	ipa_obj = ipa_pdev_get_priv_obj(pdev);
+	if (!ipa_obj) {
+		ipa_err("IPA object is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	return wlan_ipa_get_alt_pipe(ipa_obj, vdev_id, alt_pipe);
+}
+
