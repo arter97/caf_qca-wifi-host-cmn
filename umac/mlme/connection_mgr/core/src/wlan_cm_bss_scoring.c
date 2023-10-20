@@ -2180,7 +2180,7 @@ cm_sort_vendor_algo_mlo_bss_entry(struct wlan_objmgr_psoc *psoc,
 					freq[i], freq_entry);
 
 			if (mlo_support_link_num <= WLAN_MAX_ML_DEFAULT_LINK ||
-			    entry->ml_info.num_links <=
+			    entry->ml_info.num_links <
 						WLAN_MAX_ML_DEFAULT_LINK)
 				link[i].is_valid_link = false;
 
