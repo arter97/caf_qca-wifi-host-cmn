@@ -1235,6 +1235,17 @@ void __qdf_nbuf_data_set_ipv6_tc(uint8_t *data, uint8_t tc);
  */
 bool __qdf_nbuf_is_ipv4_last_fragment(struct sk_buff *skb);
 
+/**
+ * __qdf_nbuf_is_ipv4_fragment() - Check if IPv4 packet is fragment
+ * @skb: Buffer
+ *
+ * This function checks IPv4 packet is fragment or not.
+ * Caller has to call this function for IPv4 packets only.
+ *
+ * Return: True if IPv4 packet is fragment otherwise false
+ */
+bool __qdf_nbuf_is_ipv4_fragment(struct sk_buff *skb);
+
 bool __qdf_nbuf_is_ipv4_v6_pure_tcp_ack(struct sk_buff *skb);
 
 #ifdef QDF_NBUF_GLOBAL_COUNT
