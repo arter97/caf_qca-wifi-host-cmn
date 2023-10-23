@@ -115,6 +115,12 @@
 /* Length of AID field */
 #define WLAN_AID_LEN               2
 
+/* Length of dtim count field */
+#define WLAN_DTIMCOUNT_LEN         1
+
+/* Length of dtim period field */
+#define WLAN_DTIMPERIOD_LEN        1
+
 /* Assoc resp IE offset Capability(2) + Status Code(2) + AID(2) */
 #define WLAN_ASSOC_RSP_IES_OFFSET \
 	(WLAN_CAPABILITYINFO_LEN  + WLAN_STATUSCODE_LEN + WLAN_AID_LEN)
