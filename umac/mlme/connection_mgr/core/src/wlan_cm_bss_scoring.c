@@ -2233,13 +2233,32 @@ cm_sort_vendor_algo_mlo_bss_entry(struct wlan_objmgr_psoc *psoc,
 {}
 #endif
 
+/**
+ * cm_calculate_ml_scores() - Calculate mlo score of AP
+ * @psoc: Pointer to psoc object
+ * @entry: Bss scan entry
+ * @score_config: Score config
+ * @phy_config: Self phy config
+ * @scan_list: Scan entry list of bss candidates after filtering
+ * @ml_flag: MLO flag
+ * @bss_mlo_type: Bss MLO type
+ * @pcl_chan_weight:  PCL channel weight
+ * @rssi_prorated_pct: RSSI prorated pencentage
+ *
+ * For MLO AP, consider partner link to calculate combined score,
+ * For legacy/SLO AP or link, get total score of RSSI, bandwidth,
+ * congestion and band.
+ *
+ * Return: MLO score of AP
+ */
 static int cm_calculate_ml_scores(struct wlan_objmgr_psoc *psoc,
 				  struct scan_cache_entry *entry,
 				  struct scoring_cfg *score_config,
 				  struct psoc_phy_config *phy_config,
 				  qdf_list_t *scan_list, uint8_t ml_flag,
 				  enum MLO_TYPE bss_mlo_type,
-				  int pcl_chan_weight)
+				  int pcl_chan_weight,
+				  uint8_t *rssi_prorated_pct)
 {
 	int32_t score = 0;
 	int32_t rssi_score = 0;
@@ -2252,7 +2271,8 @@ static int cm_calculate_ml_scores(struct wlan_objmgr_psoc *psoc,
 
 	weight_config = &score_config->weight_config;
 	if (IS_LINK_SCORE(ml_flag) || bss_mlo_type == SLO ||
-	    bss_mlo_type == MLSR) {
+	    bss_mlo_type == MLSR ||
+	    !wlan_cm_is_eht_allowed_for_current_security(psoc, entry)) {
 		rssi_score =
 			cm_calculate_rssi_score(&score_config->rssi_score,
 						entry->rssi_raw,
@@ -2286,8 +2306,10 @@ static int cm_calculate_ml_scores(struct wlan_objmgr_psoc *psoc,
 						    phy_config, scan_list,
 						    &prorated_pcnt,
 						    pcl_chan_weight);
-		return score;
 	}
+
+	*rssi_prorated_pct = prorated_pcnt;
+
 	return score;
 }
 
@@ -2405,13 +2427,12 @@ static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 		return score;
 	}
 
-	if (wlan_cm_is_eht_allowed_for_current_security(psoc, entry)) {
-		ml_score += cm_calculate_ml_scores(psoc, entry, score_config,
-						   phy_config, scan_list,
-						   ml_flag, bss_mlo_type,
-						   pcl_chan_weight);
-		score += ml_score;
-	}
+	ml_score += cm_calculate_ml_scores(psoc, entry, score_config,
+					   phy_config, scan_list,
+					   ml_flag, bss_mlo_type,
+					   pcl_chan_weight,
+					   &prorated_pcnt);
+	score += ml_score;
 
 	/*
 	 * Check if the given entry matches with the BSSID Hint after
