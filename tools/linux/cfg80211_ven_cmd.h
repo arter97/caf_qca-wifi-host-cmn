@@ -850,6 +850,11 @@ enum {
 #endif
 #ifdef WLAN_FEATURE_11BE
 	IEEE80211_PARAM_EHT_NUM_SD = 796, /* EHT Beamformer num sounding dimentions */
+	/* User config to set common PSD value for all 20MHz subchannels of the
+	 * current channel in the TPE IE
+	 */
+	IEEE80211_PARAM_TPE_COMMON_PSD = 797,
+	IEEE80211_PARAM_TPE_PWR_UNIT = 798, /* User config to choose PSD or EIRP in a TPE IE */
 #endif
 };
 
@@ -2545,6 +2550,12 @@ struct vendor_commands vap_vendor_cmds[] = {
 	{"get_wds_ext",        IEEE80211_PARAM_WDS_EXT_EN, GET_PARAM, 0},
 #endif
 	{"get_ppevp_type",     IEEE80211_PARAM_PPEVP_TYPE, GET_PARAM, 0},
+#ifdef WLAN_FEATURE_11BE
+	{"set_tpe_common_psd", IEEE80211_PARAM_TPE_COMMON_PSD, SET_PARAM, 1},
+	{"get_tpe_common_psd", IEEE80211_PARAM_TPE_COMMON_PSD, GET_PARAM, 0},
+	{"set_tpe_pwr_unit",   IEEE80211_PARAM_TPE_PWR_UNIT, SET_PARAM, 1},
+	{"get_tpe_pwr_unit",   IEEE80211_PARAM_TPE_PWR_UNIT, GET_PARAM, 1},
+#endif
 };
 
 struct vendor_commands radio_vendor_cmds[] = {
