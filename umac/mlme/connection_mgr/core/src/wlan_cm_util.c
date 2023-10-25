@@ -197,6 +197,24 @@ QDF_STATUS cm_set_key(struct cnx_mgr *cm_ctx, bool unicast,
 }
 #endif
 
+static void cm_dump_sm_history(struct wlan_objmgr_vdev *vdev)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+	struct wlan_sm *vdev_sm;
+
+	vdev_mlme = wlan_objmgr_vdev_get_comp_private_obj(vdev,
+							  WLAN_UMAC_COMP_MLME);
+	if (!vdev_mlme)
+		return;
+
+	vdev_sm = vdev_mlme->sm_hdl;
+	if (!vdev_sm)
+		return;
+
+	wlan_sm_print_history(vdev_sm);
+	cm_sm_history_print(vdev);
+}
+
 #ifdef CONN_MGR_ADV_FEATURE
 void cm_store_wep_key(struct cnx_mgr *cm_ctx,
 		      struct wlan_cm_connect_crypto_info *crypto,
@@ -255,7 +273,8 @@ void cm_store_wep_key(struct cnx_mgr *cm_ctx,
 		   wep_keys->seq_len);
 }
 
-void cm_trigger_panic_on_cmd_timeout(struct wlan_objmgr_vdev *vdev)
+void cm_trigger_panic_on_cmd_timeout(struct wlan_objmgr_vdev *vdev,
+				     enum qdf_hang_reason reason)
 {
 	struct wlan_objmgr_psoc *psoc;
 
@@ -266,32 +285,15 @@ void cm_trigger_panic_on_cmd_timeout(struct wlan_objmgr_vdev *vdev)
 	if (qdf_is_recovering() || qdf_is_fw_down())
 		return;
 
-	qdf_trigger_self_recovery(psoc, QDF_ACTIVE_LIST_TIMEOUT);
+	cm_dump_sm_history(vdev);
+	qdf_trigger_self_recovery(psoc, reason);
 }
 
 #else
-void cm_trigger_panic_on_cmd_timeout(struct wlan_objmgr_vdev *vdev)
+void cm_trigger_panic_on_cmd_timeout(struct wlan_objmgr_vdev *vdev,
+				     enum qdf_hang_reason reason)
 {
-	struct vdev_mlme_obj *vdev_mlme = NULL;
-	struct wlan_sm *vdev_sm = NULL;
-
-	vdev_mlme = wlan_objmgr_vdev_get_comp_private_obj(
-			vdev,
-			WLAN_UMAC_COMP_MLME);
-	if (!vdev_mlme) {
-		mlme_err("VDEV MLME is null");
-		goto error;
-	}
-
-	vdev_sm = vdev_mlme->sm_hdl;
-	if (!vdev_sm) {
-		mlme_err("VDEV SM is null");
-		goto error;
-	}
-
-	wlan_sm_print_history(vdev_sm);
-	cm_sm_history_print(vdev);
-error:
+	cm_dump_sm_history(vdev);
 	QDF_ASSERT(0);
 }
 #endif
