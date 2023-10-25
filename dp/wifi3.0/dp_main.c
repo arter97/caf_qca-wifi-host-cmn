@@ -7207,9 +7207,15 @@ static inline void dp_srng_clear_ring_usage_wm_stats(struct dp_soc *soc)
 		hal_srng_clear_ring_usage_wm_locked(soc->hal_soc,
 					    soc->reo_dest_ring[ring].hal_srng);
 
-	for (ring = 0; ring < soc->num_tx_comp_rings; ring++)
+	for (ring = 0; ring < soc->num_tcl_data_rings; ring++) {
+		if (wlan_cfg_get_wbm_ring_num_for_index(
+					soc->wlan_cfg_ctx, ring) ==
+		    INVALID_WBM_RING_NUM)
+			continue;
+
 		hal_srng_clear_ring_usage_wm_locked(soc->hal_soc,
 					soc->tx_comp_ring[ring].hal_srng);
+	}
 }
 #else
 static inline void dp_srng_clear_ring_usage_wm_stats(struct dp_soc *soc)

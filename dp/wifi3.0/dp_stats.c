@@ -8374,7 +8374,12 @@ void dp_dump_srng_high_wm_stats(struct dp_soc *soc, uint64_t srng_mask)
 	}
 
 	if (srng_mask & DP_SRNG_WM_MASK_TX_COMP) {
-		for (ring = 0; ring < soc->num_tx_comp_rings; ring++) {
+		for (ring = 0; ring < soc->num_tcl_data_rings; ring++) {
+			if (wlan_cfg_get_wbm_ring_num_for_index(
+						soc->wlan_cfg_ctx, ring) ==
+			    INVALID_WBM_RING_NUM)
+				continue;
+
 			pos = 0;
 			pos += hal_dump_srng_high_wm_stats(soc->hal_soc,
 					soc->tx_comp_ring[ring].hal_srng,
