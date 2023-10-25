@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -109,6 +109,19 @@ void qdf_mem_exit(void);
 #endif
 
 #define QDF_MEM_FUNC_NAME_SIZE 48
+
+/**
+ * qdf_mem_check_prealloc_leaks() - Check mempool prealloc table for each pool
+ *
+ * This function is called when driver is unloaded and when all preallocated
+ * memory is returned to the reserved pools. It will go through the tracker
+ * table for each pool to check if it is empty, indicating that all memory
+ * has been properly returned to the pool. If there is any pointer found
+ * in the tracker table, it and the pool it belongs to will be printed out.
+ *
+ * Return: void
+ */
+void qdf_mem_check_prealloc_leaks(void);
 
 #ifdef MEMORY_DEBUG
 /**

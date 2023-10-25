@@ -1334,6 +1334,18 @@ void __qdf_mempool_free(qdf_device_t osdev, __qdf_mempool_t pool, void *buf)
 }
 qdf_export_symbol(__qdf_mempool_free);
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)) && \
+	defined(CNSS_MEM_PRE_ALLOC)
+void qdf_mem_check_prealloc_leaks(void)
+{
+	wcnss_check_pool_lists();
+}
+#else
+void qdf_mem_check_prealloc_leaks(void)
+{
+}
+#endif
+
 #ifdef CNSS_MEM_PRE_ALLOC
 static bool qdf_might_be_prealloc(void *ptr)
 {
