@@ -33,9 +33,10 @@
 
 extern uint8_t sec_type_map[MAX_CDP_SEC_TYPE];
 
-void dp_tx_comp_get_params_from_hal_desc_li(struct dp_soc *soc,
-					    void *tx_comp_hal_desc,
-					    struct dp_tx_desc_s **r_tx_desc)
+QDF_STATUS
+dp_tx_comp_get_params_from_hal_desc_li(struct dp_soc *soc,
+				       void *tx_comp_hal_desc,
+				       struct dp_tx_desc_s **r_tx_desc)
 {
 	uint8_t pool_id;
 	uint32_t tx_desc_id;
@@ -60,6 +61,8 @@ void dp_tx_comp_get_params_from_hal_desc_li(struct dp_soc *soc,
 	}
 
 	(*r_tx_desc)->peer_id = hal_tx_comp_get_peer_id(tx_comp_hal_desc);
+
+	return QDF_STATUS_SUCCESS;
 }
 
 static inline

@@ -76,11 +76,12 @@ dp_tx_hw_enqueue_rh(struct dp_soc *soc, struct dp_vdev *vdev,
  * @tx_comp_hal_desc: HAL TX Comp Descriptor
  * @r_tx_desc: SW Tx Descriptor retrieved from HAL desc.
  *
- * Return: None
+ * Return: QDF_STATUS return codes
  */
-void dp_tx_comp_get_params_from_hal_desc_rh(struct dp_soc *soc,
-					    void *tx_comp_hal_desc,
-					    struct dp_tx_desc_s **r_tx_desc);
+QDF_STATUS
+dp_tx_comp_get_params_from_hal_desc_rh(struct dp_soc *soc,
+				       void *tx_comp_hal_desc,
+				       struct dp_tx_desc_s **r_tx_desc);
 
 /**
  * dp_tx_process_htt_completion_rh() - Tx HTT Completion Indication Handler

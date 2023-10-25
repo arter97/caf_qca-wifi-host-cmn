@@ -6600,6 +6600,70 @@ void dp_tx_desc_check_corruption(struct dp_tx_desc_s *tx_desc)
 #endif
 
 #ifndef WLAN_SOFTUMAC_SUPPORT
+#ifdef DP_TX_COMP_RING_DESC_SANITY_CHECK
+
+/* Increasing this value, runs the risk of srng backpressure */
+#define DP_STALE_TX_COMP_WAIT_TIMEOUT_US 1000
+
+static inline void
+dp_tx_comp_reset_stale_entry_detection(struct dp_soc *soc, uint32_t ring_num)
+{
+	soc->stale_entry[ring_num].detected = 0;
+}
+
+/**
+ * dp_tx_comp_stale_entry_handle() - Detect stale entry condition in tx
+ *				     completion srng.
+ * @soc: DP SoC handle
+ * @ring_num: tx completion ring number
+ * @status: QDF_STATUS from tx_comp_get_params_from_hal_desc arch ops
+ *
+ * Return: QDF_STATUS_SUCCESS if stale entry is detected and handled
+ *	   QDF_STATUS error code in other cases.
+ */
+static inline QDF_STATUS
+dp_tx_comp_stale_entry_handle(struct dp_soc *soc, uint32_t ring_num,
+			      QDF_STATUS status)
+{
+	uint64_t curr_timestamp = qdf_get_log_timestamp_usecs();
+	uint64_t delta_us;
+
+	if (status != QDF_STATUS_E_PENDING) {
+		dp_tx_comp_reset_stale_entry_detection(soc, ring_num);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (soc->stale_entry[ring_num].detected) {
+		/* stale entry process continuation */
+		delta_us = curr_timestamp -
+				soc->stale_entry[ring_num].start_time;
+		if (delta_us > DP_STALE_TX_COMP_WAIT_TIMEOUT_US) {
+			dp_err("Stale tx comp desc, waited %d us", delta_us);
+			return QDF_STATUS_E_FAILURE;
+		}
+	} else {
+		/* This is the start of stale entry detection */
+		soc->stale_entry[ring_num].detected = 1;
+		soc->stale_entry[ring_num].start_time = curr_timestamp;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+#else
+
+static inline void
+dp_tx_comp_reset_stale_entry_detection(struct dp_soc *soc, uint32_t ring_num)
+{
+}
+
+static inline QDF_STATUS
+dp_tx_comp_stale_entry_handle(struct dp_soc *soc, uint32_t ring_num,
+			      QDF_STATUS status)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 uint32_t dp_tx_comp_handler(struct dp_intr *int_ctx, struct dp_soc *soc,
 			    hal_ring_handle_t hal_ring_hdl, uint8_t ring_id,
 			    uint32_t quota)
@@ -6623,6 +6687,7 @@ uint32_t dp_tx_comp_handler(struct dp_intr *int_ctx, struct dp_soc *soc,
 	int max_reap_limit, ring_near_full;
 	uint32_t num_entries;
 	qdf_nbuf_queue_head_t h;
+	QDF_STATUS status;
 
 	DP_HIST_INIT();
 
@@ -6715,16 +6780,25 @@ more_data:
 			continue;
 		}
 
-		soc->arch_ops.tx_comp_get_params_from_hal_desc(soc,
-							       tx_comp_hal_desc,
-							       &tx_desc);
+		status = soc->arch_ops.tx_comp_get_params_from_hal_desc(
+							soc, tx_comp_hal_desc,
+							&tx_desc);
 		if (qdf_unlikely(!tx_desc)) {
+			if (QDF_IS_STATUS_SUCCESS(
+				dp_tx_comp_stale_entry_handle(soc, ring_id,
+							      status))) {
+				hal_srng_dst_dec_tp(hal_soc, hal_ring_hdl);
+				break;
+			}
+
 			dp_err("unable to retrieve tx_desc!");
 			hal_dump_comp_desc(tx_comp_hal_desc);
 			DP_STATS_INC(soc, tx.invalid_tx_comp_desc, 1);
 			QDF_BUG(0);
 			continue;
 		}
+
+		dp_tx_comp_reset_stale_entry_detection(soc, ring_id);
 		tx_desc->buffer_src = buffer_src;
 
 		/*

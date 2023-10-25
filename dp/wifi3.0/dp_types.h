@@ -2328,9 +2328,9 @@ struct dp_arch_ops {
 				    struct cdp_tx_exception_metadata *metadata,
 				    struct dp_tx_msdu_info_s *msdu_info);
 
-	void (*tx_comp_get_params_from_hal_desc)(struct dp_soc *soc,
-						 void *tx_comp_hal_desc,
-						 struct dp_tx_desc_s **desc);
+	QDF_STATUS (*tx_comp_get_params_from_hal_desc)(
+				struct dp_soc *soc, void *tx_comp_hal_desc,
+				struct dp_tx_desc_s **desc);
 
 	qdf_nbuf_t (*dp_tx_mlo_mcast_send)(struct dp_soc *soc,
 					   struct dp_vdev *vdev,
@@ -3204,6 +3204,13 @@ struct dp_soc {
 #ifdef WLAN_FEATURE_TX_LATENCY_STATS
 	/* callback function for tx latency stats */
 	cdp_tx_latency_cb tx_latency_cb;
+#endif
+
+#ifdef DP_TX_COMP_RING_DESC_SANITY_CHECK
+	struct {
+		uint32_t detected;
+		uint64_t start_time;
+	} stale_entry[MAX_TCL_DATA_RINGS];
 #endif
 };
 

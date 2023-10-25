@@ -75,10 +75,12 @@ dp_tx_adjust_tso_download_len_rh(qdf_nbuf_t nbuf,
 }
 #endif /* FEATURE_TSO */
 
-void dp_tx_comp_get_params_from_hal_desc_rh(struct dp_soc *soc,
-					    void *tx_comp_hal_desc,
-					    struct dp_tx_desc_s **r_tx_desc)
+QDF_STATUS
+dp_tx_comp_get_params_from_hal_desc_rh(struct dp_soc *soc,
+				       void *tx_comp_hal_desc,
+				       struct dp_tx_desc_s **r_tx_desc)
 {
+	return QDF_STATUS_SUCCESS;
 }
 
 /**

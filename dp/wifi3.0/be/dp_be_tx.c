@@ -101,52 +101,63 @@ extern uint8_t sec_type_map[MAX_CDP_SEC_TYPE];
  * ring Desc is stale or not. if HW CC is not done, then compare PA between
  * ring Desc and current TX desc.
  *
- * Return: None.
+ * Return: QDF_STATUS_SUCCESS for success,
+ *	   QDF_STATUS_E_PENDING for stale entry,
+ *	   QDF_STATUS_E_INVAL for invalid entry.
  */
 static inline
-void dp_tx_comp_desc_check_and_invalidate(void *tx_comp_hal_desc,
-					  struct dp_tx_desc_s **r_tx_desc,
-					  uint64_t tx_desc_va,
-					  bool hw_cc_done)
+QDF_STATUS dp_tx_comp_desc_check_and_invalidate(void *tx_comp_hal_desc,
+						struct dp_tx_desc_s **r_tx_desc,
+						uint64_t tx_desc_va,
+						bool hw_cc_done)
 {
 	qdf_dma_addr_t desc_dma_addr;
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
 
 	if (qdf_likely(hw_cc_done)) {
 		/* Check upper 32 bits */
 		if (DP_TX_COMP_DESC_BUFF_VA_32BITS_HI_INVALIDATE ==
-		    (tx_desc_va >> 32))
+		    (tx_desc_va >> 32)) {
 			*r_tx_desc = NULL;
-
-		/* Invalidate the ring desc for 32 ~ 63 bits of VA */
-		hal_tx_comp_set_desc_va_63_32(
+			status = QDF_STATUS_E_PENDING;
+		} else
+			/* Invalidate the ring desc for 32 ~ 63 bits of VA */
+			hal_tx_comp_set_desc_va_63_32(
 				tx_comp_hal_desc,
 				DP_TX_COMP_DESC_BUFF_VA_32BITS_HI_INVALIDATE);
 	} else {
 		/* Compare PA between ring desc and current TX desc stored */
 		desc_dma_addr = hal_tx_comp_get_paddr(tx_comp_hal_desc);
 
-		if (desc_dma_addr != (*r_tx_desc)->dma_addr)
+		if (desc_dma_addr != (*r_tx_desc)->dma_addr) {
 			*r_tx_desc = NULL;
+			status = QDF_STATUS_E_INVAL;
+		}
 	}
+
+	return status;
 }
 #else
 static inline
-void dp_tx_comp_desc_check_and_invalidate(void *tx_comp_hal_desc,
-					  struct dp_tx_desc_s **r_tx_desc,
-					  uint64_t tx_desc_va,
-					  bool hw_cc_done)
+QDF_STATUS dp_tx_comp_desc_check_and_invalidate(void *tx_comp_hal_desc,
+						struct dp_tx_desc_s **r_tx_desc,
+						uint64_t tx_desc_va,
+						bool hw_cc_done)
 {
+	return QDF_STATUS_SUCCESS;
 }
 #endif
 
 #ifdef DP_FEATURE_HW_COOKIE_CONVERSION
 #ifdef DP_HW_COOKIE_CONVERT_EXCEPTION
-void dp_tx_comp_get_params_from_hal_desc_be(struct dp_soc *soc,
-					    void *tx_comp_hal_desc,
-					    struct dp_tx_desc_s **r_tx_desc)
+QDF_STATUS
+dp_tx_comp_get_params_from_hal_desc_be(struct dp_soc *soc,
+				       void *tx_comp_hal_desc,
+				       struct dp_tx_desc_s **r_tx_desc)
 {
 	uint32_t tx_desc_id;
 	uint64_t tx_desc_va = 0;
+	QDF_STATUS status;
 	bool hw_cc_done =
 		hal_tx_comp_get_cookie_convert_done(tx_comp_hal_desc);
 
@@ -162,56 +173,64 @@ void dp_tx_comp_get_params_from_hal_desc_be(struct dp_soc *soc,
 		(struct dp_tx_desc_s *)dp_cc_desc_find(soc, tx_desc_id);
 	}
 
-	dp_tx_comp_desc_check_and_invalidate(tx_comp_hal_desc,
-					     r_tx_desc, tx_desc_va,
-					     hw_cc_done);
+	status = dp_tx_comp_desc_check_and_invalidate(tx_comp_hal_desc,
+						      r_tx_desc, tx_desc_va,
+						      hw_cc_done);
 
 	if (*r_tx_desc)
 		(*r_tx_desc)->peer_id =
 				dp_tx_comp_get_peer_id_be(soc,
 							  tx_comp_hal_desc);
+
+	return status;
 }
 #else
-void dp_tx_comp_get_params_from_hal_desc_be(struct dp_soc *soc,
-					    void *tx_comp_hal_desc,
-					    struct dp_tx_desc_s **r_tx_desc)
+QDF_STATUS
+dp_tx_comp_get_params_from_hal_desc_be(struct dp_soc *soc,
+				       void *tx_comp_hal_desc,
+				       struct dp_tx_desc_s **r_tx_desc)
 {
 	uint64_t tx_desc_va;
+	QDF_STATUS status;
 
 	tx_desc_va = hal_tx_comp_get_desc_va(tx_comp_hal_desc);
 	*r_tx_desc = (struct dp_tx_desc_s *)(uintptr_t)tx_desc_va;
 
-	dp_tx_comp_desc_check_and_invalidate(tx_comp_hal_desc,
-					     r_tx_desc,
-					     tx_desc_va,
-					     true);
+	status = dp_tx_comp_desc_check_and_invalidate(tx_comp_hal_desc,
+						      r_tx_desc, tx_desc_va,
+						      true);
 	if (*r_tx_desc)
 		(*r_tx_desc)->peer_id =
 				dp_tx_comp_get_peer_id_be(soc,
 							  tx_comp_hal_desc);
+
+	return status;
 }
 #endif /* DP_HW_COOKIE_CONVERT_EXCEPTION */
 #else
 
-void dp_tx_comp_get_params_from_hal_desc_be(struct dp_soc *soc,
-					    void *tx_comp_hal_desc,
-					    struct dp_tx_desc_s **r_tx_desc)
+QDF_STATUS
+dp_tx_comp_get_params_from_hal_desc_be(struct dp_soc *soc,
+				       void *tx_comp_hal_desc,
+				       struct dp_tx_desc_s **r_tx_desc)
 {
 	uint32_t tx_desc_id;
+	QDF_STATUS status;
 
 	/* SW do cookie conversion to VA */
 	tx_desc_id = hal_tx_comp_get_desc_id(tx_comp_hal_desc);
 	*r_tx_desc =
 	(struct dp_tx_desc_s *)dp_cc_desc_find(soc, tx_desc_id);
 
-	dp_tx_comp_desc_check_and_invalidate(tx_comp_hal_desc,
-					     r_tx_desc, 0,
-					     false);
+	status = dp_tx_comp_desc_check_and_invalidate(tx_comp_hal_desc,
+						      r_tx_desc, 0, false);
 
 	if (*r_tx_desc)
 		(*r_tx_desc)->peer_id =
 				dp_tx_comp_get_peer_id_be(soc,
 							  tx_comp_hal_desc);
+
+	return status;
 }
 #endif /* DP_FEATURE_HW_COOKIE_CONVERSION */
 
