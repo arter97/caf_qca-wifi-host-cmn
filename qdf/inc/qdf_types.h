@@ -1606,6 +1606,14 @@ enum qdf_suspend_type {
  * of order packet counter values
  * @QDF_MGMT_RX_REO_ZERO_DURATION_PKT: Reception of management packet with zero
  * packet duration
+ * @QDF_VDEV_ACTIVE_SER_CONNECT_TIMEOUT: Active connect cmd in serialization
+ * timed out.
+ * @QDF_VDEV_ACTIVE_SER_DISCONNECT_TIMEOUT: Active disconnect cmd in
+ * serialization timed out.
+ * @QDF_VDEV_ACTIVE_SER_REASSOC_TIMEOUT:  Active reassoc cmd in serialization
+ * timed out.
+ * @QDF_VDEV_ACTIVE_SER_LINK_SWITCH_TIMEOUT: Active link switch cmd in
+ * serialization timed out.
  */
 enum qdf_hang_reason {
 	QDF_REASON_UNSPECIFIED,
@@ -1646,6 +1654,10 @@ enum qdf_hang_reason {
 	QDF_MGMT_RX_REO_INCONSISTENT_SNAPSHOT,
 	QDF_MGMT_RX_REO_OUT_OF_ORDER_PKT,
 	QDF_MGMT_RX_REO_ZERO_DURATION_PKT,
+	QDF_VDEV_ACTIVE_SER_CONNECT_TIMEOUT,
+	QDF_VDEV_ACTIVE_SER_DISCONNECT_TIMEOUT,
+	QDF_VDEV_ACTIVE_SER_REASSOC_TIMEOUT,
+	QDF_VDEV_ACTIVE_SER_LINK_SWITCH_TIMEOUT,
 };
 
 /**

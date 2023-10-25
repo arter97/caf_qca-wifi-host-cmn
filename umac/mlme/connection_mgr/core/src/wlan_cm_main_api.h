@@ -1007,10 +1007,12 @@ void cm_set_max_connect_attempts(struct wlan_objmgr_vdev *vdev,
 /**
  * cm_trigger_panic_on_cmd_timeout() - trigger panic on active command timeout
  * @vdev: vdev pointer
+ * @reason: Hang reason code
  *
  * Return: void
  */
-void cm_trigger_panic_on_cmd_timeout(struct wlan_objmgr_vdev *vdev);
+void cm_trigger_panic_on_cmd_timeout(struct wlan_objmgr_vdev *vdev,
+				     enum qdf_hang_reason reason);
 
 /**
  * cm_set_max_connect_timeout() - Set max connect timeout
