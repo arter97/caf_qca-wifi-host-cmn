@@ -226,6 +226,7 @@ uint32_t dp_rx_process_be(struct dp_intr *int_ctx,
 	uint32_t dsf;
 	uint32_t l3_pad;
 	uint8_t link_id = 0;
+	uint16_t buf_size;
 
 	DP_HIST_INIT();
 
@@ -237,6 +238,7 @@ uint32_t dp_rx_process_be(struct dp_intr *int_ctx,
 	intr_id = int_ctx->dp_intr_id;
 	num_entries = hal_srng_get_num_entries(hal_soc, hal_ring_hdl);
 	dp_runtime_pm_mark_last_busy(soc);
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 
 more_data:
 	/* reset local variables here to be re-used in the function */
@@ -330,7 +332,6 @@ more_data:
 			if (qdf_unlikely(rx_desc && rx_desc->nbuf)) {
 				qdf_assert_always(!rx_desc->unmapped);
 				dp_rx_nbuf_unmap(soc, rx_desc, reo_ring_num);
-				rx_desc->unmapped = 1;
 				dp_rx_buffer_pool_nbuf_free(soc, rx_desc->nbuf,
 							    rx_desc->pool_id);
 				dp_rx_add_to_free_desc_list(
@@ -401,7 +402,7 @@ more_data:
 				 * reap this MPDU
 				 */
 				if ((QDF_NBUF_CB_RX_PKT_LEN(rx_desc->nbuf) /
-				     (RX_DATA_BUFFER_SIZE -
+				     (buf_size -
 				      soc->rx_pkt_tlv_size) + 1) >
 				    num_pending) {
 					DP_STATS_INC(soc,
@@ -434,7 +435,6 @@ more_data:
 		 * in case double skb unmap happened.
 		 */
 		dp_rx_nbuf_unmap(soc, rx_desc, reo_ring_num);
-		rx_desc->unmapped = 1;
 		DP_RX_PROCESS_NBUF(soc, nbuf_head, nbuf_tail, ebuf_head,
 				   ebuf_tail, rx_desc);
 
@@ -1749,6 +1749,94 @@ bool dp_rx_intrabss_fwd_be(struct dp_soc *soc, struct dp_txrx_peer *ta_peer,
 }
 #endif
 
+#ifndef BE_WBM_RELEASE_DESC_RX_SG_SUPPORT
+/**
+ * dp_rx_chain_msdus_be() - Function to chain all msdus of a mpdu
+ *			    to pdev invalid peer list
+ *
+ * @soc: core DP main context
+ * @nbuf: Buffer pointer
+ * @rx_tlv_hdr: start of rx tlv header
+ * @mac_id: mac id
+ *
+ *  Return: bool: true for last msdu of mpdu
+ */
+static bool dp_rx_chain_msdus_be(struct dp_soc *soc, qdf_nbuf_t nbuf,
+				 uint8_t *rx_tlv_hdr, uint8_t mac_id)
+{
+	bool mpdu_done = false;
+	qdf_nbuf_t curr_nbuf = NULL;
+	qdf_nbuf_t tmp_nbuf = NULL;
+
+	struct dp_pdev *dp_pdev = dp_get_pdev_for_lmac_id(soc, mac_id);
+
+	if (!dp_pdev) {
+		dp_rx_debug("%pK: pdev is null for mac_id = %d", soc, mac_id);
+		return mpdu_done;
+	}
+	/* if invalid peer SG list has max values free the buffers in list
+	 * and treat current buffer as start of list
+	 *
+	 * current logic to detect the last buffer from attn_tlv is not reliable
+	 * in OFDMA UL scenario hence add max buffers check to avoid list pile
+	 * up
+	 */
+	if (!dp_pdev->first_nbuf ||
+	    (dp_pdev->invalid_peer_head_msdu &&
+	    QDF_NBUF_CB_RX_NUM_ELEMENTS_IN_LIST
+	    (dp_pdev->invalid_peer_head_msdu) >= DP_MAX_INVALID_BUFFERS)) {
+		qdf_nbuf_set_rx_chfrag_start(nbuf, 1);
+		dp_pdev->first_nbuf = true;
+
+		/* If the new nbuf received is the first msdu of the
+		 * amsdu and there are msdus in the invalid peer msdu
+		 * list, then let us free all the msdus of the invalid
+		 * peer msdu list.
+		 * This scenario can happen when we start receiving
+		 * new a-msdu even before the previous a-msdu is completely
+		 * received.
+		 */
+		curr_nbuf = dp_pdev->invalid_peer_head_msdu;
+		while (curr_nbuf) {
+			tmp_nbuf = curr_nbuf->next;
+			dp_rx_nbuf_free(curr_nbuf);
+			curr_nbuf = tmp_nbuf;
+		}
+
+		dp_pdev->invalid_peer_head_msdu = NULL;
+		dp_pdev->invalid_peer_tail_msdu = NULL;
+
+		dp_monitor_get_mpdu_status(dp_pdev, soc, rx_tlv_hdr);
+	}
+
+	if (qdf_nbuf_is_rx_chfrag_end(nbuf) &&
+	    hal_rx_attn_msdu_done_get(soc->hal_soc, rx_tlv_hdr)) {
+		qdf_assert_always(dp_pdev->first_nbuf);
+		dp_pdev->first_nbuf = false;
+		mpdu_done = true;
+	}
+
+	/*
+	 * For MCL, invalid_peer_head_msdu and invalid_peer_tail_msdu
+	 * should be NULL here, add the checking for debugging purpose
+	 * in case some corner case.
+	 */
+	DP_PDEV_INVALID_PEER_MSDU_CHECK(dp_pdev->invalid_peer_head_msdu,
+					dp_pdev->invalid_peer_tail_msdu);
+	DP_RX_LIST_APPEND(dp_pdev->invalid_peer_head_msdu,
+			  dp_pdev->invalid_peer_tail_msdu,
+			  nbuf);
+
+	return mpdu_done;
+}
+#else
+static bool dp_rx_chain_msdus_be(struct dp_soc *soc, qdf_nbuf_t nbuf,
+				 uint8_t *rx_tlv_hdr, uint8_t mac_id)
+{
+	return false;
+}
+#endif
+
 qdf_nbuf_t
 dp_rx_wbm_err_reap_desc_be(struct dp_intr *int_ctx, struct dp_soc *soc,
 			   hal_ring_handle_t hal_ring_hdl, uint32_t quota,
@@ -2025,6 +2113,9 @@ dp_rx_null_q_desc_handle_be(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	uint16_t sa_idx = 0;
 	bool is_eapol = 0;
 	bool enh_flag;
+	uint16_t buf_size;
+
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 
 	qdf_nbuf_set_rx_chfrag_start(
 				nbuf,
@@ -2052,8 +2143,7 @@ dp_rx_null_q_desc_handle_be(struct dp_soc *soc, qdf_nbuf_t nbuf,
 			goto drop_nbuf;
 
 		/* Set length in nbuf */
-		qdf_nbuf_set_pktlen(
-			nbuf, qdf_min(pkt_len, (uint32_t)RX_DATA_BUFFER_SIZE));
+		qdf_nbuf_set_pktlen(nbuf, qdf_min(pkt_len, (uint32_t)buf_size));
 	}
 
 	/*
@@ -2094,6 +2184,15 @@ dp_rx_null_q_desc_handle_be(struct dp_soc *soc, qdf_nbuf_t nbuf,
 							   nbuf,
 							   mpdu_done,
 							   pool_id);
+		} else {
+			mpdu_done = dp_rx_chain_msdus_be(soc, nbuf, rx_tlv_hdr,
+							 pool_id);
+
+			/* Trigger invalid peer handler wrapper */
+			dp_rx_process_invalid_peer_wrapper(
+					soc,
+					pdev->invalid_peer_head_msdu,
+					mpdu_done, pool_id);
 		}
 
 		if (mpdu_done) {

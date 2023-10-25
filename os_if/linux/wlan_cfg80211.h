@@ -183,6 +183,8 @@
  * @QCA_NL80211_VENDOR_SUBCMD_LINK_RECONFIG_INDEX: link reconfig event index
  * @QCA_NL80211_VENDOR_SUBCMD_AUDIO_TRANSPORT_SWITCH_INDEX: Audio transport
  * switch event index
+ * @QCA_NL80211_VENDOR_SUBCMD_TX_LATENCY_INDEX: event index for transmit
+ *	latency stats
  */
 
 enum qca_nl80211_vendor_subcmds_index {
@@ -315,6 +317,9 @@ enum qca_nl80211_vendor_subcmds_index {
 #endif
 #endif
 	QCA_NL80211_VENDOR_SUBCMD_AUDIO_TRANSPORT_SWITCH_INDEX,
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+	QCA_NL80211_VENDOR_SUBCMD_TX_LATENCY_INDEX,
+#endif
 };
 
 #if !defined(SUPPORT_WDEV_CFG80211_VENDOR_EVENT_ALLOC) && \
@@ -361,9 +366,13 @@ nla_fail:
 	.maxattr = __maxattr
 #define VENDOR_NLA_POLICY_NESTED(__policy) \
 	NLA_POLICY_NESTED(__policy)
+#define VENDOR_NLA_POLICY_NESTED_ARRAY(__policy) \
+	NLA_POLICY_NESTED_ARRAY(__policy)
 #else
 #define vendor_command_policy(__policy, __maxattr)
 #define VENDOR_NLA_POLICY_NESTED(__policy) {.type = NLA_NESTED}
+#define VENDOR_NLA_POLICY_NESTED_ARRAY(__policy) \
+	VENDOR_NLA_POLICY_NESTED(__policy)
 #endif /*End of (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 2, 0) */
 
 /* For kernel version <= 4.20, driver needs to provide policy */

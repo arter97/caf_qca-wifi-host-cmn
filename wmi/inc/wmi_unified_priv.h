@@ -113,6 +113,10 @@
 #include "wlan_coap_public_structs.h"
 #endif
 
+#ifdef QCA_TARGET_IF_MLME
+#include "wmi_unified_mlme_api.h"
+#endif
+
 #define WMI_UNIFIED_MAX_EVENT 0x100
 
 #ifdef WMI_EXT_DBG
@@ -2375,6 +2379,7 @@ QDF_STATUS (*extract_vdev_peer_delete_all_response_event)(
 
 bool (*is_management_record)(uint32_t cmd_id);
 bool (*is_diag_event)(uint32_t event_id);
+bool (*is_force_fw_hang_cmd)(uint32_t event_id);
 uint8_t *(*wmi_id_to_name)(uint32_t cmd_id);
 QDF_STATUS (*send_dfs_phyerr_offload_en_cmd)(wmi_unified_t wmi_handle,
 		uint32_t pdev_id);
@@ -3208,6 +3213,11 @@ QDF_STATUS (*extract_mlo_link_disable_request_evt_param)(
 		struct mlo_link_disable_request_evt_params *params);
 
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+QDF_STATUS (*extract_mlo_link_state_switch_evt)(
+			struct wmi_unified *wmi_handle,
+			void *buf, uint8_t len,
+			struct mlo_link_switch_state_info *params);
+
 QDF_STATUS
 (*extract_mlo_link_switch_request_event)(struct wmi_unified *wmi_handle,
 					 void *buf,
@@ -3291,6 +3301,10 @@ QDF_STATUS (*send_mlo_vdev_tid_to_link_map)(
 QDF_STATUS (*send_mlo_link_state_request)(
 			wmi_unified_t wmi_handle,
 			struct wmi_host_link_state_params *params);
+
+QDF_STATUS (*send_link_set_bss_params_cmd)(
+		wmi_unified_t wmi_handle,
+		struct wmi_host_link_bss_params *params);
 
 QDF_STATUS (*extract_mlo_vdev_tid_to_link_map_event)(
 		struct wmi_unified *wmi_handle,
@@ -3418,6 +3432,12 @@ QDF_STATUS (*extract_aoa_caps_service_ready_ext2)
 		(struct wmi_unified *wmi_handle, uint8_t *buf,
 		 struct wlan_psoc_host_rcc_enh_aoa_caps_ext2 *aoa_cap);
 #endif /* WLAN_RCC_ENHANCED_AOA_SUPPORT */
+
+#ifdef QCA_TARGET_IF_MLME
+QDF_STATUS (*send_csa_event_status_ind)(
+		wmi_unified_t wmi_handle,
+		struct csa_event_status_ind params);
+#endif /* QCA_TARGET_IF_MLME */
 };
 
 /* Forward declaration for psoc*/
@@ -3999,6 +4019,14 @@ static inline void wmi_cp_stats_attach_tlv(struct wmi_unified *wmi_handle)
 {
 }
 #endif /* QCA_SUPPORT_CP_STATS */
+
+#ifdef QCA_TARGET_IF_MLME
+void wmi_mlme_attach_tlv(wmi_unified_t wmi_handle);
+#else
+static inline void wmi_mlme_attach_tlv(wmi_unified_t wmi_handle)
+{
+}
+#endif /* QCA_TARGET_IF_MLME */
 
 #ifdef QCA_SUPPORT_MC_CP_STATS
 void wmi_mc_cp_stats_attach_tlv(struct wmi_unified *wmi_handle);

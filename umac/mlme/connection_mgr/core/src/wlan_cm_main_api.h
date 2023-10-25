@@ -332,19 +332,22 @@ void cm_hw_mode_change_resp(struct wlan_objmgr_pdev *pdev, uint8_t vdev_id,
 			    wlan_cm_id cm_id, QDF_STATUS status);
 
 /**
- * cm_handle_hw_mode_change() - SM handling of hw mode change resp
+ * cm_ser_connect_after_mode_change_resp() - SM handling of
+ * hw mode change/bearer switch resp
  * @cm_ctx: connection manager context
  * @cm_id: Connection mgr ID assigned to this connect request.
- * @event: HW mode success or failure event
+ * @event: success or failure event
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS cm_handle_hw_mode_change(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id,
-				    enum wlan_cm_sm_evt event);
+QDF_STATUS cm_ser_connect_after_mode_change_resp(struct cnx_mgr *cm_ctx,
+						wlan_cm_id *cm_id,
+						enum wlan_cm_sm_evt event);
 #else
 static inline
-QDF_STATUS cm_handle_hw_mode_change(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id,
-				    enum wlan_cm_sm_evt event)
+QDF_STATUS cm_ser_connect_after_mode_change_resp(struct cnx_mgr *cm_ctx,
+						wlan_cm_id *cm_id,
+						enum wlan_cm_sm_evt event)
 {
 	return QDF_STATUS_SUCCESS;
 }
@@ -637,6 +640,83 @@ QDF_STATUS cm_bss_select_ind_rsp(struct wlan_objmgr_vdev *vdev,
 {
 	return QDF_STATUS_SUCCESS;
 }
+
+/**
+ * cm_is_link_switch_connect_req() - API to check if connect request
+ * is for link switch.
+ * @req: Connect request
+ *
+ * Return true if the request for connection is due to link switch or else
+ * return false.
+ *
+ * Return: bool
+ */
+static inline bool cm_is_link_switch_connect_req(struct cm_connect_req *req)
+{
+	return req->req.source == CM_MLO_LINK_SWITCH_CONNECT;
+}
+
+/**
+ * cm_is_link_switch_disconnect_req() - API to check if disconnect request is
+ * for link switch.
+ * @req: Disconnect request.
+ *
+ * Return true if the request for disconnection is due to link switch or else
+ * return false.
+ *
+ * Return: bool
+ */
+static inline bool
+cm_is_link_switch_disconnect_req(struct cm_disconnect_req *req)
+{
+	return req->req.source == CM_MLO_LINK_SWITCH_DISCONNECT;
+}
+
+/**
+ * cm_is_link_switch_cmd() - Check if the CM ID is for link switch
+ * @cm_id: Connection manager request ID
+ *
+ * Return true if the bit corresponding to link switch is set for @cm_id or
+ * else return false.
+ *
+ * Return: bool
+ */
+static inline bool cm_is_link_switch_cmd(wlan_cm_id cm_id)
+{
+	return cm_id & CM_ID_LSWITCH_BIT;
+}
+
+/**
+ * cm_is_link_switch_disconnect_resp() - API to check if the disconnect
+ * response is for link switch.
+ * @resp: Disconnect response.
+ *
+ * Return true if the disconnect response is for link switch or else return
+ * false.
+ *
+ * Return: bool
+ */
+static inline bool
+cm_is_link_switch_disconnect_resp(struct wlan_cm_discon_rsp *resp)
+{
+	return cm_is_link_switch_cmd(resp->req.cm_id);
+}
+
+/**
+ * cm_is_link_switch_connect_resp() - API to check if the connect response
+ * is for link switch.
+ * @resp: Connect response.
+ *
+ * Return true if the connect response is for link switch or else return
+ * false.
+ *
+ * Return: bool
+ */
+static inline bool
+cm_is_link_switch_connect_resp(struct wlan_cm_connect_resp *resp)
+{
+	return cm_is_link_switch_cmd(resp->cm_id);
+}
 #else
 static inline void cm_store_wep_key(struct cnx_mgr *cm_ctx,
 				    struct wlan_cm_connect_crypto_info *crypto,
@@ -672,6 +752,34 @@ cm_peer_create_on_bss_select_ind_resp(struct cnx_mgr *cm_ctx,
  */
 QDF_STATUS cm_bss_select_ind_rsp(struct wlan_objmgr_vdev *vdev,
 				 QDF_STATUS status);
+
+static inline bool cm_is_link_switch_connect_req(struct cm_connect_req *req)
+{
+	return false;
+}
+
+static inline bool
+cm_is_link_switch_disconnect_req(struct cm_disconnect_req *req)
+{
+	return false;
+}
+
+static inline bool cm_is_link_switch_cmd(wlan_cm_id cm_id)
+{
+	return false;
+}
+
+static inline bool
+cm_is_link_switch_disconnect_resp(struct wlan_cm_discon_rsp *resp)
+{
+	return false;
+}
+
+static inline bool
+cm_is_link_switch_connect_resp(struct wlan_cm_connect_resp *resp)
+{
+	return false;
+}
 #endif
 
 #ifdef WLAN_FEATURE_FILS_SK
@@ -1327,6 +1435,27 @@ void cm_set_candidate_custom_sort_cb(
 bool cm_is_connect_req_reassoc(struct wlan_cm_connect_req *req);
 
 /**
+ * cm_is_first_candidate_connect_attempt() - Is it a first attempt to
+ * connect to a candidate after receiving connect request
+ * @vdev: vdev pointer
+ *
+ * Return: True if it is the first connect attempt to a candidate
+ * after receiving the connect request from the userspace
+ */
+bool cm_is_first_candidate_connect_attempt(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * cm_get_active_connect_req_param() - Get Connect request parameter
+ * @vdev: vdev pointer
+ * @req: Connection request buffer to be filled
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+cm_get_active_connect_req_param(struct wlan_objmgr_vdev *vdev,
+				struct wlan_cm_connect_req *req);
+
+/**
  * cm_get_rnr() - get rnr
  * @vdev:vdev
  * @cm_id: connect mgr id
@@ -1465,4 +1594,19 @@ cm_bss_mlo_type(struct wlan_objmgr_psoc *psoc,
 	return SLO;
 }
 #endif
+
+#ifdef WLAN_FEATURE_LL_LT_SAP
+/**
+ * cm_bearer_switch_resp() - Bearer switch response
+ * @psoc: Psoc pointer
+ * @vdev_id: vdev id
+ * @cm_id: connection ID which gave the hw mode change request
+ * @status: status of the bearer switch
+ *
+ * Return: void
+ */
+void cm_bearer_switch_resp(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id,
+			   wlan_cm_id cm_id, QDF_STATUS status);
+#endif
+
 #endif /* __WLAN_CM_MAIN_API_H__ */

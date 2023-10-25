@@ -41,9 +41,9 @@ void is_mlo_all_links_up(struct wlan_mlo_dev_context *mldev)
 /* STA: Loop through all the associated vdev status. */
 }
 
-struct wlan_objmgr_vdev *mlo_get_vdev_by_link_id(
-			struct wlan_objmgr_vdev *vdev,
-			uint8_t link_id)
+struct wlan_objmgr_vdev *mlo_get_vdev_by_link_id(struct wlan_objmgr_vdev *vdev,
+						 uint8_t link_id,
+						 wlan_objmgr_ref_dbgid id)
 {
 	struct wlan_mlo_dev_context *dev_ctx;
 	int i;
@@ -64,8 +64,7 @@ struct wlan_objmgr_vdev *mlo_get_vdev_by_link_id(
 		    link_id) {
 			if (wlan_objmgr_vdev_try_get_ref(
 						dev_ctx->wlan_vdev_list[i],
-						WLAN_MLO_MGR_ID) ==
-							QDF_STATUS_SUCCESS)
+						id) == QDF_STATUS_SUCCESS)
 				partner_vdev = dev_ctx->wlan_vdev_list[i];
 
 			break;

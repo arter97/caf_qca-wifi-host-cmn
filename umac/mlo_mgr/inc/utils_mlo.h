@@ -404,6 +404,35 @@ util_get_bvmlie_bssparamchangecnt(uint8_t *mlieseq, qdf_size_t mlieseqlen,
 QDF_STATUS
 util_get_bvmlie_mldcap(uint8_t *mlieseq, qdf_size_t mlieseqlen,
 		       bool *mldcapfound, uint16_t *mldcap);
+/**
+ * util_get_bvmlie_ext_mld_cap_op_info() - Get Ext MLD Capabilities and
+ * operation
+ * @mlie_seq: Starting address of the Multi-Link element or Multi-Link element
+ * fragment sequence
+ * @mlie_seqlen: Total length of the Multi-Link element or Multi-Link element
+ * fragment sequence
+ * @ext_mld_cap_found: Pointer to the location where a boolean status should be
+ * updated indicating whether the Ext MLD capabilities was found or not.
+ * This should be ignored by the caller if the function returns error.
+ * @ext_mld_cap: Pointer to the location where the value of the Ext MLD
+ * capabilities should be updated. This should be ignored by the caller if the
+ * function returns error, or if the function indicates that the MLD
+ * capabilities was not found.
+ *
+ * Get the Ext MLD capabilities from a given Basic variant Multi-Link element or
+ * element fragment sequence, of the AP that transmits the Multi-Link element/
+ * element fragment sequence or the non-transmitted BSSID in the same
+ * multiple BSSID set as the AP that transmits the Multi-Link element/element
+ * fragment sequence and that is affiliated with the MLD that is described in
+ * the Multi-Link element.
+ *
+ * Return: QDF_STATUS_SUCCESS in the case of success, QDF_STATUS value giving
+ * the reason for error in the case of failure
+ */
+QDF_STATUS
+util_get_bvmlie_ext_mld_cap_op_info(uint8_t *mlie_seq, qdf_size_t mlie_seqlen,
+				    bool *ext_mld_cap_found,
+				    uint16_t *ext_mld_cap);
 
 /**
  * util_get_bvmlie_persta_partner_info() - Get per-STA partner link information

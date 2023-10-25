@@ -38,6 +38,16 @@ static void hal_set_link_desc_addr_rh(void *desc, uint32_t cookie,
 				      qdf_dma_addr_t link_desc_paddr,
 				      uint8_t bm_id)
 {
+	uint32_t *buf_addr = (uint32_t *)desc;
+
+	HAL_DESC_SET_FIELD(buf_addr, BUFFER_ADDR_INFO_0, BUFFER_ADDR_31_0,
+			   link_desc_paddr & 0xffffffff);
+	HAL_DESC_SET_FIELD(buf_addr, BUFFER_ADDR_INFO_1, BUFFER_ADDR_39_32,
+			   (uint64_t)link_desc_paddr >> 32);
+	HAL_DESC_SET_FIELD(buf_addr, BUFFER_ADDR_INFO_1, RETURN_BUFFER_MANAGER,
+			   bm_id);
+	HAL_DESC_SET_FIELD(buf_addr, BUFFER_ADDR_INFO_1, SW_BUFFER_COOKIE,
+			   cookie);
 }
 
 static void hal_tx_init_data_ring_rh(hal_soc_handle_t hal_soc_hdl,
@@ -73,15 +83,27 @@ hal_rx_msdu_link_desc_set_rh(hal_soc_handle_t hal_soc_hdl,
 {
 }
 
+static uint8_t hal_rx_ret_buf_manager_get_rh(hal_ring_desc_t ring_desc)
+{
+	return HAL_RX_BUF_RBM_GET(ring_desc);
+}
+
 static
 void hal_rx_buf_cookie_rbm_get_rh(uint32_t *buf_addr_info_hdl,
 				  hal_buf_info_t buf_info_hdl)
 {
-}
+	struct hal_buf_info *buf_info =
+		(struct hal_buf_info *)buf_info_hdl;
+	struct buffer_addr_info *buf_addr_info =
+		(struct buffer_addr_info *)buf_addr_info_hdl;
 
-static uint8_t hal_rx_ret_buf_manager_get_rh(hal_ring_desc_t ring_desc)
-{
-	return 0;
+	buf_info->sw_cookie = HAL_RX_BUF_COOKIE_GET(buf_addr_info);
+	/*
+	 * buffer addr info is the first member of ring desc, so the typecast
+	 * can be done.
+	 */
+	buf_info->rbm =
+		hal_rx_ret_buf_manager_get_rh((hal_ring_desc_t)buf_addr_info);
 }
 
 static uint32_t hal_rx_get_reo_error_code_rh(hal_ring_desc_t rx_desc)

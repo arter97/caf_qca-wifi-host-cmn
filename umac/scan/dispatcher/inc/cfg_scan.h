@@ -1482,7 +1482,7 @@ enum scan_mode_6ghz {
 			"last_scan_ageout_time", \
 			0, \
 			30000, \
-			0, \
+			30000, \
 			CFG_VALUE_OR_DEFAULT, \
 			"last scan ageout time")
 #define CFG_SCAN_ALL \

@@ -56,6 +56,7 @@
 #ifdef IPA_OFFLOAD
 #include <i_qdf_ipa_wdi3.h>
 #endif /* IPA_OFFLOAD */
+#include "qdf_ssr_driver_dump.h"
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 13, 0)
 
@@ -827,6 +828,22 @@ struct qdf_nbuf_event {
 #endif
 static qdf_atomic_t qdf_nbuf_history_index;
 static struct qdf_nbuf_event qdf_nbuf_history[QDF_NBUF_HISTORY_SIZE];
+
+void qdf_nbuf_ssr_register_region(void)
+{
+	qdf_ssr_driver_dump_register_region("qdf_nbuf_history",
+					    qdf_nbuf_history,
+					    sizeof(qdf_nbuf_history));
+}
+
+qdf_export_symbol(qdf_nbuf_ssr_register_region);
+
+void qdf_nbuf_ssr_unregister_region(void)
+{
+	qdf_ssr_driver_dump_unregister_region("qdf_nbuf_history");
+}
+
+qdf_export_symbol(qdf_nbuf_ssr_unregister_region);
 
 static int32_t qdf_nbuf_circular_index_next(qdf_atomic_t *index, int size)
 {

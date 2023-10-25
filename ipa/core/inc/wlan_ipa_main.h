@@ -618,6 +618,30 @@ QDF_STATUS ipa_get_alt_pipe(struct wlan_objmgr_pdev *pdev,
 			    uint8_t vdev_id,
 			    bool *alt_pipe);
 
+/**
+ * ipa_set_perf_level_bw_enabled - Get bandwidth based IPA perf voting status
+ * @pdev: pdev objmgr pointer
+ *
+ * This function returns true or false for bandwidth based IPA perf level
+ * voting.
+ *
+ * Return: true - bandwidth based IPA perf voting is enabld. Otherwise false.
+ */
+bool ipa_set_perf_level_bw_enabled(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * ipa_set_perf_level_bw() - Set IPA perf level based on BW
+ * @pdev: pdev objmgr pointer
+ * @lvl: enum wlan_ipa_bw_level
+ *
+ * This routine is called to set IPA perf level based on max BW
+ * configured among in-use STA and SAP vdevs
+ *
+ * Return: None
+ */
+void ipa_set_perf_level_bw(struct wlan_objmgr_pdev *pdev,
+			   enum wlan_ipa_bw_level lvl);
+
 #else /* Not IPA_OFFLOAD */
 typedef QDF_STATUS (*wlan_ipa_softap_xmit)(qdf_nbuf_t nbuf, qdf_netdev_t dev);
 typedef void (*wlan_ipa_send_to_nw)(qdf_nbuf_t nbuf, qdf_netdev_t dev);

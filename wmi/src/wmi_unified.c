@@ -2133,9 +2133,7 @@ QDF_STATUS wmi_unified_cmd_send_fl(wmi_unified_t wmi_handle, wmi_buf_t buf,
 		   !wmi_is_pm_resume_cmd(cmd_id) &&
 		   !wmi_is_legacy_d0wow_disable_cmd(buf, cmd_id)) {
 			wmi_nofl_err("Target is suspended (via %s:%u)",
-				     func, line);
-			qdf_trigger_self_recovery(wmi_handle->soc->wmi_psoc,
-						  QDF_WMI_CMD_SENT_DURING_SUSPEND);
+					func, line);
 		return QDF_STATUS_E_BUSY;
 	}
 
@@ -3567,6 +3565,11 @@ static void wmi_htc_tx_complete(void *ctx, HTC_PACKET *htc_pkt)
 			WMI_MGMT_COMMAND_TX_CMP_RECORD(wmi_handle, cmd_id,
 						       offset_ptr);
 		} else {
+			if (wmi_handle->ops->is_force_fw_hang_cmd(cmd_id)) {
+				wmi_info("Tx completion received for WMI_FORCE_FW_HANG_CMDID, current_time:%ld",
+					 qdf_mc_timer_get_system_time());
+			}
+
 			WMI_COMMAND_TX_CMP_RECORD(wmi_handle, cmd_id,
 						  offset_ptr, dma_addr,
 						  phy_addr);

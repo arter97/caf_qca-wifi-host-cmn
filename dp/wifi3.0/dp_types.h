@@ -163,9 +163,7 @@
 #define DP_TX_INVALID_QOS_TAG 0xf
 
 #ifdef WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL
-#define DP_RX_REFILL_BUFF_POOL_SIZE  2048
 #define DP_RX_REFILL_BUFF_POOL_BURST 64
-#define DP_RX_REFILL_THRD_THRESHOLD  512
 #endif
 
 #ifdef WLAN_SUPPORT_RX_FLOW_TAG
@@ -209,6 +207,19 @@ typedef void dp_ptnr_soc_iter_func(struct dp_soc *ptnr_soc, void *arg,
 #define DP_VDEV_ITERATE_ALL 1
 #define DP_VDEV_ITERATE_SKIP_SELF 0
 #endif
+
+/**
+ * enum dp_pkt_xmit_type - The type of ingress stats are being referred
+ *
+ * @DP_XMIT_LINK: Packet ingress-ed on Link
+ * @DP_XMIT_MLD: Packet ingress-ed on MLD
+ * @DP_XMIT_TOTAL: Packets ingress-ed on MLD and LINK
+ */
+enum dp_pkt_xmit_type {
+	DP_XMIT_LINK,
+	DP_XMIT_MLD,
+	DP_XMIT_TOTAL,
+};
 
 enum rx_pktlog_mode {
 	DP_RX_PKTLOG_DISABLED = 0,
@@ -567,6 +578,7 @@ enum dp_ctxt_type {
  * @buf_size: Buffer size
  * @buf_alignment: Buffer alignment
  * @rx_mon_dest_frag_enable: Enable frag processing for mon dest buffer
+ * @pf_cache: page frag cache
  * @desc_type: type of desc this pool serves
  */
 struct rx_desc_pool {
@@ -583,6 +595,7 @@ struct rx_desc_pool {
 	uint16_t buf_size;
 	uint8_t buf_alignment;
 	bool rx_mon_dest_frag_enable;
+	qdf_frag_cache_t pf_cache;
 	enum qdf_dp_desc_type desc_type;
 };
 
@@ -659,6 +672,8 @@ struct dp_tx_ext_desc_pool_s {
  * @pool_id: Pool ID - used when releasing the descriptor
  * @msdu_ext_desc: MSDU extension descriptor
  * @timestamp:
+ * @driver_egress_ts: driver egress timestamp
+ * @driver_ingress_ts: driver ingress timestamp
  * @comp:
  * @tcl_cmd_vaddr: VADDR of the TCL descriptor, valid for soft-umac arch
  * @tcl_cmd_paddr: PADDR of the TCL descriptor, valid for soft-umac arch
@@ -686,6 +701,10 @@ struct dp_tx_desc_s {
 	uint8_t  pool_id;
 	struct dp_tx_ext_desc_elem_s *msdu_ext_desc;
 	qdf_ktime_t timestamp;
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+	qdf_ktime_t driver_egress_ts;
+	qdf_ktime_t driver_ingress_ts;
+#endif
 	struct hal_tx_desc_comp_s comp;
 #ifdef WLAN_SOFTUMAC_SUPPORT
 	void *tcl_cmd_vaddr;
@@ -2521,8 +2540,7 @@ struct dp_arch_ops {
 
 	void (*dp_get_vdev_stats_for_unmap_peer)(
 					struct dp_vdev *vdev,
-					struct dp_peer *peer,
-					struct cdp_vdev_stats **vdev_stats);
+					struct dp_peer *peer);
 	QDF_STATUS (*dp_get_interface_stats)(struct cdp_soc_t *soc_hdl,
 					     uint8_t vdev_id,
 					     void *buf,
@@ -2696,6 +2714,9 @@ struct dp_soc {
 	uint16_t rx_pkt_tlv_size;
 	/* rx pkt tlv size in current operation mode */
 	uint16_t curr_rx_pkt_tlv_size;
+
+	/* enable/disable dp debug logs */
+	bool dp_debug_log_en;
 
 	struct dp_arch_ops arch_ops;
 
@@ -2958,7 +2979,7 @@ struct dp_soc {
 	struct htt_t2h_stats htt_stats;
 
 	void *external_txrx_handle; /* External data path handle */
-	qdf_atomic_t ipa_mapped;
+	qdf_atomic_t ipa_map_allowed;
 #ifdef IPA_OFFLOAD
 	struct ipa_dp_tx_rsc ipa_uc_tx_rsc;
 #ifdef IPA_WDI3_TX_TWO_PIPES
@@ -2985,6 +3006,7 @@ struct dp_soc {
 	qdf_event_t rx_hw_stats_event;
 	qdf_spinlock_t rx_hw_stats_lock;
 	bool is_last_stats_ctx_init;
+	struct dp_req_rx_hw_stats_t *rx_hw_stats;
 #endif /* WLAN_FEATURE_STATS_EXT */
 
 	/* Indicates HTT map/unmap versions*/
@@ -3178,6 +3200,11 @@ struct dp_soc {
 	uint64_t alloc_addr_list_idx;
 	uint64_t shared_qaddr_del_idx;
 	uint64_t write_paddr_list_idx;
+
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+	/* callback function for tx latency stats */
+	cdp_tx_latency_cb tx_latency_cb;
+#endif
 };
 
 #ifdef IPA_OFFLOAD
@@ -3543,6 +3570,9 @@ struct dp_pdev {
 	uint8_t enhanced_stats_en:1,
 		link_peer_stats:1;
 
+	/* Flag to indicate fast path Tx flags */
+	uint32_t tx_fast_flag;
+
 	/* Flag to indicate fast RX */
 	bool rx_fast_flag;
 
@@ -3666,6 +3696,8 @@ struct dp_pdev {
 
 	/* enable calculation of delay stats*/
 	bool delay_stats_flag;
+	/* vow stats */
+	bool vow_stats;
 	void *dp_txrx_handle; /* Advanced data path handle */
 	uint32_t ppdu_id;
 	bool first_nbuf;
@@ -3813,6 +3845,66 @@ struct dp_peer;
  */
 #define WLAN_ROAM_PEER_AUTH_STATUS_AUTHENTICATED 0x2
 #endif
+
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+/**
+ * struct dp_tx_latency_config - configuration for per-link transmit latency
+ * statistics
+ * @enabled: the feature is enabled or not
+ * @report: async report is enabled or not
+ * @granularity: granularity(in microseconds) of the distribution for the types
+ */
+struct dp_tx_latency_config {
+	qdf_atomic_t enabled;
+	qdf_atomic_t report;
+	qdf_atomic_t granularity[CDP_TX_LATENCY_TYPE_MAX];
+};
+
+/**
+ * struct dp_tx_latency_stats - transmit latency distribution for a type
+ * @latency_accum: accumulated latencies
+ * @msdus_accum: accumulated number of msdus
+ * @distribution: distribution of latencies
+ */
+struct dp_tx_latency_stats {
+	qdf_atomic_t latency_accum;
+	qdf_atomic_t msdus_accum;
+	qdf_atomic_t distribution[CDP_TX_LATENCY_DISTR_LV_MAX];
+};
+
+/**
+ * struct dp_tx_latency - transmit latency statistics for remote link peer
+ * @cur_idx: current row index of the 2D stats array
+ * @stats: two-dimensional array, to store the transmit latency statistics.
+ *  one row is used to store the stats of the current cycle, it's indicated
+ *  by cur_idx, the other is for the last cycle.
+ */
+struct dp_tx_latency {
+	uint8_t cur_idx;
+	struct dp_tx_latency_stats stats[2][CDP_TX_LATENCY_TYPE_MAX];
+};
+#endif
+
+/**
+ * struct dp_vdev_stats - vdev stats structure for dp vdev
+ * @tx_i: ingress tx stats, contains legacy and MLO ingress tx stats
+ * @rx_i: ingress rx stats
+ * @tx: cdp tx stats
+ * @rx: cdp rx stats
+ * @tso_stats: tso stats
+ * @tid_tx_stats: tid tx stats
+ */
+struct dp_vdev_stats {
+	struct cdp_tx_ingress_stats tx_i[DP_INGRESS_STATS_MAX_SIZE];
+	struct cdp_rx_ingress_stats rx_i;
+	struct cdp_tx_stats tx;
+	struct cdp_rx_stats rx;
+	struct cdp_tso_stats tso_stats;
+#ifdef HW_TX_DELAY_STATS_ENABLE
+	struct cdp_tid_tx_stats tid_tx_stats[CDP_MAX_TX_COMP_RINGS]
+					    [CDP_MAX_DATA_TIDS];
+#endif
+};
 
 /* VDEV structure for data path state */
 struct dp_vdev {
@@ -4014,7 +4106,7 @@ struct dp_vdev {
 	uint64_t prev_rx_deliver_tstamp;
 
 	/* VDEV Stats */
-	struct cdp_vdev_stats stats;
+	struct dp_vdev_stats stats;
 
 	/* Is this a proxySTA VAP */
 	uint8_t proxysta_vdev : 1, /* Is this a proxySTA VAP */
@@ -4140,6 +4232,11 @@ struct dp_vdev {
 	bool is_override_rbm_id;
 	/* Return buffer manager ID */
 	uint8_t rbm_id;
+#endif
+
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+	/* configuration for tx latency stats */
+	struct dp_tx_latency_config tx_latency_cfg;
 #endif
 };
 
@@ -4766,11 +4863,15 @@ struct dp_peer_extd_stats {
  * struct dp_peer_stats - Peer stats
  * @per_pkt_stats: Per packet path stats
  * @extd_stats: Extended path stats
+ * @tx_latency: transmit latency stats
  */
 struct dp_peer_stats {
 	struct dp_peer_per_pkt_stats per_pkt_stats;
 #ifndef QCA_ENHANCED_STATS_SUPPORT
 	struct dp_peer_extd_stats extd_stats;
+#endif
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+	struct dp_tx_latency tx_latency;
 #endif
 };
 

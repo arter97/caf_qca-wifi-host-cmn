@@ -103,7 +103,7 @@ dp_tx_comp_find_tx_desc_rh(struct dp_soc *soc, uint32_t sw_cookie)
 				  (sw_cookie & DP_TX_DESC_ID_PAGE_MASK) >>
 						DP_TX_DESC_ID_PAGE_OS,
 				  (sw_cookie & DP_TX_DESC_ID_OFFSET_MASK) >>
-						DP_TX_DESC_ID_OFFSET_OS);
+						DP_TX_DESC_ID_OFFSET_OS, false);
 	/* pool id is not matching. Error */
 	if (tx_desc && tx_desc->pool_id != pool_id) {
 		dp_tx_comp_alert("Tx Comp pool id %d not matched %d",
@@ -376,7 +376,7 @@ dp_tx_hw_enqueue_rh(struct dp_soc *soc, struct dp_vdev *vdev,
 		dp_verbose_debug("CE tx ring full");
 		/* TODO: Should this be a separate ce_ring_full stat? */
 		DP_STATS_INC(soc, tx.tcl_ring_full[0], 1);
-		DP_STATS_INC(vdev, tx_i.dropped.enqueue_fail, 1);
+		DP_STATS_INC(vdev, tx_i[DP_XMIT_LINK].dropped.enqueue_fail, 1);
 		goto enqueue_fail;
 	}
 
@@ -388,8 +388,10 @@ dp_tx_hw_enqueue_rh(struct dp_soc *soc, struct dp_vdev *vdev,
 
 	tx_desc->flags |= DP_TX_DESC_FLAG_QUEUED_TX;
 	dp_vdev_peer_stats_update_protocol_cnt_tx(vdev, nbuf);
-	DP_STATS_INC_PKT(vdev, tx_i.processed, 1, tx_desc->length);
+	DP_STATS_INC_PKT(vdev, tx_i[DP_XMIT_LINK].processed, 1,
+			 tx_desc->length);
 	DP_STATS_INC(soc, tx.tcl_enq[0], 1);
+
 	dp_tx_update_stats(soc, tx_desc, 0);
 	status = QDF_STATUS_SUCCESS;
 

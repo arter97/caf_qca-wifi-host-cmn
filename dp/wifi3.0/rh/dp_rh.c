@@ -384,8 +384,12 @@ static void *dp_soc_init_rh(struct dp_soc *soc, HTC_HANDLE htc_handle,
 	dp_soc_set_interrupt_mode(soc);
 	if (soc->cdp_soc.ol_ops->get_con_mode &&
 	    soc->cdp_soc.ol_ops->get_con_mode() ==
-	    QDF_GLOBAL_MONITOR_MODE)
+	    QDF_GLOBAL_MONITOR_MODE) {
 		is_monitor_mode = true;
+		soc->curr_rx_pkt_tlv_size = soc->rx_mon_pkt_tlv_size;
+	} else {
+		soc->curr_rx_pkt_tlv_size = soc->rx_pkt_tlv_size;
+	}
 
 	if (is_monitor_mode)
 		wlan_cfg_fill_interrupt_mask(soc->wlan_cfg_ctx, 0,
@@ -718,6 +722,9 @@ dp_rxdma_ring_sel_cfg_rh(struct dp_soc *soc)
 	struct htt_rx_ring_tlv_filter htt_tlv_filter = {0};
 	struct dp_srng *rx_mac_srng;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	uint16_t buf_size;
+
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 
 	htt_tlv_filter.mpdu_start = 1;
 	htt_tlv_filter.msdu_start = 1;
@@ -783,7 +790,7 @@ dp_rxdma_ring_sel_cfg_rh(struct dp_soc *soc)
 			rx_mac_srng = dp_get_rxdma_ring(pdev, lmac_id);
 			htt_h2t_rx_ring_cfg(soc->htt_handle, mac_for_pdev,
 					    rx_mac_srng->hal_srng,
-					    RXDMA_BUF, RX_DATA_BUFFER_SIZE,
+					    RXDMA_BUF, buf_size,
 					    &htt_tlv_filter);
 		}
 	}
@@ -803,6 +810,9 @@ dp_rxdma_ring_sel_cfg_rh(struct dp_soc *soc)
 	struct htt_rx_ring_tlv_filter htt_tlv_filter = {0};
 	struct dp_srng *rx_mac_srng;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	uint16_t buf_size;
+
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 
 	htt_tlv_filter.mpdu_start = 1;
 	htt_tlv_filter.msdu_start = 1;
@@ -868,7 +878,7 @@ dp_rxdma_ring_sel_cfg_rh(struct dp_soc *soc)
 			rx_mac_srng = dp_get_rxdma_ring(pdev, lmac_id);
 			htt_h2t_rx_ring_cfg(soc->htt_handle, mac_for_pdev,
 					    rx_mac_srng->hal_srng,
-					    RXDMA_BUF, RX_DATA_BUFFER_SIZE,
+					    RXDMA_BUF, buf_size,
 					    &htt_tlv_filter);
 		}
 	}

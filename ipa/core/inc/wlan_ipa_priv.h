@@ -91,16 +91,7 @@
 #define WLAN_IPA_MAX_BANDWIDTH              4800
 #define WLAN_IPA_MAX_BANDWIDTH_2G           1400
 #else /* !QCA_IPA_LL_TX_FLOW_CONTROL */
-
 #define WLAN_IPA_MAX_BANDWIDTH              800
-
-#if defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_KIWI_V2)
-/* Iaeeb22a75f00d023e0e0972db330a48e9b250408 defines nominal vote bandwidth */
-#define WLAN_IPA_MAX_BW_NOMINAL 4800
-#else
-#define WLAN_IPA_MAX_BW_NOMINAL WLAN_IPA_MAX_BANDWIDTH
-#endif
-
 #endif /* QCA_IPA_LL_TX_FLOW_CONTROL */
 
 #define WLAN_IPA_MAX_PENDING_EVENT_COUNT    20
@@ -182,18 +173,6 @@ enum wlan_ipa_forward_type {
 	WLAN_IPA_FORWARD_PKT_NONE = 0,
 	WLAN_IPA_FORWARD_PKT_LOCAL_STACK = 1,
 	WLAN_IPA_FORWARD_PKT_DISCARD = 2
-};
-
-/**
- * enum wlan_ipa_bw_level -ipa bandwidth level
- * @WLAN_IPA_BW_LEVEL_LOW: vote for low bandwidth
- * @WLAN_IPA_BW_LEVEL_MEDIUM: vote for medium bandwidth
- * @WLAN_IPA_BW_LEVEL_HIGH: vote for high bandwidth
- */
-enum wlan_ipa_bw_level {
-	WLAN_IPA_BW_LEVEL_LOW,
-	WLAN_IPA_BW_LEVEL_MEDIUM,
-	WLAN_IPA_BW_LEVEL_HIGH,
 };
 
 /**

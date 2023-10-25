@@ -113,7 +113,7 @@ enum band_info ucfg_cm_get_connected_band(struct wlan_objmgr_vdev *vdev)
 	struct wlan_channel *bss_chan;
 	uint32_t sta_freq = 0;
 
-	if (wlan_cm_is_vdev_connected(vdev)) {
+	if (cm_is_vdev_connected(vdev)) {
 		bss_chan = wlan_vdev_mlme_get_bss_chan(vdev);
 		sta_freq = bss_chan->ch_freq;
 	}
@@ -126,4 +126,14 @@ enum band_info ucfg_cm_get_connected_band(struct wlan_objmgr_vdev *vdev)
 		return BAND_5G;
 	else	/* If station is not connected return as BAND_ALL */
 		return BAND_ALL;
+}
+
+bool ucfg_cm_is_link_switch_disconnect_resp(struct wlan_cm_discon_rsp *resp)
+{
+	return cm_is_link_switch_disconnect_resp(resp);
+}
+
+bool ucfg_cm_is_link_switch_connect_resp(struct wlan_cm_connect_resp *resp)
+{
+	return cm_is_link_switch_connect_resp(resp);
 }

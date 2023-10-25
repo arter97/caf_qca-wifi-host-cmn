@@ -1214,6 +1214,17 @@ void DP_PRINT_STATS(const char *fmt, ...);
 	DP_STATS_AGGR(_handle_a, _handle_b, _field.bytes);\
 }
 
+#define DP_STATS_AGGR_IDX(_handle_a, _handle_b, _arr, _field, _idx) \
+{ \
+	_handle_a->stats._arr._field += _handle_b->stats._arr[_idx]._field; \
+}
+
+#define DP_STATS_AGGR_PKT_IDX(_handle_a, _handle_b, _arr, _field, _idx)\
+{ \
+	DP_STATS_AGGR_IDX(_handle_a, _handle_b, _arr, _field.num, _idx); \
+	DP_STATS_AGGR_IDX(_handle_a, _handle_b, _arr, _field.bytes, _idx);\
+}
+
 #define DP_STATS_UPD_STRUCT(_handle_a, _handle_b, _field) \
 { \
 	_handle_a->stats._field = _handle_b->stats._field; \
@@ -1234,6 +1245,8 @@ void DP_PRINT_STATS(const char *fmt, ...);
 #define DP_STATS_INCC_PKT(_handle, _field, _count, _bytes, _cond)
 #define DP_STATS_AGGR(_handle_a, _handle_b, _field)
 #define DP_STATS_AGGR_PKT(_handle_a, _handle_b, _field)
+#define DP_STATS_AGGR_IDX(_handle_a, _handle_b, _arr, _field, _idx)
+#define DP_STATS_AGGR_PKT_IDX(_handle_a, _handle_b, _arr, _field, _idx)
 #endif
 
 #define DP_PEER_PER_PKT_STATS_INC(_handle, _field, _delta, _link) \
@@ -1465,6 +1478,8 @@ static inline int dp_log2_ceil(unsigned int value)
 	unsigned int tmp = value;
 	int log2 = -1;
 
+	if (qdf_unlikely(value == 0))
+		return 0;
 	while (tmp) {
 		log2++;
 		tmp >>= 1;
@@ -1705,13 +1720,13 @@ void dp_update_vdev_ingress_stats(struct dp_vdev *tgtobj);
 
 /**
  * dp_update_vdev_rate_stats() - Update the vdev rate stats
- * @tgtobj: tgt buffer for vdev stats
- * @srcobj: srcobj vdev stats
+ * @tgtobj: tgt buffer for cdp vdev stats
+ * @srcobj: srcobj dp vdev stats
  *
  * Return: None
  */
 void dp_update_vdev_rate_stats(struct cdp_vdev_stats *tgtobj,
-			       struct cdp_vdev_stats *srcobj);
+			       struct dp_vdev_stats *srcobj);
 
 /**
  * dp_update_pdev_ingress_stats(): Update the pdev ingress stats
@@ -1724,6 +1739,22 @@ void dp_update_vdev_rate_stats(struct cdp_vdev_stats *tgtobj,
  */
 void dp_update_pdev_ingress_stats(struct dp_pdev *tgtobj,
 				  struct dp_vdev *srcobj);
+
+/**
+ * dp_copy_vdev_stats_to_tgt_buf(): Update the cdp vdev ingress stats from
+ *                                        dp vdev ingress stats
+ * @vdev_stats: cdp vdev stats structure
+ * @stats: dp vdev stats structure
+ * @xmit_type: xmit type of packet - MLD/Link
+ *
+ * Update the cdp vdev ingress stats from dp vdev ingress stats
+ *
+ * Return: None
+ */
+
+void dp_copy_vdev_stats_to_tgt_buf(struct cdp_vdev_stats *vdev_stats,
+					 struct dp_vdev_stats *stats,
+					 enum dp_pkt_xmit_type xmit_type);
 
 /**
  * dp_update_vdev_stats(): Update the vdev stats
@@ -2240,140 +2271,8 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		DP_UPDATE_EXTD_STATS(_tgtobj, _srcobj); \
 	} while (0)
 
-#define DP_UPDATE_INGRESS_STATS(_tgtobj, _srcobj) \
+#define DP_UPDATE_RX_INGRESS_STATS(_tgtobj, _srcobj) \
 	do { \
-		uint8_t i = 0; \
-		_tgtobj->tx_i.rcvd.num += _srcobj->tx_i.rcvd.num; \
-		_tgtobj->tx_i.rcvd.bytes += _srcobj->tx_i.rcvd.bytes; \
-		_tgtobj->tx_i.rcvd_in_fast_xmit_flow += \
-					_srcobj->tx_i.rcvd_in_fast_xmit_flow; \
-		for (i = 0; i < CDP_MAX_TX_DATA_RINGS; i++) { \
-			_tgtobj->tx_i.rcvd_per_core[i] += \
-					_srcobj->tx_i.rcvd_per_core[i]; \
-		} \
-		_tgtobj->tx_i.processed.num += _srcobj->tx_i.processed.num; \
-		_tgtobj->tx_i.processed.bytes += \
-						_srcobj->tx_i.processed.bytes; \
-		_tgtobj->tx_i.reinject_pkts.num += \
-					_srcobj->tx_i.reinject_pkts.num; \
-		_tgtobj->tx_i.reinject_pkts.bytes += \
-					_srcobj->tx_i.reinject_pkts.bytes; \
-		_tgtobj->tx_i.inspect_pkts.num += \
-					_srcobj->tx_i.inspect_pkts.num; \
-		_tgtobj->tx_i.inspect_pkts.bytes += \
-				_srcobj->tx_i.inspect_pkts.bytes; \
-		_tgtobj->tx_i.nawds_mcast.num += \
-					_srcobj->tx_i.nawds_mcast.num; \
-		_tgtobj->tx_i.nawds_mcast.bytes += \
-					_srcobj->tx_i.nawds_mcast.bytes; \
-		_tgtobj->tx_i.bcast.num += _srcobj->tx_i.bcast.num; \
-		_tgtobj->tx_i.bcast.bytes += _srcobj->tx_i.bcast.bytes; \
-		_tgtobj->tx_i.raw.raw_pkt.num += \
-					_srcobj->tx_i.raw.raw_pkt.num; \
-		_tgtobj->tx_i.raw.raw_pkt.bytes += \
-					_srcobj->tx_i.raw.raw_pkt.bytes; \
-		_tgtobj->tx_i.raw.dma_map_error += \
-					_srcobj->tx_i.raw.dma_map_error; \
-		_tgtobj->tx_i.raw.invalid_raw_pkt_datatype += \
-				_srcobj->tx_i.raw.invalid_raw_pkt_datatype; \
-		_tgtobj->tx_i.raw.num_frags_overflow_err += \
-				_srcobj->tx_i.raw.num_frags_overflow_err; \
-		_tgtobj->tx_i.sg.sg_pkt.num += _srcobj->tx_i.sg.sg_pkt.num; \
-		_tgtobj->tx_i.sg.sg_pkt.bytes += \
-					_srcobj->tx_i.sg.sg_pkt.bytes; \
-		_tgtobj->tx_i.sg.non_sg_pkts.num += \
-					_srcobj->tx_i.sg.non_sg_pkts.num; \
-		_tgtobj->tx_i.sg.non_sg_pkts.bytes += \
-					_srcobj->tx_i.sg.non_sg_pkts.bytes; \
-		_tgtobj->tx_i.sg.dropped_host.num += \
-					_srcobj->tx_i.sg.dropped_host.num; \
-		_tgtobj->tx_i.sg.dropped_host.bytes += \
-					_srcobj->tx_i.sg.dropped_host.bytes; \
-		_tgtobj->tx_i.sg.dropped_target += \
-					_srcobj->tx_i.sg.dropped_target; \
-		_tgtobj->tx_i.sg.dma_map_error += \
-					_srcobj->tx_i.sg.dma_map_error; \
-		_tgtobj->tx_i.mcast_en.mcast_pkt.num += \
-					_srcobj->tx_i.mcast_en.mcast_pkt.num; \
-		_tgtobj->tx_i.mcast_en.mcast_pkt.bytes += \
-				_srcobj->tx_i.mcast_en.mcast_pkt.bytes; \
-		_tgtobj->tx_i.mcast_en.dropped_map_error += \
-				_srcobj->tx_i.mcast_en.dropped_map_error; \
-		_tgtobj->tx_i.mcast_en.dropped_self_mac += \
-				_srcobj->tx_i.mcast_en.dropped_self_mac; \
-		_tgtobj->tx_i.mcast_en.dropped_send_fail += \
-				_srcobj->tx_i.mcast_en.dropped_send_fail; \
-		_tgtobj->tx_i.mcast_en.ucast += _srcobj->tx_i.mcast_en.ucast; \
-		_tgtobj->tx_i.mcast_en.fail_seg_alloc += \
-					_srcobj->tx_i.mcast_en.fail_seg_alloc; \
-		_tgtobj->tx_i.mcast_en.clone_fail += \
-					_srcobj->tx_i.mcast_en.clone_fail; \
-		_tgtobj->tx_i.igmp_mcast_en.igmp_rcvd += \
-				_srcobj->tx_i.igmp_mcast_en.igmp_rcvd; \
-		_tgtobj->tx_i.igmp_mcast_en.igmp_ucast_converted += \
-			_srcobj->tx_i.igmp_mcast_en.igmp_ucast_converted; \
-		_tgtobj->tx_i.dropped.desc_na.num += \
-				_srcobj->tx_i.dropped.desc_na.num; \
-		_tgtobj->tx_i.dropped.desc_na.bytes += \
-				_srcobj->tx_i.dropped.desc_na.bytes; \
-		_tgtobj->tx_i.dropped.desc_na_exc_alloc_fail.num += \
-			_srcobj->tx_i.dropped.desc_na_exc_alloc_fail.num; \
-		_tgtobj->tx_i.dropped.desc_na_exc_alloc_fail.bytes += \
-			_srcobj->tx_i.dropped.desc_na_exc_alloc_fail.bytes; \
-		_tgtobj->tx_i.dropped.desc_na_exc_outstand.num += \
-			_srcobj->tx_i.dropped.desc_na_exc_outstand.num; \
-		_tgtobj->tx_i.dropped.desc_na_exc_outstand.bytes += \
-			_srcobj->tx_i.dropped.desc_na_exc_outstand.bytes; \
-		_tgtobj->tx_i.dropped.exc_desc_na.num += \
-				_srcobj->tx_i.dropped.exc_desc_na.num; \
-		_tgtobj->tx_i.dropped.exc_desc_na.bytes += \
-				_srcobj->tx_i.dropped.exc_desc_na.bytes; \
-		_tgtobj->tx_i.dropped.ring_full += \
-					_srcobj->tx_i.dropped.ring_full; \
-		_tgtobj->tx_i.dropped.enqueue_fail += \
-					_srcobj->tx_i.dropped.enqueue_fail; \
-		_tgtobj->tx_i.dropped.dma_error += \
-					_srcobj->tx_i.dropped.dma_error; \
-		_tgtobj->tx_i.dropped.res_full += \
-					_srcobj->tx_i.dropped.res_full; \
-		_tgtobj->tx_i.dropped.headroom_insufficient += \
-				_srcobj->tx_i.dropped.headroom_insufficient; \
-		_tgtobj->tx_i.dropped.fail_per_pkt_vdev_id_check += \
-			_srcobj->tx_i.dropped.fail_per_pkt_vdev_id_check; \
-		_tgtobj->tx_i.dropped.drop_ingress += \
-				_srcobj->tx_i.dropped.drop_ingress; \
-		_tgtobj->tx_i.dropped.invalid_peer_id_in_exc_path += \
-			_srcobj->tx_i.dropped.invalid_peer_id_in_exc_path; \
-		_tgtobj->tx_i.dropped.tx_mcast_drop += \
-					_srcobj->tx_i.dropped.tx_mcast_drop; \
-		_tgtobj->tx_i.dropped.fw2wbm_tx_drop += \
-					_srcobj->tx_i.dropped.fw2wbm_tx_drop; \
-		_tgtobj->tx_i.dropped.dropped_pkt.num = \
-			_tgtobj->tx_i.dropped.dma_error + \
-			_tgtobj->tx_i.dropped.ring_full + \
-			_tgtobj->tx_i.dropped.enqueue_fail + \
-			_tgtobj->tx_i.dropped.fail_per_pkt_vdev_id_check + \
-			_tgtobj->tx_i.dropped.desc_na.num + \
-			_tgtobj->tx_i.dropped.res_full + \
-			_tgtobj->tx_i.dropped.drop_ingress + \
-			_tgtobj->tx_i.dropped.headroom_insufficient + \
-			_tgtobj->tx_i.dropped.invalid_peer_id_in_exc_path + \
-			_tgtobj->tx_i.dropped.tx_mcast_drop + \
-			_tgtobj->tx_i.dropped.fw2wbm_tx_drop; \
-		_tgtobj->tx_i.dropped.dropped_pkt.bytes += \
-				_srcobj->tx_i.dropped.dropped_pkt.bytes; \
-		_tgtobj->tx_i.mesh.exception_fw += \
-					_srcobj->tx_i.mesh.exception_fw; \
-		_tgtobj->tx_i.mesh.completion_fw += \
-					_srcobj->tx_i.mesh.completion_fw; \
-		_tgtobj->tx_i.cce_classified += \
-					_srcobj->tx_i.cce_classified; \
-		_tgtobj->tx_i.cce_classified_raw += \
-					_srcobj->tx_i.cce_classified_raw; \
-		_tgtobj->tx_i.sniffer_rcvd.num += \
-					_srcobj->tx_i.sniffer_rcvd.num; \
-		_tgtobj->tx_i.sniffer_rcvd.bytes += \
-					_srcobj->tx_i.sniffer_rcvd.bytes; \
 		_tgtobj->rx_i.reo_rcvd_pkt.num += \
 					_srcobj->rx_i.reo_rcvd_pkt.num; \
 		_tgtobj->rx_i.reo_rcvd_pkt.bytes += \
@@ -2388,12 +2287,323 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 					_srcobj->rx_i.routed_eapol_pkt.bytes; \
 	} while (0)
 
-#define DP_UPDATE_VDEV_STATS(_tgtobj, _srcobj) \
+#define DP_UPDATE_LINK_VDEV_INGRESS_STATS(_tgtobj, _srcobj, _xmit_type) \
 	do { \
-		DP_UPDATE_INGRESS_STATS(_tgtobj, _srcobj); \
+		uint8_t i = 0; \
+		uint8_t idx = 0; \
+		enum dp_pkt_xmit_type temp_xmit_type = _xmit_type; \
+		if (temp_xmit_type == DP_XMIT_MLD) { \
+			idx = DP_VDEV_XMIT_TYPE; \
+			temp_xmit_type = DP_VDEV_XMIT_TYPE; \
+		} else if (temp_xmit_type == DP_XMIT_TOTAL) { \
+			temp_xmit_type = DP_VDEV_XMIT_TYPE; \
+		} \
+		for (; idx <= temp_xmit_type; idx++) { \
+			_tgtobj->tx_i.rcvd.num += _srcobj->tx_i[idx].rcvd.num; \
+			_tgtobj->tx_i.rcvd.bytes += \
+				_srcobj->tx_i[idx].rcvd.bytes; \
+			_tgtobj->tx_i.rcvd_in_fast_xmit_flow += \
+				_srcobj->tx_i[idx].rcvd_in_fast_xmit_flow; \
+			for (i = 0; i < CDP_MAX_TX_DATA_RINGS; i++) { \
+				_tgtobj->tx_i.rcvd_per_core[i] += \
+				_srcobj->tx_i[idx].rcvd_per_core[i]; \
+			} \
+			_tgtobj->tx_i.processed.num += \
+				_srcobj->tx_i[idx].processed.num; \
+			_tgtobj->tx_i.processed.bytes += \
+				_srcobj->tx_i[idx].processed.bytes; \
+			_tgtobj->tx_i.reinject_pkts.num += \
+				_srcobj->tx_i[idx].reinject_pkts.num; \
+			_tgtobj->tx_i.reinject_pkts.bytes += \
+				_srcobj->tx_i[idx].reinject_pkts.bytes; \
+			_tgtobj->tx_i.inspect_pkts.num += \
+				_srcobj->tx_i[idx].inspect_pkts.num; \
+			_tgtobj->tx_i.inspect_pkts.bytes += \
+				_srcobj->tx_i[idx].inspect_pkts.bytes; \
+			_tgtobj->tx_i.nawds_mcast.num += \
+				_srcobj->tx_i[idx].nawds_mcast.num; \
+			_tgtobj->tx_i.nawds_mcast.bytes += \
+				_srcobj->tx_i[idx].nawds_mcast.bytes; \
+			_tgtobj->tx_i.bcast.num += \
+				_srcobj->tx_i[idx].bcast.num; \
+			_tgtobj->tx_i.bcast.bytes += \
+				_srcobj->tx_i[idx].bcast.bytes; \
+			_tgtobj->tx_i.raw.raw_pkt.num += \
+				_srcobj->tx_i[idx].raw.raw_pkt.num; \
+			_tgtobj->tx_i.raw.raw_pkt.bytes += \
+				_srcobj->tx_i[idx].raw.raw_pkt.bytes; \
+			_tgtobj->tx_i.raw.dma_map_error += \
+				_srcobj->tx_i[idx].raw.dma_map_error; \
+			_tgtobj->tx_i.raw.invalid_raw_pkt_datatype += \
+			     _srcobj->tx_i[idx].raw.invalid_raw_pkt_datatype; \
+			_tgtobj->tx_i.raw.num_frags_overflow_err += \
+				_srcobj->tx_i[idx].raw.num_frags_overflow_err; \
+			_tgtobj->tx_i.sg.sg_pkt.num += \
+				_srcobj->tx_i[idx].sg.sg_pkt.num; \
+			_tgtobj->tx_i.sg.sg_pkt.bytes += \
+				_srcobj->tx_i[idx].sg.sg_pkt.bytes; \
+			_tgtobj->tx_i.sg.non_sg_pkts.num += \
+				_srcobj->tx_i[idx].sg.non_sg_pkts.num; \
+			_tgtobj->tx_i.sg.non_sg_pkts.bytes += \
+				_srcobj->tx_i[idx].sg.non_sg_pkts.bytes; \
+			_tgtobj->tx_i.sg.dropped_host.num += \
+				_srcobj->tx_i[idx].sg.dropped_host.num; \
+			_tgtobj->tx_i.sg.dropped_host.bytes += \
+				_srcobj->tx_i[idx].sg.dropped_host.bytes; \
+			_tgtobj->tx_i.sg.dropped_target += \
+				_srcobj->tx_i[idx].sg.dropped_target; \
+			_tgtobj->tx_i.sg.dma_map_error += \
+				_srcobj->tx_i[idx].sg.dma_map_error; \
+			_tgtobj->tx_i.mcast_en.mcast_pkt.num += \
+				_srcobj->tx_i[idx].mcast_en.mcast_pkt.num; \
+			_tgtobj->tx_i.mcast_en.mcast_pkt.bytes += \
+				_srcobj->tx_i[idx].mcast_en.mcast_pkt.bytes; \
+			_tgtobj->tx_i.mcast_en.dropped_map_error += \
+				_srcobj->tx_i[idx].mcast_en.dropped_map_error; \
+			_tgtobj->tx_i.mcast_en.dropped_self_mac += \
+				_srcobj->tx_i[idx].mcast_en.dropped_self_mac; \
+			_tgtobj->tx_i.mcast_en.dropped_send_fail += \
+				_srcobj->tx_i[idx].mcast_en.dropped_send_fail; \
+			_tgtobj->tx_i.mcast_en.ucast += \
+				_srcobj->tx_i[idx].mcast_en.ucast; \
+			_tgtobj->tx_i.mcast_en.fail_seg_alloc += \
+				_srcobj->tx_i[idx].mcast_en.fail_seg_alloc; \
+			_tgtobj->tx_i.mcast_en.clone_fail += \
+				_srcobj->tx_i[idx].mcast_en.clone_fail; \
+			_tgtobj->tx_i.igmp_mcast_en.igmp_rcvd += \
+				_srcobj->tx_i[idx].igmp_mcast_en.igmp_rcvd; \
+			_tgtobj->tx_i.igmp_mcast_en.igmp_ucast_converted += \
+			    _srcobj->tx_i[idx].igmp_mcast_en.igmp_ucast_converted; \
+			_tgtobj->tx_i.dropped.desc_na.num += \
+				_srcobj->tx_i[idx].dropped.desc_na.num; \
+			_tgtobj->tx_i.dropped.desc_na.bytes += \
+				_srcobj->tx_i[idx].dropped.desc_na.bytes; \
+			_tgtobj->tx_i.dropped.desc_na_exc_alloc_fail.num += \
+			_srcobj->tx_i[idx].dropped.desc_na_exc_alloc_fail.num; \
+			_tgtobj->tx_i.dropped.desc_na_exc_alloc_fail.bytes += \
+			    _srcobj->tx_i[idx].dropped.desc_na_exc_alloc_fail.bytes; \
+			_tgtobj->tx_i.dropped.desc_na_exc_outstand.num += \
+				_srcobj->tx_i[idx].dropped.desc_na_exc_outstand.num; \
+			_tgtobj->tx_i.dropped.desc_na_exc_outstand.bytes += \
+				_srcobj->tx_i[idx].dropped.desc_na_exc_outstand.bytes; \
+			_tgtobj->tx_i.dropped.exc_desc_na.num += \
+				_srcobj->tx_i[idx].dropped.exc_desc_na.num; \
+			_tgtobj->tx_i.dropped.exc_desc_na.bytes += \
+				_srcobj->tx_i[idx].dropped.exc_desc_na.bytes; \
+			_tgtobj->tx_i.dropped.ring_full += \
+				_srcobj->tx_i[idx].dropped.ring_full; \
+			_tgtobj->tx_i.dropped.enqueue_fail += \
+				_srcobj->tx_i[idx].dropped.enqueue_fail; \
+			_tgtobj->tx_i.dropped.dma_error += \
+				_srcobj->tx_i[idx].dropped.dma_error; \
+			_tgtobj->tx_i.dropped.res_full += \
+				_srcobj->tx_i[idx].dropped.res_full; \
+			_tgtobj->tx_i.dropped.headroom_insufficient += \
+			    _srcobj->tx_i[idx].dropped.headroom_insufficient; \
+			_tgtobj->tx_i.dropped.fail_per_pkt_vdev_id_check += \
+			    _srcobj->tx_i[idx].dropped.fail_per_pkt_vdev_id_check; \
+			_tgtobj->tx_i.dropped.drop_ingress += \
+				_srcobj->tx_i[idx].dropped.drop_ingress; \
+			_tgtobj->tx_i.dropped.invalid_peer_id_in_exc_path += \
+				_srcobj->tx_i[idx].dropped.invalid_peer_id_in_exc_path; \
+			_tgtobj->tx_i.dropped.tx_mcast_drop += \
+				_srcobj->tx_i[idx].dropped.tx_mcast_drop; \
+			_tgtobj->tx_i.dropped.fw2wbm_tx_drop += \
+				_srcobj->tx_i[idx].dropped.fw2wbm_tx_drop; \
+			_tgtobj->tx_i.dropped.dropped_pkt.bytes += \
+				_srcobj->tx_i[idx].dropped.dropped_pkt.bytes; \
+			_tgtobj->tx_i.mesh.exception_fw += \
+					_srcobj->tx_i[idx].mesh.exception_fw; \
+			_tgtobj->tx_i.mesh.completion_fw += \
+				_srcobj->tx_i[idx].mesh.completion_fw; \
+			_tgtobj->tx_i.cce_classified += \
+				_srcobj->tx_i[idx].cce_classified; \
+			_tgtobj->tx_i.cce_classified_raw += \
+				_srcobj->tx_i[idx].cce_classified_raw; \
+			_tgtobj->tx_i.sniffer_rcvd.num += \
+				_srcobj->tx_i[idx].sniffer_rcvd.num; \
+			_tgtobj->tx_i.sniffer_rcvd.bytes += \
+				_srcobj->tx_i[idx].sniffer_rcvd.bytes; \
+		} \
+		_tgtobj->tx_i.dropped.dropped_pkt.num = \
+			_tgtobj->tx_i.dropped.dma_error + \
+			_tgtobj->tx_i.dropped.ring_full + \
+			_tgtobj->tx_i.dropped.enqueue_fail + \
+			_tgtobj->tx_i.dropped.fail_per_pkt_vdev_id_check + \
+			_tgtobj->tx_i.dropped.desc_na.num + \
+			_tgtobj->tx_i.dropped.res_full + \
+			_tgtobj->tx_i.dropped.drop_ingress + \
+			_tgtobj->tx_i.dropped.headroom_insufficient + \
+			_tgtobj->tx_i.dropped.invalid_peer_id_in_exc_path + \
+			_tgtobj->tx_i.dropped.tx_mcast_drop + \
+			_tgtobj->tx_i.dropped.fw2wbm_tx_drop; \
+		DP_UPDATE_RX_INGRESS_STATS(_tgtobj, _srcobj); \
+	} while (0)
+
+#define DP_UPDATE_MLD_VDEV_INGRESS_STATS(_tgtobj, _srcobj, _xmit_type) \
+	do { \
+		uint8_t i = 0; \
+		uint8_t idx = 0; \
+		enum dp_pkt_xmit_type temp_xmit_type = _xmit_type; \
+		if (temp_xmit_type == DP_XMIT_MLD) { \
+			idx = DP_VDEV_XMIT_TYPE; \
+			temp_xmit_type = DP_VDEV_XMIT_TYPE; \
+		} else if (temp_xmit_type == DP_XMIT_TOTAL) { \
+			temp_xmit_type = DP_VDEV_XMIT_TYPE; \
+		} \
+		for (; idx <= temp_xmit_type; idx++) { \
+			_tgtobj->tx_i[idx].rcvd.num += _srcobj->tx_i[idx].rcvd.num; \
+			_tgtobj->tx_i[idx].rcvd.bytes += \
+				_srcobj->tx_i[idx].rcvd.bytes; \
+			_tgtobj->tx_i[idx].rcvd_in_fast_xmit_flow += \
+				_srcobj->tx_i[idx].rcvd_in_fast_xmit_flow; \
+			for (i = 0; i < CDP_MAX_TX_DATA_RINGS; i++) { \
+				_tgtobj->tx_i[idx].rcvd_per_core[i] += \
+				_srcobj->tx_i[idx].rcvd_per_core[i]; \
+			} \
+			_tgtobj->tx_i[idx].processed.num += \
+				_srcobj->tx_i[idx].processed.num; \
+			_tgtobj->tx_i[idx].processed.bytes += \
+				_srcobj->tx_i[idx].processed.bytes; \
+			_tgtobj->tx_i[idx].reinject_pkts.num += \
+				_srcobj->tx_i[idx].reinject_pkts.num; \
+			_tgtobj->tx_i[idx].reinject_pkts.bytes += \
+				_srcobj->tx_i[idx].reinject_pkts.bytes; \
+			_tgtobj->tx_i[idx].inspect_pkts.num += \
+				_srcobj->tx_i[idx].inspect_pkts.num; \
+			_tgtobj->tx_i[idx].inspect_pkts.bytes += \
+				_srcobj->tx_i[idx].inspect_pkts.bytes; \
+			_tgtobj->tx_i[idx].nawds_mcast.num += \
+				_srcobj->tx_i[idx].nawds_mcast.num; \
+			_tgtobj->tx_i[idx].nawds_mcast.bytes += \
+				_srcobj->tx_i[idx].nawds_mcast.bytes; \
+			_tgtobj->tx_i[idx].bcast.num += \
+				_srcobj->tx_i[idx].bcast.num; \
+			_tgtobj->tx_i[idx].bcast.bytes += \
+				_srcobj->tx_i[idx].bcast.bytes; \
+			_tgtobj->tx_i[idx].raw.raw_pkt.num += \
+				_srcobj->tx_i[idx].raw.raw_pkt.num; \
+			_tgtobj->tx_i[idx].raw.raw_pkt.bytes += \
+				_srcobj->tx_i[idx].raw.raw_pkt.bytes; \
+			_tgtobj->tx_i[idx].raw.dma_map_error += \
+				_srcobj->tx_i[idx].raw.dma_map_error; \
+			_tgtobj->tx_i[idx].raw.invalid_raw_pkt_datatype += \
+			     _srcobj->tx_i[idx].raw.invalid_raw_pkt_datatype; \
+			_tgtobj->tx_i[idx].raw.num_frags_overflow_err += \
+				_srcobj->tx_i[idx].raw.num_frags_overflow_err; \
+			_tgtobj->tx_i[idx].sg.sg_pkt.num += \
+				_srcobj->tx_i[idx].sg.sg_pkt.num; \
+			_tgtobj->tx_i[idx].sg.sg_pkt.bytes += \
+				_srcobj->tx_i[idx].sg.sg_pkt.bytes; \
+			_tgtobj->tx_i[idx].sg.non_sg_pkts.num += \
+				_srcobj->tx_i[idx].sg.non_sg_pkts.num; \
+			_tgtobj->tx_i[idx].sg.non_sg_pkts.bytes += \
+				_srcobj->tx_i[idx].sg.non_sg_pkts.bytes; \
+			_tgtobj->tx_i[idx].sg.dropped_host.num += \
+				_srcobj->tx_i[idx].sg.dropped_host.num; \
+			_tgtobj->tx_i[idx].sg.dropped_host.bytes += \
+				_srcobj->tx_i[idx].sg.dropped_host.bytes; \
+			_tgtobj->tx_i[idx].sg.dropped_target += \
+				_srcobj->tx_i[idx].sg.dropped_target; \
+			_tgtobj->tx_i[idx].sg.dma_map_error += \
+				_srcobj->tx_i[idx].sg.dma_map_error; \
+			_tgtobj->tx_i[idx].mcast_en.mcast_pkt.num += \
+				_srcobj->tx_i[idx].mcast_en.mcast_pkt.num; \
+			_tgtobj->tx_i[idx].mcast_en.mcast_pkt.bytes += \
+				_srcobj->tx_i[idx].mcast_en.mcast_pkt.bytes; \
+			_tgtobj->tx_i[idx].mcast_en.dropped_map_error += \
+				_srcobj->tx_i[idx].mcast_en.dropped_map_error; \
+			_tgtobj->tx_i[idx].mcast_en.dropped_self_mac += \
+				_srcobj->tx_i[idx].mcast_en.dropped_self_mac; \
+			_tgtobj->tx_i[idx].mcast_en.dropped_send_fail += \
+				_srcobj->tx_i[idx].mcast_en.dropped_send_fail; \
+			_tgtobj->tx_i[idx].mcast_en.ucast += \
+				_srcobj->tx_i[idx].mcast_en.ucast; \
+			_tgtobj->tx_i[idx].mcast_en.fail_seg_alloc += \
+				_srcobj->tx_i[idx].mcast_en.fail_seg_alloc; \
+			_tgtobj->tx_i[idx].mcast_en.clone_fail += \
+				_srcobj->tx_i[idx].mcast_en.clone_fail; \
+			_tgtobj->tx_i[idx].igmp_mcast_en.igmp_rcvd += \
+				_srcobj->tx_i[idx].igmp_mcast_en.igmp_rcvd; \
+			_tgtobj->tx_i[idx].igmp_mcast_en.igmp_ucast_converted += \
+			    _srcobj->tx_i[idx].igmp_mcast_en.igmp_ucast_converted; \
+			_tgtobj->tx_i[idx].dropped.desc_na.num += \
+				_srcobj->tx_i[idx].dropped.desc_na.num; \
+			_tgtobj->tx_i[idx].dropped.desc_na.bytes += \
+				_srcobj->tx_i[idx].dropped.desc_na.bytes; \
+			_tgtobj->tx_i[idx].dropped.desc_na_exc_alloc_fail.num += \
+			_srcobj->tx_i[idx].dropped.desc_na_exc_alloc_fail.num; \
+			_tgtobj->tx_i[idx].dropped.desc_na_exc_alloc_fail.bytes += \
+			    _srcobj->tx_i[idx].dropped.desc_na_exc_alloc_fail.bytes; \
+			_tgtobj->tx_i[idx].dropped.desc_na_exc_outstand.num += \
+				_srcobj->tx_i[idx].dropped.desc_na_exc_outstand.num; \
+			_tgtobj->tx_i[idx].dropped.desc_na_exc_outstand.bytes += \
+				_srcobj->tx_i[idx].dropped.desc_na_exc_outstand.bytes; \
+			_tgtobj->tx_i[idx].dropped.exc_desc_na.num += \
+				_srcobj->tx_i[idx].dropped.exc_desc_na.num; \
+			_tgtobj->tx_i[idx].dropped.exc_desc_na.bytes += \
+				_srcobj->tx_i[idx].dropped.exc_desc_na.bytes; \
+			_tgtobj->tx_i[idx].dropped.ring_full += \
+				_srcobj->tx_i[idx].dropped.ring_full; \
+			_tgtobj->tx_i[idx].dropped.enqueue_fail += \
+				_srcobj->tx_i[idx].dropped.enqueue_fail; \
+			_tgtobj->tx_i[idx].dropped.dma_error += \
+				_srcobj->tx_i[idx].dropped.dma_error; \
+			_tgtobj->tx_i[idx].dropped.res_full += \
+				_srcobj->tx_i[idx].dropped.res_full; \
+			_tgtobj->tx_i[idx].dropped.headroom_insufficient += \
+			    _srcobj->tx_i[idx].dropped.headroom_insufficient; \
+			_tgtobj->tx_i[idx].dropped.fail_per_pkt_vdev_id_check += \
+			    _srcobj->tx_i[idx].dropped.fail_per_pkt_vdev_id_check; \
+			_tgtobj->tx_i[idx].dropped.drop_ingress += \
+				_srcobj->tx_i[idx].dropped.drop_ingress; \
+			_tgtobj->tx_i[idx].dropped.invalid_peer_id_in_exc_path += \
+				_srcobj->tx_i[idx].dropped.invalid_peer_id_in_exc_path; \
+			_tgtobj->tx_i[idx].dropped.tx_mcast_drop += \
+				_srcobj->tx_i[idx].dropped.tx_mcast_drop; \
+			_tgtobj->tx_i[idx].dropped.fw2wbm_tx_drop += \
+				_srcobj->tx_i[idx].dropped.fw2wbm_tx_drop; \
+			_tgtobj->tx_i[idx].dropped.dropped_pkt.bytes += \
+				_srcobj->tx_i[idx].dropped.dropped_pkt.bytes; \
+			_tgtobj->tx_i[idx].mesh.exception_fw += \
+					_srcobj->tx_i[idx].mesh.exception_fw; \
+			_tgtobj->tx_i[idx].mesh.completion_fw += \
+				_srcobj->tx_i[idx].mesh.completion_fw; \
+			_tgtobj->tx_i[idx].cce_classified += \
+				_srcobj->tx_i[idx].cce_classified; \
+			_tgtobj->tx_i[idx].cce_classified_raw += \
+				_srcobj->tx_i[idx].cce_classified_raw; \
+			_tgtobj->tx_i[idx].sniffer_rcvd.num += \
+				_srcobj->tx_i[idx].sniffer_rcvd.num; \
+			_tgtobj->tx_i[idx].sniffer_rcvd.bytes += \
+				_srcobj->tx_i[idx].sniffer_rcvd.bytes; \
+			_tgtobj->tx_i[idx].dropped.dropped_pkt.num = \
+				_tgtobj->tx_i[idx].dropped.dma_error + \
+				_tgtobj->tx_i[idx].dropped.ring_full + \
+				_tgtobj->tx_i[idx].dropped.enqueue_fail + \
+				_tgtobj->tx_i[idx].dropped.fail_per_pkt_vdev_id_check + \
+				_tgtobj->tx_i[idx].dropped.desc_na.num + \
+				_tgtobj->tx_i[idx].dropped.res_full + \
+				_tgtobj->tx_i[idx].dropped.drop_ingress + \
+				_tgtobj->tx_i[idx].dropped.headroom_insufficient + \
+				_tgtobj->tx_i[idx].dropped.invalid_peer_id_in_exc_path + \
+				_tgtobj->tx_i[idx].dropped.tx_mcast_drop + \
+				_tgtobj->tx_i[idx].dropped.fw2wbm_tx_drop; \
+		} \
+		DP_UPDATE_RX_INGRESS_STATS(_tgtobj, _srcobj); \
+	} while (0)
+
+#define DP_UPDATE_TO_MLD_VDEV_STATS(_tgtobj, _srcobj, _xmit_type) \
+	do { \
+		DP_UPDATE_MLD_VDEV_INGRESS_STATS(_tgtobj, _srcobj, _xmit_type); \
 		DP_UPDATE_VDEV_STATS_FOR_UNMAPPED_PEERS(_tgtobj, _srcobj); \
 	} while (0)
 
+#define DP_UPDATE_TO_LINK_VDEV_STATS(_tgtobj, _srcobj, _xmit_type) \
+	do { \
+		DP_UPDATE_LINK_VDEV_INGRESS_STATS(_tgtobj, _srcobj, _xmit_type); \
+		DP_UPDATE_VDEV_STATS_FOR_UNMAPPED_PEERS(_tgtobj, _srcobj); \
+	} while (0)
 /**
  * dp_peer_find_attach() - Allocates memory for peer objects
  * @soc: SoC handle
@@ -2925,11 +3135,12 @@ uint32_t dp_reo_status_ring_handler(struct dp_intr *int_ctx,
  * dp_aggregate_vdev_stats() - Consolidate stats at VDEV level
  * @vdev: DP VDEV handle
  * @vdev_stats: aggregate statistics
- *
+ * @xmit_type: xmit type of packet - MLD/Link
  * return: void
  */
 void dp_aggregate_vdev_stats(struct dp_vdev *vdev,
-			     struct cdp_vdev_stats *vdev_stats);
+			     struct cdp_vdev_stats *vdev_stats,
+			     enum dp_pkt_xmit_type xmit_type);
 
 /**
  * dp_txrx_get_vdev_stats() - Update buffer with cdp_vdev_stats
@@ -4414,6 +4625,16 @@ QDF_STATUS dp_wds_ext_get_peer_osif_handle(
 				uint8_t *mac,
 				ol_osif_peer_handle *osif_peer);
 
+/**
+ * dp_wds_ext_set_peer_bit(): function to set wds-ext peer bit
+ * @soc: Datapath soc handle
+ * @mac: Peer mac address
+ *
+ * Return: QDF_STATUS_SUCCESS on success
+ *         QDF_STATUS_E_INVAL if peer is not found
+ */
+QDF_STATUS dp_wds_ext_set_peer_bit(ol_txrx_soc_handle soc, uint8_t *mac);
+
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
 
 #ifdef DP_MEM_PRE_ALLOC
@@ -5055,6 +5276,9 @@ void dp_rx_err_send_pktlog(struct dp_soc *soc, struct dp_pdev *pdev,
 	uint16_t msdu_len, nbuf_len;
 	uint8_t *rx_tlv_hdr;
 	struct hal_rx_msdu_metadata msdu_metadata;
+	uint16_t buf_size;
+
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 
 	if (qdf_unlikely(packetdump_cb)) {
 		rx_tlv_hdr = qdf_nbuf_data(nbuf);
@@ -5072,8 +5296,7 @@ void dp_rx_err_send_pktlog(struct dp_soc *soc, struct dp_pdev *pdev,
 
 		if (set_pktlen) {
 			msdu_len = nbuf_len + skip_size;
-			qdf_nbuf_set_pktlen(nbuf, qdf_min(msdu_len,
-					    (uint16_t)RX_DATA_BUFFER_SIZE));
+			qdf_nbuf_set_pktlen(nbuf, qdf_min(msdu_len, buf_size));
 		}
 
 		qdf_nbuf_pull_head(nbuf, skip_size);
@@ -5503,4 +5726,143 @@ dp_get_ring_stats_from_hal(struct dp_soc *soc,  struct dp_srng *srng,
 	}
 }
 
+/**
+ * dp_update_vdev_be_basic_stats() - Update vdev basic stats
+ * @txrx_peer: DP txrx_peer handle
+ * @tgtobj: Pointer to buffer for be vdev stats
+ *
+ * Return: None
+ */
+void dp_update_vdev_be_basic_stats(struct dp_txrx_peer *txrx_peer,
+				   struct dp_vdev_stats *tgtobj);
+
+/**
+ * dp_update_vdev_basic_stats() - Update vdev basic stats
+ * @txrx_peer: DP txrx_peer handle
+ * @tgtobj: Pointer to buffer for vdev stats
+ *
+ * Return: None
+ */
+void dp_update_vdev_basic_stats(struct dp_txrx_peer *txrx_peer,
+				struct cdp_vdev_stats *tgtobj);
+
+/**
+ * dp_get_vdev_stats_for_unmap_peer_legacy() - Update vdev basic stats
+ * @vdev: vdev associated with the peer
+ * @peer: unmapped peer
+ *
+ * Return: None
+ */
+void dp_get_vdev_stats_for_unmap_peer_legacy(struct dp_vdev *vdev,
+					     struct dp_peer *peer);
+
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+/**
+ * dp_h2t_tx_latency_stats_cfg_msg_send(): send HTT message for tx latency
+ * stats config to FW
+ * @dp_soc: DP SOC handle
+ * @vdev_id: vdev id
+ * @enable: indicates enablement of the feature
+ * @period: statistical period for transmit latency in terms of ms
+ * @granularity: granularity for tx latency distribution
+ *
+ * return: QDF STATUS
+ */
+QDF_STATUS
+dp_h2t_tx_latency_stats_cfg_msg_send(struct dp_soc *dp_soc, uint16_t vdev_id,
+				     bool enable, uint32_t period,
+				     uint32_t granularity);
+
+/**
+ * dp_tx_latency_stats_update_cca() - update transmit latency statistics for
+ * CCA
+ * @soc: dp soc handle
+ * @peer_id: peer id
+ * @granularity: granularity of distribution
+ * @distribution: distribution of transmit latency statistics
+ * @avg: average of CCA latency(in microseconds) within a cycle
+ *
+ * Return: None
+ */
+void
+dp_tx_latency_stats_update_cca(struct dp_soc *soc, uint16_t peer_id,
+			       uint32_t granularity, uint32_t *distribution,
+			       uint32_t avg);
+
+/**
+ * dp_tx_latency_stats_report() - report transmit latency statistics for each
+ * vdev of specified pdev
+ * @soc: dp soc handle
+ * @pdev: dp pdev Handle
+ *
+ * Return: None
+ */
+void dp_tx_latency_stats_report(struct dp_soc *soc, struct dp_pdev *pdev);
+#endif
+#ifdef WLAN_FEATURE_SSR_DRIVER_DUMP
+/**
+ * dp_ssr_dump_srng_register() - Register DP ring with SSR dump.
+ * @region_name: ring name to register.
+ * @srng: dp srng handler.
+ * @num: Ring number
+ *
+ * num = -1. If there is only single ring
+ * num = ring number. If there are multiple rings pass ring number.
+ *	e.g. in case of REO pass reo number (0..n).
+ *
+ * Return: None.
+ */
+void
+dp_ssr_dump_srng_register(char *region_name, struct dp_srng *srng, int num);
+
+/**
+ * dp_ssr_dump_srng_unregister() - Unegister DP ring with SSR dump.
+ * @region_name: ring name to unregister.
+ * @num: Ring number
+ *
+ * num = -1. If there is only single ring
+ * num = ring number. If there are multiple rings pass ring number.
+ *      e.g. in case of REO pass reo number (0..n).
+ *
+ * Return: None.
+ */
+void dp_ssr_dump_srng_unregister(char *region_name, int num);
+
+/**
+ * dp_ssr_dump_pdev_register() - Register DP Pdev with SSR dump.
+ * @pdev: Pdev handle to register.
+ * @pdev_id: Pdev ID.
+ *
+ * Return: None.
+ */
+void dp_ssr_dump_pdev_register(struct dp_pdev *pdev, uint8_t pdev_id);
+
+/**
+ * dp_ssr_dump_pdev_unregister() - Unregister DP Pdev with SSR dump.
+ * @pdev_id: Pdev ID.
+ *
+ * Return: None.
+ */
+void dp_ssr_dump_pdev_unregister(uint8_t pdev_id);
+#else
+static inline
+void dp_ssr_dump_srng_register(char *region_name, struct dp_srng *srng, int num)
+{
+}
+
+static inline
+void dp_ssr_dump_srng_unregister(char *region_name, int num)
+{
+}
+
+static inline
+void dp_ssr_dump_pdev_register(struct dp_pdev *pdev, uint8_t pdev_id)
+{
+}
+
+static inline
+void dp_ssr_dump_pdev_unregister(uint8_t pdev_id)
+{
+}
+#endif
 #endif /* #ifndef _DP_INTERNAL_H_ */

@@ -26,6 +26,8 @@
 
 /*
  * 21 bits cookie
+ * 1 bit special pool indicator
+ * 3 bits unused
  * 2 bits pool id 0 ~ 3,
  * 10 bits page id 0 ~ 1023
  * 5 bits offset id 0 ~ 31 (Desc size = 128, Num descs per page = 4096/128 = 32)
@@ -34,6 +36,8 @@
 
 /* TODO: Need to revisit this change for Rhine */
 #ifdef WLAN_SOFTUMAC_SUPPORT
+#define DP_TX_DESC_ID_SPCL_MASK    0x100000
+#define DP_TX_DESC_ID_SPCL_OS      20
 #define DP_TX_DESC_ID_POOL_MASK    0x018000
 #define DP_TX_DESC_ID_POOL_OS      15
 #define DP_TX_DESC_ID_PAGE_MASK    0x007FF0
@@ -41,6 +45,8 @@
 #define DP_TX_DESC_ID_OFFSET_MASK  0x00000F
 #define DP_TX_DESC_ID_OFFSET_OS    0
 #else
+#define DP_TX_DESC_ID_SPCL_MASK    0x100000
+#define DP_TX_DESC_ID_SPCL_OS      20
 #define DP_TX_DESC_ID_POOL_MASK    0x018000
 #define DP_TX_DESC_ID_POOL_OS      15
 #define DP_TX_DESC_ID_PAGE_MASK    0x007FE0
@@ -1274,10 +1280,14 @@ static inline void dp_tx_desc_update_fast_comp_flag(struct dp_soc *soc,
 						    uint8_t allow_fast_comp)
 {
 	if (qdf_likely(!(desc->flags & DP_TX_DESC_FLAG_TO_FW)) &&
-	    qdf_likely(allow_fast_comp)) {
+	    qdf_likely(allow_fast_comp))
 		desc->flags |= DP_TX_DESC_FLAG_SIMPLE;
-	}
+
+	if (qdf_likely(desc->nbuf->is_from_recycler) &&
+	    qdf_likely(desc->nbuf->fast_xmit))
+		desc->flags |= DP_TX_DESC_FLAG_FAST;
 }
+
 #else
 static inline void dp_tx_desc_update_fast_comp_flag(struct dp_soc *soc,
 						    struct dp_tx_desc_s *desc,
@@ -1289,21 +1299,25 @@ static inline void dp_tx_desc_update_fast_comp_flag(struct dp_soc *soc,
 /**
  * dp_tx_desc_find() - find dp tx descriptor from pool/page/offset
  * @soc: handle for the device sending the data
- * @pool_id:
- * @page_id:
- * @offset:
+ * @pool_id: pool id
+ * @page_id: page id
+ * @offset: offset from base address
+ * @spcl_pool: bit to indicate if this is a special pool
  *
  * Use page and offset to find the corresponding descriptor object in
  * the given descriptor pool.
  *
  * Return: the descriptor object that has the specified ID
  */
-static inline struct dp_tx_desc_s *dp_tx_desc_find(struct dp_soc *soc,
-		uint8_t pool_id, uint16_t page_id, uint16_t offset)
+static inline
+struct dp_tx_desc_s *dp_tx_desc_find(struct dp_soc *soc,
+				     uint8_t pool_id, uint16_t page_id,
+				     uint16_t offset, bool spcl_pool)
 {
 	struct dp_tx_desc_pool_s *tx_desc_pool = NULL;
 
-	tx_desc_pool = dp_get_tx_desc_pool(soc, pool_id);
+	tx_desc_pool = spcl_pool ? dp_get_spcl_tx_desc_pool(soc, pool_id) :
+				dp_get_tx_desc_pool(soc, pool_id);
 
 	return tx_desc_pool->desc_pages.cacheable_pages[page_id] +
 		tx_desc_pool->elem_size * offset;
