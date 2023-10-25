@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -484,7 +484,8 @@ static bool mlme_vdev_state_up_event(void *ctx, uint16_t event,
 
 	switch (event) {
 	case WLAN_VDEV_SM_EV_START_SUCCESS:
-		if (wlan_vdev_mlme_is_mlo_ap(vdev))
+		if (wlan_vdev_mlme_is_mlo_ap(vdev) &&
+		    !wlan_vdev_mlme_is_mlo_ap_sync_disabled(vdev))
 			mlme_vdev_sm_transition_to(vdev_mlme,
 						   WLAN_VDEV_SS_MLO_SYNC_WAIT);
 		else
@@ -1887,7 +1888,8 @@ static bool mlme_vdev_subst_up_active_event(void *ctx, uint16_t event,
 
 	switch (event) {
 	case WLAN_VDEV_SM_EV_START_SUCCESS:
-		if (wlan_vdev_mlme_is_mlo_ap(vdev))
+		if (wlan_vdev_mlme_is_mlo_ap(vdev) &&
+		    !wlan_vdev_mlme_is_mlo_ap_sync_disabled(vdev))
 			QDF_BUG(0);
 		fallthrough;
 	case WLAN_VDEV_SM_EV_MLO_SYNC_COMPLETE:
