@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -218,6 +218,9 @@ struct wlan_objmgr_vdev *wlan_objmgr_vdev_obj_create(
 	wlan_vdev_mlme_set_mldaddr(vdev, params->mldaddr);
 	/* set link address */
 	wlan_vdev_mlme_set_linkaddr(vdev, params->macaddr);
+	/* set mlo sap vdev sync disabled */
+	wlan_vdev_mlme_set_mlo_sap_sync_disable(
+		vdev, params->mlo_sap_sync_disable);
 	/* Set create flags */
 	vdev->vdev_objmgr.c_flags = params->flags;
 	/* store os-specific pointer */

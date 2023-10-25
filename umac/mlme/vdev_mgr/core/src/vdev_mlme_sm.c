@@ -484,7 +484,8 @@ static bool mlme_vdev_state_up_event(void *ctx, uint16_t event,
 
 	switch (event) {
 	case WLAN_VDEV_SM_EV_START_SUCCESS:
-		if (wlan_vdev_mlme_is_mlo_ap(vdev)) {
+		if (wlan_vdev_mlme_is_mlo_ap(vdev) &&
+		    !wlan_vdev_mlme_is_mlo_ap_sync_disabled(vdev)) {
 			mlme_vdev_sm_transition_to(vdev_mlme,
 						   WLAN_VDEV_SS_MLO_SYNC_WAIT);
 
@@ -1890,7 +1891,8 @@ static bool mlme_vdev_subst_up_active_event(void *ctx, uint16_t event,
 
 	switch (event) {
 	case WLAN_VDEV_SM_EV_START_SUCCESS:
-		if (wlan_vdev_mlme_is_mlo_ap(vdev))
+		if (wlan_vdev_mlme_is_mlo_ap(vdev) &&
+		    !wlan_vdev_mlme_is_mlo_ap_sync_disabled(vdev))
 			QDF_BUG(0);
 		fallthrough;
 	case WLAN_VDEV_SM_EV_MLO_SYNC_COMPLETE:
