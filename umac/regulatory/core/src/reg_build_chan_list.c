@@ -1363,6 +1363,7 @@ static void reg_propagate_6g_mas_channel_list(
 }
 
 #if defined(CONFIG_AFC_SUPPORT) && !defined(CONFIG_REG_CLIENT)
+#ifdef CONFIG_6G_FREQ_OVERLAP
 void reg_set_ap_pwr_type(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
 {
 	uint8_t  *num_rules = pdev_priv_obj->reg_rules.num_of_6g_ap_reg_rules;
@@ -1396,6 +1397,11 @@ void reg_set_ap_pwr_type(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
 				REG_INDOOR_AP;
 	}
 }
+#else
+void reg_set_ap_pwr_type(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
+{
+}
+#endif /* CONFIG_6G_FREQ_OVERLAP */
 #else
 void reg_set_ap_pwr_type(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
 {
