@@ -265,6 +265,11 @@ QDF_STATUS init_deinit_handle_host_mem_req(
 					wmi_handle, event, &mem_reqs,
 					info->wlan_res_cfg.num_active_peers,
 					info->wlan_res_cfg.num_peers, i, idx);
+			if (status != QDF_STATUS_SUCCESS) {
+				target_if_err("extract mem_req fail");
+				return status;
+			}
+
 			if (mem_reqs.tgt_num_units) {
 				status = init_deinit_alloc_host_mem(
 						psoc,
