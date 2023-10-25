@@ -2985,6 +2985,23 @@ static inline void dp_umac_reset_trigger_pre_reset_notify_cb(struct dp_soc *soc)
 		callback(soc);
 }
 
+/**
+ * dp_reset_global_tx_desc_cleanup_flag() - Reset cleanup needed flag
+ * @soc: dp soc handle
+ *
+ * Return: None
+ */
+void dp_reset_global_tx_desc_cleanup_flag(struct dp_soc *soc);
+
+/**
+ * dp_get_global_tx_desc_cleanup_flag() - Get cleanup needed flag
+ * @soc: dp soc handle
+ *
+ * Return: cleanup needed/ not needed
+ */
+bool dp_get_global_tx_desc_cleanup_flag(struct dp_soc *soc);
+
+
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 /**
  * dp_umac_reset_complete_umac_recovery() - Complete Umac reset session

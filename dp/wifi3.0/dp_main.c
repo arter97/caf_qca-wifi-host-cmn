@@ -11917,6 +11917,7 @@ static QDF_STATUS dp_umac_reset_handle_pre_reset(struct dp_soc *soc)
 static QDF_STATUS dp_umac_reset_handle_post_reset(struct dp_soc *soc)
 {
 	if (!soc->umac_reset_ctx.skel_enable) {
+		bool cleanup_needed;
 		qdf_nbuf_t *nbuf_list = &soc->umac_reset_ctx.nbuf_list;
 
 		dp_set_umac_regs(soc);
@@ -11929,7 +11930,9 @@ static QDF_STATUS dp_umac_reset_handle_post_reset(struct dp_soc *soc)
 
 		dp_umac_reset_ppeds_txdesc_pool_reset(soc, nbuf_list);
 
-		dp_tx_desc_pool_cleanup(soc, nbuf_list);
+		cleanup_needed = dp_get_global_tx_desc_cleanup_flag(soc);
+
+		dp_tx_desc_pool_cleanup(soc, nbuf_list, cleanup_needed);
 
 		dp_reset_tid_q_setup(soc);
 	}
@@ -11962,6 +11965,8 @@ static QDF_STATUS dp_umac_reset_handle_post_reset_complete(struct dp_soc *soc)
 	dp_restore_interrupt_ring_masks(soc);
 
 	dp_resume_tx_hardstart(soc);
+
+	dp_reset_global_tx_desc_cleanup_flag(soc);
 
 	status = dp_umac_reset_notify_action_completion(soc,
 				UMAC_RESET_ACTION_DO_POST_RESET_COMPLETE);

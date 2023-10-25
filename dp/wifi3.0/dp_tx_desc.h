@@ -454,9 +454,11 @@ void dp_tx_tso_num_seg_pool_deinit(struct dp_soc *soc, uint8_t num_pool);
  * dp_tx_desc_pool_cleanup() -  Clean up the tx dexcriptor pools
  * @soc: Handle to DP SoC structure
  * @nbuf_list: nbuf list for delayed free
+ * @cleanup: cleanup the pool
  *
  */
-void dp_tx_desc_pool_cleanup(struct dp_soc *soc, qdf_nbuf_t *nbuf_list);
+void dp_tx_desc_pool_cleanup(struct dp_soc *soc, qdf_nbuf_t *nbuf_list,
+			     bool cleanup);
 #endif
 
 /**
