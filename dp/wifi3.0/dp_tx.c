@@ -7819,6 +7819,7 @@ uint8_t dp_tx_need_multipass_process(struct dp_soc *soc, struct dp_vdev *vdev,
 	struct vlan_ethhdr *veh = NULL;
 	bool not_vlan = ((vdev->tx_encap_type == htt_cmn_pkt_type_raw) ||
 			(htons(eh->ether_type) != ETH_P_8021Q));
+	struct cdp_peer_info peer_info = { 0 };
 
 	if (qdf_unlikely(not_vlan))
 		return DP_VLAN_UNTAGGED;
@@ -7843,8 +7844,10 @@ uint8_t dp_tx_need_multipass_process(struct dp_soc *soc, struct dp_vdev *vdev,
 		return DP_VLAN_UNTAGGED;
 	}
 
-	peer = dp_peer_find_hash_find(soc, eh->ether_dhost, 0, DP_VDEV_ALL,
-				      DP_MOD_ID_TX_MULTIPASS);
+	DP_PEER_INFO_PARAMS_INIT(&peer_info, DP_VDEV_ALL, eh->ether_dhost,
+				 false, CDP_WILD_PEER_TYPE);
+	peer = dp_peer_hash_find_wrapper((struct dp_soc *)soc, &peer_info,
+					 DP_MOD_ID_TX_MULTIPASS);
 	if (qdf_unlikely(!peer))
 		return DP_VLAN_UNTAGGED;
 
