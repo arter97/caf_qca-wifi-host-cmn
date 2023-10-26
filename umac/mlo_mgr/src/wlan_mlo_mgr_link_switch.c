@@ -1044,6 +1044,7 @@ mlo_mgr_link_switch_validate_request(struct wlan_objmgr_vdev *vdev,
 {
 	QDF_STATUS status = QDF_STATUS_E_INVAL;
 	uint8_t vdev_id = wlan_vdev_get_id(vdev);
+	struct mlo_link_info *new_link_info;
 
 	if (req->curr_ieee_link_id >= WLAN_INVALID_LINK_ID ||
 	    req->new_ieee_link_id >= WLAN_INVALID_LINK_ID) {
@@ -1052,10 +1053,17 @@ mlo_mgr_link_switch_validate_request(struct wlan_objmgr_vdev *vdev,
 		return status;
 	}
 
-	if (!mlo_mgr_get_ap_link_by_link_id(vdev->mlo_dev_ctx,
-					    req->new_ieee_link_id)) {
+	new_link_info = mlo_mgr_get_ap_link_by_link_id(vdev->mlo_dev_ctx,
+						       req->new_ieee_link_id);
+	if (!new_link_info) {
 		mlo_err("New link id %d not part of association",
 			req->new_ieee_link_id);
+		return status;
+	}
+
+	if (new_link_info->vdev_id != WLAN_INVALID_VDEV_ID) {
+		mlo_err("requested link already active on other vdev:%d",
+			new_link_info->vdev_id);
 		return status;
 	}
 
