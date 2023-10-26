@@ -667,7 +667,7 @@ cdp_ipa_rx_intrabss_fwd(ol_txrx_soc_handle soc, uint8_t vdev_id,
 	if (!soc || !soc->ops || !soc->ops->ipa_ops || !fwd_success) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
 			  "%s invalid instance", __func__);
-		return QDF_STATUS_E_FAILURE;
+		return false;
 	}
 
 	if (soc->ops->ipa_ops->ipa_rx_intrabss_fwd)
