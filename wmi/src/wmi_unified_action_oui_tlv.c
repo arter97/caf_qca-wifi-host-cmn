@@ -222,7 +222,7 @@ send_action_oui_cmd_tlv(wmi_unified_t wmi_handle,
 
 	valid = wmi_get_action_oui_id(req->action_id, &action_id);
 	if (!valid) {
-		wmi_err("Invalid action id");
+		wmi_debug("Invalid action id");
 		return QDF_STATUS_E_INVAL;
 	}
 
