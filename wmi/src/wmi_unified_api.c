@@ -2979,6 +2979,17 @@ wmi_unified_send_coex_config_cmd(wmi_unified_t wmi_handle,
 	return QDF_STATUS_E_FAILURE;
 }
 
+QDF_STATUS
+wmi_unified_send_coex_multi_config_cmd(wmi_unified_t wmi_handle,
+				       struct coex_multi_config *param)
+{
+	if (wmi_handle->ops->send_coex_multi_config_cmd)
+		return wmi_handle->ops->send_coex_multi_config_cmd(wmi_handle,
+								   param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
 #ifdef WLAN_FEATURE_DBAM_CONFIG
 QDF_STATUS
 wmi_unified_send_dbam_config_cmd(wmi_unified_t wmi_handle,

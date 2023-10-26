@@ -6478,6 +6478,7 @@ typedef enum {
 	wmi_service_tx_compl_tsf64,
 	wmi_service_vdev_delete_all_peer,
 	wmi_service_three_way_coex_config_legacy,
+	wmi_service_multiple_coex_config_support,
 	wmi_service_rx_fse_support,
 	wmi_service_dynamic_hw_mode,
 	wmi_service_sae_roam_support,
@@ -8954,6 +8955,40 @@ struct coex_config_params {
 	uint32_t config_arg4;
 	uint32_t config_arg5;
 	uint32_t config_arg6;
+};
+
+/**
+ * struct coex_config_item - Multiple coex config item
+ * @config_type: Configuration type - wmi_coex_config_type enum
+ * @config_arg1: Configuration argument based on config type
+ * @config_arg2: Configuration argument based on config type
+ * @config_arg3: Configuration argument based on config type
+ * @config_arg4: Configuration argument based on config type
+ * @config_arg5: Configuration argument based on config type
+ * @config_arg6: Configuration argument based on config type
+ */
+struct coex_config_item {
+	uint32_t config_type;
+	uint32_t config_arg1;
+	uint32_t config_arg2;
+	uint32_t config_arg3;
+	uint32_t config_arg4;
+	uint32_t config_arg5;
+	uint32_t config_arg6;
+};
+
+#define COEX_MULTI_CONFIG_MAX_CNT  32
+
+/**
+ * struct coex_multi_config - Multiple coex config command parameters
+ * @vdev_id: Vdev id
+ * @num_configs: Number of config items
+ * @cfg_items: Array of coex config items
+ */
+struct coex_multi_config {
+	uint32_t vdev_id;
+	uint32_t num_configs;
+	struct coex_config_item cfg_items[COEX_MULTI_CONFIG_MAX_CNT];
 };
 
 #define WMI_HOST_PDEV_ID_SOC 0xFF
