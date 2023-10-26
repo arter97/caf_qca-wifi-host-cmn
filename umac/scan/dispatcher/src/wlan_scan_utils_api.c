@@ -1664,9 +1664,9 @@ err_status:
  * to an access category for which estimated service parameters
  * information is provided.
  *
- * Return: None
+ * Return: bool, whether get available ESP information.
  */
-static void util_scan_update_esp_data(struct wlan_esp_ie *esp_information,
+static bool util_scan_update_esp_data(struct wlan_esp_ie *esp_information,
 		struct scan_cache_entry *scan_entry)
 {
 
@@ -1685,7 +1685,7 @@ static void util_scan_update_esp_data(struct wlan_esp_ie *esp_information,
 
 	if (total_elements > MAX_ESP_INFORMATION_FIELD) {
 		scm_err("No of Air time fractions are greater than supported");
-		return;
+		return false;
 	}
 
 	for (i = 0; i < total_elements &&
@@ -1716,6 +1716,7 @@ static void util_scan_update_esp_data(struct wlan_esp_ie *esp_information,
 			break;
 		}
 	}
+	return true;
 }
 
 /**
@@ -1737,7 +1738,8 @@ static void util_scan_scm_update_bss_with_esp_data(
 	if (!scan_entry->ie_list.esp)
 		return;
 
-	util_scan_update_esp_data(&esp_information, scan_entry);
+	if (util_scan_update_esp_data(&esp_information, scan_entry) == false)
+		return;
 
 	/*
 	 * If the ESP metric is transmitting multiple airtime fractions, then
