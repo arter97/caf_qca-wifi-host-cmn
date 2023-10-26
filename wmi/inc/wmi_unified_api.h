@@ -2178,6 +2178,20 @@ wmi_unified_send_coex_ver_cfg_cmd(wmi_unified_t wmi_handle,
 QDF_STATUS
 wmi_unified_send_coex_config_cmd(wmi_unified_t wmi_handle,
 				 struct coex_config_params *param);
+
+/**
+ * wmi_unified_send_coex_multi_config_cmd() - send multiple coex config
+ * @wmi_handle: wmi handle
+ * @param: wmi coex multiple cfg cmd params
+ *
+ * Send WMI_COEX_MULTIPLE_CONFIG_CMDID parameters to fw.
+ *
+ * Return: QDF_STATUS_SUCCESS on success, QDF_STATUS_E_** on error
+ */
+QDF_STATUS
+wmi_unified_send_coex_multi_config_cmd(wmi_unified_t wmi_handle,
+				       struct coex_multi_config *param);
+
 #ifdef WLAN_FEATURE_DBAM_CONFIG
 /**
  * wmi_unified_send_dbam_config_cmd() - send dbam config command
