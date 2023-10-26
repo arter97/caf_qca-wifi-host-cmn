@@ -9275,6 +9275,73 @@ send_coex_config_cmd_tlv(wmi_unified_t wmi_handle,
 	return ret;
 }
 
+/**
+ * send_coex_multi_config_cmd_tlv() - send coex multiple config command to fw
+ * @wmi_handle: wmi handle
+ * @param: pointer to coex multiple config parameters
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+static QDF_STATUS
+send_coex_multi_config_cmd_tlv(wmi_unified_t wmi_handle,
+			       struct coex_multi_config *param)
+{
+	wmi_coex_multiple_config_cmd_fixed_param *cmd;
+	WMI_COEX_CONFIG_CMD_fixed_param *dst_cfg;
+	struct coex_config_item *src_cfg;
+	wmi_buf_t buf;
+	QDF_STATUS ret;
+	uint32_t len, i;
+	uint8_t *buf_ptr;
+
+	len = sizeof(*cmd) + WMI_TLV_HDR_SIZE +
+	      param->num_configs * sizeof(*dst_cfg);
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf)
+		return QDF_STATUS_E_FAILURE;
+
+	buf_ptr = (uint8_t *)wmi_buf_data(buf);
+	cmd = (wmi_coex_multiple_config_cmd_fixed_param *)buf_ptr;
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		       WMITLV_TAG_STRUC_wmi_coex_multiple_config_cmd_fixed_param,
+		       WMITLV_GET_STRUCT_TLVLEN(
+		       wmi_coex_multiple_config_cmd_fixed_param));
+
+	buf_ptr += sizeof(*cmd);
+
+	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC,
+		       sizeof(*dst_cfg) * param->num_configs);
+	buf_ptr += WMI_TLV_HDR_SIZE;
+
+	dst_cfg = (WMI_COEX_CONFIG_CMD_fixed_param *)buf_ptr;
+	for (i = 0; i < param->num_configs; i++, dst_cfg++) {
+		src_cfg = &param->cfg_items[i];
+		WMITLV_SET_HDR(&dst_cfg->tlv_header,
+			       WMITLV_TAG_STRUC_WMI_COEX_CONFIG_CMD_fixed_param,
+			       WMITLV_GET_STRUCT_TLVLEN(
+			       WMI_COEX_CONFIG_CMD_fixed_param));
+		dst_cfg->vdev_id = param->vdev_id;
+		dst_cfg->config_type = src_cfg->config_type;
+		dst_cfg->config_arg1 = src_cfg->config_arg1;
+		dst_cfg->config_arg2 = src_cfg->config_arg2;
+		dst_cfg->config_arg3 = src_cfg->config_arg3;
+		dst_cfg->config_arg4 = src_cfg->config_arg4;
+		dst_cfg->config_arg5 = src_cfg->config_arg5;
+		dst_cfg->config_arg6 = src_cfg->config_arg6;
+	}
+
+	wmi_mtrace(WMI_COEX_MULTIPLE_CONFIG_CMDID, param->vdev_id, 0);
+	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
+				   WMI_COEX_MULTIPLE_CONFIG_CMDID);
+
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		wmi_err("Sending COEX MULTIPLE CONFIG CMD failed");
+		wmi_buf_free(buf);
+	}
+
+	return ret;
+}
+
 #ifdef WLAN_FEATURE_DBAM_CONFIG
 
 static enum wmi_coex_dbam_mode_type
@@ -21452,6 +21519,7 @@ struct wmi_ops tlv_ops =  {
 	.send_bss_color_change_enable_cmd =
 		send_bss_color_change_enable_cmd_tlv,
 	.send_coex_config_cmd = send_coex_config_cmd_tlv,
+	.send_coex_multi_config_cmd = send_coex_multi_config_cmd_tlv,
 	.send_set_country_cmd = send_set_country_cmd_tlv,
 	.send_addba_send_cmd = send_addba_send_cmd_tlv,
 	.send_delba_send_cmd = send_delba_send_cmd_tlv,
@@ -22627,6 +22695,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 			WMI_SERVICE_DELETE_ALL_PEER_SUPPORT;
 	wmi_service[wmi_service_three_way_coex_config_legacy] =
 			WMI_SERVICE_THREE_WAY_COEX_CONFIG_LEGACY;
+	wmi_service[wmi_service_multiple_coex_config_support] =
+			WMI_SERVICE_MULTIPLE_COEX_CONFIG_SUPPORT;
 	wmi_service[wmi_service_rx_fse_support] =
 			WMI_SERVICE_RX_FSE_SUPPORT;
 	wmi_service[wmi_service_sae_roam_support] =
