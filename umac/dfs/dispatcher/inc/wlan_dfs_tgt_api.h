@@ -49,19 +49,21 @@
  *                         2). Chirp information (is chirp or non chirp),
  *                         3). Frequency offset.
  *                         4). Detector ID.
+ *                         5). Frequency Hopping(FH) Radar type
+ *                             (is frequency hopping or not).
  *
  * The packed argument structure is:
  *
- * ------------------------------32 bits arg----------------------------
+ * ------------------------------32 bits arg----------------------------------
  *
- * -------18 bits------|1 bit|--2 bits-|-------8 bits------|1 bit|2 bits|
- * ______________________________________________________________________
- *|                    |     |   | |   | | | | | | | | | | |     |   |   |
- *|---18 Unused bits---|  x  | x | | x |x|x|x| |x|x|x|x| |x|  x  | x | x |
- *|____________________|_____|___|_|___|_|_|_|_|_|_|_|_|_|_|_____|___|___|
+ * -------17 bits------|1 bit|1 bit|--2 bits-|-------8 bits------|1 bit|2 bits|
+ * ____________________________________________________________________________
+ *|                    |     |     |   | |   | | | | | | | | | | |     |   |   |
+ *|---17 Unused bits---|  x  |  x  | x | | x |x|x|x| |x|x|x|x| |x|  x  | x | x |
+ *|____________________|_____|_____|___|_|___|_|_|_|_|_|_|_|_|_|_|_____|___|___|
  *
- *                     |_____|_________|___________________|_____|_______|
- *                      sign   det.ID     freq.offset       Chirp  seg.ID
+ *                     |_____|_____|_________|___________________|_____|_______|
+ *                       FH   sign   det.ID     freq.offset       Chirp  seg.ID
  *
  * @DFS_UNIT_TEST_NUM_ARGS:     Number of arguments for bangradar unit test
  *                              command.
@@ -81,11 +83,13 @@ enum {
 #define FREQ_OFF_SHIFT             3
 #define DET_ID_SHIFT              11
 #define FREQ_OFFSET_SIGNBIT_SHIFT 13
+#define IS_FH_SHIFT               14
 #define SEG_ID_MASK              0x03
 #define IS_CHIRP_MASK            0x01
 #define FREQ_OFFSET_MASK         0xFF
 #define DET_ID_MASK              0x03
 #define FREQ_OFFSET_SIGNBIT_MASK 0x01
+#define IS_FH_MASK               0x01
 
 /**
  * struct dfs_emulate_bang_radar_test_cmd - Unit test command structure to send
