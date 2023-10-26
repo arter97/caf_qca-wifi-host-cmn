@@ -6065,6 +6065,14 @@ void dp_tx_comp_process_tx_status(struct dp_soc *soc,
 	if (!txrx_peer) {
 		dp_info_rl("peer is null or deletion in progress");
 		DP_STATS_INC_PKT(soc, tx.tx_invalid_peer, 1, length);
+
+		vdev = dp_vdev_get_ref_by_id(soc, tx_desc->vdev_id,
+					     DP_MOD_ID_CDP);
+		if (qdf_likely(vdev)) {
+			op_mode = vdev->qdf_opmode;
+			dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
+		}
+
 		goto out_log;
 	}
 	vdev = txrx_peer->vdev;
