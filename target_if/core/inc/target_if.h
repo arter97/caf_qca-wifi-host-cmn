@@ -893,28 +893,6 @@ static inline void target_psoc_set_num_radios(
 }
 
 /**
- * target_psoc_set_pdev_id_to_phy_id_map() - set pdev to phy id mapping
- * @psoc_info:  pointer to structure target_psoc_info
- * @pdev_id: pdev id
- * @phy_id: phy_id
- *
- * API to set pdev id to phy id mapping
- *
- * Return: void
- */
-static inline void target_psoc_set_pdev_id_to_phy_id_map(
-		struct target_psoc_info *psoc_info,
-		uint8_t *phy_id_map)
-{
-	if (!psoc_info)
-		return;
-
-	psoc_info->info.is_pdevid_to_phyid_map = true;
-	qdf_mem_copy(psoc_info->info.pdev_id_to_phy_id_map, phy_id_map,
-		     PSOC_MAX_PHY_REG_CAP);
-}
-
-/**
  * target_psoc_get_num_radios() - get number of radios
  * @psoc_info:  pointer to structure target_psoc_info
  *
