@@ -2025,11 +2025,6 @@ QDF_STATUS dp_rx_mon_deliver_non_std(struct dp_soc *soc,
 	osif_rx_mon(mon_pdev->mvdev->osif_vdev,
 		    dummy_msdu, NULL);
 
-	/* Clear rx_status*/
-	qdf_mem_zero(&mon_pdev->ppdu_info.rx_status,
-		     sizeof(mon_pdev->ppdu_info.rx_status));
-	mon_pdev->mon_ppdu_status = DP_PPDU_STATUS_START;
-
 	return QDF_STATUS_SUCCESS;
 
 allocate_dummy_msdu_fail:

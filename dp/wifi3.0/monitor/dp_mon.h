@@ -4923,11 +4923,30 @@ QDF_STATUS dp_local_pkt_capture_tx_config(struct dp_pdev *pdev)
 void
 dp_check_and_dump_full_mon_info(struct dp_soc *soc, struct dp_pdev *pdev,
 				int mac_id, int war);
+
+/**
+ * dp_mon_rx_ppdu_status_reset() - reset and clear ppdu rx status
+ * @mon_pdev: monitor pdev
+ *
+ * Return: none
+ */
+static inline void
+dp_mon_rx_ppdu_status_reset(struct dp_mon_pdev *mon_pdev)
+{
+	mon_pdev->mon_ppdu_status = DP_PPDU_STATUS_START;
+	qdf_mem_zero(&mon_pdev->ppdu_info.rx_status,
+		     sizeof(mon_pdev->ppdu_info.rx_status));
+}
 #else
 void
 dp_check_and_dump_full_mon_info(struct dp_soc *soc, struct dp_pdev *pdev,
 				int mac_id, int war);
 
+{
+}
+
+static inline void
+dp_mon_rx_ppdu_status_reset(struct dp_mon_pdev *mon_pdev)
 {
 }
 #endif

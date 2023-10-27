@@ -552,6 +552,7 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 
 		if (qdf_unlikely(tlv_status == HAL_TLV_STATUS_PPDU_NON_STD_DONE)) {
 			dp_rx_mon_deliver_non_std(soc, mac_id);
+			dp_mon_rx_ppdu_status_reset(mon_pdev);
 		} else if ((qdf_likely(tlv_status == HAL_TLV_STATUS_PPDU_DONE)) &&
 				(qdf_likely(!dp_rx_mon_check_phyrx_abort(pdev, ppdu_info)))) {
 			rx_mon_stats->status_ppdu_done++;
@@ -598,7 +599,7 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 				dp_rx_mon_dest_process(soc, int_ctx, mac_id,
 						       quota);
 
-			mon_pdev->mon_ppdu_status = DP_PPDU_STATUS_START;
+			dp_mon_rx_ppdu_status_reset(mon_pdev);
 		} else {
 			dp_rx_mon_handle_ppdu_undecoded_metadata(soc, pdev,
 								 ppdu_info);
