@@ -2949,6 +2949,25 @@ void dp_set_peer_as_tdls_peer(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 bool dp_find_peer_exist(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 			uint8_t *peer_addr);
 
+/**
+ * dp_get_info_by_peer_mac - get vdev id, state and device type of
+ * peer if already exists
+ * @soc_hdl: datapath soc handle
+ * @peer_mac: peer mac address
+ * @vdev_id: store vdev id that peer is under
+ * @param: store output dp peer info
+ *
+ * Get local peer state, type, vdev id of peer or
+ * primary vdevid for mld peer
+ *
+ * Return: None
+ */
+
+void dp_get_info_by_peer_mac(struct cdp_soc_t *soc_hdl,
+			     uint8_t *peer_mac,
+			     uint8_t vdev_id,
+			     struct cdp_peer_output_param *param);
+
 #ifdef DP_UMAC_HW_RESET_SUPPORT
 /**
  * dp_pause_reo_send_cmd() - Pause Reo send commands.

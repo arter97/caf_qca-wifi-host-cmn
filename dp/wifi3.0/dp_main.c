@@ -13547,6 +13547,7 @@ static struct cdp_peer_ops dp_ops_peer = {
 	.get_peer_state = dp_get_peer_state,
 	.peer_flush_frags = dp_peer_flush_frags,
 	.set_peer_as_tdls_peer = dp_set_peer_as_tdls_peer,
+	.get_info_by_peer_addr = dp_get_info_by_peer_mac,
 };
 #endif
 

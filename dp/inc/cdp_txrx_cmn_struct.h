@@ -515,6 +515,18 @@ enum ol_txrx_peer_state {
 };
 
 /**
+ * struct cdp_peer_output_param - peer output info for dp hash find
+ * @vdev_id: Vdev ID
+ * @state: peer state
+ * @mld_peer: whether is mld peer
+ */
+struct cdp_peer_output_param {
+	uint8_t vdev_id;
+	enum ol_txrx_peer_state state;
+	bool mld_peer;
+};
+
+/**
  * enum cdp_txrx_ast_entry_type - AST entry type information
  * @CDP_TXRX_AST_TYPE_NONE: static ast entry for connected peer
  * @CDP_TXRX_AST_TYPE_STATIC: static ast entry for connected peer

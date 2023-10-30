@@ -4026,6 +4026,57 @@ void dp_set_peer_as_tdls_peer(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 
 	dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
 }
+
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_FEATURE_MLO_SAP)
+void dp_get_info_by_peer_mac(struct cdp_soc_t *soc_hdl,
+			     uint8_t *peer_mac,
+			     uint8_t vdev_id,
+			     struct cdp_peer_output_param *param)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct dp_peer *peer = NULL;
+	struct dp_peer *tgt_peer;
+	struct cdp_peer_info peer_info = { 0 };
+
+	/* check if there's already a peer object with this MAC address */
+	DP_PEER_INFO_PARAMS_INIT(&peer_info, DP_VDEV_ALL, peer_mac,
+				 false, CDP_WILD_PEER_TYPE);
+	peer = dp_peer_hash_find_wrapper(soc, &peer_info, DP_MOD_ID_CDP);
+
+	if (!peer) {
+		param->state = OL_TXRX_PEER_STATE_INVALID;
+		return;
+	}
+	tgt_peer = dp_get_tgt_peer_from_peer(peer);
+	param->state = tgt_peer->state;
+	param->vdev_id = tgt_peer->vdev->vdev_id;
+
+	/* mlo connection link peer, get mld peer with reference */
+	if (IS_MLO_DP_MLD_PEER(peer))
+		param->mld_peer = true;
+	else
+		param->mld_peer = false;
+	dp_peer_debug("peer %pK tgt_peer: %pK peer MAC "
+		      QDF_MAC_ADDR_FMT " tgt peer MAC "
+		      QDF_MAC_ADDR_FMT " tgt peer state %d vdev id %d",
+		      peer, tgt_peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw),
+		      QDF_MAC_ADDR_REF(tgt_peer->mac_addr.raw),
+		      tgt_peer->state, param->vdev_id);
+	/* release peer reference that added by hash find */
+	dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
+}
+
+#else
+void dp_get_info_by_peer_mac(struct cdp_soc_t *soc_hdl,
+			     uint8_t *peer_mac,
+			     uint8_t vdev_id,
+			     struct cdp_peer_output_param *param)
+{
+	param->vdev_id = vdev_id;
+	param->state = dp_get_peer_state(soc_hdl, vdev_id, peer_mac);
+}
+#endif
+
 #endif
 
 bool dp_find_peer_exist(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,

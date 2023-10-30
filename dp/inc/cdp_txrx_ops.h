@@ -1978,6 +1978,7 @@ struct cdp_ocb_ops {
  * @set_tdls_offchan_enabled:
  * @set_peer_as_tdls_peer:
  * @peer_flush_frags:
+ * @get_info_by_peer_addr:
  */
 struct cdp_peer_ops {
 	QDF_STATUS (*register_peer)(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
@@ -2030,6 +2031,10 @@ struct cdp_peer_ops {
 				      uint8_t *peer_mac, bool val);
 	void (*peer_flush_frags)(struct cdp_soc_t *soc_hdl,
 				 uint8_t vdev_id, uint8_t *peer_mac);
+	void (*get_info_by_peer_addr)(struct cdp_soc_t *soc_hdl,
+				      uint8_t *peer_mac,
+				      uint8_t vdev_id,
+				      struct cdp_peer_output_param *param);
 };
 
 /**

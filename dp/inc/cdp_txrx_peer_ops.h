@@ -298,6 +298,36 @@ static inline struct cdp_vdev
 }
 
 /**
+ * cdp_peer_get_info_by_peer_addr() - Get some peer info by peer address
+ * @soc: data path soc handle
+ * @peer_mac: peer mac address
+ * @vdev_id: the vdev id that peer under
+ * @param: data struct to store the peer info
+ *
+ * Get state, vdev id and device type of one dp peer.
+ *
+ * Return: None
+ */
+static inline void
+cdp_peer_get_info_by_peer_addr(ol_txrx_soc_handle soc,
+			       uint8_t *peer_mac,
+			       uint8_t vdev_id,
+			       struct cdp_peer_output_param *param)
+{
+	if (!soc || !soc->ops || !soc->ops->peer_ops) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
+			  "%s invalid instance", __func__);
+		return;
+	}
+
+	if (soc->ops->peer_ops->get_info_by_peer_addr)
+		soc->ops->peer_ops->get_info_by_peer_addr(soc,
+							  peer_mac,
+							  vdev_id,
+							  param);
+}
+
+/**
  * cdp_peer_get_peer_mac_addr() - Get peer mac address
  * @soc: data path soc handle
  * @peer: peer instance
