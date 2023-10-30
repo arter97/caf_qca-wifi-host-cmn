@@ -1250,20 +1250,20 @@ void *hal_rx_msdu_desc_info_get_ptr(void *msdu_details_ptr,
  * @ hal_rx_desc_cookie: Opaque cookie pointer used by HAL to get to
  * the current descriptor
  * @ buf_info: structure to return the buffer information
- * Return: void
+ * Return: true: get available buffer info, false: error caused by buf_paddress_get check
  */
 static inline
-void hal_rx_reo_buf_paddr_get(hal_soc_handle_t hal_soc_hdl,
+bool hal_rx_reo_buf_paddr_get(hal_soc_handle_t hal_soc_hdl,
 			      hal_ring_desc_t rx_desc,
 			      struct hal_buf_info *buf_info)
 {
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 
-	if (hal_soc->ops->hal_rx_reo_buf_paddr_get)
-		return hal_soc->ops->hal_rx_reo_buf_paddr_get(
-					rx_desc,
-					buf_info);
-
+	if (hal_soc->ops->hal_rx_reo_buf_paddr_get) {
+		hal_soc->ops->hal_rx_reo_buf_paddr_get(rx_desc, buf_info);
+		return true;
+	}
+	return false;
 }
 
 /**
@@ -2929,16 +2929,19 @@ hal_rx_reo_buf_type_get(hal_soc_handle_t hal_soc_hdl, hal_ring_desc_t rx_desc)
  * @ring_desc: REO ring descriptor
  * @prev_pn: Buffer to populate the previous PN
  *
- * Return: None
+ * Return: true: get available previous PN, false: error caused by pn_get function check
  */
-static inline void
+static inline bool
 hal_rx_reo_prev_pn_get(hal_soc_handle_t hal_soc_hdl, hal_ring_desc_t ring_desc,
 		       uint64_t *prev_pn)
 {
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 
-	if (hal_soc->ops->hal_rx_reo_prev_pn_get)
-		return hal_soc->ops->hal_rx_reo_prev_pn_get(ring_desc, prev_pn);
+	if (hal_soc->ops->hal_rx_reo_prev_pn_get) {
+		hal_soc->ops->hal_rx_reo_prev_pn_get(ring_desc, prev_pn);
+		return true;
+	}
+	return false;
 }
 
 /**

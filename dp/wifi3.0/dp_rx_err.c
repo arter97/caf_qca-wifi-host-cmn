@@ -600,7 +600,9 @@ dp_rx_err_nbuf_pn_check(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 	if (!hal_rx_encryption_info_valid(soc->hal_soc, qdf_nbuf_data(nbuf)))
 		return QDF_STATUS_SUCCESS;
 
-	hal_rx_reo_prev_pn_get(soc->hal_soc, ring_desc, &prev_pn);
+	if (hal_rx_reo_prev_pn_get(soc->hal_soc, ring_desc, &prev_pn) == false)
+		return QDF_STATUS_E_FAILURE;
+
 	hal_rx_tlv_get_pn_num(soc->hal_soc, qdf_nbuf_data(nbuf), curr_pn);
 
 	if (curr_pn[0] > prev_pn)
@@ -2106,7 +2108,8 @@ static int dp_rx_err_handle_msdu_buf(struct dp_soc *soc,
 	struct dp_pdev *pdev;
 	struct rx_desc_pool *rx_desc_pool;
 
-	hal_rx_reo_buf_paddr_get(soc->hal_soc, ring_desc, &hbi);
+	if (hal_rx_reo_buf_paddr_get(soc->hal_soc, ring_desc, &hbi) == false)
+		goto assert_return;
 
 	rx_desc = dp_rx_cookie_2_va_rxdma_buf(soc, hbi.sw_cookie);
 
