@@ -724,10 +724,9 @@ static void hif_exec_tasklet_kill(struct hif_exec_context *ctx)
 	struct hif_tasklet_exec_context *t_ctx = hif_exec_get_tasklet(ctx);
 	int irq_ind;
 
-	if (ctx->inited) {
-		tasklet_disable(&t_ctx->tasklet);
+	if (ctx->inited)
 		tasklet_kill(&t_ctx->tasklet);
-	}
+
 	ctx->inited = false;
 
 	for (irq_ind = 0; irq_ind < ctx->numirq; irq_ind++)
