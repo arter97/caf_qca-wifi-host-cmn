@@ -182,6 +182,31 @@ static inline void qdf_nbuf_set_rx_ipa_smmu_map(qdf_nbuf_t buf,
 }
 
 /**
+ * qdf_nbuf_get_rx_ipa_smmu_map_caller() - get the caller who initiated
+ *                                         the ipa smmu map request
+ * @buf: Network buffer
+ *
+ * Return value of caller function
+ */
+static inline uint8_t qdf_nbuf_get_rx_ipa_smmu_map_caller(qdf_nbuf_t buf)
+{
+	return 0;
+}
+
+/**
+ * qdf_nbuf_set_rx_ipa_smmu_map_caller() - store the caller who initiated
+ *                                         the ipa smmu map request
+ * @buf: Network buffer
+ * @caller: caller of the IPA SMMU map
+ *
+ * Return: none
+ */
+static inline void qdf_nbuf_set_rx_ipa_smmu_map_caller(qdf_nbuf_t buf,
+						       uint8_t caller)
+{
+}
+
+/**
  * qdf_nbuf_is_intra_bss() - get intra bss bit
  * @buf: Network buffer
  *

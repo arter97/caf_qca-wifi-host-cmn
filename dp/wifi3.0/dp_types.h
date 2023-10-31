@@ -2629,6 +2629,14 @@ enum sysfs_printing_mode {
 	PRINTING_MODE_ENABLED
 };
 
+enum dp_rx_ipa_smmu_map_caller {
+	DP_RX_IPA_SMMU_POOL_MAP_ENABLE_PIPE = 1,
+	DP_RX_IPA_SMMU_POOL_MAP_OPT_DP,
+	DP_RX_IPA_SMMU_MAP_REPLENISH,
+	DP_RX_IPA_SMMU_MAP_BUFF_ATTACH,
+	DP_RX_IPA_SMMU_MAP_REO_REINJECT,
+};
+
 /**
  * typedef notify_pre_reset_fw_callback() - pre-reset callback
  * @soc: DP SoC

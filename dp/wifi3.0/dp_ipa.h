@@ -421,7 +421,8 @@ QDF_STATUS dp_ipa_handle_rx_buf_smmu_mapping(struct dp_soc *soc,
 					     uint32_t size,
 					     bool create,
 					     const char *func,
-					     uint32_t line);
+					     uint32_t line,
+					     uint8_t caller);
 /**
  * dp_ipa_tx_buf_smmu_mapping() - Create SMMU mappings for IPA
  *				  allocated TX buffers
@@ -649,7 +650,8 @@ static inline QDF_STATUS dp_ipa_handle_rx_buf_smmu_mapping(struct dp_soc *soc,
 							   uint32_t size,
 							   bool create,
 							   const char *func,
-							   uint32_t line)
+							   uint32_t line,
+							   uint8_t caller)
 {
 	return QDF_STATUS_SUCCESS;
 }

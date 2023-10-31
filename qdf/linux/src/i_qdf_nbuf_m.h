@@ -650,6 +650,10 @@ QDF_COMPILE_TIME_ASSERT(qdf_nbuf_cb_size,
 	(((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.dev.priv_cb_m. \
 	band)
 
+#define  QDF_NBUF_CB_RX_PACKET_IPA_SMMU_MAP_CALLER(skb) \
+	 (((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.dev.priv_cb_m. \
+	reserved1)
+
 #define __qdf_nbuf_ipa_owned_get(skb) \
 	QDF_NBUF_CB_TX_IPA_OWNED(skb)
 

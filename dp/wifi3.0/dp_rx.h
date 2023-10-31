@@ -2777,10 +2777,9 @@ void dp_rx_nbuf_unmap(struct dp_soc *soc,
 	dp_audio_smmu_unmap(soc->osdev,
 			    QDF_NBUF_CB_PADDR(rx_desc->nbuf),
 			    rx_desc_pool->buf_size);
-
 	dp_ipa_handle_rx_buf_smmu_mapping(soc, rx_desc->nbuf,
 					  rx_desc_pool->buf_size,
-					  false, __func__, __LINE__);
+					  false, __func__, __LINE__, 0);
 	qdf_nbuf_unmap_nbytes_single(soc->osdev, rx_desc->nbuf,
 				     QDF_DMA_FROM_DEVICE,
 				     rx_desc_pool->buf_size);
@@ -2798,7 +2797,7 @@ void dp_rx_nbuf_unmap_pool(struct dp_soc *soc,
 			    rx_desc_pool->buf_size);
 	dp_ipa_handle_rx_buf_smmu_mapping(soc, nbuf,
 					  rx_desc_pool->buf_size,
-					  false, __func__, __LINE__);
+					  false, __func__, __LINE__, 0);
 	qdf_nbuf_unmap_nbytes_single(soc->osdev, nbuf, QDF_DMA_FROM_DEVICE,
 				     rx_desc_pool->buf_size);
 }

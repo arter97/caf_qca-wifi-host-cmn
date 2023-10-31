@@ -1309,7 +1309,8 @@ static QDF_STATUS dp_rx_defrag_reo_reinject(struct dp_txrx_peer *txrx_peer,
 
 	dp_ipa_handle_rx_buf_smmu_mapping(soc, head,
 					  rx_desc_pool->buf_size, true,
-					  __func__, __LINE__);
+					  __func__, __LINE__,
+					  DP_RX_IPA_SMMU_MAP_REO_REINJECT);
 	dp_audio_smmu_map(soc->osdev,
 			  qdf_mem_paddr_from_dmaaddr(soc->osdev,
 						     QDF_NBUF_CB_PADDR(head)),

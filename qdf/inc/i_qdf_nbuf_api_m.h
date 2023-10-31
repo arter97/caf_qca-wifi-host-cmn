@@ -190,6 +190,32 @@ static inline uint8_t qdf_nbuf_is_rx_ipa_smmu_map(qdf_nbuf_t buf)
 }
 
 /**
+ * qdf_nbuf_get_rx_ipa_smmu_map_caller() - get the caller who initiated
+ *                                         the ipa smmu map request
+ * @buf: Network buffer
+ *
+ * Return value of caller function
+ */
+static inline uint8_t qdf_nbuf_get_rx_ipa_smmu_map_caller(qdf_nbuf_t buf)
+{
+	return QDF_NBUF_CB_RX_PACKET_IPA_SMMU_MAP_CALLER(buf);
+}
+
+/**
+ * qdf_nbuf_set_rx_ipa_smmu_map_caller() - store the caller who initiated
+ *                                         the ipa smmu map request
+ * @buf: Network buffer
+ * @caller: caller of the IPA SMMU map
+ *
+ * Return: none
+ */
+static inline void qdf_nbuf_set_rx_ipa_smmu_map_caller(qdf_nbuf_t buf,
+						       uint8_t caller)
+{
+	QDF_NBUF_CB_RX_PACKET_IPA_SMMU_MAP_CALLER(buf) = caller;
+}
+
+/**
  * qdf_nbuf_set_rx_reo_dest_ind_or_sw_excpt() - set reo destination indication
  *						or sw exception flag
  * @buf: Network buffer
