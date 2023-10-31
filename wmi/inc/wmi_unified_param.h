@@ -5373,6 +5373,11 @@ typedef enum {
 	wmi_pdev_enhanced_aoa_phasedelta_eventid,
 #endif
 	wmi_peer_oper_mode_change_event_id,
+
+#ifdef WLAN_FEATURE_LL_LT_SAP
+	wmi_audio_transport_switch_type_event_id,
+#endif
+
 	wmi_events_max,
 } wmi_conv_event_id;
 

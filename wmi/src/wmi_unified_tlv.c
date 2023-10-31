@@ -22309,6 +22309,11 @@ static void populate_tlv_events_id(WMI_EVT_ID *event_ids)
 	event_ids[wmi_pdev_enhanced_aoa_phasedelta_eventid] =
 			WMI_PDEV_ENHANCED_AOA_PHASEDELTA_EVENTID;
 #endif
+#ifdef WLAN_FEATURE_LL_LT_SAP
+	event_ids[wmi_audio_transport_switch_type_event_id] =
+			WMI_AUDIO_TRANSPORT_SWITCH_TYPE_EVENTID;
+#endif
+
 }
 
 #ifdef WLAN_FEATURE_LINK_LAYER_STATS

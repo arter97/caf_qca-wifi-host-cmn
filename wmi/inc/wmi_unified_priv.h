@@ -117,6 +117,10 @@
 #include "wmi_unified_mlme_api.h"
 #endif
 
+#ifdef WLAN_FEATURE_LL_LT_SAP
+#include "wlan_ll_sap_public_structs.h"
+#endif
+
 #define WMI_UNIFIED_MAX_EVENT 0x100
 
 #ifdef WMI_EXT_DBG
@@ -3437,6 +3441,19 @@ QDF_STATUS (*extract_aoa_caps_service_ready_ext2)
 QDF_STATUS (*send_csa_event_status_ind)(
 		wmi_unified_t wmi_handle,
 		struct csa_event_status_ind params);
+
+#ifdef WLAN_FEATURE_LL_LT_SAP
+QDF_STATUS (*send_audio_transport_switch_resp)(
+		wmi_unified_t wmi_hdl,
+		enum bearer_switch_req_type req_type,
+		enum bearer_switch_status status);
+
+QDF_STATUS (*extract_audio_transport_switch_req_event)(
+					wmi_unified_t wmi_hdl,
+					uint8_t *event, uint32_t data_len,
+					enum bearer_switch_req_type *req_type);
+
+#endif /* WLAN_FEATURE_LL_LT_SAP */
 #endif /* QCA_TARGET_IF_MLME */
 };
 
