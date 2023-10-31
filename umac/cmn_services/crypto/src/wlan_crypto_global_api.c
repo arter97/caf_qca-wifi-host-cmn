@@ -1699,6 +1699,11 @@ QDF_STATUS wlan_crypto_encap(struct wlan_objmgr_vdev *vdev,
 		hdrlen = ieee80211_hdrspace(wlan_vdev_get_pdev(vdev),
 					    (uint8_t *)qdf_nbuf_data(wbuf));
 
+	if (!key->valid || !key->cipher_table) {
+		status = QDF_STATUS_E_INVAL;
+		goto err;
+	}
+
 	/* if tkip, is counter measures enabled, then drop the frame */
 	cipher_table = (struct wlan_crypto_cipher *)key->cipher_table;
 	status = cipher_table->encap(key, wbuf, encapdone,
