@@ -40,6 +40,9 @@
 #ifdef IPA_OFFLOAD
 #include <wlan_ipa_obj_mgmt_api.h>
 #endif
+#ifdef WLAN_SUPPORT_FLOW_PRIORTIZATION
+#include "wlan_dp_api.h"
+#endif
 
 #define DP_INVALID_VDEV_ID 0xFF
 
@@ -1101,6 +1104,17 @@ static inline void dp_tx_hal_ring_access_end_reap(struct dp_soc *soc,
 #define DP_TX_TID_OVERRIDE(_msdu_info, _nbuf)
 #endif
 
+#ifdef WLAN_SUPPORT_FLOW_PRIORTIZATION
+#define DP_FLOW_TX_TID_OVERRIDE(_msdu_info, _nbuf) \
+	do { \
+		uint8_t tid = 0; \
+		if (qdf_unlikely(wlan_dp_fpm_is_tid_override(_nbuf, &tid))) { \
+			(_msdu_info)->tid = tid; \
+		} \
+	} while (0)
+#else
+#define DP_FLOW_TX_TID_OVERRIDE(_msdu_info, _nbuf)
+#endif
 /* TODO TX_FEATURE_NOT_YET */
 static inline void dp_tx_comp_process_exception(struct dp_tx_desc_s *tx_desc)
 {
