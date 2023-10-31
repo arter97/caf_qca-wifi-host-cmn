@@ -5556,6 +5556,29 @@ void dp_txrx_peer_stats_clr(struct dp_txrx_peer *txrx_peer)
 	dp_peer_jitter_stats_ctx_clr(txrx_peer);
 }
 
+#if defined WLAN_FEATURE_11BE_MLO && defined DP_MLO_LINK_STATS_SUPPORT
+/**
+ * dp_txrx_peer_reset_local_link_id() - Reset local link id
+ * @txrx_peer: txrx peer handle
+ *
+ * Return: None
+ */
+static inline void
+dp_txrx_peer_reset_local_link_id(struct dp_txrx_peer *txrx_peer)
+{
+	int i;
+
+	txrx_peer->local_link_id = 0;
+	for (i = 0; i <= DP_MAX_MLO_LINKS; i++)
+		txrx_peer->ll_band[i] = DP_BAND_INVALID;
+}
+#else
+static inline void
+dp_txrx_peer_reset_local_link_id(struct dp_txrx_peer *txrx_peer)
+{
+}
+#endif
+
 /**
  * dp_peer_create_wifi3() - attach txrx peer
  * @soc_hdl: Datapath soc handle
@@ -5645,6 +5668,7 @@ dp_peer_create_wifi3(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 			dp_set_peer_isolation(peer->txrx_peer, false);
 			dp_wds_ext_peer_init(peer->txrx_peer);
 			dp_peer_hw_txrx_stats_init(soc, peer->txrx_peer);
+			dp_txrx_peer_reset_local_link_id(peer->txrx_peer);
 		}
 
 		dp_cfg_event_record_peer_evt(soc, DP_CFG_EVENT_PEER_CREATE,
@@ -8012,9 +8036,37 @@ dp_check_map_link_id_band(struct dp_peer *peer)
 	if (peer->link_id_valid)
 		dp_map_link_id_band(peer);
 }
+
+/**
+ * dp_map_local_link_id_band() - map local link id band
+ * @peer: dp peer handle
+ *
+ * Return: None
+ */
+static inline
+void dp_map_local_link_id_band(struct dp_peer *peer)
+{
+	struct dp_txrx_peer *txrx_peer = NULL;
+	enum dp_bands band;
+
+	txrx_peer = dp_get_txrx_peer(peer);
+	if (txrx_peer && peer->local_link_id) {
+		band = dp_freq_to_band(peer->freq);
+		txrx_peer->ll_band[peer->local_link_id] = band;
+	} else {
+		dp_info("txrx_peer NULL or local link id not set: %u "
+			QDF_MAC_ADDR_FMT, peer->local_link_id,
+			QDF_MAC_ADDR_REF(peer->mac_addr.raw));
+	}
+}
 #else
 static inline void
 dp_check_map_link_id_band(struct dp_peer *peer)
+{
+}
+
+static inline
+void dp_map_local_link_id_band(struct dp_peer *peer)
 {
 }
 #endif
@@ -8051,6 +8103,7 @@ dp_set_peer_freq(struct cdp_soc_t *cdp_soc,  uint8_t vdev_id,
 
 	peer->freq = val.cdp_peer_param_freq;
 	dp_check_map_link_id_band(peer);
+	dp_map_local_link_id_band(peer);
 	dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
 
 	dp_info("Peer " QDF_MAC_ADDR_FMT " vdev_id %u, frequency %u",

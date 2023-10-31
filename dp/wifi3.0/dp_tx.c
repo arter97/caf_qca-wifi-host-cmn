@@ -6001,6 +6001,57 @@ dp_update_mcast_stats(struct dp_txrx_peer *txrx_peer, uint8_t link_id,
 {
 }
 #endif
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
+/**
+ * dp_tx_comp_set_nbuf_band() - set nbuf band.
+ * @soc: dp soc handle
+ * @nbuf: nbuf handle
+ * @ts: tx completion status
+ *
+ * Return: None
+ */
+static inline void
+dp_tx_comp_set_nbuf_band(struct dp_soc *soc, qdf_nbuf_t nbuf,
+			 struct hal_tx_completion_status *ts)
+{
+	struct qdf_mac_addr *mac_addr;
+	struct dp_peer *peer;
+	struct dp_txrx_peer *txrx_peer;
+	uint8_t link_id;
+
+	if ((QDF_NBUF_CB_GET_PACKET_TYPE(nbuf) !=
+		QDF_NBUF_CB_PACKET_TYPE_EAPOL &&
+	     QDF_NBUF_CB_GET_PACKET_TYPE(nbuf) !=
+		QDF_NBUF_CB_PACKET_TYPE_DHCP &&
+	     QDF_NBUF_CB_GET_PACKET_TYPE(nbuf) !=
+		QDF_NBUF_CB_PACKET_TYPE_DHCPV6) ||
+	    QDF_NBUF_CB_GET_IS_BCAST(nbuf))
+		return;
+
+	mac_addr = (struct qdf_mac_addr *)(qdf_nbuf_data(nbuf) +
+					   QDF_NBUF_DEST_MAC_OFFSET);
+
+	peer = dp_mld_peer_find_hash_find(soc, mac_addr->bytes, 0,
+					  DP_VDEV_ALL, DP_MOD_ID_TX_COMP);
+	if (qdf_likely(peer)) {
+		txrx_peer = dp_get_txrx_peer(peer);
+		if (qdf_likely(txrx_peer)) {
+			link_id =
+				dp_tx_get_link_id_from_ppdu_id(soc, ts,
+						  txrx_peer,
+						  txrx_peer->vdev);
+			qdf_nbuf_tx_set_band(nbuf, txrx_peer->ll_band[link_id]);
+		}
+		dp_peer_unref_delete(peer, DP_MOD_ID_TX_COMP);
+	}
+}
+#else
+static inline void
+dp_tx_comp_set_nbuf_band(struct dp_soc *soc, qdf_nbuf_t nbuf,
+			 struct hal_tx_completion_status *ts)
+{
+}
+#endif
 
 void dp_tx_comp_process_tx_status(struct dp_soc *soc,
 				  struct dp_tx_desc_s *tx_desc,
@@ -6063,6 +6114,7 @@ void dp_tx_comp_process_tx_status(struct dp_soc *soc,
 			(ts->status == HAL_TX_TQM_RR_REM_CMD_REM));
 
 	if (!txrx_peer) {
+		dp_tx_comp_set_nbuf_band(soc, nbuf, ts);
 		dp_info_rl("peer is null or deletion in progress");
 		DP_STATS_INC_PKT(soc, tx.tx_invalid_peer, 1, length);
 

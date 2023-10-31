@@ -65,6 +65,14 @@ enum dp_bands {
 	DP_BAND_6GHZ = 3,
 	DP_BAND_UNKNOWN = 4,
 };
+
+/**
+ * dp_freq_to_band() - Convert frequency to band
+ * @freq: peer frequency
+ *
+ * Return: band for input frequency
+ */
+enum dp_bands dp_freq_to_band(qdf_freq_t freq);
 #endif
 
 void check_free_list_for_invalid_flush(struct dp_soc *soc);

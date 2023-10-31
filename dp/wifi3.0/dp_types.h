@@ -4914,6 +4914,8 @@ struct dp_peer_stats {
  * @bw: bandwidth of peer connection
  * @mpdu_retry_threshold: MPDU retry threshold to increment tx bad count
  * @band: Link ID to band mapping
+ * @local_link_id: Local host link ID.
+ * @ll_band: Local link id band mapping
  * @stats_arr_size: peer stats array size
  * @stats: Peer link and mld statistics
  */
@@ -4967,6 +4969,8 @@ struct dp_txrx_peer {
 #if defined WLAN_FEATURE_11BE_MLO && defined DP_MLO_LINK_STATS_SUPPORT
 	/* Link ID to band mapping, (1 MLD + DP_MAX_MLO_LINKS) */
 	uint8_t band[DP_MAX_MLO_LINKS + 1];
+	uint8_t local_link_id;
+	uint8_t ll_band[DP_MAX_MLO_LINKS + 1];
 #endif
 	uint8_t stats_arr_size;
 
@@ -5070,6 +5074,7 @@ struct dp_peer {
 	/*Link ID of link peer*/
 	uint8_t link_id;
 	bool link_id_valid;
+	uint8_t local_link_id;
 
 	/*---------for mld peer----------*/
 	struct dp_peer_link_info link_peers[DP_MAX_MLO_LINKS];

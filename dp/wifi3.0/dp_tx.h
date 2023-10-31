@@ -2148,7 +2148,7 @@ static inline int dp_get_rtpm_tput_policy_requirement(struct dp_soc *soc)
  * @txrx_peer: txrx_peer pointer
  * @link_id: Peer Link ID
  *
- * Returen: None
+ * Return: None
  */
 static inline void
 dp_tx_set_nbuf_band(qdf_nbuf_t nbuf, struct dp_txrx_peer *txrx_peer,

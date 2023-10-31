@@ -3106,13 +3106,6 @@ dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 }
 
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
-/**
- * dp_freq_to_band() - Convert frequency to band
- * @freq: peer frequency
- *
- * Return: band for input frequency
- */
-static inline
 enum dp_bands dp_freq_to_band(qdf_freq_t freq)
 {
 	if (REG_IS_24GHZ_CH_FREQ(freq))
