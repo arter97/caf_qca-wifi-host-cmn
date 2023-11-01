@@ -22909,6 +22909,9 @@ static void populate_tlv_service(uint32_t *wmi_service)
 #endif
 	wmi_service[wmi_service_pdev_param_in_utf_wmi] =
 			WMI_SERVICE_PDEV_PARAM_IN_UTF_WMI;
+#ifdef WLAN_FEATURE_LL_LT_SAP
+	wmi_service[wmi_service_xpan_support] = WMI_SERVICE_XPAN_SUPPORT;
+#endif
 }
 
 /**

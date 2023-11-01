@@ -6480,6 +6480,9 @@ typedef enum {
 	wmi_service_5ghz_hi_rssi_roam_support,
 #endif
 	wmi_service_pdev_param_in_utf_wmi,
+#ifdef WLAN_FEATURE_LL_LT_SAP
+	wmi_service_xpan_support,
+#endif
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
