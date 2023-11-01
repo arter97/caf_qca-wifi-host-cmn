@@ -10945,6 +10945,35 @@ dp_soc_map_pdev_to_lmac
 }
 
 /**
+ * dp_vdev_update_lmacid() - update mac_id for vdev
+ * @soc_hdl: Datapath soc handle
+ * @vdev_id: vdev id
+ * @lmac_id: mac id
+ *
+ * Return: none
+ */
+
+static void
+dp_vdev_update_lmacid(struct cdp_soc_t *soc_hdl,
+		      uint8_t vdev_id,
+		      uint8_t lmac_id)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct dp_vdev *vdev = dp_vdev_get_ref_by_id(soc, vdev_id,
+						     DP_MOD_ID_CDP);
+
+	if (!vdev) {
+		dp_err("invalid vdev %d", vdev_id);
+		return;
+	}
+
+	dp_info("update mac id %d for vdev id %d", lmac_id, vdev_id);
+
+	vdev->lmac_id = lmac_id;
+	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
+}
+
+/**
  * dp_soc_handle_pdev_mode_change() - Update pdev to lmac mapping
  * @soc_hdl: datapath soc handle
  * @pdev_id: id of the datapath pdev handle
@@ -13256,6 +13285,7 @@ static struct cdp_misc_ops dp_ops_misc = {
 #ifdef WLAN_FEATURE_MARK_FIRST_WAKEUP_PACKET
 	.mark_first_wakeup_packet = dp_mark_first_wakeup_packet,
 #endif
+	.update_mac_id = dp_vdev_update_lmacid,
 #ifdef WLAN_FEATURE_PEER_TXQ_FLUSH_CONF
 	.set_peer_txq_flush_config = dp_set_peer_txq_flush_config,
 #endif
