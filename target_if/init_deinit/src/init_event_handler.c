@@ -239,11 +239,21 @@ static void init_deinit_mlo_tsf_sync_support(struct wmi_unified *wmi_handle,
 static void init_deinit_pdev_wsi_remap_support(struct wmi_unified *wmi_handle,
 					       struct wlan_objmgr_psoc *psoc);
 
+static bool init_deinit_mlo_get_group_id(struct wlan_objmgr_psoc *psoc,
+					 uint8_t *grp_id);
+
+static bool init_deinit_mlo_get_chip_id(struct wlan_objmgr_psoc *psoc,
+					uint8_t *grp_id);
+
+static bool init_deinit_mlo_is_shmem_capable(struct wlan_objmgr_psoc *psoc,
+					     uint8_t grp_id, uint8_t chip_id);
+
 static int init_deinit_service_ready_event_handler(ol_scn_t scn_handle,
 							uint8_t *event,
 							uint32_t data_len)
 {
 	int err_code;
+	uint8_t grp_id, chip_id;
 	struct wlan_objmgr_psoc *psoc;
 	struct target_psoc_info *tgt_hdl;
 	wmi_legacy_service_ready_callback legacy_callback;
@@ -366,9 +376,18 @@ static int init_deinit_service_ready_event_handler(ol_scn_t scn_handle,
 	target_if_atf_cfg_enable(psoc, tgt_hdl, event);
 
 	if (wmi_service_enabled(wmi_handle,
-				wmi_service_mgmt_rx_reo_supported))
-		wlan_psoc_nif_feat_cap_set(psoc,
-					   WLAN_SOC_F_MGMT_RX_REO_CAPABLE);
+				wmi_service_mgmt_rx_reo_supported)) {
+		/*
+		 * WLAN_SOC_F_MGMT_RX_REO_CAPABLE depends on SHMEM memory.
+		 * If SHMEM is not capable, WLAN_SOC_F_MGMT_RX_REO_CAPABLE
+		 * will not be supported.
+		 */
+		if (init_deinit_mlo_get_group_id(psoc, &grp_id) &&
+		    init_deinit_mlo_get_chip_id(psoc, &chip_id) &&
+		    init_deinit_mlo_is_shmem_capable(psoc, grp_id, chip_id))
+			wlan_psoc_nif_feat_cap_set(
+					psoc, WLAN_SOC_F_MGMT_RX_REO_CAPABLE);
+	}
 
 	target_if_lteu_cfg_enable(psoc, tgt_hdl, event);
 
@@ -873,6 +892,46 @@ static bool init_deinit_mlo_get_group_id(struct wlan_objmgr_psoc *psoc,
 	return false;
 }
 
+static bool init_deinit_mlo_get_chip_id(struct wlan_objmgr_psoc *psoc,
+					uint8_t *chip_id)
+{
+	struct target_psoc_info *tgt_hdl;
+
+	tgt_hdl = wlan_psoc_get_tgt_if_handle(psoc);
+	if (!tgt_hdl) {
+		target_if_err("target_psoc_info is null");
+		return false;
+	}
+
+	if ((tgt_hdl->tif_ops) &&
+	    (tgt_hdl->tif_ops->mlo_get_chip_id)) {
+		*chip_id = tgt_hdl->tif_ops->mlo_get_chip_id(psoc);
+		return true;
+	}
+
+	return false;
+}
+
+static bool init_deinit_mlo_is_shmem_capable(struct wlan_objmgr_psoc *psoc,
+					     uint8_t grp_id, uint8_t chip_id)
+{
+	struct target_psoc_info *tgt_hdl;
+
+	tgt_hdl = wlan_psoc_get_tgt_if_handle(psoc);
+	if (!tgt_hdl) {
+		target_if_err("target_psoc_info is null");
+		return false;
+	}
+
+	if ((tgt_hdl->tif_ops) &&
+	    (tgt_hdl->tif_ops->mlo_is_shmem_capable)) {
+		return tgt_hdl->tif_ops->mlo_is_shmem_capable(psoc, grp_id,
+							      chip_id);
+	}
+
+	return false;
+}
+
 void init_deinit_mlo_update_soc_ready(struct wlan_objmgr_psoc *psoc)
 {
 	uint8_t grp_id = 0;
@@ -1008,6 +1067,24 @@ static void
 init_deinit_pdev_wsi_remap_support(struct wmi_unified *wmi_handle,
 				   struct wlan_objmgr_psoc *psoc)
 {}
+
+static bool init_deinit_mlo_get_group_id(struct wlan_objmgr_psoc *psoc,
+					 uint8_t *grp_id)
+{
+	return false;
+}
+
+static bool init_deinit_mlo_get_chip_id(struct wlan_objmgr_psoc *psoc,
+					uint8_t *chip_id)
+{
+	return false;
+}
+
+static bool init_deinit_mlo_is_shmem_capable(struct wlan_objmgr_psoc *psoc,
+					     uint8_t grp_id, uint8_t chip_id)
+{
+	return false;
+}
 #else
 static void init_deinit_mlo_update_soc_ready(struct wlan_objmgr_psoc *psoc)
 {}
@@ -1025,6 +1102,23 @@ static void
 init_deinit_pdev_wsi_remap_support(struct wmi_unified *wmi_handle,
 				   struct wlan_objmgr_psoc *psoc)
 {}
+static bool init_deinit_mlo_get_group_id(struct wlan_objmgr_psoc *psoc,
+					 uint8_t *grp_id)
+{
+	return false;
+}
+
+static bool init_deinit_mlo_get_chip_id(struct wlan_objmgr_psoc *psoc,
+					uint8_t *chip_id)
+{
+	return false;
+}
+
+static bool init_deinit_mlo_is_shmem_capable(struct wlan_objmgr_psoc *psoc,
+					     uint8_t grp_id, uint8_t chip_id)
+{
+	return false;
+}
 #endif /*WLAN_FEATURE_11BE_MLO && WLAN_MLO_MULTI_CHIP*/
 
 /* MAC address fourth byte index */
