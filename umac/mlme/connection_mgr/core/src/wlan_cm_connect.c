@@ -1100,12 +1100,8 @@ static bool cm_is_retry_with_same_candidate(struct cnx_mgr *cm_ctx,
 		max_retry_count = mlo_link_num - 1;
 
 	/* Try once again for the invalid PMKID case without PMKID */
-	if (resp->status_code == STATUS_INVALID_PMKID) {
-		if (score_config->vendor_roam_score_algorithm)
-			cm_update_mlo_links_for_retry_with_same_candidate(psoc,
-									  req);
+	if (resp->status_code == STATUS_INVALID_PMKID)
 		goto use_same_candidate;
-	}
 
 	sae_connection = key_mgmt & (1 << WLAN_CRYPTO_KEY_MGMT_SAE |
 				     1 << WLAN_CRYPTO_KEY_MGMT_FT_SAE |
