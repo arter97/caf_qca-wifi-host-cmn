@@ -1365,11 +1365,6 @@ dp_rx_intrabss_ucast_check_be(qdf_nbuf_t nbuf,
 	if (!qdf_nbuf_is_intra_bss(nbuf))
 		return false;
 
-	if (!be_vdev->mlo_dev_ctxt) {
-		params->tx_vdev_id = ta_peer->vdev->vdev_id;
-		return true;
-	}
-
 	hal_rx_tlv_get_dest_chip_pmac_id(rx_tlv_hdr,
 					 &dest_chip_id,
 					 &dest_chip_pmac_id);
@@ -1395,6 +1390,11 @@ dp_rx_intrabss_ucast_check_be(qdf_nbuf_t nbuf,
 			return false;
 		}
 		dp_peer_unref_delete(da_peer, DP_MOD_ID_RX);
+	}
+
+	if (!be_vdev->mlo_dev_ctxt) {
+		params->tx_vdev_id = ta_peer->vdev->vdev_id;
+		return true;
 	}
 
 	if (dest_chip_id == be_soc->mlo_chip_id) {
