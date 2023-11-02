@@ -2347,13 +2347,17 @@ dp_peer_clean_wds_entries(struct dp_soc *soc, struct dp_peer *peer,
 			  uint32_t free_wds_count)
 {
 	uint32_t wds_deleted = 0;
+	bool ast_ind_disable;
 
 	if (soc->ast_offload_support && !soc->host_ast_db_enable)
 		return;
 
+	ast_ind_disable = wlan_cfg_get_ast_indication_disable
+		(soc->wlan_cfg_ctx);
+
 	wds_deleted = dp_peer_ast_free_wds_entries(soc, peer);
 	if ((DP_PEER_WDS_COUNT_INVALID != free_wds_count) &&
-	    (free_wds_count != wds_deleted)) {
+	    (free_wds_count != wds_deleted) && !ast_ind_disable) {
 		DP_STATS_INC(soc, ast.ast_mismatch, 1);
 		dp_alert("For peer %pK (mac: "QDF_MAC_ADDR_FMT")number of wds entries deleted by fw = %d during peer delete is not same as the numbers deleted by host = %d",
 			 peer, peer->mac_addr.raw, free_wds_count,
