@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -40,6 +40,7 @@
 #define DP_PEER_AST3_FLOW_MASK 0x2
 #define DP_MAX_AST_INDEX_PER_PEER 4
 
+#ifndef IPA_WDS_EASYMESH_FEATURE
 #ifdef WLAN_FEATURE_MULTI_AST_DEL
 
 void dp_peer_free_peer_ase_list(struct dp_soc *soc,
@@ -291,7 +292,6 @@ static void dp_ast_aging_timer_fn(void *soc_hdl)
 }
 #endif /* WLAN_FEATURE_MULTI_AST_DEL */
 
-#ifndef IPA_WDS_EASYMESH_FEATURE
 void dp_soc_wds_attach(struct dp_soc *soc)
 {
 	if (soc->ast_offload_support)
@@ -319,7 +319,7 @@ void dp_soc_wds_attach(struct dp_soc *soc)
 void dp_soc_wds_detach(struct dp_soc *soc)
 {
 }
-#endif
+#endif /* IPA_WDS_EASYMESH_FEATURE */
 
 void dp_tx_mec_handler(struct dp_vdev *vdev, uint8_t *status)
 {
