@@ -20,8 +20,10 @@
 #ifndef _WLAN_STATS_DEFINE_H_
 #define _WLAN_STATS_DEFINE_H_
 
+#ifndef BUILD_PROFILE_OPEN
 #ifdef WLAN_ODD_HOST_PLUGIN
 #include <ieee80211_external_config.h>
+#endif
 #endif
 
 /* Flags for Feature specific stats */
@@ -387,7 +389,11 @@ struct basic_psoc_data_rx {
 #define STATS_IF_MAX_DATA_TIDS       9
 #define STATS_IF_MAX_RX_CTX          8
 #define STATS_IF_MAX_SAWF_DATA_TIDS  8
+#if BUILD_PROFILE_OPEN
+#define STATS_IF_MAX_SAWF_DATA_QUEUE 8
+#else
 #define STATS_IF_MAX_SAWF_DATA_QUEUE 2
+#endif
 #define STATS_IF_NUM_AVG_WINDOWS     5
 #define STATS_IF_MAX_PUNCTURED_MODE  STATS_IF_PUNCTURED_MODE_CNT
 #define STATS_IF_MAX_TX_TQM_STATUS   9

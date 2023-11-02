@@ -17,8 +17,15 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
+#ifndef BUILD_PROFILE_OPEN
 #include <qcatools_lib.h>
 #include <ieee80211_external.h>
+#else
+#include <inc/qcatools_lib.h>
+#include <inc/odd_defines.h>
+#include <cfg80211_nlwrapper_api.h>
+#endif
+
 #include <wlan_stats_define.h>
 #include <dp_rate_stats_pub.h>
 #include <stats_lib.h>
@@ -52,7 +59,13 @@
 /* This path is for network interfaces */
 #define PATH_SYSNET_DEV              "/sys/class/net/"
 /* This path is created if phy is brought up in cfg80211 mode */
+#ifdef BUILD_PROFILE_OPEN
+#define CFG80211_MODE_FILE_PATH      "/sys/class/net/wlan%d/phy80211/"
+#define OBJ_RADIO_STRING             "wlan"
+#else
 #define CFG80211_MODE_FILE_PATH      "/sys/class/net/wifi%d/phy80211/"
+#define OBJ_RADIO_STRING             "wifi"
+#endif
 /* Radio interface name size */
 #define RADIO_IFNAME_SIZE            5
 /* To check platform is lithium or not */
@@ -74,6 +87,79 @@
 		else                       \
 			(_flg) &= (_mask); \
 	} while (0)
+
+#ifdef BUILD_PROFILE_OPEN
+int init_socket_context(struct socket_context *sock_ctx,
+			int cmd_sock_id, int event_sock_id);
+void destroy_socket_context(struct socket_context *sock_ctx);
+int start_event_thread(struct socket_context *sock_ctx);
+
+/*
+ * init_socket_context: initialize the context
+ * @sock_ctx: socket context
+ * @cmd_sock_id, @event_sock_id: If application can run as background
+ *                               process/daemon then use unique port numbers
+ *                               otherwise default socket id for simple
+ *                               applications.
+ * return 0 on success otherwise negative value on failure
+ */
+int init_socket_context(struct socket_context *sock_ctx,
+			int cmd_sock_id, int event_sock_id)
+{
+	int err = 0;
+#if UMAC_SUPPORT_CFG80211
+	if (sock_ctx->cfg80211) {
+		sock_ctx->cfg80211_ctxt.pvt_cmd_sock_id = cmd_sock_id;
+		sock_ctx->cfg80211_ctxt.pvt_event_sock_id = event_sock_id;
+
+		err = wifi_init_nl80211(&sock_ctx->cfg80211_ctxt);
+		if (err) {
+			errx(1, "unable to create NL socket");
+			return -EIO;
+		}
+	} else
+#endif
+	{
+#if UMAC_SUPPORT_WEXT
+		sock_ctx->cfg80211 = 0 /*false*/;
+		sock_ctx->sock_fd = socket(AF_INET, SOCK_DGRAM, 0);
+		if (sock_ctx->sock_fd < 0) {
+			errx(1, "socket creation failed");
+			return -EIO;
+		}
+#endif
+	}
+	return 0;
+}
+
+/**
+ * destroy_socket_context: destroys the context
+ * @sock_ctx: socket context
+ * returns 0 if success; otherwise negative values on failures
+ */
+void destroy_socket_context(struct socket_context *sock_ctx)
+{
+#if UMAC_SUPPORT_CFG80211
+	if (sock_ctx->cfg80211) {
+		wifi_destroy_nl80211(&sock_ctx->cfg80211_ctxt);
+	} else
+#endif
+	{
+#if UMAC_SUPPORT_WEXT
+		close(sock_ctx->sock_fd);
+#endif
+	}
+	return;
+}
+
+int start_event_thread(struct socket_context *sock_ctx)
+{
+	if (!sock_ctx->cfg80211)
+		return 0;
+
+	return wifi_nl80211_start_event_thread(&sock_ctx->cfg80211_ctxt);
+}
+#endif
 
 /**
  * struct soc_ifnames: Radio interface of a soc
@@ -164,6 +250,7 @@ struct async_context {
 
 /* Global socket context to create nl80211 command and event interface */
 static struct socket_context g_sock_ctx = {0};
+#ifndef BUILD_PROFILE_OPEN
 /* Global parent vap to build child sta object list */
 static struct object_list *g_parent_vap_obj;
 /**
@@ -171,9 +258,11 @@ static struct object_list *g_parent_vap_obj;
  * sta pointer while building sta object list.
  */
 static struct object_list *g_curr_sta_obj;
+#endif
 /* Global context to hold async request data */
 static struct async_context g_async_ctx = {0};
 
+#ifndef BUILD_PROFILE_OPEN
 /**
  * Mapping for Supported Features
  */
@@ -206,6 +295,7 @@ static struct feat_parser_t g_feat[] = {
 	{ "DETER", STATS_FEAT_FLG_DETER },
 	{ NULL, 0 },
 };
+#endif
 
 /* Global nl policy for response attributes */
 struct nla_policy g_policy[QCA_WLAN_VENDOR_ATTR_FEAT_MAX] = {
@@ -274,7 +364,7 @@ int libstats_is_ifname_valid(const char *ifname, enum stats_object_e obj)
 			size = 4;
 			break;
 		case STATS_OBJ_RADIO:
-			str = "wifi";
+			str = OBJ_RADIO_STRING;
 			size = 5;
 			break;
 		case STATS_OBJ_MLD:
@@ -323,6 +413,7 @@ static int is_cfg80211_mode_enabled(void)
 	return ret;
 }
 
+#ifndef BUILD_PROFILE_OPEN
 static void free_interface_list(struct interface_list *if_list)
 {
 	u_int8_t inx = 0;
@@ -567,6 +658,7 @@ static bool is_vap_radiochild(const char *rif_name, const uint8_t *rhw_addr,
 
 	return false;
 }
+#endif
 
 static int is_valid_cmd(struct stats_command *cmd)
 {
@@ -665,11 +757,13 @@ static int32_t prepare_request(struct nl_msg *nlmsg, struct stats_command *cmd)
 			STATS_ERR("failed to put serviceid\n");
 			return -EIO;
 		}
+#ifndef BUILD_PROFILE_OPEN
 		if (nla_put_u8(nlmsg, QCA_WLAN_VENDOR_ATTR_TELEMETRIC_PEER_TYPE,
 			       cmd->peer_type)) {
 			STATS_ERR("failed to put p_link_peer flag\n");
 			return -EIO;
 		}
+#endif
 	}
 
 	return ret;
@@ -1355,6 +1449,17 @@ get_advance_sta_extended_tx_rate_stats(void *buffer, uint32_t buffer_len,
 		sj->num_msdus[i] = sojourn_stats->num_msdus[i];
 	}
 }
+
+#ifdef BUILD_PROFILE_OPEN
+void
+get_advance_sta_punc_bw_tx_link_stats(struct wlan_tx_link_stats *tx_stats,
+				      struct stats_if_rdk_tx_link_stats *link);
+
+void
+get_advance_sta_punc_bw_rx_link_stats(struct wlan_rx_link_stats *rx_stats,
+				      struct stats_if_rdk_rx_link_stats *link);
+
+#endif
 
 #if WLAN_FEATURE_11BE_MLO
 void
@@ -2072,6 +2177,7 @@ static void stats_response_handler(struct cfg80211_data *buffer)
 		add_stats_obj(reply, obj);
 }
 
+#ifndef BUILD_PROFILE_OPEN
 static int32_t send_nl_command_no_response(struct stats_command *cmd,
 					   const char *ifname)
 {
@@ -2093,6 +2199,7 @@ static int32_t send_nl_command_no_response(struct stats_command *cmd,
 						   subcmd, param, ifname,
 						   (char *)&buffer, len, 0);
 }
+#endif
 
 static int32_t send_nl_command(struct stats_command *cmd,
 			       struct cfg80211_data *buffer,
@@ -2105,7 +2212,12 @@ static int32_t send_nl_command(struct stats_command *cmd,
 	nlmsg = wifi_cfg80211_prepare_command(&g_sock_ctx.cfg80211_ctxt,
 		QCA_NL80211_VENDOR_SUBCMD_TELEMETRIC_DATA, ifname);
 	if (nlmsg) {
+#ifdef BUILD_PROFILE_OPEN
+		nl_ven_data = nla_nest_start(nlmsg, NL80211_ATTR_VENDOR_DATA |
+					     NLA_F_NESTED);
+#else
 		nl_ven_data = (struct nlattr *)start_vendor_data(nlmsg);
+#endif
 		if (!nl_ven_data) {
 			STATS_ERR("failed to start vendor data\n");
 			nlmsg_free(nlmsg);
@@ -2117,8 +2229,11 @@ static int32_t send_nl_command(struct stats_command *cmd,
 			nlmsg_free(nlmsg);
 			return -EINVAL;
 		}
+#ifdef BUILD_PROFILE_OPEN
+		nla_nest_end(nlmsg, nl_ven_data);
+#else
 		end_vendor_data(nlmsg, nl_ven_data);
-
+#endif
 		ret = send_nlmsg(&g_sock_ctx.cfg80211_ctxt, nlmsg, buffer);
 		if (ret < 0)
 			STATS_ERR("Couldn't send NL command, ret = %d\n", ret);
@@ -2130,6 +2245,7 @@ static int32_t send_nl_command(struct stats_command *cmd,
 	return ret;
 }
 
+#ifndef BUILD_PROFILE_OPEN
 static void *alloc_object(enum stats_object_e obj_type, char *ifname)
 {
 	struct object_list *temp_obj = NULL;
@@ -2949,6 +3065,31 @@ static int32_t process_and_send_stats_request(struct stats_command *cmd)
 
 	return ret;
 }
+#else
+static int32_t process_and_send_stats_request(struct stats_command *user_cmd)
+{
+	int32_t ret = 0;
+	struct cfg80211_data buffer;
+	struct stats_command cmd;
+
+	if (is_valid_cmd(user_cmd)) {
+		STATS_ERR("Invalid command\n");
+		return -EINVAL;
+	}
+	memcpy(&cmd, user_cmd, sizeof(struct stats_command));
+	cmd.recursive = user_cmd->recursive;
+	cmd.mld_link = user_cmd->mld_link;
+	memset(&buffer, 0, sizeof(struct cfg80211_data));
+	buffer.data = &cmd;
+	buffer.length = sizeof(struct stats_command);
+	buffer.callback = stats_response_handler;
+	buffer.parse_data = 1;
+
+	ret = send_nl_command(&cmd, &buffer, cmd.if_name);
+
+	return ret;
+}
+#endif
 
 static void free_basic_sta(struct stats_obj *sta)
 {
@@ -3776,6 +3917,7 @@ static void stats_lib_deinit(void)
 	close(g_sock_ctx.sock_fd);
 }
 
+#ifndef BUILD_PROFILE_OPEN
 u_int64_t libstats_get_feature_flag(char *feat_flags)
 {
 	u_int64_t feats = 0;
@@ -3804,6 +3946,7 @@ u_int64_t libstats_get_feature_flag(char *feat_flags)
 
 	return feats;
 }
+#endif
 
 int32_t libstats_request_handle(struct stats_command *cmd)
 {
@@ -3828,6 +3971,7 @@ int32_t libstats_request_handle(struct stats_command *cmd)
 	return ret;
 }
 
+#ifndef BUILD_PROFILE_OPEN
 int32_t libstats_request_async_start(struct stats_command *cmd)
 {
 	int32_t ret = 0;
@@ -3871,3 +4015,4 @@ int32_t libstats_request_async_stop(struct stats_command *cmd)
 
 	return ret;
 }
+#endif
