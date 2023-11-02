@@ -1854,7 +1854,9 @@ static uint8_t hal_get_idle_link_bm_id_kiwi(uint8_t chip_id)
  */
 static inline uint8_t hal_get_first_wow_wakeup_packet_kiwi(uint8_t *buf)
 {
-	return 0;
+	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+
+	return HAL_RX_TLV_FIRST_WAKEUP_PKT_GET(pkt_tlvs);
 }
 #endif
 
