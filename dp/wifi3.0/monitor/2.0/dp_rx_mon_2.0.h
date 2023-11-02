@@ -20,6 +20,7 @@
 
 #include <qdf_nbuf_frag.h>
 #include <hal_be_api_mon.h>
+#include <dp_mon_2.0.h>
 
 #define DP_RX_MON_PACKET_OFFSET 8
 #define DP_RX_MON_RX_HDR_OFFSET 8
@@ -81,6 +82,7 @@ static inline void dp_rx_mon_ppdu_info_cache_destroy(struct dp_pdev *pdev)
 static inline struct hal_rx_ppdu_info*
 dp_rx_mon_get_ppdu_info(struct dp_mon_pdev *mon_pdev)
 {
+	qdf_mem_zero(&mon_pdev->ppdu_info, sizeof(struct hal_rx_ppdu_info));
 	return &mon_pdev->ppdu_info;
 }
 
@@ -202,6 +204,85 @@ dp_rx_mon_populate_ppdu_info_2_0(struct hal_rx_ppdu_info *hal_ppdu_info,
 QDF_STATUS dp_rx_mon_soc_attach_2_0(struct dp_soc *soc, int lmac_id);
 void  dp_rx_mon_soc_detach_2_0(struct dp_soc *soc, int lmac_id);
 void dp_rx_mon_soc_deinit_2_0(struct dp_soc *soc, uint32_t lmac_id);
+
+#ifndef QCA_MONITOR_2_0_PKT_SUPPORT
+static inline QDF_STATUS dp_rx_mon_init_wq_sm(struct dp_pdev *pdev)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS dp_rx_mon_deinit_wq_sm(struct dp_pdev *pdev)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+dp_rx_mon_add_ppdu_info_to_wq(struct dp_pdev *pdev,
+			      struct hal_rx_ppdu_info *ppdu_info)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline int
+dp_rx_mon_flush_packet_tlv(struct dp_pdev *pdev, void *buf, uint16_t end_offset,
+			   union dp_mon_desc_list_elem_t **desc_list,
+			   union dp_mon_desc_list_elem_t **tail)
+{
+	return 0;
+}
+
+static inline void
+dp_rx_mon_handle_rx_hdr(struct dp_pdev *pdev,
+			struct hal_rx_ppdu_info *ppdu_info,
+			void *status_frag)
+{
+}
+
+static inline uint16_t
+dp_rx_mon_handle_mon_buf_addr(struct dp_pdev *pdev,
+			      struct hal_rx_ppdu_info *ppdu_info,
+			      union dp_mon_desc_list_elem_t **desc_list,
+			      union dp_mon_desc_list_elem_t **tail)
+{
+	return 0;
+}
+
+static inline void
+dp_rx_mon_handle_msdu_end(struct dp_pdev *pdev,
+			  struct hal_rx_ppdu_info *ppdu_info)
+{
+}
+
+static inline void
+dp_rx_mon_reset_mpdu_q(struct hal_rx_ppdu_info *ppdu_info)
+{
+}
+
+static inline void
+dp_rx_mon_handle_mpdu_start(struct hal_rx_ppdu_info *ppdu_info)
+{
+}
+
+static inline void
+dp_rx_mon_handle_mpdu_end(struct hal_rx_ppdu_info *ppdu_info)
+{
+}
+
+static inline QDF_STATUS
+dp_rx_mon_nbuf_add_rx_frag(qdf_nbuf_t nbuf, qdf_frag_t *frag,
+			   uint16_t frag_len, uint16_t offset,
+			   uint16_t buf_size, bool frag_ref)
+{
+	return 0;
+}
+
+static inline void
+dp_rx_mon_pf_tag_to_buf_headroom_2_0(void *nbuf,
+				     struct hal_rx_ppdu_info *ppdu_info,
+				     struct dp_pdev *pdev, struct dp_soc *soc)
+{
+}
+#endif
 #else
 static inline QDF_STATUS dp_mon_pdev_ext_init_2_0(struct dp_pdev *pdev)
 {

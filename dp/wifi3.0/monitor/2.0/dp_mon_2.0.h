@@ -255,6 +255,7 @@ struct dp_mon_desc_pool {
  * @rx_mon_free_queue: RxMON ppdu info free element queue
  * @ppdu_info_lock: RxPPDU ppdu info queue lock
  * @rx_mon_queue_depth: RxMON queue depth
+ * @ppdu_info_cache: PPDU info cache
  * @desc_count: reaped status desc count
  * @status: reaped status buffer per ppdu
  * @lite_mon_rx_config: rx litemon config
@@ -263,7 +264,6 @@ struct dp_mon_desc_pool {
  * @prev_rxmon_cookie: prev rxmon cookie
  * @prev_rxmon_pkt_desc: prev packet buff desc
  * @prev_rxmon_pkt_cookie: prev packet buff desc cookie
- * @ppdu_info_cache: PPDU info cache
  * @total_free_elem: total free element in queue
  * @rx_tlv_logger: Rx TLV logger struct
  */
@@ -276,6 +276,7 @@ struct dp_mon_pdev_be {
 	struct dp_pdev_tx_monitor_be tx_monitor_be;
 	struct dp_tx_monitor_drop_stats tx_stats;
 #endif
+#if defined(WLAN_PKT_CAPTURE_RX_2_0) && defined(QCA_MONITOR_2_0_PKT_SUPPORT)
 	qdf_spinlock_t rx_mon_wq_lock;
 	qdf_workqueue_t *rx_mon_workqueue;
 	qdf_work_t rx_mon_work;
@@ -283,6 +284,8 @@ struct dp_mon_pdev_be {
 	TAILQ_HEAD(, hal_rx_ppdu_info) rx_mon_queue;
 	TAILQ_HEAD(, hal_rx_ppdu_info) rx_mon_free_queue;
 	qdf_spinlock_t ppdu_info_lock;
+	qdf_kmem_cache_t ppdu_info_cache;
+#endif
 	uint16_t rx_mon_queue_depth;
 	uint16_t desc_count;
 	struct dp_mon_desc *status[DP_MON_MAX_STATUS_BUF];
@@ -294,7 +297,6 @@ struct dp_mon_pdev_be {
 	uint32_t prev_rxmon_cookie;
 	void *prev_rxmon_pkt_desc;
 	uint32_t prev_rxmon_pkt_cookie;
-	qdf_kmem_cache_t ppdu_info_cache;
 	uint32_t total_free_elem;
 #ifdef MONITOR_TLV_RECORDING_ENABLE
 	struct dp_mon_tlv_logger *rx_tlv_log;
