@@ -3174,16 +3174,7 @@ target_if_consume_sscan_summary_report_gen3(
 	padding = (struct spectral_sscan_summary_report_padding_gen3_v2 *)*data;
 
 	if (scan_radio_blanking) {
-		uint32_t blanking_tag;
-		uint8_t blanking_tag_size;
-		uint8_t blanking_tag_pos;
-
-		blanking_tag_size =
-			SSCAN_SUMMARY_REPORT_PAD_HDR_A_BLANKING_SIZE_GEN3_V2;
-		blanking_tag_pos =
-			SSCAN_SUMMARY_REPORT_PAD_HDR_A_BLANKING_POS_GEN3_V2;
-		blanking_tag = get_bitfield(padding->hdr_a, blanking_tag_size,
-					    blanking_tag_pos);
+		uint32_t blanking_tag = padding->hdr_a;
 
 		if (blanking_tag ==
 		    SSCAN_SUMMARY_REPORT_PAD_HDR_A_BLANKING_TAG_GEN3_V2)
