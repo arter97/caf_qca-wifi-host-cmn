@@ -4901,8 +4901,7 @@ _target_if_set_spectral_config(struct target_if_spectral *spectral,
 		sparams->ss_pwr_format = !!param->value;
 		break;
 	case SPECTRAL_PARAM_RPT_MODE:
-		if ((param->value < SPECTRAL_PARAM_RPT_MODE_MIN) ||
-		    (param->value > SPECTRAL_PARAM_RPT_MODE_MAX)) {
+		if (param->value > SPECTRAL_PARAM_RPT_MODE_MAX) {
 			*err = SPECTRAL_SCAN_ERR_PARAM_INVALID_VALUE;
 			return QDF_STATUS_E_FAILURE;
 		}
