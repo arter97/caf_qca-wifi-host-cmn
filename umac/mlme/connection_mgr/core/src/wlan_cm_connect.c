@@ -1308,6 +1308,16 @@ static void cm_teardown_tdls(struct wlan_objmgr_vdev *vdev)
 	wlan_tdls_check_and_teardown_links_sync(psoc, vdev);
 }
 
+static void cm_handle_connect_start_req(struct wlan_objmgr_vdev *vdev,
+					struct wlan_cm_connect_req *req)
+{
+	if (!wlan_vdev_mlme_is_mlo_link_vdev(vdev))
+		cm_teardown_tdls(vdev);
+
+	wlan_cm_set_force_20mhz_in_24ghz(vdev,
+					 req->ht_caps & WLAN_HTCAP_C_CHWIDTH40);
+}
+
 #else
 static inline bool
 cm_is_any_other_vdev_connecting_disconnecting(struct cnx_mgr *cm_ctx,
@@ -1442,6 +1452,11 @@ post_err:
 }
 
 static inline void cm_teardown_tdls(struct wlan_objmgr_vdev *vdev) {}
+
+static inline void cm_handle_connect_start_req(struct wlan_objmgr_vdev *vdev,
+					       struct wlan_cm_connect_req *req)
+{
+}
 
 #endif /* CONN_MGR_ADV_FEATURE */
 
@@ -3461,8 +3476,7 @@ QDF_STATUS cm_connect_start_req(struct wlan_objmgr_vdev *vdev,
 
 	cm_set_crypto_params_from_ie(&connect_req->req);
 
-	if (!wlan_vdev_mlme_is_mlo_link_vdev(vdev))
-		cm_teardown_tdls(vdev);
+	cm_handle_connect_start_req(vdev, req);
 
 	status = cm_sm_deliver_event(vdev, WLAN_CM_SM_EV_CONNECT_REQ,
 				     sizeof(*connect_req), connect_req);
