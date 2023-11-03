@@ -1734,6 +1734,15 @@ QDF_STATUS dp_peer_add_ast(struct dp_soc *soc,
 		return QDF_STATUS_E_RESOURCES;
 	}
 
+	if ((type != CDP_TXRX_AST_TYPE_STATIC &&
+	     type != CDP_TXRX_AST_TYPE_STA_BSS) &&
+	    soc->num_wds_ast_entries >=
+	    wlan_cfg_get_max_ast_idx(soc->wlan_cfg_ctx) -
+	    wlan_cfg_get_resv_ast_idx(soc->wlan_cfg_ctx)) {
+		qdf_spin_unlock_bh(&soc->ast_lock);
+		return QDF_STATUS_E_RESOURCES;
+	}
+
 	/* If AST entry already exists , just return from here
 	 * ast entry with same mac address can exist on different radios
 	 * if ast_override support is enabled use search by pdev in this
@@ -1902,6 +1911,10 @@ add_ast_entry:
 	soc->num_ast_entries++;
 	dp_peer_ast_hash_add(soc, ast_entry);
 
+	if (type != CDP_TXRX_AST_TYPE_STATIC &&
+	    type != CDP_TXRX_AST_TYPE_STA_BSS)
+		soc->num_wds_ast_entries++;
+
 	if ((ast_entry->type != CDP_TXRX_AST_TYPE_STATIC) &&
 	    (ast_entry->type != CDP_TXRX_AST_TYPE_SELF) &&
 	    (ast_entry->type != CDP_TXRX_AST_TYPE_STA_BSS) &&
@@ -1934,6 +1947,12 @@ void dp_peer_free_ast_entry(struct dp_soc *soc,
 
 	ast_entry->callback = NULL;
 	ast_entry->cookie = NULL;
+
+	if (ast_entry->type != CDP_TXRX_AST_TYPE_STATIC &&
+	    ast_entry->type != CDP_TXRX_AST_TYPE_STA_BSS) {
+		if (soc->num_wds_ast_entries)
+			soc->num_wds_ast_entries--;
+	}
 
 	DP_STATS_INC(soc, ast.deleted, 1);
 	dp_peer_ast_hash_remove(soc, ast_entry);
@@ -2332,6 +2351,11 @@ static uint32_t dp_peer_ast_free_wds_entries(struct dp_soc *soc,
 		TAILQ_INSERT_TAIL(&ast_local_list, ast_entry,
 				  ase_list_elem);
 		soc->num_ast_entries--;
+		if (ast_entry->type != CDP_TXRX_AST_TYPE_STATIC &&
+		    ast_entry->type != CDP_TXRX_AST_TYPE_STA_BSS) {
+			if (soc->num_wds_ast_entries)
+				soc->num_wds_ast_entries--;
+		}
 	}
 
 	qdf_spin_unlock_bh(&soc->ast_lock);

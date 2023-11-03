@@ -3031,6 +3031,8 @@ struct dp_soc {
 	uint8_t da_war_enabled;
 	/* number of active ast entries */
 	uint32_t num_ast_entries;
+	/* number of WDS ast entries */
+	uint32_t num_wds_ast_entries;
 	/* peer extended rate statistics context at soc level*/
 	struct cdp_soc_rate_stats_ctx *rate_stats_ctx;
 	/* peer extended rate statistics control flag */

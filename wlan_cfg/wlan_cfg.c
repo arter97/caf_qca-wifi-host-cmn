@@ -3985,6 +3985,28 @@ wlan_soc_tx_packet_inspect_attach(struct cdp_ctrl_objmgr_psoc *psoc,
 }
 #endif
 
+#ifdef FEATURE_AST
+/**
+ * wlan_soc_ast_cfg_attach() - Update AST config
+ * @psoc: object manager psoc
+ * @wlan_cfg_ctx: dp soc cfg ctx
+ *
+ * Return: None
+ */
+static void
+wlan_soc_ast_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
+			struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
+{
+	wlan_cfg_ctx->resv_ast_idx = cfg_get(psoc, CFG_DP_RESV_AST_IDX);
+}
+#else
+static void
+wlan_soc_ast_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
+			struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
+{
+}
+#endif /* FEATURE_AST */
+
 #ifdef DP_UMAC_HW_RESET_SUPPORT
 /**
  * wlan_soc_umac_reset_cfg_attach() - Update umac reset buffer window config
@@ -4195,6 +4217,7 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	wlan_cfg_ctx->rx_buffer_size = cfg_get(psoc, CFG_DP_RX_BUFFER_SIZE);
 	wlan_cfg_ctx->avg_rate_stats_filter_val =
 		cfg_get(psoc, CFG_DP_STATS_AVG_RATE_FILTER);
+	wlan_soc_ast_cfg_attach(psoc, wlan_cfg_ctx);
 	return wlan_cfg_ctx;
 }
 
@@ -4451,6 +4474,7 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	wlan_cfg_ctx->rx_buffer_size = cfg_get(psoc, CFG_DP_RX_BUFFER_SIZE);
 	wlan_cfg_ctx->avg_rate_stats_filter_val =
 		cfg_get(psoc, CFG_DP_STATS_AVG_RATE_FILTER);
+	wlan_soc_ast_cfg_attach(psoc, wlan_cfg_ctx);
 	return wlan_cfg_ctx;
 }
 #endif
@@ -4526,6 +4550,12 @@ void wlan_cfg_set_max_peer_id(struct wlan_cfg_dp_soc_ctxt *cfg, uint32_t val)
 void wlan_cfg_set_max_ast_idx(struct wlan_cfg_dp_soc_ctxt *cfg, uint32_t val)
 {
 	cfg->max_ast_idx = val;
+
+	if (cfg->resv_ast_idx > cfg->max_ast_idx) {
+		qdf_err("resv_ast_idx %u is greater than max_ast_idx %u",
+			cfg->resv_ast_idx, cfg->max_ast_idx);
+		cfg->resv_ast_idx = cfg->max_ast_idx;
+	}
 }
 
 int wlan_cfg_get_max_ast_idx(struct wlan_cfg_dp_soc_ctxt *cfg)

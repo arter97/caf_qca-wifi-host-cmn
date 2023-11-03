@@ -253,6 +253,7 @@ struct wlan_srng_cfg {
  * @rxdma1_enable: flag to indicate if rxdma1 is enabled
  * @delay_mon_replenish: delay monitor buffer replenish
  * @max_ast_idx:
+ * @resv_ast_idx: AST entries reserved for directly connected client
  * @tx_desc_limit_0: tx_desc limit for 5 GHz High
  * @tx_desc_limit_1: tx_desc limit for 2 GHz
  * @tx_desc_limit_2: tx_desc limit for 5 GHz Low
@@ -457,6 +458,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	bool rxdma1_enable;
 	bool delay_mon_replenish;
 	int max_ast_idx;
+	int resv_ast_idx;
 	int tx_desc_limit_0;
 	int tx_desc_limit_1;
 	int tx_desc_limit_2;
@@ -2758,4 +2760,24 @@ bool wlan_cfg_get_ast_indication_disable(struct wlan_cfg_dp_soc_ctxt *cfg);
  * Return: dpdk_cfg
  */
 int wlan_cfg_get_dp_soc_dpdk_cfg(struct cdp_ctrl_objmgr_psoc *psoc);
+
+#ifdef FEATURE_AST
+/**
+ * wlan_cfg_get_resv_ast_idx() - Get reserve AST entry config for non wds client
+ * @cfg: soc configuration context
+ *
+ * Return: reserved AST entry config for non WDS client
+ */
+static inline
+uint32_t wlan_cfg_get_resv_ast_idx(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->resv_ast_idx;
+}
+#else
+static inline
+uint32_t wlan_cfg_get_resv_ast_idx(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return 0;
+}
+#endif /* FEATURE_AST */
 #endif /*__WLAN_CFG_H*/
