@@ -361,6 +361,14 @@ void wlan_cm_hw_mode_change_resp(struct wlan_objmgr_pdev *pdev, uint8_t vdev_id,
 }
 #endif /* ifdef POLICY_MGR_ENABLE */
 
+#ifdef WLAN_FEATURE_LL_LT_SAP
+void wlan_cm_bearer_switch_resp(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id,
+				wlan_cm_id cm_id, QDF_STATUS status)
+{
+	cm_bearer_switch_resp(psoc, vdev_id, cm_id, status);
+}
+#endif
+
 #ifdef SM_ENG_HIST_ENABLE
 void wlan_cm_sm_history_print(struct wlan_objmgr_vdev *vdev)
 {

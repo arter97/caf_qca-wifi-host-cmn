@@ -1511,8 +1511,15 @@ static int dp_tx_ipa_uc_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 			break;
 		}
 
-		qdf_nbuf_map_single(soc->osdev, nbuf,
-				    QDF_DMA_BIDIRECTIONAL);
+		retval = qdf_nbuf_map_single(soc->osdev, nbuf,
+					     QDF_DMA_BIDIRECTIONAL);
+		if (qdf_unlikely(retval != QDF_STATUS_SUCCESS)) {
+			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+				  "%s: nbuf map failed", __func__);
+			qdf_nbuf_free(nbuf);
+			retval = -EFAULT;
+			break;
+		}
 		buffer_paddr = qdf_nbuf_get_frag_paddr(nbuf, 0);
 		qdf_mem_dp_tx_skb_cnt_inc();
 		qdf_mem_dp_tx_skb_inc(qdf_nbuf_get_end_offset(nbuf));
@@ -1574,6 +1581,8 @@ int dp_ipa_uc_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
 			  "%s: DP IPA UC TX attach fail code %d",
 			  __func__, error);
+		if (error == -EFAULT)
+			dp_tx_ipa_uc_detach(soc, pdev);
 		return error;
 	}
 
@@ -3874,8 +3883,11 @@ static qdf_nbuf_t dp_ipa_frag_nbuf_linearize(struct dp_soc *soc,
 	uint32_t nbuf_len = qdf_nbuf_len(nbuf);
 	bool is_nbuf_head = true;
 	uint32_t copy_len = 0;
+	uint16_t buf_size;
 
-	dst_nbuf = qdf_nbuf_alloc(soc->osdev, RX_DATA_BUFFER_SIZE,
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
+
+	dst_nbuf = qdf_nbuf_alloc(soc->osdev, buf_size,
 				  RX_BUFFER_RESERVATION,
 				  RX_DATA_BUFFER_ALIGNMENT, FALSE);
 
@@ -3884,7 +3896,7 @@ static qdf_nbuf_t dp_ipa_frag_nbuf_linearize(struct dp_soc *soc,
 		return NULL;
 	}
 
-	if ((nbuf_len + L3_HEADER_PADDING) > RX_DATA_BUFFER_SIZE) {
+	if ((nbuf_len + L3_HEADER_PADDING) > buf_size) {
 		qdf_nbuf_free(dst_nbuf);
 		dp_err_rl("nbuf is jumbo data");
 		return NULL;

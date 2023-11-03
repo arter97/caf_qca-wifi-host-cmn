@@ -41,6 +41,10 @@
 #include <qdf_ipa.h>
 #endif
 #endif
+#ifdef WLAN_SUPPORT_DPDK
+#include <cfgmgr_api_if.h>
+#include <dpdk_wlan_msg_types.h>
+#endif
 
 /*
  * bitmap values to indicate special handling of peer_delete
@@ -746,8 +750,14 @@ struct cdp_cmn_ops {
 	void (*txrx_get_tqm_offset)(struct cdp_soc_t *soc_hdl, uint64_t *value);
 	uint64_t (*get_fst_cmem_base)(struct cdp_soc_t *soc_hdl, uint64_t size);
 #ifdef WLAN_SUPPORT_DPDK
-	void (*dpdk_get_ring_info)(struct cdp_soc_t *soc_hdl,
-				   qdf_uio_info_t *uio_info);
+	uint8_t (*dpdk_get_ring_info)(struct cdp_soc_t *soc_hdl,
+				      qdf_uio_info_t *uio_info);
+	int (*cfgmgr_get_soc_info)(struct cdp_soc_t *soc_hdl, uint8_t soc_id,
+				   struct dpdk_wlan_soc_info_event *ev_buf);
+	int (*cfgmgr_get_vdev_info)(struct cdp_soc_t *soc_hdl, uint8_t soc_id,
+				    struct dpdk_wlan_vdev_info_event *ev_buf);
+	int (*cfgmgr_get_peer_info)(struct cdp_soc_t *soc_hdl, uint8_t soc_id,
+				    struct dpdk_wlan_peer_info *ev_buf);
 #endif
 };
 

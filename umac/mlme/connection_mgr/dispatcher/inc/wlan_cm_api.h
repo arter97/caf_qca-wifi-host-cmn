@@ -662,4 +662,18 @@ enum MLO_TYPE
 wlan_cm_bss_mlo_type(struct wlan_objmgr_psoc *psoc,
 		     struct scan_cache_entry *entry,
 		     qdf_list_t *scan_list);
+
+#ifdef WLAN_FEATURE_LL_LT_SAP
+/**
+ * wlan_cm_bearer_switch_resp() - Bearer switch response
+ * @psoc: psoc pointer
+ * @vdev_id: vdev id
+ * @cm_id: connection ID which gave the hw mode change request
+ * @status: status of the Bearer switch
+ *
+ * Return: void
+ */
+void wlan_cm_bearer_switch_resp(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id,
+				wlan_cm_id cm_id, QDF_STATUS status);
+#endif /* WLAN_FEATURE_LL_LT_SAP */
 #endif /* __WLAN_CM_UCFG_API_H */

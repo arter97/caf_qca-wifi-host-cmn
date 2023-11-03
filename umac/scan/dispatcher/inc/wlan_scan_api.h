@@ -126,11 +126,28 @@ QDF_STATUS wlan_scan_cfg_get_passive_6g_dwelltime(struct wlan_objmgr_psoc *psoc,
  */
 void wlan_scan_cfg_get_min_dwelltime_6g(struct wlan_objmgr_psoc *psoc,
 					uint32_t *min_dwell_time_6ghz);
+
+/**
+ * wlan_scan_cfg_set_scan_mode_6g() - API to set scan mode for 6 GHz
+ * @psoc: pointer to psoc object
+ * @scan_mode_6g: scan mode value for 6 GHz
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_scan_cfg_set_scan_mode_6g(struct wlan_objmgr_psoc *psoc,
+					  enum scan_mode_6ghz scan_mode_6g);
 #else
 static inline
 void wlan_scan_cfg_get_min_dwelltime_6g(struct wlan_objmgr_psoc *psoc,
 					uint32_t *min_dwell_time_6ghz)
 {
+}
+
+static inline
+QDF_STATUS wlan_scan_cfg_set_scan_mode_6g(struct wlan_objmgr_psoc *psoc,
+					  enum scan_mode_6ghz scan_mode_6g)
+{
+	return QDF_STATUS_E_NOSUPPORT;
 }
 #endif
 

@@ -618,12 +618,13 @@ static bool cm_subst_join_pending_event(void *ctx, uint16_t event,
 		break;
 	case WLAN_CM_SM_EV_HW_MODE_SUCCESS:
 	case WLAN_CM_SM_EV_HW_MODE_FAILURE:
+	case WLAN_CM_SM_EV_BEARER_SWITCH_COMPLETE:
 		/* check if cm id is valid for the current req */
 		if (!cm_check_cmid_match_list_head(cm_ctx, data)) {
 			event_handled = false;
 			break;
 		}
-		cm_handle_hw_mode_change(cm_ctx, data, event);
+		cm_ser_connect_after_mode_change_resp(cm_ctx, data, event);
 		break;
 	case WLAN_CM_SM_EV_SCAN:
 		cm_sm_transition_to(cm_ctx, WLAN_CM_SS_SCAN);
@@ -1279,6 +1280,7 @@ static const char *cm_sm_event_names[] = {
 	"EV_REASSOC_TIMER",
 	"EV_HO_ROAM_DISCONNECT_DONE",
 	"EV_RSO_STOP_RSP",
+	"EV_BEARER_SWITCH_COMPLETE",
 };
 
 enum wlan_cm_sm_state cm_get_state(struct cnx_mgr *cm_ctx)

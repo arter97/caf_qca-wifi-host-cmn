@@ -1442,6 +1442,14 @@ cm_get_band_score(uint32_t freq, struct scoring_cfg *score_config)
 
 #ifdef WLAN_FEATURE_11BE
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+#if defined (SAP_MULTI_LINK_EMULATION)
+bool wlan_cm_is_eht_allowed_for_current_security(
+			struct wlan_objmgr_psoc *psoc,
+			struct scan_cache_entry *scan_entry)
+{
+	return true;
+}
+#else
 bool wlan_cm_is_eht_allowed_for_current_security(
 			struct wlan_objmgr_psoc *psoc,
 			struct scan_cache_entry *scan_entry)
@@ -1513,6 +1521,7 @@ bool wlan_cm_is_eht_allowed_for_current_security(
 		   QDF_MAC_ADDR_REF(scan_entry->bssid.bytes), *rsnxe_caps);
 	return false;
 }
+#endif
 #endif
 
 static int cm_calculate_eht_score(struct wlan_objmgr_psoc *psoc,
@@ -2946,7 +2955,13 @@ void wlan_cm_reset_check_6ghz_security(struct wlan_objmgr_psoc *psoc)
 	mlme_psoc_obj->psoc_cfg.score_config.check_6ghz_security =
 					cfg_get(psoc, CFG_CHECK_6GHZ_SECURITY);
 }
-
+#if defined (SAP_MULTI_LINK_EMULATION)
+	/*Disable security check for 2link SAP emulation */
+bool wlan_cm_get_check_6ghz_security(struct wlan_objmgr_psoc *psoc)
+{
+	return true;
+}
+#else
 bool wlan_cm_get_check_6ghz_security(struct wlan_objmgr_psoc *psoc)
 {
 	struct psoc_mlme_obj *mlme_psoc_obj;
@@ -2957,7 +2972,7 @@ bool wlan_cm_get_check_6ghz_security(struct wlan_objmgr_psoc *psoc)
 
 	return mlme_psoc_obj->psoc_cfg.score_config.check_6ghz_security;
 }
-
+#endif
 void wlan_cm_set_standard_6ghz_conn_policy(struct wlan_objmgr_psoc *psoc,
 					   bool value)
 {

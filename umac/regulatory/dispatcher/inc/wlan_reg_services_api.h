@@ -2166,6 +2166,15 @@ uint16_t wlan_reg_chan_opclass_to_freq(uint8_t chan,
 				       bool global_tbl_lookup);
 
 /**
+ * wlan_reg_compute_6g_center_freq_from_cfi() - Given the IEEE value of the
+ * 6 GHz center frequency, find the 6 GHz center frequency.
+ * @ieee_6g_cfi: IEEE value of 6 GHz cfi
+ *
+ * Return: Center frequency in MHz
+ */
+qdf_freq_t wlan_reg_compute_6g_center_freq_from_cfi(uint8_t ieee_6g_cfi);
+
+/**
  * wlan_reg_chan_opclass_to_freq_auto() - Convert channel number and opclass to
  * frequency
  * @chan: IEEE channel number

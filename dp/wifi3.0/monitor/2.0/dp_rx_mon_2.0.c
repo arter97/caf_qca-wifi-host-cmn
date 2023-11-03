@@ -1238,6 +1238,7 @@ dp_rx_mon_flush_packet_tlv(struct dp_pdev *pdev, void *buf, uint16_t end_offset,
 	uint8_t *rx_tlv_start;
 	uint16_t tlv_status = HAL_TLV_STATUS_BUF_DONE;
 	struct hal_rx_ppdu_info *ppdu_info;
+	uint32_t cookie_2;
 
 	if (!buf)
 		return work_done;
@@ -1258,9 +1259,19 @@ dp_rx_mon_flush_packet_tlv(struct dp_pdev *pdev, void *buf, uint16_t end_offset,
 							buf);
 
 		if (tlv_status == HAL_TLV_STATUS_MON_BUF_ADDR) {
-			struct dp_mon_desc *mon_desc = (struct dp_mon_desc *)(uintptr_t)ppdu_info->packet_info.sw_cookie;
+			struct dp_mon_desc *mon_desc;
+			unsigned long long desc = ppdu_info->packet_info.sw_cookie;
+
+			cookie_2 = DP_MON_GET_COOKIE(desc);
+			mon_desc = DP_MON_GET_DESC(desc);
 
 			qdf_assert_always(mon_desc);
+
+			if (mon_desc->cookie_2 != cookie_2) {
+				mon_pdev->rx_mon_stats.dup_mon_sw_desc++;
+				qdf_err("duplicate cookie found mon_desc:%pK", mon_desc);
+				qdf_assert_always(0);
+			}
 
 			/* WAR: sometimes duplicate pkt desc are received
 			 * from HW, this check gracefully handles
@@ -1367,8 +1378,6 @@ dp_rx_mon_flush_status_buf_queue(struct dp_pdev *pdev)
 		qdf_frag_free(buf);
 		DP_STATS_INC(mon_soc, frag_free, 1);
 	}
-	mon_pdev_be->prev_rxmon_pkt_desc = NULL;
-	mon_pdev_be->prev_rxmon_pkt_cookie = 0;
 
 	if (work_done) {
 		mon_pdev->rx_mon_stats.mon_rx_bufs_replenished_dest +=
@@ -1392,9 +1401,6 @@ dp_rx_mon_handle_flush_n_trucated_ppdu(struct dp_soc *soc,
 				       struct dp_pdev *pdev,
 				       struct dp_mon_desc *mon_desc)
 {
-	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
-	struct dp_mon_pdev_be *mon_pdev_be =
-			dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
 	union dp_mon_desc_list_elem_t *desc_list = NULL;
 	union dp_mon_desc_list_elem_t *tail = NULL;
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
@@ -1417,9 +1423,6 @@ dp_rx_mon_handle_flush_n_trucated_ppdu(struct dp_soc *soc,
 		qdf_frag_free(buf);
 		DP_STATS_INC(mon_soc, frag_free, 1);
 	}
-
-	mon_pdev_be->prev_rxmon_desc = NULL;
-	mon_pdev_be->prev_rxmon_cookie = 0;
 
 	if (desc_list)
 		dp_mon_add_desc_list_to_free_list(soc, &desc_list, &tail,
@@ -1466,6 +1469,7 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 	uint8_t num_buf_reaped = 0;
 	bool rx_hdr_valid = true;
 	QDF_STATUS status;
+	uint32_t cookie_2;
 
 	if (!mon_pdev->monitor_configured &&
 	    !dp_lite_mon_is_rx_enabled(mon_pdev)) {
@@ -1576,10 +1580,19 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 		struct hal_rx_mon_msdu_info *buf_info;
 		struct hal_mon_packet_info *packet_info = &ppdu_info->packet_info;
 		struct dp_mon_desc *mon_desc = (struct dp_mon_desc *)(uintptr_t)ppdu_info->packet_info.sw_cookie;
+		unsigned long long desc = ppdu_info->packet_info.sw_cookie;
 		struct hal_rx_mon_mpdu_info *mpdu_info;
 		uint16_t frag_idx = 0;
 
+		cookie_2 = DP_MON_GET_COOKIE(desc);
+		mon_desc = DP_MON_GET_DESC(desc);
 		qdf_assert_always(mon_desc);
+
+		if (mon_desc->cookie_2 != cookie_2) {
+			mon_pdev->rx_mon_stats.dup_mon_sw_desc++;
+			qdf_err("duplicate cookie found mon_desc:%pK", mon_desc);
+			qdf_assert_always(0);
+		}
 
 		if (mon_desc->magic != DP_MON_DESC_MAGIC)
 			qdf_assert_always(0);
@@ -1962,10 +1975,6 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 		mon_pdev->rx_mon_stats.status_buf_count++;
 		dp_mon_record_index_update(mon_pdev_be);
 	}
-	mon_pdev_be->prev_rxmon_desc = NULL;
-	mon_pdev_be->prev_rxmon_cookie = 0;
-	mon_pdev_be->prev_rxmon_pkt_desc = NULL;
-	mon_pdev_be->prev_rxmon_pkt_cookie = 0;
 
 	dp_mon_rx_stats_update_rssi_dbm_params(mon_pdev, ppdu_info);
 	if (work_done) {
@@ -2197,6 +2206,7 @@ dp_rx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 	uint32_t work_done = 0;
 	struct hal_rx_ppdu_info *ppdu_info = NULL;
 	QDF_STATUS status;
+	uint32_t cookie_2;
 	if (!pdev || !hal_soc) {
 		dp_mon_err("%pK: pdev or hal_soc is null, mac_id = %d",
 			   soc, mac_id);
@@ -2227,6 +2237,7 @@ dp_rx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 				&& quota--)) {
 		struct hal_mon_desc hal_mon_rx_desc = {0};
 		struct dp_mon_desc *mon_desc;
+		unsigned long long desc;
 		hal_be_get_mon_dest_status(soc->hal_soc,
 					   rx_mon_dst_ring_desc,
 					   &hal_mon_rx_desc);
@@ -2241,8 +2252,17 @@ dp_rx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 			dp_rx_mon_update_drop_cnt(mon_pdev, &hal_mon_rx_desc);
 			continue;
 		}
-		mon_desc = (struct dp_mon_desc *)(uintptr_t)(hal_mon_rx_desc.buf_addr);
+		desc = hal_mon_rx_desc.buf_addr;
+		cookie_2 = DP_MON_GET_COOKIE(desc);
+		mon_desc = DP_MON_GET_DESC(desc);
+
 		qdf_assert_always(mon_desc);
+
+		if (mon_desc->cookie_2 != cookie_2) {
+			mon_pdev->rx_mon_stats.dup_mon_sw_desc++;
+			qdf_err("duplicate cookie found mon_desc:%pK", mon_desc);
+			qdf_assert_always(0);
+		}
 
 		if ((mon_desc == mon_pdev_be->prev_rxmon_desc) &&
 		    (mon_desc->cookie == mon_pdev_be->prev_rxmon_cookie)) {

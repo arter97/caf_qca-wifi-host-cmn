@@ -2708,6 +2708,15 @@ enum phy_ch_width reg_find_chwidth_from_bw(uint16_t bw);
 
 #ifdef CONFIG_BAND_6GHZ
 /**
+ * reg_compute_6g_center_freq_from_cfi() - Given the IEEE value of the
+ * 6 GHz center frequency, find the 6 GHz center frequency.
+ * @ieee_6g_cfi: IEEE value of 6 GHz cfi
+ *
+ * Return: Center frequency in MHz
+ */
+qdf_freq_t reg_compute_6g_center_freq_from_cfi(uint8_t ieee_6g_cfi);
+
+/**
  * reg_get_thresh_priority_freq() - Get the prioritized frequency value
  * @pdev: pdev pointer
  */
@@ -2752,6 +2761,14 @@ int8_t reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
 			uint16_t in_punc_pattern,
 			bool is_client_list_lookup_needed,
 			enum reg_6g_client_type client_type);
+
+#else
+static inline
+qdf_freq_t reg_compute_6g_center_freq_from_cfi(uint8_t ieee_6g_cfi)
+{
+	return 0;
+}
+
 #endif /* CONFIG_BAND_6GHZ */
 
 /**

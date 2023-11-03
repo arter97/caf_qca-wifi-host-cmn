@@ -632,7 +632,7 @@ dp_tx_mlo_mcast_multipass_send(struct dp_vdev_be *be_vdev,
 	} else {
 		/* return when vlan map is not initialized */
 		if (!ptnr_vdev->iv_vlan_map)
-			return;
+			goto nbuf_free;
 		group_key = ptnr_vdev->iv_vlan_map[ptr->vlan_id];
 
 		/*
@@ -640,7 +640,7 @@ dp_tx_mlo_mcast_multipass_send(struct dp_vdev_be *be_vdev,
 		 */
 
 		if (!group_key)
-			return;
+			goto nbuf_free;
 
 		dp_tx_remove_vlan_tag(ptnr_vdev, nbuf_clone);
 		dp_tx_add_groupkey_metadata(ptnr_vdev, &msdu_info, group_key);
@@ -653,6 +653,8 @@ dp_tx_mlo_mcast_multipass_send(struct dp_vdev_be *be_vdev,
 					&msdu_info,
 					DP_MLO_MCAST_REINJECT_PEER_ID,
 					NULL);
+
+nbuf_free:
 	if (qdf_unlikely(nbuf_clone)) {
 		dp_info("pkt send failed");
 		qdf_nbuf_free(nbuf_clone);
@@ -1869,7 +1871,7 @@ qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 				& DP_TXRX_HLOS_TID_OVERRIDE_ENABLED)) {
 		tid = qdf_nbuf_get_priority(nbuf);
 
-		if (tid == DP_TX_INVALID_QOS_TAG)
+		if (tid >= DP_TX_INVALID_QOS_TAG)
 			tid = HTT_TX_EXT_TID_INVALID;
 	}
 
@@ -1930,7 +1932,7 @@ qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 
 	if (tid != HTT_TX_EXT_TID_INVALID) {
 		hal_tx_desc_cached[5] |= tid << TCL_DATA_CMD_HLOS_TID_LSB;
-		hal_tx_desc_cached[5] |= tid << TCL_DATA_CMD_HLOS_TID_OVERWRITE_LSB;
+		hal_tx_desc_cached[5] |= 1 << TCL_DATA_CMD_HLOS_TID_OVERWRITE_LSB;
 	}
 
 	if (vdev->opmode == wlan_op_mode_sta)

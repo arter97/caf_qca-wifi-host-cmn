@@ -5276,6 +5276,9 @@ void dp_rx_err_send_pktlog(struct dp_soc *soc, struct dp_pdev *pdev,
 	uint16_t msdu_len, nbuf_len;
 	uint8_t *rx_tlv_hdr;
 	struct hal_rx_msdu_metadata msdu_metadata;
+	uint16_t buf_size;
+
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 
 	if (qdf_unlikely(packetdump_cb)) {
 		rx_tlv_hdr = qdf_nbuf_data(nbuf);
@@ -5293,8 +5296,7 @@ void dp_rx_err_send_pktlog(struct dp_soc *soc, struct dp_pdev *pdev,
 
 		if (set_pktlen) {
 			msdu_len = nbuf_len + skip_size;
-			qdf_nbuf_set_pktlen(nbuf, qdf_min(msdu_len,
-					    (uint16_t)RX_DATA_BUFFER_SIZE));
+			qdf_nbuf_set_pktlen(nbuf, qdf_min(msdu_len, buf_size));
 		}
 
 		qdf_nbuf_pull_head(nbuf, skip_size);

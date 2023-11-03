@@ -500,7 +500,7 @@ hal_txmon_parse_pcu_ppdu_setup_init(void *tx_tlv,
 	/* protection frame address 1 */
 	*(uint32_t *)&prot_status_info->addr1[0] =
 		pcu_init->protection_frame_ad1_31_0;
-	*(uint32_t *)&prot_status_info->addr1[4] =
+	*(uint16_t *)&prot_status_info->addr1[4] =
 		pcu_init->protection_frame_ad1_47_32;
 	/* protection frame address 2 */
 	*(uint32_t *)&prot_status_info->addr2[0] =
@@ -510,7 +510,7 @@ hal_txmon_parse_pcu_ppdu_setup_init(void *tx_tlv,
 	/* protection frame address 3 */
 	*(uint32_t *)&prot_status_info->addr3[0] =
 		pcu_init->protection_frame_ad3_31_0;
-	*(uint32_t *)&prot_status_info->addr3[4] =
+	*(uint16_t *)&prot_status_info->addr3[4] =
 		pcu_init->protection_frame_ad3_47_32;
 	/* protection frame address 4 */
 	*(uint32_t *)&prot_status_info->addr4[0] =
@@ -539,7 +539,7 @@ hal_txmon_parse_peer_entry(void *tx_tlv,
 
 	*(uint32_t *)&tx_status_info->addr1[0] =
 				peer_entry->mac_addr_a_31_0;
-	*(uint32_t *)&tx_status_info->addr1[4] =
+	*(uint16_t *)&tx_status_info->addr1[4] =
 				peer_entry->mac_addr_a_47_32;
 	*(uint32_t *)&tx_status_info->addr2[0] =
 				peer_entry->mac_addr_b_15_0;
@@ -2164,7 +2164,7 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 					HAL_TX_DESC_GET_64(tx_tlv,
 							   RX_FRAME_BITMAP_ACK,
 							   ADDR1_31_0);
-		*(uint32_t *)&tx_status_info->addr2[4] =
+		*(uint16_t *)&tx_status_info->addr2[4] =
 					HAL_TX_DESC_GET_64(tx_tlv,
 							   RX_FRAME_BITMAP_ACK,
 							   ADDR1_47_32);
@@ -2232,7 +2232,7 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 				HAL_TX_DESC_GET_64(tx_tlv,
 						   RX_FRAME_1K_BITMAP_ACK,
 						   ADDR1_31_0);
-		*(uint32_t *)&tx_status_info->addr1[4] =
+		*(uint16_t *)&tx_status_info->addr1[4] =
 				HAL_TX_DESC_GET_64(tx_tlv,
 						   RX_FRAME_1K_BITMAP_ACK,
 						   ADDR1_47_32);

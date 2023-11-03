@@ -1015,7 +1015,17 @@ static QDF_STATUS mlo_peer_detach_link_peer(
 
 	return status;
 }
-
+#if defined (SAP_MULTI_LINK_EMULATION)
+/*Skip link vdev check. Second link does not have vdev*/
+static QDF_STATUS mlo_dev_get_link_vdevs(
+			struct wlan_objmgr_vdev *vdev,
+			struct wlan_mlo_dev_context *ml_dev,
+			struct mlo_partner_info *ml_info,
+			struct wlan_objmgr_vdev *link_vdevs[])
+{
+	return QDF_STATUS_SUCCESS;
+}
+#else
 static QDF_STATUS mlo_dev_get_link_vdevs(
 			struct wlan_objmgr_vdev *vdev,
 			struct wlan_mlo_dev_context *ml_dev,
@@ -1059,6 +1069,7 @@ static QDF_STATUS mlo_dev_get_link_vdevs(
 
 	return QDF_STATUS_SUCCESS;
 }
+#endif
 
 static void mlo_dev_release_link_vdevs(
 			struct wlan_objmgr_vdev *link_vdevs[])
@@ -1453,7 +1464,22 @@ QDF_STATUS wlan_mlo_peer_asreq(struct wlan_objmgr_vdev *vdev,
 
 	return QDF_STATUS_SUCCESS;
 }
-
+#if defined (SAP_MULTI_LINK_EMULATION)
+static void
+set_assoc_peer_for_2link_sap(struct wlan_objmgr_peer *assoc_peer,
+			     struct wlan_mlo_peer_context *ml_peer)
+{
+	assoc_peer = ml_peer->peer_list[0].link_peer;
+	if (assoc_peer)
+		mlo_mlme_peer_assoc_resp(assoc_peer);
+}
+#else
+static void
+set_assoc_peer_for_2link_sap(struct wlan_objmgr_peer *assoc_peer,
+			     struct wlan_mlo_peer_context *ml_peer)
+{
+}
+#endif
 QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 				struct wlan_objmgr_peer *link_peer,
 				struct mlo_partner_info *ml_info,
@@ -1467,7 +1493,7 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 	struct wlan_objmgr_vdev *vdev_link;
 	QDF_STATUS status;
 	uint16_t i, j;
-	struct wlan_objmgr_peer *assoc_peer;
+	struct wlan_objmgr_peer *assoc_peer = NULL;
 	uint8_t bridge_peer_psoc_id = WLAN_OBJMGR_MAX_DEVICES;
 	bool is_ml_peer_attached = false;
 
@@ -1505,7 +1531,6 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 				QDF_MAC_ADDR_REF(link_peer->mldaddr));
 			return QDF_STATUS_E_FAILURE;
 		}
-
 		for (i = 0; i < WLAN_UMAC_MLO_MAX_VDEVS; i++) {
 			vdev_link = link_vdevs[i];
 			if (!vdev_link) {
@@ -1787,8 +1812,11 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 			assoc_peer = ml_peer->peer_list[0].link_peer;
 			if (assoc_peer)
 				mlo_mlme_peer_assoc_resp(assoc_peer);
+		} else {
+			set_assoc_peer_for_2link_sap(assoc_peer, ml_peer);
 		}
 	}
+
 
 	if (wlan_vdev_mlme_get_opmode(vdev) == QDF_STA_MODE)
 		wlan_clear_peer_level_tid_to_link_mapping(vdev);

@@ -35,6 +35,28 @@
 #define DP_MON_QUEUE_DEPTH_MAX 16
 #define DP_MON_MSDU_LOGGING 0
 #define DP_MON_MPDU_LOGGING 1
+#define DP_MON_DESC_ADDR_MASK 0x000000FFFFFFFFFF
+#define DP_MON_DESC_ADDR_SHIFT 40
+#define DP_MON_DESC_FIXED_ADDR_MASK 0xFFFFFF
+#define DP_MON_DESC_FIXED_ADDR ((uint64_t)DP_MON_DESC_FIXED_ADDR_MASK << \
+	DP_MON_DESC_COOKIE_LSB)
+#define DP_MON_DESC_COOKIE_MASK 0xFFFFFF0000000000
+#define DP_MON_DESC_COOKIE_SHIFT 24
+#define DP_MON_DESC_COOKIE_LSB 40
+#define DP_MON_GET_COOKIE(mon_desc) \
+	((uint32_t)(((unsigned long long)(mon_desc) & DP_MON_DESC_COOKIE_MASK) \
+	>> DP_MON_DESC_COOKIE_LSB))
+
+#ifdef DP_RX_MON_DESC_64_BIT
+#define  DP_MON_GET_DESC(mon_desc) \
+	((struct dp_mon_desc *)(uintptr_t)(((unsigned long long)(mon_desc) & \
+	DP_MON_DESC_ADDR_MASK) | ((unsigned long long)DP_MON_DESC_FIXED_ADDR)))
+
+#else
+#define  DP_MON_GET_DESC(mon_desc) \
+	((struct dp_mon_desc *)(uintptr_t)(((unsigned long)(mon_desc) & \
+	DP_MON_DESC_ADDR_MASK)))
+#endif
 
 #define DP_MON_DECAP_FORMAT_INVALID 0xff
 #define DP_MON_MIN_FRAGS_FOR_RESTITCH 2
@@ -168,6 +190,7 @@ struct dp_mon_filter_be {
  * @in_use: desc is in use
  * @unmapped: used to mark desc an unmapped if the corresponding
  * nbuf is already unmapped
+ * @cookie_2: unique cookie provided as part of 64 bit cookie to HW
  * @end_offset: offset in status buffer where DMA ended
  * @cookie: unique desc identifier
  * @magic: magic number to validate desc data
@@ -175,8 +198,9 @@ struct dp_mon_filter_be {
 struct dp_mon_desc {
 	uint8_t *buf_addr;
 	qdf_dma_addr_t paddr;
-	uint8_t in_use:1,
-		unmapped:1;
+	uint32_t in_use:1,
+		unmapped:1,
+		cookie_2:24;
 	uint16_t end_offset;
 	uint32_t cookie;
 	uint32_t magic;

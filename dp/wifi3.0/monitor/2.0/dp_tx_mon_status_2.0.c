@@ -133,6 +133,9 @@ dp_tx_mon_status_queue_free(struct dp_pdev *pdev,
 	uint8_t i = tx_mon_be->cur_frag_q_idx;
 	uint32_t end_offset = 0;
 
+	if (last_frag_q_idx > MAX_STATUS_BUFFER_IN_PPDU)
+		last_frag_q_idx = MAX_STATUS_BUFFER_IN_PPDU;
+
 	for (; i < last_frag_q_idx; i++) {
 		status_frag = tx_mon_be->frag_q_vec[i].frag_buf;
 
