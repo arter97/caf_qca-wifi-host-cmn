@@ -831,6 +831,15 @@
  *
  *	The attributes used with this subcommand are defined in
  *	enum qca_wlan_vendor_attr_tx_latency.
+ *
+ * @QCA_NL80211_VENDOR_SUBCMD_HIGH_AP_AVAILABILITY: This vendor subcommand is
+ *	used to configure AP to allow quick discovery by peer STA and attempt
+ *	connection when AP is in MCC mode with other concurrent interfaces.
+ *	AP starts frequent beaconing while waiting on same channel for
+ *	configured duration.
+ *
+ *	The attributes used with this subcommand are defined in
+ *	enum qca_wlan_vendor_attr_high_ap_availability.
  */
 
 enum qca_nl80211_vendor_subcmds {
@@ -1094,6 +1103,7 @@ enum qca_nl80211_vendor_subcmds {
 	QCA_NL80211_VENDOR_SUBCMD_TDLS_DISC_RSP_EXT = 231,
 	QCA_NL80211_VENDOR_SUBCMD_AUDIO_TRANSPORT_SWITCH = 232,
 	QCA_NL80211_VENDOR_SUBCMD_TX_LATENCY = 233,
+	QCA_NL80211_VENDOR_SUBCMD_HIGH_AP_AVAILABILITY = 234,
 };
 
 enum qca_wlan_vendor_tos {
@@ -17345,5 +17355,72 @@ enum qca_wlan_vendor_attr_tx_latency {
 	QCA_WLAN_VENDOR_ATTR_TX_LATENCY_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_TX_LATENCY_MAX =
 	QCA_WLAN_VENDOR_ATTR_TX_LATENCY_AFTER_LAST - 1,
+};
+
+/**
+ * enum qca_high_ap_availability_operation: Represents the possible values for
+ * %QCA_WLAN_VENDOR_ATTR_HIGH_AP_AVAILABILITY_OPERATION attribute.
+ *
+ * @QCA_HIGH_AP_AVAILABILITY_OPERATION_REQUEST: Userspace requests AP for high
+ * availability mode. Host driver provides cookie id
+ * %QCA_WLAN_VENDOR_ATTR_HIGH_AP_AVAILABILITY_COOKIE in response.
+ *
+ * @QCA_HIGH_AP_AVAILABILITY_OPERATION_CANCEL: Userspace triggers cancel
+ * ongoing %QCA_NL80211_VENDOR_SUBCMD_HIGH_AP_AVAILABILITY operation. A valid
+ * cookie id returned from %QCA_HIGH_AP_AVAILABILITY_OPERATION_REQUEST is used
+ * with %QCA_WLAN_VENDOR_ATTR_HIGH_AP_AVAILABILITY_COOKIE attribute. On
+ * cancel completion, host driver exits high availability operation and notifies
+ * userspace with %QCA_HIGH_AP_AVAILABILITY_OPERATION_COMPLETED.
+ *
+ * @QCA_HIGH_AP_AVAILABILITY_OPERATION_STARTED: Host driver notifies userspace
+ * when AP starts high availability operation. A valid cookie id returned from
+ * %QCA_HIGH_AP_AVAILABILITY_OPERATION_REQUEST is used with
+ * %QCA_WLAN_VENDOR_ATTR_HIGH_AP_AVAILABILITY_COOKIE attribute.
+ *
+ * @QCA_HIGH_AP_AVAILABILITY_OPERATION_COMPLETED: Host driver notifies
+ * userspace when AP exits/completed high availability operation. A valid cookie
+ * id returned from %QCA_HIGH_AP_AVAILABILITY_OPERATION_REQUEST is used with
+ * %QCA_WLAN_VENDOR_ATTR_HIGH_AP_AVAILABILITY_COOKIE attribute.
+ *
+ * @QCA_HIGH_AP_AVAILABILITY_OPERATION_CANCELLED: Host driver notifies
+ * userspace when host driver cancel high availability operation early (without
+ * userspace request for cancel). A valid cookie id returned from
+ * %QCA_HIGH_AP_AVAILABILITY_OPERATION_REQUEST is used with
+ * %QCA_WLAN_VENDOR_ATTR_HIGH_AP_AVAILABILITY_COOKIE attribute.
+ */
+enum qca_high_ap_availability_operation {
+	QCA_HIGH_AP_AVAILABILITY_OPERATION_REQUEST = 0,
+	QCA_HIGH_AP_AVAILABILITY_OPERATION_CANCEL = 1,
+	QCA_HIGH_AP_AVAILABILITY_OPERATION_STARTED = 2,
+	QCA_HIGH_AP_AVAILABILITY_OPERATION_COMPLETED = 3,
+	QCA_HIGH_AP_AVAILABILITY_OPERATION_CANCELLED = 4,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_high_ap_availability - Definition of attributes
+ * used by %QCA_NL80211_VENDOR_SUBCMD_HIGH_AP_AVAILABILITY to configure AP to
+ * allow quick discovery by peer STA and attempt connection.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_HIGH_AP_AVAILABILITY_OPERATION: u8 attribute, used
+ * to request/notify possible operation type defined in enum
+ * qca_high_ap_availability_operation.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_HIGH_AP_AVAILABILITY_COOKIE: u16 attribute returned
+ * with %QCA_HIGH_AP_AVAILABILITY_OPERATION_REQUEST as unique id. This is used
+ * with all subsequent %QCA_WLAN_VENDOR_ATTR_HIGH_AP_AVAILABILITY_OPERATION.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_HIGH_AP_AVAILABILITY_DURATION: u32 attribute for max
+ * duration (in ms) to allow peer STA attempt discovery and connection.
+ */
+enum qca_wlan_vendor_attr_high_ap_availability {
+	QCA_WLAN_VENDOR_ATTR_HIGH_AP_AVAILABILITY_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_HIGH_AP_AVAILABILITY_OPERATION = 1,
+	QCA_WLAN_VENDOR_ATTR_HIGH_AP_AVAILABILITY_COOKIE = 2,
+	QCA_WLAN_VENDOR_ATTR_HIGH_AP_AVAILABILITY_DURATION = 3,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_HIGH_AP_AVAILABILITY_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_HIGH_AP_AVAILABILITY_MAX =
+	QCA_WLAN_VENDOR_ATTR_HIGH_AP_AVAILABILITY_AFTER_LAST - 1,
 };
 #endif
