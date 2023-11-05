@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -264,6 +264,18 @@ typedef __qdf_semaphore_t qdf_semaphore_t;
  * composition of this object
  */
 typedef __qdf_mutex_t qdf_mutex_t;
+
+#define qdf_rcu_head_t __qdf_rcu_head_t
+#define qdf_rcu_callback_t __qdf_rcu_callback_t
+#define qdf_rcu_dereference(p) __qdf_rcu_dereference(p)
+#define qdf_rcu_dereference_protected(p, c) \
+		__qdf_rcu_dereference_protected(p, c)
+#define qdf_rcu_assign_pointer(p, v) __qdf_rcu_assign_pointer(p, v)
+
+static inline bool qdf_lockdep_is_held(qdf_spinlock_t *lock)
+{
+	return __qdf_lockdep_is_held(&lock->lock);
+}
 
 QDF_STATUS qdf_mutex_create(qdf_mutex_t *lock, const char *func, int line);
 
@@ -534,6 +546,40 @@ static inline void qdf_spin_unlock_irq(qdf_spinlock_t *lock,
 {
 	BEFORE_UNLOCK(lock, QDF_MAX_HOLD_TIME_ALOWED_SPINLOCK_IRQ);
 	__qdf_spin_unlock_irq(&lock->lock.spinlock, flags);
+}
+
+/**
+ * qdf_rcu_read_lock_bh() - mark the beginning of an RCU-bh critical section
+ *
+ * Return: none
+ */
+static inline void qdf_rcu_read_lock_bh(void)
+{
+	__qdf_rcu_read_lock_bh();
+}
+
+/**
+ * qdf_rcu_read_unlock_bh() - marks the end of a softirq-only RCU critical
+ * section
+ *
+ * Return: none
+ */
+static inline void qdf_rcu_read_unlock_bh(void)
+{
+	__qdf_rcu_read_unlock_bh();
+}
+
+/**
+ * qdf_call_rcu() - Marks the end of updater code and the beginning of
+ * reclaimer code
+ * @head: function parameter for func
+ * @func: function to be executed after grace period is over
+ *
+ * Return: none
+ */
+static inline void qdf_call_rcu(qdf_rcu_head_t *head, qdf_rcu_callback_t func)
+{
+	__qdf_call_rcu(head, func);
 }
 
 /**
