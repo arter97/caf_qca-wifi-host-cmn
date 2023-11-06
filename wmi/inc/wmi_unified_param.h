@@ -5556,6 +5556,7 @@ typedef enum {
 
 #ifdef WLAN_FEATURE_LL_LT_SAP
 	wmi_audio_transport_switch_type_event_id,
+	wmi_vdev_oob_connection_response_event_id,
 #endif
 
 	wmi_events_max,

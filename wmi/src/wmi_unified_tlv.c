@@ -22638,6 +22638,8 @@ static void populate_tlv_events_id(WMI_EVT_ID *event_ids)
 #ifdef WLAN_FEATURE_LL_LT_SAP
 	event_ids[wmi_audio_transport_switch_type_event_id] =
 			WMI_AUDIO_TRANSPORT_SWITCH_TYPE_EVENTID;
+	event_ids[wmi_vdev_oob_connection_response_event_id] =
+			WMI_VDEV_OOB_CONNECTION_RESP_EVENTID;
 #endif
 
 }

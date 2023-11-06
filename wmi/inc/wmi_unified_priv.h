@@ -119,6 +119,7 @@
 
 #ifdef WLAN_FEATURE_LL_LT_SAP
 #include "wlan_ll_sap_public_structs.h"
+#include "wmi_unified_ll_sap_api.h"
 #endif
 
 #define WMI_UNIFIED_MAX_EVENT 0x100
@@ -3459,6 +3460,14 @@ QDF_STATUS (*extract_audio_transport_switch_req_event)(
 					wmi_unified_t wmi_hdl,
 					uint8_t *event, uint32_t data_len,
 					enum bearer_switch_req_type *req_type);
+
+QDF_STATUS (*send_oob_connect_request)(wmi_unified_t wmi_hdl,
+				       struct wmi_oob_connect_request request);
+
+QDF_STATUS (*extract_oob_connect_response_event)(
+			wmi_unified_t wmi_hdl,
+			uint8_t *event, uint32_t data_len,
+			struct wmi_oob_connect_response_event *response);
 
 #endif /* WLAN_FEATURE_LL_LT_SAP */
 #endif /* QCA_TARGET_IF_MLME */
