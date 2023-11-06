@@ -1728,18 +1728,40 @@ struct CE_handle *ce_init(struct hif_softc *scn,
 			 * Also allocate a shadow src ring in
 			 * regular mem to use for faster access.
 			 */
-			src_ring->shadow_base_unaligned =
-				qdf_mem_malloc(nentries *
-					       sizeof(struct CE_src_desc) +
-					       CE_DESC_RING_ALIGN);
+			src_ring->shadow_base_unaligned = qdf_mem_malloc(
+								nentries *
+								sizeof(struct CE_src_desc));
 			if (!src_ring->shadow_base_unaligned)
-				goto error_no_dma_mem;
+					goto error_no_dma_mem;
+			/*
+			 * Align the shadow_base by default will need extra
+			 * allocated memory. Although the extra memory size is
+			 * small, kernel will allocate large amount of useless
+			 * memory if the useful memory size is large because
+			 * it's based on buddy algorithm. For example, requesting
+			 * (65536 + 8) bytes will actually allocate 65536 * 2 =
+			 * 131072 bytes. But most of the time we do not need to
+			 * align the memory because it's already aligned by
+			 * default.
+			 */
+			if (!((size_t)src_ring->shadow_base &
+				(CE_DESC_RING_ALIGN - 1))){
+				src_ring->shadow_base = (struct CE_src_desc *)
+						src_ring->shadow_base_unaligned;
+			} else {
+				qdf_mem_free(src_ring->shadow_base_unaligned);
+				src_ring->shadow_base_unaligned =
+					qdf_mem_malloc(nentries *
+						       sizeof(struct CE_src_desc) +
+						       CE_DESC_RING_ALIGN);
+				if (!src_ring->shadow_base_unaligned)
+					goto error_no_dma_mem;
 
-			src_ring->shadow_base = (struct CE_src_desc *)
-				(((size_t) src_ring->shadow_base_unaligned +
-				CE_DESC_RING_ALIGN - 1) &
-				 ~(CE_DESC_RING_ALIGN - 1));
-
+				src_ring->shadow_base = (struct CE_src_desc *)
+					(((size_t) src_ring->shadow_base_unaligned +
+					CE_DESC_RING_ALIGN - 1) &
+					 ~(CE_DESC_RING_ALIGN - 1));
+			}
 			status = ce_ring_setup(scn, CE_RING_SRC, CE_id,
 					       src_ring, attr);
 			if (status < 0)
