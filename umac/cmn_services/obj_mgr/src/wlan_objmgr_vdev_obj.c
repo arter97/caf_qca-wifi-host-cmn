@@ -1706,6 +1706,7 @@ void wlan_vdev_mlme_set_mlo_vdev(struct wlan_objmgr_vdev *vdev)
 void wlan_vdev_mlme_clear_mlo_vdev(struct wlan_objmgr_vdev *vdev)
 {
 	struct wlan_objmgr_pdev *pdev;
+	uint32_t mlo_vdev_cap;
 
 	if (!vdev) {
 		obj_mgr_err("vdev is NULL");
@@ -1724,7 +1725,9 @@ void wlan_vdev_mlme_clear_mlo_vdev(struct wlan_objmgr_vdev *vdev)
 		wlan_release_vdev_mlo_lock(vdev);
 		return;
 	}
-	wlan_vdev_mlme_feat_ext2_cap_clear(vdev, WLAN_VDEV_FEXT2_MLO);
+
+	mlo_vdev_cap = WLAN_VDEV_FEXT2_MLO | WLAN_VDEV_FEXT2_MLO_STA_LINK;
+	wlan_vdev_mlme_feat_ext2_cap_clear(vdev, mlo_vdev_cap);
 
 	wlan_pdev_dec_mlo_vdev_count(pdev);
 
@@ -1734,8 +1737,17 @@ void wlan_vdev_mlme_clear_mlo_vdev(struct wlan_objmgr_vdev *vdev)
 
 void wlan_vdev_mlme_set_mlo_link_vdev(struct wlan_objmgr_vdev *vdev)
 {
+	uint32_t mlo_vdev_cap;
+	struct wlan_objmgr_pdev *pdev;
+
 	if (!vdev) {
 		obj_mgr_err("vdev is NULL");
+		return;
+	}
+
+	pdev = wlan_vdev_get_pdev(vdev);
+	if (!pdev) {
+		obj_mgr_err("pdev is NULL");
 		return;
 	}
 
@@ -1745,8 +1757,12 @@ void wlan_vdev_mlme_set_mlo_link_vdev(struct wlan_objmgr_vdev *vdev)
 					     WLAN_VDEV_FEXT2_MLO_STA_LINK)) {
 		wlan_release_vdev_mlo_lock(vdev);
 		return;
+	} else if (!wlan_vdev_mlme_feat_ext2_cap_get(vdev, WLAN_VDEV_FEXT2_MLO)) {
+		wlan_pdev_inc_mlo_vdev_count(pdev);
 	}
-	wlan_vdev_mlme_feat_ext2_cap_set(vdev, WLAN_VDEV_FEXT2_MLO_STA_LINK);
+
+	mlo_vdev_cap = WLAN_VDEV_FEXT2_MLO | WLAN_VDEV_FEXT2_MLO_STA_LINK;
+	wlan_vdev_mlme_feat_ext2_cap_set(vdev, mlo_vdev_cap);
 
 	wlan_release_vdev_mlo_lock(vdev);
 	obj_mgr_debug("Set MLO link flag: vdev_id: %d", wlan_vdev_get_id(vdev));
