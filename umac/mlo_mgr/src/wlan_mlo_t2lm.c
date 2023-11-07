@@ -267,6 +267,7 @@ uint8_t *wlan_mlo_add_t2lm_info_ie(uint8_t *frm, struct wlan_t2lm_info *t2lm,
 	uint8_t num_tids = 0;
 	uint8_t link_mapping_presence_indicator = 0;
 	struct vdev_mlme_obj *vdev_mlme;
+	uint8_t *tmp_frm = frm;
 
 	t2lm_ie = (struct wlan_ie_tid_to_link_mapping *)frm;
 	t2lm_ie->elem_id = WLAN_ELEMID_EXTN_ELEM;
@@ -332,11 +333,16 @@ uint8_t *wlan_mlo_add_t2lm_info_ie(uint8_t *frm, struct wlan_t2lm_info *t2lm,
 		t2lm_ie->elem_len += sizeof(uint16_t);
 	}
 
-	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
-	if (vdev_mlme && t2lm->mapping_switch_time_present) {
+	if (t2lm->mapping_switch_time_present) {
 		/* Mapping switch time is different for each vdevs. Hence,
 		 * populate the mapping switch time from vdev_mlme_obj.
 		 */
+		vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+		if (!vdev_mlme) {
+			t2lm_err("null vdev_mlme");
+			return tmp_frm;
+		}
+
 		*(uint16_t *)frm =
 			htole16(vdev_mlme->proto.ap.mapping_switch_time);
 		frm += sizeof(uint16_t);
