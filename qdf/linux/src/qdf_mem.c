@@ -2977,3 +2977,29 @@ qdf_dma_addr_t qdf_mem_paddr_from_dmaaddr(qdf_device_t osdev,
 
 qdf_export_symbol(qdf_mem_paddr_from_dmaaddr);
 #endif
+
+void *__qdf_mem_valloc(size_t size, const char *func, uint32_t line)
+{
+	void *ptr;
+
+	if (!size) {
+		qdf_err("Valloc called with 0 bytes @ %s:%d", func, line);
+		return NULL;
+	}
+
+	ptr = vzalloc(size);
+
+	return ptr;
+}
+
+qdf_export_symbol(__qdf_mem_valloc);
+
+void __qdf_mem_vfree(void *ptr)
+{
+	if (qdf_unlikely(!ptr))
+		return;
+
+	vfree(ptr);
+}
+
+qdf_export_symbol(__qdf_mem_vfree);
