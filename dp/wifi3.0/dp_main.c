@@ -5568,7 +5568,6 @@ dp_txrx_peer_reset_local_link_id(struct dp_txrx_peer *txrx_peer)
 {
 	int i;
 
-	txrx_peer->local_link_id = 0;
 	for (i = 0; i <= DP_MAX_MLO_LINKS; i++)
 		txrx_peer->ll_band[i] = DP_BAND_INVALID;
 }

@@ -4885,6 +4885,20 @@ struct dp_peer_stats {
 };
 
 /**
+ * struct dp_local_link_id_peer_map - Mapping table entry for link peer mac
+ *				      address to local_link_id
+ * @in_use: set if this entry is having valid mapping between local_link_id
+ *	    and the link peer mac address.
+ * @local_link_id: local_link_id assigned to the link peer
+ * @mac_addr: link peer mac address
+ */
+struct dp_local_link_id_peer_map {
+	uint8_t in_use;
+	uint8_t local_link_id;
+	union dp_align_mac_addr mac_addr;
+};
+
+/**
  * struct dp_txrx_peer: DP txrx_peer structure used in per pkt path
  * @vdev: VDEV to which this peer is associated
  * @peer_id: peer ID for this peer
@@ -4914,7 +4928,7 @@ struct dp_peer_stats {
  * @bw: bandwidth of peer connection
  * @mpdu_retry_threshold: MPDU retry threshold to increment tx bad count
  * @band: Link ID to band mapping
- * @local_link_id: Local host link ID.
+ * @ll_id_peer_map: Mapping table for link peer mac address to local_link_id
  * @ll_band: Local link id band mapping
  * @stats_arr_size: peer stats array size
  * @stats: Peer link and mld statistics
@@ -4969,7 +4983,8 @@ struct dp_txrx_peer {
 #if defined WLAN_FEATURE_11BE_MLO && defined DP_MLO_LINK_STATS_SUPPORT
 	/* Link ID to band mapping, (1 MLD + DP_MAX_MLO_LINKS) */
 	uint8_t band[DP_MAX_MLO_LINKS + 1];
-	uint8_t local_link_id;
+
+	struct dp_local_link_id_peer_map ll_id_peer_map[DP_MAX_MLO_LINKS];
 	uint8_t ll_band[DP_MAX_MLO_LINKS + 1];
 #endif
 	uint8_t stats_arr_size;
