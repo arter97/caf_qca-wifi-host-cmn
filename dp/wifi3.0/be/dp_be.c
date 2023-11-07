@@ -2696,6 +2696,15 @@ void dp_mlo_dev_ctxt_list_attach_wrapper(dp_mlo_dev_obj_t mlo_dev_obj)
 void dp_mlo_dev_ctxt_list_detach_wrapper(dp_mlo_dev_obj_t mlo_dev_obj)
 {
 }
+
+static uint8_t
+dp_get_hw_link_id_be(struct dp_pdev *pdev)
+{
+	struct dp_pdev_be *be_pdev = dp_get_be_pdev_from_dp_pdev(pdev);
+
+	return be_pdev->mlo_link_id;
+}
+
 #else
 static QDF_STATUS dp_mlo_peer_find_hash_attach_wrapper(struct dp_soc *soc)
 {
@@ -2730,23 +2739,13 @@ void dp_mlo_dev_ctxt_list_detach_wrapper(dp_mlo_dev_obj_t mlo_dev_obj)
 {
 	dp_mlo_dev_ctxt_list_detach(mlo_dev_obj);
 }
-#endif
 
-#ifdef QCA_ENHANCED_STATS_SUPPORT
-static uint8_t
-dp_get_hw_link_id_be(struct dp_pdev *pdev)
-{
-	struct dp_pdev_be *be_pdev = dp_get_be_pdev_from_dp_pdev(pdev);
-
-	return be_pdev->mlo_link_id;
-}
-#else
 static uint8_t
 dp_get_hw_link_id_be(struct dp_pdev *pdev)
 {
 	return 0;
 }
-#endif /* QCA_ENHANCED_STATS_SUPPORT */
+#endif
 
 static struct dp_peer *
 dp_mlo_peer_find_hash_find_be(struct dp_soc *soc,

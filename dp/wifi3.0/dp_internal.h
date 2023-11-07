@@ -5875,6 +5875,7 @@ QDF_STATUS dp_get_per_link_peer_stats(struct dp_peer *peer,
  *
  * Return: link_id
  */
+#ifdef QCA_ENHANCED_STATS_SUPPORT
 static inline int
 dp_get_peer_hw_link_id(struct dp_soc *soc,
 		       struct dp_pdev *pdev)
@@ -5884,6 +5885,14 @@ dp_get_peer_hw_link_id(struct dp_soc *soc,
 
 	return 0;
 }
+#else
+static inline int
+dp_get_peer_hw_link_id(struct dp_soc *soc,
+		       struct dp_pdev *pdev)
+{
+	return 0;
+}
+#endif /* QCA_ENHANCED_STATS_SUPPORT */
 
 #ifdef QCA_MULTIPASS_SUPPORT
 /**

@@ -1548,6 +1548,21 @@ void dp_peer_delete(struct dp_soc *soc,
  */
 void dp_mlo_peer_delete(struct dp_soc *soc, struct dp_peer *peer, void *arg);
 
+/*
+ * dp_get_hw_link_id() - return hw link id
+ * @pdev: DP pdev
+ *
+ * Return: link_id
+ */
+
+static inline uint8_t dp_get_hw_link_id(struct dp_pdev *pdev)
+{
+	if (pdev->soc->arch_ops.get_hw_link_id)
+		return pdev->soc->arch_ops.get_hw_link_id(pdev);
+
+	return 0;
+}
+
 #ifdef WLAN_FEATURE_11BE_MLO
 
 /* is MLO connection mld peer */
