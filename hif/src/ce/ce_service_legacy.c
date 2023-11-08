@@ -1418,9 +1418,8 @@ static void ce_legacy_src_ring_setup(struct hif_softc *scn, uint32_t ce_id,
 	if (!(CE_ATTR_DISABLE_INTR & attr->flags)) {
 		/* In 8us units */
 		timer_thrs = CE_SRC_BATCH_TIMER_THRESHOLD >> 3;
-		/* Batch counter threshold 1 in Dwrod units */
-		count_thrs = (CE_SRC_BATCH_COUNTER_THRESHOLD *
-			      (sizeof(struct CE_src_desc) >> 2));
+		count_thrs = CE_SRC_BATCH_COUNTER_THRESHOLD;
+
 		ce_legacy_msi_param_setup(scn, ctrl_addr, ce_id, attr);
 		ce_legacy_src_intr_thres_setup(scn, ctrl_addr, attr,
 					       timer_thrs, count_thrs);
@@ -1470,7 +1469,6 @@ static void ce_legacy_dest_ring_setup(struct hif_softc *scn, uint32_t ce_id,
 	if (!(CE_ATTR_DISABLE_INTR & attr->flags)) {
 		/* In 8us units */
 		timer_thrs = CE_DST_BATCH_TIMER_THRESHOLD >> 3;
-		/* Batch counter threshold 1 in Dwrod units */
 		count_thrs = CE_DST_BATCH_COUNTER_THRESHOLD;
 
 		ce_legacy_msi_param_setup(scn, ctrl_addr, ce_id, attr);
