@@ -22,6 +22,17 @@
 
 #include <hal_rx.h>
 
+#define HAL_RX_BUF_COOKIE_GET(buff_addr_info)			\
+	(_HAL_MS((*_OFFSET_TO_WORD_PTR(buff_addr_info,		\
+		BUFFER_ADDR_INFO_1_SW_BUFFER_COOKIE_OFFSET)),	\
+		BUFFER_ADDR_INFO_1_SW_BUFFER_COOKIE_MASK,	\
+		BUFFER_ADDR_INFO_1_SW_BUFFER_COOKIE_LSB))
+
+#define HAL_RX_BUF_RBM_GET(buff_addr_info)			\
+	(_HAL_MS((*_OFFSET_TO_WORD_PTR(buff_addr_info,		\
+		BUFFER_ADDR_INFO_1_RETURN_BUFFER_MANAGER_OFFSET)),\
+		BUFFER_ADDR_INFO_1_RETURN_BUFFER_MANAGER_MASK,	\
+		BUFFER_ADDR_INFO_1_RETURN_BUFFER_MANAGER_LSB))
 /*
  * macro to set the cookie into the rxdma ring entry
  */

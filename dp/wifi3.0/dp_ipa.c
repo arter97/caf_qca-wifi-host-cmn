@@ -182,7 +182,8 @@ QDF_STATUS dp_ipa_handle_rx_buf_smmu_mapping(struct dp_soc *soc,
 	 * operation and nbuf has done ipa smmu map before,
 	 * do ipa smmu unmap as well.
 	 */
-	if (!qdf_atomic_read(&soc->ipa_pipes_enabled)) {
+	if (!(qdf_atomic_read(&soc->ipa_pipes_enabled) &&
+				qdf_atomic_read(&soc->ipa_map_allowed))) {
 		if (!create && qdf_nbuf_is_rx_ipa_smmu_map(nbuf)) {
 			DP_STATS_INC(soc, rx.err.ipa_unmap_no_pipe, 1);
 		} else {
@@ -382,7 +383,7 @@ QDF_STATUS dp_ipa_set_smmu_mapped(struct cdp_soc_t *soc_hdl, int val)
 {
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
 
-	qdf_atomic_set(&soc->ipa_mapped, val);
+	qdf_atomic_set(&soc->ipa_map_allowed, val);
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -390,7 +391,7 @@ int dp_ipa_get_smmu_mapped(struct cdp_soc_t *soc_hdl)
 {
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
 
-	return qdf_atomic_read(&soc->ipa_mapped);
+	return qdf_atomic_read(&soc->ipa_map_allowed);
 }
 
 static QDF_STATUS dp_ipa_get_shared_mem_info(qdf_device_t osdev,
@@ -1510,8 +1511,15 @@ static int dp_tx_ipa_uc_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 			break;
 		}
 
-		qdf_nbuf_map_single(soc->osdev, nbuf,
-				    QDF_DMA_BIDIRECTIONAL);
+		retval = qdf_nbuf_map_single(soc->osdev, nbuf,
+					     QDF_DMA_BIDIRECTIONAL);
+		if (qdf_unlikely(retval != QDF_STATUS_SUCCESS)) {
+			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+				  "%s: nbuf map failed", __func__);
+			qdf_nbuf_free(nbuf);
+			retval = -EFAULT;
+			break;
+		}
 		buffer_paddr = qdf_nbuf_get_frag_paddr(nbuf, 0);
 		qdf_mem_dp_tx_skb_cnt_inc();
 		qdf_mem_dp_tx_skb_inc(qdf_nbuf_get_end_offset(nbuf));
@@ -1573,6 +1581,8 @@ int dp_ipa_uc_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
 			  "%s: DP IPA UC TX attach fail code %d",
 			  __func__, error);
+		if (error == -EFAULT)
+			dp_tx_ipa_uc_detach(soc, pdev);
 		return error;
 	}
 
@@ -3466,9 +3476,11 @@ QDF_STATUS dp_ipa_enable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	qdf_atomic_set(&soc->ipa_pipes_enabled, 1);
 	DP_IPA_EP_SET_TX_DB_PA(soc, ipa_res);
 
-	if (!ipa_config_is_opt_wifi_dp_enabled())
+	if (!ipa_config_is_opt_wifi_dp_enabled()) {
+		qdf_atomic_set(&soc->ipa_map_allowed, 1);
 		dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, pdev, true,
 						       __func__, __LINE__);
+	}
 
 	result = qdf_ipa_wdi_enable_pipes(hdl);
 	if (result) {
@@ -3477,9 +3489,11 @@ QDF_STATUS dp_ipa_enable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 			  __func__, result);
 		qdf_atomic_set(&soc->ipa_pipes_enabled, 0);
 		DP_IPA_RESET_TX_DB_PA(soc, ipa_res);
-		if (qdf_atomic_read(&soc->ipa_mapped))
+		if (qdf_atomic_read(&soc->ipa_map_allowed)) {
+			qdf_atomic_set(&soc->ipa_map_allowed, 0);
 			dp_ipa_handle_rx_buf_pool_smmu_mapping(
 					soc, pdev, false, __func__, __LINE__);
+		}
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -3526,9 +3540,11 @@ QDF_STATUS dp_ipa_disable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 
 	qdf_atomic_set(&soc->ipa_pipes_enabled, 0);
 
-	if (qdf_atomic_read(&soc->ipa_mapped))
+	if (!ipa_config_is_opt_wifi_dp_enabled()) {
+		qdf_atomic_set(&soc->ipa_map_allowed, 0);
 		dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, pdev, false,
 						       __func__, __LINE__);
+	}
 
 	return result ? QDF_STATUS_E_FAILURE : QDF_STATUS_SUCCESS;
 }
@@ -3552,6 +3568,37 @@ QDF_STATUS dp_ipa_set_perf_level(int client, uint32_t max_supported_bw_mbps,
 
 	return QDF_STATUS_SUCCESS;
 }
+
+#ifdef QCA_SUPPORT_WDS_EXTENDED
+/**
+ * dp_ipa_rx_wdsext_iface() - Forward RX exception packets to wdsext interface
+ * @soc_hdl: data path soc handle
+ * @peer_id: Peer id to get respective peer
+ * @skb: socket buffer
+ *
+ * Return: true on success, else false
+ */
+bool dp_ipa_rx_wdsext_iface(struct cdp_soc_t *soc_hdl, uint8_t peer_id,
+			    qdf_nbuf_t skb)
+{
+	struct dp_txrx_peer *txrx_peer;
+	dp_txrx_ref_handle txrx_ref_handle = NULL;
+	struct dp_soc *dp_soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	bool status = false;
+
+	txrx_peer = dp_tgt_txrx_peer_get_ref_by_id(soc_hdl, peer_id,
+						   &txrx_ref_handle,
+						   DP_MOD_ID_IPA);
+
+	if (qdf_likely(txrx_peer)) {
+		if (dp_rx_deliver_to_stack_ext(dp_soc, txrx_peer->vdev,
+					       txrx_peer, skb)
+			status =  true;
+		dp_txrx_peer_unref_delete(txrx_ref_handle, DP_MOD_ID_IPA);
+	}
+	return status;
+}
+#endif
 
 /**
  * dp_ipa_intrabss_send() - send IPA RX intra-bss frames
@@ -3836,8 +3883,11 @@ static qdf_nbuf_t dp_ipa_frag_nbuf_linearize(struct dp_soc *soc,
 	uint32_t nbuf_len = qdf_nbuf_len(nbuf);
 	bool is_nbuf_head = true;
 	uint32_t copy_len = 0;
+	uint16_t buf_size;
 
-	dst_nbuf = qdf_nbuf_alloc(soc->osdev, RX_DATA_BUFFER_SIZE,
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
+
+	dst_nbuf = qdf_nbuf_alloc(soc->osdev, buf_size,
 				  RX_BUFFER_RESERVATION,
 				  RX_DATA_BUFFER_ALIGNMENT, FALSE);
 
@@ -3846,7 +3896,7 @@ static qdf_nbuf_t dp_ipa_frag_nbuf_linearize(struct dp_soc *soc,
 		return NULL;
 	}
 
-	if ((nbuf_len + L3_HEADER_PADDING) > RX_DATA_BUFFER_SIZE) {
+	if ((nbuf_len + L3_HEADER_PADDING) > buf_size) {
 		qdf_nbuf_free(dst_nbuf);
 		dp_err_rl("nbuf is jumbo data");
 		return NULL;
@@ -4111,7 +4161,7 @@ void dp_ipa_aggregate_vdev_stats(struct dp_vdev *vdev,
 
 	soc = vdev->pdev->soc;
 	dp_update_vdev_ingress_stats(vdev);
-	qdf_mem_copy(vdev_stats, &vdev->stats, sizeof(vdev->stats));
+	dp_copy_vdev_stats_to_tgt_buf(vdev_stats, &vdev->stats, DP_XMIT_LINK);
 	dp_vdev_iterate_peer(vdev, dp_ipa_update_vdev_stats, vdev_stats,
 			     DP_MOD_ID_GENERIC_STATS);
 	dp_update_vdev_rate_stats(vdev_stats, &vdev->stats);

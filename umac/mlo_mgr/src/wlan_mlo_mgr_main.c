@@ -416,6 +416,8 @@ QDF_STATUS wlan_mlo_mgr_deinit(void)
 		return QDF_STATUS_E_FAILURE;
 	}
 
+	wlan_mlo_mgr_unregister_link_switch_notifier(WLAN_UMAC_COMP_MLO_MGR);
+
 	mlo_global_ctx_deinit();
 
 	status = wlan_objmgr_unregister_vdev_create_handler(
@@ -430,7 +432,6 @@ QDF_STATUS wlan_mlo_mgr_deinit(void)
 	if (status != QDF_STATUS_SUCCESS)
 		mlo_err("Failed to unregister vdev delete handler");
 
-	wlan_mlo_mgr_unregister_link_switch_notifier(WLAN_UMAC_COMP_MLO_MGR);
 	return status;
 }
 
@@ -542,6 +543,62 @@ bool wlan_mlo_is_mld_ctx_exist(struct qdf_mac_addr *mldaddr)
 
 	return false;
 }
+
+#ifdef WLAN_MLO_MULTI_CHIP
+QDF_STATUS mlo_mgr_is_mld_has_active_link(bool *is_active)
+{
+	qdf_list_t *ml_list;
+	uint32_t idx, count;
+	struct wlan_mlo_dev_context *mld_cur, *mld_next;
+	struct wlan_objmgr_vdev *vdev;
+	struct mlo_mgr_context *g_mlo_ctx = wlan_objmgr_get_mlo_ctx();
+	QDF_STATUS status;
+
+	if (!g_mlo_ctx || !is_active)
+		return QDF_STATUS_E_FAILURE;
+
+	ml_link_lock_acquire(g_mlo_ctx);
+	ml_list = &g_mlo_ctx->ml_dev_list;
+	if (!qdf_list_size(ml_list)) {
+		ml_link_lock_release(g_mlo_ctx);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	*is_active = false;
+	mld_cur = wlan_mlo_list_peek_head(ml_list);
+	while (mld_cur) {
+		mlo_dev_lock_acquire(mld_cur);
+		count = QDF_ARRAY_SIZE(mld_cur->wlan_vdev_list);
+		for (idx = 0; idx < count; idx++) {
+			vdev = mld_cur->wlan_vdev_list[idx];
+			if (!vdev)
+				continue;
+
+			status = wlan_vdev_mlme_is_init_state(vdev);
+			if (QDF_STATUS_SUCCESS == status)
+				continue;
+
+			qdf_err("VDEV [vdev_id %u, pdev_id %u, psoc_id %u, state %u] is still active",
+				wlan_vdev_get_id(vdev),
+				wlan_objmgr_pdev_get_pdev_id(wlan_vdev_get_pdev(vdev)),
+				wlan_vdev_get_psoc_id(vdev),
+				wlan_vdev_mlme_get_state(vdev));
+			*is_active = true;
+			mlo_dev_lock_release(mld_cur);
+			ml_link_lock_release(g_mlo_ctx);
+			return QDF_STATUS_SUCCESS;
+		}
+		mld_next = wlan_mlo_get_next_mld_ctx(ml_list, mld_cur);
+		mlo_dev_lock_release(mld_cur);
+		mld_cur = mld_next;
+	}
+	ml_link_lock_release(g_mlo_ctx);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+qdf_export_symbol(mlo_mgr_is_mld_has_active_link);
+#endif
 
 #ifdef WLAN_FEATURE_11BE_MLO
 bool mlo_mgr_ml_peer_exist_on_diff_ml_ctx(uint8_t *peer_addr,
@@ -922,6 +979,7 @@ static inline void mlo_t2lm_ctx_init(struct wlan_mlo_dev_context *ml_dev,
 	t2lm->link_mapping_size = 0;
 
 	wlan_mlo_t2lm_timer_init(vdev);
+	wlan_mlo_t2lm_register_link_update_notify_handler(ml_dev);
 }
 
 /**
@@ -1151,6 +1209,9 @@ static QDF_STATUS mlo_dev_ctx_init(struct wlan_objmgr_vdev *vdev)
 		return QDF_STATUS_E_NOMEM;
 	}
 
+	ml_dev->mlo_max_recom_simult_links =
+		WLAN_UMAC_MLO_RECOM_MAX_SIMULT_LINKS_DEFAULT;
+
 	mlo_dev_mlpeer_list_init(ml_dev);
 
 	ml_link_lock_acquire(g_mlo_ctx);
@@ -1188,12 +1249,16 @@ static inline void mlo_ptqm_migration_deinit(
  * mlo_t2lm_ctx_deinit() - API to deinitialize the t2lm context with the default
  * values.
  * @vdev: Pointer to vdev structure
+ * @ml_dev: Pointer to mlo dev context
  *
  * Return: None
  */
-static inline void mlo_t2lm_ctx_deinit(struct wlan_objmgr_vdev *vdev)
+static inline void mlo_t2lm_ctx_deinit(struct wlan_objmgr_vdev *vdev,
+				       struct wlan_mlo_dev_context *ml_dev)
 {
 	wlan_mlo_t2lm_timer_deinit(vdev);
+	wlan_unregister_t2lm_link_update_notify_handler(
+			ml_dev, ml_dev->t2lm_ctx.link_update_callback_index);
 }
 
 /**
@@ -1306,7 +1371,7 @@ static QDF_STATUS mlo_dev_ctx_deinit(struct wlan_objmgr_vdev *vdev)
 
 		mlo_ptqm_migration_deinit(ml_dev);
 		mlo_mgr_link_switch_deinit(ml_dev);
-		mlo_t2lm_ctx_deinit(vdev);
+		mlo_t2lm_ctx_deinit(vdev, ml_dev);
 		mlo_epcs_ctx_deinit(ml_dev);
 
 		/* Destroy DP MLO Device Context */

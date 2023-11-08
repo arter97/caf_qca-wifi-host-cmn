@@ -886,7 +886,11 @@ dp_rx_null_q_handle_invalid_peer_id_exception(struct dp_soc *soc,
 
 bool dp_rx_check_pkt_len(struct dp_soc *soc, uint32_t pkt_len)
 {
-	if (qdf_unlikely(pkt_len > RX_DATA_BUFFER_SIZE)) {
+	uint16_t buf_size;
+
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
+
+	if (qdf_unlikely(pkt_len > buf_size)) {
 		DP_STATS_INC_PKT(soc, rx.err.rx_invalid_pkt_len,
 				 1, pkt_len);
 		return true;
@@ -1563,6 +1567,22 @@ fail:
 	return;
 }
 
+#ifdef WLAN_SUPPORT_RX_FLOW_TAG
+static void dp_rx_peek_trapped_packet(struct dp_soc *soc,
+				      struct dp_vdev *vdev)
+{
+	if (soc->cdp_soc.ol_ops->send_wakeup_trigger)
+		soc->cdp_soc.ol_ops->send_wakeup_trigger(soc->ctrl_psoc,
+				vdev->vdev_id);
+}
+#else
+static void dp_rx_peek_trapped_packet(struct dp_soc *soc,
+				      struct dp_vdev *vdev)
+{
+	return;
+}
+#endif
+
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP) && \
 	defined(WLAN_MCAST_MLO)
 static bool dp_rx_igmp_handler(struct dp_soc *soc,
@@ -1617,6 +1637,9 @@ dp_rx_err_route_hdl(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	struct dp_vdev *vdev;
 	struct hal_rx_msdu_metadata msdu_metadata;
 	bool is_eapol;
+	uint16_t buf_size;
+
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 
 	qdf_nbuf_set_rx_chfrag_start(
 				nbuf,
@@ -1643,8 +1666,7 @@ dp_rx_err_route_hdl(struct dp_soc *soc, qdf_nbuf_t nbuf,
 			goto drop_nbuf;
 
 		/* Set length in nbuf */
-		qdf_nbuf_set_pktlen(
-			nbuf, qdf_min(pkt_len, (uint32_t)RX_DATA_BUFFER_SIZE));
+		qdf_nbuf_set_pktlen(nbuf, qdf_min(pkt_len, (uint32_t)buf_size));
 	}
 
 	/*
@@ -1677,6 +1699,10 @@ dp_rx_err_route_hdl(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	else
 		qdf_nbuf_pull_head(nbuf, (msdu_metadata.l3_hdr_pad +
 				   soc->rx_pkt_tlv_size));
+
+	if (hal_rx_msdu_cce_metadata_get(soc->hal_soc, rx_tlv_hdr) ==
+			CDP_STANDBY_METADATA)
+		dp_rx_peek_trapped_packet(soc, vdev);
 
 	QDF_NBUF_CB_RX_PEER_ID(nbuf) = txrx_peer->peer_id;
 	if (dp_rx_igmp_handler(soc, vdev, txrx_peer, nbuf, link_id))

@@ -542,7 +542,6 @@ QDF_STATUS qdf_mc_timer_start(qdf_mc_timer_t *timer, uint32_t expiration_time)
 		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
 			  "%s: Cannot start a timer with expiration less than 10 ms",
 			  __func__);
-		QDF_ASSERT(0);
 		return QDF_STATUS_E_INVAL;
 	}
 

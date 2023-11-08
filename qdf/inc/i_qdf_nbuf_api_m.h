@@ -289,4 +289,31 @@ qdf_nbuf_rx_get_band(qdf_nbuf_t nbuf)
 {
 	return QDF_NBUF_CB_RX_BAND(nbuf);
 }
+
+/**
+ * qdf_nbuf_set_tx_ts() - set tx timestamp of nbuf
+ * @buf: Network buffer
+ *
+ * Return: None
+ */
+static inline void qdf_nbuf_set_tx_ts(qdf_nbuf_t buf)
+{
+	__qdf_nbuf_set_tx_ts(buf, qdf_ktime_real_get());
+}
+
+/**
+ * qdf_nbuf_get_tx_ts() - get tx timestamp of nbuf
+ * @buf: Network buffer
+ * @clear: clear the fields after getting tx timestamp
+ *
+ * Return: tx timestamp
+ */
+static inline qdf_time_t qdf_nbuf_get_tx_ts(qdf_nbuf_t buf, bool clear)
+{
+	qdf_time_t ts = __qdf_nbuf_get_tx_ts(buf);
+
+	if (clear)
+		__qdf_nbuf_clear_tx_ts(buf);
+	return ts;
+}
 #endif /* _QDF_NBUF_M_H */

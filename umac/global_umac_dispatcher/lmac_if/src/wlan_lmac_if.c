@@ -982,6 +982,8 @@ wlan_lmac_if_mlo_rx_link_switch_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 {
 	rx_ops->mlo_rx_ops.mlo_link_switch_request_handler =
 					mlo_mgr_link_switch_request_params;
+	rx_ops->mlo_rx_ops.mlo_link_state_switch_event_handler =
+					mlo_mgr_link_state_switch_info_handler;
 }
 #else
 static inline void

@@ -730,6 +730,12 @@ static inline void
 dp_htt_setup_rxdma_err_dst_ring(struct dp_soc *soc, int mac_id,
 				int lmac_id)
 {
+	if ((soc->cdp_soc.ol_ops->get_con_mode &&
+	     soc->cdp_soc.ol_ops->get_con_mode() == QDF_GLOBAL_MONITOR_MODE) &&
+	    soc->rxdma_err_dst_ring[lmac_id].hal_srng)
+		htt_srng_setup(soc->htt_handle, mac_id,
+			       soc->rxdma_err_dst_ring[lmac_id].hal_srng,
+			       RXDMA_DST);
 }
 #endif
 
@@ -862,5 +868,18 @@ dp_srng_configure_nf_interrupt_thresholds(struct dp_soc *soc,
 					  int ring_type)
 {
 }
+#endif
+
+#ifdef WLAN_SUPPORT_DPDK
+/*
+ * dp_soc_reset_dpdk_intr_mask() - reset interrupt mask
+ * @dp_soc - DP Soc handle
+ *
+ * Return: Return void
+ */
+void dp_soc_reset_dpdk_intr_mask(struct dp_soc *soc);
+#else
+static inline void dp_soc_reset_dpdk_intr_mask(struct dp_soc *soc)
+{ }
 #endif
 #endif /* _DP_RINGS_H_ */

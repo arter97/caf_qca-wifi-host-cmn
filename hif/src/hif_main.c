@@ -57,6 +57,7 @@
 #include <pld_common.h>
 #include "ce_internal.h"
 #include <qdf_tracepoint.h>
+#include "qdf_ssr_driver_dump.h"
 
 void hif_dump(struct hif_opaque_softc *hif_ctx, uint8_t cmd_id, bool start)
 {
@@ -1310,6 +1311,7 @@ struct hif_opaque_softc *hif_open(qdf_device_t qdf_ctx,
 	hif_init_direct_link_rcv_pipe_num(scn);
 	hif_ce_desc_history_log_register(scn);
 	hif_desc_history_log_register();
+	qdf_ssr_driver_dump_register_region("hif", scn, sizeof(*scn));
 
 out:
 	return GET_HIF_OPAQUE_HDL(scn);
@@ -1348,6 +1350,7 @@ void hif_close(struct hif_opaque_softc *hif_ctx)
 		return;
 	}
 
+	qdf_ssr_driver_dump_unregister_region("hif");
 	hif_desc_history_log_unregister();
 	hif_ce_desc_history_log_unregister();
 	hif_latency_detect_deinit(scn);

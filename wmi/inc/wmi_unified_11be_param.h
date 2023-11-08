@@ -48,11 +48,13 @@ struct wmi_mlo_ready_params {
  * @WMI_HOST_MLO_TEARDOWN_REASON_DOWN: Wifi down
  * @WMI_HOST_MLO_TEARDOWN_REASON_SSR: Wifi Recovery
  * @WMI_HOST_MLO_TEARDOWN_REASON_MODE1_SSR: Recovery Mode1 SSR teardown
+ * @WMI_HOST_MLO_TEARDOWN_REASON_STANDBY: Network Standby mode teardown
  */
 enum wmi_mlo_teardown_reason {
 	WMI_HOST_MLO_TEARDOWN_REASON_DOWN,
 	WMI_HOST_MLO_TEARDOWN_REASON_SSR,
 	WMI_HOST_MLO_TEARDOWN_REASON_MODE1_SSR,
+	WMI_HOST_MLO_TEARDOWN_REASON_STANDBY,
 };
 
 /** struct wmi_mlo_teardown_params - MLO teardown command params
@@ -64,6 +66,7 @@ struct wmi_mlo_teardown_params {
 	uint32_t pdev_id;
 	enum wmi_mlo_teardown_reason reason;
 	bool umac_reset;
+	bool standby_active;
 };
 
 /** enum wmi_mlo_setup_status - Status code in WMI MLO setup completion event

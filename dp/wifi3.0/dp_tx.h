@@ -205,11 +205,13 @@ struct dp_tx_queue {
  * @u.sg_info: Scatter Gather information for non-TSO SG frames
  * @meta_data: Mesh meta header information
  * @ppdu_cookie: 16-bit ppdu_cookie that has to be replayed back in completions
+ * @xmit_type: xmit type of packet Link (0)/MLD (1)
  * @gsn: global sequence for reinjected mcast packets
  * @vdev_id : vdev_id for reinjected mcast packets
  * @skip_hp_update : Skip HP update for TSO segments and update in last segment
  * @buf_len:
  * @payload_addr:
+ * @driver_ingress_ts: driver ingress timestamp
  *
  * This structure holds the complete MSDU information needed to program the
  * Hardware TCL and MSDU extension descriptors for different frame types
@@ -228,6 +230,7 @@ struct dp_tx_msdu_info_s {
 	} u;
 	uint32_t meta_data[DP_TX_MSDU_INFO_META_DATA_DWORDS];
 	uint16_t ppdu_cookie;
+	uint8_t xmit_type;
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 #ifdef WLAN_MCAST_MLO
 	uint16_t gsn;
@@ -240,6 +243,9 @@ struct dp_tx_msdu_info_s {
 #ifdef QCA_DP_TX_RMNET_OPTIMIZATION
 	uint16_t buf_len;
 	uint8_t *payload_addr;
+#endif
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+	qdf_ktime_t driver_ingress_ts;
 #endif
 };
 
@@ -1683,7 +1689,8 @@ bool dp_tx_desc_set_ktimestamp(struct dp_vdev *vdev,
 	    qdf_unlikely(vdev->pdev->soc->wlan_cfg_ctx->pext_stats_enabled) ||
 	    qdf_unlikely(dp_tx_pkt_tracepoints_enabled()) ||
 	    qdf_unlikely(vdev->pdev->soc->peerstats_enabled) ||
-	    qdf_unlikely(dp_is_vdev_tx_delay_stats_enabled(vdev))) {
+	    qdf_unlikely(dp_is_vdev_tx_delay_stats_enabled(vdev)) ||
+	    qdf_unlikely(wlan_cfg_is_peer_jitter_stats_enabled(vdev->pdev->soc->wlan_cfg_ctx))) {
 		tx_desc->timestamp = qdf_ktime_real_get();
 		return true;
 	}
@@ -1697,7 +1704,8 @@ bool dp_tx_desc_set_ktimestamp(struct dp_vdev *vdev,
 	if (qdf_unlikely(vdev->pdev->delay_stats_flag) ||
 	    qdf_unlikely(vdev->pdev->soc->wlan_cfg_ctx->pext_stats_enabled) ||
 	    qdf_unlikely(dp_tx_pkt_tracepoints_enabled()) ||
-	    qdf_unlikely(vdev->pdev->soc->peerstats_enabled)) {
+	    qdf_unlikely(vdev->pdev->soc->peerstats_enabled) ||
+	    qdf_unlikely(wlan_cfg_is_peer_jitter_stats_enabled(vdev->pdev->soc->wlan_cfg_ctx))) {
 		tx_desc->timestamp = qdf_ktime_real_get();
 		return true;
 	}
@@ -1864,11 +1872,13 @@ dp_tx_limit_check(struct dp_vdev *vdev, qdf_nbuf_t nbuf)
 {
 	struct dp_pdev *pdev = vdev->pdev;
 	struct dp_soc *soc = pdev->soc;
+	uint8_t xmit_type = qdf_nbuf_get_vdev_xmit_type(nbuf);
 
 	if (__dp_tx_limit_check(soc)) {
 		if (is_dp_spl_tx_limit_reached(vdev, nbuf)) {
 			dp_tx_info("queued packets are more than max tx, drop the frame");
-			DP_STATS_INC(vdev, tx_i.dropped.desc_na.num, 1);
+			DP_STATS_INC(vdev,
+				     tx_i[xmit_type].dropped.desc_na.num, 1);
 			return true;
 		}
 	}
@@ -1877,9 +1887,11 @@ dp_tx_limit_check(struct dp_vdev *vdev, qdf_nbuf_t nbuf)
 			pdev->num_reg_tx_allowed) {
 		if (is_dp_spl_tx_limit_reached(vdev, nbuf)) {
 			dp_tx_info("queued packets are more than max tx, drop the frame");
-			DP_STATS_INC(vdev, tx_i.dropped.desc_na.num, 1);
 			DP_STATS_INC(vdev,
-				     tx_i.dropped.desc_na_exc_outstand.num, 1);
+				     tx_i[xmit_type].dropped.desc_na.num, 1);
+			DP_STATS_INC(vdev,
+				     tx_i[xmit_type].dropped.desc_na_exc_outstand.num,
+				     1);
 			return true;
 		}
 	}
@@ -1891,12 +1903,13 @@ dp_tx_limit_check(struct dp_vdev *vdev, qdf_nbuf_t nbuf)
  * dp_tx_exception_limit_check - Check if allocated tx exception descriptors
  * reached soc max limit
  * @vdev: DP vdev handle
+ * @xmit_type: xmit type of packet - MLD/Link
  *
  * Return: true if allocated tx descriptors reached max configured value, else
  * false
  */
 static inline bool
-dp_tx_exception_limit_check(struct dp_vdev *vdev)
+dp_tx_exception_limit_check(struct dp_vdev *vdev, uint8_t xmit_type)
 {
 	struct dp_pdev *pdev = vdev->pdev;
 	struct dp_soc *soc = pdev->soc;
@@ -1904,7 +1917,7 @@ dp_tx_exception_limit_check(struct dp_vdev *vdev)
 	if (qdf_atomic_read(&soc->num_tx_exception) >=
 			soc->num_msdu_exception_desc) {
 		dp_info("exc packets are more than max drop the exc pkt");
-		DP_STATS_INC(vdev, tx_i.dropped.exc_desc_na.num, 1);
+		DP_STATS_INC(vdev, tx_i[xmit_type].dropped.exc_desc_na.num, 1);
 		return true;
 	}
 
@@ -2045,7 +2058,7 @@ dp_tx_limit_check(struct dp_vdev *vdev, qdf_nbuf_t nbuf)
 }
 
 static inline bool
-dp_tx_exception_limit_check(struct dp_vdev *vdev)
+dp_tx_exception_limit_check(struct dp_vdev *vdev, uint8_t xmit_type)
 {
 	return false;
 }
@@ -2149,5 +2162,45 @@ dp_tx_set_nbuf_band(qdf_nbuf_t nbuf, struct dp_txrx_peer *txrx_peer,
 		    uint8_t link_id)
 {
 }
+#endif
+
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+/**
+ * dp_tx_latency_stats_fetch() - fetch transmit latency statistics for
+ * specified link mac address
+ * @soc_hdl: Handle to struct dp_soc
+ * @vdev_id: vdev id
+ * @mac: link mac address of remote peer
+ * @latency: buffer to hold per-link transmit latency statistics
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+dp_tx_latency_stats_fetch(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+			  uint8_t *mac, struct cdp_tx_latency *latency);
+
+/**
+ * dp_tx_latency_stats_config() - config transmit latency statistics for
+ * specified vdev
+ * @soc_hdl: Handle to struct dp_soc
+ * @vdev_id: vdev id
+ * @cfg: configuration for transmit latency statistics
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+dp_tx_latency_stats_config(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+			   struct cdp_tx_latency_config *cfg);
+
+/**
+ * dp_tx_latency_stats_register_cb() - register transmit latency statistics
+ * callback
+ * @handle: Handle to struct dp_soc
+ * @cb: callback function for transmit latency statistics
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_tx_latency_stats_register_cb(struct cdp_soc_t *handle,
+					   cdp_tx_latency_cb cb);
 #endif
 #endif

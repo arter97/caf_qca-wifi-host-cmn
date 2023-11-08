@@ -253,3 +253,19 @@ void qdf_get_bus_reg_dump(struct device *dev, uint8_t *buf, uint32_t len)
 }
 
 qdf_export_symbol(qdf_get_bus_reg_dump);
+
+#ifdef WLAN_SUPPORT_DPDK
+int qdf_uio_register_device(struct device *parent, qdf_uio_info_t *info)
+{
+	return uio_register_device(parent, (struct uio_info *)info);
+}
+
+qdf_export_symbol(qdf_uio_register_device);
+
+void qdf_uio_unregister_device(qdf_uio_info_t *info)
+{
+	uio_unregister_device(info);
+}
+
+qdf_export_symbol(qdf_uio_unregister_device);
+#endif

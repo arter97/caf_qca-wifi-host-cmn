@@ -170,6 +170,7 @@ static inline int dp_ath_rate_out(uint64_t _i)
 #endif
 
 #define INVALID_RATE_ERR -1
+#define NUM_LEGACY_MCS 1
 
 /*
  * The order of the rate types are jumbled below since the current code

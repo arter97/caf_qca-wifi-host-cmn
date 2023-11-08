@@ -49,7 +49,8 @@ void dp_tx_comp_get_params_from_hal_desc_li(struct dp_soc *soc,
 				     (tx_desc_id & DP_TX_DESC_ID_PAGE_MASK) >>
 							DP_TX_DESC_ID_PAGE_OS,
 				     (tx_desc_id & DP_TX_DESC_ID_OFFSET_MASK) >>
-						DP_TX_DESC_ID_OFFSET_OS);
+						DP_TX_DESC_ID_OFFSET_OS,
+				     (tx_desc_id & DP_TX_DESC_ID_SPCL_MASK));
 	/* Pool id is not matching. Error */
 	if ((*r_tx_desc)->pool_id != pool_id) {
 		dp_tx_comp_alert("Tx Comp pool id %d not matched %d",
@@ -254,7 +255,9 @@ void dp_tx_process_htt_completion_li(struct dp_soc *soc,
 	}
 	case HTT_TX_FW2WBM_TX_STATUS_VDEVID_MISMATCH:
 	{
-		DP_STATS_INC(vdev, tx_i.dropped.fail_per_pkt_vdev_id_check, 1);
+		DP_STATS_INC(vdev,
+			     tx_i[DP_XMIT_LINK].dropped.fail_per_pkt_vdev_id_check,
+			     1);
 		goto release_tx_desc;
 	}
 	default:
@@ -403,9 +406,6 @@ void dp_sawf_config_li(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 	uint8_t q_id = 0;
 	uint32_t flow_idx = 0;
 
-	if (!wlan_cfg_get_sawf_config(soc->wlan_cfg_ctx))
-		return;
-
 	q_id = dp_sawf_queue_id_get(nbuf);
 	if (q_id == DP_SAWF_DEFAULT_Q_INVALID)
 		return;
@@ -416,6 +416,9 @@ void dp_sawf_config_li(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 
 	if ((q_id >= DP_SAWF_DEFAULT_QUEUE_MIN) &&
 	    (q_id < DP_SAWF_DEFAULT_QUEUE_MAX))
+		return;
+
+	if (!wlan_cfg_get_sawf_config(soc->wlan_cfg_ctx))
 		return;
 
 	dp_sawf_tcl_cmd(fw_metadata, nbuf);
@@ -543,7 +546,8 @@ dp_tx_hw_enqueue_li(struct dp_soc *soc, struct dp_vdev *vdev,
 			  "%s %d : HAL RING Access Failed -- %pK",
 			 __func__, __LINE__, hal_ring_hdl);
 		DP_STATS_INC(soc, tx.tcl_ring_full[ring_id], 1);
-		DP_STATS_INC(vdev, tx_i.dropped.enqueue_fail, 1);
+		DP_STATS_INC(vdev, tx_i[DP_XMIT_LINK].dropped.enqueue_fail,
+			     1);
 		dp_sawf_tx_enqueue_fail_peer_stats(soc, tx_desc);
 		return status;
 	}
@@ -556,7 +560,8 @@ dp_tx_hw_enqueue_li(struct dp_soc *soc, struct dp_vdev *vdev,
 	if (qdf_unlikely(!hal_tx_desc)) {
 		dp_verbose_debug("TCL ring full ring_id:%d", ring_id);
 		DP_STATS_INC(soc, tx.tcl_ring_full[ring_id], 1);
-		DP_STATS_INC(vdev, tx_i.dropped.enqueue_fail, 1);
+		DP_STATS_INC(vdev, tx_i[DP_XMIT_LINK].dropped.enqueue_fail,
+			     1);
 		dp_sawf_tx_enqueue_fail_peer_stats(soc, tx_desc);
 		goto ring_access_fail;
 	}
@@ -566,7 +571,8 @@ dp_tx_hw_enqueue_li(struct dp_soc *soc, struct dp_vdev *vdev,
 	hal_tx_desc_sync(hal_tx_desc_cached, hal_tx_desc);
 	coalesce = dp_tx_attempt_coalescing(soc, vdev, tx_desc, tid,
 					    msdu_info, ring_id);
-	DP_STATS_INC_PKT(vdev, tx_i.processed, 1, tx_desc->length);
+	DP_STATS_INC_PKT(vdev, tx_i[DP_XMIT_LINK].processed, 1,
+			 tx_desc->length);
 	DP_STATS_INC(soc, tx.tcl_enq[ring_id], 1);
 	dp_tx_update_stats(soc, tx_desc, ring_id);
 	status = QDF_STATUS_SUCCESS;
@@ -603,7 +609,8 @@ QDF_STATUS dp_tx_desc_pool_init_li(struct dp_soc *soc,
 	while (tx_desc) {
 		page_id = count / num_desc_per_page;
 		offset = count % num_desc_per_page;
-		id = ((pool_id_32 << DP_TX_DESC_ID_POOL_OS) |
+		id = ((!!spcl_tx_desc) <<  DP_TX_DESC_ID_SPCL_OS |
+			(pool_id_32 << DP_TX_DESC_ID_POOL_OS) |
 			(page_id << DP_TX_DESC_ID_PAGE_OS) | offset);
 
 		tx_desc->id = id;

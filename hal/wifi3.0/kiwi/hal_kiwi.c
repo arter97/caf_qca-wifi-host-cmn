@@ -1288,6 +1288,18 @@ static uint8_t hal_rx_get_tlv_kiwi(void *rx_tlv)
 }
 
 /**
+ * hal_rx_phy_legacy_get_rssi_kiwi() - API to get RSSI from TLV
+ *                                     WIFIPHYRX_RSSI_LEGACY_E
+ * @buf: pointer to the start of WIFIPHYRX_RSSI_LEGACY_E TLV
+ *
+ * Return: value of RSSI
+ */
+static int8_t hal_rx_phy_legacy_get_rssi_kiwi(uint8_t *buf)
+{
+	return HAL_RX_GET_64(buf, PHYRX_RSSI_LEGACY, RSSI_COMB_PPDU);
+}
+
+/**
  * hal_rx_proc_phyrx_other_receive_info_tlv_kiwi()
  *				    - process other receive info TLV
  * @rx_tlv_hdr: pointer to TLV header
@@ -1966,7 +1978,7 @@ hal_get_tsf_time_kiwi(hal_soc_handle_t hal_soc_hdl, uint32_t tsf_id,
 	uint64_t global_time_low_offset, global_time_high_offset;
 	uint64_t tsf_offset_low, tsf_offset_hi;
 	uint64_t fw_time, global_time, sync_time;
-	enum hal_scratch_reg_enum tsf_enum_low, tsf_enum_high;
+	enum hal_scratch_reg_enum tsf_enum_low = 0, tsf_enum_high = 0;
 
 	if (hif_force_wake_request(soc->hif_handle))
 		return;
@@ -2212,6 +2224,8 @@ static void hal_hw_txrx_ops_attach_kiwi(struct hal_soc *hal_soc)
 					hal_rx_msdu_desc_info_ptr_get_kiwi;
 	hal_soc->ops->hal_ent_mpdu_desc_info = hal_ent_mpdu_desc_info_kiwi;
 	hal_soc->ops->hal_dst_mpdu_desc_info = hal_dst_mpdu_desc_info_kiwi;
+	hal_soc->ops->hal_rx_phy_legacy_get_rssi =
+					hal_rx_phy_legacy_get_rssi_kiwi;
 	hal_soc->ops->hal_rx_get_fc_valid = hal_rx_get_fc_valid_be;
 	hal_soc->ops->hal_rx_get_to_ds_flag = hal_rx_get_to_ds_flag_be;
 	hal_soc->ops->hal_rx_get_mac_addr2_valid =

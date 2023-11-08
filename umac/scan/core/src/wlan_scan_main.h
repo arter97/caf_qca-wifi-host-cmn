@@ -165,6 +165,12 @@ struct probe_time_dwell_time {
 /* Passive dwell time if bt_a2dp is enabled. Time in msecs*/
 #define PASSIVE_DWELL_TIME_BT_A2DP_ENABLED 28
 
+/* Aux Scan Flags */
+#define SCAN_FLAG_EXT_AUX_LOW_POWER_SCAN	0x0000020000
+#define SCAN_FLAG_EXT_AUX_LOW_LATENCY_SCAN	0x0000040000
+#define SCAN_FLAG_EXT_AUX_FAST_SCAN		0x0000080000
+#define SCAN_FLAG_EXT_AUX_RELIABLE_SCAN		0x0000100000
+
 /**
  * struct cb_handler - defines scan event handler
  * call back function and arguments
@@ -550,6 +556,7 @@ struct scan_cb {
  *                        on the ini scan_mode_6ghz_duty_cycle.
  * @allow_bss_with_incomplete_ie: Continue scan entry even if any corrupted
  *                                IEs are present.
+ * @aux_mac_support: advertise aux mac support from FW
  */
 struct wlan_scan_obj {
 	uint32_t scan_disabled;
@@ -586,6 +593,7 @@ struct wlan_scan_obj {
 #endif
 	uint16_t duty_cycle_cnt_6ghz;
 	bool allow_bss_with_incomplete_ie;
+	bool aux_mac_support;
 };
 
 #ifdef ENABLE_SCAN_PROFILE

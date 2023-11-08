@@ -1448,7 +1448,9 @@ static void reg_modify_chan_list_for_cached_channels(
 {
 	uint32_t i, j;
 	uint32_t num_cache_channels = pdev_priv_obj->num_cache_channels;
-	struct regulatory_channel *chan_list = pdev_priv_obj->cur_chan_list;
+	struct regulatory_channel *cur_chan_list = pdev_priv_obj->cur_chan_list;
+	struct regulatory_channel *sec_chan_list =
+					pdev_priv_obj->secondary_cur_chan_list;
 	struct regulatory_channel *cache_chan_list =
 					pdev_priv_obj->cache_disable_chan_list;
 
@@ -1456,15 +1458,24 @@ static void reg_modify_chan_list_for_cached_channels(
 		return;
 
 	if (pdev_priv_obj->disable_cached_channels) {
-		for (i = 0; i < num_cache_channels; i++)
-			for (j = 0; j < NUM_CHANNELS; j++)
+		for (i = 0; i < num_cache_channels; i++) {
+			for (j = 0; j < NUM_CHANNELS; j++) {
 				if (cache_chan_list[i].center_freq ==
-				    chan_list[j].center_freq) {
-					chan_list[j].state =
+				    cur_chan_list[j].center_freq) {
+					cur_chan_list[j].state =
 							CHANNEL_STATE_DISABLE;
-					chan_list[j].chan_flags |=
+					cur_chan_list[j].chan_flags |=
 						REGULATORY_CHAN_DISABLED;
 				}
+				if (cache_chan_list[i].center_freq ==
+				    sec_chan_list[j].center_freq) {
+					sec_chan_list[j].state =
+							CHANNEL_STATE_DISABLE;
+					sec_chan_list[j].chan_flags |=
+						REGULATORY_CHAN_DISABLED;
+				}
+			}
+		}
 	}
 }
 #else
@@ -1489,17 +1500,17 @@ reg_modify_chan_list_for_srd_channels(struct wlan_objmgr_pdev *pdev,
 {
 	enum channel_enum chan_enum;
 
-	if (!reg_is_etsi13_regdmn(pdev))
+	if (!reg_is_etsi_regdmn(pdev))
 		return;
 
-	if (reg_is_etsi13_srd_chan_allowed_master_mode(pdev))
+	if (reg_is_etsi_srd_chan_allowed_master_mode(pdev))
 		return;
 
 	for (chan_enum = 0; chan_enum < NUM_CHANNELS; chan_enum++) {
 		if (chan_list[chan_enum].chan_flags & REGULATORY_CHAN_DISABLED)
 			continue;
 
-		if (reg_is_etsi13_srd_chan_for_freq(
+		if (reg_is_etsi_srd_chan_for_freq(
 					pdev,
 					chan_list[chan_enum].center_freq)) {
 			chan_list[chan_enum].state =
@@ -3331,8 +3342,6 @@ void reg_compute_pdev_current_chan_list(struct wlan_regulatory_pdev_priv_obj
 	reg_modify_chan_list_for_chan_144(pdev_priv_obj->cur_chan_list,
 					  pdev_priv_obj->en_chan_144);
 
-	reg_modify_chan_list_for_cached_channels(pdev_priv_obj);
-
 	reg_modify_chan_list_for_srd_channels(pdev_priv_obj->pdev_ptr,
 					      pdev_priv_obj->cur_chan_list);
 
@@ -3350,6 +3359,8 @@ void reg_compute_pdev_current_chan_list(struct wlan_regulatory_pdev_priv_obj
 						  cur_chan_list);
 
 	reg_populate_secondary_cur_chan_list(pdev_priv_obj);
+
+	reg_modify_chan_list_for_cached_channels(pdev_priv_obj);
 
 	reg_modify_chan_list_for_avoid_chan_ext(pdev_priv_obj);
 
@@ -5078,6 +5089,40 @@ reg_fill_subchan_centers(uint8_t nchans, uint8_t cfi, uint8_t *subchannels)
 	}
 }
 
+struct opclass_nchans_pair {
+	uint8_t opclass;
+	uint8_t nchans;
+};
+
+static const struct opclass_nchans_pair opclass_nchans_map[] = {
+	{131, 1},
+	{136, 1},
+	{132, 2},
+	{133, 4},
+	{134, 8},
+#ifdef WLAN_FEATURE_11BE
+	{137, 16},
+#endif
+};
+
+/**
+ * reg_get_nsubchaneels_for_opclass() - Get the number of subchannels based on
+ * the operating class.
+ * @opclass: Operating class
+ *
+ * Return: Number of subchannels
+ */
+static uint8_t reg_get_nsubchaneels_for_opclass(uint8_t opclass)
+{
+	uint8_t  i, n_opclasses = QDF_ARRAY_SIZE(opclass_nchans_map);
+
+	for (i = 0; i < n_opclasses; i++)
+		if (opclass == opclass_nchans_map[i].opclass)
+			return opclass_nchans_map[i].nchans;
+
+	return 0;
+}
+
 /**
  * reg_get_subchannels_for_opclass() - Get the list of subchannels based on the
  * the channel frequency index and opclass.
@@ -5093,29 +5138,7 @@ uint8_t reg_get_subchannels_for_opclass(uint8_t cfi,
 {
 	uint8_t nchans;
 
-	switch (opclass) {
-	case 131:
-	case 136:
-		nchans = 1;
-		break;
-	case 132:
-		nchans = 2;
-		break;
-	case 133:
-		nchans = 4;
-		break;
-	case 134:
-		nchans = 8;
-		break;
-	case 137:
-		nchans = 16;
-		break;
-
-	default:
-		nchans = 0;
-		break;
-	}
-
+	nchans = reg_get_nsubchaneels_for_opclass(opclass);
 	reg_fill_subchan_centers(nchans, cfi, subchannels);
 
 	return nchans;
