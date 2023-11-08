@@ -1387,6 +1387,28 @@ bool cm_is_vdev_disconnected(struct wlan_objmgr_vdev *vdev)
 	return false;
 }
 
+#ifdef CONN_MGR_ADV_FEATURE
+bool cm_is_vdev_idle_due_to_link_switch(struct wlan_objmgr_vdev *vdev)
+{
+	struct cnx_mgr *cm_ctx;
+	enum wlan_cm_sm_state state;
+	enum wlan_cm_sm_state sub_state;
+
+	cm_ctx = cm_get_cm_ctx(vdev);
+	if (!cm_ctx)
+		return false;
+
+	state = cm_get_state(cm_ctx);
+	sub_state = cm_get_sub_state(cm_ctx);
+
+	if (state == WLAN_CM_S_INIT &&
+	    sub_state == WLAN_CM_SS_IDLE_DUE_TO_LINK_SWITCH)
+		return true;
+
+	return false;
+}
+#endif
+
 bool cm_is_vdev_roaming(struct wlan_objmgr_vdev *vdev)
 {
 	struct cnx_mgr *cm_ctx;

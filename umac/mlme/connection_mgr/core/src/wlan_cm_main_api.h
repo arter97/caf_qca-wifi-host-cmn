@@ -1065,6 +1065,26 @@ bool cm_is_vdev_disconnecting(struct wlan_objmgr_vdev *vdev);
  */
 bool cm_is_vdev_disconnected(struct wlan_objmgr_vdev *vdev);
 
+#ifdef CONN_MGR_ADV_FEATURE
+/**
+ * cm_is_vdev_idle_due_to_link_switch() - Check if VDEV is in
+ * IDLE state due to link switch
+ * @vdev: VDEV objmgr pointer
+ *
+ * Returns true if the current CM SS is WLAN_CM_SS_IDLE_DUE_TO_LINK_SWITCH or
+ * returns false.
+ *
+ * Return: bool
+ */
+bool cm_is_vdev_idle_due_to_link_switch(struct wlan_objmgr_vdev *vdev);
+#else
+static inline bool
+cm_is_vdev_idle_due_to_link_switch(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
+#endif
+
 /**
  * cm_is_vdev_roaming() - check if vdev is in roaming state
  * @vdev: vdev pointer
