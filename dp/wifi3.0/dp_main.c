@@ -5397,11 +5397,15 @@ static inline void dp_peer_ast_handle_roam_del(struct dp_soc *soc,
 		return;
 
 	qdf_spin_lock_bh(&soc->ast_lock);
-	if (soc->ast_override_support)
+	if (soc->ast_override_support) {
 		ast_entry = dp_peer_ast_hash_find_by_pdevid(soc, peer_mac_addr,
 							    pdev->pdev_id);
-	else
+		if (!ast_entry)
+			ast_entry = dp_peer_ast_hash_find_soc(soc,
+							      peer_mac_addr);
+	} else {
 		ast_entry = dp_peer_ast_hash_find_soc(soc, peer_mac_addr);
+	}
 
 	if (ast_entry && ast_entry->next_hop && !ast_entry->delete_in_progress)
 		dp_peer_del_ast(soc, ast_entry);
