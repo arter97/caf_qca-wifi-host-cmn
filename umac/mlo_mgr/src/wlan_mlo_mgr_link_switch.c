@@ -531,6 +531,14 @@ mlo_mgr_link_switch_notification(struct wlan_objmgr_vdev *vdev,
 {
 	QDF_STATUS status;
 
+	if ((notify_reason == MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_PRE_SER ||
+	     notify_reason ==
+		MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_POST_SER) &&
+		mlo_is_chan_switch_in_progress(vdev)) {
+		mlo_debug("CSA is in progress on one of ML vdevs, abort link switch");
+		return QDF_STATUS_E_AGAIN;
+	}
+
 	if (notify_reason == MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_PRE_SER)
 		return QDF_STATUS_SUCCESS;
 
