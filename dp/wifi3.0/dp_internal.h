@@ -2724,6 +2724,17 @@ void dp_peer_ppdu_delayed_ba_cleanup(struct dp_peer *peer);
 void dp_peer_rx_init(struct dp_pdev *pdev, struct dp_peer *peer);
 
 /**
+ * dp_peer_rx_init_wrapper() - Initialize receive TID state, based on peer type
+ * @pdev: Datapath pdev
+ * @peer: Datapath peer
+ * @setup_info: setup info received for setting up the peer
+ *
+ * Return: None
+ */
+void dp_peer_rx_init_wrapper(struct dp_pdev *pdev, struct dp_peer *peer,
+			     struct cdp_peer_setup_info *setup_info);
+
+/**
  * dp_peer_cleanup() - Cleanup peer information
  * @vdev: Datapath vdev
  * @peer: Datapath peer
@@ -5890,4 +5901,15 @@ void dp_ssr_dump_pdev_unregister(uint8_t pdev_id)
 {
 }
 #endif
+
+/**
+ * dp_get_peer_vdev_roaming_in_progress() - Check if peer's vdev is in roaming
+ *					    state.
+ * @peer: DP peer handle
+ *
+ * Return: true if the peer's vdev is in roaming state
+ *	   else false.
+ */
+bool dp_get_peer_vdev_roaming_in_progress(struct dp_peer *peer);
+
 #endif /* #ifndef _DP_INTERNAL_H_ */
