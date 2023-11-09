@@ -713,6 +713,7 @@ struct wlan_mlo_sta_assoc_pending_list {
  * @emlsr_cap: EMLSR capabilities info
  * @link_force_ctx: set link force mode context
  * @ml_link_control_mode: link control mode configured via user space
+ * @ml_chan_switch_in_progress: Flag to track CSA at MLD level
  */
 struct wlan_mlo_sta {
 	qdf_bitmap(wlan_connect_req_links, WLAN_UMAC_MLO_MAX_VDEVS);
@@ -743,6 +744,7 @@ struct wlan_mlo_sta {
 	struct wlan_link_force_context link_force_ctx;
 #endif
 	uint8_t ml_link_control_mode;
+	bool ml_chan_switch_in_progress;
 };
 
 /**
