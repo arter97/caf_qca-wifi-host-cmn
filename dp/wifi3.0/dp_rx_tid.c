@@ -275,7 +275,7 @@ static void dp_rx_tid_update_cb(struct dp_soc *soc, void *cb_ctxt,
 	}
 }
 
-static bool dp_get_peer_vdev_roaming_in_progress(struct dp_peer *peer)
+bool dp_get_peer_vdev_roaming_in_progress(struct dp_peer *peer)
 {
 	struct ol_if_ops *ol_ops = NULL;
 	bool is_roaming = false;

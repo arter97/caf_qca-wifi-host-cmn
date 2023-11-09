@@ -3269,6 +3269,62 @@ void dp_peer_rx_init(struct dp_pdev *pdev, struct dp_peer *peer)
 				cdp_sec_type_none;
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO
+static void dp_peer_rx_init_reorder_queue(struct dp_pdev *pdev,
+					  struct dp_peer *peer)
+{
+	struct dp_soc *soc = pdev->soc;
+	struct dp_peer *mld_peer = DP_GET_MLD_PEER_FROM_PEER(peer);
+	struct dp_rx_tid *rx_tid = NULL;
+	uint32_t ba_window_size, tid;
+	QDF_STATUS status;
+
+	if (dp_get_peer_vdev_roaming_in_progress(peer))
+		return;
+
+	tid = DP_NON_QOS_TID;
+	rx_tid = &mld_peer->rx_tid[tid];
+	ba_window_size = rx_tid->ba_status == DP_RX_BA_ACTIVE ?
+					rx_tid->ba_win_size : 1;
+	status = dp_peer_rx_reorder_queue_setup(soc, peer, tid, ba_window_size);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		dp_info("peer %pK " QDF_MAC_ADDR_FMT " type %d failed to setup tid %d ba_win_size %d",
+			peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw),
+			peer->peer_type, tid, ba_window_size);
+		/* Do not return, continue for other tids. */
+	}
+
+	for (tid = 0; tid < DP_MAX_TIDS - 1; tid++) {
+		rx_tid = &mld_peer->rx_tid[tid];
+		ba_window_size = rx_tid->ba_status == DP_RX_BA_ACTIVE ?
+						rx_tid->ba_win_size : 1;
+		status = dp_peer_rx_reorder_queue_setup(soc, peer,
+							tid, ba_window_size);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			dp_info("peer %pK " QDF_MAC_ADDR_FMT " type %d failed to setup tid %d ba_win_size %d",
+				peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw),
+				peer->peer_type, tid, ba_window_size);
+			/* Do not return, continue for other tids. */
+		}
+	}
+}
+
+void dp_peer_rx_init_wrapper(struct dp_pdev *pdev, struct dp_peer *peer,
+			     struct cdp_peer_setup_info *setup_info)
+{
+	if (setup_info && !setup_info->is_first_link)
+		dp_peer_rx_init_reorder_queue(pdev, peer);
+	else
+		dp_peer_rx_init(pdev, peer);
+}
+#else
+void dp_peer_rx_init_wrapper(struct dp_pdev *pdev, struct dp_peer *peer,
+			     struct cdp_peer_setup_info *setup_info)
+{
+	dp_peer_rx_init(pdev, peer);
+}
+#endif
+
 void dp_peer_cleanup(struct dp_vdev *vdev, struct dp_peer *peer)
 {
 	enum wlan_op_mode vdev_opmode;

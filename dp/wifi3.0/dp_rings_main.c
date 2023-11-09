@@ -2686,7 +2686,7 @@ dp_peer_setup_wifi3(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 					dp_peer_err("MLD peer null. Primary link peer:%pK", peer);
 			}
 		} else {
-			dp_peer_rx_init(pdev, peer);
+			dp_peer_rx_init_wrapper(pdev, peer, setup_info);
 		}
 	}
 
