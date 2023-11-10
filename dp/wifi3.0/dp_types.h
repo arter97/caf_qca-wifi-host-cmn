@@ -2688,15 +2688,25 @@ struct test_qaddr_del {
 
 #ifdef DP_RX_MSDU_DONE_FAIL_HISTORY
 
-#define DP_MSDU_DONE_FAIL_HIST_MAX 32
+#define DP_MSDU_DONE_FAIL_HIST_MAX 128
 
 struct dp_msdu_done_fail_entry {
 	qdf_dma_addr_t paddr;
+	uint32_t sw_cookie;
 };
 
 struct dp_msdu_done_fail_history {
 	qdf_atomic_t index;
 	struct dp_msdu_done_fail_entry entry[DP_MSDU_DONE_FAIL_HIST_MAX];
+};
+#endif
+
+#ifdef DP_RX_PEEK_MSDU_DONE_WAR
+#define DP_MSDU_DONE_FAIL_DESCS_MAX 64
+
+struct dp_rx_msdu_done_fail_desc_list {
+	qdf_atomic_t index;
+	struct dp_rx_desc *msdu_done_fail_descs[DP_MSDU_DONE_FAIL_DESCS_MAX];
 };
 #endif
 
@@ -3273,6 +3283,9 @@ struct dp_soc {
 #endif
 #ifdef DP_RX_MSDU_DONE_FAIL_HISTORY
 	struct dp_msdu_done_fail_history *msdu_done_fail_hist;
+#endif
+#ifdef DP_RX_PEEK_MSDU_DONE_WAR
+	struct dp_rx_msdu_done_fail_desc_list msdu_done_fail_desc_list;
 #endif
 };
 

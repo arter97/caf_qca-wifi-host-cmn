@@ -138,6 +138,8 @@ struct dp_rx_desc_dbg_info {
  * @in_err_state:	Nbuf sanity failed for this descriptor.
  * @has_reuse_nbuf:	the nbuf associated with this desc is also saved in
  *			reuse_nbuf field
+ * @msdu_done_fail:	this particular rx_desc was dequeued from REO with
+ *			msdu_done bit not set in data buffer.
  */
 struct dp_rx_desc {
 	qdf_nbuf_t nbuf;
@@ -158,7 +160,8 @@ struct dp_rx_desc {
 	uint8_t	in_use:1,
 		unmapped:1,
 		in_err_state:1,
-		has_reuse_nbuf:1;
+		has_reuse_nbuf:1,
+		msdu_done_fail:1;
 };
 
 #ifndef QCA_HOST_MODE_WIFI_DISABLED

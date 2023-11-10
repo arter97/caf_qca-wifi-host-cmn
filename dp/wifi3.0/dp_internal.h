@@ -4521,6 +4521,25 @@ void dp_set_max_page_size(struct qdf_mem_multi_page_t *pages,
 #endif /* MAX_ALLOC_PAGE_SIZE */
 
 /**
+ * dp_get_next_index() - get the next entry to record an entry
+ *			 in the history.
+ * @curr_idx: Current index where the last entry is written.
+ * @max_entries: Max number of entries in the history
+ *
+ * This function assumes that the max number os entries is a power of 2.
+ *
+ * Return: The index where the next entry is to be written.
+ */
+
+static inline uint32_t dp_get_next_index(qdf_atomic_t *curr_idx,
+					 uint32_t max_entries)
+{
+	uint32_t idx = qdf_atomic_inc_return(curr_idx);
+
+	return idx & (max_entries - 1);
+}
+
+/**
  * dp_history_get_next_index() - get the next entry to record an entry
  *				 in the history.
  * @curr_idx: Current index where the last entry is written.
@@ -4533,9 +4552,7 @@ void dp_set_max_page_size(struct qdf_mem_multi_page_t *pages,
 static inline uint32_t dp_history_get_next_index(qdf_atomic_t *curr_idx,
 						 uint32_t max_entries)
 {
-	uint32_t idx = qdf_atomic_inc_return(curr_idx);
-
-	return idx & (max_entries - 1);
+	return dp_get_next_index(curr_idx, max_entries);
 }
 
 /**
