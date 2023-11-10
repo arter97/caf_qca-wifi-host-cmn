@@ -3493,6 +3493,19 @@ static inline void dp_soc_msdu_done_fail_history_detach(struct dp_soc *soc)
 }
 #endif
 
+#ifdef DP_RX_PEEK_MSDU_DONE_WAR
+static void dp_soc_msdu_done_fail_desc_list_attach(struct dp_soc *soc)
+{
+	qdf_atomic_init(&soc->msdu_done_fail_desc_list.index);
+	qdf_atomic_set(&soc->msdu_done_fail_desc_list.index,
+		       DP_MSDU_DONE_FAIL_DESCS_MAX - 1);
+}
+#else
+static void dp_soc_msdu_done_fail_desc_list_attach(struct dp_soc *soc)
+{
+}
+#endif
+
 #ifdef WLAN_SUPPORT_RX_FLOW_TAG
 QDF_STATUS
 dp_rx_fst_attach_wrapper(struct dp_soc *soc, struct dp_pdev *pdev)
@@ -13675,6 +13688,7 @@ dp_soc_attach(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 	dp_soc_rx_history_attach(soc);
 	dp_soc_mon_status_ring_history_attach(soc);
 	dp_soc_tx_history_attach(soc);
+	dp_soc_msdu_done_fail_desc_list_attach(soc);
 	dp_soc_msdu_done_fail_history_attach(soc);
 	wlan_set_srng_cfg(&soc->wlan_srng_cfg);
 	soc->wlan_cfg_ctx = wlan_cfg_soc_attach(soc->ctrl_psoc);
