@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -744,4 +744,21 @@ enum host_edca_param_type {
 	HOST_EDCA_PARAM_TYPE_PIFS = 1,
 };
 
+/**
+ * enum ratemask_param_type - ratemask param type
+ * @RATEMASK_PARAMS_TYPE_CCK_OFDM: type CCK_OFDM
+ * @RATEMASK_PARAMS_TYPE_HT: type HT
+ * @RATEMASK_PARAMS_TYPE_VHT: type VHT
+ * @RATEMASK_PARAMS_TYPE_HE: type HE
+ * @RATEMASK_PARAMS_TYPE_EHT: type EHT
+ * @RATEMASK_PARAMS_TYPE_MAX: Max ratemask param type
+ */
+enum ratemask_param_type {
+	RATEMASK_PARAMS_TYPE_CCK_OFDM = 0,
+	RATEMASK_PARAMS_TYPE_HT = 1,
+	RATEMASK_PARAMS_TYPE_VHT = 2,
+	RATEMASK_PARAMS_TYPE_HE = 3,
+	RATEMASK_PARAMS_TYPE_EHT = 4,
+	RATEMASK_PARAMS_TYPE_MAX,
+};
 #endif /* _WLAN_OBJMGR_CMN_H_*/
