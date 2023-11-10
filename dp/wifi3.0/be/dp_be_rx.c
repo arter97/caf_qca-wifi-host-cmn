@@ -69,6 +69,30 @@ dp_rx_update_flow_info(qdf_nbuf_t nbuf, uint8_t *rx_tlv_hdr)
 }
 #endif
 
+#ifdef DP_RX_MSDU_DONE_FAIL_HISTORY
+static inline void
+dp_rx_msdu_done_fail_event_record(struct dp_soc *soc,
+				  qdf_nbuf_t nbuf)
+{
+	struct dp_msdu_done_fail_entry *entry;
+	uint32_t idx;
+
+	if (qdf_unlikely(!soc->msdu_done_fail_hist))
+		return;
+
+	idx = dp_history_get_next_index(&soc->msdu_done_fail_hist->index,
+					DP_MSDU_DONE_FAIL_HIST_MAX);
+	entry = &soc->msdu_done_fail_hist->entry[idx];
+	entry->paddr = qdf_nbuf_get_frag_paddr(nbuf, 0);
+}
+#else
+static inline void
+dp_rx_msdu_done_fail_event_record(struct dp_soc *soc,
+				  qdf_nbuf_t nbuf)
+{
+}
+#endif
+
 #ifndef AST_OFFLOAD_ENABLE
 static void
 dp_rx_wds_learn(struct dp_soc *soc,
@@ -612,10 +636,12 @@ done:
 		 */
 		if (qdf_unlikely(!qdf_nbuf_is_rx_chfrag_cont(nbuf) &&
 				 !hal_rx_tlv_msdu_done_get_be(rx_tlv_hdr))) {
-			dp_err("MSDU DONE failure");
 			DP_STATS_INC(soc, rx.err.msdu_done_fail, 1);
+			dp_err("MSDU DONE failure %d",
+			       soc->stats.rx.err.msdu_done_fail);
 			hal_rx_dump_pkt_tlvs(hal_soc, rx_tlv_hdr,
 					     QDF_TRACE_LEVEL_INFO);
+			dp_rx_msdu_done_fail_event_record(soc, nbuf);
 			tid_stats->fail_cnt[MSDU_DONE_FAILURE]++;
 			dp_rx_nbuf_free(nbuf);
 			qdf_assert(0);
