@@ -30,6 +30,9 @@
 #include "wlan_cm_roam.h"
 #include <qdf_platform.h>
 #include <wlan_mlo_mgr_link_switch.h>
+#ifdef WLAN_FEATURE_LL_LT_SAP
+#include "wlan_ll_sap_api.h"
+#endif
 
 static uint32_t cm_get_prefix_for_cm_id(enum wlan_cm_source source) {
 	switch (source) {
@@ -715,6 +718,28 @@ void cm_remove_cmd_from_serialization(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id)
 	}
 }
 
+#ifdef WLAN_FEATURE_LL_LT_SAP
+/**
+ * cm_switch_bearer_on_sta_connect_complete() - Switch the bearer on sta connect
+ * complete
+ * @vdev: vdev on which sta connection is completed
+ *
+ * Return: void
+ */
+static void cm_switch_bearer_on_sta_connect_complete(
+						struct wlan_objmgr_vdev *vdev)
+{
+	wlan_ll_sap_switch_bearer_on_sta_connect_complete(
+						wlan_vdev_get_psoc(vdev),
+						wlan_vdev_get_id(vdev));
+}
+#else
+static inline void cm_switch_bearer_on_sta_connect_complete(
+						struct wlan_objmgr_vdev *vdev)
+{
+}
+#endif
+
 void
 cm_flush_pending_request(struct cnx_mgr *cm_ctx, uint32_t prefix,
 			 bool only_failed_req)
@@ -754,6 +779,7 @@ cm_flush_pending_request(struct cnx_mgr *cm_ctx, uint32_t prefix,
 			cm_handle_connect_flush(cm_ctx, cm_req);
 			cm_ctx->connect_count--;
 			cm_free_connect_req_mem(&cm_req->connect_req);
+			cm_switch_bearer_on_sta_connect_complete(cm_ctx->vdev);
 		} else if (req_prefix == ROAM_REQ_PREFIX) {
 			cm_free_roam_req_mem(&cm_req->roam_req);
 		} else if (req_prefix == DISCONNECT_REQ_PREFIX) {
