@@ -5941,6 +5941,8 @@ typedef enum {
 	PDEV_PARAM(pdev_param_ul_ofdma_rtd, PDEV_PARAM_UL_OFDMA_RTD),
 	PDEV_PARAM(pdev_param_tid_mapping_3link_mlo,
 		   PDEV_PARAM_TID_MAPPING_3LINK_MLO),
+	PDEV_PARAM(pdev_param_enable_delayed_lmr_feedback,
+		   PDEV_PARAM_ENABLE_DELAYED_LMR_FEEDBACK),
 	pdev_param_max,
 } wmi_conv_pdev_params_id;
 
