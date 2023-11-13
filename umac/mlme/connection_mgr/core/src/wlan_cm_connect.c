@@ -1609,7 +1609,10 @@ next:
 		cur_node = next_node;
 		next_node = NULL;
 	}
-
+	/* print updated candidate list */
+	mlme_debug(CM_PREFIX_FMT "updated candidate list",
+		   CM_PREFIX_REF(vdev_id, cm_req->cm_id));
+	cm_print_candidate_list(cm_req->candidate_list);
 free_list:
 	if (candidate_list)
 		wlan_scan_purge_results(candidate_list);
