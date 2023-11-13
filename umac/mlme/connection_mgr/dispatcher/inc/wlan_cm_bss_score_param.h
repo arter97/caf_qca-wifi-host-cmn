@@ -369,6 +369,20 @@ static inline bool wlan_cm_is_eht_allowed_for_current_security(
 }
 #endif
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+/**
+ * cm_print_candidate_list() - print candidate list
+ * @candidate_list: candidate list
+ *
+ * Return: None
+ */
+void cm_print_candidate_list(qdf_list_t *candidate_list);
+#else
+static inline void cm_print_candidate_list(qdf_list_t *candidate_list)
+{
+}
+#endif
+
 /**
  * wlan_cm_init_score_config() - Init score INI and config
  * @psoc: pointer to psoc object

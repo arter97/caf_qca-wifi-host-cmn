@@ -2176,6 +2176,21 @@ cm_sort_vendor_algo_mlo_bss_entry(struct wlan_objmgr_psoc *psoc,
 		else
 			freq[i] = link[i].freq;
 
+		if (policy_mgr_2_freq_always_on_same_mac(psoc, freq[i],
+							 freq_entry) &&
+		    !wlan_mlme_is_5gl_5gh_mlsr_supported(psoc)) {
+			total_score[i] = 0;
+			mlme_nofl_debug("Partner(" QDF_MAC_ADDR_FMT " freq %d): assoc freq %d can't be MLMR",
+					QDF_MAC_ADDR_REF(link[i].link_addr.bytes),
+					freq[i], freq_entry);
+			if (mlo_support_link_num <= WLAN_MAX_ML_DEFAULT_LINK ||
+			    entry->ml_info.num_links <
+			    WLAN_MAX_ML_DEFAULT_LINK)
+				link[i].is_valid_link = false;
+
+			continue;
+		}
+
 		if (!entry_partner[i])
 			continue;
 
@@ -2340,7 +2355,10 @@ static void cm_vendor_specific_boost(struct wlan_objmgr_psoc *psoc,
 		freq_entry = entry->channel.chan_freq;
 		link = &entry->ml_info.link_info[0];
 
-		freq = link[0].is_valid_link ? link[0].freq : link[1].freq;
+		if (!link[0].is_valid_link)
+			return;
+
+		freq = link[0].freq;
 
 		/* Add boost of 10% for one link MLMR candidate  */
 		if (!policy_mgr_are_2_freq_on_same_mac(psoc,
@@ -2729,7 +2747,7 @@ cm_update_bss_score_for_mac_addr_matching(struct scan_cache_node *scan_entry,
 #endif
 
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
-static void cm_print_candidate_list(qdf_list_t *candidate_list)
+void cm_print_candidate_list(qdf_list_t *candidate_list)
 {
 	struct scan_cache_node *scan_entry = NULL;
 	qdf_list_node_t *cur_node = NULL, *next_node = NULL;
@@ -2758,9 +2776,10 @@ static void cm_print_candidate_list(qdf_list_t *candidate_list)
 			len += qdf_scnprintf(log_str + len, str_len - len, "num_link %d partners ",
 					     scan_entry->entry->ml_info.num_links);
 		for (i = 0; i < scan_entry->entry->ml_info.num_links; i++)
-			len += qdf_scnprintf(log_str + len, str_len - len, QDF_MAC_ADDR_FMT " freq (%d) link_id %d ",
+			len += qdf_scnprintf(log_str + len, str_len - len, QDF_MAC_ADDR_FMT " freq (%d) link_id %d is_valid_link %d ",
 					     QDF_MAC_ADDR_REF(link[i].link_addr.bytes),
-					     link[i].freq, link[i].link_id);
+					     link[i].freq, link[i].link_id,
+					     link[i].is_valid_link);
 		mlme_debug("Candidate(" QDF_MAC_ADDR_FMT " freq %d self_link_id %d): %s bss_score %d ",
 			   QDF_MAC_ADDR_REF(scan_entry->entry->bssid.bytes),
 			   scan_entry->entry->channel.chan_freq,
@@ -3016,11 +3035,6 @@ static void cm_update_candidate_list_for_vendor(qdf_list_t *candidate_list)
 static void cm_eliminate_common_candidate(qdf_list_t *candidate_list)
 {
 }
-
-static void cm_print_candidate_list(qdf_list_t *candidate_list)
-{
-}
-
 #endif
 void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 				 struct pcl_freq_weight_list *pcl_lst,
