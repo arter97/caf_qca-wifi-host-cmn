@@ -261,23 +261,40 @@ void dp_rx_prefetch_hw_sw_nbuf_desc(struct dp_soc *soc,
 static inline
 QDF_STATUS dp_peer_rx_reorder_queue_setup_li(struct dp_soc *soc,
 					     struct dp_peer *peer,
-					     int tid,
+					     uint32_t tid_bitmap,
 					     uint32_t ba_window_size)
 {
-	struct dp_rx_tid *rx_tid = &peer->rx_tid[tid];
+	int tid;
+	struct dp_rx_tid *rx_tid;
 
-	if (!rx_tid->hw_qdesc_paddr)
-		return QDF_STATUS_E_INVAL;
+	if (!soc->cdp_soc.ol_ops->peer_rx_reorder_queue_setup) {
+		dp_peer_debug("peer_rx_reorder_queue_setup NULL");
+		return QDF_STATUS_SUCCESS;
+	}
 
-	if (soc->cdp_soc.ol_ops->peer_rx_reorder_queue_setup) {
+	for (tid = 0; tid < DP_MAX_TIDS; tid++) {
+		if (!(BIT(tid) & tid_bitmap))
+			continue;
+
+		rx_tid = &peer->rx_tid[tid];
+		if (!rx_tid->hw_qdesc_paddr) {
+			tid_bitmap &= ~BIT(tid);
+			continue;
+		}
+
 		if (soc->cdp_soc.ol_ops->peer_rx_reorder_queue_setup(
 		    soc->ctrl_psoc,
 		    peer->vdev->pdev->pdev_id,
 		    peer->vdev->vdev_id,
 		    peer->mac_addr.raw, rx_tid->hw_qdesc_paddr, tid, tid,
 		    1, ba_window_size)) {
-			dp_peer_err("%pK: Failed to send reo queue setup to FW - tid %d\n",
+			dp_peer_err("%pK: Fail to send reo q setup. tid %d",
 				    soc, tid);
+			return QDF_STATUS_E_FAILURE;
+		}
+
+		if (!tid_bitmap) {
+			dp_peer_err("tid_bitmap=0. All tids setup fail");
 			return QDF_STATUS_E_FAILURE;
 		}
 	}

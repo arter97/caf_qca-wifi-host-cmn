@@ -476,6 +476,11 @@ static int init_deinit_service_ready_event_handler(ol_scn_t scn_handle,
 		init_deinit_set_send_init_cmd(psoc, tgt_hdl);
 	}
 
+	if (wmi_service_enabled(wmi_handle,
+			wmi_service_multiple_reorder_queue_setup_support))
+		cdp_soc_set_param(wlan_psoc_get_dp_handle(psoc),
+			DP_SOC_PARAM_MULTI_RX_REORDER_SETUP_SUPPORT, 1);
+
 exit:
 	return err_code;
 }
