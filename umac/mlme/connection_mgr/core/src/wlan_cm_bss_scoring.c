@@ -2314,12 +2314,12 @@ cm_check_and_update_bssid_hint_entry_bss_score(struct scan_cache_entry *entry,
 	if (!bssid_hint || !qdf_is_macaddr_equal(bssid_hint, &entry->bssid))
 		return false;
 
-	entry->bss_score = CM_BEST_CANDIDATE_MAX_BSS_SCORE;
+	entry->bss_score = entry->bss_score + CM_BEST_CANDIDATE_MAX_BSS_SCORE;
 	mlme_nofl_debug("%s("QDF_MAC_ADDR_FMT" freq %d): rssi %d BSSID hint given, give max score %d",
 			IS_ASSOC_LINK(ml_flag) ? "Candidate" : "Partner",
 			QDF_MAC_ADDR_REF(entry->bssid.bytes),
 			entry->channel.chan_freq, entry->rssi_raw,
-			CM_BEST_CANDIDATE_MAX_BSS_SCORE);
+			entry->bss_score);
 	return true;
 }
 
