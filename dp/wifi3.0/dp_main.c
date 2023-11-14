@@ -11213,6 +11213,11 @@ static QDF_STATUS dp_soc_set_param(struct cdp_soc_t  *soc_hdl,
 		dp_info("UMAC HW reset support :%u",
 			soc->features.umac_hw_reset_support);
 		break;
+	case DP_SOC_PARAM_MULTI_RX_REORDER_SETUP_SUPPORT:
+		soc->features.multi_rx_reorder_q_setup_support = value;
+		dp_info("Multi rx reorder queue setup support: %u",
+			soc->features.multi_rx_reorder_q_setup_support);
+		break;
 	default:
 		dp_info("not handled param %d ", param);
 		break;

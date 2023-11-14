@@ -1525,6 +1525,10 @@ struct ol_if_ops {
 				       uint8_t ba_window_size_valid,
 				       uint16_t ba_window_size);
 	QDF_STATUS
+	(*peer_multi_rx_reorder_queue_setup)(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
+					     uint8_t pdev_id,
+					     struct multi_rx_reorder_queue_setup_params *tid_params);
+	QDF_STATUS
 	(*peer_rx_reorder_queue_remove)(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 					uint8_t pdev_id,
 					uint8_t vdev_id, uint8_t *peer_macaddr,
