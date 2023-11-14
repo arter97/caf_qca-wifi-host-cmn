@@ -1245,4 +1245,32 @@ void wlan_crypto_aquire_lock(void);
  */
 void wlan_crypto_release_lock(void);
 #endif /* WLAN_FEATURE_FILS_SK */
+
+/**
+ * crypto_flush_entries - This API will flush crypto keys
+ * @psoc: psoc handler
+ *
+ * Return: None
+ */
+void crypto_flush_entries(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * ucfg_crypto_flush_entries - wrapper API for "crypto_flush_entries"
+ * @psoc: psoc handler
+ *
+ * Return: None
+ */
+void ucfg_crypto_flush_entries(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * ucfg_crypto_free_key_by_link_id - free key by link id
+ * @psoc: psoc handler
+ * @link_addr: link address
+ * @link_id: link id
+ *
+ * Return: None
+ */
+void ucfg_crypto_free_key_by_link_id(struct wlan_objmgr_psoc *psoc,
+				     struct qdf_mac_addr *link_addr,
+				     uint8_t link_id);
 #endif /* end of _WLAN_CRYPTO_GLOBAL_API_H_ */
