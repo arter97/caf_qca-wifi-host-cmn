@@ -4484,7 +4484,39 @@ struct rx_reorder_queue_setup_params {
 	uint16_t queue_no;
 	uint8_t ba_window_size_valid;
 	uint16_t ba_window_size;
+};
 
+#define WMI_MAX_TIDS 17 /* This should be kept the same as (C)DP_MAX_TIDS */
+
+/**
+ * struct rx_reorder_queue_params_list  - Specific params for each tid
+ * @hw_qdesc_paddr: 64 bits of queue desc address
+ * @queue_no: 16-bit number assigned by host for queue
+ * @ba_window_size: BA window size
+ * @ba_window_size_valid: BA window size validity flag
+ */
+struct rx_reorder_queue_params_list {
+	qdf_dma_addr_t hw_qdesc_paddr;
+	uint16_t queue_no;
+	uint16_t ba_window_size;
+	uint8_t ba_window_size_valid;
+};
+
+/**
+ * struct multi_rx_reorder_queue_setup_params  - Multi reorder
+ *	queue setup params
+ * @queue_params_list: An array for recording the specific params for each tid.
+ * @peer_macaddr: Peer mac address
+ * @tid_bitmap: A group of TIDs to be set at a time
+ * @tid_num: The number of TIDs to be set
+ * @vdev_id: vdev id
+ */
+struct multi_rx_reorder_queue_setup_params {
+	struct rx_reorder_queue_params_list queue_params_list[WMI_MAX_TIDS];
+	uint8_t *peer_macaddr;
+	uint32_t tid_bitmap;
+	uint8_t tid_num;
+	uint16_t vdev_id;
 };
 
 /**
@@ -6631,6 +6663,7 @@ typedef enum {
 #ifdef WLAN_FEATURE_LL_LT_SAP
 	wmi_service_xpan_support,
 #endif
+	wmi_service_multiple_reorder_queue_setup_support,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF

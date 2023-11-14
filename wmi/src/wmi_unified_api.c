@@ -263,6 +263,18 @@ QDF_STATUS wmi_unified_peer_rx_reorder_queue_setup_send(
 	return QDF_STATUS_E_FAILURE;
 }
 
+QDF_STATUS wmi_unified_peer_multi_rx_reorder_queue_setup_send(
+		wmi_unified_t wmi_handle,
+		struct multi_rx_reorder_queue_setup_params *param)
+{
+	if (wmi_handle->ops->send_peer_multi_rx_reorder_queue_setup_cmd)
+		return wmi_handle->ops->
+			send_peer_multi_rx_reorder_queue_setup_cmd(
+							wmi_handle, param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
 QDF_STATUS wmi_unified_peer_rx_reorder_queue_remove_send(
 		wmi_unified_t wmi_handle,
 		struct rx_reorder_queue_remove_params *param)

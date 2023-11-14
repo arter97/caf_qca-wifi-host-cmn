@@ -2246,6 +2246,93 @@ QDF_STATUS send_peer_rx_reorder_queue_setup_cmd_tlv(wmi_unified_t wmi,
 }
 
 /**
+ * send_peer_multi_rx_reorder_queue_setup_cmd_tlv() - Send multi rx reorder
+ *         setup cmd to fw.
+ * @wmi: wmi handle
+ * @param: Multi rx reorder queue setup parameters
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+static
+QDF_STATUS send_peer_multi_rx_reorder_queue_setup_cmd_tlv(wmi_unified_t wmi,
+		struct multi_rx_reorder_queue_setup_params *param)
+{
+	wmi_peer_multiple_reorder_queue_setup_cmd_fixed_param *cmd;
+	wmi_buf_t buf;
+	uint8_t *buf_ptr;
+	wmi_peer_per_reorder_q_setup_params_t *q_params;
+	struct rx_reorder_queue_params_list *param_ptr;
+	int tid;
+	int32_t len;
+
+	len = sizeof(wmi_peer_multiple_reorder_queue_setup_cmd_fixed_param) +
+		WMI_TLV_HDR_SIZE +
+		sizeof(wmi_peer_per_reorder_q_setup_params_t) * param->tid_num;
+
+	buf = wmi_buf_alloc(wmi, len);
+	if (!buf)
+		return QDF_STATUS_E_NOMEM;
+
+	buf_ptr = (uint8_t *)wmi_buf_data(buf);
+	cmd = (wmi_peer_multiple_reorder_queue_setup_cmd_fixed_param *)
+		wmi_buf_data(buf);
+
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		WMITLV_TAG_STRUC_wmi_peer_multiple_reorder_queue_setup_cmd_fixed_param,
+		WMITLV_GET_STRUCT_TLVLEN
+			(wmi_peer_multiple_reorder_queue_setup_cmd_fixed_param));
+
+	WMI_CHAR_ARRAY_TO_MAC_ADDR(param->peer_macaddr, &cmd->peer_macaddr);
+	cmd->vdev_id = param->vdev_id;
+
+	buf_ptr +=
+		sizeof(wmi_peer_multiple_reorder_queue_setup_cmd_fixed_param);
+
+	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC,
+		       sizeof(wmi_peer_per_reorder_q_setup_params_t) *
+		       param->tid_num);
+
+	q_params = (wmi_peer_per_reorder_q_setup_params_t *)(buf_ptr +
+							     WMI_TLV_HDR_SIZE);
+
+	for (tid = 0; tid < WMI_MAX_TIDS; tid++) {
+		if (!(BIT(tid) & param->tid_bitmap))
+			continue;
+
+		WMITLV_SET_HDR(q_params,
+			WMITLV_TAG_STRUC_wmi_peer_per_reorder_q_setup_params_t,
+			WMITLV_GET_STRUCT_TLVLEN(
+				wmi_peer_per_reorder_q_setup_params_t));
+
+		param_ptr = &param->queue_params_list[tid];
+		q_params->tid = tid;
+		q_params->queue_ptr_lo = param_ptr->hw_qdesc_paddr & 0xffffffff;
+		q_params->queue_ptr_hi =
+				(uint64_t)param_ptr->hw_qdesc_paddr >> 32;
+		q_params->queue_no = param_ptr->queue_no;
+		q_params->ba_window_size_valid =
+				param_ptr->ba_window_size_valid;
+		q_params->ba_window_size = param_ptr->ba_window_size;
+		q_params++;
+	}
+
+	wmi_mtrace(WMI_PEER_MULTIPLE_REORDER_QUEUE_SETUP_CMDID,
+		   cmd->vdev_id, 0);
+	if (wmi_unified_cmd_send(wmi, buf, len,
+		WMI_PEER_MULTIPLE_REORDER_QUEUE_SETUP_CMDID)) {
+		wmi_err("Send WMI_PEER_MULTILE_REORDER_QUEUE_SETUP_CMDID fail");
+		wmi_buf_free(buf);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	wmi_debug("peer_mac "QDF_MAC_ADDR_FMT" vdev_id %d, bitmap 0x%x, num %d",
+		  QDF_MAC_ADDR_REF(param->peer_macaddr),
+		  param->vdev_id, param->tid_bitmap, param->tid_num);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
  * send_peer_rx_reorder_queue_remove_cmd_tlv() - send rx reorder remove
  * 	command to fw
  * @wmi: wmi handle
@@ -21512,6 +21599,8 @@ struct wmi_ops tlv_ops =  {
 	.send_peer_delete_all_cmd = send_peer_delete_all_cmd_tlv,
 	.send_peer_rx_reorder_queue_setup_cmd =
 		send_peer_rx_reorder_queue_setup_cmd_tlv,
+	.send_peer_multi_rx_reorder_queue_setup_cmd =
+		send_peer_multi_rx_reorder_queue_setup_cmd_tlv,
 	.send_peer_rx_reorder_queue_remove_cmd =
 		send_peer_rx_reorder_queue_remove_cmd_tlv,
 	.send_pdev_utf_cmd = send_pdev_utf_cmd_tlv,
@@ -23137,6 +23226,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 #ifdef WLAN_FEATURE_LL_LT_SAP
 	wmi_service[wmi_service_xpan_support] = WMI_SERVICE_XPAN_SUPPORT;
 #endif
+	wmi_service[wmi_service_multiple_reorder_queue_setup_support] =
+			WMI_SERVICE_MULTIPLE_REORDER_QUEUE_SETUP_SUPPORT;
 }
 
 /**
