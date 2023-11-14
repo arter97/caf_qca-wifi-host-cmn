@@ -779,6 +779,31 @@ out:
 	return status;
 }
 
+static void
+mlo_mgr_link_switch_connect_success_trans_state(struct wlan_objmgr_vdev *vdev)
+{
+	enum mlo_link_switch_req_state curr_state;
+
+	/*
+	 * If connection is success, then sending link switch failure to FW
+	 * might result in not updating VDEV to link mapping in FW and FW may
+	 * immediately send next link switch with params corresponding to
+	 * pre-link switch which may vary post-link switch in host and might
+	 * not be valid and results in Host-FW out-of-sync.
+	 *
+	 * Force the result of link switch in align with link switch connect
+	 * so that Host and FW are not out of sync.
+	 */
+	mlo_dev_lock_acquire(vdev->mlo_dev_ctx);
+	curr_state = vdev->mlo_dev_ctx->link_ctx->last_req.state;
+	vdev->mlo_dev_ctx->link_ctx->last_req.state =
+					MLO_LINK_SWITCH_STATE_COMPLETE_SUCCESS;
+	mlo_dev_lock_release(vdev->mlo_dev_ctx);
+
+	if (curr_state != MLO_LINK_SWITCH_STATE_CONNECT_NEW_LINK)
+		mlo_debug("Current link switch state %d changed", curr_state);
+}
+
 void mlo_mgr_link_switch_connect_done(struct wlan_objmgr_vdev *vdev,
 				      QDF_STATUS status)
 {
@@ -786,7 +811,7 @@ void mlo_mgr_link_switch_connect_done(struct wlan_objmgr_vdev *vdev,
 
 	req = &vdev->mlo_dev_ctx->link_ctx->last_req;
 	if (QDF_IS_STATUS_SUCCESS(status))
-		mlo_mgr_link_switch_trans_next_state(vdev->mlo_dev_ctx);
+		mlo_mgr_link_switch_connect_success_trans_state(vdev);
 	else
 		mlo_err("VDEV %d link switch connect failed", req->vdev_id);
 
@@ -948,8 +973,7 @@ void mlo_mgr_remove_link_switch_cmd(struct wlan_objmgr_vdev *vdev)
 	mlo_mgr_link_switch_notify(vdev, req);
 
 	/* Handle any pending disconnect */
-	if (cur_state == MLO_LINK_SWITCH_STATE_ABORT_TRANS)
-		mlo_handle_pending_disconnect(vdev);
+	mlo_handle_pending_disconnect(vdev);
 
 	if (req->reason == MLO_LINK_SWITCH_REASON_HOST_FORCE) {
 		mlo_debug("Link switch not serialized");
