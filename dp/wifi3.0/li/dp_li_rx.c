@@ -1528,11 +1528,11 @@ dp_rx_null_q_desc_handle_li(struct dp_soc *soc, qdf_nbuf_t nbuf,
 				if (qdf_unlikely(vdev->mesh_vdev) ||
 				    qdf_unlikely(txrx_peer->nawds_enabled))
 					dp_rx_tid_setup_wifi3(
-						peer, tid,
+						peer, BIT(tid),
 						hal_get_rx_max_ba_window(soc->hal_soc,tid),
 						IEEE80211_SEQ_MAX);
 				else
-					dp_rx_tid_setup_wifi3(peer, tid, 1,
+					dp_rx_tid_setup_wifi3(peer, BIT(tid), 1,
 							      IEEE80211_SEQ_MAX);
 			}
 			qdf_spin_unlock_bh(&rx_tid->tid_lock);

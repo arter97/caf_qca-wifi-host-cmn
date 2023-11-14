@@ -200,7 +200,7 @@ void dp_rx_prefetch_hw_sw_nbuf_desc(struct dp_soc *soc,
  * dp_peer_rx_reorder_queue_setup_rh() - NOP for RH arch implementation
  * @soc: Handle to HAL Soc structure
  * @peer: DP peer structure
- * @tid: tid id
+ * @tid_bitmap: tids to be set up
  * @ba_window_size: BA window size
  *
  * Return: None
@@ -208,7 +208,7 @@ void dp_rx_prefetch_hw_sw_nbuf_desc(struct dp_soc *soc,
 static inline
 QDF_STATUS dp_peer_rx_reorder_queue_setup_rh(struct dp_soc *soc,
 					     struct dp_peer *peer,
-					     int tid,
+					     uint32_t tid_bitmap,
 					     uint32_t ba_window_size)
 {
 	return QDF_STATUS_SUCCESS;
