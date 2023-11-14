@@ -3756,6 +3756,18 @@ QDF_STATUS wmi_unified_peer_rx_reorder_queue_setup_send(
 		struct rx_reorder_queue_setup_params *param);
 
 /**
+ * wmi_unified_peer_multi_rx_reorder_queue_setup_send() - send
+ *        multi rx reorder queue setup command to fw
+ * @wmi_handle: wmi handle
+ * @param: Multi rx reorder queue setup parameters
+ *
+ * Return: QDF_STATUS for success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_peer_multi_rx_reorder_queue_setup_send(
+		wmi_unified_t wmi_handle,
+		struct multi_rx_reorder_queue_setup_params *param);
+
+/**
  * wmi_unified_peer_rx_reorder_queue_remove_send() - send rx reorder queue
  *      remove command to fw
  * @wmi_handle: wmi handle
