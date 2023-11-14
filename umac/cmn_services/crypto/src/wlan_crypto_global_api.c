@@ -4409,9 +4409,17 @@ QDF_STATUS wlan_crypto_save_ml_sta_key(
 }
 #endif
 
-static QDF_STATUS wlan_crypto_save_key_sta(struct wlan_objmgr_vdev *vdev,
-					   uint8_t key_index,
-					   struct wlan_crypto_key *crypto_key)
+/**
+ * wlan_crypto_save_key_at_psoc() - Allocate memory for storing key in PSOC
+ * @vdev: vdev object
+ * @key_index: the index of the key that needs to be allocated
+ * @crypto_key: Pointer to crypto key
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS
+wlan_crypto_save_key_at_psoc(struct wlan_objmgr_vdev *vdev, uint8_t key_index,
+			     struct wlan_crypto_key *crypto_key)
 {
 	struct wlan_objmgr_psoc *psoc;
 	struct crypto_psoc_priv_obj *crypto_psoc_obj;
@@ -4469,10 +4477,11 @@ QDF_STATUS wlan_crypto_save_key(struct wlan_objmgr_vdev *vdev,
 		crypto_err("Invalid Key index %d", key_index);
 		return QDF_STATUS_E_FAILURE;
 	}
-	if (wlan_vdev_mlme_get_opmode(vdev) == QDF_STA_MODE &&
+	if ((wlan_vdev_mlme_get_opmode(vdev) == QDF_STA_MODE ||
+	     wlan_vdev_mlme_get_opmode(vdev) == QDF_SAP_MODE) &&
 	    wlan_vdev_mlme_is_mlo_vdev(vdev) &&
 	    is_mlo_adv_enable()) {
-		wlan_crypto_save_key_sta(vdev, key_index, crypto_key);
+		wlan_crypto_save_key_at_psoc(vdev, key_index, crypto_key);
 	} else {
 		priv_key = &crypto_priv->crypto_key;
 		if (key_index < WLAN_CRYPTO_MAXKEYIDX) {
@@ -4551,9 +4560,17 @@ struct wlan_crypto_key *wlan_crypto_get_ml_sta_link_key(
 }
 #endif
 
-static struct wlan_crypto_key *wlan_crypto_get_ml_key_sta(
-					struct wlan_objmgr_vdev *vdev,
-					uint8_t key_index)
+/**
+ * wlan_crypto_get_ml_keys_from_index() - Get the stored key information from
+ * key index
+ * @vdev: vdev object
+ * @key_index: the index of the key that needs to be retrieved
+ *
+ * Return: Key material
+ */
+static struct wlan_crypto_key *
+wlan_crypto_get_ml_keys_from_index(struct wlan_objmgr_vdev *vdev,
+				   uint8_t key_index)
 {
 	struct wlan_objmgr_psoc *psoc;
 	struct crypto_psoc_priv_obj *crypto_psoc_obj;
@@ -4623,11 +4640,11 @@ struct wlan_crypto_key *wlan_crypto_get_key(struct wlan_objmgr_vdev *vdev,
 		return NULL;
 	}
 
-	if (wlan_vdev_mlme_get_opmode(vdev) == QDF_STA_MODE &&
+	if ((wlan_vdev_mlme_get_opmode(vdev) == QDF_STA_MODE ||
+	     wlan_vdev_mlme_get_opmode(vdev) == QDF_SAP_MODE) &&
 	    wlan_vdev_mlme_is_mlo_vdev(vdev) &&
 	    is_mlo_adv_enable()) {
-		return wlan_crypto_get_ml_key_sta(vdev, key_index);
-
+		return wlan_crypto_get_ml_keys_from_index(vdev, key_index);
 	} else {
 		if (key_index < WLAN_CRYPTO_MAXKEYIDX)
 			return priv_key->key[key_index];
