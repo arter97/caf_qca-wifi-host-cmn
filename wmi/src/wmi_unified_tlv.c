@@ -1178,33 +1178,40 @@ send_vdev_nss_chain_params_cmd_tlv(wmi_unified_t wmi_handle,
 /**
  * send_vdev_stop_cmd_tlv() - send vdev stop command to fw
  * @wmi: wmi handle
- * @vdev_id: vdev id
+ * @params: VDEV stop params
  *
  * Return: QDF_STATUS_SUCCESS for success or error code
  */
 static QDF_STATUS send_vdev_stop_cmd_tlv(wmi_unified_t wmi,
-					uint8_t vdev_id)
+					 struct vdev_stop_params *params)
 {
 	wmi_vdev_stop_cmd_fixed_param *cmd;
 	wmi_buf_t buf;
 	int32_t len = sizeof(*cmd);
+	uint8_t *buf_ptr;
+
+	len += vdev_stop_mlo_params_size(params);
 
 	buf = wmi_buf_alloc(wmi, len);
 	if (!buf)
 		return QDF_STATUS_E_NOMEM;
 
-	cmd = (wmi_vdev_stop_cmd_fixed_param *) wmi_buf_data(buf);
+	buf_ptr = wmi_buf_data(buf);
+	cmd = (wmi_vdev_stop_cmd_fixed_param *)buf_ptr;
 	WMITLV_SET_HDR(&cmd->tlv_header,
 		       WMITLV_TAG_STRUC_wmi_vdev_stop_cmd_fixed_param,
 		       WMITLV_GET_STRUCT_TLVLEN(wmi_vdev_stop_cmd_fixed_param));
-	cmd->vdev_id = vdev_id;
+	cmd->vdev_id = params->vdev_id;
+	buf_ptr += sizeof(wmi_vdev_stop_cmd_fixed_param);
+	buf_ptr = vdev_stop_add_mlo_params(buf_ptr, params);
+
 	wmi_mtrace(WMI_VDEV_STOP_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi, buf, len, WMI_VDEV_STOP_CMDID)) {
 		wmi_err("Failed to send vdev stop command");
 		wmi_buf_free(buf);
 		return QDF_STATUS_E_FAILURE;
 	}
-	wmi_debug("vdev id = %d", vdev_id);
+	wmi_debug("vdev id = %d", cmd->vdev_id);
 
 	return 0;
 }

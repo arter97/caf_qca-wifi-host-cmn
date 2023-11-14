@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -957,12 +957,12 @@ wmi_unified_vdev_nss_chain_params_send(
 /**
  * wmi_unified_vdev_stop_send() - send vdev stop command to fw
  * @wmi_handle: wmi handle
- * @vdev_id: vdev id
+ * @params: VDEV stop params
  *
  * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
  */
 QDF_STATUS wmi_unified_vdev_stop_send(wmi_unified_t wmi_handle,
-				      uint8_t vdev_id);
+				      struct vdev_stop_params *params);
 
 /**
  * wmi_unified_vdev_up_send() - send vdev up command in fw
