@@ -592,7 +592,8 @@ struct wlan_lmac_if_mlme_tx_ops {
 	QDF_STATUS (*target_if_mlo_ready)(struct wlan_objmgr_pdev **pdev,
 					  uint8_t num_pdevs);
 	QDF_STATUS (*target_if_mlo_teardown_req)(struct wlan_objmgr_pdev *pdev,
-						 uint32_t grp_id, bool reset);
+						 uint32_t grp_id, bool reset,
+						 bool standby_active);
 #endif
 #ifdef WLAN_FEATURE_DYNAMIC_MAC_ADDR_UPDATE
 QDF_STATUS (*vdev_send_set_mac_addr)(struct qdf_mac_addr mac_addr,
@@ -1525,6 +1526,7 @@ struct wlan_lmac_if_son_rx_ops {
  * @unregister_events: function to de-register event handlers with FW
  * @link_set_active: function to send mlo link set active command to FW
  * @request_link_state_info_cmd: function pointer to send link state info
+ * @send_link_set_bss_params_cmd: function pointer to send link set bss cmd
  * @shmem_local_ops: operations specific to WLAN_MLO_GLOBAL_SHMEM_SUPPORT
  * @send_tid_to_link_mapping: function to send T2LM command to FW
  * @send_link_removal_cmd: function to send MLO link removal command to FW
@@ -1541,6 +1543,9 @@ struct wlan_lmac_if_mlo_tx_ops {
 	QDF_STATUS (*request_link_state_info_cmd)(
 		struct wlan_objmgr_psoc *psoc,
 		struct mlo_link_state_cmd_params *param);
+	QDF_STATUS (*send_link_set_bss_params_cmd)(
+			struct wlan_objmgr_psoc *psoc,
+			struct mlo_link_bss_params *param);
 
 #ifdef WLAN_MLO_GLOBAL_SHMEM_SUPPORT
 	struct wlan_lmac_if_global_shmem_local_ops shmem_local_ops;
@@ -1576,6 +1581,8 @@ struct wlan_lmac_if_mlo_tx_ops {
  * @mlo_link_disable_request_handler: function ptr for mlo link disable request
  * @mlo_link_switch_request_handler: Handler function pointer to deliver link
  * switch request params from FW to host.
+ * @mlo_link_state_switch_event_handler: Function pointer to handle link state
+ * switch event
  */
 struct wlan_lmac_if_mlo_rx_ops {
 	QDF_STATUS
@@ -1597,6 +1604,9 @@ struct wlan_lmac_if_mlo_rx_ops {
 	QDF_STATUS
 	(*mlo_link_switch_request_handler)(struct wlan_objmgr_psoc *psoc,
 					   void *evt_params);
+	QDF_STATUS
+	(*mlo_link_state_switch_event_handler)(struct wlan_objmgr_psoc *psoc,
+					       struct mlo_link_switch_state_info *info);
 #endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
 };
 #endif

@@ -16,6 +16,7 @@
  */
 #include <dp_types.h>
 #include "dp_rx.h"
+#include "dp_tx.h"
 #include "dp_peer.h"
 #include <dp_htt.h>
 #include <dp_mon_filter.h>
@@ -1086,6 +1087,8 @@ dp_print_pdev_rx_mon_stats(struct dp_pdev *pdev)
 		       rx_mon_stats->mpdu_ppdu_id_mismatch_drop);
 	DP_PRINT_STATS("mpdu_decap_type_invalid = %u",
 		       rx_mon_stats->mpdu_decap_type_invalid);
+	DP_PRINT_STATS("pending_desc_count = %u",
+		       rx_mon_stats->pending_desc_count);
 	stat_ring_ppdu_ids =
 		(uint32_t *)qdf_mem_malloc(sizeof(uint32_t) * MAX_PPDU_ID_HIST);
 	dest_ring_ppdu_ids =
@@ -1824,6 +1827,11 @@ dp_enable_enhanced_stats(struct cdp_soc_t *soc, uint8_t pdev_id)
 
 	dp_mon_tx_enable_enhanced_stats(pdev);
 
+	/* reset the tx fast path flag, as enhanced stats are enabled */
+	pdev->tx_fast_flag &= ~DP_TX_DESC_FLAG_SIMPLE;
+	if (dp_soc->hw_txrx_stats_en)
+		pdev->tx_fast_flag &= ~DP_TX_DESC_FLAG_FASTPATH_SIMPLE;
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -1857,6 +1865,7 @@ dp_disable_enhanced_stats(struct cdp_soc_t *soc, uint8_t pdev_id)
 	struct dp_pdev *pdev =
 		dp_get_pdev_from_soc_pdev_id_wifi3((struct dp_soc *)soc,
 						   pdev_id);
+	struct dp_soc *dp_soc = cdp_soc_t_to_dp_soc(soc);
 	struct dp_mon_pdev *mon_pdev;
 
 	if (!pdev || !pdev->monitor_pdev)
@@ -1878,6 +1887,11 @@ dp_disable_enhanced_stats(struct cdp_soc_t *soc, uint8_t pdev_id)
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
 			  FL("Failed to reset enhanced mode filters"));
 	}
+
+	/* set the tx fast path flag, as enhanced stats are disabled */
+	pdev->tx_fast_flag |= DP_TX_DESC_FLAG_SIMPLE;
+	if (dp_soc->hw_txrx_stats_en)
+		pdev->tx_fast_flag |= DP_TX_DESC_FLAG_FASTPATH_SIMPLE;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -2156,6 +2170,10 @@ void dp_peer_update_telemetry_stats(struct dp_soc *soc,
 	struct dp_mon_peer *mon_peer = NULL;
 	uint8_t ac;
 	uint64_t current_time = qdf_get_log_timestamp();
+	uint32_t remn, time_diff, usage;
+	uint16_t usage_per_sec;
+	struct dp_mon_peer_airtime_stats *stat_airtime;
+	struct dp_mon_peer_airtime_consumption *consump;
 
 	vdev = peer->vdev;
 	if (!vdev)
@@ -2167,29 +2185,57 @@ void dp_peer_update_telemetry_stats(struct dp_soc *soc,
 
 	mon_peer = peer->monitor_peer;
 	if (qdf_likely(mon_peer)) {
+		stat_airtime = &mon_peer->stats.airtime_stats;
+		time_diff = (uint32_t)(current_time -
+					stat_airtime->last_update_time);
 		for (ac = 0; ac < WME_AC_MAX; ac++) {
-			mon_peer->stats.airtime_stats.tx_airtime_consumption[ac].avg_consumption_per_sec =
-				(uint8_t)qdf_do_div((uint64_t)(mon_peer->stats.airtime_stats.tx_airtime_consumption[ac].consumption * 100),
-						    (uint32_t)(current_time - mon_peer->stats.airtime_stats.last_update_time));
-			mon_peer->stats.airtime_stats.rx_airtime_consumption[ac].avg_consumption_per_sec =
-				(uint8_t)qdf_do_div((uint64_t)(mon_peer->stats.airtime_stats.rx_airtime_consumption[ac].consumption * 100),
-						    (uint32_t)(current_time - mon_peer->stats.airtime_stats.last_update_time));
+			consump = &stat_airtime->tx_airtime_consumption[ac];
+			usage = consump->consumption;
+			usage_per_sec = (uint8_t)qdf_do_div((uint64_t)
+						(usage * 100), time_diff);
+			remn = qdf_do_div_rem((uint64_t)
+						(usage * 100), time_diff);
+			if (remn < time_diff / 2) {
+				if (remn && usage_per_sec == 0)
+					usage_per_sec++;
+			} else {
+				if (usage_per_sec < 100)
+					usage_per_sec++;
+			}
+			consump->avg_consumption_per_sec = usage_per_sec;
 			/* Store each peer airtime consumption in pdev
 			 * link_airtime to calculate pdev's total airtime
 			 * consumption
 			 */
-			DP_STATS_INC(
-				pdev,
-				telemetry_stats.link_airtime[ac],
-				mon_peer->stats.airtime_stats.tx_airtime_consumption[ac].consumption);
-			DP_STATS_INC(
-				pdev,
-				telemetry_stats.link_airtime[ac],
-				mon_peer->stats.airtime_stats.rx_airtime_consumption[ac].consumption);
-			mon_peer->stats.airtime_stats.tx_airtime_consumption[ac].consumption = 0;
-			mon_peer->stats.airtime_stats.rx_airtime_consumption[ac].consumption = 0;
+			DP_STATS_INC(pdev,
+				     telemetry_stats.link_airtime[ac],
+				     consump->consumption);
+			consump->consumption = 0;
+
+			consump = &stat_airtime->rx_airtime_consumption[ac];
+			usage = consump->consumption;
+			usage_per_sec = (uint8_t)qdf_do_div((uint64_t)
+						(usage * 100), time_diff);
+			remn = qdf_do_div_rem((uint64_t)
+						(usage * 100), time_diff);
+			if (remn < time_diff / 2) {
+				if (remn && usage_per_sec == 0)
+					usage_per_sec++;
+			} else {
+				if (usage_per_sec < 100)
+					usage_per_sec++;
+			}
+			consump->avg_consumption_per_sec = usage_per_sec;
+			/* Store each peer airtime consumption in pdev
+			 * link_airtime to calculate pdev's total airtime
+			 * consumption
+			 */
+			DP_STATS_INC(pdev,
+				     telemetry_stats.link_airtime[ac],
+				     consump->consumption);
+			consump->consumption = 0;
 		}
-		mon_peer->stats.airtime_stats.last_update_time = current_time;
+		stat_airtime->last_update_time = current_time;
 	}
 }
 
@@ -6142,7 +6188,6 @@ QDF_STATUS dp_mon_pdev_deinit(struct dp_pdev *pdev)
 		mon_ops->tx_mon_filter_dealloc(pdev);
 	if (mon_pdev->filter)
 		dp_mon_filter_dealloc(mon_pdev);
-	dp_mon_rings_deinit(pdev);
 	if (mon_pdev->invalid_mon_peer)
 		qdf_mem_free(mon_pdev->invalid_mon_peer);
 	mon_pdev->is_dp_mon_pdev_initialized = false;
@@ -6389,10 +6434,17 @@ void dp_mon_peer_get_stats(struct dp_peer *peer, void *arg,
 		DP_UPDATE_MON_STATS(peer_stats, mon_peer_stats);
 		break;
 	}
-	case UPDATE_VDEV_STATS:
+	case UPDATE_VDEV_STATS_MLD:
 	{
 		struct cdp_vdev_stats *vdev_stats =
 						(struct cdp_vdev_stats *)arg;
+		DP_UPDATE_MON_STATS(vdev_stats, mon_peer_stats);
+		break;
+	}
+	case UPDATE_VDEV_STATS:
+	{
+		struct dp_vdev_stats *vdev_stats =
+						(struct dp_vdev_stats *)arg;
 		DP_UPDATE_MON_STATS(vdev_stats, mon_peer_stats);
 		break;
 	}
@@ -6454,6 +6506,12 @@ dp_mon_peer_get_stats_param(struct dp_peer *peer, enum cdp_peer_stats_type type,
 		break;
 	case cdp_peer_rx_snr:
 		buf->rx_snr = mon_peer->stats.rx.snr;
+		break;
+	case cdp_peer_rx_avg_rate:
+		buf->rx_rate_avg = mon_peer->stats.rx.rnd_avg_rx_rate;
+		break;
+	case cdp_peer_tx_avg_rate:
+		buf->tx_rate_avg = mon_peer->stats.tx.rnd_avg_tx_rate;
 		break;
 	default:
 		dp_err("Invalid stats type: %u requested", type);

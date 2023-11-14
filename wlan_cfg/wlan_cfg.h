@@ -177,6 +177,7 @@ struct wlan_srng_cfg {
  * @int_timer_threshold_mon_dest: Timer threshold counter for monitor dest
  * @tx_ring_size:
  * @time_control_bp:
+ * @rx_buffer_size: skb size
  * @qref_control_size: list size for memory history arrays
  * @tx_comp_ring_size:
  * @tx_comp_ring_size_nss:
@@ -351,6 +352,8 @@ struct wlan_srng_cfg {
  *                            during this window, configured time is in
  *                            milliseconds.
  * @fw_ast_indication_disable: Disable AST
+ * @avg_rate_stats_filter_val: Average rate filter value for stats.
+ *
  */
 struct wlan_cfg_dp_soc_ctxt {
 	int num_int_ctxts;
@@ -386,6 +389,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	int int_timer_threshold_mon_dest;
 	int tx_ring_size;
 	int time_control_bp;
+	int rx_buffer_size;
 	int qref_control_size;
 	int tx_comp_ring_size;
 	int tx_comp_ring_size_nss;
@@ -564,6 +568,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint32_t umac_reset_buffer_window;
 #endif
 	bool fw_ast_indication_disable;
+	uint16_t avg_rate_stats_filter_val;
 };
 
 /**
@@ -1263,6 +1268,16 @@ int wlan_cfg_get_num_global_spcl_tx_desc(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_c
 int wlan_cfg_get_num_tx_desc(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
 
 /**
+ * wlan_cfg_set_num_tx_spl_desc() - Set the number of special Tx Descriptors
+ * per pool
+ *
+ * @cfg: Configuration Handle
+ * @num_desc: Number of descriptor
+ */
+void wlan_cfg_set_num_tx_spl_desc(struct wlan_cfg_dp_soc_ctxt *cfg,
+				  int num_desc);
+
+/**
  * wlan_cfg_get_num_tx_spl_desc() - Number of Tx Descriptors for special
  *				    frames per pool
  * @wlan_cfg_ctx: Configuration Handle
@@ -1606,6 +1621,14 @@ void wlan_cfg_set_tx_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg,
  * Return: interval time
  */
 int wlan_cfg_time_control_bp(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_rx_buffer_size - Get buffer size for skb
+ * @cfg: soc configuration context
+ *
+ * Return: buffer size
+ */
+int wlan_cfg_rx_buffer_size(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
  * wlan_cfg_qref_control_size - Get debug array size
@@ -2727,4 +2750,12 @@ void wlan_cfg_set_ast_indication_disable(struct wlan_cfg_dp_soc_ctxt *cfg,
  * Return: true or false
  */
 bool wlan_cfg_get_ast_indication_disable(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_get_dp_soc_dpdk_cfg - Return soc dpdk config
+ * @psoc: psoc object
+ *
+ * Return: dpdk_cfg
+ */
+int wlan_cfg_get_dp_soc_dpdk_cfg(struct cdp_ctrl_objmgr_psoc *psoc);
 #endif /*__WLAN_CFG_H*/

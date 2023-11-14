@@ -65,6 +65,9 @@
 #ifdef IPA_OFFLOAD
 #include <linux/ipa.h>
 #endif
+#ifdef WLAN_SUPPORT_DPDK
+#include <linux/uio_driver.h>
+#endif
 
 #define __qdf_must_check __must_check
 
@@ -364,6 +367,10 @@ enum __qdf_net_wireless_evcode {
 #define __QDF_DMA_FROM_DEVICE    DMA_TO_DEVICE
 #endif
 #define __qdf_inline             inline
+
+#if defined(WLAN_SUPPORT_DPDK) && defined(__KERNEL__)
+typedef struct uio_info qdf_uio_info_t;
+#endif
 
 /*
  * 1. GNU C/C++ Compiler

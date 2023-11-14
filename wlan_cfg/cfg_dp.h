@@ -100,6 +100,12 @@
 
 #define WLAN_CFG_TIME_CONTROL_BP 3000
 
+#if defined(RX_DATA_BUFFER_SIZE)
+#define WLAN_CFG_RX_BUFFER_SIZE RX_DATA_BUFFER_SIZE
+#else
+#define WLAN_CFG_RX_BUFFER_SIZE 2048
+#endif
+
 #define WLAN_CFG_QREF_CONTROL_SIZE 0
 
 #if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
@@ -182,6 +188,9 @@
 
 #define WLAN_CFG_TIME_CONTROL_BP_MIN 3000
 #define WLAN_CFG_TIME_CONTROL_BP_MAX 1800000
+/*MTU size of ethernet is 1500*/
+#define WLAN_CFG_RX_BUFFER_SIZE_MIN 1536
+#define WLAN_CFG_RX_BUFFER_SIZE_MAX 4096
 
 #define WLAN_CFG_QREF_CONTROL_SIZE_MIN 0
 #define WLAN_CFG_QREF_CONTROL_SIZE_MAX 4000
@@ -556,6 +565,10 @@
 #define WLAN_CFG_TX_CAPT_2_RBM_DEFAULT 2
 #define WLAN_CFG_TX_CAPT_3_RBM_DEFAULT 3
 
+#define WLAN_CFG_DP_AVG_RATE_FILTER_MIN 0
+#define WLAN_CFG_DP_AVG_RATE_FILTER_MAX 11000
+#define WLAN_CFG_DP_AVG_RATE_FILTER_DEFAULT 0
+
 /*
  * <ini>
  * "dp_tx_capt_max_mem_mb"- maximum memory used by Tx capture
@@ -845,6 +858,13 @@
 		WLAN_CFG_TIME_CONTROL_BP_MAX,\
 		WLAN_CFG_TIME_CONTROL_BP,\
 		CFG_VALUE_OR_DEFAULT, "DP time control back pressure")
+
+#define CFG_DP_RX_BUFFER_SIZE \
+		CFG_INI_UINT("dp_rx_buffer_size", \
+		WLAN_CFG_RX_BUFFER_SIZE_MIN,\
+		WLAN_CFG_RX_BUFFER_SIZE_MAX,\
+		WLAN_CFG_RX_BUFFER_SIZE,\
+		CFG_VALUE_OR_DEFAULT, "DP rx buffer size")
 
 #define CFG_DP_QREF_CONTROL_SIZE \
 		CFG_INI_UINT("dp_qref_control_size", \
@@ -1565,6 +1585,14 @@
 		WLAN_CFG_DP_NAPI_SCALE_FACTOR, \
 		CFG_VALUE_OR_DEFAULT, "NAPI scale factor for DP")
 
+#define CFG_DP_STATS_AVG_RATE_FILTER \
+		CFG_INI_UINT("dp_stats_avg_rate_filter_val", \
+		WLAN_CFG_DP_AVG_RATE_FILTER_MIN,\
+		WLAN_CFG_DP_AVG_RATE_FILTER_MAX, \
+		WLAN_CFG_DP_AVG_RATE_FILTER_DEFAULT, \
+		CFG_VALUE_OR_DEFAULT, \
+		"Average Rate filter for stats")
+
 /*
  * <ini>
  * legacy_mode_csum_disable - Disable csum offload for legacy 802.11abg modes
@@ -2173,5 +2201,7 @@
 		CFG(CFG_DP_TX_CAPT_RADIO_1_RBM_ID) \
 		CFG(CFG_DP_TX_CAPT_RADIO_2_RBM_ID) \
 		CFG(CFG_DP_TX_CAPT_RADIO_3_RBM_ID) \
-		CFG_DP_UMAC_RESET_BUFFER_WINDOW_CFG
+		CFG_DP_UMAC_RESET_BUFFER_WINDOW_CFG \
+		CFG(CFG_DP_RX_BUFFER_SIZE) \
+		CFG(CFG_DP_STATS_AVG_RATE_FILTER)
 #endif /* _CFG_DP_H_ */

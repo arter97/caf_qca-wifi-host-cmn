@@ -193,13 +193,12 @@ static void dp_rx_desc_nbuf_cleanup(struct dp_soc *soc,
 					    QDF_NBUF_CB_PADDR(nbuf),
 					    buf_size);
 
-		if (qdf_atomic_read(&soc->ipa_mapped)) {
-			if (dp_ipa_handle_rx_buf_smmu_mapping(
-							soc, nbuf, buf_size,
-							false, __func__,
-							__LINE__))
-				dp_info_rl("Unable to unmap nbuf: %pK", nbuf);
-		}
+		if (dp_ipa_handle_rx_buf_smmu_mapping(
+						soc, nbuf, buf_size,
+						false, __func__,
+						__LINE__))
+			dp_info_rl("Unable to unmap nbuf: %pK", nbuf);
+
 		qdf_nbuf_unmap_nbytes_single(soc->osdev, nbuf,
 					     QDF_DMA_BIDIRECTIONAL, buf_size);
 		dp_rx_nbuf_free(nbuf);
@@ -268,6 +267,7 @@ void dp_rx_desc_pool_deinit(struct dp_soc *soc,
 
 	/* Deinitialize rx mon desr frag flag */
 	rx_desc_pool->rx_mon_dest_frag_enable = false;
+	qdf_frag_cache_drain(&rx_desc_pool->pf_cache);
 
 	soc->arch_ops.dp_rx_desc_pool_deinit(soc, rx_desc_pool, pool_id);
 
@@ -464,6 +464,7 @@ void dp_rx_desc_pool_deinit(struct dp_soc *soc,
 
 		/* Deinitialize rx mon dest frag flag */
 		rx_desc_pool->rx_mon_dest_frag_enable = false;
+		qdf_frag_cache_drain(&rx_desc_pool->pf_cache);
 
 		soc->arch_ops.dp_rx_desc_pool_deinit(soc, rx_desc_pool,
 						     pool_id);

@@ -213,4 +213,22 @@ const char *ucfg_cm_reason_code_to_str(enum wlan_reason_code reason)
  * Return: enum band_info
  */
 enum band_info ucfg_cm_get_connected_band(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * ucfg_cm_is_link_switch_disconnect_resp() - Check if the disconnect response
+ * is for link switch request.
+ * @resp: Connection manager disconnect response.
+ *
+ * Return: bool
+ */
+bool ucfg_cm_is_link_switch_disconnect_resp(struct wlan_cm_discon_rsp *resp);
+
+/**
+ * ucfg_cm_is_link_switch_connect_resp() - Check if the connect response if for
+ * link switch request.
+ * @resp: Connection manager connect response.
+ *
+ * Return: bool
+ */
+bool ucfg_cm_is_link_switch_connect_resp(struct wlan_cm_connect_resp *resp);
 #endif /* __WLAN_CM_UCFG_API_H */

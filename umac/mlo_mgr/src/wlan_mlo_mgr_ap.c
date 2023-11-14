@@ -552,6 +552,11 @@ static bool mlo_handle_link_ready(struct wlan_objmgr_vdev *vdev)
 		/* Release ref taken as part of mlo_ap_get_vdev_list */
 		mlo_release_vdev_ref(vdev_list[i]);
 	}
+
+	/* Clear up bmap for this vdev as it is moving to UP_ACTIVE state */
+	idx = mlo_get_link_vdev_ix(mld_ctx, vdev);
+	wlan_util_change_map_index(mld_ctx->ap_ctx->mlo_vdev_up_bmap, idx, 0);
+
 	mlo_ap_lock_release(vdev->mlo_dev_ctx->ap_ctx);
 	return true;
 }

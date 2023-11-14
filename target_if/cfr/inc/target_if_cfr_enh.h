@@ -131,22 +131,42 @@
 
 #define STREAMFS_NUM_SUBBUF_SPRUCE 255
 
-/* Max 4 users in MU case for QCN6432 */
-#define QCN6432_CFR_MU_USERS 4
+/* Max 8 users in MU case for QCN6432 */
+#define QCN6432_CFR_MU_USERS 8
 
-#define QCN6432_MAX_HEADER_LENGTH_WORDS 22
+/* uCode header = (14 + (max number of MU users supported *2))*4 Bytes */
+#define QCN6432_MAX_HEADER_LENGTH_WORDS 30
 
-#define QCN6432_MAX_DATA_LENGTH_BYTES 8192
+/* Maximum number of tones that can be uploaded is 1001
+ * Max data len = Num tones per stream per chain * max chains
+ * max nss * size of tone
+ *              = 1001 * 2 * 4 * 4 = 32032 Bytes
+ * Total length = Max data len + ucode header
+ *              = 32032 + 120 = 32152 Bytes
+ */
+#define QCN6432_MAX_DATA_LENGTH_BYTES 32152
 
 /* Max size :
- * sizeof(csi_cfr_header) + 88 bytes(cfr header) + 8192 bytes(cfr payload)
+ * sizeof(csi_cfr_header) + 120 bytes(ucode header) + 32152 bytes(cfr payload)
  */
 #define STREAMFS_MAX_SUBBUF_QCN6432 \
 	(sizeof(struct csi_cfr_header) + \
 	 (QCN6432_MAX_HEADER_LENGTH_WORDS * 4) + \
 	 QCN6432_MAX_DATA_LENGTH_BYTES)
 
-#define STREAMFS_NUM_SUBBUF_QCN6432 255
+/* The number of buffers allotted by two IPC rings is 103.
+ * Hence, the relayFS should be have more than 103 buffers.
+ * Considering the maximum size of CFR log size to be 8MB
+ * and which should be multiple of relayFS buffer pool memory.
+ *
+ * Size of a relayFS buffer = csi metadata + QCN6432_MAX_DATA_LENGTH_BYTES
+ *                          = 310 + 32152
+ *                          = 32462 Bytes
+ *
+ * Num of streamfs sub buffers = 4MB / 32462B
+ *                             = 128 (approax)
+ */
+#define STREAMFS_NUM_SUBBUF_QCN6432 128
 
 /* Max 4 users in MU case for QCA5332 */
 #define QCA5332_CFR_MU_USERS 4

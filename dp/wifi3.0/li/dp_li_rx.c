@@ -245,12 +245,15 @@ uint32_t dp_rx_process_li(struct dp_intr *int_ctx,
 	uint32_t dsf;
 	uint32_t max_ast;
 	uint64_t current_time = 0;
+	uint16_t buf_size;
 
 	DP_HIST_INIT();
 
 	qdf_assert_always(soc && hal_ring_hdl);
 	hal_soc = soc->hal_soc;
 	qdf_assert_always(hal_soc);
+
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 
 	scn = soc->hif_handle;
 	intr_id = int_ctx->dp_intr_id;
@@ -344,7 +347,6 @@ more_data:
 			if (qdf_unlikely(rx_desc && rx_desc->nbuf)) {
 				qdf_assert_always(!rx_desc->unmapped);
 				dp_rx_nbuf_unmap(soc, rx_desc, reo_ring_num);
-				rx_desc->unmapped = 1;
 				dp_rx_buffer_pool_nbuf_free(soc, rx_desc->nbuf,
 							    rx_desc->pool_id);
 				dp_rx_add_to_free_desc_list(
@@ -408,7 +410,7 @@ more_data:
 				 * reap this MPDU
 				 */
 				if ((msdu_desc_info.msdu_len /
-				     (RX_DATA_BUFFER_SIZE -
+				     (buf_size -
 				      soc->rx_pkt_tlv_size) + 1) >
 				    num_pending) {
 					DP_STATS_INC(soc,
@@ -495,7 +497,6 @@ more_data:
 		 * in case double skb unmap happened.
 		 */
 		dp_rx_nbuf_unmap(soc, rx_desc, reo_ring_num);
-		rx_desc->unmapped = 1;
 		DP_RX_PROCESS_NBUF(soc, nbuf_head, nbuf_tail, ebuf_head,
 				   ebuf_tail, rx_desc);
 
@@ -1347,6 +1348,9 @@ dp_rx_null_q_desc_handle_li(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	uint16_t sa_idx = 0;
 	bool is_eapol = 0;
 	bool enh_flag;
+	uint16_t buf_size;
+
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 
 	qdf_nbuf_set_rx_chfrag_start(
 				nbuf,
@@ -1374,8 +1378,7 @@ dp_rx_null_q_desc_handle_li(struct dp_soc *soc, qdf_nbuf_t nbuf,
 			goto drop_nbuf;
 
 		/* Set length in nbuf */
-		qdf_nbuf_set_pktlen(
-			nbuf, qdf_min(pkt_len, (uint32_t)RX_DATA_BUFFER_SIZE));
+		qdf_nbuf_set_pktlen(nbuf, qdf_min(pkt_len, (uint32_t)buf_size));
 	}
 
 	/*

@@ -409,6 +409,7 @@ enum cdp_mon_phyrx_abort_reason_code {
  * @dest_mpdu_drop:
  * @dup_mon_linkdesc_cnt: duplicate link descriptor indications from HW
  * @dup_mon_buf_cnt: duplicate buffer indications from HW
+ * @dup_mon_sw_desc: Duplicate sw desc from HW
  * @stat_ring_ppdu_id_hist:
  * @dest_ring_ppdu_id_hist:
  * @ppdu_id_hist_idx:
@@ -453,6 +454,7 @@ enum cdp_mon_phyrx_abort_reason_code {
  * @null_pkt_desc: NULL packet desc count
  * @desc_magic_mismatch: desc magic number mismatch count;
  * @null_pkt_addr: NULL packet address count;
+ * @pending_desc_count: Pending desc_count during pdev deinit
  */
 struct cdp_pdev_mon_stats {
 #ifndef REMOVE_MON_DBG_STATS
@@ -476,6 +478,7 @@ struct cdp_pdev_mon_stats {
 	uint32_t dest_mpdu_drop;
 	uint32_t dup_mon_linkdesc_cnt;
 	uint32_t dup_mon_buf_cnt;
+	uint32_t dup_mon_sw_desc;
 	uint32_t stat_ring_ppdu_id_hist[MAX_PPDU_ID_HIST];
 	uint32_t dest_ring_ppdu_id_hist[MAX_PPDU_ID_HIST];
 	uint32_t ppdu_id_hist_idx;
@@ -518,6 +521,7 @@ struct cdp_pdev_mon_stats {
 	uint32_t null_pkt_desc;
 	uint32_t desc_magic_mismatch;
 	uint32_t null_pkt_addr;
+	uint32_t pending_desc_count;
 };
 
 #ifdef QCA_SUPPORT_LITE_MONITOR

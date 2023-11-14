@@ -874,6 +874,7 @@ dp_mon_buffers_replenish(struct dp_soc *dp_soc,
 	void *mon_ring_entry;
 	union dp_mon_desc_list_elem_t *next;
 	void *mon_srng;
+	unsigned long long desc;
 	QDF_STATUS ret = QDF_STATUS_E_FAILURE;
 	struct dp_mon_soc *mon_soc = dp_soc->monitor_soc;
 
@@ -947,11 +948,20 @@ dp_mon_buffers_replenish(struct dp_soc *dp_soc,
 		(*desc_list)->mon_desc.buf_addr = mon_desc.buf_addr;
 		(*desc_list)->mon_desc.paddr = mon_desc.paddr;
 		(*desc_list)->mon_desc.magic = DP_MON_DESC_MAGIC;
+		(*desc_list)->mon_desc.cookie_2++;
 
 		mon_soc->stats.frag_alloc++;
+
+		/* populate lower 40 bit mon_desc address in desc
+		 * and cookie_2 in upper 24 bits
+		 */
+		desc = (unsigned long)&((*desc_list)->mon_desc);
+		desc = (unsigned long long)((unsigned long long)desc & DP_MON_DESC_ADDR_MASK);
+		desc = (desc | ((unsigned long long)(*desc_list)->mon_desc.cookie_2 << DP_MON_DESC_ADDR_SHIFT));
+
 		hal_mon_buff_addr_info_set(dp_soc->hal_soc,
 					   mon_ring_entry,
-					   &((*desc_list)->mon_desc),
+					   desc,
 					   mon_desc.paddr);
 
 		*desc_list = next;

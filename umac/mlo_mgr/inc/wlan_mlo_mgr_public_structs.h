@@ -54,7 +54,17 @@
 
 /* MAX MLO Assoc Links per MLD */
 #ifndef WLAN_UMAC_MLO_ASSOC_MAX_SUPPORTED_LINKS
+#ifdef SAP_MULTI_LINK_EMULATION
+#define WLAN_UMAC_MLO_ASSOC_MAX_SUPPORTED_LINKS 2
+#else
 #define WLAN_UMAC_MLO_ASSOC_MAX_SUPPORTED_LINKS 1
+#endif
+#endif
+
+
+/* Default Initialization value for Max Recommended Simultaneous Links */
+#ifndef WLAN_UMAC_MLO_RECOM_MAX_SIMULT_LINKS_DEFAULT
+#define WLAN_UMAC_MLO_RECOM_MAX_SIMULT_LINKS_DEFAULT 2
 #endif
 
 /* Max PEER support */
@@ -344,6 +354,7 @@ struct mlo_wsi_info {
  * @force_non_assoc_prim_umac: Force non-assoc link to be primary umac
  * @lswitch_notifier: Link switch notifier callbacks
  * @wsi_info: WSI stats info
+ * @disable_eml: Disable Enhanced Multi Link features(eMLSR and eMLMR).
  */
 struct mlo_mgr_context {
 #ifdef WLAN_MLO_USE_SPINLOCK
@@ -375,6 +386,7 @@ struct mlo_mgr_context {
 	struct wlan_mlo_link_switch_notifier lswitch_notifier[WLAN_UMAC_COMP_ID_MAX];
 #endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
 	struct mlo_wsi_info *wsi_info;
+	bool disable_eml;
 };
 
 /**
@@ -393,17 +405,46 @@ struct wlan_ml_vdev_aid_mgr {
 
 /**
  * struct wlan_mlo_key_mgmt - MLO key management
- * @link_mac_address: list of vdevs selected for connection with the MLAP
- * @vdev_id: vdev id value
  * @keys_saved: keys saved bool
+ * @link_id: link id
  */
 struct wlan_mlo_key_mgmt {
-	struct qdf_mac_addr link_mac_address;
-	uint8_t vdev_id;
 	bool keys_saved;
+	uint8_t link_id;
+};
+
+/**
+ * struct mlo_link_bss_params - link bss param
+ * @link_id: link id
+ * @ap_mld_mac: mld mac address
+ * @chan: channel
+ */
+struct mlo_link_bss_params {
+	int8_t link_id;
+	int8_t ap_mld_mac[QDF_MAC_ADDR_SIZE];
+	struct wlan_channel *chan;
 };
 
 #ifdef WLAN_FEATURE_11BE_MLO
+
+/**
+ * enum mlo_link_info_event_status - link info event status
+ * @WLAN_LINK_INFO_EVENT_SUCCESS: success
+ * @WLAN_LINK_INFO_EVENT_REJECT_FAILURE: reject due to common failure reason
+ * @WLAN_LINK_INFO_EVENT_REJECT_VDEV_NOT_UP: reject as vdev is not up
+ * @WLAN_LINK_INFO_EVENT_REJECT_ROAMING_IN_PROGRESS: reject as roaming
+ *						     is in progress
+ * @WLAN_LINK_INFO_EVENT_REJECT_NON_MLO_CONNECTION: reject as it's not
+ *						    MLO connection
+ */
+enum mlo_link_info_event_status {
+	WLAN_LINK_INFO_EVENT_SUCCESS,
+	WLAN_LINK_INFO_EVENT_REJECT_FAILURE,
+	WLAN_LINK_INFO_EVENT_REJECT_VDEV_NOT_UP,
+	WLAN_LINK_INFO_EVENT_REJECT_ROAMING_IN_PROGRESS,
+	WLAN_LINK_INFO_EVENT_REJECT_NON_MLO_CONNECTION,
+};
+
 /**
  * struct mlo_link_state_cmd_params - MLO link state params
  * @vdev_id: Vdev id
@@ -641,6 +682,16 @@ struct emlsr_capability {
 #endif
 
 /**
+ * struct wlan_mlo_sta_assoc_pending_list - MLO sta assoc pending list entry
+ * @peer_list: MLO peer list
+ * @list_lock: lock to access members of structure
+ */
+struct wlan_mlo_sta_assoc_pending_list {
+	qdf_list_t peer_list;
+	qdf_spinlock_t list_lock;
+};
+
+/**
  * struct wlan_mlo_sta - MLO sta additional info
  * @wlan_connect_req_links: list of vdevs selected for connection with the MLAP
  * @wlan_connected_links: list of vdevs associated with this MLO connection
@@ -666,7 +717,7 @@ struct emlsr_capability {
 struct wlan_mlo_sta {
 	qdf_bitmap(wlan_connect_req_links, WLAN_UMAC_MLO_MAX_VDEVS);
 	qdf_bitmap(wlan_connected_links, WLAN_UMAC_MLO_MAX_VDEVS);
-	struct wlan_mlo_key_mgmt key_mgmt[WLAN_UMAC_MLO_MAX_VDEVS - 1];
+	struct wlan_mlo_key_mgmt key_mgmt[WLAN_MAX_ML_BSS_LINKS];
 	struct wlan_cm_connect_req *connect_req;
 	struct wlan_cm_connect_req *copied_conn_req;
 #ifdef WLAN_MLO_USE_SPINLOCK
@@ -701,6 +752,7 @@ struct wlan_mlo_sta {
  * @mlo_ap_lock: lock to sync VDEV SM event
  * @mlo_vdev_quiet_bmap: Bitmap of vdevs for which quiet ie needs to enabled
  * @mlo_vdev_up_bmap: Bitmap of vdevs for which sync complete can be dispatched
+ * @assoc_list: MLO sta assoc pending list entry (for FT-over-DS)
  */
 struct wlan_mlo_ap {
 	uint8_t num_ml_vdevs;
@@ -712,6 +764,7 @@ struct wlan_mlo_ap {
 #endif
 	qdf_bitmap(mlo_vdev_quiet_bmap, WLAN_UMAC_MLO_MAX_VDEVS);
 	qdf_bitmap(mlo_vdev_up_bmap, WLAN_UMAC_MLO_MAX_VDEVS);
+	struct wlan_mlo_sta_assoc_pending_list assoc_list;
 };
 
 /**
@@ -771,6 +824,7 @@ struct wlan_mlo_link_mac_update {
  * @ptqm_migrate_timer: timer for ptqm migration
  * @mlo_peer_id_bmap: mlo_peer_id bitmap for ptqm migration
  * @link_ctx: link related information
+ * @mlo_max_recom_simult_links: Max Recommended Simultaneous Links
  */
 struct wlan_mlo_dev_context {
 	qdf_list_node_t node;
@@ -803,6 +857,7 @@ struct wlan_mlo_dev_context {
 	qdf_bitmap(mlo_peer_id_bmap, MAX_MLO_PEER_ID);
 #endif
 	struct mlo_link_switch_context *link_ctx;
+	uint8_t mlo_max_recom_simult_links;
 };
 
 /**
@@ -1484,6 +1539,36 @@ struct mlo_link_disable_request_evt_params {
 	uint32_t link_id_bitmap;
 };
 
+#define MAX_LINK_SWITCH_TLV 5
+/**
+ * struct mlo_link_switch_params - Structure to hold link State switch
+ * related parameters
+ * @mld_addr: MLD address
+ * @active_link_bitmap: Bitmap of ieee link id for active links
+ * @prev_link_bitmap: Bitmap of ieee link id for previous active links
+ * @fw_timestamp: Firmware timestamp in milliseconds
+ * @reason_code: Reason code for the switch
+ */
+struct mlo_link_switch_params {
+	struct qdf_mac_addr mld_addr;
+	uint32_t active_link_bitmap;
+	uint32_t prev_link_bitmap;
+	uint32_t fw_timestamp;
+	uint32_t reason_code;
+};
+
+/**
+ * struct mlo_link_switch_state_info  - Structure to hold the link switch
+ * related parameters corresponding to all the TLV received in link state switch
+ * event.
+ * @num_params: Number of the link switch parameters
+ * @link_switch_param: Link switch parameters
+ */
+struct mlo_link_switch_state_info {
+	uint8_t num_params;
+	struct mlo_link_switch_params link_switch_param[MAX_LINK_SWITCH_TLV];
+};
+
 #ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
 /**
  * struct peer_ptqm_migrate_entry - peer ptqm migrate entry
@@ -1568,4 +1653,16 @@ struct peer_entry_ptqm_migrate_event_params {
 	enum primary_link_peer_migration_evenr_status status;
 };
 #endif /* QCA_SUPPORT_PRIMARY_LINK_MIGRATE */
+
+/**
+ * struct wlan_mlo_sta_entry - MLO sta entry
+ * @mac_node: QDF list mac_node member
+ * @peer_mld_addr: MLO peer MAC address
+ */
+
+struct wlan_mlo_sta_entry {
+	qdf_list_node_t mac_node;
+	struct qdf_mac_addr peer_mld_addr;
+};
+
 #endif
