@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -513,10 +513,12 @@ struct peer_flush_params {
  * @vdev_id: vdev id
  * @hw_link_id_bitmap: logical link id bitmap for peers
  * not getting created
+ * @is_mlo_link_switch: Is peer delete due to link switch
  */
 struct peer_delete_cmd_params {
 	uint8_t vdev_id;
 	uint32_t hw_link_id_bitmap;
+	bool is_mlo_link_switch;
 };
 
 /* Default FILS DISCOVERY/probe response sent in period of 20TU */
@@ -862,9 +864,11 @@ struct vdev_delete_params {
 /**
  * struct vdev_stop_params - vdev stop cmd parameter
  * @vdev_id: vdev id
+ * @is_mlo_link_switch: Is VDEV stop due to link switch
  */
 struct vdev_stop_params {
 	uint8_t vdev_id;
+	bool is_mlo_link_switch;
 };
 
 /**

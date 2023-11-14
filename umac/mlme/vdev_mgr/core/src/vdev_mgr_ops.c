@@ -646,6 +646,8 @@ static QDF_STATUS vdev_mgr_stop_param_update(
 	}
 
 	param->vdev_id = wlan_vdev_get_id(vdev);
+	param->is_mlo_link_switch =
+		wlan_vdev_mlme_is_mlo_link_switch_in_progress(vdev);
 
 	return QDF_STATUS_SUCCESS;
 }
