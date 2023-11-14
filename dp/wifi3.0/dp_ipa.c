@@ -529,6 +529,30 @@ dp_ipa_setup_tx_smmu_params_pmac_id(struct dp_soc *soc,
 
 	QDF_IPA_WDI_SETUP_INFO_SMMU_RX_PMAC_ID(tx_smmu, pmac_id);
 }
+
+static void
+dp_ipa_set_rx_chip_id(struct dp_soc *soc,
+		      qdf_ipa_wdi_pipe_setup_info_t *rx)
+{
+	uint8_t mlo_chip_id = 0xFF;
+
+	if (soc->cdp_soc.ol_ops->get_mlo_chip_id)
+		mlo_chip_id = soc->cdp_soc.ol_ops->get_mlo_chip_id(soc->ctrl_psoc);
+
+	QDF_IPA_WDI_SETUP_INFO_CHIP_ID(rx, mlo_chip_id);
+}
+
+static void
+dp_ipa_set_rx_smmu_chip_id(struct dp_soc *soc,
+			   qdf_ipa_wdi_pipe_setup_info_smmu_t *rx_smmu)
+{
+	uint8_t mlo_chip_id = 0xFF;
+
+	if (soc->cdp_soc.ol_ops->get_mlo_chip_id)
+		mlo_chip_id = soc->cdp_soc.ol_ops->get_mlo_chip_id(soc->ctrl_psoc);
+
+	QDF_IPA_WDI_SETUP_INFO_SMMU_CHIP_ID(rx_smmu, mlo_chip_id);
+}
 #else
 static inline void
 dp_ipa_setup_tx_alt_params_pmac_id(struct dp_soc *soc,
@@ -551,6 +575,18 @@ dp_ipa_setup_tx_params_pmac_id(struct dp_soc *soc,
 static inline void
 dp_ipa_setup_tx_smmu_params_pmac_id(struct dp_soc *soc,
 				    qdf_ipa_wdi_pipe_setup_info_smmu_t *tx_smmu)
+{
+}
+
+static inline void
+dp_ipa_set_rx_chip_id(struct dp_soc *soc,
+		      qdf_ipa_wdi_pipe_setup_info_t *rx)
+{
+}
+
+static inline void
+dp_ipa_set_rx_smmu_chip_id(struct dp_soc *soc,
+			   qdf_ipa_wdi_pipe_setup_info_smmu_t *rx_smmu)
 {
 }
 #endif
@@ -2502,6 +2538,9 @@ static void dp_ipa_wdi_rx_params(struct dp_soc *soc,
 
 	QDF_IPA_WDI_SETUP_INFO_PKT_OFFSET(rx) =
 		soc->rx_pkt_tlv_size + L3_HEADER_PADDING;
+
+	/* Set Chip ID, extract chip id from be_soc and pass to IPA */
+	dp_ipa_set_rx_chip_id(soc, rx);
 }
 
 static void
@@ -2605,6 +2644,9 @@ dp_ipa_wdi_rx_smmu_params(struct dp_soc *soc,
 
 	QDF_IPA_WDI_SETUP_INFO_SMMU_PKT_OFFSET(rx_smmu) =
 		soc->rx_pkt_tlv_size + L3_HEADER_PADDING;
+
+	/* Set Chip ID, extract chip id from be_soc and pass to IPA */
+	dp_ipa_set_rx_smmu_chip_id(soc, rx_smmu);
 }
 
 #ifdef IPA_WDI3_VLAN_SUPPORT
@@ -2668,6 +2710,9 @@ dp_ipa_wdi_rx_alt_pipe_smmu_params(struct dp_soc *soc,
 
 	QDF_IPA_WDI_SETUP_INFO_SMMU_PKT_OFFSET(rx_smmu) =
 		soc->rx_pkt_tlv_size + L3_HEADER_PADDING;
+
+	/* Set Chip ID, extract chip id from be_soc and pass to IPA */
+	dp_ipa_set_rx_smmu_chip_id(soc, rx_smmu);
 }
 
 /**
@@ -2730,6 +2775,9 @@ static void dp_ipa_wdi_rx_alt_pipe_params(struct dp_soc *soc,
 
 	QDF_IPA_WDI_SETUP_INFO_PKT_OFFSET(rx) =
 		soc->rx_pkt_tlv_size + L3_HEADER_PADDING;
+
+	/* Set Chip ID, extract chip id from be_soc and pass to IPA */
+	dp_ipa_set_rx_chip_id(soc, rx);
 }
 
 /**

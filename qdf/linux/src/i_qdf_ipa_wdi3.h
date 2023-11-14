@@ -310,15 +310,25 @@ typedef struct ipa_wdi_pipe_setup_info_smmu __qdf_ipa_wdi_pipe_setup_info_smmu_t
 
 #define __QDF_IPA_WDI_SETUP_INFO_SMMU_RX_PMAC_ID(txrx, pmac_id)	\
 	((((struct ipa_wdi_pipe_setup_info_smmu *)(txrx))->rx_pmac_id) = (pmac_id))
+
+#define __QDF_IPA_WDI_SETUP_INFO_CHIP_ID(txrx, chip_id)	\
+	((((struct ipa_wdi_pipe_setup_info *)(txrx))->mlo_chip_id) = (chip_id))
+
+#define __QDF_IPA_WDI_SETUP_INFO_SMMU_CHIP_ID(txrx, chip_id)	\
+	((((struct ipa_wdi_pipe_setup_info_smmu *)(txrx))->mlo_chip_id) = (chip_id))
 #else
 #define __QDF_IPA_WDI_SETUP_INFO_RX_PMAC_ID(txrx, pmac_id)
 #define __QDF_IPA_WDI_SETUP_INFO_SMMU_RX_PMAC_ID(txrx, pmac_id)
+#define __QDF_IPA_WDI_SETUP_INFO_CHIP_ID(txrx, chip_id)
+#define __QDF_IPA_WDI_SETUP_INFO_SMMU_CHIP_ID(txrx, chip_id)
 #endif
 #else
 #define __QDF_IPA_WDI_SETUP_INFO_RX_BANK_ID(txrx, bid)
 #define __QDF_IPA_WDI_SETUP_INFO_SMMU_RX_BANK_ID(txrx, bid)
 #define __QDF_IPA_WDI_SETUP_INFO_RX_PMAC_ID(txrx, pmac_id)
 #define __QDF_IPA_WDI_SETUP_INFO_SMMU_RX_PMAC_ID(txrx, pmac_id)
+#define __QDF_IPA_WDI_SETUP_INFO_CHIP_ID(txrx, chip_id)
+#define __QDF_IPA_WDI_SETUP_INFO_SMMU_CHIP_ID(txrx, chip_id)
 #endif
 
 /**
