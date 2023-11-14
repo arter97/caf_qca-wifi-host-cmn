@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -450,7 +450,7 @@ uint8_t *peer_assoc_add_ml_partner_links(uint8_t *buf_ptr,
 
 size_t peer_delete_mlo_params_size(struct peer_delete_cmd_params *req)
 {
-	if (!req->hw_link_id_bitmap)
+	if (!req->hw_link_id_bitmap && !req->is_mlo_link_switch)
 		return WMI_TLV_HDR_SIZE;
 
 	return sizeof(wmi_peer_delete_mlo_params) + WMI_TLV_HDR_SIZE;
@@ -461,7 +461,7 @@ uint8_t *peer_delete_add_mlo_params(uint8_t *buf_ptr,
 {
 	wmi_peer_delete_mlo_params *mlo_params;
 
-	if (!req->hw_link_id_bitmap) {
+	if (!req->hw_link_id_bitmap && !req->is_mlo_link_switch) {
 		WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC, 0);
 		return buf_ptr + WMI_TLV_HDR_SIZE;
 	}
@@ -475,7 +475,42 @@ uint8_t *peer_delete_add_mlo_params(uint8_t *buf_ptr,
 		       WMITLV_TAG_STRUC_wmi_peer_delete_mlo_params,
 		       WMITLV_GET_STRUCT_TLVLEN(wmi_peer_delete_mlo_params));
 	mlo_params->mlo_hw_link_id_bitmap = req->hw_link_id_bitmap;
+	WMI_MLO_FLAGS_SET_MLO_LINK_SWITCH(mlo_params->mlo_flags.mlo_flags,
+					  req->is_mlo_link_switch);
+
 	return buf_ptr + sizeof(wmi_peer_delete_mlo_params);
+}
+
+size_t vdev_stop_mlo_params_size(struct vdev_stop_params *params)
+{
+	if (!params->is_mlo_link_switch)
+		return WMI_TLV_HDR_SIZE;
+
+	return sizeof(wmi_vdev_stop_mlo_params) + WMI_TLV_HDR_SIZE;
+}
+
+uint8_t *vdev_stop_add_mlo_params(uint8_t *buf_ptr,
+				  struct vdev_stop_params *params)
+{
+	wmi_vdev_stop_mlo_params *mlo_params;
+
+	if (!params->is_mlo_link_switch) {
+		WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC, 0);
+		return buf_ptr + WMI_TLV_HDR_SIZE;
+	}
+
+	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC,
+		       sizeof(wmi_vdev_stop_mlo_params));
+	buf_ptr += WMI_TLV_HDR_SIZE;
+
+	mlo_params = (wmi_vdev_stop_mlo_params *)buf_ptr;
+	WMITLV_SET_HDR(&mlo_params->tlv_header,
+		       WMITLV_TAG_STRUC_wmi_vdev_stop_mlo_params,
+		       WMITLV_GET_STRUCT_TLVLEN(wmi_vdev_stop_mlo_params));
+	WMI_MLO_FLAGS_SET_MLO_LINK_SWITCH(mlo_params->mlo_flags.mlo_flags,
+					  params->is_mlo_link_switch);
+
+	return buf_ptr + sizeof(wmi_vdev_stop_mlo_params);
 }
 
 /**
