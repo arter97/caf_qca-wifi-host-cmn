@@ -2472,11 +2472,9 @@ static void dp_ipa_wdi_rx_params(struct dp_soc *soc,
 				 bool over_gsi)
 {
 	if (over_gsi)
-		QDF_IPA_WDI_SETUP_INFO_CLIENT(rx) =
-					IPA_CLIENT_WLAN2_PROD;
+		QDF_IPA_WDI_SETUP_INFO_CLIENT(rx) = IPA_CLIENT_WLAN2_PROD;
 	else
-		QDF_IPA_WDI_SETUP_INFO_CLIENT(rx) =
-					IPA_CLIENT_WLAN1_PROD;
+		QDF_IPA_WDI_SETUP_INFO_CLIENT(rx) = IPA_CLIENT_WLAN1_PROD;
 
 	QDF_IPA_WDI_SETUP_INFO_TRANSFER_RING_BASE_PA(rx) =
 		qdf_mem_get_dma_addr(soc->osdev,

@@ -1330,7 +1330,7 @@ static inline
 void dp_peer_map_ipa_evt(struct dp_soc *soc, struct dp_peer *peer,
 			 struct dp_ast_entry *ast_entry, uint8_t *mac_addr)
 {
-	if (ast_entry || (peer->vdev && peer->vdev->proxysta_vdev)) {
+	if (ast_entry && (ast_entry->type == CDP_TXRX_AST_TYPE_WDS)) {
 		if (soc->cdp_soc.ol_ops->peer_map_event) {
 			soc->cdp_soc.ol_ops->peer_map_event(
 			soc->ctrl_psoc, ast_entry->peer_id,
@@ -3135,7 +3135,7 @@ dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 	if (!soc->ast_offload_support)
 		dp_peer_reset_flowq_map(peer);
 
-	if (soc->cdp_soc.ol_ops->peer_unmap_event) {
+	if (!wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx) && soc->cdp_soc.ol_ops->peer_unmap_event) {
 		soc->cdp_soc.ol_ops->peer_unmap_event(soc->ctrl_psoc,
 				peer_id, vdev_id, mac_addr);
 	}

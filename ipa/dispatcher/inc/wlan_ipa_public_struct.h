@@ -67,6 +67,8 @@ struct wlan_ipa_config {
  * @WLAN_IPA_STA_CONNECT: STA associates to AP
  * @WLAN_IPA_STA_DISCONNECT: STA dissociates from AP
  * @WLAN_IPA_CLIENT_CONNECT_EX: Peer associates/re-associates to softap
+ * @WLAN_IPA_MLO_CLIENT_CONNECT_EX: MLO Peer Connect
+ * @WLAN_IPA_MLO_CLIENT_DISCONNECT: MLO Peer Disconnect
  * @WLAN_IPA_WLAN_EVENT_MAX: Max value for the enum
  */
 enum wlan_ipa_wlan_event {
@@ -77,6 +79,8 @@ enum wlan_ipa_wlan_event {
 	WLAN_IPA_STA_CONNECT,
 	WLAN_IPA_STA_DISCONNECT,
 	WLAN_IPA_CLIENT_CONNECT_EX,
+	WLAN_IPA_MLO_CLIENT_CONNECT_EX,
+	WLAN_IPA_MLO_CLIENT_DISCONNECT,
 	WLAN_IPA_WLAN_EVENT_MAX
 };
 

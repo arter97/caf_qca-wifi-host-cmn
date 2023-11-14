@@ -703,6 +703,7 @@ struct wlan_ipa_priv {
 	uint8_t activated_fw_pipe;
 	uint8_t num_sap_connected;
 	uint8_t sap_num_connected_sta;
+	uint8_t sap_num_mlo_connected_sta;
 	uint8_t sta_connected;
 	uint32_t tx_pipe_handle;
 	uint32_t rx_pipe_handle;
@@ -820,6 +821,8 @@ static inline char *wlan_ipa_wlan_event_to_str(qdf_ipa_wlan_event event)
 	CASE_RETURN_STRING(QDF_IPA_STA_CONNECT);
 	CASE_RETURN_STRING(QDF_IPA_STA_DISCONNECT);
 	CASE_RETURN_STRING(QDF_IPA_CLIENT_CONNECT_EX);
+	CASE_RETURN_STRING(QDF_IPA_MLO_CLIENT_CONNECT_EX);
+	CASE_RETURN_STRING(QDF_IPA_MLO_CLIENT_DISCONNECT);
 	CASE_RETURN_STRING(QDF_SWITCH_TO_SCC);
 	CASE_RETURN_STRING(QDF_SWITCH_TO_MCC);
 	CASE_RETURN_STRING(QDF_WDI_ENABLE);

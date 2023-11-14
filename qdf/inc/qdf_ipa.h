@@ -33,6 +33,8 @@
  * @QDF_IPA_STA_CONNECT: STA associates to AP
  * @QDF_IPA_STA_DISCONNECT: STA dissociates from AP
  * @QDF_IPA_CLIENT_CONNECT_EX: Peer associates/re-associates to softap
+ * @QDF_IPA_MLO_CLIENT_CONNECT_EX: MLO Peer associates/re-associates to softap
+ * @QDF_IPA_MLO_CLIENT_DISCONNECT: MLO Client Disconnects
  * @QDF_SWITCH_TO_SCC: WLAN interfaces in scc mode
  * @QDF_SWITCH_TO_MCC: WLAN interfaces in mcc mode
  * @QDF_WDI_ENABLE: WDI enable complete
@@ -48,6 +50,8 @@ typedef enum {
 	QDF_IPA_STA_CONNECT,
 	QDF_IPA_STA_DISCONNECT,
 	QDF_IPA_CLIENT_CONNECT_EX,
+	QDF_IPA_MLO_CLIENT_CONNECT_EX,
+	QDF_IPA_MLO_CLIENT_DISCONNECT,
 	QDF_SWITCH_TO_SCC,
 	QDF_SWITCH_TO_MCC,
 	QDF_WDI_ENABLE,
