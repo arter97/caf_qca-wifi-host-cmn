@@ -681,6 +681,7 @@ static inline bool dfs_is_precac_domain(struct wlan_dfs *dfs)
  * 1. FCC domain.
  * 2. MKK domain.
  * 3. MKKN domain.
+ * 4. ETSI domain.
  *
  */
 #if defined(QCA_SUPPORT_ADFS_RCAC)
@@ -1150,12 +1151,6 @@ bool dfs_is_agile_rcac_enabled(struct wlan_dfs *dfs);
  */
 void dfs_prepare_agile_rcac_channel(struct wlan_dfs *dfs,
 				    bool *is_rcac_chan_available);
-/**
- * dfs_start_agile_rcac_timer() - Start Agile RCAC timer.
- * @dfs: Pointer to struct wlan_dfs.
- *
- */
-void dfs_start_agile_rcac_timer(struct wlan_dfs *dfs);
 
 /**
  * dfs_stop_agile_rcac_timer() - Stop Agile RCAC timer.
@@ -1183,10 +1178,6 @@ static inline void dfs_agile_cleanup_rcac(struct wlan_dfs *dfs)
 static inline void
 dfs_prepare_agile_rcac_channel(struct wlan_dfs *dfs,
 			       bool *is_rcac_chan_available)
-{
-}
-
-static inline void dfs_start_agile_rcac_timer(struct wlan_dfs *dfs)
 {
 }
 
@@ -1614,4 +1605,19 @@ bool dfs_is_ignore_radar_for_punctured_chans(struct wlan_dfs *dfs,
 	return false;
 }
 #endif /* DFS_BW_PUNCTURE */
+
+/* dfs_is_pcac_on_weather_channel_for_freq() - Given a channel number, find if
+ * it's a weather radar channel.
+ * @dfs: Pointer to WLAN_DFS structure.
+ * @chwidth: PreCAC channel width enum.
+ * @precac_freq: preCAC freq.
+ *
+ * Based on the precac_width, find the first and last subchannels of the given
+ * preCAC channel and check if this range overlaps with weather channel range.
+ *
+ * Return: True if weather channel, else false.
+ */
+bool dfs_is_pcac_on_weather_channel_for_freq(struct wlan_dfs *dfs,
+					     enum phy_ch_width chwidth,
+					     uint16_t precac_freq);
 #endif /* _DFS_ZERO_CAC_H_ */
