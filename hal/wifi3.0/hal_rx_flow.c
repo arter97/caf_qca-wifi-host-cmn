@@ -154,6 +154,26 @@ hal_rx_flow_setup_fse(hal_soc_handle_t hal_soc_hdl,
 }
 qdf_export_symbol(hal_rx_flow_setup_fse);
 
+void *
+hal_rx_flow_write_fse_metadata(hal_soc_handle_t hal_soc_hdl,
+			       struct hal_rx_fst *fst, uint32_t table_offset,
+			       struct hal_rx_flow *flow)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+	void *ret;
+
+	if (hal_soc->ops->hal_rx_flow_write_fse_metadata) {
+		ret =
+		hal_soc->ops->hal_rx_flow_write_fse_metadata((uint8_t *)fst,
+							     table_offset,
+							     (uint8_t *)flow);
+	}
+
+	return NULL;
+}
+
+qdf_export_symbol(hal_rx_flow_write_fse_metadata);
+
 uint32_t
 hal_rx_flow_setup_cmem_fse(hal_soc_handle_t hal_soc_hdl, uint32_t cmem_ba,
 			   uint32_t table_offset, struct hal_rx_flow *flow)
@@ -284,6 +304,8 @@ hal_rx_flow_get_tuple_info(hal_soc_handle_t hal_soc_hdl,
 
 	return NULL;
 }
+
+qdf_export_symbol(hal_rx_flow_get_tuple_info);
 
 #ifndef WLAN_SUPPORT_RX_FISA
 /**
@@ -528,8 +550,8 @@ hal_rx_insert_flow_entry(hal_soc_handle_t hal_soc,
 		if (!qdf_mem_cmp(&hal_tuple_info,
 				 flow_tuple_info,
 				 sizeof(struct hal_flow_tuple_info))) {
-			dp_err("Duplicate flow entry in FST %u at skid %u ",
-			       hal_hash, i);
+			*flow_idx = hal_hash;
+
 			return QDF_STATUS_E_EXISTS;
 		}
 	}

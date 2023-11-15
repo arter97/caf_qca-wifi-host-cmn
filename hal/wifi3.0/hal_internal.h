@@ -1256,6 +1256,9 @@ struct hal_hw_txrx_ops {
 	void * (*hal_rx_flow_setup_fse)(uint8_t *rx_fst,
 					uint32_t table_offset,
 					uint8_t *rx_flow);
+	void * (*hal_rx_flow_write_fse_metadata)(uint8_t *rx_fst,
+						 uint32_t table_offset,
+						 uint8_t *rx_flow);
 	void * (*hal_rx_flow_get_tuple_info)(uint8_t *rx_fst,
 					     uint32_t hal_hash,
 					     uint8_t *tuple_info);

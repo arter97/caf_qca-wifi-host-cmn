@@ -5890,4 +5890,41 @@ void dp_ssr_dump_pdev_unregister(uint8_t pdev_id)
 {
 }
 #endif
+#ifdef WLAN_SUPPORT_RX_FLOW_TAG
+/**
+ * dp_rx_flow_find_entry_by_flowid() - Find DP FSE matching a given flow index
+ * @fst: Rx FST Handle
+ * @flow_id: Flow index of the requested flow
+ *
+ * Return: Pointer to the DP FSE entry
+ */
+struct dp_rx_fse *
+dp_rx_flow_find_entry_by_flowid(struct dp_rx_fst *fst, uint32_t flow_id);
+
+/**
+ * dp_rx_flow_write_entry_metadata() - Update fse metadata
+ * @pdev: DP pdev instance
+ * @fse_metadata: FSE metadata
+ * @fse: fse entry
+ *
+ * Return: Success when flow is added, no-memory or already exists on error
+ */
+QDF_STATUS
+dp_rx_flow_write_entry_metadata(struct dp_pdev *pdev, uint32_t fse_metadata,
+				struct dp_rx_fse *fse);
+
+/**
+ * dp_rx_flow_invalidate_fse_entry() - invalidate fse entry
+ * @pdev: pdev handle
+ * @fse: fse entry
+ * @rx_flow_info: Flow tuple info
+ * @delete_entry: flag to indicate if delete is needed if invalidate fails
+ *
+ * Return: Status
+ */
+QDF_STATUS
+dp_rx_flow_invalidate_fse_entry(struct dp_pdev *pdev, struct dp_rx_fse *fse,
+				struct cdp_rx_flow_info *rx_flow_info,
+				bool delete_entry);
+#endif /* #WLAN_SUPPORT_RX_FLOW_TAG */
 #endif /* #ifndef _DP_INTERNAL_H_ */

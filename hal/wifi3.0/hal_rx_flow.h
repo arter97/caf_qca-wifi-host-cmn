@@ -81,6 +81,19 @@ hal_rx_flow_setup_fse(hal_soc_handle_t hal_soc_hdl,
 		      struct hal_rx_flow *flow);
 
 /**
+ * hal_rx_flow_write_fse_metadata() - Write fse metadata
+ * @hal_soc_hdl: HAL SOC handle
+ * @fst: Pointer to the Rx Flow Search Table
+ * @table_offset: offset into the table where the flow is to be setup
+ * @flow: Flow Parameters
+ *
+ * Return: Success/Failure
+ */
+void *
+hal_rx_flow_write_fse_metadata(hal_soc_handle_t hal_soc_hdl,
+			       struct hal_rx_fst *fst, uint32_t table_offset,
+			       struct hal_rx_flow *flow);
+/**
  * hal_rx_flow_setup_cmem_fse() - Setup a flow search entry in HW CMEM FST
  * @hal_soc_hdl: HAL SOC handle
  * @cmem_ba: CMEM base address

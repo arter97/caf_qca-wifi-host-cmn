@@ -2571,12 +2571,13 @@ struct cdp_fse_ops {
 	(*fse_rule_add)(struct cdp_soc_t *soc,
 			uint32_t *src_ip, uint32_t src_port,
 			uint32_t *dest_ip, uint32_t dest_port,
-			uint8_t protocol, uint8_t version);
+			uint8_t protocol, uint8_t version, uint32_t svc_id,
+			uint8_t tid, uint8_t *dest_mac, uint8_t pdev_id);
 	QDF_STATUS
 	(*fse_rule_delete)(struct cdp_soc_t *soc,
 			   uint32_t *src_ip, uint32_t src_port,
 			   uint32_t *dest_ip, uint32_t dest_port,
-			   uint8_t protocol, uint8_t version);
+			   uint8_t protocol, uint8_t version, uint8_t pdev_id);
 };
 #endif /* WLAN_SUPPORT_RX_FLOW_TAG */
 

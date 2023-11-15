@@ -167,7 +167,48 @@
 #endif
 
 #ifdef WLAN_SUPPORT_RX_FLOW_TAG
-#define DP_RX_FSE_FLOW_MATCH_SFE 0xAAAA
+
+#define DP_RX_FSE_FLOW_INVALID_VP	0xFF
+
+#define DP_RX_FSE_FLOW_MATCH_SFE	(0x0000 | DP_RX_FSE_FLOW_INVALID_VP)
+#define DP_RX_FSE_FLOW_VP_NUM_MASK	0x00FF
+#define DP_RX_FSE_FLOW_TID_MASK		0x0F00
+#define DP_RX_FSE_FLOW_EVT_REQ_MASK	0x1000
+
+#define DP_RX_FSE_FLOW_VP_NUM_SHIFT	0
+#define DP_RX_FSE_FLOW_TID_SHIFT	8
+#define DP_RX_FSE_FLOW_EVT_REQ_SHIFT	12
+
+#define DP_RX_FSE_FLOW_UPDATE(mask, meta, val, shift) \
+		(((meta) & ~(mask)) | (((val) << (shift)) & (mask)))
+
+#define DP_RX_FSE_FLOW_EXTRACT(mask, meta, shift) \
+				(((meta) & (mask)) >> (shift))
+
+#define DP_RX_FSE_FLOW_UPDATE_TID(meta, tid) \
+	DP_RX_FSE_FLOW_UPDATE(DP_RX_FSE_FLOW_TID_MASK, \
+				meta, tid, DP_RX_FSE_FLOW_TID_SHIFT)
+
+#define DP_RX_FSE_FLOW_EXTRACT_TID(meta) \
+	DP_RX_FSE_FLOW_EXTRACT(DP_RX_FSE_FLOW_TID_MASK, meta, \
+				DP_RX_FSE_FLOW_TID_SHIFT)
+
+#define DP_RX_FSE_FLOW_UPDATE_VP_NUM(meta, vp_num) \
+	DP_RX_FSE_FLOW_UPDATE(DP_RX_FSE_FLOW_VP_NUM_MASK, \
+				meta, vp_num, DP_RX_FSE_FLOW_VP_NUM_SHIFT)
+
+#define DP_RX_FSE_FLOW_EXTRACT_VP_NUM(meta) \
+	DP_RX_FSE_FLOW_EXTRACT(DP_RX_FSE_FLOW_VP_NUM_MASK, meta, \
+				DP_RX_FSE_FLOW_VP_NUM_SHIFT)
+
+#define DP_RX_FSE_FLOW_UPDATE_EVT_REQ(meta, val) \
+	DP_RX_FSE_FLOW_UPDATE(DP_RX_FSE_FLOW_EVT_REQ_MASK, \
+				meta, val, DP_RX_FSE_FLOW_EVT_REQ_SHIFT)
+
+#define DP_RX_FSE_FLOW_EXTRACT_EVT_REQ(meta) \
+	DP_RX_FSE_FLOW_EXTRACT(DP_RX_FSE_FLOW_EVT_REQ_MASK, meta, \
+				DP_RX_FSE_FLOW_EVT_REQ_SHIFT)
+
 #endif
 
 #ifdef WLAN_VENDOR_SPECIFIC_BAR_UPDATE
@@ -5174,7 +5215,15 @@ struct dp_rx_fse {
 	/* Flag indicating whether flow is IPv4 address tuple */
 	uint8_t is_ipv4_addr_entry;
 	/* Flag indicating whether flow is valid */
-	uint8_t is_valid;
+	/* Flag indicating whether fse tid mismatch has been detected */
+	uint8_t is_valid:1,
+		mismatch:1;
+	/* Service id */
+	uint32_t svc_id;
+	/* tid */
+	uint8_t tid;
+	/* Destination Mac address */
+	union dp_align_mac_addr dest_mac;
 };
 
 struct dp_rx_fst {

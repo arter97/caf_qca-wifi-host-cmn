@@ -41,13 +41,24 @@
 #include "dp_rx_buffer_pool.h"
 
 #ifdef WLAN_SUPPORT_RX_FLOW_TAG
+#include "hal_rx_flow.h"
+
 static inline void
-dp_rx_update_flow_info(qdf_nbuf_t nbuf, uint8_t *rx_tlv_hdr)
+dp_rx_update_flow_info(struct dp_pdev *pdev, qdf_nbuf_t nbuf,
+		       uint8_t *rx_tlv_hdr, int32_t tid)
 {
 	uint32_t fse_metadata;
+	uint32_t vp_num;
+	bool flow_invalid;
+	bool flow_timeout;
+	uint32_t flow_index;
+	struct dp_rx_fse *fse;
+
+	hal_rx_msdu_get_flow_params_be(rx_tlv_hdr, &flow_invalid,
+				       &flow_timeout, &flow_index);
 
 	/* Set the flow idx valid flag only when there is no timeout */
-	if (hal_rx_msdu_flow_idx_timeout_be(rx_tlv_hdr))
+	if (flow_timeout)
 		return;
 
 	/*
@@ -56,15 +67,70 @@ dp_rx_update_flow_info(qdf_nbuf_t nbuf, uint8_t *rx_tlv_hdr)
 	 * go via stack instead of VP.
 	 */
 	fse_metadata = hal_rx_msdu_fse_metadata_get_be(rx_tlv_hdr);
-	if (!hal_rx_msdu_flow_idx_invalid_be(rx_tlv_hdr) && (fse_metadata == DP_RX_FSE_FLOW_MATCH_SFE))
+	vp_num = DP_RX_FSE_FLOW_EXTRACT_VP_NUM(fse_metadata);
+
+	if (!flow_invalid && vp_num == DP_RX_FSE_FLOW_INVALID_VP) {
+		uint32_t meta_tid = DP_RX_FSE_FLOW_EXTRACT_TID(fse_metadata);
+
+		if (DP_RX_FSE_FLOW_EXTRACT_EVT_REQ(fse_metadata) &&
+		    tid != meta_tid) {
+			fse = dp_rx_flow_find_entry_by_flowid(pdev->rx_fst,
+							      flow_index);
+			if (!fse || !fse->is_valid || fse->mismatch)
+				return;
+
+			if (fse->svc_id != DP_RX_FLOW_INVALID_SVC_ID) {
+				struct dp_soc *soc = pdev->soc;
+				struct fse_info_cookie cookie = {0};
+				struct hal_rx_fst *hal_rx_fst =
+						pdev->rx_fst->hal_rx_fst;
+				struct hal_flow_tuple_info *tuple_info =
+						(struct hal_flow_tuple_info *)
+						&cookie.tuple_info;
+				struct cdp_rx_flow_info rx_flow_info = {0};
+
+				hal_rx_flow_get_tuple_info(soc->hal_soc,
+							   hal_rx_fst,
+							   fse->flow_hash,
+							   tuple_info);
+
+				cookie.svc_id = fse->svc_id;
+				cookie.tid = tid;
+				cookie.dest_mac = &fse->dest_mac.raw[0];
+
+				rx_flow_info.flow_tuple_info =
+							cookie.tuple_info;
+				/* Update the tid in fse entry to avoid sending
+				 * repeated wdi events for mismatch.
+				 */
+				fse->tid = tid;
+				fse->mismatch = 1;
+
+				dp_rx_flow_write_entry_metadata(pdev,
+								fse_metadata,
+								fse);
+
+				dp_rx_flow_invalidate_fse_entry(pdev, fse,
+								&rx_flow_info,
+								false);
+
+				dp_wdi_event_handler(WDI_EVENT_FSE_UPDATE, soc,
+						     &cookie, HTT_INVALID_PEER,
+						     dp_rx_fse_event_mismatch,
+						     pdev->pdev_id);
+			}
+		}
+
 		return;
+	}
 
 	qdf_nbuf_set_rx_flow_idx_valid(nbuf,
 				 !hal_rx_msdu_flow_idx_invalid_be(rx_tlv_hdr));
 }
 #else
 static inline void
-dp_rx_update_flow_info(qdf_nbuf_t nbuf, uint8_t *rx_tlv_hdr)
+dp_rx_update_flow_info(struct dp_pdev *pdev, qdf_nbuf_t nbuf,
+		       uint8_t *rx_tlv_hdr, int32_t tid)
 {
 }
 #endif
@@ -758,7 +824,7 @@ done:
 		}
 
 		dp_rx_cksum_offload(vdev->pdev, nbuf, rx_tlv_hdr);
-		dp_rx_update_flow_info(nbuf, rx_tlv_hdr);
+		dp_rx_update_flow_info(vdev->pdev, nbuf, rx_tlv_hdr, tid);
 
 		if (qdf_unlikely(!rx_pdev->rx_fast_flag)) {
 			/*

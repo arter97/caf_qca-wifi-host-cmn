@@ -3181,6 +3181,34 @@ struct cdp_rx_flow_tuple_info {
 };
 
 /**
+ * enum dp_rx_fse_event_type - fse event type info to be used in wsi events
+ * @dp_rx_fse_event_add: Event to indicate fse addition
+ * @dp_rx_fse_event_mismatch: Event to indicate fse tid mismatch
+ * @dp_rx_fse_event_del: Event to indicate fse deletion
+ *
+ */
+enum dp_rx_fse_event_type {
+	dp_rx_fse_event_add,
+	dp_rx_fse_event_mismatch,
+	dp_rx_fse_event_del,
+};
+
+/**
+ * struct fse_info_cookie - fse entry cookie information
+ * @tuple_info: tuple information
+ * @svc_id: Service class ID
+ * @tid: TID
+ * @dest_mac: Destination MAC of the flow
+ *
+ */
+struct fse_info_cookie {
+	struct cdp_rx_flow_tuple_info tuple_info;
+	uint32_t svc_id;
+	uint8_t tid;
+	uint8_t *dest_mac;
+};
+
+/**
  * struct cdp_rx_flow_info - RX flow info used for addition/deletion
  * @is_addr_ipv4: indicates whether given IP address is IPv4/IPv6
  * @op_code: add/delete/enable/disable operation requested
@@ -3188,7 +3216,10 @@ struct cdp_rx_flow_tuple_info {
  * @fse_metadata: metadata to be set in RX flow
  * @use_ppe_ds: use DS mode
  * @priority_vld: is priority valid
+ * @tid: tid
  * @service_code: service code for DS
+ * @svc_id: service class id
+ * @dest_mac: Destination mac address
  */
 struct cdp_rx_flow_info {
 	bool is_addr_ipv4;
@@ -3197,7 +3228,10 @@ struct cdp_rx_flow_info {
 	uint16_t fse_metadata;
 	uint8_t use_ppe_ds;
 	uint8_t priority_vld;
+	uint8_t tid;
 	uint16_t service_code;
+	uint32_t svc_id;
+	uint8_t *dest_mac;
 };
 
 #ifdef QCA_SUPPORT_SCAN_SPCL_VAP_STATS
