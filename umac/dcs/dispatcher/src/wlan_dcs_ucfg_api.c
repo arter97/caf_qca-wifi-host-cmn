@@ -104,6 +104,15 @@ ucfg_wlan_dcs_cmd(struct wlan_objmgr_psoc *psoc,
 	return wlan_dcs_cmd_send(psoc, mac_id, is_host_pdev_id);
 }
 
+#ifdef WLAN_FEATURE_VDEV_DCS
+QDF_STATUS
+ucfg_wlan_dcs_cmd_for_vdev(struct wlan_objmgr_psoc *psoc, uint32_t mac_id,
+			   uint8_t vdev_id)
+{
+	return wlan_send_dcs_cmd_for_vdev(psoc, mac_id, vdev_id);
+}
+#endif
+
 void ucfg_config_dcs_enable(struct wlan_objmgr_psoc *psoc,
 			    uint32_t mac_id,
 			    uint8_t interference_type)

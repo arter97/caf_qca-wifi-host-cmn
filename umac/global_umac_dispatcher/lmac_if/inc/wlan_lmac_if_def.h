@@ -227,6 +227,7 @@ struct wlan_lmac_if_cp_stats_rx_ops {
  * @dcs_attach: function to register event handlers with FW
  * @dcs_detach: function to de-register event handlers with FW
  * @dcs_cmd_send: function to send dcs commands to FW
+ * @dcs_cmd_send_for_vdev: Function to send dcs command for vdev to FW
  */
 struct wlan_target_if_dcs_tx_ops {
 	QDF_STATUS (*dcs_attach)(struct wlan_objmgr_psoc *psoc);
@@ -235,6 +236,9 @@ struct wlan_target_if_dcs_tx_ops {
 				   uint32_t pdev_id,
 				   bool is_host_pdev_id,
 				   uint32_t dcs_enable);
+	QDF_STATUS (*dcs_cmd_send_for_vdev)(struct wlan_objmgr_psoc *psoc,
+					    uint8_t vdev_id,
+					    uint32_t dcs_enable);
 };
 
 /**

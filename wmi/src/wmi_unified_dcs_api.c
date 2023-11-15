@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -74,3 +74,19 @@ QDF_STATUS wmi_send_dcs_pdev_param(wmi_unified_t wmi_handle,
 
 	return wmi_unified_pdev_param_send(wmi_handle, &pparam, pdev_idx);
 }
+
+#ifdef WLAN_FEATURE_VDEV_DCS
+QDF_STATUS wmi_send_dcs_vdev_param(wmi_unified_t wmi_handle,
+				   uint8_t vdev_id,
+				   uint32_t dcs_enable)
+{
+	struct vdev_set_params param;
+
+	qdf_mem_zero(&param, sizeof(param));
+	param.vdev_id = vdev_id;
+	param.param_id = wmi_vdev_param_dcs;
+	param.param_value = dcs_enable;
+
+	return wmi_unified_vdev_set_param_send(wmi_handle, &param);
+}
+#endif

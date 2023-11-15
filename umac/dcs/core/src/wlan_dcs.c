@@ -30,6 +30,7 @@
 #include "wlan_utility.h"
 #ifdef WLAN_POLICY_MGR_ENABLE
 #include "wlan_policy_mgr_api.h"
+#include "wlan_policy_mgr_ll_sap.h"
 #endif
 #include <wlan_reg_services_api.h>
 
@@ -130,6 +131,7 @@ QDF_STATUS wlan_dcs_cmd_send(struct wlan_objmgr_psoc *psoc,
 
 	dcs_enable = dcs_pdev_priv->dcs_host_params.dcs_enable &
 			dcs_pdev_priv->dcs_host_params.dcs_enable_cfg;
+
 	dcs_tx_ops = target_if_dcs_get_tx_ops(psoc);
 
 	if (dcs_tx_ops && dcs_tx_ops->dcs_cmd_send) {
@@ -142,6 +144,45 @@ QDF_STATUS wlan_dcs_cmd_send(struct wlan_objmgr_psoc *psoc,
 
 	return QDF_STATUS_SUCCESS;
 }
+
+#ifdef WLAN_FEATURE_VDEV_DCS
+QDF_STATUS wlan_send_dcs_cmd_for_vdev(struct wlan_objmgr_psoc *psoc,
+				      uint32_t mac_id,
+				      uint8_t vdev_id)
+{
+	struct wlan_target_if_dcs_tx_ops *dcs_tx_ops;
+	struct dcs_pdev_priv_obj *dcs_pdev_priv;
+	uint32_t dcs_enable;
+	QDF_STATUS status;
+
+	if (!psoc) {
+		dcs_err("psoc is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	dcs_pdev_priv = wlan_dcs_get_pdev_private_obj(psoc, mac_id);
+	if (!dcs_pdev_priv) {
+		dcs_err("dcs pdev private object is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	dcs_enable = dcs_pdev_priv->dcs_host_params.dcs_enable &
+			dcs_pdev_priv->dcs_host_params.dcs_enable_cfg;
+	dcs_tx_ops = target_if_dcs_get_tx_ops(psoc);
+
+	if (!dcs_tx_ops || !dcs_tx_ops->dcs_cmd_send_for_vdev) {
+		dcs_err("dcs_cmd_send_for_vdev tx_ops is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	dcs_debug("dcs_enable: %u, vdev_id: %u pdev_id %u", dcs_enable,
+		  vdev_id, mac_id);
+	status = dcs_tx_ops->dcs_cmd_send_for_vdev(psoc, vdev_id,
+						   dcs_enable);
+
+	return status;
+}
+#endif
 
 /**
  * wlan_dcs_im_copy_stats() - dcs target interference mitigation statistics copy
@@ -649,6 +690,7 @@ static void wlan_dcs_frequency_control(struct wlan_objmgr_psoc *psoc,
 	uint8_t delta_pos;
 	unsigned long delta_time;
 	bool disable_dcs_sometime = false;
+	struct dcs_param param;
 
 	if (!psoc || !dcs_pdev_priv || !event) {
 		dcs_err("psoc or dcs_pdev_priv or event is null");
@@ -707,9 +749,11 @@ static void wlan_dcs_frequency_control(struct wlan_objmgr_psoc *psoc,
 			return;
 		}
 
+		param.mac_id = event->dcs_param.pdev_id;
+		param.vdev_id = event->dcs_param.vdev_id;
+		param.interference_type = event->dcs_param.interference_type;
 		dcs_info("start dcs callback handler");
-		dcs_psoc_priv->dcs_cbk.cbk(psoc, event->dcs_param.pdev_id,
-					   event->dcs_param.interference_type,
+		dcs_psoc_priv->dcs_cbk.cbk(psoc, &param,
 					   dcs_psoc_priv->dcs_cbk.arg);
 	}
 }
@@ -1869,10 +1913,11 @@ wlan_dcs_process(struct wlan_objmgr_psoc *psoc,
 
 	if (unlikely(dcs_pdev_priv->dcs_host_params.dcs_debug
 			>= DCS_DEBUG_VERBOSE))
-		dcs_debug("dcs_enable: %u, interference_type: %u, pdev_id: %u",
+		dcs_debug("dcs_enable: %u, interference_type: %u, pdev_id: %u, vdev_id: %d ",
 			  dcs_pdev_priv->dcs_host_params.dcs_enable,
 			  event->dcs_param.interference_type,
-			  event->dcs_param.pdev_id);
+			  event->dcs_param.pdev_id,
+			  event->dcs_param.vdev_id);
 
 	switch (event->dcs_param.interference_type) {
 	case WLAN_HOST_DCS_CWIM:

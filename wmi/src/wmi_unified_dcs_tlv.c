@@ -51,6 +51,12 @@ static QDF_STATUS extract_dcs_interference_type_tlv(
 					wmi_handle,
 					param_buf->fixed_param->pdev_id);
 
+	/*
+	 * Will add service capability check. If it's supported
+	 * then fill vdev_id from param_buf otherwise fill WLAN_INVALID_VDEV_ID
+	 */
+	param->vdev_id = param_buf->fixed_param->vdev_id;
+
 	return QDF_STATUS_SUCCESS;
 }
 

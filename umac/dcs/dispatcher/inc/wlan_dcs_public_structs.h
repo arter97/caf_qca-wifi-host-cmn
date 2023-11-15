@@ -42,10 +42,12 @@ enum wlan_host_dcs_type {
  * struct wlan_host_dcs_interference_param - dcs interference parameters
  * @interference_type: type of DCS interference
  * @pdev_id: pdev id
+ * @vdev_id: vdev id
  */
 struct wlan_host_dcs_interference_param {
 	uint32_t interference_type;
 	uint32_t pdev_id;
+	uint8_t vdev_id;
 };
 
 /**
@@ -163,5 +165,17 @@ struct wlan_host_dcs_event {
 	struct wlan_host_dcs_im_tgt_stats wlan_stat;
 	struct wlan_host_dcs_interference_param dcs_param;
 	struct wlan_host_dcs_awgn_info awgn_info;
+};
+
+/**
+ * struct dcs_param - DCS parameter
+ * @mac_id: mac id
+ * @vdev_id: vdev_id
+ * @interference_type: interference type
+ */
+struct dcs_param {
+	uint32_t mac_id;
+	uint8_t vdev_id;
+	uint8_t interference_type;
 };
 #endif

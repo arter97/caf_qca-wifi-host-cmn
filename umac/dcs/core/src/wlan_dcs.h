@@ -191,7 +191,7 @@ struct dcs_afc_select_chan_cbk {
 };
 
 /**
- * struct dcs_pdev_priv_obj - define dcs pdev priv
+ * struct dcs_pdev_priv_obj  - define dcs pdev priv
  * @dcs_host_params: dcs host configuration parameter
  * @dcs_im_stats: dcs im statistics
  * @dcs_freq_ctrl_params: dcs frequency control parameter
@@ -318,6 +318,23 @@ QDF_STATUS wlan_dcs_detach(struct wlan_objmgr_psoc *psoc);
 QDF_STATUS wlan_dcs_cmd_send(struct wlan_objmgr_psoc *psoc,
 			     uint32_t pdev_id,
 			     bool is_host_pdev_id);
+
+#ifdef WLAN_FEATURE_VDEV_DCS
+/**
+ * wlan_send_dcs_cmd_for_vdev() - Send dcs command to target_if layer in
+ * vdev level
+ * @psoc: psoc pointer
+ * @mac_id: mac_id
+ * @vdev_id: vdev_id
+ *
+ * The function gets called to send dcs command in vdev level to FW
+ *
+ * return: QDF_STATUS_SUCCESS for success or error code
+ */
+QDF_STATUS wlan_send_dcs_cmd_for_vdev(struct wlan_objmgr_psoc *psoc,
+				      uint32_t mac_id,
+				      uint8_t vdev_id);
+#endif
 
 /**
  * wlan_dcs_process() - dcs process main entry

@@ -85,4 +85,28 @@ QDF_STATUS wmi_send_dcs_pdev_param(wmi_unified_t wmi_handle,
 				   uint32_t pdev_idx,
 				   bool is_host_pdev_id,
 				   uint32_t dcs_enable);
+
+#ifdef WLAN_FEATURE_VDEV_DCS
+/**
+ * wmi_send_dcs_vdev_param() - send dcs vdev param
+ * @wmi_handle: wmi handle
+ * @vdev_id: vdev id
+ * @dcs_enable: value of dcs enable
+ *
+ * This functions gets called to send dcs vdev param
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wmi_send_dcs_vdev_param(wmi_unified_t wmi_handle,
+				   uint8_t vdev_id,
+				   uint32_t dcs_enable);
+#else
+static inline
+QDF_STATUS wmi_send_dcs_vdev_param(wmi_unified_t wmi_handle,
+				   uint8_t vdev_id,
+				   uint32_t dcs_enable)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 #endif /* _WMI_UNIFIED_DCS_API_H_ */
