@@ -208,6 +208,19 @@ typedef void dp_ptnr_soc_iter_func(struct dp_soc *ptnr_soc, void *arg,
 #define DP_VDEV_ITERATE_SKIP_SELF 0
 #endif
 
+/**
+ * enum dp_pkt_xmit_type - The type of ingress stats are being referred
+ *
+ * @DP_XMIT_LINK: Packet ingress-ed on Link
+ * @DP_XMIT_MLD: Packet ingress-ed on MLD
+ * @DP_XMIT_TOTAL: Packets ingress-ed on MLD and LINK
+ */
+enum dp_pkt_xmit_type {
+	DP_XMIT_LINK,
+	DP_XMIT_MLD,
+	DP_XMIT_TOTAL,
+};
+
 enum rx_pktlog_mode {
 	DP_RX_PKTLOG_DISABLED = 0,
 	DP_RX_PKTLOG_FULL,
@@ -565,6 +578,7 @@ enum dp_ctxt_type {
  * @buf_size: Buffer size
  * @buf_alignment: Buffer alignment
  * @rx_mon_dest_frag_enable: Enable frag processing for mon dest buffer
+ * @pf_cache: page frag cache
  * @desc_type: type of desc this pool serves
  */
 struct rx_desc_pool {
@@ -581,6 +595,7 @@ struct rx_desc_pool {
 	uint16_t buf_size;
 	uint8_t buf_alignment;
 	bool rx_mon_dest_frag_enable;
+	qdf_frag_cache_t pf_cache;
 	enum qdf_dp_desc_type desc_type;
 };
 
@@ -2525,8 +2540,7 @@ struct dp_arch_ops {
 
 	void (*dp_get_vdev_stats_for_unmap_peer)(
 					struct dp_vdev *vdev,
-					struct dp_peer *peer,
-					struct cdp_vdev_stats **vdev_stats);
+					struct dp_peer *peer);
 	QDF_STATUS (*dp_get_interface_stats)(struct cdp_soc_t *soc_hdl,
 					     uint8_t vdev_id,
 					     void *buf,
@@ -2700,6 +2714,9 @@ struct dp_soc {
 	uint16_t rx_pkt_tlv_size;
 	/* rx pkt tlv size in current operation mode */
 	uint16_t curr_rx_pkt_tlv_size;
+
+	/* enable/disable dp debug logs */
+	bool dp_debug_log_en;
 
 	struct dp_arch_ops arch_ops;
 
@@ -2989,6 +3006,7 @@ struct dp_soc {
 	qdf_event_t rx_hw_stats_event;
 	qdf_spinlock_t rx_hw_stats_lock;
 	bool is_last_stats_ctx_init;
+	struct dp_req_rx_hw_stats_t *rx_hw_stats;
 #endif /* WLAN_FEATURE_STATS_EXT */
 
 	/* Indicates HTT map/unmap versions*/
@@ -3867,6 +3885,27 @@ struct dp_tx_latency {
 };
 #endif
 
+/**
+ * struct dp_vdev_stats - vdev stats structure for dp vdev
+ * @tx_i: ingress tx stats, contains legacy and MLO ingress tx stats
+ * @rx_i: ingress rx stats
+ * @tx: cdp tx stats
+ * @rx: cdp rx stats
+ * @tso_stats: tso stats
+ * @tid_tx_stats: tid tx stats
+ */
+struct dp_vdev_stats {
+	struct cdp_tx_ingress_stats tx_i[DP_INGRESS_STATS_MAX_SIZE];
+	struct cdp_rx_ingress_stats rx_i;
+	struct cdp_tx_stats tx;
+	struct cdp_rx_stats rx;
+	struct cdp_tso_stats tso_stats;
+#ifdef HW_TX_DELAY_STATS_ENABLE
+	struct cdp_tid_tx_stats tid_tx_stats[CDP_MAX_TX_COMP_RINGS]
+					    [CDP_MAX_DATA_TIDS];
+#endif
+};
+
 /* VDEV structure for data path state */
 struct dp_vdev {
 	/* OS device abstraction */
@@ -4067,7 +4106,7 @@ struct dp_vdev {
 	uint64_t prev_rx_deliver_tstamp;
 
 	/* VDEV Stats */
-	struct cdp_vdev_stats stats;
+	struct dp_vdev_stats stats;
 
 	/* Is this a proxySTA VAP */
 	uint8_t proxysta_vdev : 1, /* Is this a proxySTA VAP */
@@ -4400,12 +4439,14 @@ struct dp_peer_mesh_latency_parameter {
  * @vdev_id: Vdev ID for current link peer
  * @is_valid: flag for link peer info valid or not
  * @chip_id: chip id
+ * @is_bridge_peer: flag to indicate if peer is bridge peer
  */
 struct dp_peer_link_info {
 	union dp_align_mac_addr mac_addr;
 	uint8_t vdev_id;
 	uint8_t is_valid;
 	uint8_t chip_id;
+	uint8_t is_bridge_peer;
 };
 
 /**
@@ -5027,6 +5068,9 @@ struct dp_peer {
 	struct dp_peer_link_info link_peers[DP_MAX_MLO_LINKS];
 	uint8_t num_links;
 	DP_MUTEX_TYPE link_peers_info_lock;
+#ifdef WLAN_FEATURE_11BE_MLO_3_LINK_TX
+	uint32_t flow_cnt[CDP_DATA_TID_MAX];
+#endif
 #endif
 #ifdef CONFIG_SAWF_DEF_QUEUES
 	struct dp_peer_sawf *sawf;

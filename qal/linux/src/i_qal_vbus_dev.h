@@ -430,6 +430,7 @@ __qal_vbus_rcu_read_unlock(void)
 	return QDF_STATUS_SUCCESS;
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 2, 0))
 /**
  * __qal_vbus_of_get_named_gpio_flags() - Get a GPIO descriptor and flags
  * for GPIO API
@@ -448,4 +449,15 @@ __qal_vbus_of_get_named_gpio_flags(struct qdf_device_node *np,
 	return of_get_named_gpio_flags((struct device_node *)np,
 				       list_name, index, flags);
 }
+#else
+static inline int
+__qal_vbus_of_get_named_gpio_flags(struct qdf_device_node *np,
+				   const char *list_name,
+				   int index, __qdf_of_gpio_flags *flags)
+{
+	QDF_ASSERT(0);
+	return QDF_STATUS_E_NOSUPPORT;
+}
+#endif
+
 #endif /* __I_QAL_VBUS_DEV_H */

@@ -752,7 +752,7 @@ void cm_reassoc_hw_mode_change_resp(struct wlan_objmgr_pdev *pdev,
 	 * new command has been received reassoc should be
 	 * aborted from here with reassoc req cleanup.
 	 */
-	if (QDF_IS_STATUS_ERROR(status))
+	if (QDF_IS_STATUS_ERROR(qdf_status))
 		cm_reassoc_handle_event_post_fail(cm_ctx, cm_id);
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLME_CM_ID);
 }

@@ -1784,7 +1784,7 @@ void qdf_fill_wlan_connectivity_log(enum qdf_proto_type type,
 	wlan_diag_event.diag_cmn.ktime_us = qdf_ktime_to_us(qdf_ktime_get());
 	wlan_diag_event.diag_cmn.vdev_id = vdev_id;
 
-	wlan_diag_event.version = DIAG_MGMT_VERSION;
+	wlan_diag_event.version = DIAG_MGMT_VERSION_V2;
 
 	if (type == QDF_PROTO_TYPE_DHCP) {
 		wlan_diag_event.subtype =

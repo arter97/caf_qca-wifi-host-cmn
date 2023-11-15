@@ -129,5 +129,15 @@ target_if_scan_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops);
 QDF_STATUS
 target_if_scan_set_max_active_scans(struct wlan_objmgr_psoc *psoc,
 				    uint32_t max_active_scans);
+/**
+ * target_if_update_aux_support() - update aux mac support in scan
+ * object via service bit from FW
+ * @psoc: psoc object
+ *
+ * This function updates aux mac support bit in scan object via service bit
+ * from FW.
+ *
+ */
+QDF_STATUS target_if_update_aux_support(struct wlan_objmgr_psoc *psoc);
 
 #endif

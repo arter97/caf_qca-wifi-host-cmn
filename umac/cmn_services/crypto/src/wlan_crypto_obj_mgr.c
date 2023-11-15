@@ -329,7 +329,7 @@ static void crypto_free_list(struct crypto_psoc_priv_obj *psoc, void *ptr)
 			   hash_entry_next) {
 		crypto_debug("crypto delete for link_id %d mac_addr "
 			     QDF_MAC_ADDR_FMT, crypto_entry->link_id,
-			     QDF_MAC_ADDR_REF(&crypto_entry->mac_addr.raw));
+			     QDF_MAC_ADDR_REF(crypto_entry->mac_addr.raw));
 		qdf_mem_free(crypto_entry);
 		if (!qdf_atomic_read(&psoc->crypto_key_cnt))
 			crypto_debug("Invalid crypto_key_cnt %d",

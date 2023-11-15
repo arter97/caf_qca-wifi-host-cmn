@@ -368,4 +368,23 @@ void qdf_register_get_bus_reg_dump(qdf_bus_reg_dump callback);
  * Return: none
  */
 void qdf_get_bus_reg_dump(struct device *dev, uint8_t *buf, uint32_t len);
+
+#ifdef WLAN_SUPPORT_DPDK
+/**
+ * qdf_uio_register_device() - register dev to UIO dev
+ * @parent: parent device to be registered with UIO dev
+ * @info: UIO device capabilities
+ *
+ * Return: zero on success or a negative error code
+ */
+int qdf_uio_register_device(struct device *parent, qdf_uio_info_t *info);
+
+/**
+ * qdf_uio_unregister_device - unregister a UIO device
+ * @info: UIO device capabilities
+ *
+ * Return: none
+ */
+void qdf_uio_unregister_device(qdf_uio_info_t *info);
+#endif
 #endif /*_QDF_PLATFORM_H*/

@@ -368,6 +368,7 @@ struct security_info {
  * @profile_num: profile number
  * @profile_count: total profile count
  * @trans_bssid: TX BSSID address
+ * @non_trans_bssid: non TX BSSID address
  * @split_profile: Indicates if next MBSSID tag has the other part
  *                 of the non tx profile
  * @prof_residue: Set prof_residue to true, if the first non TX
@@ -384,6 +385,7 @@ struct scan_mbssid_info {
 	uint8_t profile_num;
 	uint8_t profile_count;
 	uint8_t trans_bssid[QDF_MAC_ADDR_SIZE];
+	uint8_t non_trans_bssid[QDF_MAC_ADDR_SIZE];
 	bool split_profile;
 	bool prof_residue;
 	bool split_prof_continue;
@@ -421,6 +423,7 @@ struct non_inheritance_ie {
 	bool non_inh_ie_found;
 };
 
+#define TBTT_BSS_PARAM_TRANS_BSSID_BIT 0x08
 /**
  * struct rnr_bss_info - Reduced Neighbor Report BSS information
  * @neighbor_ap_tbtt_offset: Neighbor AP TBTT offset
@@ -611,6 +614,7 @@ enum number_of_partner_link {
  * @raw_frame: contain raw frame and the length of the raw frame
  * @pdev_id: pdev id
  * @ml_info: Multi link information
+ * @mlo_max_recom_simult_links: Max recommended simultaneous link
  * @non_intersected_phymode: Non intersected phy mode of the AP
  */
 struct scan_cache_entry {
@@ -664,6 +668,7 @@ struct scan_cache_entry {
 	uint8_t pdev_id;
 #ifdef WLAN_FEATURE_11BE_MLO
 	struct ml_info ml_info;
+	uint8_t mlo_max_recom_simult_links;
 #endif
 	enum wlan_phymode non_intersected_phymode;
 };
@@ -1117,6 +1122,7 @@ enum scan_request_type {
  * @num_hint_bssid: number of BSSID hints
  * @hint_s_ssid: short SSID hints
  * @hint_bssid: BSSID hints
+ * @mld_id: MLD ID of the requested BSS within ML probe request
  */
 struct scan_req_params {
 	uint32_t scan_id;
@@ -1217,6 +1223,7 @@ struct scan_req_params {
 	uint32_t num_hint_bssid;
 	struct hint_short_ssid hint_s_ssid[WLAN_SCAN_MAX_HINT_S_SSID];
 	struct hint_bssid hint_bssid[WLAN_SCAN_MAX_HINT_BSSID];
+	uint8_t mld_id;
 };
 
 /**
