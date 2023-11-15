@@ -1953,8 +1953,9 @@ qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 
 	hal_tx_desc_cached[4] = tx_desc->length;
 	/* l3 and l4 checksum enable */
-	hal_tx_desc_cached[4] |= DP_TX_L3_L4_CSUM_ENABLE <<
-		TCL_DATA_CMD_IPV4_CHECKSUM_EN_LSB;
+	if (nbuf->ip_summed == CHECKSUM_PARTIAL)
+		hal_tx_desc_cached[4] |= DP_TX_L3_L4_CSUM_ENABLE <<
+			TCL_DATA_CMD_IPV4_CHECKSUM_EN_LSB;
 
 	hal_tx_desc_cached[5] = vdev->lmac_id << TCL_DATA_CMD_PMAC_ID_LSB;
 	hal_tx_desc_cached[5] |= vdev->vdev_id << TCL_DATA_CMD_VDEV_ID_LSB;
