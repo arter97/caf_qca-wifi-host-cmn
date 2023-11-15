@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -1261,7 +1261,7 @@ void mlo_sta_link_connect_notify(struct wlan_objmgr_vdev *vdev,
 	}
 
 	if (sta_ctx && sta_ctx->disconn_req) {
-		mlo_debug("Handle pending disocnnect for vdev %d",
+		mlo_debug("Handle pending disconnect for vdev %d",
 			  wlan_vdev_get_id(vdev));
 		mlo_handle_pending_disconnect(vdev);
 		return;

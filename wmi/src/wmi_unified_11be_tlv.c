@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -550,6 +550,49 @@ force_reason_host_to_fw(enum mlo_link_force_reason host_reason,
 	return QDF_STATUS_SUCCESS;
 }
 
+static uint8_t *
+populate_disallowed_mode_bmap(uint8_t *buf_ptr,
+			      struct mlo_link_set_active_param *param,
+			      uint32_t *tlv_len)
+{
+	uint8_t i;
+	wmi_disallowed_mlo_mode_bitmap_param *disallow_mode_bmap;
+
+	if (!buf_ptr) {
+		wmi_err("Buffer pointer is NULL");
+		return NULL;
+	}
+
+	disallow_mode_bmap =
+		(wmi_disallowed_mlo_mode_bitmap_param *)buf_ptr;
+	*tlv_len = WMITLV_GET_STRUCT_TLVLEN
+		(wmi_disallowed_mlo_mode_bitmap_param);
+
+	for (i = 0; i < param->num_disallow_mode_comb; i++) {
+		WMITLV_SET_HDR(&disallow_mode_bmap->tlv_header, 0, *tlv_len);
+		disallow_mode_bmap->disallowed_mode_bitmap =
+			param->disallow_mode_link_bmap->disallowed_mode;
+		disallow_mode_bmap->ieee_link_id_comb =
+			param->disallow_mode_link_bmap->ieee_link_id_comb;
+		WMI_MLO_IEEE_LINK_ID_COMB_SET_LINK_ID1(disallow_mode_bmap->ieee_link_id_comb,
+						       param->disallow_mode_link_bmap->ieee_link_id[0]);
+		WMI_MLO_IEEE_LINK_ID_COMB_SET_LINK_ID2(disallow_mode_bmap->ieee_link_id_comb,
+						       param->disallow_mode_link_bmap->ieee_link_id[1]);
+		WMI_MLO_IEEE_LINK_ID_COMB_SET_LINK_ID3(disallow_mode_bmap->ieee_link_id_comb,
+						       param->disallow_mode_link_bmap->ieee_link_id[2]);
+		WMI_MLO_IEEE_LINK_ID_COMB_SET_LINK_ID4(disallow_mode_bmap->ieee_link_id_comb,
+						       param->disallow_mode_link_bmap->ieee_link_id[3]);
+
+		wmi_debug("entry[%d]: disallowed_mode %d ieee_link_id_comb 0x%x",
+			  i, disallow_mode_bmap->disallowed_mode_bitmap,
+			  disallow_mode_bmap->ieee_link_id_comb);
+		disallow_mode_bmap++;
+	}
+	buf_ptr += sizeof(*disallow_mode_bmap) * param->num_disallow_mode_comb;
+
+	return buf_ptr;
+}
+
 /**
  * send_mlo_link_set_active_id_cmd_tlv() - send mlo link set active command
  * by link id bitmap
@@ -575,9 +618,11 @@ send_mlo_link_set_active_id_cmd_tlv(wmi_unified_t wmi_handle,
 	QDF_STATUS status;
 	wmi_mlo_link_set_active_cmd_fixed_param *cmd;
 	wmi_mlo_set_active_link_number_param *link_num_param;
+	wmi_disallowed_mlo_mode_bitmap_param *disallowed_mode_bmap;
 	uint32_t *link_bitmap;
 	uint32_t num_link_num_param = 0, num_link_bitmap = 0, tlv_len;
 	uint32_t num_inactive_link_bitmap = 0;
+	uint32_t num_disallow_mode_comb = 0;
 	wmi_buf_t buf;
 	uint8_t *buf_ptr;
 	uint32_t len;
@@ -612,13 +657,17 @@ send_mlo_link_set_active_id_cmd_tlv(wmi_unified_t wmi_handle,
 		return QDF_STATUS_E_INVAL;
 	}
 
+	num_disallow_mode_comb = param->num_disallow_mode_comb;
 	len = sizeof(*cmd) +
 	      WMI_TLV_HDR_SIZE + WMI_TLV_HDR_SIZE +
 	      WMI_TLV_HDR_SIZE + sizeof(*link_num_param) * num_link_num_param +
-	      WMI_TLV_HDR_SIZE + sizeof(*link_bitmap) * num_link_bitmap;
+	      WMI_TLV_HDR_SIZE + sizeof(*link_bitmap) * num_link_bitmap +
+	      WMI_TLV_HDR_SIZE +
+	      WMI_TLV_HDR_SIZE + sizeof(*disallowed_mode_bmap) * num_disallow_mode_comb;
 	if (force_mode == WMI_MLO_LINK_FORCE_ACTIVE_INACTIVE)
-		len += WMI_TLV_HDR_SIZE +
-		sizeof(*link_bitmap) * num_inactive_link_bitmap;
+		len += sizeof(*link_bitmap) * num_inactive_link_bitmap;
+	wmi_debug("num_disallow_mode_comb %d len: %d",
+		  num_disallow_mode_comb, len);
 
 	buf = wmi_buf_alloc(wmi_handle, len);
 	if (!buf)
@@ -716,8 +765,16 @@ send_mlo_link_set_active_id_cmd_tlv(wmi_unified_t wmi_handle,
 
 			buf_ptr += sizeof(*link_bitmap) * 1;
 		}
+	} else {
+		/* add empty link bitmap2 tlv */
+		WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_UINT32, 0);
+		buf_ptr += WMI_TLV_HDR_SIZE;
 	}
 
+	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC,
+		       sizeof(*disallowed_mode_bmap) * param->num_disallow_mode_comb);
+	buf_ptr += WMI_TLV_HDR_SIZE;
+	buf_ptr = populate_disallowed_mode_bmap(buf_ptr, param, &tlv_len);
 	wmi_mtrace(WMI_MLO_LINK_SET_ACTIVE_CMDID, 0, cmd->force_mode);
 	status = wmi_unified_cmd_send(wmi_handle, buf, len,
 				      WMI_MLO_LINK_SET_ACTIVE_CMDID);
@@ -744,8 +801,10 @@ send_mlo_link_set_active_cmd_tlv(wmi_unified_t wmi_handle,
 	QDF_STATUS status;
 	wmi_mlo_link_set_active_cmd_fixed_param *cmd;
 	wmi_mlo_set_active_link_number_param *link_num_param;
+	wmi_disallowed_mlo_mode_bitmap_param *disallowed_mode_bmap;
 	uint32_t *vdev_bitmap;
 	uint32_t num_link_num_param = 0, num_vdev_bitmap = 0, tlv_len;
+	uint32_t num_disallow_mode_comb = 0;
 	uint32_t num_inactive_vdev_bitmap = 0;
 	wmi_buf_t buf;
 	uint8_t *buf_ptr;
@@ -799,9 +858,11 @@ send_mlo_link_set_active_cmd_tlv(wmi_unified_t wmi_handle,
 		return QDF_STATUS_E_INVAL;
 	}
 
+	num_disallow_mode_comb = param->num_disallow_mode_comb;
 	len = sizeof(*cmd) +
 	      WMI_TLV_HDR_SIZE + sizeof(*link_num_param) * num_link_num_param +
-	      WMI_TLV_HDR_SIZE + sizeof(*vdev_bitmap) * num_vdev_bitmap;
+	      WMI_TLV_HDR_SIZE + sizeof(*vdev_bitmap) * num_vdev_bitmap +
+	      WMI_TLV_HDR_SIZE + sizeof(*disallowed_mode_bmap) * num_disallow_mode_comb;
 	if (force_mode == WMI_MLO_LINK_FORCE_ACTIVE_INACTIVE)
 		len += WMI_TLV_HDR_SIZE +
 		sizeof(*vdev_bitmap) * num_inactive_vdev_bitmap;
@@ -819,9 +880,10 @@ send_mlo_link_set_active_cmd_tlv(wmi_unified_t wmi_handle,
 	WMITLV_SET_HDR(&cmd->tlv_header, tag_id, tlv_len);
 	cmd->force_mode = force_mode;
 	cmd->reason = force_reason;
-	wmi_debug("mode %d reason %d num_link_num_param %d num_vdev_bitmap %d inactive %d",
+	wmi_debug("mode %d reason %d num_link_num_param %d num_vdev_bitmap %d inactive %d num_disallow_mode_comb %d",
 		  cmd->force_mode, cmd->reason, num_link_num_param,
-		  num_vdev_bitmap, num_inactive_vdev_bitmap);
+		  num_vdev_bitmap, num_inactive_vdev_bitmap,
+		  num_disallow_mode_comb);
 	buf_ptr += sizeof(*cmd);
 
 	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC,
@@ -889,8 +951,16 @@ send_mlo_link_set_active_cmd_tlv(wmi_unified_t wmi_handle,
 			buf_ptr += sizeof(*vdev_bitmap) *
 				num_inactive_vdev_bitmap;
 		}
+	} else {
+		/* add empty link bitmap2 tlv */
+		WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_UINT32, 0);
+		buf_ptr += WMI_TLV_HDR_SIZE;
 	}
 
+	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC,
+		       sizeof(*disallowed_mode_bmap) * param->num_disallow_mode_comb);
+	buf_ptr += WMI_TLV_HDR_SIZE;
+	buf_ptr = populate_disallowed_mode_bmap(buf_ptr, param, &tlv_len);
 	wmi_mtrace(WMI_MLO_LINK_SET_ACTIVE_CMDID, 0, cmd->force_mode);
 	status = wmi_unified_cmd_send(wmi_handle, buf, len,
 				      WMI_MLO_LINK_SET_ACTIVE_CMDID);

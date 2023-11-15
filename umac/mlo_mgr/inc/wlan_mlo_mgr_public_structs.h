@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -1423,6 +1423,45 @@ struct ml_link_force_cmd {
 	uint8_t link_num;
 };
 
+/* MLO invalid link bitmap for upto 4 links*/
+#define MLO_INVALID_LINK_BMAP 0xFFFFFFFF
+
+/* Max number of disallowed bitmap combination sent to FW */
+#define MAX_DISALLOW_BMAP_COMB 4
+
+/**
+ * enum mlo_disallowed_mode: MLO disallowed mode reasons
+ * @MLO_DISALLOWED_MODE_NO_RESTRICTION:
+ *  Set disallowed mode has no restrictions(any mode allowed).
+ * @MLO_DISALLOWED_MODE_NO_MLMR:
+ *  Set disallowed mode has restriction set to no MLMR.
+ * @MLO_DISALLOWED_MODE_NO_EMLSR:
+ *  Set disallowed mode has restriction set to no EMLSR.
+ * @MLO_DISALLOWED_MODE_NO_MLMR_EMLSR:
+ *  Set disallowed mode has restriction set to no MLMR or EMLSR
+ */
+enum mlo_disallowed_mode {
+	MLO_DISALLOWED_MODE_NO_RESTRICTION = 0,
+	MLO_DISALLOWED_MODE_NO_MLMR = 1,
+	MLO_DISALLOWED_MODE_NO_EMLSR = 2,
+	MLO_DISALLOWED_MODE_NO_MLMR_EMLSR = 3,
+};
+
+/**
+ * struct ml_link_disallow_mode_bitmap: MLO link disallow mode bitmap params
+ * @disallowed_mode: Bitmap of MLO Modes like MLMR, eMLSR which are not allowed.
+ * @ieee_link_id_comb: MLO IEEE Link Ids for which above,
+ * disallowed_mode_bitmap is applicable.
+ * @ieee_link_id: Each 8-bits in ieee_link_id_comb represents one link ID.
+ **/
+struct ml_link_disallow_mode_bitmap {
+	uint32_t disallowed_mode;
+	union {
+		uint32_t ieee_link_id_comb;
+		uint8_t ieee_link_id[4];
+	};
+};
+
 /**
  * struct mlo_link_set_active_param: MLO link set active params
  * @force_mode: operation to take (enum mlo_link_force_mode)
@@ -1449,6 +1488,8 @@ struct ml_link_force_cmd {
  *  If this value is true, the "force_cmd" field should be provided and
  *  that will be sent to target
  * @force_cmd: force command which includes link id bitmap
+ * @num_disallow_mode_comb: Number of disallowed mode link bitmap combinations
+ * @disallow_mode_link_bmap: MLO link disallowed mode link bitmap
  */
 struct mlo_link_set_active_param {
 	uint32_t force_mode;
@@ -1462,6 +1503,8 @@ struct mlo_link_set_active_param {
 	struct mlo_control_flags control_flags;
 	bool use_ieee_link_id;
 	struct ml_link_force_cmd force_cmd;
+	uint32_t num_disallow_mode_comb;
+	struct ml_link_disallow_mode_bitmap disallow_mode_link_bmap[MAX_DISALLOW_BMAP_COMB];
 };
 
 /**
