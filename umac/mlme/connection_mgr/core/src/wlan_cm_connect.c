@@ -2197,6 +2197,9 @@ QDF_STATUS cm_try_next_candidate(struct cnx_mgr *cm_ctx,
 	if (!cm_req)
 		return QDF_STATUS_E_FAILURE;
 
+	if (mlo_is_sta_bridge_vdev(cm_ctx->vdev))
+		goto connect_err;
+
 	status = cm_get_valid_candidate(cm_ctx, cm_req, resp,
 					&same_candidate_used);
 	if (QDF_IS_STATUS_ERROR(status))
