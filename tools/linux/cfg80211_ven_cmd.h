@@ -1500,6 +1500,9 @@ enum _ol_ath_param_t {
 	OL_ATH_PARAM_STANDBY_ACTIVE_MODE = 540,
 	OL_ATH_PARAM_SET_AWGN_EVENT = 541,
 	OL_ATH_PARAM_DP_DEBUG_LOG = 542,
+#ifdef WLAN_FEATURE_11BE_MLO
+	OL_ATH_PARAM_DISABLE_EML = 542,
+#endif
 };
 
 #ifdef CONFIG_SUPPORT_VENCMDTABLE
@@ -3949,6 +3952,13 @@ struct vendor_commands radio_vendor_cmds[] = {
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_DP_DEBUG_LOG, SET_PARAM, 1},
 	{"g_dp_debug_log",
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_DP_DEBUG_LOG, GET_PARAM, 0},
+#ifdef WLAN_FEATURE_11BE_MLO
+	{"disable_eml",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_DISABLE_EML, SET_PARAM, 1},
+	{"g_disable_eml",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_DISABLE_EML, GET_PARAM, 0},
+
+#endif
 };
 #endif
 
