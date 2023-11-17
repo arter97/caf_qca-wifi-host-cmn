@@ -377,4 +377,11 @@ void dfs_mlme_release_radar_mode_switch_lock(struct wlan_objmgr_pdev *pdev)
 {
 }
 #endif
+
+/**
+ * dfs_mlme_is_pdev_valid() - Return true if the given pdev is valid
+ * for the current operating HW mode, false otherwise.
+ * @pdev: Pointer to struct wlan_objmgr_pdev
+ */
+bool dfs_mlme_is_pdev_valid(struct wlan_objmgr_pdev *pdev);
 #endif /* _WLAN_DFS_MLME_API_H_ */

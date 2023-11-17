@@ -206,6 +206,8 @@ void register_dfs_callbacks(void)
 	tmp_dfs_to_mlme->mlme_mark_dfs =
 		mlme_dfs_mark_dfs;
 	tmp_dfs_to_mlme->mlme_set_tx_flag = mlme_dfs_set_tx_flag;
+	tmp_dfs_to_mlme->mlme_is_pdev_valid_for_curhwmode =
+		mlme_dfs_is_pdev_valid_for_curhwmode;
 	/*
 	 * Register precac auto channel switch feature related callbacks
 	 */
