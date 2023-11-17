@@ -855,6 +855,9 @@ enum {
 	IEEE80211_PARAM_GET_MLD_PEER = 797,
 #endif
 	IEEE80211_PARAM_MLD_NETDEV_NAME = 798, /* MLD Intf name */
+#ifdef WLAN_FEATURE_11BE_MLO
+	IEEE80211_PARAM_MLO_MAX_RECOM_ACTIVE_LINKS = 820, /* MLO Max Simultaneous Active links */
+#endif
 };
 
 enum {
@@ -2552,6 +2555,12 @@ struct vendor_commands vap_vendor_cmds[] = {
 	{"get_ppevp_type",     IEEE80211_PARAM_PPEVP_TYPE, GET_PARAM, 0},
 #ifdef CONFIG_MLO_SINGLE_DEV
 	{"get_mld_peer",     IEEE80211_PARAM_GET_MLD_PEER, GET_PARAM, 0},
+#endif
+#ifdef WLAN_FEATURE_11BE_MLO
+	{"max_recom_active_links", IEEE80211_PARAM_MLO_MAX_RECOM_ACTIVE_LINKS,
+		SET_PARAM, 1},
+	{"g_max_recom_active_links", IEEE80211_PARAM_MLO_MAX_RECOM_ACTIVE_LINKS,
+		GET_PARAM, 0},
 #endif
 };
 
