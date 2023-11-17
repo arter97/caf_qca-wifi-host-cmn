@@ -2964,8 +2964,9 @@ void __wmi_control_rx(struct wmi_unified *wmi_handle, wmi_buf_t evt_buf)
 	if (wmi_handle->target_type == WMI_TLV_TARGET) {
 		ev_buff_type = wmi_handle->ctx[idx].buff_type;
 		if (ev_buff_type == WMI_RX_PROCESSED_BUFF) {
-			wmi_handle->event_handler[idx] (wmi_handle->scn_handle,
-				wmi_cmd_struct_ptr, len);
+			if (qdf_likely(wmi_handle->event_handler[idx]))
+				wmi_handle->event_handler[idx] (wmi_handle->scn_handle,
+								wmi_cmd_struct_ptr, len);
 		} else if (ev_buff_type == WMI_RX_RAW_BUFF) {
 			ev_buf.evt_raw_buf = data;
 			ev_buf.evt_processed_buf = wmi_cmd_struct_ptr;
