@@ -1407,6 +1407,25 @@ QDF_STATUS wlan_reg_modify_pdev_chan_range(struct wlan_objmgr_pdev *pdev);
 QDF_STATUS wlan_reg_get_phybitmap(struct wlan_objmgr_pdev *pdev,
 				  uint16_t *phybitmap);
 
+#ifdef WLAN_FEATURE_11BE
+/**
+ * wlan_reg_phybitmap_support_11be() - API to check if current reg domain
+ * supports 11be
+ * @pdev: PDEV object manager pointer
+ *
+ * If the max supported phy mode of current reg domain equals 11be then
+ * return true else return false.
+ * Return: bool
+ */
+bool wlan_reg_phybitmap_support_11be(struct wlan_objmgr_pdev *pdev);
+#else
+static inline bool
+wlan_reg_phybitmap_support_11be(struct wlan_objmgr_pdev *pdev)
+{
+	return false;
+}
+#endif
+
 /**
  * wlan_reg_update_pdev_wireless_modes() - Update the wireless_modes in the
  * pdev_priv_obj with the input wireless_modes
