@@ -2921,6 +2921,18 @@ QDF_STATUS wmi_extract_aoa_caps_service_ready_ext2(
 }
 #endif /* WLAN_RCC_ENHANCED_AOA_SUPPORT */
 
+#if defined(OL_ATH_SUPPORT_LED) && (OL_ATH_SUPPORT_LED == 1)
+QDF_STATUS wmi_unified_led_blink_rate_table_cmd_send(wmi_unified_t wmi_handle,
+					struct wmi_led_blink_params *params)
+{
+	if (wmi_handle->ops->send_led_blink_rate_table_cmd)
+		return wmi_handle->ops->send_led_blink_rate_table_cmd
+				(wmi_handle, params);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif
+
 QDF_STATUS wmi_extract_pdev_utf_event(wmi_unified_t wmi_handle,
 				      uint8_t *evt_buf,
 				      struct wmi_host_pdev_utf_event *param)

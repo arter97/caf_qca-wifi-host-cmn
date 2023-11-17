@@ -4682,6 +4682,77 @@ static void wmi_scan_chanlist_dump(struct scan_chan_list_params *scan_chan_list)
 		wmi_nofl_debug("Chan[TXPwr][DFS]:%s", info);
 }
 
+#if defined(OL_ATH_SUPPORT_LED) && (OL_ATH_SUPPORT_LED == 1)
+static QDF_STATUS send_led_blink_rate_table_cmd_tlv(wmi_unified_t wmi_handle,
+					struct wmi_led_blink_params *params)
+{
+	wmi_buf_t buf;
+	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
+	wmi_enable_led_blink_download_rate_table_fixed_param *cmd;
+	int i;
+	uint8_t *buf_ptr;
+	wmi_led_blink_rate_table *led_blink_rate_table;
+	uint32_t len;
+
+	len = sizeof(*cmd) + WMI_TLV_HDR_SIZE;
+	len += sizeof(wmi_led_blink_rate_table) * params->num_blink_rate_table_entries;
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf) {
+		qdf_status = QDF_STATUS_E_NOMEM;
+		goto end;
+	}
+
+	buf_ptr = (uint8_t *)wmi_buf_data(buf);
+	cmd = (wmi_enable_led_blink_download_rate_table_fixed_param *)buf_ptr;
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		       WMITLV_TAG_STRUC_wmi_enable_led_blink_download_rate_table_fixed_param,
+		       WMITLV_GET_STRUCT_TLVLEN
+		       (wmi_enable_led_blink_download_rate_table_fixed_param));
+
+
+	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(
+					wmi_handle,
+					params->pdev_id);
+	cmd->blink_enable_flag = params->blink_enable_flag;
+	cmd->bw_per_index = params->bw_per_index;
+
+	wmi_debug("len = %d, pdev_id = %d, blink_enable_flag = %d, bw_per_index = %d\n",
+		  len, cmd->pdev_id, cmd->blink_enable_flag, cmd->bw_per_index);
+	wmi_mtrace(WMI_PDEV_ENABLE_LED_BLINK_DOWNLOAD_TABLE_CMDID,
+		   cmd->pdev_id, 0);
+
+	WMITLV_SET_HDR((buf_ptr +
+			sizeof(wmi_enable_led_blink_download_rate_table_fixed_param)),
+		       WMITLV_TAG_ARRAY_STRUC,
+		       sizeof(wmi_led_blink_rate_table) * params->num_blink_rate_table_entries);
+
+	led_blink_rate_table = (wmi_led_blink_rate_table *)(buf_ptr + sizeof(*cmd) + WMI_TLV_HDR_SIZE);
+
+	for (i = 0; i < params->num_blink_rate_table_entries; i++) {
+		WMITLV_SET_HDR(&led_blink_rate_table->tlv_header,
+			       WMITLV_TAG_STRUC_wmi_led_blink_rate_table,
+			       WMITLV_GET_STRUCT_TLVLEN(wmi_led_blink_rate_table));
+		led_blink_rate_table->on_time = params->led_blink_rate_table[i].time_on;
+		led_blink_rate_table->off_time = params->led_blink_rate_table[i].time_off;
+
+		led_blink_rate_table++;
+	}
+
+	qdf_status = wmi_unified_cmd_send(wmi_handle, buf, len,
+					  WMI_PDEV_ENABLE_LED_BLINK_DOWNLOAD_TABLE_CMDID);
+
+	if (QDF_IS_STATUS_ERROR(qdf_status)) {
+		wmi_err("Failed to send WMI_PDEV_ENABLE_LED_BLINK_DOWNLOAD_TABLE_CMDID");
+		wmi_buf_free(buf);
+		goto end;
+	}
+
+end:
+	return qdf_status;
+}
+#endif
+
 static QDF_STATUS send_scan_chan_list_cmd_tlv(wmi_unified_t wmi_handle,
 				struct scan_chan_list_params *chan_list)
 {
@@ -22095,6 +22166,9 @@ struct wmi_ops tlv_ops =  {
 	.extract_aoa_caps_service_ready_ext2 =
 			extract_aoa_caps_tlv,
 #endif /* WLAN_RCC_ENHANCED_AOA_SUPPORT */
+#if defined(OL_ATH_SUPPORT_LED) && (OL_ATH_SUPPORT_LED == 1)
+	.send_led_blink_rate_table_cmd = send_led_blink_rate_table_cmd_tlv,
+#endif
 };
 
 #ifdef WLAN_FEATURE_11BE_MLO

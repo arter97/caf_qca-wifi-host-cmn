@@ -3471,6 +3471,11 @@ QDF_STATUS (*extract_oob_connect_response_event)(
 
 #endif /* WLAN_FEATURE_LL_LT_SAP */
 #endif /* QCA_TARGET_IF_MLME */
+
+#if defined(OL_ATH_SUPPORT_LED) && (OL_ATH_SUPPORT_LED == 1)
+QDF_STATUS (*send_led_blink_rate_table_cmd)(wmi_unified_t wmi_handle,
+					struct wmi_led_blink_params *params);
+#endif
 };
 
 /* Forward declaration for psoc*/

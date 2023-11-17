@@ -10283,4 +10283,29 @@ struct edca_pifs_vparam {
 struct wmi_host_coex_fix_chan_cap {
 	uint32_t fix_chan_priority;
 };
+
+#if defined(OL_ATH_SUPPORT_LED) && (OL_ATH_SUPPORT_LED == 1)
+typedef struct {
+	u_int32_t    time_on;      /* LED ON time in ms */
+	u_int32_t    time_off;     /* LED OFF time in ms */
+} led_blink_rate;
+
+/**
+ * struct wmi_led_blink_params  - LED blink mechanism parameters
+ * @pdev_id: pdev_id
+ * @blink_enable_flag: LED blink enabled/disabled
+ * @bw_per_index: BW per index to consider from LED blink rate table
+ * @num_blink_rate_table_entries: Number of entries in the LED blink rate table
+ * @led_blink_rate_table: Pointer to the table with multiple blink speeds
+ * (LED on/off time) corresponding to various range of data rates.
+ */
+
+struct wmi_led_blink_params {
+	uint32_t pdev_id;
+	uint32_t blink_enable_flag;
+	uint32_t bw_per_index;
+	uint32_t num_blink_rate_table_entries;
+	const led_blink_rate *led_blink_rate_table;
+};
+#endif /* OL_ATH_SUPPORT_LED */
 #endif /* _WMI_UNIFIED_PARAM_H_ */

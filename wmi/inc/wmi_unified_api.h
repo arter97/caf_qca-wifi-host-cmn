@@ -5258,4 +5258,18 @@ QDF_STATUS
 wmi_extract_csa_ie_received_event(wmi_unified_t wmi_handle,
 				  void *evt_buf, uint8_t *vdev_id,
 				  struct csa_offload_params *csa_event);
+
+#if defined(OL_ATH_SUPPORT_LED) && (OL_ATH_SUPPORT_LED == 1)
+/**
+ * wmi_unified_led_blink_rate_table_cmd_send() - WMI LED blink rate table
+ * function
+ * @wmi_handle: handle to WMI.
+ * @params: pointer to hold LED blink rate table
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS
+wmi_unified_led_blink_rate_table_cmd_send(wmi_unified_t wmi_handle,
+					struct wmi_led_blink_params *params);
+#endif
 #endif /* _WMI_UNIFIED_API_H_ */
