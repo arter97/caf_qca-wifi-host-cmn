@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -738,6 +738,11 @@ bool wlan_reg_get_keep_6ghz_sta_cli_connection(struct wlan_objmgr_pdev *pdev)
 bool wlan_reg_get_fcc_constraint(struct wlan_objmgr_pdev *pdev, uint32_t freq)
 {
 	return reg_get_fcc_constraint(pdev, freq);
+}
+
+uint32_t wlan_reg_get_country_max_allowed_bw(struct wlan_objmgr_pdev *pdev)
+{
+	return reg_get_country_max_allowed_bw(pdev);
 }
 
 QDF_STATUS wlan_reg_get_chip_mode(struct wlan_objmgr_pdev *pdev,
