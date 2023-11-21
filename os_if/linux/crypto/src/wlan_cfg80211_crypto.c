@@ -52,6 +52,16 @@ void wlan_cfg80211_translate_ml_sta_key(uint8_t key_index,
 	crypto_key->key_type = key_type;
 	crypto_key->cipher_type = osif_nl_to_crypto_cipher_type(params->cipher);
 
+	if (IS_WEP_CIPHER(crypto_key->cipher_type) && !mac_addr) {
+	/*
+	 * This is a valid scenario in case of WEP, where-in the
+	 * keys are passed by the user space during the connect request
+	 * but since we did not connect yet, so we do not know the peer
+	 * address yet.
+	 */
+		osif_debug("No Mac Address to copy");
+		return;
+	}
 	qdf_mem_copy(&crypto_key->macaddr, mac_addr,
 		     QDF_MAC_ADDR_SIZE);
 	osif_debug("crypto key mac " QDF_MAC_ADDR_FMT,
