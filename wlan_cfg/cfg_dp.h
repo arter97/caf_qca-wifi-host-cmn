@@ -893,6 +893,15 @@
 #define CFG_DP_SAWF_STATS_CONFIG
 #endif
 
+#ifdef CONFIG_SAWF
+#define CFG_DP_SAWF_MCAST_ENABLE \
+		CFG_INI_BOOL("dp_sawf_mcast", false, \
+		"Service Aware Wifi - Enhanched Multicast Enable/Disable")
+#define CFG_DP_SAWF_MCAST  CFG(CFG_DP_SAWF_MCAST_ENABLE)
+#else
+#define CFG_DP_SAWF_MCAST
+#endif
+
 #ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
 /*
  * <ini>
@@ -2245,5 +2254,6 @@
 		CFG_DP_UMAC_RESET_BUFFER_WINDOW_CFG \
 		CFG(CFG_DP_RX_BUFFER_SIZE) \
 		CFG(CFG_DP_STATS_AVG_RATE_FILTER) \
-		CFG_DP_RESV_AST_IDX_CFG
+		CFG_DP_RESV_AST_IDX_CFG \
+		CFG_DP_SAWF_MCAST
 #endif /* _CFG_DP_H_ */
