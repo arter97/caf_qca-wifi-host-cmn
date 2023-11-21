@@ -384,7 +384,11 @@ static const struct qwlan_hw qwlan_hw_list[] = {
 		.subid = 0,
 		.name = "PEACH_V1",
 	},
-
+	{
+		.id = PEACH_V2,
+		.subid = 0,
+		.name = "PEACH_V2",
+	},
 	{
 		.id = KIWI_V1,
 		.subid = 0,
