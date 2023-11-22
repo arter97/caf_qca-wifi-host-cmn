@@ -321,6 +321,20 @@ bool dp_check_umac_reset_in_progress(struct dp_soc *soc)
 	return !!soc->umac_reset_ctx.intr_ctx_bkp;
 }
 
+
+#if !defined(QCA_SUPPORT_DP_GLOBAL_CTX) || \
+	(defined(QCA_SUPPORT_DP_GLOBAL_CTX) && \
+	!defined(WLAN_FEATURE_11BE_MLO) || !defined(WLAN_MLO_MULTI_CHIP))
+bool dp_get_global_tx_desc_cleanup_flag(struct dp_soc *soc)
+{
+	return true;
+}
+
+void dp_reset_global_tx_desc_cleanup_flag(struct dp_soc *soc)
+{
+}
+#endif
+
 #if !defined(WLAN_FEATURE_11BE_MLO) || !defined(WLAN_MLO_MULTI_CHIP)
 /**
  * dp_umac_reset_initiate_umac_recovery() - Initiate Umac reset session

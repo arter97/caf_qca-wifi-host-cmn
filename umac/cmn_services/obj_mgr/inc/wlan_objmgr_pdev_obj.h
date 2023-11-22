@@ -272,9 +272,7 @@ struct wlan_objmgr_pdev {
 	qdf_work_t peer_obj_free_work;
 	uint32_t active_work_cnt;
 #endif
-#ifdef WLAN_MLO_MULTI_CHIP
 	bool standby_active;
-#endif
 };
 
 /*

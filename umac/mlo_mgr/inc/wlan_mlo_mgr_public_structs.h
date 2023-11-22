@@ -354,6 +354,7 @@ struct mlo_wsi_info {
  * @force_non_assoc_prim_umac: Force non-assoc link to be primary umac
  * @lswitch_notifier: Link switch notifier callbacks
  * @wsi_info: WSI stats info
+ * @disable_eml: Disable Enhanced Multi Link features(eMLSR and eMLMR).
  */
 struct mlo_mgr_context {
 #ifdef WLAN_MLO_USE_SPINLOCK
@@ -385,6 +386,7 @@ struct mlo_mgr_context {
 	struct wlan_mlo_link_switch_notifier lswitch_notifier[WLAN_UMAC_COMP_ID_MAX];
 #endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
 	struct mlo_wsi_info *wsi_info;
+	bool disable_eml;
 };
 
 /**
@@ -424,6 +426,25 @@ struct mlo_link_bss_params {
 };
 
 #ifdef WLAN_FEATURE_11BE_MLO
+
+/**
+ * enum mlo_link_info_event_status - link info event status
+ * @WLAN_LINK_INFO_EVENT_SUCCESS: success
+ * @WLAN_LINK_INFO_EVENT_REJECT_FAILURE: reject due to common failure reason
+ * @WLAN_LINK_INFO_EVENT_REJECT_VDEV_NOT_UP: reject as vdev is not up
+ * @WLAN_LINK_INFO_EVENT_REJECT_ROAMING_IN_PROGRESS: reject as roaming
+ *						     is in progress
+ * @WLAN_LINK_INFO_EVENT_REJECT_NON_MLO_CONNECTION: reject as it's not
+ *						    MLO connection
+ */
+enum mlo_link_info_event_status {
+	WLAN_LINK_INFO_EVENT_SUCCESS,
+	WLAN_LINK_INFO_EVENT_REJECT_FAILURE,
+	WLAN_LINK_INFO_EVENT_REJECT_VDEV_NOT_UP,
+	WLAN_LINK_INFO_EVENT_REJECT_ROAMING_IN_PROGRESS,
+	WLAN_LINK_INFO_EVENT_REJECT_NON_MLO_CONNECTION,
+};
+
 /**
  * struct mlo_link_state_cmd_params - MLO link state params
  * @vdev_id: Vdev id

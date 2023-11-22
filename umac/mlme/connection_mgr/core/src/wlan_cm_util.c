@@ -74,6 +74,11 @@ struct cnx_mgr *cm_get_cm_ctx_fl(struct wlan_objmgr_vdev *vdev,
 	struct vdev_mlme_obj *vdev_mlme;
 	struct cnx_mgr *cm_ctx = NULL;
 
+	if (!vdev) {
+		mlme_rl_nofl_err("%s:%u: vdev is NULL", func, line);
+		return NULL;
+	}
+
 	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
 	if (vdev_mlme)
 		cm_ctx = vdev_mlme->cnx_mgr_ctx;
@@ -560,8 +565,10 @@ cm_fill_connect_resp_from_req(struct wlan_objmgr_vdev *vdev,
 
 	if (candidate)
 		resp->freq = candidate->entry->channel.chan_freq;
-	else
+	else if (req->chan_freq)
 		resp->freq = req->chan_freq;
+	else
+		resp->freq = req->chan_freq_hint;
 
 	resp->ssid = req->ssid;
 	resp->is_wps_connection = req->is_wps_connection;

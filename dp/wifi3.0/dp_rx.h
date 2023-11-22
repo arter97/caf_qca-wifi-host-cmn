@@ -131,6 +131,7 @@ struct dp_rx_desc_dbg_info {
  * @magic:
  * @nbuf_data_addr:	VA of nbuf data posted
  * @dbg_info:
+ * @prev_paddr_buf_start: paddr of the prev nbuf attach to rx_desc
  * @in_use:		rx_desc is in use
  * @unmapped:		used to mark rx_desc an unmapped if the corresponding
  *			nbuf is already unmapped
@@ -152,6 +153,7 @@ struct dp_rx_desc {
 	uint32_t magic;
 	uint8_t *nbuf_data_addr;
 	struct dp_rx_desc_dbg_info *dbg_info;
+	qdf_dma_addr_t prev_paddr_buf_start;
 #endif
 	uint8_t	in_use:1,
 		unmapped:1,
@@ -1950,6 +1952,7 @@ void dp_rx_desc_prep(struct dp_rx_desc *rx_desc,
 	rx_desc->unmapped = 0;
 	rx_desc->nbuf_data_addr = (uint8_t *)qdf_nbuf_data(rx_desc->nbuf);
 	dp_rx_set_reuse_nbuf(rx_desc, rx_desc->nbuf);
+	rx_desc->prev_paddr_buf_start = rx_desc->paddr_buf_start;
 	rx_desc->paddr_buf_start = nbuf_frag_info_t->paddr;
 }
 

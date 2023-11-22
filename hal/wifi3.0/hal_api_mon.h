@@ -1311,16 +1311,16 @@ struct hal_rx_ppdu_info {
 	struct hal_rx_mon_mpdu_info mpdu_info[HAL_MAX_UL_MU_USERS];
 	 /* placeholder to hold packet buffer info */
 	struct hal_mon_packet_info packet_info;
-#ifdef WLAN_PKT_CAPTURE_RX_2_0
+#if defined(WLAN_PKT_CAPTURE_RX_2_0) && defined(QCA_MONITOR_2_0_PKT_SUPPORT)
 	 /* per user per MPDU queue */
 	qdf_nbuf_queue_t mpdu_q[HAL_MAX_UL_MU_USERS];
-#endif
 	 /* ppdu info list element */
 	TAILQ_ENTRY(hal_rx_ppdu_info) ppdu_list_elem;
 	 /* ppdu info free list element */
 	TAILQ_ENTRY(hal_rx_ppdu_info) ppdu_free_list_elem;
 	/* placeholder to track if RX_HDR is received */
 	uint8_t rx_hdr_rcvd[HAL_MAX_UL_MU_USERS];
+#endif
 	/* Per user BAR and NDPA bit flag */
 	struct hal_rx_user_ctrl_frm_info ctrl_frm_info[HAL_MAX_UL_MU_USERS];
 	/* PPDU end user stats count */

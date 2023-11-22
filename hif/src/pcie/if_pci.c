@@ -1869,13 +1869,14 @@ static int hif_enable_pci_nopld(struct hif_pci_softc *sc,
 	}
 
 	/* Request MMIO resources */
+#ifdef CONFIG_PCI
 	ret = pci_request_region(pdev, BAR_NUM, "ath");
 	if (ret) {
 		hif_err("PCI MMIO reservation error");
 		ret = -EIO;
 		goto err_region;
 	}
-
+#endif
 #ifdef CONFIG_ARM_LPAE
 	/* if CONFIG_ARM_LPAE is enabled, we have to set 64 bits mask
 	 * for 32 bits device also.
@@ -1939,10 +1940,14 @@ static int hif_enable_pci_nopld(struct hif_pci_softc *sc,
 	return ret;
 
 err_iomap:
+#ifdef CONFIG_PCI
 	pci_clear_master(pdev);
+#endif
 err_dma:
+#ifdef CONFIG_PCI
 	pci_release_region(pdev, BAR_NUM);
 err_region:
+#endif
 	pci_disable_device(pdev);
 	return ret;
 }
@@ -1959,11 +1964,14 @@ static int hif_enable_pci_pld(struct hif_pci_softc *sc,
 
 static void hif_pci_deinit_nopld(struct hif_pci_softc *sc)
 {
+#ifdef CONFIG_PCI
 	pci_disable_msi(sc->pdev);
 	pci_iounmap(sc->pdev, sc->mem);
 	pci_clear_master(sc->pdev);
 	pci_release_region(sc->pdev, BAR_NUM);
 	pci_disable_device(sc->pdev);
+#endif
+	return;
 }
 
 static void hif_pci_deinit_pld(struct hif_pci_softc *sc) {}

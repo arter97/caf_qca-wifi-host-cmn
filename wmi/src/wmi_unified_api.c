@@ -3712,11 +3712,11 @@ wmi_unified_extract_roam_result_stats(wmi_unified_t wmi, void *buf,
 QDF_STATUS
 wmi_unified_extract_roam_11kv_stats(wmi_unified_t wmi, void *evt_buf,
 				    struct wmi_neighbor_report_data *dst,
-				    uint8_t idx, uint8_t rpt_idx, uint8_t band)
+				    uint8_t idx, uint8_t rpt_idx)
 {
 	if (wmi->ops->extract_roam_11kv_stats)
 		return wmi->ops->extract_roam_11kv_stats(wmi, evt_buf, dst, idx,
-							 rpt_idx, band);
+							 rpt_idx);
 
 	return QDF_STATUS_E_FAILURE;
 }

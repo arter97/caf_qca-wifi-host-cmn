@@ -817,6 +817,11 @@ struct rx_mon_pkt_tlvs {
 #define HAL_RX_REO_QUEUE_DESC_ADDR_39_32_GET(_rx_pkt_tlv)	\
 	HAL_RX_MPDU_START(_rx_pkt_tlv).rx_reo_queue_desc_addr_39_32
 
+#ifdef WLAN_FEATURE_MARK_FIRST_WAKEUP_PACKET
+#define HAL_RX_TLV_FIRST_WAKEUP_PKT_GET(_rx_pkt_tlv)	\
+	HAL_RX_MSDU_END(_rx_pkt_tlv).reserved_1a
+#endif
+
 /* used by monitor mode for parsing from full TLV */
 #define HAL_RX_MON_GET_FC_VALID(_rx_mpdu_start)	\
 	HAL_RX_GET(rx_mpdu_start, RX_MPDU_INFO, MPDU_FRAME_CONTROL_VALID)

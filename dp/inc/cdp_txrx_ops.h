@@ -758,6 +758,12 @@ struct cdp_cmn_ops {
 				    struct dpdk_wlan_vdev_info_event *ev_buf);
 	int (*cfgmgr_get_peer_info)(struct cdp_soc_t *soc_hdl, uint8_t soc_id,
 				    struct dpdk_wlan_peer_info *ev_buf);
+	int (*cfgmgr_get_vdev_create_evt_info)(
+				struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+				struct dpdk_wlan_vdev_create_info *ev_buf);
+	int (*cfgmgr_get_peer_create_evt_info)(
+				struct cdp_soc_t *soc_hdl, uint16_t peer_id,
+				struct dpdk_wlan_peer_create_info *ev_buf);
 #endif
 };
 
@@ -2516,6 +2522,16 @@ struct cdp_sawf_ops {
 				uint8_t svc_id, uint8_t direction,
 				uint8_t start_or_stop, uint8_t *peer_mac,
 				uint16_t peer_id);
+#endif
+#ifdef WLAN_FEATURE_11BE_MLO_3_LINK_TX
+	uint16_t
+	(*get_peer_msduq)(struct net_device *netdev, uint8_t *dest_mac,
+			  uint32_t dscp_pcp, bool pcp);
+	QDF_STATUS
+	(*sawf_3_link_peer_flow_count)(struct cdp_soc_t *hdl,
+				       uint8_t *mac_addr,
+				       uint16_t peer_id,
+				       uint32_t mark_metadata);
 #endif
 };
 #endif

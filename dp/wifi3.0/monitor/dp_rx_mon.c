@@ -661,6 +661,33 @@ end:
 	dp_rx_populate_cfr_non_assoc_sta(pdev, ppdu_info, cdp_rx_ppdu);
 }
 
+/*
+ * dp_mon_eval_avg_rate_filter() - Evaluates rate value against filter
+ * @peer: dp peer
+ * @ratekbps: last packet rate in kbps
+ * @avg_rate: average rate for which new rate is to be evaluated
+ *
+ * Return: true when average need to be evaluated else false
+ */
+static inline bool
+dp_mon_eval_avg_rate_filter(struct dp_peer *peer, uint32_t ratekbps,
+			    uint32_t avg_rate) {
+	uint16_t filter_val = 0;
+
+	if (qdf_unlikely(!peer || !peer->vdev ||
+			  !peer->vdev->pdev->soc->wlan_cfg_ctx)) {
+		return true;
+	}
+
+	filter_val =
+		peer->vdev->pdev->soc->wlan_cfg_ctx->avg_rate_stats_filter_val;
+
+	if (!filter_val || avg_rate < filter_val || ratekbps > filter_val) {
+		return true;
+	}
+	return false;
+}
+
 /**
  * dp_rx_rate_stats_update() - Update per-peer rate statistics
  * @peer: Datapath peer handle
@@ -736,8 +763,12 @@ static inline void dp_rx_rate_stats_update(struct dp_peer *peer,
 	ppdu->rix = rix;
 	ppdu_user->rix = rix;
 	DP_STATS_UPD(mon_peer, rx.last_rx_rate, ratekbps);
-	mon_peer->stats.rx.avg_rx_rate =
-		dp_ath_rate_lpf(mon_peer->stats.rx.avg_rx_rate, ratekbps);
+	if (qdf_likely(dp_mon_eval_avg_rate_filter(peer, ratekbps,
+					mon_peer->stats.rx.avg_rx_rate))) {
+		mon_peer->stats.rx.avg_rx_rate =
+			dp_ath_rate_lpf(mon_peer->stats.rx.avg_rx_rate,
+					ratekbps);
+	}
 	ppdu_rx_rate = dp_ath_rate_out(mon_peer->stats.rx.avg_rx_rate);
 	DP_STATS_UPD(mon_peer, rx.rnd_avg_rx_rate, ppdu_rx_rate);
 	ppdu->rx_ratekbps = ratekbps;
@@ -1993,11 +2024,6 @@ QDF_STATUS dp_rx_mon_deliver_non_std(struct dp_soc *soc,
 	/* deliver to the user layer application */
 	osif_rx_mon(mon_pdev->mvdev->osif_vdev,
 		    dummy_msdu, NULL);
-
-	/* Clear rx_status*/
-	qdf_mem_zero(&mon_pdev->ppdu_info.rx_status,
-		     sizeof(mon_pdev->ppdu_info.rx_status));
-	mon_pdev->mon_ppdu_status = DP_PPDU_STATUS_START;
 
 	return QDF_STATUS_SUCCESS;
 

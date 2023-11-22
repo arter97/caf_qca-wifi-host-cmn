@@ -2985,6 +2985,23 @@ static inline void dp_umac_reset_trigger_pre_reset_notify_cb(struct dp_soc *soc)
 		callback(soc);
 }
 
+/**
+ * dp_reset_global_tx_desc_cleanup_flag() - Reset cleanup needed flag
+ * @soc: dp soc handle
+ *
+ * Return: None
+ */
+void dp_reset_global_tx_desc_cleanup_flag(struct dp_soc *soc);
+
+/**
+ * dp_get_global_tx_desc_cleanup_flag() - Get cleanup needed flag
+ * @soc: dp soc handle
+ *
+ * Return: cleanup needed/ not needed
+ */
+bool dp_get_global_tx_desc_cleanup_flag(struct dp_soc *soc);
+
+
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 /**
  * dp_umac_reset_complete_umac_recovery() - Complete Umac reset session
@@ -3505,6 +3522,14 @@ void dp_print_soc_interrupt_stats(struct dp_soc *soc);
  */
 
 void dp_print_tx_ppeds_stats(struct dp_soc *soc);
+
+/* REO destination ring's watermark mask */
+#define DP_SRNG_WM_MASK_REO_DST  BIT(REO_DST)
+/* TX completion ring's watermark mask */
+#define DP_SRNG_WM_MASK_TX_COMP  BIT(WBM2SW_RELEASE)
+/* All srng's watermark mask */
+#define DP_SRNG_WM_MASK_ALL  0xFFFFFFFF
+
 #ifdef WLAN_DP_SRNG_USAGE_WM_TRACKING
 /**
  * dp_dump_srng_high_wm_stats() - Print the ring usage high watermark stats

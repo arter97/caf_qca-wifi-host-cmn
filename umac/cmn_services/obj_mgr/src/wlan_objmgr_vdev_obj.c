@@ -143,7 +143,6 @@ struct wlan_objmgr_vdev *wlan_objmgr_vdev_obj_create(
 	wlan_objmgr_vdev_status_handler stat_handler;
 	void *arg;
 	QDF_STATUS obj_status;
-	struct qdf_mac_addr *mld_addr;
 
 	if (!pdev) {
 		obj_mgr_err("pdev is NULL");
@@ -292,21 +291,9 @@ struct wlan_objmgr_vdev *wlan_objmgr_vdev_obj_create(
 
 	obj_mgr_debug("Created vdev %d", vdev->vdev_objmgr.vdev_id);
 
-	/* Attach DP vdev to DP MLO dev ctx */
-	mld_addr = (struct qdf_mac_addr *)wlan_vdev_mlme_get_mldaddr(vdev);
-
-	if (!qdf_is_macaddr_zero(mld_addr)) {
-		/* only for MLO vdev's */
-		if (cdp_mlo_dev_ctxt_attach(
-				wlan_psoc_get_dp_handle(psoc),
-				wlan_vdev_get_id(vdev),
-				(uint8_t *)mld_addr)
-				!= QDF_STATUS_SUCCESS) {
-			obj_mgr_err("Fail to attach vdev to DP MLO Dev ctxt");
-			wlan_objmgr_vdev_obj_delete(vdev);
-			return NULL;
-		}
-	}
+	obj_status = wlan_objmgr_vdev_mlo_dev_ctxt_attach(vdev);
+	if (obj_status != QDF_STATUS_SUCCESS)
+		return NULL;
 
 	return vdev;
 }
@@ -320,7 +307,6 @@ static QDF_STATUS wlan_objmgr_vdev_obj_destroy(struct wlan_objmgr_vdev *vdev)
 	void *arg;
 	uint8_t vdev_id;
 	struct wlan_objmgr_psoc *psoc = NULL;
-	struct qdf_mac_addr *mld_addr;
 
 	if (!vdev) {
 		obj_mgr_err("vdev is NULL");
@@ -350,19 +336,10 @@ static QDF_STATUS wlan_objmgr_vdev_obj_destroy(struct wlan_objmgr_vdev *vdev)
 			     WLAN_MD_OBJMGR_VDEV, "wlan_objmgr_vdev");
 
 	/* Detach DP vdev from DP MLO Device Context */
-	mld_addr = (struct qdf_mac_addr *)wlan_vdev_mlme_get_mldaddr(vdev);
 
-	if (!qdf_is_macaddr_zero(mld_addr)) {
-		/* only for MLO vdev's */
-		if (cdp_mlo_dev_ctxt_detach(wlan_psoc_get_dp_handle(psoc),
-					    wlan_vdev_get_id(vdev),
-					    (uint8_t *)mld_addr)
-					    != QDF_STATUS_SUCCESS) {
-			obj_mgr_err("Failed to detach DP vdev from DP MLO Dev ctxt");
-			QDF_BUG(0);
-			return QDF_STATUS_E_FAILURE;
-		}
-	}
+	obj_status = wlan_objmgr_vdev_mlo_dev_ctxt_detach(vdev);
+	if (obj_status != QDF_STATUS_SUCCESS)
+		return obj_status;
 
 	/* Invoke registered destroy handlers in reverse order of creation */
 	for (id = WLAN_UMAC_COMP_ID_MAX - 1; id >= 0; id--) {
@@ -396,6 +373,82 @@ static QDF_STATUS wlan_objmgr_vdev_obj_destroy(struct wlan_objmgr_vdev *vdev)
 	/* Free VDEV object */
 	return wlan_objmgr_vdev_obj_free(vdev);
 }
+
+QDF_STATUS
+wlan_objmgr_vdev_mlo_dev_ctxt_attach(struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_objmgr_psoc *psoc = NULL;
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	struct qdf_mac_addr *mld_addr;
+
+	psoc = wlan_vdev_get_psoc(vdev);
+	if (!psoc) {
+		obj_mgr_err("Failed to get psoc");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	/* Attach DP vdev to DP MLO dev ctx */
+	mld_addr = (struct qdf_mac_addr *)wlan_vdev_mlme_get_mldaddr(vdev);
+
+	if (qdf_is_macaddr_zero(mld_addr))
+		return status;
+
+	/* only for MLO vdev's */
+	status = cdp_mlo_dev_ctxt_attach(wlan_psoc_get_dp_handle(psoc),
+					 wlan_vdev_get_id(vdev),
+					 (uint8_t *)mld_addr);
+	if (status != QDF_STATUS_SUCCESS) {
+		obj_mgr_err("Fail to attach vdev to DP MLO Dev ctxt");
+		wlan_objmgr_vdev_obj_delete(vdev);
+		return status;
+	}
+
+	return status;
+}
+
+qdf_export_symbol(wlan_objmgr_vdev_mlo_dev_ctxt_attach);
+
+#if defined(WLAN_MLO_MULTI_CHIP)
+QDF_STATUS
+wlan_objmgr_vdev_mlo_dev_ctxt_detach(struct wlan_objmgr_vdev *vdev)
+{
+	struct qdf_mac_addr *mld_addr;
+	struct wlan_objmgr_psoc *psoc = NULL;
+
+	psoc = wlan_vdev_get_psoc(vdev);
+	if (!psoc) {
+		obj_mgr_err("Failed to get psoc");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	/* Detach DP vdev from DP MLO Device Context */
+	mld_addr = (struct qdf_mac_addr *)wlan_vdev_mlme_get_mldaddr(vdev);
+	if (qdf_is_macaddr_zero(mld_addr))
+		return QDF_STATUS_SUCCESS;
+
+		/* only for MLO vdev's */
+	if (cdp_mlo_dev_ctxt_detach(wlan_psoc_get_dp_handle(psoc),
+				    wlan_vdev_get_id(vdev),
+				    (uint8_t *)mld_addr)
+				    != QDF_STATUS_SUCCESS) {
+		obj_mgr_err("Failed to detach DP vdev from DP MLO Dev ctxt");
+		QDF_BUG(0);
+		return QDF_STATUS_E_FAILURE;
+	}
+	return QDF_STATUS_SUCCESS;
+}
+
+qdf_export_symbol(wlan_objmgr_vdev_mlo_dev_ctxt_detach);
+
+#else
+QDF_STATUS
+wlan_objmgr_vdev_mlo_dev_ctxt_detach(struct wlan_objmgr_vdev *vdev)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+qdf_export_symbol(wlan_objmgr_vdev_mlo_dev_ctxt_detach);
+#endif
 
 QDF_STATUS wlan_objmgr_vdev_obj_delete(struct wlan_objmgr_vdev *vdev)
 {

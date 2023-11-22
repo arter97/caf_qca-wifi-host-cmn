@@ -1788,6 +1788,15 @@ __qdf_nbuf_is_ipv4_last_fragment(struct sk_buff *skb)
 	return false;
 }
 
+bool
+__qdf_nbuf_is_ipv4_fragment(struct sk_buff *skb)
+{
+	if (ntohs(ip_hdr(skb)->frag_off) & IP_MF)
+		return true;
+
+	return false;
+}
+
 void
 __qdf_nbuf_data_set_ipv4_tos(uint8_t *data, uint8_t tos)
 {

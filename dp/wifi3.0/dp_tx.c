@@ -6001,6 +6001,57 @@ dp_update_mcast_stats(struct dp_txrx_peer *txrx_peer, uint8_t link_id,
 {
 }
 #endif
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
+/**
+ * dp_tx_comp_set_nbuf_band() - set nbuf band.
+ * @soc: dp soc handle
+ * @nbuf: nbuf handle
+ * @ts: tx completion status
+ *
+ * Return: None
+ */
+static inline void
+dp_tx_comp_set_nbuf_band(struct dp_soc *soc, qdf_nbuf_t nbuf,
+			 struct hal_tx_completion_status *ts)
+{
+	struct qdf_mac_addr *mac_addr;
+	struct dp_peer *peer;
+	struct dp_txrx_peer *txrx_peer;
+	uint8_t link_id;
+
+	if ((QDF_NBUF_CB_GET_PACKET_TYPE(nbuf) !=
+		QDF_NBUF_CB_PACKET_TYPE_EAPOL &&
+	     QDF_NBUF_CB_GET_PACKET_TYPE(nbuf) !=
+		QDF_NBUF_CB_PACKET_TYPE_DHCP &&
+	     QDF_NBUF_CB_GET_PACKET_TYPE(nbuf) !=
+		QDF_NBUF_CB_PACKET_TYPE_DHCPV6) ||
+	    QDF_NBUF_CB_GET_IS_BCAST(nbuf))
+		return;
+
+	mac_addr = (struct qdf_mac_addr *)(qdf_nbuf_data(nbuf) +
+					   QDF_NBUF_DEST_MAC_OFFSET);
+
+	peer = dp_mld_peer_find_hash_find(soc, mac_addr->bytes, 0,
+					  DP_VDEV_ALL, DP_MOD_ID_TX_COMP);
+	if (qdf_likely(peer)) {
+		txrx_peer = dp_get_txrx_peer(peer);
+		if (qdf_likely(txrx_peer)) {
+			link_id =
+				dp_tx_get_link_id_from_ppdu_id(soc, ts,
+						  txrx_peer,
+						  txrx_peer->vdev);
+			qdf_nbuf_tx_set_band(nbuf, txrx_peer->ll_band[link_id]);
+		}
+		dp_peer_unref_delete(peer, DP_MOD_ID_TX_COMP);
+	}
+}
+#else
+static inline void
+dp_tx_comp_set_nbuf_band(struct dp_soc *soc, qdf_nbuf_t nbuf,
+			 struct hal_tx_completion_status *ts)
+{
+}
+#endif
 
 void dp_tx_comp_process_tx_status(struct dp_soc *soc,
 				  struct dp_tx_desc_s *tx_desc,
@@ -6063,8 +6114,17 @@ void dp_tx_comp_process_tx_status(struct dp_soc *soc,
 			(ts->status == HAL_TX_TQM_RR_REM_CMD_REM));
 
 	if (!txrx_peer) {
+		dp_tx_comp_set_nbuf_band(soc, nbuf, ts);
 		dp_info_rl("peer is null or deletion in progress");
 		DP_STATS_INC_PKT(soc, tx.tx_invalid_peer, 1, length);
+
+		vdev = dp_vdev_get_ref_by_id(soc, tx_desc->vdev_id,
+					     DP_MOD_ID_CDP);
+		if (qdf_likely(vdev)) {
+			op_mode = vdev->qdf_opmode;
+			dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
+		}
+
 		goto out_log;
 	}
 	vdev = txrx_peer->vdev;
@@ -6592,6 +6652,70 @@ void dp_tx_desc_check_corruption(struct dp_tx_desc_s *tx_desc)
 #endif
 
 #ifndef WLAN_SOFTUMAC_SUPPORT
+#ifdef DP_TX_COMP_RING_DESC_SANITY_CHECK
+
+/* Increasing this value, runs the risk of srng backpressure */
+#define DP_STALE_TX_COMP_WAIT_TIMEOUT_US 1000
+
+static inline void
+dp_tx_comp_reset_stale_entry_detection(struct dp_soc *soc, uint32_t ring_num)
+{
+	soc->stale_entry[ring_num].detected = 0;
+}
+
+/**
+ * dp_tx_comp_stale_entry_handle() - Detect stale entry condition in tx
+ *				     completion srng.
+ * @soc: DP SoC handle
+ * @ring_num: tx completion ring number
+ * @status: QDF_STATUS from tx_comp_get_params_from_hal_desc arch ops
+ *
+ * Return: QDF_STATUS_SUCCESS if stale entry is detected and handled
+ *	   QDF_STATUS error code in other cases.
+ */
+static inline QDF_STATUS
+dp_tx_comp_stale_entry_handle(struct dp_soc *soc, uint32_t ring_num,
+			      QDF_STATUS status)
+{
+	uint64_t curr_timestamp = qdf_get_log_timestamp_usecs();
+	uint64_t delta_us;
+
+	if (status != QDF_STATUS_E_PENDING) {
+		dp_tx_comp_reset_stale_entry_detection(soc, ring_num);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (soc->stale_entry[ring_num].detected) {
+		/* stale entry process continuation */
+		delta_us = curr_timestamp -
+				soc->stale_entry[ring_num].start_time;
+		if (delta_us > DP_STALE_TX_COMP_WAIT_TIMEOUT_US) {
+			dp_err("Stale tx comp desc, waited %d us", delta_us);
+			return QDF_STATUS_E_FAILURE;
+		}
+	} else {
+		/* This is the start of stale entry detection */
+		soc->stale_entry[ring_num].detected = 1;
+		soc->stale_entry[ring_num].start_time = curr_timestamp;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+#else
+
+static inline void
+dp_tx_comp_reset_stale_entry_detection(struct dp_soc *soc, uint32_t ring_num)
+{
+}
+
+static inline QDF_STATUS
+dp_tx_comp_stale_entry_handle(struct dp_soc *soc, uint32_t ring_num,
+			      QDF_STATUS status)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 uint32_t dp_tx_comp_handler(struct dp_intr *int_ctx, struct dp_soc *soc,
 			    hal_ring_handle_t hal_ring_hdl, uint8_t ring_id,
 			    uint32_t quota)
@@ -6615,6 +6739,7 @@ uint32_t dp_tx_comp_handler(struct dp_intr *int_ctx, struct dp_soc *soc,
 	int max_reap_limit, ring_near_full;
 	uint32_t num_entries;
 	qdf_nbuf_queue_head_t h;
+	QDF_STATUS status;
 
 	DP_HIST_INIT();
 
@@ -6636,6 +6761,8 @@ more_data:
 		dp_err("HAL RING Access Failed -- %pK", hal_ring_hdl);
 		return 0;
 	}
+
+	hal_srng_update_ring_usage_wm_no_lock(soc->hal_soc, hal_ring_hdl);
 
 	if (!num_avail_for_reap)
 		num_avail_for_reap = hal_srng_dst_num_valid(hal_soc,
@@ -6705,16 +6832,25 @@ more_data:
 			continue;
 		}
 
-		soc->arch_ops.tx_comp_get_params_from_hal_desc(soc,
-							       tx_comp_hal_desc,
-							       &tx_desc);
+		status = soc->arch_ops.tx_comp_get_params_from_hal_desc(
+							soc, tx_comp_hal_desc,
+							&tx_desc);
 		if (qdf_unlikely(!tx_desc)) {
+			if (QDF_IS_STATUS_SUCCESS(
+				dp_tx_comp_stale_entry_handle(soc, ring_id,
+							      status))) {
+				hal_srng_dst_dec_tp(hal_soc, hal_ring_hdl);
+				break;
+			}
+
 			dp_err("unable to retrieve tx_desc!");
 			hal_dump_comp_desc(tx_comp_hal_desc);
 			DP_STATS_INC(soc, tx.invalid_tx_comp_desc, 1);
 			QDF_BUG(0);
 			continue;
 		}
+
+		dp_tx_comp_reset_stale_entry_detection(soc, ring_id);
 		tx_desc->buffer_src = buffer_src;
 
 		/*
@@ -7817,6 +7953,7 @@ uint8_t dp_tx_need_multipass_process(struct dp_soc *soc, struct dp_vdev *vdev,
 	struct vlan_ethhdr *veh = NULL;
 	bool not_vlan = ((vdev->tx_encap_type == htt_cmn_pkt_type_raw) ||
 			(htons(eh->ether_type) != ETH_P_8021Q));
+	struct cdp_peer_info peer_info = { 0 };
 
 	if (qdf_unlikely(not_vlan))
 		return DP_VLAN_UNTAGGED;
@@ -7841,8 +7978,10 @@ uint8_t dp_tx_need_multipass_process(struct dp_soc *soc, struct dp_vdev *vdev,
 		return DP_VLAN_UNTAGGED;
 	}
 
-	peer = dp_peer_find_hash_find(soc, eh->ether_dhost, 0, DP_VDEV_ALL,
-				      DP_MOD_ID_TX_MULTIPASS);
+	DP_PEER_INFO_PARAMS_INIT(&peer_info, DP_VDEV_ALL, eh->ether_dhost,
+				 false, CDP_WILD_PEER_TYPE);
+	peer = dp_peer_hash_find_wrapper((struct dp_soc *)soc, &peer_info,
+					 DP_MOD_ID_TX_MULTIPASS);
 	if (qdf_unlikely(!peer))
 		return DP_VLAN_UNTAGGED;
 

@@ -1736,6 +1736,53 @@ dp_get_umac_reset_in_progress_state(struct cdp_soc_t *psoc)
 			CDP_UMAC_RESET_IN_PROGRESS_DURING_BUFFER_WINDOW :
 			CDP_UMAC_RESET_NOT_IN_PROGRESS);
 }
+
+/**
+ * dp_get_global_tx_desc_cleanup_flag() - Get cleanup needed flag
+ * @soc: dp soc handle
+ *
+ * Return: cleanup needed/ not needed
+ */
+bool dp_get_global_tx_desc_cleanup_flag(struct dp_soc *soc)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	struct dp_mlo_ctxt *mlo_ctx = be_soc->ml_ctxt;
+	struct dp_soc_mlo_umac_reset_ctx *grp_umac_reset_ctx;
+	bool flag;
+
+	if (!mlo_ctx)
+		return true;
+
+	grp_umac_reset_ctx = &mlo_ctx->grp_umac_reset_ctx;
+	qdf_spin_lock_bh(&grp_umac_reset_ctx->grp_ctx_lock);
+
+	flag = grp_umac_reset_ctx->tx_desc_pool_cleaned;
+	if (!flag)
+		grp_umac_reset_ctx->tx_desc_pool_cleaned = true;
+
+	qdf_spin_unlock_bh(&grp_umac_reset_ctx->grp_ctx_lock);
+
+	return !flag;
+}
+
+/**
+ * dp_reset_global_tx_desc_cleanup_flag() - Reset cleanup needed flag
+ * @soc: dp soc handle
+ *
+ * Return: None
+ */
+void dp_reset_global_tx_desc_cleanup_flag(struct dp_soc *soc)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	struct dp_mlo_ctxt *mlo_ctx = be_soc->ml_ctxt;
+	struct dp_soc_mlo_umac_reset_ctx *grp_umac_reset_ctx;
+
+	if (!mlo_ctx)
+		return;
+
+	grp_umac_reset_ctx = &mlo_ctx->grp_umac_reset_ctx;
+	grp_umac_reset_ctx->tx_desc_pool_cleaned = false;
+}
 #endif
 
 struct dp_soc *

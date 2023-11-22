@@ -3602,6 +3602,21 @@ qdf_nbuf_is_ipv4_last_fragment(qdf_nbuf_t nbuf)
 }
 
 /**
+ * qdf_nbuf_is_ipv4_fragment() - Check if IPV4 packet is fragment
+ * @nbuf: Network buffer
+ *
+ * This function check if IPV4 packet is fragment or not.
+ * Caller has to call this function for ipv4 packets only.
+ *
+ * Return: True if ipv4 packet is fragment otherwise false
+ */
+static inline bool
+qdf_nbuf_is_ipv4_fragment(qdf_nbuf_t nbuf)
+{
+	return __qdf_nbuf_is_ipv4_fragment(nbuf);
+}
+
+/**
  * qdf_nbuf_data_set_ipv4_tos() - set the TOS field of IPV4 packet.
  *
  * @data: Pointer to IPV4 packet data buffer

@@ -2510,6 +2510,31 @@ static void dp_peer_setup_get_reo_hash(struct dp_vdev *vdev,
 					lmac_peer_id_msb);
 }
 #endif /* IPA_OFFLOAD */
+#if defined WLAN_FEATURE_11BE_MLO && defined DP_MLO_LINK_STATS_SUPPORT
+/**
+ *  dp_peer_set_local_link_id() - Set local link id
+ *  @peer: dp peer handle
+ *
+ *  Return: None
+ */
+static inline void
+dp_peer_set_local_link_id(struct dp_peer *peer)
+{
+	struct dp_txrx_peer *txrx_peer;
+
+	if (!IS_MLO_DP_LINK_PEER(peer))
+		return;
+
+	txrx_peer = dp_get_txrx_peer(peer);
+	if (txrx_peer)
+		peer->local_link_id = ++txrx_peer->local_link_id;
+}
+#else
+static inline void
+dp_peer_set_local_link_id(struct dp_peer *peer)
+{
+}
+#endif
 
 /**
  * dp_peer_setup_wifi3() - initialize the peer
@@ -2620,6 +2645,8 @@ dp_peer_setup_wifi3(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 			dp_peer_rx_init(pdev, peer);
 		}
 	}
+
+	dp_peer_set_local_link_id(peer);
 
 	if (!IS_MLO_DP_MLD_PEER(peer))
 		dp_peer_ppdu_delayed_ba_init(peer);

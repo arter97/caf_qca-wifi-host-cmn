@@ -190,6 +190,11 @@ static void dp_soc_cfg_attach_be(struct dp_soc *soc)
 	/* this is used only when dmac mode is enabled */
 	soc->num_rx_refill_buf_rings = 1;
 
+	/*
+	 * do not allocate TCL credit ring for BE as we already have
+	 * 4 TCL_DATA rings
+	 */
+	soc->init_tcl_cmd_cred_ring = false;
 	soc->wlan_cfg_ctx->notify_frame_support =
 				DP_MARK_NOTIFY_FRAME_SUPPORT;
 }
@@ -1582,10 +1587,22 @@ fail:
 	}
 }
 
+static inline
+void dp_tx_update_vp_profile(struct dp_soc_be *soc,
+			     struct dp_vdev_be *vdev)
+{
+	dp_tx_ppeds_vp_profile_update(soc, vdev);
+}
 #else
 static inline
 void dp_soc_txrx_peer_setup_be(struct dp_soc *soc, uint8_t vdev_id,
 			       uint8_t *peer_mac)
+{
+}
+
+static inline
+void dp_tx_update_vp_profile(struct dp_soc_be *soc,
+			     struct dp_vdev_be *vdev)
 {
 }
 #endif
@@ -2964,6 +2981,7 @@ QDF_STATUS dp_txrx_set_vdev_param_be(struct dp_soc *soc,
 	case CDP_UPDATE_DSCP_TO_TID_MAP:
 	case CDP_UPDATE_TDLS_FLAGS:
 		dp_tx_update_bank_profile(be_soc, be_vdev);
+		dp_tx_update_vp_profile(be_soc, be_vdev);
 		break;
 	case CDP_ENABLE_CIPHER:
 		if (vdev->tx_encap_type == htt_cmn_pkt_type_raw)
@@ -3879,6 +3897,7 @@ QDF_STATUS dp_htt_reo_migration(struct dp_soc *soc, uint16_t peer_id,
 	struct dp_ast_entry *ast_entry;
 	uint16_t hw_peer_id;
 	uint16_t ast_hash;
+	int i = 0;
 
 	if (!dp_mlo) {
 		dp_htt_err("Invalid dp_mlo ctxt");
@@ -3964,6 +3983,21 @@ QDF_STATUS dp_htt_reo_migration(struct dp_soc *soc, uint16_t peer_id,
 	peer_info->chip_id = chip_id;
 	peer_info->hw_peer_id = hw_peer_id;
 	peer_info->ast_hash = ast_hash;
+
+
+	for (i = 0; i < DP_MAX_TIDS; i++) {
+		rx_tid = &mld_peer->rx_tid[i];
+		if (!rx_tid)
+			continue;
+
+		qdf_mem_zero(&params, sizeof(params));
+		params.std.need_status = 1;
+		params.std.addr_lo = rx_tid->hw_qdesc_paddr & 0xffffffff;
+		params.std.addr_hi = (uint64_t)(rx_tid->hw_qdesc_paddr) >> 32;
+
+		status = dp_reo_send_cmd(current_pr_soc, CMD_FLUSH_QUEUE, &params,
+					 NULL,NULL);
+	}
 
 	qdf_mem_zero(&params, sizeof(params));
 

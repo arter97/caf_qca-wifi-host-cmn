@@ -51,6 +51,11 @@ QDF_STATUS wlan_reg_read_default_country(struct wlan_objmgr_psoc *psoc,
 	return reg_read_default_country(psoc, country);
 }
 
+enum phy_ch_width wlan_get_next_lower_bandwidth(enum phy_ch_width ch_width)
+{
+	return get_next_lower_bandwidth(ch_width);
+}
+
 QDF_STATUS wlan_reg_read_current_country(struct wlan_objmgr_psoc *psoc,
 					 uint8_t *country)
 {
@@ -879,6 +884,12 @@ enum phy_ch_width
 wlan_reg_get_next_lower_bandwidth(enum phy_ch_width ch_width)
 {
 	return get_next_lower_bandwidth(ch_width);
+}
+
+enum phy_ch_width
+wlan_reg_get_next_higher_bandwidth(enum phy_ch_width ch_width)
+{
+	return reg_get_next_higher_bandwidth(ch_width);
 }
 
 #ifdef CONFIG_REG_CLIENT

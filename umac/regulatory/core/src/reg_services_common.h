@@ -222,6 +222,14 @@ reg_init_freq_range(qdf_freq_t left, qdf_freq_t right);
 enum phy_ch_width get_next_lower_bandwidth(enum phy_ch_width ch_width);
 
 /**
+ * reg_get_next_higher_bandwidth() - Get next higher bandwidth
+ * @ch_width: Channel width
+ *
+ * Return: Channel width
+ */
+enum phy_ch_width reg_get_next_higher_bandwidth(enum phy_ch_width ch_width);
+
+/**
  * reg_read_default_country() - Get the default regulatory country
  * @psoc: The physical SoC to get default country from
  * @country_code: the buffer to populate the country code into

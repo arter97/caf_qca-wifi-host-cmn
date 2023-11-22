@@ -474,6 +474,7 @@ enum cdp_peer_type {
  * @is_primary_link: set true for MLO primary link peer
  * @primary_umac_id: primary umac_id
  * @num_links: number of links in MLO
+ * @is_bridge_peer: flag to indicate if peer is bridge peer or not
  */
 struct cdp_peer_setup_info {
 	uint8_t *mld_peer_mac;
@@ -481,6 +482,7 @@ struct cdp_peer_setup_info {
 		is_primary_link:1;
 	uint8_t primary_umac_id;
 	uint8_t num_links;
+	uint8_t is_bridge_peer;
 };
 
 /**

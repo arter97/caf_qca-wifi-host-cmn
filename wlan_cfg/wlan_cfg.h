@@ -352,6 +352,8 @@ struct wlan_srng_cfg {
  *                            during this window, configured time is in
  *                            milliseconds.
  * @fw_ast_indication_disable: Disable AST
+ * @avg_rate_stats_filter_val: Average rate filter value for stats.
+ *
  */
 struct wlan_cfg_dp_soc_ctxt {
 	int num_int_ctxts;
@@ -566,6 +568,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint32_t umac_reset_buffer_window;
 #endif
 	bool fw_ast_indication_disable;
+	uint16_t avg_rate_stats_filter_val;
 };
 
 /**

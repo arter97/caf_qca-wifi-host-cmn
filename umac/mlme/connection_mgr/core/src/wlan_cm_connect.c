@@ -3042,6 +3042,45 @@ QDF_STATUS cm_notify_connect_complete(struct cnx_mgr *cm_ctx,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+static void cm_update_link_channel_info(struct wlan_objmgr_vdev *vdev,
+					struct qdf_mac_addr *mac_addr,
+					qdf_freq_t freq)
+{
+	uint8_t link_id;
+	struct wlan_objmgr_pdev *pdev;
+	struct scan_cache_entry *cache_entry;
+	struct wlan_channel channel;
+
+	pdev = wlan_vdev_get_pdev(vdev);
+
+	cache_entry = wlan_scan_get_scan_entry_by_mac_freq(pdev, mac_addr,
+							   freq);
+	if (!cache_entry) {
+		mlme_debug("not found the mac_addr from scan entry");
+		return;
+	}
+	link_id = wlan_vdev_get_link_id(vdev);
+
+	channel.ch_freq = cache_entry->channel.chan_freq;
+	channel.ch_ieee = wlan_reg_freq_to_chan(pdev, channel.ch_freq);
+	channel.ch_phymode = cache_entry->phy_mode;
+	channel.ch_cfreq1 = cache_entry->channel.cfreq0;
+	channel.ch_cfreq2 = cache_entry->channel.cfreq1;
+
+	util_scan_free_cache_entry(cache_entry);
+
+	mlo_mgr_update_ap_channel_info(vdev, link_id, (uint8_t *)mac_addr,
+				       channel);
+}
+#else
+static void cm_update_link_channel_info(struct wlan_objmgr_vdev *vdev,
+					struct qdf_mac_addr *mac_addr,
+					qdf_freq_t freq)
+{
+}
+#endif
+
 QDF_STATUS cm_connect_complete(struct cnx_mgr *cm_ctx,
 			       struct wlan_cm_connect_resp *resp)
 {
@@ -3087,6 +3126,8 @@ QDF_STATUS cm_connect_complete(struct cnx_mgr *cm_ctx,
 		wlan_scan_update_mlme_by_bssinfo(
 					wlan_vdev_get_pdev(cm_ctx->vdev),
 					&bss_info, &mlme_info);
+		cm_update_link_channel_info(cm_ctx->vdev, &resp->bssid,
+					    resp->freq);
 	}
 
 	cm_standby_link_update_mlme_by_bssid(cm_ctx->vdev,

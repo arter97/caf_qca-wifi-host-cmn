@@ -1212,6 +1212,14 @@ more_msdu_link_desc:
 		}
 		head_nbuf = NULL;
 
+		txrx_peer = dp_tgt_txrx_peer_get_ref_by_id(
+				soc, peer_id,
+				&txrx_ref_handle,
+				DP_MOD_ID_RX_ERR);
+		if (!txrx_peer)
+			dp_info_rl("txrx_peer is null peer_id %u",
+				   peer_id);
+
 		dp_rx_nbuf_set_link_id_from_tlv(soc, qdf_nbuf_data(nbuf), nbuf);
 
 		if (pdev && pdev->link_peer_stats &&
@@ -1246,28 +1254,21 @@ more_msdu_link_desc:
 			dp_rx_oor_handle(soc, nbuf, peer_id, rx_tlv_hdr_last);
 			break;
 		case HAL_REO_ERR_QUEUE_DESC_ADDR_0:
-			txrx_peer = dp_tgt_txrx_peer_get_ref_by_id(
-							soc, peer_id,
-							&txrx_ref_handle,
-							DP_MOD_ID_RX_ERR);
-			if (!txrx_peer)
-				dp_info_rl("txrx_peer is null peer_id %u",
-					   peer_id);
 			soc->arch_ops.dp_rx_null_q_desc_handle(soc, nbuf,
 							       rx_tlv_hdr_last,
 							       rx_desc_pool_id,
 							       txrx_peer,
 							       TRUE,
 							       link_id);
-			if (txrx_peer)
-				dp_txrx_peer_unref_delete(txrx_ref_handle,
-							  DP_MOD_ID_RX_ERR);
 			break;
 		default:
 			dp_err_rl("Non-support error code %d", err_code);
 			dp_rx_nbuf_free(nbuf);
 		}
 
+		if (txrx_peer)
+			dp_txrx_peer_unref_delete(txrx_ref_handle,
+						  DP_MOD_ID_RX_ERR);
 process_next_msdu:
 		nbuf = head_nbuf;
 		while (nbuf) {

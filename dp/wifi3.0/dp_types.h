@@ -2328,9 +2328,9 @@ struct dp_arch_ops {
 				    struct cdp_tx_exception_metadata *metadata,
 				    struct dp_tx_msdu_info_s *msdu_info);
 
-	void (*tx_comp_get_params_from_hal_desc)(struct dp_soc *soc,
-						 void *tx_comp_hal_desc,
-						 struct dp_tx_desc_s **desc);
+	QDF_STATUS (*tx_comp_get_params_from_hal_desc)(
+				struct dp_soc *soc, void *tx_comp_hal_desc,
+				struct dp_tx_desc_s **desc);
 
 	qdf_nbuf_t (*dp_tx_mlo_mcast_send)(struct dp_soc *soc,
 					   struct dp_vdev *vdev,
@@ -3204,6 +3204,13 @@ struct dp_soc {
 #ifdef WLAN_FEATURE_TX_LATENCY_STATS
 	/* callback function for tx latency stats */
 	cdp_tx_latency_cb tx_latency_cb;
+#endif
+
+#ifdef DP_TX_COMP_RING_DESC_SANITY_CHECK
+	struct {
+		uint32_t detected;
+		uint64_t start_time;
+	} stale_entry[MAX_TCL_DATA_RINGS];
 #endif
 };
 
@@ -4439,12 +4446,14 @@ struct dp_peer_mesh_latency_parameter {
  * @vdev_id: Vdev ID for current link peer
  * @is_valid: flag for link peer info valid or not
  * @chip_id: chip id
+ * @is_bridge_peer: flag to indicate if peer is bridge peer
  */
 struct dp_peer_link_info {
 	union dp_align_mac_addr mac_addr;
 	uint8_t vdev_id;
 	uint8_t is_valid;
 	uint8_t chip_id;
+	uint8_t is_bridge_peer;
 };
 
 /**
@@ -4905,6 +4914,8 @@ struct dp_peer_stats {
  * @bw: bandwidth of peer connection
  * @mpdu_retry_threshold: MPDU retry threshold to increment tx bad count
  * @band: Link ID to band mapping
+ * @local_link_id: Local host link ID.
+ * @ll_band: Local link id band mapping
  * @stats_arr_size: peer stats array size
  * @stats: Peer link and mld statistics
  */
@@ -4958,6 +4969,8 @@ struct dp_txrx_peer {
 #if defined WLAN_FEATURE_11BE_MLO && defined DP_MLO_LINK_STATS_SUPPORT
 	/* Link ID to band mapping, (1 MLD + DP_MAX_MLO_LINKS) */
 	uint8_t band[DP_MAX_MLO_LINKS + 1];
+	uint8_t local_link_id;
+	uint8_t ll_band[DP_MAX_MLO_LINKS + 1];
 #endif
 	uint8_t stats_arr_size;
 
@@ -5061,11 +5074,15 @@ struct dp_peer {
 	/*Link ID of link peer*/
 	uint8_t link_id;
 	bool link_id_valid;
+	uint8_t local_link_id;
 
 	/*---------for mld peer----------*/
 	struct dp_peer_link_info link_peers[DP_MAX_MLO_LINKS];
 	uint8_t num_links;
 	DP_MUTEX_TYPE link_peers_info_lock;
+#ifdef WLAN_FEATURE_11BE_MLO_3_LINK_TX
+	uint32_t flow_cnt[CDP_DATA_TID_MAX];
+#endif
 #endif
 #ifdef CONFIG_SAWF_DEF_QUEUES
 	struct dp_peer_sawf *sawf;

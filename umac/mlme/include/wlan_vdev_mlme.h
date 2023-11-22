@@ -28,6 +28,7 @@
 
 struct vdev_mlme_obj;
 struct cnx_mgr;
+struct ml_rv_info;
 
 /* Requestor ID for multiple vdev restart */
 #define MULTIPLE_VDEV_RESTART_REQ_ID 0x1234
@@ -721,6 +722,8 @@ enum vdev_start_resp_type {
  *                                      the first ml reconfig IE
  * @mlme_vdev_reconfig_timer_complete:  callback to process ml reconfing
  *                                      operation
+ * @mlme_vdev_reconfig_notify_standby: callback to notify to process standby
+ *                                      link removal
  * @mlme_vdev_notify_mlo_sync_wait_entry:
  */
 struct vdev_mlme_ops {
@@ -806,6 +809,9 @@ struct vdev_mlme_ops {
 				uint16_t *tbtt_count, uint16_t bcn_int);
 	void (*mlme_vdev_reconfig_timer_complete)(
 				struct vdev_mlme_obj *vdev_mlme);
+	QDF_STATUS (*mlme_vdev_reconfig_notify_standby)(
+				struct vdev_mlme_obj *vdev_mlme,
+				struct ml_rv_info *reconfig_info);
 	QDF_STATUS (*mlme_vdev_notify_mlo_sync_wait_entry)(
 				struct vdev_mlme_obj *vdev_mlme);
 };

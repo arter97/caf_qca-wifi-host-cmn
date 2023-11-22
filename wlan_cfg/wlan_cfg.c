@@ -4193,6 +4193,8 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	wlan_soc_local_pkt_capture_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_umac_reset_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_cfg_ctx->rx_buffer_size = cfg_get(psoc, CFG_DP_RX_BUFFER_SIZE);
+	wlan_cfg_ctx->avg_rate_stats_filter_val =
+		cfg_get(psoc, CFG_DP_STATS_AVG_RATE_FILTER);
 	return wlan_cfg_ctx;
 }
 
@@ -4447,7 +4449,8 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 			cfg_get(psoc, CFG_SPECIAL_FRAME_MSK);
 	wlan_soc_umac_reset_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_cfg_ctx->rx_buffer_size = cfg_get(psoc, CFG_DP_RX_BUFFER_SIZE);
-
+	wlan_cfg_ctx->avg_rate_stats_filter_val =
+		cfg_get(psoc, CFG_DP_STATS_AVG_RATE_FILTER);
 	return wlan_cfg_ctx;
 }
 #endif

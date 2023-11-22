@@ -1531,7 +1531,7 @@ static inline QDF_STATUS dp_peer_map_ast(struct dp_soc *soc,
 	txrx_ast_free_cb cb = NULL;
 	QDF_STATUS err = QDF_STATUS_SUCCESS;
 
-	if (soc->ast_offload_support)
+	if (soc->ast_offload_support && !wlan_cfg_get_dp_soc_dpdk_cfg(soc->ctrl_psoc))
 		return QDF_STATUS_SUCCESS;
 
 	if (!peer) {
@@ -1611,7 +1611,8 @@ static inline QDF_STATUS dp_peer_map_ast(struct dp_soc *soc,
 				  ase_list_elem);
 	}
 
-	if (ast_entry || (peer->vdev && peer->vdev->proxysta_vdev)) {
+	if (ast_entry || (peer->vdev && peer->vdev->proxysta_vdev) ||
+	    wlan_cfg_get_dp_soc_dpdk_cfg(soc->ctrl_psoc)) {
 		if (soc->cdp_soc.ol_ops->peer_map_event) {
 			soc->cdp_soc.ol_ops->peer_map_event(
 			soc->ctrl_psoc, peer->peer_id,
@@ -3105,13 +3106,6 @@ dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 }
 
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
-/**
- * dp_freq_to_band() - Convert frequency to band
- * @freq: peer frequency
- *
- * Return: band for input frequency
- */
-static inline
 enum dp_bands dp_freq_to_band(qdf_freq_t freq)
 {
 	if (REG_IS_24GHZ_CH_FREQ(freq))
