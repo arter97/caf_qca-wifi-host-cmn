@@ -1897,36 +1897,39 @@ static QDF_STATUS send_mlo_peer_tid_to_link_map_cmd_tlv(
 
 static void update_t2lm_ie_info_params(
 		wmi_mlo_ap_vdev_tid_to_link_map_ie_info * info,
-		struct wlan_t2lm_info *params)
+		struct wlan_mlo_t2lm_ie *params)
 {
 	WMI_MLO_VDEV_TID_TO_LINK_MAP_CTRL_DIR_SET(
 			info->tid_to_link_map_ctrl,
-			params->direction);
+			params->t2lm.direction);
 
 	WMI_MLO_VDEV_TID_TO_LINK_MAP_CTRL_DEF_LINK_SET(
 			info->tid_to_link_map_ctrl,
-			params->default_link_mapping);
+			params->t2lm.default_link_mapping);
 
-	info->map_switch_time = params->mapping_switch_time;
+	info->map_switch_time = params->t2lm.mapping_switch_time;
 	WMI_MLO_VDEV_TID_TO_LINK_MAP_CTRL_SWT_TIME_SET(
 			info->tid_to_link_map_ctrl,
-			params->mapping_switch_time_present);
+			params->t2lm.mapping_switch_time_present);
 
-	info->expected_duration = params->expected_duration;
+	info->expected_duration = params->t2lm.expected_duration;
 	WMI_MLO_VDEV_TID_TO_LINK_MAP_CTRL_DUR_TIME_SET(
 			info->tid_to_link_map_ctrl,
-			params->expected_duration_present);
+			params->t2lm.expected_duration_present);
+
+	info->disabled_link_bitmap = params->disabled_link_bitmap;
+	wmi_debug("disabled_link_bitmap:%d", info->disabled_link_bitmap);
 
 	WMI_MLO_VDEV_TID_TO_LINK_MAP_CTRL_LINK_MAP_SIZE_SET(
 			info->tid_to_link_map_ctrl,
-			params->link_mapping_size);
+			params->t2lm.link_mapping_size);
 
 	wmi_debug("tid_to_link_map_ctrl:%x map_switch_time:%d expected_duration:%d",
 		  info->tid_to_link_map_ctrl, info->map_switch_time,
 		  info->expected_duration);
 
 	/* Do not fill link mapping values when default mapping is set to 1 */
-	if (params->default_link_mapping)
+	if (params->t2lm.default_link_mapping)
 		return;
 
 	WMI_MLO_VDEV_TID_TO_LINK_MAP_CTRL_LINK_MAP_PRE_SET(
@@ -1934,67 +1937,67 @@ static void update_t2lm_ie_info_params(
 
 	WMI_MLO_VDEV_TID_TO_LINK_MAP_IEEE_LINK_ID_0_SET(
 			info->ieee_tid_0_1_link_map,
-			params->ieee_link_map_tid[0]);
+			params->t2lm.ieee_link_map_tid[0]);
 
 	WMI_MLO_VDEV_TID_TO_LINK_MAP_IEEE_LINK_ID_1_SET(
 			info->ieee_tid_0_1_link_map,
-			params->ieee_link_map_tid[1]);
+			params->t2lm.ieee_link_map_tid[1]);
 
 	WMI_MLO_VDEV_TID_TO_LINK_MAP_IEEE_LINK_ID_2_SET(
 			info->ieee_tid_2_3_link_map,
-			params->ieee_link_map_tid[2]);
+			params->t2lm.ieee_link_map_tid[2]);
 
 	WMI_MLO_VDEV_TID_TO_LINK_MAP_IEEE_LINK_ID_3_SET(
 			info->ieee_tid_2_3_link_map,
-			params->ieee_link_map_tid[3]);
+			params->t2lm.ieee_link_map_tid[3]);
 
 	WMI_MLO_VDEV_TID_TO_LINK_MAP_IEEE_LINK_ID_4_SET(
 			info->ieee_tid_4_5_link_map,
-			params->ieee_link_map_tid[4]);
+			params->t2lm.ieee_link_map_tid[4]);
 
 	WMI_MLO_VDEV_TID_TO_LINK_MAP_IEEE_LINK_ID_5_SET(
 			info->ieee_tid_4_5_link_map,
-			params->ieee_link_map_tid[5]);
+			params->t2lm.ieee_link_map_tid[5]);
 
 	WMI_MLO_VDEV_TID_TO_LINK_MAP_IEEE_LINK_ID_6_SET(
 			info->ieee_tid_6_7_link_map,
-			params->ieee_link_map_tid[6]);
+			params->t2lm.ieee_link_map_tid[6]);
 
 	WMI_MLO_VDEV_TID_TO_LINK_MAP_IEEE_LINK_ID_7_SET(
 			info->ieee_tid_6_7_link_map,
-			params->ieee_link_map_tid[7]);
+			params->t2lm.ieee_link_map_tid[7]);
 
 	WMI_MLO_VDEV_TID_TO_LINK_MAP_HW_LINK_ID_0_SET(
 			info->hw_tid_0_1_link_map,
-			params->hw_link_map_tid[0]);
+			params->t2lm.hw_link_map_tid[0]);
 
 	WMI_MLO_VDEV_TID_TO_LINK_MAP_HW_LINK_ID_1_SET(
 			info->hw_tid_0_1_link_map,
-			params->hw_link_map_tid[1]);
+			params->t2lm.hw_link_map_tid[1]);
 
 	WMI_MLO_VDEV_TID_TO_LINK_MAP_HW_LINK_ID_2_SET(
 			info->hw_tid_2_3_link_map,
-			params->hw_link_map_tid[2]);
+			params->t2lm.hw_link_map_tid[2]);
 
 	WMI_MLO_VDEV_TID_TO_LINK_MAP_HW_LINK_ID_3_SET(
 			info->hw_tid_2_3_link_map,
-			params->hw_link_map_tid[3]);
+			params->t2lm.hw_link_map_tid[3]);
 
 	WMI_MLO_VDEV_TID_TO_LINK_MAP_HW_LINK_ID_4_SET(
 			info->hw_tid_4_5_link_map,
-			params->hw_link_map_tid[4]);
+			params->t2lm.hw_link_map_tid[4]);
 
 	WMI_MLO_VDEV_TID_TO_LINK_MAP_HW_LINK_ID_5_SET(
 			info->hw_tid_4_5_link_map,
-			params->hw_link_map_tid[5]);
+			params->t2lm.hw_link_map_tid[5]);
 
 	WMI_MLO_VDEV_TID_TO_LINK_MAP_HW_LINK_ID_6_SET(
 			info->hw_tid_6_7_link_map,
-			params->hw_link_map_tid[6]);
+			params->t2lm.hw_link_map_tid[6]);
 
 	WMI_MLO_VDEV_TID_TO_LINK_MAP_HW_LINK_ID_7_SET(
 			info->hw_tid_6_7_link_map,
-			params->hw_link_map_tid[7]);
+			params->t2lm.hw_link_map_tid[7]);
 
 	wmi_debug("tid_to_link_map_ctrl:%x", info->tid_to_link_map_ctrl);
 	wmi_debug("ieee_link_map: tid_0_1:%x tid_2_3:%x tid_4_5:%x tid_6_7:%x",
@@ -2048,10 +2051,8 @@ static QDF_STATUS send_mlo_vdev_tid_to_link_map_cmd_tlv(
 	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(
 			wmi_handle, params->pdev_id);
 	cmd->vdev_id = params->vdev_id;
-	cmd->disabled_link_bitmap = params->disabled_link_bitmap;
-	wmi_debug("pdev_id:%d vdev_id:%d disabled_link_bitmap:%x num_t2lm_info:%d",
-		  cmd->pdev_id, cmd->vdev_id, cmd->disabled_link_bitmap,
-		  params->num_t2lm_info);
+	wmi_debug("pdev_id:%d vdev_id:%d num_t2lm_info:%d",
+		  cmd->pdev_id, cmd->vdev_id, params->num_t2lm_info);
 
 	buf_ptr += sizeof(wmi_mlo_ap_vdev_tid_to_link_map_cmd_fixed_param);
 

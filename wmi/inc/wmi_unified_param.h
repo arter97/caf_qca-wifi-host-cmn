@@ -1331,8 +1331,7 @@ struct wmi_host_tid_to_link_map_ap_params {
 	uint8_t vdev_id;
 	uint8_t num_t2lm_info;
 	uint16_t hw_link_id;
-	uint16_t disabled_link_bitmap;
-	struct wlan_t2lm_info info[WLAN_MAX_T2LM_IE];
+	struct wlan_mlo_t2lm_ie info[WLAN_MAX_T2LM_IE];
 };
 
 /**
