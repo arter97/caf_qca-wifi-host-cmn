@@ -66,6 +66,7 @@ dp_tx_mon_status_free_packet_buf(struct dp_pdev *pdev,
 		if (hal_txmon_is_mon_buf_addr_tlv(pdev->soc->hal_soc, tx_tlv)) {
 			struct dp_mon_desc *mon_desc = NULL;
 			qdf_frag_t packet_buffer = NULL;
+			uint32_t cookie_2;
 
 			mon_buf_tx_tlv = ((uint8_t *)tx_tlv +
 					  HAL_RX_TLV64_HDR_SIZE);
@@ -73,9 +74,15 @@ dp_tx_mon_status_free_packet_buf(struct dp_pdev *pdev,
 						       mon_buf_tx_tlv,
 						       &packet_info);
 
-			mon_desc = (struct dp_mon_desc *)(uintptr_t)packet_info.sw_cookie;
+			mon_desc = dp_mon_get_desc_addr(packet_info.sw_cookie);
+			cookie_2 = DP_MON_GET_COOKIE(packet_info.sw_cookie);
 
 			qdf_assert_always(mon_desc);
+
+			if (mon_desc->cookie_2 != cookie_2) {
+				qdf_err("duplicate cookie found mon_desc:%pK", mon_desc);
+				qdf_assert_always(0);
+			}
 
 			if (mon_desc->magic != DP_MON_DESC_MAGIC)
 				qdf_assert_always(0);
@@ -1329,11 +1336,14 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 		struct dp_mon_desc *mon_desc = NULL;
 		qdf_frag_t packet_buffer = NULL;
 		uint32_t end_offset = 0;
+		uint32_t cookie_2;
 
 		tx_status_info = &tx_mon_be->data_status_info;
 		/* update buffer from packet info */
 		packet_info = &TXMON_PPDU_HAL(tx_data_ppdu_info, packet_info);
 		mon_desc = (struct dp_mon_desc *)(uintptr_t)packet_info->sw_cookie;
+		mon_desc = dp_mon_get_desc_addr(packet_info->sw_cookie);
+		cookie_2 = DP_MON_GET_COOKIE(packet_info->sw_cookie);
 
 		qdf_assert_always(mon_desc);
 
@@ -1343,6 +1353,10 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 		qdf_assert_always(mon_desc->buf_addr);
 		tx_mon_be->stats.pkt_buf_recv++;
 
+		if (mon_desc->cookie_2 != cookie_2) {
+			mon_pdev->rx_mon_stats.dup_mon_sw_desc++;
+			qdf_assert_always(0);
+		}
 		if (!mon_desc->unmapped) {
 			qdf_mem_unmap_page(pdev->soc->osdev,
 					   (qdf_dma_addr_t)mon_desc->paddr,

@@ -156,6 +156,7 @@ dp_tx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 		struct dp_mon_desc *mon_desc = NULL;
 		qdf_frag_t status_frag = NULL;
 		uint32_t end_offset = 0;
+		uint32_t cookie_2;
 
 		hal_be_get_mon_dest_status(soc->hal_soc,
 					   tx_mon_dst_ring_desc,
@@ -195,8 +196,14 @@ dp_tx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 			    hal_mon_tx_desc.end_offset,
 			    hal_mon_tx_desc.end_reason);
 
-		mon_desc = (struct dp_mon_desc *)(uintptr_t)(hal_mon_tx_desc.buf_addr);
+		cookie_2 = DP_MON_GET_COOKIE(hal_mon_tx_desc.buf_addr);
+		mon_desc = dp_mon_get_desc_addr(hal_mon_tx_desc.buf_addr);
 		qdf_assert_always(mon_desc);
+
+		if (mon_desc->cookie_2 != cookie_2) {
+			qdf_err("duplicate cookie found mon_desc:%pK", mon_desc);
+			qdf_assert_always(0);
+		}
 
 		if (!mon_desc->unmapped) {
 			qdf_mem_unmap_page(soc->osdev, mon_desc->paddr,
