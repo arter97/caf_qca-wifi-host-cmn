@@ -354,6 +354,8 @@ struct wlan_srng_cfg {
  *                            milliseconds.
  * @fw_ast_indication_disable: Disable AST
  * @avg_rate_stats_filter_val: Average rate filter value for stats.
+ * @rx_mon_wq_threshold: rx monitor work queue threshold.
+ * @rx_mon_wq_depth: rx monitor work queue depth.
  *
  */
 struct wlan_cfg_dp_soc_ctxt {
@@ -571,6 +573,8 @@ struct wlan_cfg_dp_soc_ctxt {
 #endif
 	bool fw_ast_indication_disable;
 	uint16_t avg_rate_stats_filter_val;
+	uint8_t rx_mon_wq_threshold;
+	uint8_t rx_mon_wq_depth;
 };
 
 /**
@@ -2780,4 +2784,22 @@ uint32_t wlan_cfg_get_resv_ast_idx(struct wlan_cfg_dp_soc_ctxt *cfg)
 	return 0;
 }
 #endif /* FEATURE_AST */
+
+/**
+ * wlan_cfg_get_rx_mon_wq_threshold - Get rx mon work queue threshold
+ *
+ * @cfg: soc configuration context
+ *
+ * Return: uint8_t
+ */
+uint8_t wlan_cfg_get_rx_mon_wq_threshold(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_get_rx_mon_wq_depth - Get rx mon work queue depth
+ *
+ * @cfg: soc configuration context
+ *
+ * Return: uint8_t
+ */
+uint8_t wlan_cfg_get_rx_mon_wq_depth(struct wlan_cfg_dp_soc_ctxt *cfg);
 #endif /*__WLAN_CFG_H*/

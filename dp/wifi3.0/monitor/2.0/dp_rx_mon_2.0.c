@@ -510,6 +510,7 @@ void dp_rx_mon_pf_tag_to_buf_headroom_2_0(void *nbuf,
 #ifdef QCA_KMEM_CACHE_SUPPORT
 QDF_STATUS dp_rx_mon_ppdu_info_cache_create(struct dp_pdev *pdev)
 {
+	struct dp_soc *soc = pdev->soc;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be =
 			dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
@@ -526,7 +527,7 @@ QDF_STATUS dp_rx_mon_ppdu_info_cache_create(struct dp_pdev *pdev)
 	}
 
 	TAILQ_INIT(&mon_pdev_be->rx_mon_free_queue);
-	for (obj = 0; obj < DP_RX_MON_WQ_THRESHOLD; obj++) {
+	for (obj = 0; obj < wlan_cfg_get_rx_mon_wq_threshold(soc->wlan_cfg_ctx); obj++) {
 		ppdu_info =  (struct hal_rx_ppdu_info *)qdf_kmem_cache_alloc(mon_pdev_be->ppdu_info_cache);
 
 		if (ppdu_info) {
@@ -1418,6 +1419,7 @@ static QDF_STATUS
 dp_rx_mon_add_ppdu_info_to_wq(struct dp_pdev *pdev,
 			      struct hal_rx_ppdu_info *ppdu_info)
 {
+	struct dp_soc *soc = pdev->soc;
 	struct dp_mon_pdev *mon_pdev = (struct dp_mon_pdev *)pdev->monitor_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be =
 		dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
@@ -1428,7 +1430,8 @@ dp_rx_mon_add_ppdu_info_to_wq(struct dp_pdev *pdev,
 		return QDF_STATUS_E_FAILURE;
 
 	if (qdf_likely(ppdu_info)) {
-		if (mon_pdev_be->rx_mon_queue_depth < DP_RX_MON_WQ_THRESHOLD) {
+		if (mon_pdev_be->rx_mon_queue_depth <
+		    wlan_cfg_get_rx_mon_wq_threshold(soc->wlan_cfg_ctx)) {
 			qdf_spin_lock_bh(&mon_pdev_be->rx_mon_wq_lock);
 			TAILQ_INSERT_TAIL(&mon_pdev_be->rx_mon_queue,
 					  ppdu_info, ppdu_list_elem);
@@ -1440,7 +1443,8 @@ dp_rx_mon_add_ppdu_info_to_wq(struct dp_pdev *pdev,
 		}
 		qdf_spin_unlock_bh(&mon_pdev_be->rx_mon_wq_lock);
 
-		if (mon_pdev_be->rx_mon_queue_depth > DP_MON_QUEUE_DEPTH_MAX) {
+		if (mon_pdev_be->rx_mon_queue_depth >
+		    wlan_cfg_get_rx_mon_wq_depth(soc->wlan_cfg_ctx)) {
 			qdf_queue_work(0, mon_pdev_be->rx_mon_workqueue,
 				       &mon_pdev_be->rx_mon_work);
 		}

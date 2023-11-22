@@ -4185,6 +4185,10 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 					CFG_DP_RXDMA_MONITOR_BUF_RING);
 	wlan_cfg_ctx->tx_mon_buf_ring_size = cfg_get(psoc,
 					CFG_DP_TX_MONITOR_BUF_RING);
+	wlan_cfg_ctx->rx_mon_wq_threshold = cfg_get(psoc,
+					CFG_DP_RX_MON_WQ_THRESHOLD);
+	wlan_cfg_ctx->rx_mon_wq_depth = cfg_get(psoc,
+					CFG_DP_RX_MON_WQ_DEPTH);
 	wlan_soc_ipa_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_hw_cc_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_ppe_cfg_attach(psoc, wlan_cfg_ctx);
@@ -4437,6 +4441,10 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 					CFG_DP_RXDMA_MONITOR_BUF_RING);
 	wlan_cfg_ctx->tx_mon_buf_ring_size = cfg_get(psoc,
 					CFG_DP_TX_MONITOR_BUF_RING);
+	wlan_cfg_ctx->rx_mon_wq_threshold = cfg_get(psoc,
+					CFG_DP_RX_MON_WQ_THRESHOLD);
+	wlan_cfg_ctx->rx_mon_wq_depth = cfg_get(psoc,
+					CFG_DP_RX_MON_WQ_DEPTH);
 	wlan_soc_ipa_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_hw_cc_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_ppe_cfg_attach(psoc, wlan_cfg_ctx);
@@ -5975,3 +5983,17 @@ int wlan_cfg_get_dp_soc_dpdk_cfg(struct cdp_ctrl_objmgr_psoc *psoc)
 	return 0;
 }
 #endif
+
+uint8_t wlan_cfg_get_rx_mon_wq_threshold(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->rx_mon_wq_threshold;
+}
+
+qdf_export_symbol(wlan_cfg_get_rx_mon_wq_threshold);
+
+uint8_t wlan_cfg_get_rx_mon_wq_depth(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->rx_mon_wq_depth;
+}
+
+qdf_export_symbol(wlan_cfg_get_rx_mon_wq_depth);
