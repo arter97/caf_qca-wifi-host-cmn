@@ -175,10 +175,10 @@ struct reset_ts {
  * @partner_map: Partner soc map
  * @request_map: Partner soc request map
  * @response_map: Partner soc response map
+ * @tx_desc_pool_cleaned: Global tx_desc pool clean up has been done
  * @grp_ctx_lock: lock for accessing group level umac reset context
  * @umac_reset_in_progress: Flag to indicate if umac reset is in progress
  * @is_target_recovery: Flag to indicate if this is for target recovery
- * @tx_desc_pool_cleaned: Global tx_desc pool clean up has been done
  * @initiator_chip_id: chip id of the Umac reset initiator
  * @umac_reset_count: Number of times Umac reset happened on this MLO group
  */
@@ -186,10 +186,10 @@ struct dp_soc_mlo_umac_reset_ctx {
 	unsigned long partner_map;
 	unsigned long request_map;
 	unsigned long response_map;
+	unsigned long tx_desc_pool_cleaned;
 	qdf_spinlock_t grp_ctx_lock;
 	uint8_t umac_reset_in_progress:1,
-		is_target_recovery:1,
-		tx_desc_pool_cleaned:1;
+		is_target_recovery:1;
 	uint8_t initiator_chip_id;
 	uint32_t umac_reset_count;
 };

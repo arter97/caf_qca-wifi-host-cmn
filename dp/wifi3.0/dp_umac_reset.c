@@ -350,6 +350,9 @@ static QDF_STATUS dp_umac_reset_initiate_umac_recovery(struct dp_soc *soc,
 				enum umac_reset_rx_event rx_event,
 				bool is_target_recovery)
 {
+	if (dp_umac_reset_is_global_context_enabled())
+		return QDF_STATUS_E_NOSUPPORT;
+
 	return dp_umac_reset_validate_n_update_state_machine_on_rx(
 					umac_reset_ctx, rx_event,
 					UMAC_RESET_STATE_WAIT_FOR_TRIGGER,

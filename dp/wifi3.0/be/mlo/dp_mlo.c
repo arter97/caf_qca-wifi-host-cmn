@@ -1433,11 +1433,15 @@ QDF_STATUS dp_umac_reset_initiate_umac_recovery(struct dp_soc *soc,
 	struct dp_soc_mlo_umac_reset_ctx *grp_umac_reset_ctx;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 
-	if (!mlo_ctx)
+	if (!mlo_ctx) {
+		if (dp_umac_reset_is_global_context_enabled())
+			return QDF_STATUS_E_NOSUPPORT;
+
 		return dp_umac_reset_validate_n_update_state_machine_on_rx(
 					umac_reset_ctx, rx_event,
 					UMAC_RESET_STATE_WAIT_FOR_TRIGGER,
 					UMAC_RESET_STATE_DO_TRIGGER_RECEIVED);
+	}
 
 	grp_umac_reset_ctx = &mlo_ctx->grp_umac_reset_ctx;
 	qdf_spin_lock_bh(&grp_umac_reset_ctx->grp_ctx_lock);
@@ -1748,21 +1752,16 @@ bool dp_get_global_tx_desc_cleanup_flag(struct dp_soc *soc)
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
 	struct dp_mlo_ctxt *mlo_ctx = be_soc->ml_ctxt;
 	struct dp_soc_mlo_umac_reset_ctx *grp_umac_reset_ctx;
-	bool flag;
 
-	if (!mlo_ctx)
+	if (!mlo_ctx) {
+		dp_warn("Umac reset is running in non mlo configuration !");
 		return true;
+	}
 
 	grp_umac_reset_ctx = &mlo_ctx->grp_umac_reset_ctx;
-	qdf_spin_lock_bh(&grp_umac_reset_ctx->grp_ctx_lock);
 
-	flag = grp_umac_reset_ctx->tx_desc_pool_cleaned;
-	if (!flag)
-		grp_umac_reset_ctx->tx_desc_pool_cleaned = true;
-
-	qdf_spin_unlock_bh(&grp_umac_reset_ctx->grp_ctx_lock);
-
-	return !flag;
+	return !qdf_atomic_test_and_set_bit(soc->arch_id,
+				&grp_umac_reset_ctx->tx_desc_pool_cleaned);
 }
 
 /**
@@ -1781,7 +1780,8 @@ void dp_reset_global_tx_desc_cleanup_flag(struct dp_soc *soc)
 		return;
 
 	grp_umac_reset_ctx = &mlo_ctx->grp_umac_reset_ctx;
-	grp_umac_reset_ctx->tx_desc_pool_cleaned = false;
+	qdf_atomic_clear_bit(soc->arch_id,
+			     &grp_umac_reset_ctx->tx_desc_pool_cleaned);
 }
 #endif
 

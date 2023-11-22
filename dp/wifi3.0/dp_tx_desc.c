@@ -107,8 +107,6 @@ void dp_tx_desc_pool_cleanup(struct dp_soc *soc, qdf_nbuf_t *nbuf_list,
 
 	for (i = 0; i < num_pool; i++) {
 		tx_desc_pool = dp_get_tx_desc_pool(soc, i);
-
-		TX_DESC_LOCK_LOCK(&tx_desc_pool->lock);
 		if (tx_desc_pool)
 			qdf_tx_desc_pool_free_bufs(soc,
 						   &tx_desc_pool->desc_pages,
@@ -116,12 +114,8 @@ void dp_tx_desc_pool_cleanup(struct dp_soc *soc, qdf_nbuf_t *nbuf_list,
 						   tx_desc_pool->elem_count,
 						   true, &dp_tx_desc_clean_up,
 						   nbuf_list);
-
-		TX_DESC_LOCK_UNLOCK(&tx_desc_pool->lock);
 
 		tx_desc_pool = dp_get_spcl_tx_desc_pool(soc, i);
-		TX_DESC_LOCK_LOCK(&tx_desc_pool->lock);
-
 		if (tx_desc_pool)
 			qdf_tx_desc_pool_free_bufs(soc,
 						   &tx_desc_pool->desc_pages,
@@ -129,8 +123,6 @@ void dp_tx_desc_pool_cleanup(struct dp_soc *soc, qdf_nbuf_t *nbuf_list,
 						   tx_desc_pool->elem_count,
 						   true, &dp_tx_desc_clean_up,
 						   nbuf_list);
-
-		TX_DESC_LOCK_UNLOCK(&tx_desc_pool->lock);
 	}
 }
 #endif

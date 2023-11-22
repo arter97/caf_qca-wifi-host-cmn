@@ -3498,6 +3498,17 @@ void dp_print_soc_tx_stats(struct dp_soc *soc);
  * Return: void
  */
 void dp_print_global_desc_count(void);
+
+/**
+ * dp_umac_reset_is_global_context_enabled: Check if global context is in use
+ *
+ * Return: status
+ */
+static inline
+bool dp_umac_reset_is_global_context_enabled(void)
+{
+	return true;
+}
 #else
 /**
  * dp_print_global_desc_count(): Print global desc in use
@@ -3507,6 +3518,12 @@ void dp_print_global_desc_count(void);
 static inline
 void dp_print_global_desc_count(void)
 {
+}
+
+static inline
+bool dp_umac_reset_is_global_context_enabled(void)
+{
+	return false;
 }
 #endif
 
