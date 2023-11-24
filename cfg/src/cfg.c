@@ -671,6 +671,7 @@ cfg_ini_config_print(struct wlan_objmgr_psoc *psoc, uint8_t *buf,
 			len = qdf_scnprintf(buf, buflen, "%s %d\n", meta->name,
 					    *((int32_t *)offset));
 			buf += len;
+			buflen -= len;
 			break;
 		case CFG_UINT_ITEM:
 			len = qdf_scnprintf(buf, buflen, "%s %d\n", meta->name,
