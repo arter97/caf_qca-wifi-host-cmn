@@ -5946,6 +5946,10 @@ typedef enum {
 		   PDEV_PARAM_TID_MAPPING_3LINK_MLO),
 	PDEV_PARAM(pdev_param_enable_delayed_lmr_feedback,
 		   PDEV_PARAM_ENABLE_DELAYED_LMR_FEEDBACK),
+	PDEV_PARAM(pdev_param_enable_small_mru,
+		   PDEV_PARAM_ENABLE_SMALL_MRU),
+	PDEV_PARAM(pdev_param_enable_large_mru,
+		   PDEV_PARAM_ENABLE_LARGE_MRU),
 	pdev_param_max,
 } wmi_conv_pdev_params_id;
 

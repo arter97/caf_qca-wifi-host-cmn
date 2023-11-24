@@ -461,6 +461,10 @@ static const uint32_t pdev_param_tlv[] = {
 		  PDEV_PARAM_TID_MAPPING_3LINK_MLO),
 	PARAM_MAP(pdev_param_enable_delayed_lmr_feedback,
 		  PDEV_PARAM_ENABLE_DELAYED_LMR_FEEDBACK),
+	PARAM_MAP(pdev_param_enable_small_mru,
+		  PDEV_PARAM_ENABLE_SMALL_MRU),
+	PARAM_MAP(pdev_param_enable_large_mru,
+		  PDEV_PARAM_ENABLE_LARGE_MRU),
 };
 
 /* Populate vdev_param array whose index is host param, value is target param */
