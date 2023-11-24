@@ -6726,6 +6726,7 @@ uint32_t dp_tx_comp_handler(struct dp_intr *int_ctx, struct dp_soc *soc,
 	DP_HIST_INIT();
 
 	num_entries = hal_srng_get_num_entries(soc->hal_soc, hal_ring_hdl);
+	dp_tx_nbuf_queue_head_init(&h);
 
 more_data:
 
@@ -6757,8 +6758,6 @@ more_data:
 	last_prefetched_hw_desc = dp_srng_dst_prefetch_32_byte_desc(hal_soc,
 							    hal_ring_hdl,
 							    num_avail_for_reap);
-
-	dp_tx_nbuf_queue_head_init(&h);
 
 	/* Find head descriptor from completion ring */
 	while (qdf_likely(num_avail_for_reap--)) {
@@ -6962,6 +6961,21 @@ next_desc:
 
 	dp_srng_access_end(int_ctx, soc, hal_ring_hdl);
 
+	/* Process the reaped descriptors */
+	if (head_desc)
+		dp_tx_comp_process_desc_list(soc, head_desc, ring_id);
+
+	DP_STATS_INC(soc, tx.tx_comp[ring_id], count);
+
+	/* Reap more descriptors until quota is completed */
+	num_avail_for_reap = dp_tx_check_if_more_desc_available(
+						num_processed,
+						quota,
+						hal_ring_hdl,
+						hal_soc);
+	if (num_avail_for_reap)
+		goto more_data;
+
 	/* Process the reaped descriptors that were sent via fast path */
 	if (fast_head_desc) {
 		dp_tx_comp_process_desc_list_fast(soc, fast_head_desc,
@@ -6969,12 +6983,6 @@ next_desc:
 						  fast_desc_count);
 		dp_tx_nbuf_dev_kfree_list(&h);
 	}
-
-	/* Process the reaped descriptors */
-	if (head_desc)
-		dp_tx_comp_process_desc_list(soc, head_desc, ring_id);
-
-	DP_STATS_INC(soc, tx.tx_comp[ring_id], count);
 
 	/*
 	 * If we are processing in near-full condition, there are 3 scenario

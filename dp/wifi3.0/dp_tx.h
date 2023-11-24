@@ -817,6 +817,28 @@ void dp_tx_prefetch_hw_sw_nbuf_desc(struct dp_soc *soc,
 					(uint8_t *)*last_prefetched_hw_desc);
 	}
 }
+
+/**
+ * dp_tx_check_if_more_desc_available() - check if more desc available
+ * @num_processed: Number of processed descriptors
+ * @quota: Quota for descriptors to process
+ * @hal_ring_hdl: ring pointer
+ * @hal_soc: HAL SOC handle
+ *
+ * Return: Number of descriptors available to process
+ */
+static inline
+uint32_t dp_tx_check_if_more_desc_available(
+					uint32_t num_processed,
+					uint32_t quota,
+					hal_ring_handle_t hal_ring_hdl,
+					hal_soc_handle_t hal_soc)
+{
+	if (num_processed < quota)
+		return hal_srng_dst_num_valid(hal_soc,
+					      hal_ring_hdl, 0);
+	return 0;
+}
 #else
 static inline
 void dp_tx_prefetch_hw_sw_nbuf_desc(struct dp_soc *soc,
@@ -827,6 +849,16 @@ void dp_tx_prefetch_hw_sw_nbuf_desc(struct dp_soc *soc,
 				    struct dp_tx_desc_s
 				    **last_prefetched_sw_desc)
 {
+}
+
+static inline
+uint32_t dp_tx_check_if_more_desc_available(
+					uint32_t num_processed,
+					uint32_t quota,
+					hal_ring_handle_t hal_ring_hdl,
+					hal_soc_handle_t hal_soc)
+{
+	return 0;
 }
 #endif
 
