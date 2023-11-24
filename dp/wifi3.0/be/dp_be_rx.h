@@ -525,6 +525,42 @@ QDF_STATUS dp_peer_rx_reorder_queue_setup_be(struct dp_soc *soc,
 					     uint32_t tid_bitmap,
 					     uint32_t ba_window_size)
 {
+	struct dp_rx_tid *rx_tid;
+	int tid;
+
+	if (hal_reo_shared_qaddr_is_enable(soc->hal_soc)) {
+		/* Some BE targets dont require WMI and use shared
+		 * table managed by host for storing Reo queue ref structs
+		 */
+		if (peer->peer_id == HTT_INVALID_PEER) {
+			dp_peer_debug("Invalid peer id for dp_peer:%pK", peer);
+			return QDF_STATUS_SUCCESS;
+		}
+
+		for (tid = 0; tid < DP_MAX_TIDS; tid++) {
+			if (!((1 << tid) & tid_bitmap))
+				continue;
+
+			rx_tid = &peer->rx_tid[tid];
+			if (!rx_tid->hw_qdesc_paddr) {
+				tid_bitmap &= ~BIT(tid);
+				continue;
+			}
+
+			hal_reo_shared_qaddr_write(soc->hal_soc,
+						   peer->peer_id,
+						   tid, peer->rx_tid[tid].
+							hw_qdesc_paddr);
+
+			if (!tid_bitmap) {
+				dp_peer_err("tid_bitmap=0. All tids setup fail");
+				return QDF_STATUS_E_FAILURE;
+			}
+		}
+
+		return QDF_STATUS_SUCCESS;
+	}
+
 	if (soc->features.multi_rx_reorder_q_setup_support)
 		return dp_peer_rx_reorder_multi_q_setup(peer,
 							tid_bitmap,
