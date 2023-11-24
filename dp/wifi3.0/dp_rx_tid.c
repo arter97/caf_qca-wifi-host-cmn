@@ -616,7 +616,7 @@ dp_single_rx_tid_setup(struct dp_peer *peer, int tid,
 	uint32_t hw_qdesc_align;
 	int hal_pn_type;
 	void *hw_qdesc_vaddr;
-	uint32_t alloc_tries = 0;
+	uint32_t alloc_tries = 0, ret;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	struct dp_txrx_peer *txrx_peer;
 
@@ -716,14 +716,16 @@ try_desc_alloc:
 		hw_qdesc_vaddr, rx_tid->hw_qdesc_paddr, hal_pn_type,
 		vdev->vdev_stats_id);
 
-	qdf_mem_map_nbytes_single(soc->osdev, hw_qdesc_vaddr,
-		QDF_DMA_BIDIRECTIONAL, rx_tid->hw_qdesc_alloc_size,
-		&(rx_tid->hw_qdesc_paddr));
+	ret = qdf_mem_map_nbytes_single(soc->osdev, hw_qdesc_vaddr,
+					QDF_DMA_BIDIRECTIONAL,
+					rx_tid->hw_qdesc_alloc_size,
+					&rx_tid->hw_qdesc_paddr);
 
-	add_entry_alloc_list(soc, rx_tid, peer, hw_qdesc_vaddr);
+	if (!ret)
+		add_entry_alloc_list(soc, rx_tid, peer, hw_qdesc_vaddr);
 
 	if (dp_reo_desc_addr_chk(rx_tid->hw_qdesc_paddr) !=
-			QDF_STATUS_SUCCESS) {
+			QDF_STATUS_SUCCESS || ret) {
 		if (alloc_tries++ < 10) {
 			qdf_mem_free(rx_tid->hw_qdesc_vaddr_unaligned);
 			rx_tid->hw_qdesc_vaddr_unaligned = NULL;
