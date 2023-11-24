@@ -550,6 +550,7 @@ void osif_update_partner_vdev_info(struct wlan_objmgr_vdev *vdev,
 	}
 }
 
+#ifndef ENABLE_CFG80211_BACKPORTS
 static inline
 QDF_STATUS osif_update_mlo_partner_info(
 			struct wlan_objmgr_vdev *vdev,
@@ -671,6 +672,58 @@ QDF_STATUS osif_update_mlo_partner_info(
 
 	return QDF_STATUS_SUCCESS;
 }
+
+#else
+static inline
+QDF_STATUS osif_update_mlo_partner_info(
+			struct wlan_objmgr_vdev *vdev,
+			struct wlan_cm_connect_req *connect_req,
+			const struct cfg80211_connect_params *req)
+{
+	struct mlo_partner_info partner_info = {0};
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	struct wlan_objmgr_psoc *psoc;
+	struct wlan_mlo_dev_context *ml_dev = NULL;
+
+	if (!vdev || !connect_req || !req)
+		return status;
+
+	psoc = wlan_vdev_get_psoc(vdev);
+	if (!psoc) {
+		osif_err("null psoc");
+		return QDF_STATUS_SUCCESS;
+	}
+
+	if (!wlan_mlo_get_psoc_capable(psoc))
+		return QDF_STATUS_SUCCESS;
+
+	ml_dev = vdev->mlo_dev_ctx;
+	if (!ml_dev) {
+		osif_err("ML ctx is NULL");
+		return QDF_STATUS_SUCCESS;
+	}
+
+	wlan_vdev_set_link_id(vdev, req->link_id);
+	wlan_vdev_mlme_set_mlo_vdev(vdev);
+	partner_info.num_partner_links = 0;
+
+	status = mlo_mlme_connect_get_partner_info(vdev, req, &partner_info);
+	if ((partner_info.num_partner_links != 0) &&
+	    QDF_IS_STATUS_ERROR(status)) {
+		osif_err("Failed to get ML partner info status:%d ", status);
+		return status;
+	}
+
+	qdf_mem_copy(&connect_req->ml_parnter_info,
+		     &partner_info, sizeof(struct mlo_partner_info));
+
+	mlo_update_connect_req_links(vdev, 1);
+	osif_update_partner_vdev_info(vdev, partner_info);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+#endif /* ENABLE_CFG80211_BACKPORTS */
 #endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
 #else
 static inline

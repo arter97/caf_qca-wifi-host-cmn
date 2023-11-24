@@ -334,6 +334,33 @@ void mlo_mlme_peer_reassoc(struct wlan_objmgr_vdev *vdev,
 						     frm_buf);
 }
 
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+QDF_STATUS
+mlo_mlme_connect_get_partner_info(struct wlan_objmgr_vdev *vdev,
+				  const struct cfg80211_connect_params *req,
+				  struct mlo_partner_info *par_info)
+{
+	struct mlo_mgr_context *mlo_ctx = wlan_objmgr_get_mlo_ctx();
+	struct vdev_mlme_obj *vdev_mlme;
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	struct mlo_mlme_ext_ops *ops = mlo_ctx->mlme_ops;
+
+	if (!mlo_ctx || !mlo_ctx->mlme_ops ||
+	    !mlo_ctx->mlme_ops->mlo_mlme_ext_validate_conn_req)
+		return QDF_STATUS_E_FAILURE;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme)
+		return QDF_STATUS_E_FAILURE;
+
+	if (mlo_ctx->mlme_ops->mlo_mlme_ext_connect_get_partner_info)
+		status = ops->mlo_mlme_ext_connect_get_partner_info(vdev, req,
+								    par_info);
+
+	return status;
+}
+#endif
+
 uint8_t mlo_get_link_vdev_ix(struct wlan_mlo_dev_context *ml_dev,
 			     struct wlan_objmgr_vdev *vdev)
 {

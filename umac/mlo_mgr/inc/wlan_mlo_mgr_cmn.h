@@ -207,6 +207,21 @@ QDF_STATUS mlo_mlme_clone_sta_security(struct wlan_objmgr_vdev *vdev,
 QDF_STATUS mlo_mlme_sta_op_class(struct wlan_objmgr_vdev *vdev,
 				 uint8_t *ml_ie);
 
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+/**
+ * mlo_mlme_connect_get_partner_info() - Get partner link info from connect
+ * @vdev: Object manager vdev
+ * @req: cfg80211_connect_params data object to be passed to callback
+ * @partner_info: mlo_partner_info data object containing partner link info
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+mlo_mlme_connect_get_partner_info(struct wlan_objmgr_vdev *vdev,
+				  const struct cfg80211_connect_params *req,
+				  struct mlo_partner_info *partner_info);
+#endif
+
 /**
  * mlo_mlme_validate_conn_req() - Validate connect request
  * @vdev: Object manager vdev

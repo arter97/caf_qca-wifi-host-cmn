@@ -32,6 +32,7 @@
 #include <qdf_event.h>
 #endif
 #include <wlan_mlo_t2lm.h>
+#include <net/cfg80211.h>
 
 /* MAX MLO dev support */
 #ifndef WLAN_UMAC_MLO_MAX_VDEVS
@@ -1263,6 +1264,7 @@ struct wlan_mlo_bridge_sta {
  * @mlo_mlme_ext_handle_sta_csa_param: Callback to handle sta csa param
  * @mlo_mlme_ext_sta_op_class:
  * @mlo_mlme_ext_peer_reassoc: Callback to process reassoc
+ * @mlo_mlme_ext_connect_get_partner_info: Callback to get MLO partner info
  */
 struct mlo_mlme_ext_ops {
 	QDF_STATUS (*mlo_mlme_ext_validate_conn_req)(
@@ -1302,6 +1304,12 @@ struct mlo_mlme_ext_ops {
 					struct wlan_mlo_peer_context *ml_peer,
 					struct qdf_mac_addr *addr,
 					qdf_nbuf_t frm_buf);
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+	QDF_STATUS (*mlo_mlme_ext_connect_get_partner_info)(
+				struct wlan_objmgr_vdev *vdev,
+				const struct cfg80211_connect_params *req,
+				struct mlo_partner_info *partner_info);
+#endif
 };
 
 /*
