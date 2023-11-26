@@ -76,6 +76,7 @@ struct vdev_mlme_obj;
 struct wlan_t2lm_context;
 struct mlo_link_switch_context;
 struct wlan_mlo_link_switch_req;
+struct mlo_all_link_rssi;
 
 /* Max LINK PEER support */
 #define MAX_MLO_LINK_PEERS WLAN_UMAC_MLO_MAX_VDEVS
@@ -1653,11 +1654,13 @@ struct peer_ptqm_migrate_list_entry {
  * struct peer_migrate_ptqm_multi_entries - multi ptqm migrate peer entry params
  * @num_entries: Number of entries in the peer_list list
  * @peer_list: List to hold the peer entries to be migrated
+ * @rssi_data: RSSI data of all the HW links
  *
  */
 struct peer_migrate_ptqm_multi_entries {
 	uint16_t num_entries;
 	qdf_list_t peer_list;
+	const struct mlo_all_link_rssi *rssi_data;
 };
 
 enum primary_link_peer_migration_evenr_status {
