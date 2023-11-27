@@ -147,7 +147,8 @@ void mlo_mgr_update_ap_channel_info(struct wlan_objmgr_vdev *vdev, uint8_t link_
 		  link_info->link_chan_info->ch_phymode);
 }
 
-void mlo_mgr_update_link_info_reset(struct wlan_mlo_dev_context *ml_dev)
+void mlo_mgr_update_link_info_reset(struct wlan_objmgr_psoc *psoc,
+				    struct wlan_mlo_dev_context *ml_dev)
 {
 	struct mlo_link_info *link_info;
 	uint8_t link_info_iter;
@@ -159,6 +160,12 @@ void mlo_mgr_update_link_info_reset(struct wlan_mlo_dev_context *ml_dev)
 
 	for (link_info_iter = 0; link_info_iter < WLAN_MAX_ML_BSS_LINKS;
 	     link_info_iter++) {
+		if (!qdf_is_macaddr_zero(&link_info->ap_link_addr) &&
+		    !qdf_is_macaddr_zero(&link_info->link_addr))
+			wlan_crypto_free_key_by_link_id(
+						psoc,
+						&link_info->link_addr,
+						link_info->link_id);
 		qdf_mem_zero(&link_info->link_addr, QDF_MAC_ADDR_SIZE);
 		qdf_mem_zero(&link_info->ap_link_addr, QDF_MAC_ADDR_SIZE);
 		qdf_mem_zero(link_info->link_chan_info,
@@ -531,7 +538,8 @@ mlo_mgr_link_switch_notification(struct wlan_objmgr_vdev *vdev,
 	return status;
 }
 
-QDF_STATUS mlo_mgr_link_switch_init(struct wlan_mlo_dev_context *ml_dev)
+QDF_STATUS mlo_mgr_link_switch_init(struct wlan_objmgr_psoc *psoc,
+				    struct wlan_mlo_dev_context *ml_dev)
 {
 	ml_dev->link_ctx =
 		qdf_mem_malloc(sizeof(struct mlo_link_switch_context));
@@ -541,7 +549,7 @@ QDF_STATUS mlo_mgr_link_switch_init(struct wlan_mlo_dev_context *ml_dev)
 
 	mlo_mgr_link_switch_init_state(ml_dev);
 	mlo_mgr_alloc_link_info_wmi_chan(ml_dev);
-	mlo_mgr_update_link_info_reset(ml_dev);
+	mlo_mgr_update_link_info_reset(psoc, ml_dev);
 
 	return QDF_STATUS_SUCCESS;
 }

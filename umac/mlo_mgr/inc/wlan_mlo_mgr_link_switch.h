@@ -188,12 +188,14 @@ mlo_mgr_update_link_info_mac_addr(struct wlan_objmgr_vdev *vdev,
 
 /**
  * mlo_mgr_update_link_info_reset() - Reset link info of ml dev context
+ * @psoc: psoc pointer
  * @ml_dev: MLO device context
  *
  * Reset link info of ml links
  * Return: QDF_STATUS
  */
-void mlo_mgr_update_link_info_reset(struct wlan_mlo_dev_context *ml_dev);
+void mlo_mgr_update_link_info_reset(struct wlan_objmgr_psoc *psoc,
+				    struct wlan_mlo_dev_context *ml_dev);
 
 /**
  * mlo_mgr_update_ap_link_info() - Update AP links information
@@ -594,6 +596,7 @@ mlo_mgr_link_switch_defer_disconnect_req(struct wlan_objmgr_vdev *vdev,
 
 /**
  * mlo_mgr_link_switch_init() - API to initialize link switch
+ * @psoc: PSOC object manager
  * @ml_dev: MLO dev context
  *
  * Initializes the MLO link context in @ml_dev and allocates various
@@ -601,7 +604,8 @@ mlo_mgr_link_switch_defer_disconnect_req(struct wlan_objmgr_vdev *vdev,
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS mlo_mgr_link_switch_init(struct wlan_mlo_dev_context *ml_dev);
+QDF_STATUS mlo_mgr_link_switch_init(struct wlan_objmgr_psoc *psoc,
+				    struct wlan_mlo_dev_context *ml_dev);
 
 /**
  * mlo_mgr_link_switch_deinit() - API to de-initialize link switch
@@ -673,7 +677,8 @@ mlo_mgr_link_switch_deinit(struct wlan_mlo_dev_context *ml_dev)
 }
 
 static inline QDF_STATUS
-mlo_mgr_link_switch_init(struct wlan_mlo_dev_context *ml_dev)
+mlo_mgr_link_switch_init(struct wlan_objmgr_psoc *psoc,
+			 struct wlan_mlo_dev_context *ml_dev)
 {
 	return QDF_STATUS_SUCCESS;
 }
