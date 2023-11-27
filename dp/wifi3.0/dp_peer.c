@@ -937,7 +937,7 @@ void dp_peer_mec_free_list(struct dp_soc *soc, void *ptr)
 	TAILQ_FOREACH_SAFE(mecentry, free_list, hash_list_elem,
 			   mecentry_next) {
 		dp_peer_debug("%pK: MEC delete for mac_addr " QDF_MAC_ADDR_FMT,
-			      soc, QDF_MAC_ADDR_REF(&mecentry->mac_addr));
+			      soc, QDF_MAC_ADDR_REF(mecentry->mac_addr.raw));
 		qdf_mem_free(mecentry);
 		qdf_atomic_dec(&soc->mec_cnt);
 		DP_STATS_INC(soc, mec.deleted, 1);
