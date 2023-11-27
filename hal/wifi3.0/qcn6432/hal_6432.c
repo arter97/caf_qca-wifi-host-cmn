@@ -234,6 +234,8 @@ static void hal_get_tqm_scratch_reg_qca5332(hal_soc_handle_t hal_soc_hdl,
 	*value = ((uint64_t)(offset_hi) << 32 | offset_lo);
 }
 #endif
+
+#if (defined(WLAN_SA_API_ENABLE))
 /**
  * hal_rx_proc_phyrx_other_receive_info_tlv_6432(): API to get tlv info
  *
@@ -247,30 +249,48 @@ void hal_rx_proc_phyrx_other_receive_info_tlv_6432(void *rx_tlv_hdr,
 				     void *ppdu_info_hdl)
 {
 	uint32_t tlv_tag, tlv_len;
-	uint32_t temp_len, other_tlv_len, other_tlv_tag;
-	void *rx_tlv = (uint8_t *)rx_tlv_hdr + HAL_RX_TLV32_HDR_SIZE;
-	void *other_tlv_hdr = NULL;
-	void *other_tlv = NULL;
+	void *rx_tlv;
 
-	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(rx_tlv_hdr);
 	tlv_len = HAL_RX_GET_USER_TLV32_LEN(rx_tlv_hdr);
-	temp_len = 0;
+	rx_tlv = (uint8_t *)rx_tlv_hdr + HAL_RX_TLV64_HDR_SIZE;
 
-	other_tlv_hdr = rx_tlv + HAL_RX_TLV32_HDR_SIZE;
-	other_tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(other_tlv_hdr);
-	other_tlv_len = HAL_RX_GET_USER_TLV32_LEN(other_tlv_hdr);
+	if (!tlv_len)
+		return;
 
-	temp_len += other_tlv_len;
-	other_tlv = other_tlv_hdr + HAL_RX_TLV32_HDR_SIZE;
+	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(rx_tlv);
+	tlv_len = HAL_RX_GET_USER_TLV32_LEN(rx_tlv);
 
-	switch (other_tlv_tag) {
+	if (!tlv_len)
+		return;
+
+	switch (tlv_tag) {
+	case WIFIPHYRX_OTHER_RECEIVE_INFO_EVM_DETAILS_E:
+		/* Skip TLV tag to get TLV content */
+		rx_tlv = (uint8_t *)rx_tlv + HAL_RX_TLV64_HDR_SIZE;
+		break;
 	default:
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-				"%s unhandled TLV type: %d, TLV len:%d",
-				__func__, other_tlv_tag, other_tlv_len);
+		QDF_TRACE(QDF_MODULE_ID_HAL, QDF_TRACE_LEVEL_DEBUG,
+			  "%s unhandled TLV type: %d, TLV len:%d",
+			  __func__, tlv_tag, tlv_len);
 		break;
 	}
 }
+
+#else
+/**
+ * hal_rx_proc_phyrx_other_receive_info_tlv_6432(): API to get tlv info
+ *
+ * @rx_tlv_hdr: start address of rx_pkt_tlvs
+ * @ppdu_info_hdl: PPDU info handle to fill
+ *
+ * Return: uint32_t
+ */
+static inline
+void hal_rx_proc_phyrx_other_receive_info_tlv_6432(void *rx_tlv_hdr,
+						   void *ppdu_info_hdl)
+{
+}
+#endif
 
 #if defined(WLAN_CFR_ENABLE) && defined(WLAN_ENH_CFR_ENABLE)
 static inline

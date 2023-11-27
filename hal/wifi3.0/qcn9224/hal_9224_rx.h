@@ -37,9 +37,9 @@
 #include "dp_types.h"
 #include "hal_api_mon.h"
 #include "phyrx_other_receive_info_ru_details.h"
-#if (defined(WLAN_SA_API_ENABLE)) && (defined(QCA_WIFI_QCA9574))
+#if (defined(WLAN_SA_API_ENABLE))
 #include "phyrx_other_receive_info_evm_details.h"
-#endif /* WLAN_SA_API_ENABLE && QCA_WIFI_QCA9574 */
+#endif /* WLAN_SA_API_ENABLE */
 
 #define HAL_RX_MSDU0_BUFFER_ADDR_LSB(link_desc_va)	\
 	(uint8_t *)(link_desc_va) +			\

@@ -222,6 +222,7 @@ uint8_t hal_rx_wbm_err_msdu_continuation_get_5332(void *wbm_desc)
 	WBM_RELEASE_RING_RX_RX_MSDU_DESC_INFO_DETAILS_MSDU_CONTINUATION_LSB;
 }
 
+#if (defined(WLAN_SA_API_ENABLE))
 /**
  * hal_rx_proc_phyrx_other_receive_info_tlv_5332() - API to get tlv info
  * @rx_tlv_hdr: start address of rx_pkt_tlvs
@@ -234,31 +235,47 @@ void hal_rx_proc_phyrx_other_receive_info_tlv_5332(void *rx_tlv_hdr,
 						   void *ppdu_info_hdl)
 {
 	uint32_t tlv_tag, tlv_len;
-	uint32_t temp_len, other_tlv_len, other_tlv_tag;
-	void *rx_tlv = (uint8_t *)rx_tlv_hdr + HAL_RX_TLV32_HDR_SIZE;
-	void *other_tlv_hdr = NULL;
-	void *other_tlv = NULL;
+	void *rx_tlv;
 
-	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(rx_tlv_hdr);
 	tlv_len = HAL_RX_GET_USER_TLV32_LEN(rx_tlv_hdr);
-	temp_len = 0;
+	rx_tlv = (uint8_t *)rx_tlv_hdr + HAL_RX_TLV64_HDR_SIZE;
 
-	other_tlv_hdr = rx_tlv + HAL_RX_TLV32_HDR_SIZE;
-	other_tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(other_tlv_hdr);
-	other_tlv_len = HAL_RX_GET_USER_TLV32_LEN(other_tlv_hdr);
+	if (!tlv_len)
+		return;
 
-	temp_len += other_tlv_len;
-	other_tlv = other_tlv_hdr + HAL_RX_TLV32_HDR_SIZE;
+	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(rx_tlv);
+	tlv_len = HAL_RX_GET_USER_TLV32_LEN(rx_tlv);
 
-	switch (other_tlv_tag) {
+	if (!tlv_len)
+		return;
+
+	switch (tlv_tag) {
+	case WIFIPHYRX_OTHER_RECEIVE_INFO_EVM_DETAILS_E:
+		/* Skip TLV tag to get TLV content */
+		rx_tlv = (uint8_t *)rx_tlv + HAL_RX_TLV64_HDR_SIZE;
+		break;
 	default:
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+		QDF_TRACE(QDF_MODULE_ID_HAL, QDF_TRACE_LEVEL_DEBUG,
 			  "%s unhandled TLV type: %d, TLV len:%d",
-			  __func__, other_tlv_tag, other_tlv_len);
-	break;
+			  __func__, tlv_tag, tlv_len);
+		break;
 	}
 }
 
+#else
+/**
+ * hal_rx_proc_phyrx_other_receive_info_tlv_5332() - API to get tlv info
+ * @rx_tlv_hdr: start address of rx_pkt_tlvs
+ * @ppdu_info_hdl: PPDU info handle to fill
+ *
+ * Return: uint32_t
+ */
+static inline
+void hal_rx_proc_phyrx_other_receive_info_tlv_5332(void *rx_tlv_hdr,
+						   void *ppdu_info_hdl)
+{
+}
+#endif
 #if defined(WLAN_CFR_ENABLE) && defined(WLAN_ENH_CFR_ENABLE)
 static inline
 void hal_rx_get_bb_info_5332(void *rx_tlv, void *ppdu_info_hdl)

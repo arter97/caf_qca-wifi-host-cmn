@@ -253,7 +253,7 @@ uint8_t hal_rx_wbm_err_msdu_continuation_get_9224(void *wbm_desc)
 	WBM_RELEASE_RING_RX_RX_MSDU_DESC_INFO_DETAILS_MSDU_CONTINUATION_LSB;
 }
 
-#if (defined(WLAN_SA_API_ENABLE)) && (defined(QCA_WIFI_QCA9574))
+#if (defined(WLAN_SA_API_ENABLE))
 #define HAL_RX_EVM_DEMF_SEGMENT_SIZE 128
 #define HAL_RX_EVM_DEMF_MAX_STREAMS 2
 #define HAL_RX_SU_EVM_MEMBER_LEN 4
