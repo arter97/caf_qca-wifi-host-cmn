@@ -2177,17 +2177,17 @@ cm_sort_vendor_algo_mlo_bss_entry(struct wlan_objmgr_psoc *psoc,
 			freq[i] = link[i].freq;
 
 		if (policy_mgr_2_freq_always_on_same_mac(psoc, freq[i],
-							 freq_entry) &&
-		    !wlan_mlme_is_5gl_5gh_mlsr_supported(psoc)) {
+							 freq_entry)) {
 			total_score[i] = 0;
-			mlme_nofl_debug("Partner(" QDF_MAC_ADDR_FMT " freq %d): assoc freq %d can't be MLMR",
-					QDF_MAC_ADDR_REF(link[i].link_addr.bytes),
-					freq[i], freq_entry);
-			if (mlo_support_link_num <= WLAN_MAX_ML_DEFAULT_LINK ||
-			    entry->ml_info.num_links <
-			    WLAN_MAX_ML_DEFAULT_LINK)
-				link[i].is_valid_link = false;
-
+			if (!wlan_mlme_is_5gl_5gh_mlsr_supported(psoc)) {
+				mlme_nofl_debug("Partner(" QDF_MAC_ADDR_FMT " freq %d): assoc freq %d can't be MLMR",
+						QDF_MAC_ADDR_REF(link[i].link_addr.bytes),
+						freq[i], freq_entry);
+				if (mlo_support_link_num <= WLAN_MAX_ML_DEFAULT_LINK ||
+				    entry->ml_info.num_links <
+				    WLAN_MAX_ML_DEFAULT_LINK)
+					link[i].is_valid_link = false;
+			}
 			continue;
 		}
 
