@@ -1857,7 +1857,7 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		DP_STATS_AGGR(_tgtobj, _srcobj, tx.non_ampdu_cnt); \
 		DP_STATS_AGGR(_tgtobj, _srcobj, tx.ampdu_cnt); \
 		DP_STATS_AGGR_PKT(_tgtobj, _srcobj, tx.dropped.fw_rem); \
-		DP_STATS_AGGR(_tgtobj, _srcobj, tx.dropped.fw_rem_tx); \
+		DP_STATS_AGGR_PKT(_tgtobj, _srcobj, tx.dropped.fw_rem_tx); \
 		DP_STATS_AGGR(_tgtobj, _srcobj, tx.dropped.fw_rem_notx); \
 		DP_STATS_AGGR(_tgtobj, _srcobj, tx.dropped.fw_reason1); \
 		DP_STATS_AGGR(_tgtobj, _srcobj, tx.dropped.fw_reason2); \
@@ -1997,8 +1997,10 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 					_srcobj->tx.dropped.fw_rem.bytes; \
 		_tgtobj->tx.dropped.fw_rem_notx += \
 					_srcobj->tx.dropped.fw_rem_notx; \
-		_tgtobj->tx.dropped.fw_rem_tx += \
-					_srcobj->tx.dropped.fw_rem_tx; \
+		_tgtobj->tx.dropped.fw_rem_tx.num += \
+					_srcobj->tx.dropped.fw_rem_tx.num; \
+		_tgtobj->tx.dropped.fw_rem_tx.bytes += \
+					_srcobj->tx.dropped.fw_rem_tx.bytes; \
 		_tgtobj->tx.dropped.age_out += _srcobj->tx.dropped.age_out; \
 		_tgtobj->tx.dropped.fw_reason1 += \
 					_srcobj->tx.dropped.fw_reason1; \

@@ -7371,7 +7371,7 @@ void dp_print_peer_stats(struct dp_peer *peer,
 			peer_stats->tx.dropped.fw_rem.bytes);
 	}
 	DP_PRINT_STATS("Dropped At FW: Removed transmitted = %d",
-		       peer_stats->tx.dropped.fw_rem_tx);
+		       peer_stats->tx.dropped.fw_rem_tx.num);
 	DP_PRINT_STATS("Dropped At FW: Removed Untransmitted = %d",
 		       peer_stats->tx.dropped.fw_rem_notx);
 	DP_PRINT_STATS("Dropped At FW: removed untransmitted fw_reason1 = %u",
@@ -7816,7 +7816,7 @@ void dp_txrx_path_stats(struct dp_soc *soc)
 			       pdev->stats.tx.dropped.fw_rem.num,
 			       pdev->stats.tx.dropped.fw_rem.bytes);
 		DP_PRINT_STATS("firmware removed tx: %u",
-			       pdev->stats.tx.dropped.fw_rem_tx);
+			       pdev->stats.tx.dropped.fw_rem_tx.num);
 		DP_PRINT_STATS("firmware removed notx %u",
 			       pdev->stats.tx.dropped.fw_rem_notx);
 		DP_PRINT_STATS("Invalid peer on tx path: %llu",
@@ -8052,7 +8052,7 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 	DP_PRINT_STATS("	FW removed bytes= %llu",
 		       pdev->stats.tx.dropped.fw_rem.bytes);
 	DP_PRINT_STATS("	FW removed transmitted = %u",
-		       pdev->stats.tx.dropped.fw_rem_tx);
+		       pdev->stats.tx.dropped.fw_rem_tx.num);
 	DP_PRINT_STATS("	FW removed untransmitted = %u",
 		       pdev->stats.tx.dropped.fw_rem_notx);
 	DP_PRINT_STATS("	FW removed untransmitted fw_reason1 = %u",
@@ -9237,8 +9237,10 @@ void dp_update_pdev_stats(struct dp_pdev *tgtobj,
 	tgtobj->stats.tx.dropped.fw_rem.num += srcobj->tx.dropped.fw_rem.num;
 	tgtobj->stats.tx.dropped.fw_rem.bytes +=
 			srcobj->tx.dropped.fw_rem.bytes;
-	tgtobj->stats.tx.dropped.fw_rem_tx +=
-			srcobj->tx.dropped.fw_rem_tx;
+	tgtobj->stats.tx.dropped.fw_rem_tx.num +=
+			srcobj->tx.dropped.fw_rem_tx.num;
+	tgtobj->stats.tx.dropped.fw_rem_tx.bytes +=
+			srcobj->tx.dropped.fw_rem_tx.bytes;
 	tgtobj->stats.tx.dropped.fw_rem_notx +=
 			srcobj->tx.dropped.fw_rem_notx;
 	tgtobj->stats.tx.dropped.fw_reason1 +=
@@ -10060,7 +10062,7 @@ dp_print_per_link_peer_txrx_stats(struct cdp_peer_stats *peer_stats,
 			       peer_stats->tx.dropped.fw_rem.bytes);
 	}
 	DP_PRINT_STATS("Dropped At FW: Removed transmitted = %u",
-		       peer_stats->tx.dropped.fw_rem_tx);
+		       peer_stats->tx.dropped.fw_rem_tx.num);
 	DP_PRINT_STATS("Dropped At FW: Removed Untransmitted = %u",
 		       peer_stats->tx.dropped.fw_rem_notx);
 	DP_PRINT_STATS("Dropped At FW: removed untransmitted fw_reason1 = %u",
