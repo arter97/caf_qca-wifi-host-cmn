@@ -88,13 +88,12 @@ hal_tx_comp_get_status_generic_be(void *desc, void *ts1,
 					 FIRST_MSDU);
 	ts->last_msdu = HAL_TX_DESC_GET(desc, WBM2SW_COMPLETION_RING_TX,
 					LAST_MSDU);
-#if 0
-	// TODO -  This has to be calculated form first and last msdu
-	ts->msdu_part_of_amsdu = HAL_TX_DESC_GET(desc,
-						 WBM2SW_COMPLETION_RING_TX,
-						 MSDU_PART_OF_AMSDU);
-#endif
 
+	/* This can be calculated from first and last msdu. If a msdu is both
+	 * the last and the first msdu, then it does not belong to an amsdu.
+	 */
+	ts->msdu_part_of_amsdu = (ts->first_msdu && ts->last_msdu) ?
+				  false : true;
 	ts->peer_id = HAL_TX_DESC_GET(desc, WBM2SW_COMPLETION_RING_TX,
 				      SW_PEER_ID);
 	ts->tid = HAL_TX_DESC_GET(desc, WBM2SW_COMPLETION_RING_TX, TID);
