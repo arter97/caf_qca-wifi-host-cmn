@@ -1766,6 +1766,14 @@ int htt_h2t_rx_ring_cfg(struct htt_soc *htt_soc, int pdev_id,
 		*msg_word = 0;
 	}
 
+	dp_info("offset_valid %d, offset: mpdu_start %d, msdu_end %d, "
+		"rx_pkt_header %d, rx_pkt %d",
+		htt_tlv_filter->offset_valid,
+		htt_tlv_filter->rx_mpdu_start_offset,
+		htt_tlv_filter->rx_msdu_end_offset,
+		htt_tlv_filter->rx_header_offset,
+		htt_tlv_filter->rx_packet_offset);
+
 	soc->dp_soc->arch_ops.dp_rx_word_mask_subscribe(
 						soc->dp_soc,
 						msg_word,

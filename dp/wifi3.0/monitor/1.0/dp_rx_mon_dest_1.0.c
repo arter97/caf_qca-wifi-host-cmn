@@ -1814,6 +1814,9 @@ dp_rx_mon_restitch_mpdu_from_msdus(struct dp_soc *soc,
 
 	hdr_desc = hal_rx_desc_get_80211_hdr(soc->hal_soc, rx_desc);
 
+	if (!hdr_desc)
+		goto mpdu_stitch_fail;
+
 	dp_rx_mon_dest_debug("%pK: decap format not raw", soc);
 
 	/* Base size */
