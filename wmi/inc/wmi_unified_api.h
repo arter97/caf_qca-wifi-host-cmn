@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1355,7 +1355,7 @@ QDF_STATUS wmi_unified_sta_ps_cmd_send(wmi_unified_t wmi_handle,
  * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
  */
 QDF_STATUS wmi_unified_ap_ps_cmd_send(wmi_unified_t wmi_handle,
-				      uint8_t macaddr[QDF_MAC_ADDR_SIZE],
+				      uint8_t *macaddr,
 				      struct ap_ps_params *param);
 
 /**
