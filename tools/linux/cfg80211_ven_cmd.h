@@ -1455,6 +1455,7 @@ enum _ol_ath_param_t {
 #endif /* CONFIG_AFC_SUPPORT */
 #ifdef WLAN_FEATURE_11BE_MLO
 	OL_ATH_PARAM_FORCE_NON_ASSOC_PRIMARY_UMAC = 529,
+	OL_ATH_PARAM_DOWNGRADE_320MHZ_OPCLASS = 530,
 #endif
 };
 
@@ -3771,6 +3772,10 @@ struct vendor_commands radio_vendor_cmds[] = {
 #ifdef WLAN_FEATURE_11BE_MLO
 	{"get_mlo_vdev_count",
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_MLO_VDEV_COUNT, GET_PARAM, 0},
+	{"downgrade_320mhz_opclass",
+		 OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_DOWNGRADE_320MHZ_OPCLASS, SET_PARAM, 1},
+	{"g_downgrade_320mhz_opclass",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_DOWNGRADE_320MHZ_OPCLASS, GET_PARAM, 0},
 #endif /* WLAN_FEATURE_11BE_MLO */
 	{"bcn_rlimit",
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_ENABLE_BCN_RATELIMIT, SET_PARAM, 1},
