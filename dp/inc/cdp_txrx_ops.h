@@ -717,7 +717,7 @@ struct cdp_cmn_ops {
 	QDF_STATUS (*set_wds_ext_peer_bit)(ol_txrx_soc_handle soc,
 					   uint8_t *mac);
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
-	void (*txrx_drain)(ol_txrx_soc_handle soc);
+	void (*txrx_drain)(ol_txrx_soc_handle soc, uint8_t rx_only);
 	int (*get_free_desc_poolsize)(struct cdp_soc_t *soc);
 #ifdef WLAN_SYSFS_DP_STATS
 	QDF_STATUS (*txrx_sysfs_fill_stats)(ol_txrx_soc_handle soc,
