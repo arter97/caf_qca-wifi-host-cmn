@@ -723,14 +723,18 @@ QDF_STATUS mlo_mgr_link_switch_start_connect(struct wlan_objmgr_vdev *vdev)
 	struct mlo_link_info *mlo_link_info;
 	uint8_t *vdev_mac;
 	struct wlan_mlo_sta *sta_ctx;
-	struct wlan_mlo_link_switch_req *req =
-					&vdev->mlo_dev_ctx->link_ctx->last_req;
+	struct qdf_mac_addr mld_addr;
+	struct wlan_mlo_dev_context *mlo_dev_ctx = vdev->mlo_dev_ctx;
+	struct wlan_mlo_link_switch_req *req = &mlo_dev_ctx->link_ctx->last_req;
+	struct wlan_objmgr_vdev *assoc_vdev = wlan_mlo_get_assoc_link_vdev(vdev);
 
-	sta_ctx = vdev->mlo_dev_ctx->sta_ctx;
+	if (!assoc_vdev) {
+		mlo_err("Assoc VDEV not found");
+		goto out;
+	}
 
-	mlo_link_info =
-		mlo_mgr_get_ap_link_by_link_id(vdev->mlo_dev_ctx,
-					       req->new_ieee_link_id);
+	mlo_link_info = mlo_mgr_get_ap_link_by_link_id(mlo_dev_ctx,
+						       req->new_ieee_link_id);
 
 	if (!mlo_link_info) {
 		mlo_err("New link ID not found");
@@ -746,7 +750,7 @@ QDF_STATUS mlo_mgr_link_switch_start_connect(struct wlan_objmgr_vdev *vdev)
 		goto out;
 	}
 
-	wlan_vdev_set_link_id(vdev, req->new_ieee_link_id);
+	sta_ctx = mlo_dev_ctx->sta_ctx;
 	copied_conn_req_lock_acquire(sta_ctx);
 	if (sta_ctx->copied_conn_req) {
 		qdf_mem_copy(&conn_req, sta_ctx->copied_conn_req,
@@ -757,12 +761,25 @@ QDF_STATUS mlo_mgr_link_switch_start_connect(struct wlan_objmgr_vdev *vdev)
 	}
 	copied_conn_req_lock_release(sta_ctx);
 
+	status = wlan_vdev_get_bss_peer_mld_mac(assoc_vdev, &mld_addr);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mlo_debug("Get MLD addr failed");
+		goto out;
+	}
+
 	conn_req.vdev_id = wlan_vdev_get_id(vdev);
 	conn_req.source = CM_MLO_LINK_SWITCH_CONNECT;
+	wlan_vdev_set_link_id(vdev, req->new_ieee_link_id);
+
 	qdf_copy_macaddr(&conn_req.bssid, &mlo_link_info->ap_link_addr);
-	mlo_allocate_and_copy_ies(&conn_req, sta_ctx->copied_conn_req);
+	qdf_copy_macaddr(&conn_req.mld_addr, &mld_addr);
+	wlan_vdev_mlme_get_ssid(assoc_vdev, conn_req.ssid.ssid,
+				&conn_req.ssid.length);
+
 	conn_req.crypto.auth_type = 0;
 	conn_req.ml_parnter_info = sta_ctx->ml_partner_info;
+	mlo_allocate_and_copy_ies(&conn_req, sta_ctx->copied_conn_req);
+
 	status = wlan_cm_start_connect(vdev, &conn_req);
 	if (QDF_IS_STATUS_SUCCESS(status))
 		mlo_update_connected_links(vdev, 1);
