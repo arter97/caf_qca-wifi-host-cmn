@@ -570,7 +570,7 @@ dp_dump_wbm_idle_hptp(struct dp_soc *soc, struct dp_pdev *pdev);
 void dp_display_srng_info(struct cdp_soc_t *soc_hdl);
 
 #if defined(DP_POWER_SAVE) || defined(FEATURE_RUNTIME_PM)
-void dp_drain_txrx(struct cdp_soc_t *soc_handle);
+void dp_drain_txrx(struct cdp_soc_t *soc_handle, uint8_t rx_only);
 
 /*
  * dp_update_ring_hptp() - update dp rings hptp
@@ -817,7 +817,8 @@ static inline void dp_display_srng_info(struct cdp_soc_t *soc_hdl)
 }
 
 #if defined(DP_POWER_SAVE) || defined(FEATURE_RUNTIME_PM)
-static inline void dp_drain_txrx(struct cdp_soc_t *soc_handle)
+static inline void dp_drain_txrx(struct cdp_soc_t *soc_handle,
+				 uint8_t rx_only)
 {
 }
 #endif
