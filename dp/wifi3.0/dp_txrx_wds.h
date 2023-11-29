@@ -249,6 +249,13 @@ dp_rx_wds_add_or_update_ast(struct dp_soc *soc,
 			dp_peer_unref_delete(ta_base_peer, DP_MOD_ID_RX);
 		}
 		return;
+	} else {
+		/* With FEATURE_WDS=y && FEATURE_AST=n &&
+		 * AST_OFFLOAD_ENABLE=n, check if it is roaming
+		 * candidate with source mac address and its
+		 * current associated peer.
+		 */
+		dp_peer_update_wds(soc, ta_peer, nbuf);
 	}
 
 	qdf_spin_lock_bh(&soc->ast_lock);

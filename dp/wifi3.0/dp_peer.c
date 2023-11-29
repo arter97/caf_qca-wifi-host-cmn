@@ -46,7 +46,7 @@
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
 #include "reg_services_common.h"
 #endif
-#ifdef FEATURE_AST
+#ifdef FEATURE_WDS
 #ifdef BYPASS_OL_OPS
 /**
  * dp_add_wds_entry_wrapper() - Add new AST entry for the wds station
@@ -128,7 +128,7 @@ void dp_del_wds_entry_wrapper(struct dp_soc *soc,
 	target_if_del_wds_entry(soc->ctrl_psoc, vdev_id,
 				wds_macaddr, type, delete_in_fw);
 }
-#else
+#else /* !BYPASS_OL_OPS */
 static int dp_add_wds_entry_wrapper(struct dp_soc *soc,
 				    struct dp_peer *peer,
 				    const uint8_t *dest_macaddr,
@@ -180,7 +180,26 @@ void dp_del_wds_entry_wrapper(struct dp_soc *soc,
 						delete_in_fw);
 }
 #endif /* BYPASS_OL_OPS */
-#else
+#else /* !FEATURE_WDS */
+static inline int
+dp_add_wds_entry_wrapper(struct dp_soc *soc,
+			 struct dp_peer *peer,
+			 const uint8_t *dest_macaddr,
+			 uint32_t flags,
+			 uint8_t type)
+{
+	return qdf_status_to_os_return(QDF_STATUS_SUCCESS);
+}
+
+static inline int
+dp_update_wds_entry_wrapper(struct dp_soc *soc,
+			    struct dp_peer *peer,
+			    uint8_t *dest_macaddr,
+			    uint32_t flags)
+{
+	return qdf_status_to_os_return(QDF_STATUS_SUCCESS);
+}
+
 void dp_del_wds_entry_wrapper(struct dp_soc *soc,
 			      uint8_t vdev_id,
 			      uint8_t *wds_macaddr,
@@ -188,7 +207,7 @@ void dp_del_wds_entry_wrapper(struct dp_soc *soc,
 			      uint8_t delete_in_fw)
 {
 }
-#endif /* FEATURE_AST */
+#endif /* FEATURE_WDS */
 
 #ifdef FEATURE_WDS
 static inline bool
@@ -2212,6 +2231,119 @@ struct dp_ast_entry *dp_peer_ast_hash_find_by_vdevid(struct dp_soc *soc,
 	return NULL;
 }
 
+#ifdef FEATURE_WDS_AST_LEARNING
+/*
+ * This branch is added for below driver configurations.
+ * FEATURE_WDS=y && FEATURE_AST=n && AST_OFFLOAD_ENABLE=n.
+ */
+QDF_STATUS dp_peer_add_ast(struct dp_soc *soc,
+			   struct dp_peer *peer,
+			   uint8_t *mac_addr,
+			   enum cdp_txrx_ast_entry_type type,
+			   uint32_t flags)
+{
+	QDF_STATUS status;
+
+	if (qdf_unlikely(soc->ast_offload_support))
+		return QDF_STATUS_E_INVAL;
+
+	/* Only interested in wds peer */
+	if (type != CDP_TXRX_AST_TYPE_WDS)
+		return QDF_STATUS_SUCCESS;
+
+	/* Add wds peer into wds hash table */
+	status = dp_wds_hash_add_wds_entry(soc, mac_addr, peer->peer_id);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		dp_peer_info("Failed to add wds peer " QDF_MAC_ADDR_FMT,
+			     QDF_MAC_ADDR_REF(mac_addr));
+		return status;
+	}
+
+	/* Notify wds peer to target for ast creation */
+	return qdf_status_from_os_return(dp_add_wds_entry_wrapper(soc,
+								  peer,
+								  mac_addr,
+								  flags,
+								  type));
+}
+
+static QDF_STATUS dp_peer_map_ast(struct dp_soc *soc,
+				  struct dp_peer *peer,
+				  uint8_t *mac_addr,
+				  uint16_t hw_peer_id,
+				  uint8_t vdev_id,
+				  uint16_t ast_hash,
+				  uint8_t is_wds)
+{
+	QDF_STATUS status;
+
+	if (!is_wds)
+		return QDF_STATUS_SUCCESS;
+
+	if (!peer) {
+		dp_peer_err("peer is NULL for wds peer " QDF_MAC_ADDR_FMT,
+			    QDF_MAC_ADDR_REF(mac_addr));
+		return QDF_STATUS_E_INVAL;
+	}
+
+	dp_peer_debug("Map wds peer " QDF_MAC_ADDR_FMT " peer id %d",
+		      QDF_MAC_ADDR_REF(mac_addr), peer->peer_id);
+
+	status = dp_wds_hash_map_wds_entry(soc, mac_addr, peer->peer_id);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		dp_peer_info("Failed to map wds peer " QDF_MAC_ADDR_FMT,
+			     QDF_MAC_ADDR_REF(mac_addr));
+		return status;
+	}
+
+	/* Notify OL layer about the connected wds peer */
+	if (soc->cdp_soc.ol_ops->peer_map_event)
+		soc->cdp_soc.ol_ops->peer_map_event(soc->ctrl_psoc,
+						    peer->peer_id,
+						    hw_peer_id,
+						    vdev_id,
+						    mac_addr,
+						    CDP_TXRX_AST_TYPE_WDS,
+						    ast_hash);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS dp_peer_update_wds(struct dp_soc *soc, struct dp_txrx_peer *ta_peer,
+			      qdf_nbuf_t nbuf)
+{
+	uint8_t wds_macaddr[QDF_MAC_ADDR_SIZE];
+	struct dp_peer *peer;
+	QDF_STATUS status;
+	int ret;
+
+	peer = dp_peer_get_ref_by_id(soc, ta_peer->peer_id, DP_MOD_ID_RX);
+	if (qdf_unlikely(!peer))
+		return QDF_STATUS_E_INVAL;
+
+	qdf_mem_copy(wds_macaddr, qdf_nbuf_data(nbuf) + QDF_MAC_ADDR_SIZE,
+		     QDF_MAC_ADDR_SIZE);
+
+	/* Search WDS hash table to check if a roaming candidate.
+	 * 1. wds entry exists with wds_macaddr but peer id is different.
+	 * 2. wds entry is mapped.
+	 */
+	status = dp_wds_hash_update_wds_entry(soc, wds_macaddr, peer->peer_id);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		dp_peer_debug("Failed to update wds entry " QDF_MAC_ADDR_FMT,
+			      QDF_MAC_ADDR_REF(wds_macaddr));
+		dp_peer_unref_delete(peer, DP_MOD_ID_RX);
+		return status;
+	}
+
+	/* Update target with new associated peer and wds_macaddr */
+	ret = dp_update_wds_entry_wrapper(soc, peer, wds_macaddr, 0);
+
+	dp_peer_unref_delete(peer, DP_MOD_ID_RX);
+
+	return qdf_status_from_os_return(ret);
+}
+#else /* !FEATURE_WDS_AST_LEARNING */
 QDF_STATUS dp_peer_add_ast(struct dp_soc *soc,
 			   struct dp_peer *peer,
 			   uint8_t *mac_addr,
@@ -2221,12 +2353,24 @@ QDF_STATUS dp_peer_add_ast(struct dp_soc *soc,
 	return QDF_STATUS_E_FAILURE;
 }
 
+static inline QDF_STATUS dp_peer_map_ast(struct dp_soc *soc,
+					 struct dp_peer *peer,
+					 uint8_t *mac_addr,
+					 uint16_t hw_peer_id,
+					 uint8_t vdev_id,
+					 uint16_t ast_hash,
+					 uint8_t is_wds)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* FEATURE_WDS_AST_LEARNING */
+
 void dp_peer_del_ast(struct dp_soc *soc, struct dp_ast_entry *ast_entry)
 {
 }
 
 int dp_peer_update_ast(struct dp_soc *soc, struct dp_peer *peer,
-			struct dp_ast_entry *ast_entry, uint32_t flags)
+		       struct dp_ast_entry *ast_entry, uint32_t flags)
 {
 	return 1;
 }
@@ -2262,17 +2406,6 @@ struct dp_ast_entry *dp_peer_ast_hash_find_by_pdevid(struct dp_soc *soc,
 }
 
 QDF_STATUS dp_peer_ast_hash_attach(struct dp_soc *soc)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-static inline QDF_STATUS dp_peer_map_ast(struct dp_soc *soc,
-					 struct dp_peer *peer,
-					 uint8_t *mac_addr,
-					 uint16_t hw_peer_id,
-					 uint8_t vdev_id,
-					 uint16_t ast_hash,
-					 uint8_t is_wds)
 {
 	return QDF_STATUS_SUCCESS;
 }
@@ -2563,6 +2696,27 @@ void dp_peer_find_map_detach(struct dp_soc *soc)
 }
 
 #ifndef AST_OFFLOAD_ENABLE
+#ifdef FEATURE_WDS_AST_LEARNING
+static QDF_STATUS dp_peer_wds_hash_attach(struct dp_soc *soc)
+{
+	return dp_wds_hash_attach(soc);
+}
+
+static void dp_peer_wds_hash_detach(struct dp_soc *soc)
+{
+	dp_wds_hash_detach(soc);
+}
+#else /* !FEATURE_WDS_AST_LEARNING */
+static inline QDF_STATUS dp_peer_wds_hash_attach(struct dp_soc *soc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline void dp_peer_wds_hash_detach(struct dp_soc *soc)
+{
+}
+#endif /* FEATURE_WDS_AST_LEARNING */
+
 QDF_STATUS dp_peer_find_attach(struct dp_soc *soc)
 {
 	QDF_STATUS status;
@@ -2583,12 +2737,18 @@ QDF_STATUS dp_peer_find_attach(struct dp_soc *soc)
 	if (!QDF_IS_STATUS_SUCCESS(status))
 		goto ast_table_detach;
 
+	status = dp_peer_wds_hash_attach(soc);
+	if (QDF_IS_STATUS_ERROR(status))
+		goto ast_hash_detach;
+
 	status = dp_peer_mec_hash_attach(soc);
 	if (QDF_IS_STATUS_SUCCESS(status)) {
 		dp_soc_wds_attach(soc);
 		return status;
 	}
 
+	dp_peer_wds_hash_detach(soc);
+ast_hash_detach:
 	dp_peer_ast_hash_detach(soc);
 ast_table_detach:
 	dp_peer_ast_table_detach(soc);
@@ -3301,6 +3461,7 @@ dp_peer_find_detach(struct dp_soc *soc)
 	dp_peer_ast_hash_detach(soc);
 	dp_peer_ast_table_detach(soc);
 	dp_peer_mec_hash_detach(soc);
+	dp_peer_wds_hash_detach(soc);
 }
 #else
 void

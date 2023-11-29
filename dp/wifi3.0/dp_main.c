@@ -862,6 +862,7 @@ static inline bool dp_peer_check_ast_offload(struct dp_soc *soc)
 }
 #endif
 
+#ifndef FEATURE_WDS_AST_LEARNING
 /**
  * dp_peer_get_ast_info_by_soc_wifi3() - search the soc AST hash table
  *                                       and return ast entry information
@@ -889,61 +890,6 @@ static bool dp_peer_get_ast_info_by_soc_wifi3
 	qdf_spin_lock_bh(&soc->ast_lock);
 
 	ast_entry = dp_peer_ast_hash_find_soc(soc, ast_mac_addr);
-	if ((!ast_entry) ||
-	    (ast_entry->delete_in_progress && !ast_entry->callback)) {
-		qdf_spin_unlock_bh(&soc->ast_lock);
-		return false;
-	}
-
-	peer = dp_peer_get_ref_by_id(soc, ast_entry->peer_id,
-				     DP_MOD_ID_AST);
-	if (!peer) {
-		qdf_spin_unlock_bh(&soc->ast_lock);
-		return false;
-	}
-
-	ast_entry_info->type = ast_entry->type;
-	ast_entry_info->pdev_id = ast_entry->pdev_id;
-	ast_entry_info->vdev_id = ast_entry->vdev_id;
-	ast_entry_info->peer_id = ast_entry->peer_id;
-	qdf_mem_copy(&ast_entry_info->peer_mac_addr[0],
-		     &peer->mac_addr.raw[0],
-		     QDF_MAC_ADDR_SIZE);
-	dp_peer_unref_delete(peer, DP_MOD_ID_AST);
-	qdf_spin_unlock_bh(&soc->ast_lock);
-	return true;
-}
-
-/**
- * dp_peer_get_ast_info_by_pdevid_wifi3() - search the soc AST hash table
- *                                          and return ast entry information
- *                                          if mac address and pdev_id matches
- * @soc_hdl: data path soc handle
- * @ast_mac_addr: AST entry mac address
- * @pdev_id: pdev_id
- * @ast_entry_info: ast entry information
- *
- * Return: true if ast entry found with ast_mac_addr
- *          false if ast entry not found
- */
-static bool dp_peer_get_ast_info_by_pdevid_wifi3
-		(struct cdp_soc_t *soc_hdl,
-		 uint8_t *ast_mac_addr,
-		 uint8_t pdev_id,
-		 struct cdp_ast_entry_info *ast_entry_info)
-{
-	struct dp_ast_entry *ast_entry;
-	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
-	struct dp_peer *peer = NULL;
-
-	if (soc->ast_offload_support)
-		return false;
-
-	qdf_spin_lock_bh(&soc->ast_lock);
-
-	ast_entry = dp_peer_ast_hash_find_by_pdevid(soc, ast_mac_addr,
-						    pdev_id);
-
 	if ((!ast_entry) ||
 	    (ast_entry->delete_in_progress && !ast_entry->callback)) {
 		qdf_spin_unlock_bh(&soc->ast_lock);
@@ -1026,6 +972,181 @@ static QDF_STATUS dp_peer_ast_entry_del_by_soc(struct cdp_soc_t *soc_handle,
 		   CDP_TXRX_AST_DELETE_IN_PROGRESS);
 	}
 	return QDF_STATUS_SUCCESS;
+}
+#else /* FEATURE_WDS_AST_LEARNING */
+/**
+ * dp_peer_get_ast_info_by_soc_wifi3() - search the soc WDS hash table
+ *                                       and return ast entry information
+ *                                       of first ast entry found in the
+ *                                       table with given mac address
+ * @soc_hdl: data path soc handle
+ * @ast_mac_addr: WDS entry mac address
+ * @ast_entry_info: ast entry information
+ *
+ * This branch is added for below driver configurations.
+ * FEATURE_WDS=y && FEATURE_AST=n && AST_OFFLOAD_ENABLE=n.
+ *
+ * Return: true if wds entry found with ast_mac_addr. Otherwise false if
+ *	   wds entry is not found.
+ */
+static bool
+dp_peer_get_ast_info_by_soc_wifi3(struct cdp_soc_t *soc_hdl,
+				  uint8_t *ast_mac_addr,
+				  struct cdp_ast_entry_info *ast_entry_info)
+{
+	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
+	struct dp_wds_entry *ent;
+	struct dp_peer *peer;
+
+	if (dp_peer_check_ast_offload(soc))
+		return false;
+
+	ent = dp_wds_hash_find_wds_entry(soc, ast_mac_addr);
+	if (!ent) {
+		dp_info_rl("Failed to find wds entry for mac " QDF_MAC_ADDR_FMT,
+			   QDF_MAC_ADDR_REF(ast_mac_addr));
+		return false;
+	}
+
+	if (!ent->is_mapped) {
+		dp_info_rl("wds entry is not mapped for mac " QDF_MAC_ADDR_FMT,
+			   QDF_MAC_ADDR_REF(ast_mac_addr));
+		return false;
+	}
+
+	peer = dp_peer_get_ref_by_id(soc, ent->peer_id, DP_MOD_ID_AST);
+	if (!peer) {
+		dp_info_rl("Failed to get peer %d for mac " QDF_MAC_ADDR_FMT,
+			   ent->peer_id, QDF_MAC_ADDR_REF(ast_mac_addr));
+		return false;
+	}
+
+	qdf_mem_copy(ast_entry_info->peer_mac_addr, peer->mac_addr.raw,
+		     QDF_MAC_ADDR_SIZE);
+	ast_entry_info->peer_id = ent->peer_id;
+	ast_entry_info->type = CDP_TXRX_AST_TYPE_WDS;
+
+	dp_peer_unref_delete(peer, DP_MOD_ID_AST);
+
+	return true;
+}
+
+/**
+ * dp_peer_ast_entry_del_by_soc() - delete the wds entry from soc WDS hash table
+ *				    with given mac address
+ * @soc_handle: data path soc handle
+ * @mac_addr: wds node mac address
+ * @callback: callback function to called on ast delete response from FW
+ * @cookie: argument to be passed to callback
+ *
+ * This branch is added for below driver configurations.
+ * FEATURE_WDS=y && FEATURE_AST=n && AST_OFFLOAD_ENABLE=n.
+ *
+ * Return: QDF_STATUS_SUCCESS if wds node is found with mac_addr and wds entry
+ *	   is deleted in both Host and Target. Otherwise error code is returned.
+ */
+static QDF_STATUS dp_peer_ast_entry_del_by_soc(struct cdp_soc_t *soc_handle,
+					       uint8_t *mac_addr,
+					       txrx_ast_free_cb callback,
+					       void *cookie)
+{
+	struct dp_soc *soc = (struct dp_soc *)soc_handle;
+	struct dp_wds_entry *ent;
+	struct dp_peer *peer;
+	bool delete_in_fw;
+
+	if (dp_peer_check_ast_offload(soc))
+		return QDF_STATUS_SUCCESS;
+
+	ent = dp_wds_hash_find_wds_entry(soc, mac_addr);
+	if (!ent) {
+		dp_info_rl("Failed to find wds entry for mac " QDF_MAC_ADDR_FMT,
+			   QDF_MAC_ADDR_REF(mac_addr));
+		return QDF_STATUS_E_NOENT;
+	}
+
+	if (!ent->is_mapped) {
+		dp_info_rl("wds entry is not mapped for mac " QDF_MAC_ADDR_FMT,
+			   QDF_MAC_ADDR_REF(mac_addr));
+		return QDF_STATUS_E_INVAL;
+	}
+
+	peer = dp_peer_get_ref_by_id(soc, ent->peer_id, DP_MOD_ID_AST);
+	if (!peer) {
+		dp_info_rl("Failed to get peer %u for mac " QDF_MAC_ADDR_FMT,
+			   ent->peer_id, QDF_MAC_ADDR_REF(mac_addr));
+		return QDF_STATUS_E_INVAL;
+	}
+
+	/* Notify target to delete the WDS AST entry */
+	if (peer && dp_peer_state_cmp(peer, DP_PEER_STATE_LOGICAL_DELETE))
+		delete_in_fw = false;
+	else
+		delete_in_fw = true;
+
+	dp_del_wds_entry_wrapper(soc, peer->vdev->vdev_id, mac_addr,
+				 CDP_TXRX_AST_TYPE_WDS, delete_in_fw);
+
+	dp_peer_unref_delete(peer, DP_MOD_ID_AST);
+
+	/* Delete the wds entry in wds hash table */
+	return dp_wds_hash_remove_wds_entry(soc, mac_addr, ent->peer_id);
+}
+#endif /* FEATURE_WDS_AST_LEARNING */
+
+/**
+ * dp_peer_get_ast_info_by_pdevid_wifi3() - search the soc AST hash table
+ *                                          and return ast entry information
+ *                                          if mac address and pdev_id matches
+ * @soc_hdl: data path soc handle
+ * @ast_mac_addr: AST entry mac address
+ * @pdev_id: pdev_id
+ * @ast_entry_info: ast entry information
+ *
+ * Return: true if ast entry found with ast_mac_addr
+ *          false if ast entry not found
+ */
+static bool dp_peer_get_ast_info_by_pdevid_wifi3
+		(struct cdp_soc_t *soc_hdl,
+		 uint8_t *ast_mac_addr,
+		 uint8_t pdev_id,
+		 struct cdp_ast_entry_info *ast_entry_info)
+{
+	struct dp_ast_entry *ast_entry;
+	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
+	struct dp_peer *peer = NULL;
+
+	if (soc->ast_offload_support)
+		return false;
+
+	qdf_spin_lock_bh(&soc->ast_lock);
+
+	ast_entry = dp_peer_ast_hash_find_by_pdevid(soc, ast_mac_addr,
+						    pdev_id);
+
+	if ((!ast_entry) ||
+	    (ast_entry->delete_in_progress && !ast_entry->callback)) {
+		qdf_spin_unlock_bh(&soc->ast_lock);
+		return false;
+	}
+
+	peer = dp_peer_get_ref_by_id(soc, ast_entry->peer_id,
+				     DP_MOD_ID_AST);
+	if (!peer) {
+		qdf_spin_unlock_bh(&soc->ast_lock);
+		return false;
+	}
+
+	ast_entry_info->type = ast_entry->type;
+	ast_entry_info->pdev_id = ast_entry->pdev_id;
+	ast_entry_info->vdev_id = ast_entry->vdev_id;
+	ast_entry_info->peer_id = ast_entry->peer_id;
+	qdf_mem_copy(&ast_entry_info->peer_mac_addr[0],
+		     &peer->mac_addr.raw[0],
+		     QDF_MAC_ADDR_SIZE);
+	dp_peer_unref_delete(peer, DP_MOD_ID_AST);
+	qdf_spin_unlock_bh(&soc->ast_lock);
+	return true;
 }
 
 /**
@@ -8328,6 +8449,17 @@ static void dp_print_reg_write_stats(struct dp_soc *soc)
 }
 #endif
 
+#ifdef FEATURE_WDS_AST_LEARNING
+static void dp_print_wds_hash_table(struct dp_soc *soc)
+{
+	dp_wds_hash_print_wds_hash_table(soc);
+}
+#else /* !FEATURE_WDS_AST_LEARNING */
+static inline void dp_print_wds_hash_table(struct dp_soc *soc)
+{
+}
+#endif /* FEATURE_WDS_AST_LEARNING */
+
 /**
  * dp_print_host_stats()- Function to print the stats aggregated at host
  * @vdev: DP_VDEV handle
@@ -8373,6 +8505,7 @@ dp_print_host_stats(struct dp_vdev *vdev,
 		dp_print_peer_table(vdev);
 		if (soc->arch_ops.dp_mlo_print_ptnr_info)
 			soc->arch_ops.dp_mlo_print_ptnr_info(vdev);
+		dp_print_wds_hash_table(pdev->soc);
 		break;
 	case TXRX_SRNG_PTR_STATS:
 		dp_print_ring_stats(pdev);

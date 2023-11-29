@@ -2686,4 +2686,29 @@ void dp_map_link_id_band(struct dp_peer *peer)
 {
 }
 #endif
+
+#ifdef FEATURE_WDS_AST_LEARNING
+/**
+ * dp_peer_update_wds() - Search WDS hash table to check if wds ast entry
+ * needs to be updated.
+ * @soc: datapath soc handle
+ * @ta_peer: dp_txrx_peer handle
+ * @nbuf: skb buffer
+ *
+ * This branch is added for below driver configurations.
+ * FEATURE_WDS=y && FEATURE_AST=n && AST_OFFLOAD_ENABLE=n.
+ *
+ * return: QDF_STATUS_SUCCESS for success, otherwise error codes.
+ */
+QDF_STATUS dp_peer_update_wds(struct dp_soc *soc, struct dp_txrx_peer *ta_peer,
+			      qdf_nbuf_t nbuf);
+#else /* !FEATURE_WDS_AST_LEARNING */
+static inline QDF_STATUS
+dp_peer_update_wds(struct dp_soc *soc, struct dp_txrx_peer *ta_peer,
+		   qdf_nbuf_t nbuf)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* FEATURE_WDS_AST_LEARNING */
+
 #endif /* _DP_PEER_H_ */
