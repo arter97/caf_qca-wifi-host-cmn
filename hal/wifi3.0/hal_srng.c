@@ -65,8 +65,11 @@ void hal_qca5018_attach(struct hal_soc *hal);
 #ifdef QCA_WIFI_QCA5332
 void hal_qca5332_attach(struct hal_soc *hal);
 #endif
-#ifdef QCA_WIFI_KIWI
+#ifdef INCLUDE_HAL_KIWI
 void hal_kiwi_attach(struct hal_soc *hal);
+#endif
+#ifdef INCLUDE_HAL_PEACH
+void hal_peach_attach(struct hal_soc *hal);
 #endif
 
 #ifdef ENABLE_VERBOSE_DEBUG
@@ -443,12 +446,17 @@ static void hal_target_based_configure(struct hal_soc *hal)
 			hal_qca6750_attach(hal);
 		break;
 #endif
-#ifdef QCA_WIFI_KIWI
+#ifdef INCLUDE_HAL_KIWI
 	case TARGET_TYPE_KIWI:
 	case TARGET_TYPE_MANGO:
-	case TARGET_TYPE_PEACH:
 		hal->use_register_windowing = true;
 		hal_kiwi_attach(hal);
+		break;
+#endif
+#ifdef INCLUDE_HAL_PEACH
+	case TARGET_TYPE_PEACH:
+		hal->use_register_windowing = true;
+		hal_peach_attach(hal);
 		break;
 #endif
 #if defined(QCA_WIFI_QCA8074) && defined(WIFI_TARGET_TYPE_3_0)
