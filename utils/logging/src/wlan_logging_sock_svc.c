@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -645,12 +645,12 @@ static int pktlog_send_per_pkt_stats_to_user(void)
 			ret = 0;
 		}
 err:
-	/*
-	 * Free old skb in case or error before assigning new skb
-	 * to the free list.
-	 */
-	if (free_old_skb)
-		dev_kfree_skb(pstats_msg->skb);
+		/*
+		 * Free old skb in case or error before assigning new skb
+		 * to the free list.
+		 */
+		if (free_old_skb)
+			dev_kfree_skb(pstats_msg->skb);
 
 		spin_lock_irqsave(&gwlan_logging.pkt_stats_lock, flags);
 		pstats_msg->skb = skb_new;
