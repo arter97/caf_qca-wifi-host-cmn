@@ -1695,6 +1695,10 @@ enum reg_subdomains_6g {
 	MKK1_CLI_LPI_6G = MKK1_AP_LPI_6G,
 	MKK1_AP_VLP_6G = 0x61,
 	MKK1_CLI_VLP_6G = MKK1_AP_VLP_6G,
+	MKK2_AP_LPI_6G = 0x62,
+	MKK2_CLI_LPI_6G = MKK2_AP_LPI_6G,
+	MKK2_AP_VLP_6G = 0x63,
+	MKK2_CLI_VLP_6G = MKK2_AP_VLP_6G,
 };
 
 /*
@@ -1745,6 +1749,10 @@ static const struct sixghz_super_to_subdomains g_6g_reg_dmn_9_tuples[] = {
 	 {MKK1_CLI_LPI_6G, MKK1_CLI_LPI_6G},
 	 {0, 0},
 	 {MKK1_CLI_VLP_6G, MKK1_CLI_VLP_6G} },
+	{MKK2_6G_16, MKK2_AP_LPI_6G, 0, MKK2_AP_VLP_6G,
+	 {MKK2_CLI_LPI_6G, MKK2_CLI_LPI_6G},
+	 {0, 0},
+	 {MKK2_CLI_VLP_6G, MKK2_CLI_VLP_6G} },
 	{ETSI2_6G_0C, ETSI2_AP_LPI_6G, 0, ETSI1_AP_VLP_6G,
 	 {ETSI2_CLI_LPI_6G, ETSI2_CLI_LPI_6G},
 	 {0, 0},
@@ -2024,6 +2032,8 @@ static const struct sub_6g_regdomain sub_regdomains_6g[] = {
 					 CHAN_6875_7125_10} },
 	[MKK1_AP_LPI_6G]  = {2, 160, 1, {CHAN_5925_6425_13} },
 	[MKK1_AP_VLP_6G]  = {2, 160, 1, {CHAN_5945_6425_10} },
+	[MKK2_AP_LPI_6G]  = {2, 320, 1, {CHAN_5945_6425_4} },
+	[MKK2_AP_VLP_6G]  = {2, 320, 1, {CHAN_5945_6425_6} },
 };
 #endif
 #ifdef CONFIG_REG_CLIENT

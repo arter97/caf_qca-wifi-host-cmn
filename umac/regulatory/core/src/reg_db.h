@@ -663,6 +663,7 @@ struct reg_domain_pair {
  * @APL5_6G_12: Super domain for future purpose
  * @APL7_6G_13: Super domain APL7_6G_13 for CHILE
  * @FCC1_6G_14: Super domain FCC1_6G_14 for DOMINICAN REPUBLIC
+ * @MKK2_6G_16: Super domain MKK2_6G_16 for Japan LPI and VLP support for 320 MHz
  */
 enum reg_super_domain_6g {
 	FCC1_6G_01 = 0x01,
@@ -684,6 +685,7 @@ enum reg_super_domain_6g {
 	APL5_6G_12 = 0x12,
 	APL7_6G_13 = 0x13,
 	FCC1_6G_14 = 0x14,
+	MKK2_6G_16 = 0x16,
 };
 
 #if defined(COMPILE_REGDB_6G)
