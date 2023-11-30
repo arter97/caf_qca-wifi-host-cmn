@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -276,6 +276,7 @@ struct hal_rx_mon_msdu_info {
  * @full_pkt: Full MPDU received
  * @first_rx_hdr_rcvd: First rx_hdr received
  * @truncated: truncated MPDU
+ * @is_aggr: is aggregated MSDU
  */
 struct hal_rx_mon_mpdu_info {
 	uint32_t decap_type : 8,
@@ -286,7 +287,8 @@ struct hal_rx_mon_mpdu_info {
 		 mpdu_start_received : 1,
 		 full_pkt : 1,
 		 first_rx_hdr_rcvd : 1,
-		 truncated : 1;
+		 truncated : 1,
+		 is_aggr : 1;
 };
 
 /**

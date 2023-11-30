@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -686,6 +686,7 @@ dp_rx_mon_handle_mpdu_end(struct hal_rx_ppdu_info *ppdu_info)
 	mpdu_meta->decrypt_err = mpdu_info->decrypt_err;
 	mpdu_meta->full_pkt = mpdu_info->full_pkt;
 	mpdu_meta->truncated = mpdu_info->truncated;
+	mpdu_meta->is_aggr = mpdu_info->is_aggr;
 
 	/* reset mpdu info for next mpdu for same user */
 	qdf_mem_zero(mpdu_info, sizeof(*mpdu_info));
@@ -774,6 +775,11 @@ dp_rx_mon_handle_msdu_end(struct dp_pdev *pdev,
 	last_buf_info->user_rssi = msdu_info->user_rssi;
 	last_buf_info->reception_type = msdu_info->reception_type;
 	last_buf_info->msdu_len = msdu_info->msdu_len;
+
+	if (last_buf_info->first_msdu && last_buf_info->last_msdu)
+		ppdu_info->mpdu_info[user_id].is_aggr = false;
+	else
+		ppdu_info->mpdu_info[user_id].is_aggr = true;
 
 	/* If flow classification is enabled,
 	 * update protocol and flow tag to buf headroom
@@ -1306,6 +1312,11 @@ dp_rx_mon_process_ppdu_info(struct dp_pdev *pdev,
 			mpdu_meta = (struct hal_rx_mon_mpdu_info *)qdf_nbuf_data(mpdu);
 
 			ppdu_info->rx_status.rs_fcs_err = mpdu_meta->fcs_err;
+			if (mpdu_meta->is_aggr)
+				ppdu_info->rx_status.rs_flags |= IEEE80211_AMSDU_FLAG;
+			else
+				ppdu_info->rx_status.rs_flags &= ~IEEE80211_AMSDU_FLAG;
+
 			if (dp_lite_mon_is_rx_enabled(mon_pdev)) {
 				status = dp_lite_mon_rx_mpdu_process(pdev, ppdu_info,
 								     mpdu, mpdu_idx, user);
