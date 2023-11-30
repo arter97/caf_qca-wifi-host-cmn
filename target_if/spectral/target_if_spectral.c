@@ -4221,10 +4221,7 @@ target_if_psoc_spectral_init(struct wlan_objmgr_psoc *psoc)
 	return psoc_spectral;
 
 fail:
-	if (psoc_spectral)
-		target_if_psoc_spectral_deinit(psoc);
-
-	return psoc_spectral;
+	return NULL;
 }
 
 /**
