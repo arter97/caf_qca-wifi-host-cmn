@@ -247,6 +247,8 @@ extract_vdev_start_resp_tlv(struct wmi_unified *wmi_handle, void *evt_buf,
 	vdev_rsp->cfgd_tx_streams = ev->cfgd_tx_streams;
 	vdev_rsp->cfgd_rx_streams = ev->cfgd_rx_streams;
 	vdev_rsp->max_allowed_tx_power = ev->max_allowed_tx_power;
+	if (ev->min_device_tx_pwr_valid)
+		vdev_rsp->min_allowed_tx_power = ev->min_device_tx_pwr;
 
 	return QDF_STATUS_SUCCESS;
 }
