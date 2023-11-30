@@ -1408,7 +1408,11 @@ static inline uint8_t *__qdf_nbuf_put_tail(struct sk_buff *skb, size_t size)
 		if (unlikely(pskb_expand_head(skb, 0,
 			size - skb_tailroom(skb), GFP_ATOMIC))) {
 			__qdf_nbuf_count_dec(skb);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+			dev_consume_skb_any(skb);
+#else
 			dev_kfree_skb_any(skb);
+#endif
 			return NULL;
 		}
 	}
@@ -1911,7 +1915,11 @@ static inline void __qdf_nbuf_set_pktlen(struct sk_buff *skb, uint32_t len)
 				   " tail-room: %u, len: %u, skb->len: %u",
 				   skb_tailroom(skb), len, skb->len);
 				__qdf_nbuf_count_dec(skb);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+				dev_consume_skb_any(skb);
+#else
 				dev_kfree_skb_any(skb);
+#endif
 			}
 		}
 		skb_put(skb, (len - skb->len));
@@ -2342,7 +2350,11 @@ __qdf_nbuf_realloc_headroom(struct sk_buff *skb, uint32_t headroom)
 {
 	if (pskb_expand_head(skb, headroom, 0, GFP_ATOMIC)) {
 		__qdf_nbuf_count_dec(skb);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+		dev_consume_skb_any(skb);
+#else
 		dev_kfree_skb_any(skb);
+#endif
 		skb = NULL;
 	}
 	return skb;
@@ -2366,7 +2378,11 @@ __qdf_nbuf_realloc_tailroom(struct sk_buff *skb, uint32_t tailroom)
 	 * unlikely path
 	 */
 	__qdf_nbuf_count_dec(skb);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+	dev_consume_skb_any(skb);
+#else
 	dev_kfree_skb_any(skb);
+#endif
 	return NULL;
 }
 
@@ -2457,7 +2473,11 @@ __qdf_nbuf_expand(struct sk_buff *skb, uint32_t headroom, uint32_t tailroom)
 		return skb;
 
 	__qdf_nbuf_count_dec(skb);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+	dev_consume_skb_any(skb);
+#else
 	dev_kfree_skb_any(skb);
+#endif
 	return NULL;
 }
 

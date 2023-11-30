@@ -722,7 +722,11 @@ void __qdf_nbuf_free(struct sk_buff *skb)
 	if (nbuf_free_cb)
 		nbuf_free_cb(skb);
 	else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+		dev_consume_skb_any(skb);
+#else
 		dev_kfree_skb_any(skb);
+#endif
 }
 
 qdf_export_symbol(__qdf_nbuf_free);
@@ -3691,7 +3695,11 @@ void qdf_nbuf_free_debug_simple(qdf_nbuf_t nbuf, const char *func,
 {
 	if (qdf_likely(nbuf)) {
 		if (is_initial_mem_debug_disabled) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+			dev_consume_skb_any(nbuf);
+#else
 			dev_kfree_skb_any(nbuf);
+#endif
 		} else {
 			qdf_nbuf_free_debug(nbuf, func, line);
 		}
