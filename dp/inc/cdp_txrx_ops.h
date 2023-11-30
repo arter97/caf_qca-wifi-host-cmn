@@ -1838,7 +1838,7 @@ struct ol_if_ops {
 				       uint8_t vdev_id,
 				       struct ol_txrx_hardtart_ctxt *ctxt);
 #endif
-#if defined(IPA_WDS_EASYMESH_FEATURE) && defined(FEATURE_AST)
+#ifdef IPA_WDS_EASYMESH_FEATURE
 void (*peer_send_wds_disconnect)(struct cdp_ctrl_objmgr_psoc *psoc,
 				 uint8_t *mac_addr, uint8_t vdev_id);
 #endif

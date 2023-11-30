@@ -3071,6 +3071,40 @@ struct dp_ipa_resources {
 };
 #endif
 
+#if defined(FEATURE_WDS) && !defined(FEATURE_AST) && \
+!defined(AST_OFFLOAD_ENABLE)
+#define FEATURE_WDS_AST_LEARNING 1
+
+#define DP_WDS_HASH_LOAD_MULTI 2
+#define DP_WDS_HASH_LOAD_SHIFT 0
+
+/**
+ * struct dp_wds_entry - WDS entry
+ *
+ * @mac_addr: WDS mac addr for this WDS entry. Same as @wds_macaddr in
+ *		struct wmi_peer_add_wds_entry_cmd_fixed_param
+ * @peer_id: peer id of @peer_macaddr in
+ *	       struct wmi_peer_add_wds_entry_cmd_fixed_param
+ * @hash_list_elem: node in soc WDS hash list (@mac_addr used as hash)
+ * @is_mapped: boolean flag to indicate if @mac_addr is mapped in target
+ *
+ * This structure is used under below driver configurations.
+ * FEATURE_WDS=y and FEATURE_AST=n and AST_OFFLOAD_ENABLE=n.
+ *
+ * Each entry contains mac_addr that is a WDS peer connected
+ * behind the repeater. @peer_id is the peer id of the STA vdev
+ * of the repeater which is directly connected to SAP vdev with
+ * @vdev_id.
+ */
+struct dp_wds_entry {
+	union dp_align_mac_addr mac_addr;
+	uint16_t peer_id;
+	bool is_mapped;
+
+	TAILQ_ENTRY(dp_wds_entry) hash_list_elem;
+};
+#endif
+
 /* SOC level structure for data path */
 struct dp_soc {
 	/**
@@ -3666,6 +3700,19 @@ struct dp_soc {
 #ifdef WLAN_FEATURE_TX_LATENCY_STATS
 	/* callback function for tx latency stats */
 	cdp_tx_latency_cb tx_latency_cb;
+#endif
+
+#ifdef FEATURE_WDS_AST_LEARNING
+	/** @wds_lock: spinlock for WDS hash table */
+	qdf_spinlock_t wds_hash_lock;
+	struct {
+		/** @mask: mask bits */
+		uint32_t mask;
+		/** @idx_bits: index to shift bits */
+		uint32_t idx_bits;
+		/** @bins: WDS hash table */
+		TAILQ_HEAD(, dp_wds_entry) * bins;
+	} wds_hash;
 #endif
 
 #ifdef DP_TX_COMP_RING_DESC_SANITY_CHECK

@@ -539,4 +539,158 @@ static inline QDF_STATUS dp_rx_ast_set_active(struct dp_soc *soc,
 	qdf_spin_unlock_bh(&soc->ast_lock);
 	return QDF_STATUS_E_FAILURE;
 }
+
+#ifdef FEATURE_WDS_AST_LEARNING
+/**
+ * dp_wds_hash_attach() - Allocate and initialize WDS Hash table
+ * @soc: datapath soc handle
+ *
+ * Return: QDF_STATUS;
+ */
+QDF_STATUS dp_wds_hash_attach(struct dp_soc *soc);
+
+/**
+ * dp_wds_hash_detach() - Free WDS hash table
+ * @soc: datapath soc handle
+ *
+ * Return: None
+ */
+void dp_wds_hash_detach(struct dp_soc *soc);
+
+/**
+ * dp_wds_hash_add_wds_entry() - Add wds entry into WDS hash table
+ * @soc: datapath soc handle
+ * @wds_macaddr: wds mac address
+ * @peer_id: peer id of peer the wds node is associated
+ *
+ * Add wds entry into WDS hash table along with WMI_PEER_ADD_WDS_ENTRY_CMDID
+ * request to target.
+ *
+ * Return: QDF_STATUS_SUCCESS for success and otherwise failure
+ */
+QDF_STATUS dp_wds_hash_add_wds_entry(struct dp_soc *soc, uint8_t *wds_macaddr,
+				     uint16_t peer_id);
+
+/**
+ * dp_wds_hash_map_wds_entry() - Map wds entry in WDS hash table
+ * @soc: datapath soc handle
+ * @wds_macaddr: wds mac address
+ * @peer_id: peer id of peer the wds node is associated
+ *
+ * Map the wds entry upon wds peer map event from target.
+ *
+ * Return: QDF_STATUS_SUCCESS for success and otherwise failure
+ */
+QDF_STATUS dp_wds_hash_map_wds_entry(struct dp_soc *soc, uint8_t *wds_macaddr,
+				     uint16_t peer_id);
+
+/**
+ * dp_wds_hash_update_wds_entry() - Update wds entry in WDS hash table
+ * @soc: datapath soc handle
+ * @wds_macaddr: wds mac address
+ * @peer_id: peer id of peer the wds node is associated
+ *
+ * Update wds entry with new peer_id if matching entry with wds_macaddr
+ * is found and the entry is mapped already.
+ *
+ * Return: QDF_STATUS_SUCCESS for success and otherwise failure
+ */
+QDF_STATUS dp_wds_hash_update_wds_entry(struct dp_soc *soc,
+					uint8_t *wds_macaddr,
+					uint16_t peer_id);
+
+/**
+ * dp_wds_hash_remove_wds_entry() - Remove wds entry from WDS hash table
+ * @soc: datapath soc handle
+ * @wds_macaddr: wds mac address
+ * @peer_id: peer id the wds node is associated
+ *
+ * Return: QDF_STATUS_SUCCESS for success otherwise error codes
+ */
+QDF_STATUS dp_wds_hash_remove_wds_entry(struct dp_soc *soc,
+					uint8_t *wds_macaddr,
+					uint16_t peer_id);
+
+/**
+ * dp_wds_hash_find_wds_entry() - Find wds entry from WDS hash table matching
+ *				  vdev_id and wds_macaddr
+ * @soc: datapath soc handle
+ * @wds_macaddr: wds mac address
+ *
+ * Return: dp_wds_entry pointer if matched, otherwise NULL
+ */
+struct dp_wds_entry *dp_wds_hash_find_wds_entry(struct dp_soc *soc,
+						uint8_t *wds_macaddr);
+
+/**
+ * dp_wds_hash_cleanup_by_peer_id() - Cleanup wds entries with peer_id
+ * @soc: datapath soc handle
+ * @vdev_id: vdev id
+ * @peer_id: peer id
+ *
+ * This API cleans up all wds entries in WDS hash table that match with
+ * peer id.
+ *
+ * Return: QDF_STATUS_SUCCESS for success, otherwise error codes.
+ */
+QDF_STATUS dp_wds_hash_cleanup_by_peer_id(struct dp_soc *soc, uint8_t vdev_id,
+					  uint16_t peer_id);
+
+/**
+ * dp_wds_hash_print_wds_hash_table() - Print wds hash table
+ * @soc: datapath soc handle
+ *
+ * Return: none
+ */
+void dp_wds_hash_print_wds_hash_table(struct dp_soc *soc);
+
+#else /* !FEATURE_WDS_AST_LEARNING */
+static inline QDF_STATUS dp_wds_hash_attach(struct dp_soc *soc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline void dp_wds_hash_detach(struct dp_soc *soc)
+{
+}
+
+static inline QDF_STATUS
+dp_wds_hash_add_wds_entry(struct dp_soc *soc, uint8_t *wds_macaddr,
+			  uint16_t peer_id)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+dp_wds_hash_map_wds_entry(struct dp_soc *soc, uint8_t *wds_macaddr,
+			  uint16_t peer_id)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+dp_wds_hash_update_wds_entry(struct dp_soc *soc, uint8_t *wds_macaddr,
+			     uint16_t peer_id)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+dp_wds_hash_remove_wds_entry(struct dp_soc *soc, uint8_t *wds_macaddr,
+			     uint16_t peer_id)
+{
+	return QDF_STATUS_E_FAILURE;
+}
+
+static inline struct dp_wds_entry
+*dp_wds_hash_find_wds_entry(struct dp_soc *soc, uint8_t *wds_macaddr)
+{
+	return NULL;
+}
+
+static inline void dp_wds_hash_print_wds_hash_table(struct dp_soc *soc)
+{
+}
+#endif /* FEATURE_WDS_AST_LEARNING */
+
 #endif /* DP_TXRX_WDS*/

@@ -1020,3 +1020,429 @@ void dp_send_completion_to_stack(struct dp_soc *soc,  struct dp_pdev *pdev,
 }
 #endif
 #endif
+
+#ifdef FEATURE_WDS_AST_LEARNING
+static uint32_t dp_wds_hash_index(struct dp_soc *soc,
+				  union dp_align_mac_addr *mac_addr)
+{
+	uint32_t index;
+
+	index = mac_addr->align2.bytes_ab ^
+		mac_addr->align2.bytes_cd ^
+		mac_addr->align2.bytes_ef;
+	index ^= index >> soc->wds_hash.idx_bits;
+	index &= soc->wds_hash.mask;
+
+	return index;
+}
+
+static struct
+dp_wds_entry *__dp_wds_hash_find_entry_by_peer_id(struct dp_soc *soc,
+						  uint8_t *wds_macaddr,
+						  uint16_t peer_id)
+{
+	union dp_align_mac_addr local_mac_addr_aligned, *mac_addr;
+	struct dp_wds_entry *wds_ent;
+	uint32_t index;
+
+	qdf_mem_copy(&local_mac_addr_aligned.raw[0], wds_macaddr,
+		     QDF_MAC_ADDR_SIZE);
+	mac_addr = &local_mac_addr_aligned;
+
+	index = dp_wds_hash_index(soc, mac_addr);
+
+	TAILQ_FOREACH(wds_ent, &soc->wds_hash.bins[index], hash_list_elem) {
+		if (wds_ent->peer_id == peer_id &&
+		    !qdf_mem_cmp(wds_ent->mac_addr.raw, wds_macaddr,
+				 QDF_MAC_ADDR_SIZE)) {
+			return wds_ent;
+		}
+	}
+
+	return NULL;
+}
+
+static struct
+dp_wds_entry *dp_wds_hash_find_entry_by_peer_id(struct dp_soc *soc,
+						uint8_t *mac_addr,
+						uint16_t peer_id)
+{
+	struct dp_wds_entry *entry;
+
+	qdf_spin_lock_bh(&soc->wds_hash_lock);
+	entry = __dp_wds_hash_find_entry_by_peer_id(soc, mac_addr, peer_id);
+	qdf_spin_unlock_bh(&soc->wds_hash_lock);
+
+	return entry;
+}
+
+static struct
+dp_wds_entry *__dp_wds_hash_find_wds_entry(struct dp_soc *soc,
+					   uint8_t *wds_macaddr)
+{
+	union dp_align_mac_addr local_mac_addr_aligned, *mac_addr;
+	struct dp_wds_entry *wds_ent;
+	uint32_t index;
+
+	qdf_mem_copy(&local_mac_addr_aligned.raw[0], wds_macaddr,
+		     QDF_MAC_ADDR_SIZE);
+	mac_addr = &local_mac_addr_aligned;
+
+	index = dp_wds_hash_index(soc, mac_addr);
+
+	TAILQ_FOREACH(wds_ent, &soc->wds_hash.bins[index], hash_list_elem) {
+		if (!qdf_mem_cmp(wds_ent->mac_addr.raw, wds_macaddr,
+				 QDF_MAC_ADDR_SIZE))
+			return wds_ent;
+	}
+
+	return NULL;
+}
+
+struct dp_wds_entry *dp_wds_hash_find_wds_entry(struct dp_soc *soc,
+						uint8_t *wds_macaddr)
+{
+	struct dp_wds_entry *wds_ent;
+
+	qdf_spin_lock_bh(&soc->wds_hash_lock);
+	wds_ent = __dp_wds_hash_find_wds_entry(soc, wds_macaddr);
+	qdf_spin_unlock_bh(&soc->wds_hash_lock);
+
+	return wds_ent;
+}
+
+static void dp_wds_hash_enqueue_entry(struct dp_soc *soc,
+				      struct dp_wds_entry *entry)
+{
+	uint32_t index = dp_wds_hash_index(soc, &entry->mac_addr);
+
+	qdf_spin_lock_bh(&soc->wds_hash_lock);
+	TAILQ_INSERT_TAIL(&soc->wds_hash.bins[index], entry, hash_list_elem);
+	qdf_spin_unlock_bh(&soc->wds_hash_lock);
+}
+
+static void dp_wds_hash_bins_flush(struct dp_soc *soc)
+{
+	struct dp_wds_entry *wds_ent, *wds_ent_next;
+	unsigned int index;
+
+	TAILQ_HEAD(, dp_wds_entry) free_list;
+	TAILQ_INIT(&free_list);
+
+	qdf_spin_lock_bh(&soc->wds_hash_lock);
+
+	if (!soc->wds_hash.mask || !soc->wds_hash.bins) {
+		dp_debug("%pK: wds hash table is empty", soc);
+		qdf_spin_unlock_bh(&soc->wds_hash_lock);
+		return;
+	}
+
+	for (index = 0; index <= soc->wds_hash.mask; index++) {
+		if (!TAILQ_EMPTY(&soc->wds_hash.bins[index])) {
+			TAILQ_FOREACH_SAFE(wds_ent, &soc->wds_hash.bins[index],
+					   hash_list_elem, wds_ent_next) {
+				TAILQ_REMOVE(&soc->wds_hash.bins[index],
+					     wds_ent, hash_list_elem);
+				TAILQ_INSERT_TAIL(&free_list, wds_ent,
+						  hash_list_elem);
+			}
+		}
+	}
+	qdf_spin_unlock_bh(&soc->wds_hash_lock);
+
+	TAILQ_FOREACH_SAFE(wds_ent, &free_list, hash_list_elem, wds_ent_next) {
+		dp_debug("Free WDS entry for mac: " QDF_MAC_ADDR_FMT,
+			 QDF_MAC_ADDR_REF(wds_ent->mac_addr.raw));
+		qdf_mem_free(wds_ent);
+	}
+}
+
+QDF_STATUS dp_wds_hash_attach(struct dp_soc *soc)
+{
+	unsigned int max_ast_idx;
+	int i, hash_elems, log2;
+
+	max_ast_idx = wlan_cfg_get_max_ast_idx(soc->wlan_cfg_ctx);
+	hash_elems = ((max_ast_idx * DP_WDS_HASH_LOAD_MULTI) >>
+		      DP_WDS_HASH_LOAD_SHIFT);
+
+	log2 = dp_log2_ceil(hash_elems);
+	hash_elems = 1 << log2;
+
+	soc->wds_hash.mask = hash_elems - 1;
+	soc->wds_hash.idx_bits = log2;
+
+	dp_info("%pK: wds hash_elems %d max_ast_idx %d", soc, hash_elems,
+		max_ast_idx);
+
+	soc->wds_hash.bins = qdf_mem_malloc(
+			hash_elems * sizeof(TAILQ_HEAD(anonymous_tail_q,
+						       dp_wds_entry)));
+	if (!soc->wds_hash.bins) {
+		dp_err("Failed to allocate wds hash table");
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	for (i = 0; i < hash_elems; i++)
+		TAILQ_INIT(&soc->wds_hash.bins[i]);
+
+	qdf_spinlock_create(&soc->wds_hash_lock);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+void dp_wds_hash_detach(struct dp_soc *soc)
+{
+	dp_wds_hash_bins_flush(soc);
+	qdf_mem_free(soc->wds_hash.bins);
+	soc->wds_hash.bins = NULL;
+	qdf_spinlock_destroy(&soc->wds_hash_lock);
+}
+
+QDF_STATUS dp_wds_hash_add_wds_entry(struct dp_soc *soc, uint8_t *wds_macaddr,
+				     uint16_t peer_id)
+{
+	struct dp_wds_entry *entry;
+
+	dp_debug("add entry peer_id %d mac " QDF_MAC_ADDR_FMT, peer_id,
+		 QDF_MAC_ADDR_REF(wds_macaddr));
+
+	entry = dp_wds_hash_find_entry_by_peer_id(soc, wds_macaddr, peer_id);
+	if (qdf_unlikely(entry)) {
+		dp_debug("mac " QDF_MAC_ADDR_FMT
+			 " peer_id %u is_mapped %d exist",
+			 QDF_MAC_ADDR_REF(entry->mac_addr.raw), entry->peer_id,
+			 entry->is_mapped);
+		return QDF_STATUS_E_ALREADY;
+	}
+
+	entry = (struct dp_wds_entry *)qdf_mem_malloc(
+			sizeof(struct dp_wds_entry));
+	if (qdf_unlikely(!entry)) {
+		dp_debug("Failed to allocate wds entry");
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	qdf_copy_macaddr((struct qdf_mac_addr *)entry->mac_addr.raw,
+			 (struct qdf_mac_addr *)wds_macaddr);
+	entry->peer_id = peer_id;
+	dp_wds_hash_enqueue_entry(soc, entry);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS dp_wds_hash_map_wds_entry(struct dp_soc *soc, uint8_t *wds_macaddr,
+				     uint16_t peer_id)
+{
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	struct dp_wds_entry *entry;
+
+	dp_debug("map entry peer_id %d mac " QDF_MAC_ADDR_FMT, peer_id,
+		 QDF_MAC_ADDR_REF(wds_macaddr));
+
+	qdf_spin_lock_bh(&soc->wds_hash_lock);
+	entry = __dp_wds_hash_find_entry_by_peer_id(soc, wds_macaddr, peer_id);
+	if (qdf_unlikely(!entry)) {
+		dp_debug("map failed, wds entry not found");
+		status = QDF_STATUS_E_INVAL;
+		goto err_out;
+	}
+
+	entry->is_mapped = true;
+
+err_out:
+	qdf_spin_unlock_bh(&soc->wds_hash_lock);
+	return status;
+}
+
+QDF_STATUS dp_wds_hash_update_wds_entry(struct dp_soc *soc,
+					uint8_t *wds_macaddr,
+					uint16_t peer_id)
+{
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	struct dp_wds_entry *entry;
+
+	dp_debug("Update entry peer_id %d mac " QDF_MAC_ADDR_FMT, peer_id,
+		 QDF_MAC_ADDR_REF(wds_macaddr));
+
+	qdf_spin_lock_bh(&soc->wds_hash_lock);
+	entry = __dp_wds_hash_find_wds_entry(soc, wds_macaddr);
+	if (!entry) {
+		dp_debug_rl("wds entry not found mac " QDF_MAC_ADDR_FMT,
+			    QDF_MAC_ADDR_REF(wds_macaddr));
+		status = QDF_STATUS_E_INVAL;
+		goto err_out;
+	}
+
+	if (!entry->is_mapped) {
+		dp_debug_rl("wds entry is not mapped mac " QDF_MAC_ADDR_FMT,
+			    QDF_MAC_ADDR_REF(wds_macaddr));
+		status = QDF_STATUS_E_INVAL;
+		goto err_out;
+	}
+
+	if (entry->peer_id == peer_id) {
+		dp_debug_rl("peer_id not change mac " QDF_MAC_ADDR_FMT,
+			    QDF_MAC_ADDR_REF(wds_macaddr));
+		status = QDF_STATUS_E_INVAL;
+		goto err_out;
+	}
+
+	entry->peer_id = peer_id;
+
+err_out:
+	qdf_spin_unlock_bh(&soc->wds_hash_lock);
+	return status;
+}
+
+QDF_STATUS dp_wds_hash_remove_wds_entry(struct dp_soc *soc,
+					uint8_t *wds_macaddr,
+					uint16_t peer_id)
+{
+	union dp_align_mac_addr local_mac_addr_aligned, *mac_addr;
+	struct dp_wds_entry *wds_ent_next;
+	struct dp_wds_entry *wds_ent;
+	uint32_t index;
+
+	dp_debug("remove entry peer_id %u mac " QDF_MAC_ADDR_FMT, peer_id,
+		 QDF_MAC_ADDR_REF(wds_macaddr));
+
+	qdf_mem_copy(&local_mac_addr_aligned.raw[0], wds_macaddr,
+		     QDF_MAC_ADDR_SIZE);
+	mac_addr = &local_mac_addr_aligned;
+
+	index = dp_wds_hash_index(soc, mac_addr);
+
+	qdf_spin_lock_bh(&soc->wds_hash_lock);
+	TAILQ_FOREACH_SAFE(wds_ent, &soc->wds_hash.bins[index], hash_list_elem,
+			   wds_ent_next) {
+		if (wds_ent->peer_id == peer_id &&
+		    !qdf_mem_cmp(wds_ent->mac_addr.raw, wds_macaddr,
+				 QDF_MAC_ADDR_SIZE)) {
+			TAILQ_REMOVE(&soc->wds_hash.bins[index], wds_ent,
+				     hash_list_elem);
+			qdf_mem_free(wds_ent);
+			dp_debug("mac " QDF_MAC_ADDR_FMT
+				 " peer_id %u destroyed",
+				 QDF_MAC_ADDR_REF(wds_macaddr), peer_id);
+
+			qdf_spin_unlock_bh(&soc->wds_hash_lock);
+			return QDF_STATUS_SUCCESS;
+		}
+	}
+	qdf_spin_unlock_bh(&soc->wds_hash_lock);
+
+	dp_debug("Not found entry peer_id %u mac " QDF_MAC_ADDR_FMT, peer_id,
+		 QDF_MAC_ADDR_REF(wds_macaddr));
+	return QDF_STATUS_E_NOENT;
+}
+
+#ifdef IPA_WDS_EASYMESH_FEATURE
+/**
+ * dp_wds_hash_send_disconnect_to_ipa() - Send disconnect event for wds peer
+ *					  to IPA
+ * @soc: datapath soc handle
+ * @vdev_id: vdev id
+ * @mac_addr: mac address of wds peer
+ *
+ * Return: None
+ */
+static void
+dp_wds_hash_send_disconnect_to_ipa(struct dp_soc *soc, uint8_t vdev_id,
+				   uint8_t *mac_addr)
+{
+	if (soc->cdp_soc.ol_ops->peer_send_wds_disconnect)
+		soc->cdp_soc.ol_ops->peer_send_wds_disconnect(soc->ctrl_psoc,
+							      mac_addr,
+							      vdev_id);
+}
+#else /* !IPA_WDS_EASYMESH_FEATURE */
+static inline void
+dp_wds_hash_send_disconnect_to_ipa(struct dp_soc *soc, uint8_t vdev_id,
+				   uint8_t *mac_addr)
+{
+}
+#endif /* IPA_WDS_EASYMESH_FEATURE */
+
+QDF_STATUS dp_wds_hash_cleanup_by_peer_id(struct dp_soc *soc, uint8_t vdev_id,
+					  uint16_t peer_id)
+{
+	struct dp_wds_entry *wds_ent, *wds_ent_next;
+	unsigned int index;
+
+	TAILQ_HEAD(, dp_wds_entry) free_list;
+	TAILQ_INIT(&free_list);
+
+	dp_debug("vdev_id %u peer_id %u", vdev_id, peer_id);
+
+	qdf_spin_lock_bh(&soc->wds_hash_lock);
+
+	if (!soc->wds_hash.mask || !soc->wds_hash.bins) {
+		dp_info_rl("%pK: wds hash table is empty", soc);
+		qdf_spin_unlock_bh(&soc->wds_hash_lock);
+		return QDF_STATUS_SUCCESS;
+	}
+
+	for (index = 0; index <= soc->wds_hash.mask; index++) {
+		if (!TAILQ_EMPTY(&soc->wds_hash.bins[index])) {
+			TAILQ_FOREACH_SAFE(wds_ent, &soc->wds_hash.bins[index],
+					   hash_list_elem, wds_ent_next) {
+				if (wds_ent->peer_id == peer_id) {
+					TAILQ_REMOVE(&soc->wds_hash.bins[index],
+						     wds_ent, hash_list_elem);
+					TAILQ_INSERT_TAIL(&free_list, wds_ent,
+							  hash_list_elem);
+				}
+			}
+		}
+	}
+	qdf_spin_unlock_bh(&soc->wds_hash_lock);
+
+	TAILQ_FOREACH_SAFE(wds_ent, &free_list, hash_list_elem, wds_ent_next) {
+		dp_wds_hash_send_disconnect_to_ipa(soc, vdev_id,
+						   wds_ent->mac_addr.raw);
+
+		dp_del_wds_entry_wrapper(soc, vdev_id, wds_ent->mac_addr.raw,
+					 CDP_TXRX_AST_TYPE_WDS, true);
+		qdf_mem_free(wds_ent);
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+void dp_wds_hash_print_wds_hash_table(struct dp_soc *soc)
+{
+	struct dp_wds_entry *wds_ent;
+	int num = 0;
+	int index;
+
+	DP_PRINT_STATS("WDS Hash Table:");
+
+	qdf_spin_lock_bh(&soc->wds_hash_lock);
+
+	if (!soc->wds_hash.mask || !soc->wds_hash.bins) {
+		DP_PRINT_STATS("WDS Hash Table is empty");
+		qdf_spin_unlock_bh(&soc->wds_hash_lock);
+		return;
+	}
+
+	for (index = 0; index <= soc->wds_hash.mask; index++) {
+		if (TAILQ_EMPTY(&soc->wds_hash.bins[index]))
+			continue;
+
+		TAILQ_FOREACH(wds_ent, &soc->wds_hash.bins[index],
+			      hash_list_elem) {
+			DP_PRINT_STATS("%6d mac = " QDF_MAC_ADDR_FMT
+				       " peer_id = %u is_mapped = %d",
+				       num,
+				       QDF_MAC_ADDR_REF(wds_ent->mac_addr.raw),
+				       wds_ent->peer_id,
+				       wds_ent->is_mapped);
+			num++;
+		}
+	}
+
+	qdf_spin_unlock_bh(&soc->wds_hash_lock);
+}
+
+#endif /* FEATURE_WDS_AST_LEARNING */
