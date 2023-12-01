@@ -8015,16 +8015,10 @@ dp_tx_multipass_send_pkt_to_repeater(struct dp_soc *soc, struct dp_vdev *vdev,
 	 * if pass through to classic repeater fails.
 	 */
 	if (nbuf_copy) {
-		struct dp_tx_msdu_info_s msdu_info_copy;
+		qdf_nbuf_set_tx_ftype(nbuf_copy, CB_FTYPE_MPASS);
+		nbuf_copy = dp_tx_send((struct cdp_soc_t *)soc,
+				       vdev->vdev_id, nbuf_copy);
 
-		qdf_mem_zero(&msdu_info_copy, sizeof(msdu_info_copy));
-		msdu_info_copy.tid = HTT_TX_EXT_TID_INVALID;
-		msdu_info_copy.xmit_type =
-			qdf_nbuf_get_vdev_xmit_type(nbuf);
-		HTT_TX_MSDU_EXT2_DESC_FLAG_VALID_KEY_FLAGS_SET(msdu_info_copy.meta_data[0], 1);
-		nbuf_copy = dp_tx_send_msdu_single(vdev, nbuf_copy,
-						   &msdu_info_copy,
-						   HTT_INVALID_PEER, NULL);
 		if (nbuf_copy) {
 			qdf_nbuf_free(nbuf_copy);
 			dp_info_rl("nbuf_copy send failed");
@@ -8048,7 +8042,7 @@ bool dp_tx_multipass_process(struct dp_soc *soc, struct dp_vdev *vdev,
 	uint16_t group_key = 0;
 	uint8_t is_spcl_peer = DP_VLAN_UNTAGGED;
 
-	if (HTT_TX_MSDU_EXT2_DESC_FLAG_VALID_KEY_FLAGS_GET(msdu_info->meta_data[0]))
+	if (qdf_nbuf_get_tx_ftype(nbuf) == CB_FTYPE_MPASS)
 		return true;
 
 	is_spcl_peer = dp_tx_need_multipass_process(soc, vdev, nbuf, &vlan_id);

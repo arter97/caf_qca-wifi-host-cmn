@@ -1086,6 +1086,7 @@ enum qdf_reception_type {
  * @CB_FTYPE_DMS: Directed Multicast Service
  * @CB_FTYPE_SAWF: SAWF information
  * @CB_FTYPE_MLO_MCAST: MLO MCAST enable information
+ * @CB_FTYPE_MPASS: MPSK enable information
  */
 enum cb_ftype {
 	CB_FTYPE_INVALID = 0,
@@ -1100,6 +1101,7 @@ enum cb_ftype {
 	CB_FTYPE_DMS = 9,
 	CB_FTYPE_SAWF = 10,
 	CB_FTYPE_MLO_MCAST = 11,
+	CB_FTYPE_MPASS = 12,
 };
 
 /**
