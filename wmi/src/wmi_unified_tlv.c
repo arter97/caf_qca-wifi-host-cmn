@@ -68,6 +68,10 @@
 #include <wmi_unified_vdev_tlv.h>
 #include <wmi_unified_11be_tlv.h>
 
+#ifdef FEATURE_SET
+#include "wlan_mlme_public_struct.h"
+#endif
+
 /*
  * If FW supports WMI_SERVICE_SCAN_CONFIG_PER_CHANNEL,
  * then channel_list may fill the upper 12 bits with channel flags,
@@ -10492,7 +10496,50 @@ static inline void copy_feature_set_info(uint32_t *feature_set_bitmap,
 	WMI_SET_MAX_TDLS_PEERS_SUPPORT(feature_set_bitmap,
 				       feature_set->max_tdls_peers);
 	WMI_SET_STA_DUAL_P2P_SUPPORT(feature_set_bitmap,
-				     feature_set->sta_dual_p2p_support);
+				     (feature_set->iface_combinations &
+				      MLME_IFACE_STA_DUAL_P2P_SUPPORT) > 0);
+	WMI_SET_STA_P2P_SUPPORT(feature_set_bitmap,
+				(feature_set->iface_combinations &
+				 MLME_IFACE_STA_P2P_SUPPORT) > 0);
+	WMI_SET_STA_SAP_SUPPORT(feature_set_bitmap,
+				(feature_set->iface_combinations &
+				 MLME_IFACE_STA_SAP_SUPPORT) > 0);
+	WMI_SET_STA_NAN_SUPPORT(feature_set_bitmap,
+				(feature_set->iface_combinations &
+				 MLME_IFACE_STA_NAN_SUPPORT) > 0);
+	WMI_SET_STA_TDLS_SUPPORT(feature_set_bitmap,
+				 (feature_set->iface_combinations &
+				  MLME_IFACE_STA_TDLS_SUPPORT) > 0);
+	WMI_SET_STA_SAP_P2P_SUPPORT(feature_set_bitmap,
+				    (feature_set->iface_combinations &
+				     MLME_IFACE_STA_SAP_P2P_SUPPORT) > 0);
+	WMI_SET_STA_SAP_NAN_SUPPORT(feature_set_bitmap,
+				    (feature_set->iface_combinations &
+				     MLME_IFACE_STA_SAP_NAN_SUPPORT) > 0);
+	WMI_SET_STA_P2P_NAN_SUPPORT(feature_set_bitmap,
+				    (feature_set->iface_combinations &
+				     MLME_IFACE_STA_P2P_NAN_SUPPORT) > 0);
+	WMI_SET_STA_P2P_TDLS_SUPPORT(feature_set_bitmap,
+				     (feature_set->iface_combinations &
+				      MLME_IFACE_STA_P2P_TDLS_SUPPORT) > 0);
+	WMI_SET_STA_SAP_TDLS_SUPPORT(feature_set_bitmap,
+				     (feature_set->iface_combinations &
+				      MLME_IFACE_STA_SAP_TDLS_SUPPORT) > 0);
+	WMI_SET_STA_NAN_TDLS_SUPPORT(feature_set_bitmap,
+				     (feature_set->iface_combinations &
+				      MLME_IFACE_STA_NAN_TDLS_SUPPORT) > 0);
+	WMI_SET_STA_SAP_P2P_TDLS_SUPPORT(feature_set_bitmap,
+				(feature_set->iface_combinations &
+				 MLME_IFACE_STA_SAP_P2P_TDLS_SUPPORT) > 0);
+	WMI_SET_STA_SAP_NAN_TDLS_SUPPORT(feature_set_bitmap,
+				(feature_set->iface_combinations &
+				 MLME_IFACE_STA_SAP_NAN_TDLS_SUPPORT) > 0);
+	WMI_SET_STA_P2P_P2P_TDLS_SUPPORT(feature_set_bitmap,
+				(feature_set->iface_combinations &
+				 MLME_IFACE_STA_P2P_P2P_TDLS_SUPPORT) > 0);
+	WMI_SET_STA_P2P_NAN_TDLS_SUPPORT(feature_set_bitmap,
+				(feature_set->iface_combinations &
+				 MLME_IFACE_STA_P2P_NAN_TDLS_SUPPORT) > 0);
 	WMI_SET_PEER_BIGDATA_GETBSSINFO_API_SUPPORT(
 				feature_set_bitmap,
 				feature_set->peer_bigdata_getbssinfo_support);
