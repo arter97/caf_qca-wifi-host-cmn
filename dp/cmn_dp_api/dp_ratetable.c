@@ -6537,6 +6537,9 @@ dp_getrateindex(uint32_t gi, uint16_t mcs, uint8_t nss, uint8_t preamble,
 	/* For error case, where idx exceeds boundary limit */
 	*ratecode = 0;
 	mod = dp_getmodulation(preamble, bw, punc_bw);
+	if (mod >= DP_CMN_MOD_IEEE80211_T_MAX_PHY)
+		goto done;
+
 	rc = mcs;
 
 	/* get the base of corresponding rate table  entry */
@@ -6607,6 +6610,9 @@ dp_getrateindex(uint32_t gi, uint16_t mcs, uint8_t nss, uint8_t preamble,
 	/* For error case, where idx exceeds boundary limit */
 	*ratecode = 0;
 	mod = dp_getmodulation(preamble, bw, punc_bw);
+	if (mod >= DP_CMN_MOD_IEEE80211_T_MAX_PHY)
+		goto done;
+
 	rc = mcs;
 
 	/* get the base of corresponding rate table  entry */
