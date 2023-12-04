@@ -9556,10 +9556,9 @@ QDF_STATUS dp_get_per_link_peer_stats(struct dp_peer *peer,
 				      enum cdp_peer_type peer_type,
 				      uint8_t num_link)
 {
-	uint8_t i, index = 0;
+	uint8_t i, min_num_links;
 	struct dp_peer *link_peer;
 	struct dp_mld_link_peers link_peers_info;
-	struct cdp_peer_stats *stats;
 	struct dp_soc *soc = peer->vdev->pdev->soc;
 
 	dp_get_peer_calibr_stats(peer, peer_stats);
@@ -9570,19 +9569,18 @@ QDF_STATUS dp_get_per_link_peer_stats(struct dp_peer *peer,
 		dp_get_link_peers_ref_from_mld_peer(soc, peer,
 						    &link_peers_info,
 						    DP_MOD_ID_GENERIC_STATS);
-		for (i = 0; i < link_peers_info.num_links; i++) {
+		if (link_peers_info.num_links > num_link)
+			dp_info("Req stats of %d link. less than total link %d",
+				num_link, link_peers_info.num_links);
+
+		min_num_links = num_link < link_peers_info.num_links ?
+				num_link : link_peers_info.num_links;
+		for (i = 0; i < min_num_links; i++) {
 			link_peer = link_peers_info.link_peers[i];
 			if (qdf_unlikely(!link_peer))
 				continue;
-			if (index > num_link) {
-				dp_err("Request stats for %d link(s) is less than total link(s) %d",
-				       num_link, link_peers_info.num_links);
-				break;
-			}
-			stats = &peer_stats[index];
-			dp_get_peer_per_pkt_stats(link_peer, stats);
-			dp_get_peer_extd_stats(link_peer, stats);
-			index++;
+			dp_get_peer_per_pkt_stats(link_peer, peer_stats);
+			dp_get_peer_extd_stats(link_peer, peer_stats);
 		}
 		dp_release_link_peers_ref(&link_peers_info,
 					  DP_MOD_ID_GENERIC_STATS);
