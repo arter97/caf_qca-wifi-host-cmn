@@ -47,6 +47,9 @@
 #ifdef WLAN_FEATURE_LL_LT_SAP
 #include "wlan_ll_sap_api.h"
 #endif
+#ifdef CONNECTIVITY_DIAG_EVENT
+#include "wlan_connectivity_logging.h"
+#endif
 
 void
 cm_fill_failure_resp_from_cm_id(struct cnx_mgr *cm_ctx,
@@ -295,6 +298,21 @@ cm_connect_handle_event_post_fail(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id)
 	qdf_mem_free(resp);
 }
 
+#ifdef CONNECTIVITY_DIAG_EVENT
+static void
+cm_connectivity_connecting_event(struct wlan_objmgr_vdev *vdev,
+				 struct wlan_cm_connect_req *req)
+{
+	wlan_connectivity_connecting_event(vdev, req);
+}
+#else
+static void
+cm_connectivity_connecting_event(struct wlan_objmgr_vdev *vdev,
+				 struct wlan_cm_connect_req *req)
+{
+}
+#endif
+
 QDF_STATUS
 cm_send_connect_start_fail(struct cnx_mgr *cm_ctx,
 			   struct cm_connect_req *req,
@@ -307,12 +325,13 @@ cm_send_connect_start_fail(struct cnx_mgr *cm_ctx,
 	if (!resp)
 		return QDF_STATUS_E_NOMEM;
 
+	cm_connectivity_connecting_event(cm_ctx->vdev, &req->req);
+
 	cm_fill_failure_resp_from_cm_id(cm_ctx, resp, req->cm_id, reason);
 
 	status = cm_sm_deliver_event_sync(cm_ctx, WLAN_CM_SM_EV_CONNECT_FAILURE,
 					  sizeof(*resp), resp);
 	qdf_mem_free(resp);
-
 	return status;
 }
 
