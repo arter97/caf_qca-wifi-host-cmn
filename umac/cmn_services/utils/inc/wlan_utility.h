@@ -33,6 +33,8 @@
 #define TGT_IS_VALID_SNR(x)     ((x) >= 0 && (x) < TGT_MAX_SNR)
 #define TGT_IS_VALID_RSSI(x)    ((x) != 0xFF)
 
+#define QCA6490_DEVICE_ID (0x1103)
+
 /**
  * struct wlan_vdev_ch_check_filter - vdev chan check filter object
  * @flag:     matches or not

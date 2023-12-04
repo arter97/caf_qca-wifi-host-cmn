@@ -600,7 +600,9 @@ dp_rx_err_nbuf_pn_check(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 	if (!hal_rx_encryption_info_valid(soc->hal_soc, qdf_nbuf_data(nbuf)))
 		return QDF_STATUS_SUCCESS;
 
-	hal_rx_reo_prev_pn_get(soc->hal_soc, ring_desc, &prev_pn);
+	if (hal_rx_reo_prev_pn_get(soc->hal_soc, ring_desc, &prev_pn) == false)
+		return QDF_STATUS_E_FAILURE;
+
 	hal_rx_tlv_get_pn_num(soc->hal_soc, qdf_nbuf_data(nbuf), curr_pn);
 
 	if (curr_pn[0] > prev_pn)
@@ -1771,7 +1773,8 @@ process_rx:
 		dp_rx_update_flow_tag(soc, vdev, nbuf, rx_tlv_hdr, true);
 		DP_PEER_STATS_FLAT_INC(txrx_peer, to_stack.num, 1);
 		qdf_nbuf_set_exc_frame(nbuf, 1);
-		dp_rx_deliver_to_stack(soc, vdev, txrx_peer, nbuf, NULL);
+		dp_rx_deliver_to_osif_stack(soc, vdev, txrx_peer, nbuf, NULL,
+					    qdf_nbuf_is_ipv4_eapol_pkt(nbuf));
 	}
 
 	return;
@@ -2105,7 +2108,8 @@ static int dp_rx_err_handle_msdu_buf(struct dp_soc *soc,
 	struct dp_pdev *pdev;
 	struct rx_desc_pool *rx_desc_pool;
 
-	hal_rx_reo_buf_paddr_get(soc->hal_soc, ring_desc, &hbi);
+	if (hal_rx_reo_buf_paddr_get(soc->hal_soc, ring_desc, &hbi) == false)
+		goto assert_return;
 
 	rx_desc = dp_rx_cookie_2_va_rxdma_buf(soc, hbi.sw_cookie);
 

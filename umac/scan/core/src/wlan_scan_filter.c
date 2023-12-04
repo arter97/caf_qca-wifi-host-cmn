@@ -699,7 +699,7 @@ static bool util_mlo_filter_match(struct wlan_objmgr_pdev *pdev,
 	struct partner_link_info *partner_link;
 	bool is_disabled;
 
-	if (!db_entry->ie_list.multi_link)
+	if (!db_entry->ie_list.multi_link_bv)
 		return true;
 	if (!filter->band_bitmap)
 		return true;
@@ -763,6 +763,7 @@ static bool util_eht_puncture_valid(struct scan_cache_entry *db_entry)
 	uint16_t orig_puncture_bitmap;
 	uint16_t new_puncture_bitmap = 0;
 	QDF_STATUS status;
+	uint8_t band_mask;
 
 	eht_ops = (struct wlan_ie_ehtops *)util_scan_entry_ehtop(db_entry);
 	if (!eht_ops)
@@ -777,6 +778,9 @@ static bool util_eht_puncture_valid(struct scan_cache_entry *db_entry)
 	orig_width = QDF_GET_BITS(eht_ops->control,
 				  EHTOP_INFO_CHAN_WIDTH_IDX,
 				  EHTOP_INFO_CHAN_WIDTH_BITS);
+
+	band_mask = BIT(wlan_reg_freq_to_band(db_entry->channel.chan_freq));
+
 	if (orig_width == WLAN_EHT_CHWIDTH_320) {
 		width = CH_WIDTH_320MHZ;
 		center_freq_320m = db_entry->channel.cfreq1;
