@@ -40,6 +40,8 @@
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 #include <wlan_mlo_mgr_cmn.h>
 #include <wlan_mlo_mgr_ap.h>
+#endif
+#if defined(WLAN_FEATURE_11BE_MLO)
 #include <wlan_mlo_mgr_setup.h>
 #endif
 #include <target_if_twt.h>
@@ -918,6 +920,27 @@ static void init_deinit_mlo_tsf_sync_support(struct wmi_unified *wmi_handle,
 	if (wmi_service_enabled(wmi_handle, wmi_service_mlo_tsf_sync))
 		mlo_tsf_sync_enab = true;
 
+	mlo_update_tsf_sync_support(psoc, mlo_tsf_sync_enab);
+}
+#elif defined(WLAN_FEATURE_11BE_MLO) && !defined(WLAN_MLO_MULTI_CHIP)
+static void init_deinit_mlo_update_soc_ready(struct wlan_objmgr_psoc *psoc)
+{}
+static void init_deinit_mlo_update_pdev_ready(struct wlan_objmgr_psoc *psoc,
+					      uint8_t num_radios)
+{}
+static void
+init_deinit_pdev_wsi_stats_info_support(struct wmi_unified *wmi_handle,
+					struct wlan_objmgr_psoc *psoc)
+{}
+static void init_deinit_mlo_tsf_sync_support(struct wmi_unified *wmi_handle,
+					     struct wlan_objmgr_psoc *psoc)
+{
+	bool mlo_tsf_sync_enab = false;
+
+	if (wmi_service_enabled(wmi_handle, wmi_service_mlo_tsf_sync))
+		mlo_tsf_sync_enab = true;
+
+	target_if_debug("mlo_tsf_sync_enab %d", mlo_tsf_sync_enab);
 	mlo_update_tsf_sync_support(psoc, mlo_tsf_sync_enab);
 }
 
