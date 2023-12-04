@@ -441,4 +441,29 @@ enum scan_priority convert_nl_scan_priority_to_internal(
  * Return: True if current scan can be allowed
  */
 bool wlan_is_scan_allowed(struct wlan_objmgr_vdev *vdev);
+
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+/**
+ * struct osif_scan_ops - OS scan ops
+ * @get_scan_status: call back to get the status of the cfg80211 scan
+ * @update_scan_status: call back to set the cfg80211 scan status
+ */
+struct osif_scan_ops {
+	QDF_STATUS (*get_scan_status)(struct net_device *netdev,
+				      struct cfg80211_scan_request **req,
+				      struct pdev_osif_priv *osif_priv);
+	void (*update_scan_status)(struct net_device *netdev,
+				   struct cfg80211_scan_request **req,
+				   struct pdev_osif_priv *osif_priv,
+				   bool suspend);
+};
+
+/**
+ * osif_scan_set_ops() - Set global_osif_scan_ops with ops
+ * @ops: ops structure holding pointers to osif scan callback APIs
+ *
+ * Retuen: none
+ */
+void osif_scan_set_ops(struct osif_scan_ops *ops);
+#endif /* ENABLE_CFG80211_BACKPORTS_MLO */
 #endif
