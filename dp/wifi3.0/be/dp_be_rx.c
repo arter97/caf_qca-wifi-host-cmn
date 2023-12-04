@@ -1612,9 +1612,12 @@ dp_rx_intrabss_ucast_check_be(qdf_nbuf_t nbuf,
 				&be_soc->soc, rx.err.intra_bss_bad_chipid))
 		return false;
 
-	params->dest_soc =
-		dp_mlo_get_soc_ref_by_chip_id(be_soc->ml_ctxt,
-					      dest_chip_id);
+	if (!be_soc->ml_ctxt)
+		params->dest_soc = (struct dp_soc *)be_soc;
+	else
+		params->dest_soc =
+			dp_mlo_get_soc_ref_by_chip_id(be_soc->ml_ctxt,
+						      dest_chip_id);
 	if (!params->dest_soc)
 		return false;
 
@@ -1630,7 +1633,7 @@ dp_rx_intrabss_ucast_check_be(qdf_nbuf_t nbuf,
 		dp_peer_unref_delete(da_peer, DP_MOD_ID_RX);
 	}
 
-	if (!be_vdev->mlo_dev_ctxt) {
+	if ((!be_vdev->mlo_dev_ctxt) || (!be_soc->ml_ctxt)) {
 		params->tx_vdev_id = ta_peer->vdev->vdev_id;
 		return true;
 	}
