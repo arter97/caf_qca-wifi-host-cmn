@@ -1297,6 +1297,8 @@ static QDF_STATUS dp_rx_defrag_reo_reinject(struct dp_txrx_peer *txrx_peer,
 	cookie = temp_buf_info.sw_cookie;
 	rx_desc_pool = &soc->rx_desc_buf[pdev->lmac_id];
 
+	dp_rx_buf_smmu_mapping_lock(soc);
+
 	/* map the nbuf before reinject it into HW */
 	ret = qdf_nbuf_map_nbytes_single(soc->osdev, head,
 					 QDF_DMA_FROM_DEVICE,
@@ -1304,6 +1306,7 @@ static QDF_STATUS dp_rx_defrag_reo_reinject(struct dp_txrx_peer *txrx_peer,
 	if (qdf_unlikely(ret == QDF_STATUS_E_FAILURE)) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
 				"%s: nbuf map failed !", __func__);
+		dp_rx_buf_smmu_mapping_unlock(soc);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -1311,10 +1314,7 @@ static QDF_STATUS dp_rx_defrag_reo_reinject(struct dp_txrx_peer *txrx_peer,
 					  rx_desc_pool->buf_size, true,
 					  __func__, __LINE__,
 					  DP_RX_IPA_SMMU_MAP_REO_REINJECT);
-	dp_audio_smmu_map(soc->osdev,
-			  qdf_mem_paddr_from_dmaaddr(soc->osdev,
-						     QDF_NBUF_CB_PADDR(head)),
-			  QDF_NBUF_CB_PADDR(head), rx_desc_pool->buf_size);
+	dp_audio_smmu_map(soc, head, rx_desc_pool->buf_size);
 
 	/*
 	 * As part of rx frag handler buffer was unmapped and rx desc
@@ -1322,6 +1322,8 @@ static QDF_STATUS dp_rx_defrag_reo_reinject(struct dp_txrx_peer *txrx_peer,
 	 * it back to 0.
 	 */
 	rx_desc->unmapped = 0;
+
+	dp_rx_buf_smmu_mapping_unlock(soc);
 
 	paddr = qdf_nbuf_get_frag_paddr(head, 0);
 
@@ -2174,10 +2176,10 @@ uint32_t dp_rx_frag_handle(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 	if (rx_desc->unmapped)
 		return rx_bufs_used;
 
-	dp_ipa_rx_buf_smmu_mapping_lock(soc);
+	dp_rx_buf_smmu_mapping_lock(soc);
 	dp_rx_nbuf_unmap_pool(soc, rx_desc_pool, rx_desc->nbuf);
 	rx_desc->unmapped = 1;
-	dp_ipa_rx_buf_smmu_mapping_unlock(soc);
+	dp_rx_buf_smmu_mapping_unlock(soc);
 
 	rx_desc->rx_buf_start = qdf_nbuf_data(msdu);
 

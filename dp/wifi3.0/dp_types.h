@@ -1373,6 +1373,14 @@ struct dp_soc_stats {
 			uint32_t ipa_smmu_unmap_dup;
 			/* ipa smmu unmap while ipa pipes is disabled */
 			uint32_t ipa_unmap_no_pipe;
+#ifdef FEATURE_DIRECT_LINK
+			/* audio smmu map duplicate count */
+			uint32_t audio_smmu_map_dup;
+			/* audio smmu unmap duplicate count */
+			uint32_t audio_smmu_unmap_dup;
+			/* audio smmu unmap while direct link is disabled */
+			uint32_t audio_unmap_no_link;
+#endif
 			/* REO cmd send fail/requeue count */
 			uint32_t reo_cmd_send_fail;
 			/* REO cmd send drain count */
@@ -3068,9 +3076,10 @@ struct dp_soc {
 #endif
 	qdf_atomic_t ipa_pipes_enabled;
 	bool ipa_first_tx_db_access;
-	qdf_spinlock_t ipa_rx_buf_map_lock;
-	bool ipa_rx_buf_map_lock_initialized;
-	uint8_t ipa_reo_ctx_lock_required[MAX_REO_DEST_RINGS];
+#endif
+#if defined(IPA_OFFLOAD) || defined(FEATURE_DIRECT_LINK)
+	qdf_spinlock_t rx_buf_map_lock;
+	uint8_t reo_ctx_lock_required[MAX_REO_DEST_RINGS];
 #endif
 
 #ifdef WLAN_FEATURE_STATS_EXT
@@ -3294,6 +3303,9 @@ struct dp_soc {
 #endif
 #ifdef DP_RX_PEEK_MSDU_DONE_WAR
 	struct dp_rx_msdu_done_fail_desc_list msdu_done_fail_desc_list;
+#endif
+#ifdef FEATURE_DIRECT_LINK
+	qdf_atomic_t direct_link_active;
 #endif
 };
 

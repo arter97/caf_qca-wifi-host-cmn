@@ -371,6 +371,9 @@ dp_pdev_nbuf_alloc_and_map_replenish(struct dp_soc *dp_soc,
 					  true, __func__, __LINE__,
 					  DP_RX_IPA_SMMU_MAP_REPLENISH);
 
+	dp_audio_smmu_map(dp_soc, (nbuf_frag_info_t->virt_addr).nbuf,
+			  rx_desc_pool->buf_size);
+
 	ret = dp_check_paddr(dp_soc, &((nbuf_frag_info_t->virt_addr).nbuf),
 			     &nbuf_frag_info_t->paddr,
 			     rx_desc_pool);
@@ -1035,6 +1038,7 @@ QDF_STATUS __dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 
 	count = 0;
 
+	dp_rx_buf_smmu_mapping_lock(dp_soc);
 	while (count < num_req_buffers) {
 		/* Flag is set while pdev rx_desc_pool initialization */
 		if (qdf_unlikely(rx_desc_pool->rx_mon_dest_frag_enable))
@@ -1090,6 +1094,7 @@ QDF_STATUS __dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 		*desc_list = next;
 
 	}
+	dp_rx_buf_smmu_mapping_unlock(dp_soc);
 
 	dp_rx_refill_ring_record_entry(dp_soc, dp_pdev->lmac_id, rxdma_srng,
 				       num_req_buffers, count);
@@ -3240,12 +3245,6 @@ dp_pdev_rx_buffers_attach(struct dp_soc *dp_soc, uint32_t mac_id,
 						__func__, __LINE__,
 						DP_RX_IPA_SMMU_MAP_BUFF_ATTACH);
 
-			dp_audio_smmu_map(dp_soc->osdev,
-					  qdf_mem_paddr_from_dmaaddr(dp_soc->osdev,
-								     QDF_NBUF_CB_PADDR(nbuf)),
-					  QDF_NBUF_CB_PADDR(nbuf),
-					  rx_desc_pool->buf_size);
-
 			desc_list = next;
 		}
 
@@ -3527,3 +3526,72 @@ bool dp_rx_multipass_process(struct dp_txrx_peer *txrx_peer, qdf_nbuf_t nbuf,
 	return true;
 }
 #endif /* QCA_MULTIPASS_SUPPORT */
+
+#ifdef FEATURE_DIRECT_LINK
+/**
+ * dp_rx_handle_buf_pool_audio_smmu_mapping() - Handle rx buffer pool audio
+ *  map/unmap on direct link enable/disable
+ * @soc: core txrx main context
+ * @pdev_id: pdev id
+ * @create: whether map or unmap
+ *
+ * Return: QDF status
+ */
+QDF_STATUS dp_rx_handle_buf_pool_audio_smmu_mapping(struct dp_soc *soc,
+						    uint8_t pdev_id,
+						    bool create)
+{
+	struct rx_desc_pool *rx_pool;
+	uint32_t num_desc, page_id, offset, i;
+	uint16_t num_desc_per_page;
+	union dp_rx_desc_list_elem_t *rx_desc_elem;
+	struct dp_rx_desc *rx_desc;
+	qdf_nbuf_t nbuf;
+
+	if (create)
+		qdf_atomic_set(&soc->direct_link_active, 1);
+	else
+		qdf_atomic_set(&soc->direct_link_active, 0);
+
+	rx_pool = &soc->rx_desc_buf[pdev_id];
+
+	dp_rx_set_reo_ctx_mapping_lock_required(soc, true);
+	dp_rx_buf_smmu_mapping_lock(soc);
+	num_desc = rx_pool->pool_size;
+	num_desc_per_page = rx_pool->desc_pages.num_element_per_page;
+	for (i = 0; i < num_desc; i++) {
+		page_id = i / num_desc_per_page;
+		offset = i % num_desc_per_page;
+		if (qdf_unlikely(!(rx_pool->desc_pages.cacheable_pages)))
+			break;
+		rx_desc_elem = dp_rx_desc_find(page_id, offset, rx_pool);
+		rx_desc = &rx_desc_elem->rx_desc;
+		if ((!(rx_desc->in_use)) || rx_desc->unmapped)
+			continue;
+		nbuf = rx_desc->nbuf;
+
+		if (qdf_unlikely(create ==
+				 qdf_nbuf_get_rx_audio_smmu_map(nbuf))) {
+			if (create) {
+				DP_STATS_INC(soc,
+					     rx.err.audio_smmu_map_dup, 1);
+			} else {
+				DP_STATS_INC(soc,
+					     rx.err.audio_smmu_unmap_dup, 1);
+			}
+			continue;
+		}
+
+		qdf_nbuf_set_rx_audio_smmu_map(nbuf, create);
+
+		if (create)
+			__dp_audio_smmu_map(soc, nbuf, rx_pool->buf_size);
+		else
+			__dp_audio_smmu_unmap(soc, nbuf, rx_pool->buf_size);
+	}
+	dp_rx_buf_smmu_mapping_unlock(soc);
+	dp_rx_set_reo_ctx_mapping_lock_required(soc, false);
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif

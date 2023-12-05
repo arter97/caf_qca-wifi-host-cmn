@@ -1214,10 +1214,10 @@ dp_rx_wbm_err_reap_desc_li(struct dp_intr *int_ctx, struct dp_soc *soc,
 			qdf_nbuf_set_tid_val(rx_desc->nbuf, mpdu_desc_info.tid);
 
 		rx_desc_pool = &soc->rx_desc_buf[rx_desc->pool_id];
-		dp_ipa_rx_buf_smmu_mapping_lock(soc);
+		dp_rx_buf_smmu_mapping_lock(soc);
 		dp_rx_nbuf_unmap_pool(soc, rx_desc_pool, nbuf);
 		rx_desc->unmapped = 1;
-		dp_ipa_rx_buf_smmu_mapping_unlock(soc);
+		dp_rx_buf_smmu_mapping_unlock(soc);
 
 		if (qdf_unlikely(
 		    soc->wbm_release_desc_rx_sg_support &&

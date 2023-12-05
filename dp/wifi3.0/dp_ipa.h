@@ -458,65 +458,6 @@ QDF_STATUS dp_ipa_rx_buf_pool_smmu_mapping(struct cdp_soc_t *soc_hdl,
 QDF_STATUS dp_ipa_set_smmu_mapped(struct cdp_soc_t *soc, int val);
 int dp_ipa_get_smmu_mapped(struct cdp_soc_t *soc);
 
-#ifndef QCA_OL_DP_SRNG_LOCK_LESS_ACCESS
-static inline void
-dp_ipa_rx_buf_smmu_mapping_lock(struct dp_soc *soc)
-{
-	if (soc->ipa_rx_buf_map_lock_initialized)
-		qdf_spin_lock_bh(&soc->ipa_rx_buf_map_lock);
-}
-
-static inline void
-dp_ipa_rx_buf_smmu_mapping_unlock(struct dp_soc *soc)
-{
-	if (soc->ipa_rx_buf_map_lock_initialized)
-		qdf_spin_unlock_bh(&soc->ipa_rx_buf_map_lock);
-}
-
-static inline void
-dp_ipa_reo_ctx_buf_mapping_lock(struct dp_soc *soc,
-				uint32_t reo_ring_num)
-{
-	if (!soc->ipa_reo_ctx_lock_required[reo_ring_num])
-		return;
-
-	qdf_spin_lock_bh(&soc->ipa_rx_buf_map_lock);
-}
-
-static inline void
-dp_ipa_reo_ctx_buf_mapping_unlock(struct dp_soc *soc,
-				  uint32_t reo_ring_num)
-{
-	if (!soc->ipa_reo_ctx_lock_required[reo_ring_num])
-		return;
-
-	qdf_spin_unlock_bh(&soc->ipa_rx_buf_map_lock);
-}
-#else
-
-static inline void
-dp_ipa_rx_buf_smmu_mapping_lock(struct dp_soc *soc)
-{
-}
-
-static inline void
-dp_ipa_rx_buf_smmu_mapping_unlock(struct dp_soc *soc)
-{
-}
-
-static inline void
-dp_ipa_reo_ctx_buf_mapping_lock(struct dp_soc *soc,
-				uint32_t reo_ring_num)
-{
-}
-
-static inline void
-dp_ipa_reo_ctx_buf_mapping_unlock(struct dp_soc *soc,
-				  uint32_t reo_ring_num)
-{
-}
-#endif
-
 #ifdef IPA_WDS_EASYMESH_FEATURE
 /**
  * dp_ipa_ast_create() - Create/update AST entry in AST table

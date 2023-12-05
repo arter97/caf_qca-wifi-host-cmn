@@ -2511,47 +2511,179 @@ bool dp_rx_pkt_tracepoints_enabled(void)
 }
 
 #ifdef FEATURE_DIRECT_LINK
+static inline
+QDF_STATUS __dp_audio_smmu_map(struct dp_soc *soc, qdf_nbuf_t nbuf,
+			       qdf_size_t size)
+{
+	int ret;
+
+	qdf_nbuf_set_rx_audio_smmu_map(nbuf, 1);
+
+	ret = pld_audio_smmu_map(soc->osdev->dev,
+				 qdf_mem_paddr_from_dmaaddr(soc->osdev,
+							    QDF_NBUF_CB_PADDR(nbuf)),
+				 QDF_NBUF_CB_PADDR(nbuf), size);
+	if (ret)
+		return QDF_STATUS_E_FAILURE;
+
+	return QDF_STATUS_SUCCESS;
+}
+
 /**
  * dp_audio_smmu_map()- Map memory region into Audio SMMU CB
- * @qdf_dev: pointer to QDF device structure
- * @paddr: physical address
- * @iova: DMA address
+ * @soc: DP soc reference
+ * @nbuf: Rx nbuf address
+ * @size: buffer size
+ *
+ * Return: 0 on success else failure code
+ */
+static inline
+QDF_STATUS dp_audio_smmu_map(struct dp_soc *soc, qdf_nbuf_t nbuf,
+			     qdf_size_t size)
+{
+	if (!qdf_atomic_read(&soc->direct_link_active))
+		return QDF_STATUS_SUCCESS;
+
+	if (qdf_unlikely(qdf_nbuf_get_rx_audio_smmu_map(nbuf))) {
+		DP_STATS_INC(soc, rx.err.audio_smmu_map_dup, 1);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	return __dp_audio_smmu_map(soc, nbuf, size);
+}
+
+static inline void
+__dp_audio_smmu_unmap(struct dp_soc *soc, qdf_nbuf_t nbuf, qdf_size_t size)
+{
+	qdf_nbuf_set_rx_audio_smmu_map(nbuf, 0);
+	pld_audio_smmu_unmap(soc->osdev->dev, QDF_NBUF_CB_PADDR(nbuf), size);
+}
+
+/**
+ * dp_audio_smmu_unmap()- Remove memory region mapping from Audio SMMU CB
+ * @soc: DP soc reference
+ * @nbuf: Rx nbuf address
  * @size: memory region size
  *
  * Return: 0 on success else failure code
  */
 static inline
-int dp_audio_smmu_map(qdf_device_t qdf_dev, qdf_dma_addr_t paddr,
-		      qdf_dma_addr_t iova, qdf_size_t size)
+QDF_STATUS dp_audio_smmu_unmap(struct dp_soc *soc, qdf_nbuf_t nbuf,
+			       qdf_size_t size)
 {
-	return pld_audio_smmu_map(qdf_dev->dev, paddr, iova, size);
+	bool mapped = qdf_nbuf_get_rx_audio_smmu_map(nbuf);
+
+	if (!qdf_atomic_read(&soc->direct_link_active)) {
+		if (mapped) {
+			DP_STATS_INC(soc, rx.err.audio_unmap_no_link, 1);
+		} else {
+			return QDF_STATUS_SUCCESS;
+		}
+	}
+
+	if (qdf_unlikely(!mapped)) {
+		DP_STATS_INC(soc, rx.err.audio_smmu_unmap_dup, 1);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	__dp_audio_smmu_unmap(soc, nbuf, size);
+
+	return QDF_STATUS_SUCCESS;
 }
 
 /**
- * dp_audio_smmu_unmap()- Remove memory region mapping from Audio SMMU CB
- * @qdf_dev: pointer to QDF device structure
- * @iova: DMA address
- * @size: memory region size
+ * dp_rx_handle_buf_pool_audio_smmu_mapping() - Handle rx buffer pool audio
+ *  map/unmap on direct link enable/disable
+ * @soc: core txrx main context
+ * @pdev_id: pdev id
+ * @create: whether map or unmap
  *
- * Return: None
+ * Return: QDF status
  */
-static inline
-void dp_audio_smmu_unmap(qdf_device_t qdf_dev, qdf_dma_addr_t iova,
-			 qdf_size_t size)
-{
-	pld_audio_smmu_unmap(qdf_dev->dev, iova, size);
-}
+QDF_STATUS dp_rx_handle_buf_pool_audio_smmu_mapping(struct dp_soc *soc,
+						    uint8_t pdev_id,
+						    bool create);
 #else
 static inline
-int dp_audio_smmu_map(qdf_device_t qdf_dev, qdf_dma_addr_t paddr,
-		      qdf_dma_addr_t iova, qdf_size_t size)
+QDF_STATUS dp_audio_smmu_map(struct dp_soc *soc, qdf_nbuf_t nbuf,
+			     qdf_size_t size)
 {
-	return 0;
+	return QDF_STATUS_E_NOSUPPORT;
 }
 
 static inline
-void dp_audio_smmu_unmap(qdf_device_t qdf_dev, qdf_dma_addr_t iova,
-			 qdf_size_t size)
+QDF_STATUS dp_audio_smmu_unmap(struct dp_soc *soc, qdf_nbuf_t nbuf,
+			       qdf_size_t size)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+#endif
+
+#if (defined(IPA_OFFLOAD) || defined(FEATURE_DIRECT_LINK)) && \
+	!defined(QCA_OL_DP_SRNG_LOCK_LESS_ACCESS)
+static inline
+void dp_rx_set_reo_ctx_mapping_lock_required(struct dp_soc *soc,
+					     bool lock_required)
+{
+	hal_ring_handle_t hal_ring_hdl;
+	int ring;
+
+	for (ring = 0; ring < soc->num_reo_dest_rings; ring++) {
+		hal_ring_hdl = soc->reo_dest_ring[ring].hal_srng;
+		hal_srng_lock(hal_ring_hdl);
+		soc->reo_ctx_lock_required[ring] = lock_required;
+		hal_srng_unlock(hal_ring_hdl);
+	}
+}
+
+static inline void dp_rx_buf_smmu_mapping_lock(struct dp_soc *soc)
+{
+	qdf_spin_lock_bh(&soc->rx_buf_map_lock);
+}
+
+static inline void dp_rx_buf_smmu_mapping_unlock(struct dp_soc *soc)
+{
+	qdf_spin_unlock_bh(&soc->rx_buf_map_lock);
+}
+
+static inline void
+dp_reo_ctx_buf_mapping_lock(struct dp_soc *soc, uint32_t reo_ring_num)
+{
+	if (!soc->reo_ctx_lock_required[reo_ring_num])
+		return;
+
+	qdf_spin_lock_bh(&soc->rx_buf_map_lock);
+}
+
+static inline void
+dp_reo_ctx_buf_mapping_unlock(struct dp_soc *soc, uint32_t reo_ring_num)
+{
+	if (!soc->reo_ctx_lock_required[reo_ring_num])
+		return;
+
+	qdf_spin_unlock_bh(&soc->rx_buf_map_lock);
+}
+#else
+static inline void dp_rx_set_reo_ctx_mapping_lock_required(struct dp_soc *soc,
+							   bool lock_required)
+{
+}
+
+static inline void dp_rx_buf_smmu_mapping_lock(struct dp_soc *soc)
+{
+}
+
+static inline void dp_rx_buf_smmu_mapping_unlock(struct dp_soc *soc)
+{
+}
+
+static inline void
+dp_reo_ctx_buf_mapping_lock(struct dp_soc *soc,	uint32_t reo_ring_num)
+{
+}
+
+static inline void
+dp_reo_ctx_buf_mapping_unlock(struct dp_soc *soc, uint32_t reo_ring_num)
 {
 }
 #endif
@@ -2772,11 +2904,10 @@ void dp_rx_nbuf_unmap(struct dp_soc *soc,
 	struct rx_desc_pool *rx_desc_pool;
 
 	rx_desc_pool = &soc->rx_desc_buf[rx_desc->pool_id];
-	dp_ipa_reo_ctx_buf_mapping_lock(soc, reo_ring_num);
+	dp_reo_ctx_buf_mapping_lock(soc, reo_ring_num);
 
-	dp_audio_smmu_unmap(soc->osdev,
-			    QDF_NBUF_CB_PADDR(rx_desc->nbuf),
-			    rx_desc_pool->buf_size);
+	dp_audio_smmu_unmap(soc, rx_desc->nbuf, rx_desc_pool->buf_size);
+
 	dp_ipa_handle_rx_buf_smmu_mapping(soc, rx_desc->nbuf,
 					  rx_desc_pool->buf_size,
 					  false, __func__, __LINE__, 0);
@@ -2785,7 +2916,7 @@ void dp_rx_nbuf_unmap(struct dp_soc *soc,
 				     rx_desc_pool->buf_size);
 	rx_desc->unmapped = 1;
 
-	dp_ipa_reo_ctx_buf_mapping_unlock(soc, reo_ring_num);
+	dp_reo_ctx_buf_mapping_unlock(soc, reo_ring_num);
 }
 
 static inline
@@ -2793,8 +2924,7 @@ void dp_rx_nbuf_unmap_pool(struct dp_soc *soc,
 			   struct rx_desc_pool *rx_desc_pool,
 			   qdf_nbuf_t nbuf)
 {
-	dp_audio_smmu_unmap(soc->osdev, QDF_NBUF_CB_PADDR(nbuf),
-			    rx_desc_pool->buf_size);
+	dp_audio_smmu_unmap(soc, nbuf, rx_desc_pool->buf_size);
 	dp_ipa_handle_rx_buf_smmu_mapping(soc, nbuf,
 					  rx_desc_pool->buf_size,
 					  false, __func__, __LINE__, 0);

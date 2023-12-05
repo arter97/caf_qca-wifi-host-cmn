@@ -332,10 +332,10 @@ more_msdu_link_desc:
 		}
 
 		rx_desc_pool = &soc->rx_desc_buf[rx_desc->pool_id];
-		dp_ipa_rx_buf_smmu_mapping_lock(soc);
+		dp_rx_buf_smmu_mapping_lock(soc);
 		dp_rx_nbuf_unmap_pool(soc, rx_desc_pool, rx_desc->nbuf);
 		rx_desc->unmapped = 1;
-		dp_ipa_rx_buf_smmu_mapping_unlock(soc);
+		dp_rx_buf_smmu_mapping_unlock(soc);
 
 		rx_desc->rx_buf_start = qdf_nbuf_data(rx_desc->nbuf);
 
@@ -734,10 +734,10 @@ dp_rx_bar_frame_handle(struct dp_soc *soc,
 
 	nbuf = rx_desc->nbuf;
 	rx_desc_pool = &soc->rx_desc_buf[rx_desc->pool_id];
-	dp_ipa_rx_buf_smmu_mapping_lock(soc);
+	dp_rx_buf_smmu_mapping_lock(soc);
 	dp_rx_nbuf_unmap_pool(soc, rx_desc_pool, nbuf);
 	rx_desc->unmapped = 1;
-	dp_ipa_rx_buf_smmu_mapping_unlock(soc);
+	dp_rx_buf_smmu_mapping_unlock(soc);
 	rx_tlv_hdr = qdf_nbuf_data(nbuf);
 	tid = hal_rx_mpdu_start_tid_get(soc->hal_soc,
 					rx_tlv_hdr);
@@ -1117,10 +1117,10 @@ more_msdu_link_desc:
 		pdev = dp_get_pdev_for_lmac_id(soc, rx_desc_pool_id);
 
 		rx_desc_pool = &soc->rx_desc_buf[rx_desc_pool_id];
-		dp_ipa_rx_buf_smmu_mapping_lock(soc);
+		dp_rx_buf_smmu_mapping_lock(soc);
 		dp_rx_nbuf_unmap_pool(soc, rx_desc_pool, nbuf);
 		rx_desc->unmapped = 1;
-		dp_ipa_rx_buf_smmu_mapping_unlock(soc);
+		dp_rx_buf_smmu_mapping_unlock(soc);
 
 		QDF_NBUF_CB_RX_PKT_LEN(nbuf) = msdu_list.msdu_info[i].msdu_len;
 		rx_bufs_used++;
@@ -1876,11 +1876,11 @@ static int dp_rx_err_handle_msdu_buf(struct dp_soc *soc,
 
 	rx_desc_pool = &soc->rx_desc_buf[rx_desc->pool_id];
 	/* After this point the rx_desc and nbuf are valid */
-	dp_ipa_rx_buf_smmu_mapping_lock(soc);
+	dp_rx_buf_smmu_mapping_lock(soc);
 	qdf_assert_always(!rx_desc->unmapped);
 	dp_rx_nbuf_unmap_pool(soc, rx_desc_pool, rx_desc->nbuf);
 	rx_desc->unmapped = 1;
-	dp_ipa_rx_buf_smmu_mapping_unlock(soc);
+	dp_rx_buf_smmu_mapping_unlock(soc);
 	dp_rx_buffer_pool_nbuf_free(soc, rx_desc->nbuf,
 				    rx_desc->pool_id);
 
@@ -3011,12 +3011,12 @@ dp_rx_err_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 					if (rx_desc->unmapped == 0) {
 						rx_desc_pool =
 							&soc->rx_desc_buf[rx_desc->pool_id];
-						dp_ipa_rx_buf_smmu_mapping_lock(soc);
+						dp_rx_buf_smmu_mapping_lock(soc);
 						dp_rx_nbuf_unmap_pool(soc,
 								      rx_desc_pool,
 								      msdu);
 						rx_desc->unmapped = 1;
-						dp_ipa_rx_buf_smmu_mapping_unlock(soc);
+						dp_rx_buf_smmu_mapping_unlock(soc);
 					}
 
 					dp_rx_err_debug("%pK: msdu_nbuf=%pK ",
@@ -3190,10 +3190,10 @@ dp_wbm_int_err_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 					continue;
 				}
 
-				dp_ipa_rx_buf_smmu_mapping_lock(soc);
+				dp_rx_buf_smmu_mapping_lock(soc);
 				dp_rx_nbuf_unmap_pool(soc, rx_desc_pool, msdu);
 				rx_desc->unmapped = 1;
-				dp_ipa_rx_buf_smmu_mapping_unlock(soc);
+				dp_rx_buf_smmu_mapping_unlock(soc);
 
 				dp_rx_buffer_pool_nbuf_free(soc, msdu,
 							    rx_desc->pool_id);
@@ -3251,11 +3251,11 @@ dp_handle_wbm_internal_error(struct dp_soc *soc, void *hal_desc,
 
 		if (rx_desc && rx_desc->nbuf) {
 			rx_desc_pool = &soc->rx_desc_buf[rx_desc->pool_id];
-			dp_ipa_rx_buf_smmu_mapping_lock(soc);
+			dp_rx_buf_smmu_mapping_lock(soc);
 			dp_rx_nbuf_unmap_pool(soc, rx_desc_pool,
 					      rx_desc->nbuf);
 			rx_desc->unmapped = 1;
-			dp_ipa_rx_buf_smmu_mapping_unlock(soc);
+			dp_rx_buf_smmu_mapping_unlock(soc);
 
 			dp_rx_buffer_pool_nbuf_free(soc, rx_desc->nbuf,
 						    rx_desc->pool_id);

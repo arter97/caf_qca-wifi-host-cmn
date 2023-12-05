@@ -2311,6 +2311,40 @@ static void dp_soc_reset_txrx_ring_map(struct dp_soc *soc)
 		soc->tx_ring_map[i] = 0;
 }
 
+#if defined(IPA_OFFLOAD) || defined(FEATURE_DIRECT_LINK)
+/**
+ * dp_soc_rx_buf_map_lock_init() - Initialize rx buf map lock
+ * @soc: DP SOC handle
+ *
+ * Return: None
+ */
+static void dp_soc_rx_buf_map_lock_init(struct dp_soc *soc)
+{
+	qdf_spinlock_create(&soc->rx_buf_map_lock);
+}
+
+/**
+ * dp_soc_rx_buf_map_lock_deinit() - De-initialize rx buf map lock
+ * @soc: DP SOC handle
+ *
+ * Return: None
+ */
+static void dp_soc_rx_buf_map_lock_deinit(struct dp_soc *soc)
+{
+	qdf_spinlock_destroy(&soc->rx_buf_map_lock);
+}
+#else
+static inline
+void dp_soc_rx_buf_map_lock_init(struct dp_soc *soc)
+{
+}
+
+static inline
+void dp_soc_rx_buf_map_lock_deinit(struct dp_soc *soc)
+{
+}
+#endif
+
 /**
  * dp_soc_deinit() - Deinitialize txrx SOC
  * @txrx_soc: Opaque DP SOC handle
@@ -2330,6 +2364,8 @@ void dp_soc_deinit(void *txrx_soc)
 		soc->arch_ops.txrx_peer_map_detach(soc);
 		soc->peer_map_attach_success = FALSE;
 	}
+
+	dp_soc_rx_buf_map_lock_deinit(soc);
 
 	qdf_flush_work(&soc->htt_stats.work);
 	qdf_disable_work(&soc->htt_stats.work);
@@ -3641,6 +3677,7 @@ void *dp_soc_init(struct dp_soc *soc, HTC_HANDLE htc_handle,
 	dp_soc_hw_txrx_stats_init(soc);
 
 	dp_soc_get_ap_mld_mode(soc);
+	dp_soc_rx_buf_map_lock_init(soc);
 
 	return soc;
 fail7:

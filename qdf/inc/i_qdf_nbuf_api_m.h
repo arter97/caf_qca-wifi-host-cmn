@@ -242,6 +242,31 @@ static inline uint8_t qdf_nbuf_get_rx_reo_dest_ind_or_sw_excpt(qdf_nbuf_t buf)
 }
 
 /**
+ * qdf_nbuf_set_rx_audio_smmu_map() - Set rx audio smmu mapped flag
+ * @nbuf: Network buffer
+ * @value: 1 - audio smmu mapped, 0 - audio smmu unmapped
+ *
+ * Return: none
+ */
+static inline void
+qdf_nbuf_set_rx_audio_smmu_map(qdf_nbuf_t nbuf, uint8_t value)
+{
+	QDF_NBUF_CB_RX_AUDIO_SMMU_MAP(nbuf) = value;
+}
+
+/**
+ * qdf_nbuf_get_rx_audio_smmu_map() - Get audio smmu map flag
+ * @nbuf: Network buffer
+ *
+ * Return 0 or 1
+ */
+static inline
+uint8_t qdf_nbuf_get_rx_audio_smmu_map(qdf_nbuf_t nbuf)
+{
+	return QDF_NBUF_CB_RX_AUDIO_SMMU_MAP(nbuf);
+}
+
+/**
  * qdf_nbuf_get_tx_fctx() - get fctx of nbuf
  *
  * @buf: Network buffer

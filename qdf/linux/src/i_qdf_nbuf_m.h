@@ -74,6 +74,7 @@
  * @u.rx.dev.priv_cb_m.fr_ds: from DS bit in RX packet
  * @u.rx.dev.priv_cb_m.to_ds: to DS bit in RX packet
  * @u.rx.dev.priv_cb_m.logical_link_id: link id of RX packet
+ * @u.rx.dev.priv_cb_m.audio_smmu_map: audio smmu map
  * @u.rx.dev.priv_cb_m.reserved1: reserved bits
  * @u.rx.dev.priv_cb_m.dp_ext: Union of tcp and ext structs
  * @u.rx.dev.priv_cb_m.dp_ext.tcp: TCP structs
@@ -226,7 +227,8 @@ struct qdf_nbuf_cb {
 						 to_ds:1,
 						 logical_link_id:4,
 						 band:3,
-						 reserved1:7;
+						 audio_smmu_map:1,
+						 reserved1:6;
 					union {
 						struct {
 							uint32_t tcp_seq_num;
@@ -653,6 +655,10 @@ QDF_COMPILE_TIME_ASSERT(qdf_nbuf_cb_size,
 #define  QDF_NBUF_CB_RX_PACKET_IPA_SMMU_MAP_CALLER(skb) \
 	 (((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.dev.priv_cb_m. \
 	reserved1)
+
+#define QDF_NBUF_CB_RX_AUDIO_SMMU_MAP(skb) \
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.dev.priv_cb_m. \
+	audio_smmu_map)
 
 #define __qdf_nbuf_ipa_owned_get(skb) \
 	QDF_NBUF_CB_TX_IPA_OWNED(skb)
