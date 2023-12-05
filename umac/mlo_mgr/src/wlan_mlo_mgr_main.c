@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -1211,6 +1211,9 @@ static QDF_STATUS mlo_dev_ctx_init(struct wlan_objmgr_vdev *vdev)
 
 	ml_dev->mlo_max_recom_simult_links =
 		WLAN_UMAC_MLO_RECOM_MAX_SIMULT_LINKS_DEFAULT;
+
+	ml_dev->mlo_extmld_cap_advertisement =
+		WLAN_UMAC_MLO_EXTMLDCAP_ENABLE_ADVERTISEMENT;
 
 	mlo_dev_mlpeer_list_init(ml_dev);
 

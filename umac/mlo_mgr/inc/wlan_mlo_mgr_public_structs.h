@@ -68,6 +68,11 @@
 #define WLAN_UMAC_MLO_RECOM_MAX_SIMULT_LINKS_DEFAULT 2
 #endif
 
+/* Default initialization for RMSL Advertisement */
+#ifndef WLAN_UMAC_MLO_EXTMLDCAP_ENABLE_ADVERTISEMENT
+#define WLAN_UMAC_MLO_EXTMLDCAP_ENABLE_ADVERTISEMENT 1
+#endif
+
 /* Max PEER support */
 #define MAX_MLO_PEER 512
 
@@ -912,6 +917,8 @@ struct wlan_mlo_link_mac_update {
  * @mlo_peer_id_bmap: mlo_peer_id bitmap for ptqm migration
  * @link_ctx: link related information
  * @mlo_max_recom_simult_links: Max Recommended Simultaneous Links
+ * @mlo_extmld_cap_advertisement: Enable/disable Extended MLD Cap and OP
+ *                                advertisement
  */
 struct wlan_mlo_dev_context {
 	qdf_list_node_t node;
@@ -945,6 +952,7 @@ struct wlan_mlo_dev_context {
 #endif
 	struct mlo_link_switch_context *link_ctx;
 	uint8_t mlo_max_recom_simult_links;
+	bool mlo_extmld_cap_advertisement;
 };
 
 /**
