@@ -598,11 +598,14 @@ static int osif_send_roam_auth_event(struct wlan_objmgr_vdev *vdev,
 					    WLAN_CRYPTO_PARAM_KEY_MGMT);
 		/* if FT or CCKM connection: dont send replay counter */
 		if (!QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X) &&
-		    !QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_PSK) &&
+		    !QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_PSK) &&
 		    !QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_SAE) &&
 		    !QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X_SHA384) &&
 		    !QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_CCKM) &&
 		    !QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_SAE_EXT_KEY) &&
+		    !QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA256) &&
+		    !QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA384) &&
+		    !QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_PSK_SHA384) &&
 		    nla_put(skb,
 			    QCA_WLAN_VENDOR_ATTR_ROAM_AUTH_KEY_REPLAY_CTR,
 			    REPLAY_CTR_LEN,
