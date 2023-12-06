@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1251,6 +1251,9 @@ void dp_peer_rx_tid_setup(struct dp_peer *peer)
 	struct dp_soc *soc = peer->vdev->pdev->soc;
 	struct dp_txrx_peer *txrx_peer = dp_get_txrx_peer(peer);
 	struct dp_vdev *vdev = peer->vdev;
+
+	if (!txrx_peer)
+		return;
 
 	dp_peer_rx_tids_init(peer);
 
