@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -546,7 +546,9 @@ struct wlan_psoc_host_service_ext_param {
  * @num_msdu_idx_qtype_map: Number of HTT_MSDUQ_INDEX to HTT_MSDU_QTYPE
  *                          mapping
  * @is_multipass_sap: Multipass sap flag
- * @num_max_mlo_link_per_ml_bss_supp: max link number per MLD FW supports.
+ * @num_max_mlo_link_per_ml_bss_supp: mlo sta max link number per MLD that
+ *                                    FW supports.
+ * @num_max_mlo_link_per_ml_sap_supp: mlo sap max link support number from FW
  * @num_aux_dev_caps: number of aux dev capabilities
  *
  * Following fields are used to save the values that are received in service
@@ -590,6 +592,7 @@ struct wlan_psoc_host_service_ext2_param {
 	bool is_multipass_sap;
 #endif
 	uint32_t num_max_mlo_link_per_ml_bss_supp;
+	uint32_t num_max_mlo_link_per_ml_sap_supp;
 	uint32_t num_aux_dev_caps;
 
 	uint64_t wireless_modes_ext;

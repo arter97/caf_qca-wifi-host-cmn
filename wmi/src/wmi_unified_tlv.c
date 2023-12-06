@@ -15250,9 +15250,12 @@ extract_num_max_mlo_link(wmi_service_ready_ext2_event_fixed_param *ev,
 {
 	param->num_max_mlo_link_per_ml_bss_supp =
 				ev->num_max_mlo_link_per_ml_bss_supp;
+	param->num_max_mlo_link_per_ml_sap_supp =
+				ev->num_max_mlo_link_per_ml_sap_supp;
 
-	wmi_debug("Firmware Max MLO link support: %d",
-		  param->num_max_mlo_link_per_ml_bss_supp);
+	wmi_debug("Firmware Max MLO link support: %d(mlo sta) %d(mlo sap)",
+		  param->num_max_mlo_link_per_ml_bss_supp,
+		  param->num_max_mlo_link_per_ml_sap_supp);
 }
 #else
 static inline void
