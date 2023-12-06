@@ -23388,6 +23388,10 @@ static void populate_tlv_service(uint32_t *wmi_service)
 #endif
 	wmi_service[wmi_service_multiple_reorder_queue_setup_support] =
 			WMI_SERVICE_MULTIPLE_REORDER_QUEUE_SETUP_SUPPORT;
+#if defined(OL_ATH_SUPPORT_LED) && (OL_ATH_SUPPORT_LED == 1)
+	wmi_service[wmi_service_pcie_data_rate_led_blink_support] =
+				WMI_SERVICE_PCIE_DATA_RATE_LED_BLINK_SUPPORT;
+#endif
 }
 
 /**
