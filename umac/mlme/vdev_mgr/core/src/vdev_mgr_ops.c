@@ -705,8 +705,12 @@ static QDF_STATUS vdev_mgr_up_param_update(
 
 	mbss = &mlme_obj->mgmt.mbss_11ax;
 	wlan_vdev_mgr_get_param_bssid(vdev, bssid);
-	if (qdf_mem_cmp(bssid, mbss->non_trans_bssid, QDF_MAC_ADDR_SIZE))
-		return QDF_STATUS_SUCCESS;
+
+	if (wlan_vdev_mlme_get_opmode(vdev) != QDF_SAP_MODE) {
+		if (qdf_mem_cmp(bssid, mbss->non_trans_bssid,
+				QDF_MAC_ADDR_SIZE))
+			return QDF_STATUS_SUCCESS;
+	}
 
 	param->profile_idx = mbss->profile_idx;
 	param->profile_num = mbss->profile_num;
