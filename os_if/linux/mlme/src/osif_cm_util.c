@@ -763,6 +763,21 @@ QDF_STATUS osif_cm_connect_comp_ind(struct wlan_objmgr_vdev *vdev,
 	return ret;
 }
 
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+struct net_device *osif_cm_get_mld_netdev(struct wlan_objmgr_vdev *vdev)
+{
+	osif_cm_get_mld_netdev_cb cb = NULL;
+	struct net_device *dev;
+
+	if (osif_cm_legacy_ops)
+		cb = osif_cm_legacy_ops->osif_get_mld_netdev_cb;
+	if (cb)
+		dev = cb(vdev);
+
+	return dev;
+}
+#endif
+
 #ifdef WLAN_VENDOR_HANDOFF_CONTROL
 QDF_STATUS osif_cm_vendor_handoff_params_cb(struct wlan_objmgr_psoc *psoc,
 					    void *vendor_handoff_context)

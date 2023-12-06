@@ -362,6 +362,21 @@ typedef QDF_STATUS
 	(*os_if_cm_perfd_set_cpufreq_ctrl_cb)(bool action);
 #endif
 
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+/*
+ * typedef osif_cm_get_mld_netdev_cb: Callback to get MLD netdev from vdev
+ * @vdev: vdev pointer
+ *
+ * This callback gets MLD netdev from the corresponding vdev pointer
+ *
+ * Return: ML net device
+ *
+ * NB: kernel-doc Cannot parse typedef
+ */
+typedef struct net_device *
+	(*osif_cm_get_mld_netdev_cb)(struct wlan_objmgr_vdev *vdev);
+#endif
+
 /**
  * struct osif_cm_ops - connection manager legacy callbacks
  * @connect_complete_cb: callback for connect complete to legacy
@@ -384,6 +399,7 @@ typedef QDF_STATUS
  * @vendor_handoff_params_cb: callback to legacy module to send vendor handoff
  * parameters to upper layer
  * @perfd_set_cpufreq_cb: callback to update CPU min freq
+ * @osif_get_mld_netdev_cb: callback to get ML netdev from vdev
  */
 struct osif_cm_ops {
 	osif_cm_connect_comp_cb connect_complete_cb;
@@ -413,6 +429,9 @@ struct osif_cm_ops {
 #ifdef WLAN_BOOST_CPU_FREQ_IN_ROAM
 	os_if_cm_perfd_set_cpufreq_ctrl_cb perfd_set_cpufreq_cb;
 #endif
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+	osif_cm_get_mld_netdev_cb osif_get_mld_netdev_cb;
+#endif
 };
 
 /**
@@ -430,6 +449,18 @@ struct osif_cm_ops {
 QDF_STATUS osif_cm_connect_comp_ind(struct wlan_objmgr_vdev *vdev,
 				    struct wlan_cm_connect_resp *rsp,
 				    enum osif_cb_type type);
+
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+/**
+ * osif_cm_get_mld_netdev() - Function to get ML net device from vdev
+ * @vdev: vdev pointer
+ *
+ * This function gets ML net device from corresponding vdev
+ *
+ * Return: ML net device
+ */
+struct net_device *osif_cm_get_mld_netdev(struct wlan_objmgr_vdev *vdev);
+#endif
 
 #ifdef WLAN_VENDOR_HANDOFF_CONTROL
 /**
