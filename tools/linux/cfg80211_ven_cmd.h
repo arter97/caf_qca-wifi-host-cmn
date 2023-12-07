@@ -855,6 +855,7 @@ enum {
 	 */
 	IEEE80211_PARAM_TPE_COMMON_PSD = 797,
 	IEEE80211_PARAM_TPE_PWR_UNIT = 798, /* User config to choose PSD or EIRP in a TPE IE */
+	IEEE80211_PARAM_MAX_MPDU_LENGTH =799, /* MAX MPDU LENGTH */
 #endif
 };
 
@@ -2473,6 +2474,8 @@ struct vendor_commands vap_vendor_cmds[] = {
 	{"g_spl_vap_scan",      IEEE80211_PARAM_SPL_VAP_SCAN, GET_PARAM, 0},
 	{"discfrm_6g_clear_usr_override", IEEE80211_PARAM_DISC_FRM_CLEAR_USR_OVERRIDE, SET_PARAM, 1},
 #ifdef WLAN_FEATURE_11BE
+	{"set_max_mpdu_length", IEEE80211_PARAM_MAX_MPDU_LENGTH, SET_PARAM, 1},
+	{"get_max_mpdu_length", IEEE80211_PARAM_MAX_MPDU_LENGTH, GET_PARAM, 0},
 	{"set_eht_epcs_pri_access",   IEEE80211_PARAM_EPCS_PRIORITY_ACCESS, SET_PARAM, 1},
 	{"get_eht_epcs_pri_access",   IEEE80211_PARAM_EPCS_PRIORITY_ACCESS, GET_PARAM, 0},
 	{"set_eht_om_ctrl",           IEEE80211_PARAM_OM_CONTROL, SET_PARAM, 1},
