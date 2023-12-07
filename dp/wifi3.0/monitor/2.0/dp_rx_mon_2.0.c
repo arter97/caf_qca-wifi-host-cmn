@@ -1501,6 +1501,8 @@ dp_rx_mon_handle_full_mon(struct dp_pdev *pdev,
 	mpdu_meta = (struct hal_rx_mon_mpdu_info *)qdf_nbuf_data(mpdu);
 
 	if (mpdu_meta->decap_type == HAL_HW_RX_DECAP_FORMAT_RAW) {
+		uint8_t fcs_len_left = HAL_RX_FCS_LEN;
+
 		if (qdf_unlikely(ppdu_info->rx_status.rs_fcs_err)) {
 			hdr_desc = qdf_nbuf_get_frag_addr(mpdu, 0);
 			wh = (struct ieee80211_frame *)hdr_desc;
@@ -1510,9 +1512,21 @@ dp_rx_mon_handle_full_mon(struct dp_pdev *pdev,
 				return QDF_STATUS_E_FAILURE;
 			}
 		}
+		if (qdf_nbuf_get_nr_frags(mpdu) >= 2) {
+			uint8_t last_f = qdf_nbuf_get_nr_frags(mpdu) - 1;
+			uint8_t last_frag_size =
+				qdf_nbuf_get_frag_size(mpdu, last_f);
+
+			if (last_frag_size < HAL_RX_FCS_LEN) {
+				qdf_nbuf_remove_frag(mpdu, last_f,
+						     DP_MON_DATA_BUFFER_SIZE);
+				fcs_len_left -= last_frag_size;
+			}
+		}
+
 		qdf_nbuf_trim_add_frag_size(mpdu,
 					    qdf_nbuf_get_nr_frags(mpdu) - 1,
-					    -HAL_RX_FCS_LEN, 0);
+					    -fcs_len_left, 0);
 		return QDF_STATUS_SUCCESS;
 	}
 

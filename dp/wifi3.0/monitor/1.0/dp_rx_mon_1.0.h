@@ -667,9 +667,23 @@ void dp_rx_mon_remove_raw_frame_fcs_len(struct dp_soc *soc,
 	addr -= soc->rx_mon_pkt_tlv_size;
 	if (hal_rx_tlv_decap_format_get(soc->hal_soc, addr) ==
 		HAL_HW_RX_DECAP_FORMAT_RAW) {
+		uint8_t fcs_len_left = HAL_RX_FCS_LEN;
+
+		if (qdf_nbuf_get_nr_frags(*tail_msdu) >= 2) {
+			uint8_t last_f = qdf_nbuf_get_nr_frags(*tail_msdu) - 1;
+			uint8_t last_frag_size =
+				qdf_nbuf_get_frag_size(*tail_msdu, last_f);
+
+			if (last_frag_size < HAL_RX_FCS_LEN) {
+				qdf_nbuf_remove_frag(*tail_msdu, last_f,
+						     RX_MONITOR_BUFFER_SIZE);
+				fcs_len_left -= last_frag_size;
+			}
+		}
+
 		qdf_nbuf_trim_add_frag_size(*tail_msdu,
-			qdf_nbuf_get_nr_frags(*tail_msdu) - 1,
-					-HAL_RX_FCS_LEN, 0);
+					    qdf_nbuf_get_nr_frags(*tail_msdu) -
+					    1, -fcs_len_left, 0);
 	}
 }
 
