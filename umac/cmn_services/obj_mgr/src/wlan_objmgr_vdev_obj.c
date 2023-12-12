@@ -1773,3 +1773,21 @@ void wlan_vdev_mlme_clear_mlo_link_vdev(struct wlan_objmgr_vdev *vdev)
 		      wlan_vdev_get_id(vdev));
 }
 #endif /* WLAN_FEATURE_11BE_MLO */
+
+uint8_t wlan_vdev_get_peer_sta_count(struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_objmgr_peer *peer;
+	uint8_t peer_count = 0;
+
+	wlan_vdev_obj_lock(vdev);
+	wlan_objmgr_for_each_vdev_peer(vdev, peer) {
+		wlan_objmgr_peer_get_ref(peer, WLAN_OBJMGR_ID);
+		if (wlan_peer_get_peer_type(peer) == WLAN_PEER_STA)
+			peer_count++;
+
+		wlan_objmgr_peer_release_ref(peer, WLAN_OBJMGR_ID);
+	}
+	wlan_vdev_obj_unlock(vdev);
+
+	return peer_count;
+}

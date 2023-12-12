@@ -2524,4 +2524,11 @@ wlan_vdev_read_skip_pumac_cnt(struct wlan_objmgr_vdev *vdev)
 }
 #endif
 
+/**
+ * wlan_vdev_get_peer_sta_count: Get peer STA count
+ * @vdev: Pointer to vdev
+ *
+ * Return: STA peer count
+ */
+uint8_t wlan_vdev_get_peer_sta_count(struct wlan_objmgr_vdev *vdev);
 #endif /* _WLAN_OBJMGR_VDEV_OBJ_H_*/

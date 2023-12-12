@@ -1221,6 +1221,7 @@ struct dfs_punc_unpunc {
  * @dfs_is_stadfs_enabled:           Is STADFS enabled.
  * @dfs_seg_id:                      Segment ID of the radar hit channel.
  * @dfs_is_chirp:                    Radar Chirp in pulse present or not.
+ * @dfs_is_fh_pulse:                 Frequency hopping radar present or not.
  * @dfs_bw_reduced:                  DFS bandwidth reduced channel bit.
  * @dfs_freq_offset:                 Frequency offset where radar was found.
  * @dfs_cac_aborted:                 DFS cac is aborted.
@@ -1404,6 +1405,7 @@ struct wlan_dfs {
 	bool           dfs_is_stadfs_enabled;
 	uint8_t        dfs_seg_id;
 	uint8_t        dfs_is_chirp;
+	uint8_t        dfs_is_fh_pulse;
 	bool           dfs_bw_reduced;
 	int32_t        dfs_freq_offset;
 	bool           dfs_cac_aborted;

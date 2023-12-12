@@ -238,5 +238,11 @@ QDF_STATUS wlan_vdev_mlme_send_set_mac_addr(struct qdf_mac_addr mac_addr,
  */
 void wlan_vdev_mlme_notify_set_mac_addr_response(struct wlan_objmgr_vdev *vdev,
 						 uint8_t resp_status);
+#else
+static inline
+void wlan_vdev_mlme_notify_set_mac_addr_response(struct wlan_objmgr_vdev *vdev,
+						 uint8_t resp_status)
+{
+}
 #endif
 #endif

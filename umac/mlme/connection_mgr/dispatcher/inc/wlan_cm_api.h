@@ -198,6 +198,15 @@ bool wlan_cm_is_vdev_disconnecting(struct wlan_objmgr_vdev *vdev);
 bool wlan_cm_is_vdev_disconnected(struct wlan_objmgr_vdev *vdev);
 
 /**
+ * wlan_cm_is_vdev_idle_due_to_link_switch() - Check if VDEV is in IDLE
+ * due to link switch sub-state.
+ * @vdev: VDEV objmgr pointer
+ *
+ * Return: bool
+ */
+bool wlan_cm_is_vdev_idle_due_to_link_switch(struct wlan_objmgr_vdev *vdev);
+
+/**
  * wlan_cm_is_vdev_roaming() - check if vdev is in roaming state
  * @vdev: vdev pointer
  *

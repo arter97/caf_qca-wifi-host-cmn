@@ -3597,6 +3597,33 @@ static inline void hif_ce_do_recv(struct hif_msg_callbacks *msg_callbacks,
 	}
 }
 
+#ifdef WLAN_FEATURE_WMI_DIAG_OVER_CE7
+/**
+ * hif_ce_rtpm_mark_last_busy() - record and mark last busy for RTPM
+ * @scn: hif_softc pointer.
+ * @ce_id: ce ID
+ *
+ * Return: None
+ */
+static inline void
+hif_ce_rtpm_mark_last_busy(struct hif_softc *scn, uint32_t ce_id)
+{
+	/* do NOT mark last busy for diag event, to avoid impacting RTPM */
+	if (ce_id == CE_ID_7)
+		return;
+
+	hif_rtpm_record_ce_last_busy_evt(scn, ce_id);
+	hif_rtpm_mark_last_busy(HIF_RTPM_ID_CE);
+}
+#else
+static inline void
+hif_ce_rtpm_mark_last_busy(struct hif_softc *scn, uint32_t ce_id)
+{
+	hif_rtpm_record_ce_last_busy_evt(scn, ce_id);
+	hif_rtpm_mark_last_busy(HIF_RTPM_ID_CE);
+}
+#endif
+
 /* Called by lower (CE) layer when data is received from the Target. */
 static void
 hif_pci_ce_recv_data(struct CE_handle *copyeng, void *ce_context,
@@ -3612,8 +3639,7 @@ hif_pci_ce_recv_data(struct CE_handle *copyeng, void *ce_context,
 	struct hif_msg_callbacks *msg_callbacks = &pipe_info->pipe_callbacks;
 
 	do {
-		hif_rtpm_record_ce_last_busy_evt(scn, ce_state->id);
-		hif_rtpm_mark_last_busy(HIF_RTPM_ID_CE);
+		hif_ce_rtpm_mark_last_busy(scn, ce_state->id);
 		qdf_nbuf_unmap_single(scn->qdf_dev,
 				      (qdf_nbuf_t) transfer_context,
 				      QDF_DMA_FROM_DEVICE);

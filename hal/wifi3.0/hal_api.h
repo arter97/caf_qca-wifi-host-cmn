@@ -1303,6 +1303,16 @@ void hal_srng_dst_init_hp(struct hal_soc_handle *hal_soc,
 			  uint32_t *vaddr);
 
 /**
+ * hal_srng_dst_update_hp_addr() - Update hp_addr with current HW HP value
+ * @hal_soc: hal_soc handle
+ * @hal_ring_hdl: Opaque HAL SRNG pointer
+ *
+ * Return: None
+ */
+void hal_srng_dst_update_hp_addr(struct hal_soc_handle *hal_soc,
+				 hal_ring_handle_t hal_ring_hdl);
+
+/**
  * hal_srng_cleanup() - Deinitialize HW SRNG ring.
  * @hal_soc: Opaque HAL SOC handle
  * @hal_ring_hdl: Opaque HAL SRNG pointer

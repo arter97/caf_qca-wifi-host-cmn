@@ -4234,22 +4234,6 @@ qdf_nbuf_t dp_tx_send_mesh(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 
 #endif
 
-#ifdef QCA_DP_TX_NBUF_AND_NBUF_DATA_PREFETCH
-static inline
-void dp_tx_prefetch_nbuf_data(qdf_nbuf_t nbuf)
-{
-	if (nbuf) {
-		qdf_prefetch(&nbuf->len);
-		qdf_prefetch(&nbuf->data);
-	}
-}
-#else
-static inline
-void dp_tx_prefetch_nbuf_data(qdf_nbuf_t nbuf)
-{
-}
-#endif
-
 #ifdef DP_UMAC_HW_RESET_SUPPORT
 qdf_nbuf_t dp_tx_drop(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 		      qdf_nbuf_t nbuf)
@@ -4472,8 +4456,6 @@ send_single:
 	 * prepare direct-buffer type TCL descriptor and enqueue to TCL
 	 * SRNG. There is no need to setup a MSDU extension descriptor.
 	 */
-	dp_tx_prefetch_nbuf_data(nbuf);
-
 	nbuf = dp_tx_send_msdu_single_wrapper(vdev, nbuf, &msdu_info,
 					      peer_id, end_nbuf);
 	return nbuf;

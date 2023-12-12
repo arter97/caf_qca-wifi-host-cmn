@@ -962,98 +962,6 @@ cm_inform_dlm_connect_complete(struct wlan_objmgr_vdev *vdev,
 	return QDF_STATUS_SUCCESS;
 }
 
-#ifdef WLAN_FEATURE_11BE_MLO
-static bool
-cm_update_mlo_links_for_retry_with_same_candidate(struct wlan_objmgr_psoc *psoc,
-						  struct cm_connect_req *cm_req)
-{
-	uint8_t mlo_link_num;
-	struct scan_cache_entry *entry;
-
-	if (!cm_req->req.ml_parnter_info.num_partner_links)
-		return false;
-
-	entry = cm_req->cur_candidate->entry;
-
-	mlo_link_num = wlan_mlme_get_sta_mlo_conn_max_num(psoc);
-	if (cm_req->req.ml_parnter_info.num_partner_links > mlo_link_num)
-		cm_req->req.ml_parnter_info.num_partner_links = mlo_link_num;
-
-	/*
-	 * Try next candidate for non-ML AP
-	 */
-	if (!entry->ie_list.multi_link_bv || !entry->ml_info.num_links) {
-		cm_req->req.ml_parnter_info.num_partner_links = NO_LINK;
-		return false;
-	}
-
-	if (cm_req->req.ml_parnter_info.num_partner_links > NO_LINK) {
-		/*
-		 * Try to same AP exhaustively till single link ML connection
-		 * is tried with the AP
-		 */
-		cm_req->req.ml_parnter_info.num_partner_links--;
-	}
-
-	mlme_debug(CM_PREFIX_FMT "try ML connection with %d partner links",
-		   CM_PREFIX_REF(cm_req->req.vdev_id, cm_req->cm_id),
-		   cm_req->req.ml_parnter_info.num_partner_links);
-
-	return true;
-}
-#else
-static inline bool
-cm_update_mlo_links_for_retry_with_same_candidate(struct wlan_objmgr_psoc *psoc,
-						  struct cm_connect_req *cm_req)
-{
-	return false;
-}
-#endif
-
-/**
- * cm_retry_with_same_candidate_for_sae_connection() - This API check if
- * reconnect attempt is required with the same candidate again or not based
- * on sae connection
- * @psoc: obj mgr psoc
- * @req: Connect request
- * @max_retry_count: pointer to hold max retry value
- * @is_mlo_vdev: MLO connection or not
- * @is_sae_con: SAE connection or not
- *
- * Return: void
- */
-static void
-cm_retry_with_same_candidate_for_sae_connection(
-			struct wlan_objmgr_psoc *psoc,
-			struct cm_connect_req *req,
-			uint8_t *max_retry_count, bool is_mlo_vdev,
-			bool is_sae_con)
-{
-	uint8_t sae_max_retry_count = CM_MAX_CANDIDATE_RETRIES;
-	struct scoring_cfg *score_config;
-	struct psoc_mlme_obj *mlme_psoc_obj;
-
-	mlme_psoc_obj = wlan_psoc_mlme_get_cmpt_obj(psoc);
-	if (!mlme_psoc_obj)
-		return;
-
-	score_config = &mlme_psoc_obj->psoc_cfg.score_config;
-
-	/* For SAE use max retry count from INI */
-	if (is_sae_con)
-		wlan_mlme_get_sae_assoc_retry_count(psoc, &sae_max_retry_count);
-
-	if (score_config->vendor_roam_score_algorithm) {
-		if (is_mlo_vdev)
-			sae_max_retry_count = QDF_MAX(sae_max_retry_count,
-						      *max_retry_count);
-
-		cm_update_mlo_links_for_retry_with_same_candidate(psoc, req);
-	}
-
-	*max_retry_count = sae_max_retry_count;
-}
-
 /**
  * cm_is_retry_with_same_candidate() - This API check if reconnect attempt is
  * required with the same candidate again
@@ -1077,40 +985,27 @@ static bool cm_is_retry_with_same_candidate(struct cnx_mgr *cm_ctx,
 	QDF_STATUS status;
 	uint8_t mlo_link_num;
 	qdf_freq_t freq;
-	struct scoring_cfg *score_config;
-	struct psoc_mlme_obj *mlme_psoc_obj;
 
 	psoc = wlan_pdev_get_psoc(wlan_vdev_get_pdev(cm_ctx->vdev));
-	mlme_psoc_obj = wlan_psoc_mlme_get_cmpt_obj(psoc);
-	if (!mlme_psoc_obj)
-		return false;
 
-	score_config = &mlme_psoc_obj->psoc_cfg.score_config;
 	key_mgmt = req->cur_candidate->entry->neg_sec_info.key_mgmt;
 	freq = req->cur_candidate->entry->channel.chan_freq;
 
 	is_mlo_vdev = wlan_vdev_mlme_is_mlo_vdev(cm_ctx->vdev);
 	mlo_link_num = wlan_mlme_get_sta_mlo_conn_max_num(psoc);
-	/*
-	 * Update no of retrials for n link MLO, so that connection can be
-	 * tried with all possible link combinations till SLO.
-	 */
-	if (score_config->vendor_roam_score_algorithm &&
-	    is_mlo_vdev && mlo_link_num > 1)
-		max_retry_count = mlo_link_num - 1;
 
 	/* Try once again for the invalid PMKID case without PMKID */
-	if (resp->status_code == STATUS_INVALID_PMKID) {
-		if (score_config->vendor_roam_score_algorithm)
-			cm_update_mlo_links_for_retry_with_same_candidate(psoc,
-									  req);
+	if (resp->status_code == STATUS_INVALID_PMKID)
 		goto use_same_candidate;
-	}
 
 	sae_connection = key_mgmt & (1 << WLAN_CRYPTO_KEY_MGMT_SAE |
 				     1 << WLAN_CRYPTO_KEY_MGMT_FT_SAE |
 				     1 << WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY |
 				     1 << WLAN_CRYPTO_KEY_MGMT_FT_SAE_EXT_KEY);
+
+	/* For SAE use max retry count from INI */
+	if (sae_connection)
+		wlan_mlme_get_sae_assoc_retry_count(psoc, &max_retry_count);
 
 	/* Try again for the JOIN timeout if only one candidate */
 	if (resp->reason == CM_JOIN_TIMEOUT &&
@@ -1124,10 +1019,6 @@ static bool cm_is_retry_with_same_candidate(struct cnx_mgr *cm_ctx,
 		if (policy_mgr_will_freq_lead_to_mcc(psoc, freq))
 			return false;
 
-		cm_retry_with_same_candidate_for_sae_connection(
-				psoc, req, &max_retry_count, is_mlo_vdev,
-				sae_connection);
-
 		goto use_same_candidate;
 	}
 
@@ -1138,28 +1029,8 @@ static bool cm_is_retry_with_same_candidate(struct cnx_mgr *cm_ctx,
 	if (resp->reason == CM_ASSOC_TIMEOUT && (sae_connection ||
 	    (mlme_get_reconn_after_assoc_timeout_flag(psoc, resp->vdev_id)))) {
 
-		cm_retry_with_same_candidate_for_sae_connection(
-				psoc, req, &max_retry_count, is_mlo_vdev,
-				sae_connection);
-
 		goto use_same_candidate;
 	}
-
-	/*
-	 * When vendor roam score algorithm is enabled and association failure
-	 * happens while trying MLO connection with multiple link, then
-	 * retry with same candidate with same primary link and other band as
-	 * secondary link. If still failure happens, then try standlone single
-	 * link MLO mode with the same candidate AP. Ex:
-	 * Priority 1(candidate AP’s 6 GHz case) – 6 GHz (Associating link) +
-	 *                                         5 GHz + 2.4 GHz
-	 * Priority 2(candidate AP’s 6 GHz case) – 6 GHz (Associating link) +
-	 *                                         2.4 GHz
-	 * Priority 3(AP’s 6 GHz case) – 6 GHz (single Link)
-	 */
-	if (resp->status_code && score_config->vendor_roam_score_algorithm &&
-	    cm_update_mlo_links_for_retry_with_same_candidate(psoc, req))
-		goto use_same_candidate;
 
 	return false;
 
@@ -1308,6 +1179,16 @@ static void cm_teardown_tdls(struct wlan_objmgr_vdev *vdev)
 	wlan_tdls_check_and_teardown_links_sync(psoc, vdev);
 }
 
+static void cm_handle_connect_start_req(struct wlan_objmgr_vdev *vdev,
+					struct wlan_cm_connect_req *req)
+{
+	if (!wlan_vdev_mlme_is_mlo_link_vdev(vdev))
+		cm_teardown_tdls(vdev);
+
+	wlan_cm_set_force_20mhz_in_24ghz(vdev,
+					 req->ht_caps & WLAN_HTCAP_C_CHWIDTH40);
+}
+
 #else
 static inline bool
 cm_is_any_other_vdev_connecting_disconnecting(struct cnx_mgr *cm_ctx,
@@ -1442,6 +1323,11 @@ post_err:
 }
 
 static inline void cm_teardown_tdls(struct wlan_objmgr_vdev *vdev) {}
+
+static inline void cm_handle_connect_start_req(struct wlan_objmgr_vdev *vdev,
+					       struct wlan_cm_connect_req *req)
+{
+}
 
 #endif /* CONN_MGR_ADV_FEATURE */
 
@@ -3461,8 +3347,7 @@ QDF_STATUS cm_connect_start_req(struct wlan_objmgr_vdev *vdev,
 
 	cm_set_crypto_params_from_ie(&connect_req->req);
 
-	if (!wlan_vdev_mlme_is_mlo_link_vdev(vdev))
-		cm_teardown_tdls(vdev);
+	cm_handle_connect_start_req(vdev, req);
 
 	status = cm_sm_deliver_event(vdev, WLAN_CM_SM_EV_CONNECT_REQ,
 				     sizeof(*connect_req), connect_req);

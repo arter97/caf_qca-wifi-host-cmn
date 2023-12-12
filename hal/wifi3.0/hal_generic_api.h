@@ -627,6 +627,15 @@ QDF_STATUS hal_srng_set_msi_config(hal_ring_handle_t ring_hdl,
 	srng->msi_addr = ring_params->msi_addr;
 	srng->msi_data = ring_params->msi_data;
 
+	if (!srng->msi_addr && !srng->msi_data) {
+		if (srng->ring_dir == HAL_SRNG_SRC_RING)
+			SRNG_SRC_REG_WRITE(srng, MSI1_BASE_MSB, 0);
+		else
+			SRNG_DST_REG_WRITE(srng, MSI1_BASE_MSB, 0);
+
+		return QDF_STATUS_SUCCESS;
+	}
+
 	if (srng->ring_dir == HAL_SRNG_SRC_RING) {
 		reg_val = 0;
 

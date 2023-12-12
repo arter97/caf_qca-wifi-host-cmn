@@ -1534,10 +1534,6 @@ static inline QDF_STATUS dp_peer_map_ast(struct dp_soc *soc,
 	if (soc->ast_offload_support && !wlan_cfg_get_dp_soc_dpdk_cfg(soc->ctrl_psoc))
 		return QDF_STATUS_SUCCESS;
 
-	if (!peer) {
-		return QDF_STATUS_E_INVAL;
-	}
-
 	dp_peer_err("%pK: peer %pK ID %d vid %d mac " QDF_MAC_ADDR_FMT,
 		    soc, peer, hw_peer_id, vdev_id,
 		    QDF_MAC_ADDR_REF(mac_addr));
@@ -1547,6 +1543,21 @@ static inline QDF_STATUS dp_peer_map_ast(struct dp_soc *soc,
 	ast_entry = dp_peer_ast_hash_find_by_vdevid(soc, mac_addr, vdev_id);
 
 	if (is_wds) {
+		/*
+		 * While processing peer map of AST entry if the next hop peer is
+		 * deleted free the AST entry as it is not attached to peer yet
+		 */
+		if (!peer) {
+			if (ast_entry)
+				dp_peer_free_ast_entry(soc, ast_entry);
+
+			qdf_spin_unlock_bh(&soc->ast_lock);
+
+			dp_peer_alert("Peer is NULL for WDS entry mac "
+				      QDF_MAC_ADDR_FMT " ",
+				      QDF_MAC_ADDR_REF(mac_addr));
+			return QDF_STATUS_E_INVAL;
+		}
 		/*
 		 * In certain cases like Auth attack on a repeater
 		 * can result in the number of ast_entries falling
@@ -1595,6 +1606,13 @@ static inline QDF_STATUS dp_peer_map_ast(struct dp_soc *soc,
 
 			return err;
 		}
+	}
+
+	if (!peer) {
+		qdf_spin_unlock_bh(&soc->ast_lock);
+		dp_peer_alert("Peer is NULL for mac " QDF_MAC_ADDR_FMT " ",
+			      QDF_MAC_ADDR_REF(mac_addr));
+		return QDF_STATUS_E_INVAL;
 	}
 
 	if (ast_entry) {
@@ -2347,13 +2365,17 @@ dp_peer_clean_wds_entries(struct dp_soc *soc, struct dp_peer *peer,
 			  uint32_t free_wds_count)
 {
 	uint32_t wds_deleted = 0;
+	bool ast_ind_disable;
 
 	if (soc->ast_offload_support && !soc->host_ast_db_enable)
 		return;
 
+	ast_ind_disable = wlan_cfg_get_ast_indication_disable
+		(soc->wlan_cfg_ctx);
+
 	wds_deleted = dp_peer_ast_free_wds_entries(soc, peer);
 	if ((DP_PEER_WDS_COUNT_INVALID != free_wds_count) &&
-	    (free_wds_count != wds_deleted)) {
+	    (free_wds_count != wds_deleted) && !ast_ind_disable) {
 		DP_STATS_INC(soc, ast.ast_mismatch, 1);
 		dp_alert("For peer %pK (mac: "QDF_MAC_ADDR_FMT")number of wds entries deleted by fw = %d during peer delete is not same as the numbers deleted by host = %d",
 			 peer, peer->mac_addr.raw, free_wds_count,

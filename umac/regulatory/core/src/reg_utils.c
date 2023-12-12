@@ -1030,39 +1030,6 @@ bool reg_is_fcc_constraint_set(struct wlan_objmgr_pdev *pdev)
 
 	return true;
 }
-
-#ifdef CONFIG_BAND_6GHZ
-enum reg_6g_ap_type reg_decide_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev)
-{
-	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
-	enum reg_6g_ap_type ap_pwr_type = REG_INDOOR_AP;
-
-	pdev_priv_obj = reg_get_pdev_obj(pdev);
-	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
-		reg_err("pdev reg component is NULL");
-		return REG_VERY_LOW_POWER_AP;
-	}
-
-	if (wlan_reg_is_afc_power_event_received(pdev) &&
-	    pdev_priv_obj->reg_rules.num_of_6g_ap_reg_rules[REG_STANDARD_POWER_AP]) {
-		ap_pwr_type = REG_STANDARD_POWER_AP;
-	} else if (pdev_priv_obj->indoor_chan_enabled) {
-		if (pdev_priv_obj->reg_rules.num_of_6g_ap_reg_rules[REG_INDOOR_AP])
-			ap_pwr_type = REG_INDOOR_AP;
-		else
-			ap_pwr_type = REG_VERY_LOW_POWER_AP;
-	} else if (pdev_priv_obj->reg_rules.num_of_6g_ap_reg_rules[REG_VERY_LOW_POWER_AP]) {
-		ap_pwr_type = REG_VERY_LOW_POWER_AP;
-	}
-	reg_debug("indoor_chan_enabled %d ap_pwr_type %d",
-		  pdev_priv_obj->indoor_chan_enabled, ap_pwr_type);
-
-	reg_set_ap_pwr_and_update_chan_list(pdev, ap_pwr_type);
-
-	return ap_pwr_type;
-}
-#endif /* CONFIG_BAND_6GHZ */
-
 #endif /* CONFIG_REG_CLIENT */
 
 /**

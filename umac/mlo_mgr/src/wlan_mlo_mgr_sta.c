@@ -288,7 +288,8 @@ mlo_send_link_disconnect(struct wlan_objmgr_vdev *vdev,
 		if ((wlan_vdev_list[i] != assoc_vdev) &&
 		    (qdf_test_bit(i, sta_ctx->wlan_connected_links) ||
 		    (wlan_cm_is_vdev_connected(wlan_vdev_list[i]) &&
-		    !wlan_peer_is_mlo(wlan_vdev_get_bsspeer(wlan_vdev_list[i])))))
+		    !wlan_peer_is_mlo(wlan_vdev_get_bsspeer(wlan_vdev_list[i]))) ||
+		    wlan_cm_is_vdev_idle_due_to_link_switch(wlan_vdev_list[i])))
 			wlan_cm_disconnect(wlan_vdev_list[i],
 					   link_source, reason_code,
 					   NULL);
@@ -2331,7 +2332,8 @@ void mlo_internal_disconnect_links(struct wlan_objmgr_vdev *vdev)
 	for (i =  0; i < vdev_count; i++) {
 		if (wlan_vdev_list[i] != assoc_vdev &&
 		    (wlan_cm_is_vdev_connected(wlan_vdev_list[i]) ||
-		     wlan_cm_is_vdev_connecting(wlan_vdev_list[i])))
+		     wlan_cm_is_vdev_connecting(wlan_vdev_list[i]) ||
+		     wlan_cm_is_vdev_idle_due_to_link_switch(wlan_vdev_list[i])))
 			wlan_cm_disconnect(wlan_vdev_list[i],
 					   CM_MLO_LINK_VDEV_DISCONNECT,
 					   REASON_UNSPEC_FAILURE,
