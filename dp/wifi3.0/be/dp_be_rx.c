@@ -2128,6 +2128,12 @@ dp_rx_wbm_err_reap_desc_be(struct dp_intr *int_ctx, struct dp_soc *soc,
 
 		nbuf = rx_desc->nbuf;
 
+		rx_desc_pool = &soc->rx_desc_buf[rx_desc->pool_id];
+		dp_ipa_rx_buf_smmu_mapping_lock(soc);
+		dp_rx_nbuf_unmap_pool(soc, rx_desc_pool, nbuf);
+		rx_desc->unmapped = 1;
+		dp_ipa_rx_buf_smmu_mapping_unlock(soc);
+
 		/*
 		 * Read wbm err info , MSDU info , MPDU info , peer meta data,
 		 * from desc. Save all the info in nbuf CB/TLV.
@@ -2153,12 +2159,6 @@ dp_rx_wbm_err_reap_desc_be(struct dp_intr *int_ctx, struct dp_soc *soc,
 			    HAL_RX_WBM_ERR_SRC_RXDMA) ||
 			   (wbm_err.info_bit.wbm_err_src ==
 			    HAL_RX_WBM_ERR_SRC_REO));
-
-		rx_desc_pool = &soc->rx_desc_buf[rx_desc->pool_id];
-		dp_ipa_rx_buf_smmu_mapping_lock(soc);
-		dp_rx_nbuf_unmap_pool(soc, rx_desc_pool, nbuf);
-		rx_desc->unmapped = 1;
-		dp_ipa_rx_buf_smmu_mapping_unlock(soc);
 
 		if (qdf_unlikely(
 			soc->wbm_release_desc_rx_sg_support &&

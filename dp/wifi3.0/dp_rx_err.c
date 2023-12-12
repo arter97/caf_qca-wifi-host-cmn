@@ -2859,8 +2859,9 @@ dp_rx_wbm_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
 				dp_rx_nbuf_free(nbuf);
 			} else {
 				/* should not enter here */
-				dp_rx_err_alert("invalid rxdma push reason %u",
-						wbm_err.info_bit.rxdma_psh_rsn);
+				dp_err("invalid rxdma push reason %u, wbm_err 0x%lx",
+				       wbm_err.info_bit.rxdma_psh_rsn,
+				       wbm_err.info);
 				dp_rx_nbuf_free(nbuf);
 				dp_assert_always_internal(0);
 			}
