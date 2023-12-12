@@ -187,6 +187,54 @@ dp_rx_wds_learn(struct dp_soc *soc,
 }
 #else
 #ifdef QCA_SUPPORT_WDS_EXTENDED
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+/**
+ * dp_wds_ext_get_base_peer() - function to find the base peer
+ * for which wds_ext event trigger is required.
+ * @soc: DP soc
+ * @txrx_peer: WDS repeater txrx peer
+ * @mod_id: ID of module requesting reference
+ *
+ * Return: struct dp_peer*: Pointer to DP peer object
+ */
+
+static inline
+struct dp_peer *dp_wds_ext_get_base_peer(struct dp_soc *soc,
+					 struct dp_txrx_peer *txrx_peer,
+					 enum dp_mod_id mod_id)
+{
+	struct dp_peer *base_peer = NULL;
+
+	base_peer = dp_get_primary_link_peer_by_id(soc,
+						   txrx_peer->peer_id,
+						   mod_id);
+	return base_peer;
+}
+#else
+static inline
+struct dp_peer *dp_wds_ext_get_base_peer(struct dp_soc *soc,
+					 struct dp_txrx_peer *txrx_peer,
+					 enum dp_mod_id mod_id)
+{
+	struct dp_peer *base_peer = NULL;
+
+	if (qdf_unlikely(txrx_peer->nawds_enabled &&
+			 txrx_peer->is_mld_peer)) {
+		base_peer = dp_get_primary_link_peer_by_id(
+						soc,
+						txrx_peer->peer_id,
+						mod_id);
+	} else {
+		base_peer = dp_peer_get_ref_by_id(
+						soc,
+						txrx_peer->peer_id,
+						mod_id);
+	}
+
+	return base_peer;
+}
+#endif
+
 /**
  * dp_wds_ext_peer_learn_be() - function to send event to control
  * path on receiving 1st 4-address frame from backhaul.
@@ -219,19 +267,9 @@ static inline void dp_wds_ext_peer_learn_be(struct dp_soc *soc,
 		qdf_atomic_test_and_set_bit(WDS_EXT_PEER_INIT_BIT,
 					    &ta_txrx_peer->wds_ext.init);
 
-		if (qdf_unlikely(ta_txrx_peer->nawds_enabled &&
-				 ta_txrx_peer->is_mld_peer)) {
-			ta_base_peer = dp_get_primary_link_peer_by_id(
-							soc,
-							ta_txrx_peer->peer_id,
+		ta_base_peer = dp_wds_ext_get_base_peer(soc,
+							ta_txrx_peer,
 							DP_MOD_ID_RX);
-		} else {
-			ta_base_peer = dp_peer_get_ref_by_id(
-							soc,
-							ta_txrx_peer->peer_id,
-							DP_MOD_ID_RX);
-		}
-
 		if (!ta_base_peer)
 			return;
 
