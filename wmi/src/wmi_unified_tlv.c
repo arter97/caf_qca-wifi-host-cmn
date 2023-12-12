@@ -21105,6 +21105,121 @@ QDF_STATUS send_afc_cmd_tlv(wmi_unified_t wmi_handle,
 }
 #endif
 
+#define HOST_TO_FW_DBM_MULTIPLIER 4
+static QDF_STATUS
+send_both_eirp_psd_for_set_tpc_tlv(wmi_unified_t wmi_handle,
+				   uint8_t vdev_id,
+				   struct reg_tpc_power_info *param)
+{
+	wmi_buf_t buf;
+	wmi_vdev_set_tpc_power_fixed_param *set_tpc_fixed_param;
+	wmi_vdev_ch_power_psd_info *ch_power_psd_info;
+	wmi_vdev_ch_power_eirp_info *ch_power_eirp_info;
+	uint8_t *buf_ptr;
+	uint16_t idx;
+	uint32_t len;
+	QDF_STATUS ret;
+
+	len =  sizeof(wmi_vdev_set_tpc_power_fixed_param);
+	len += WMI_TLV_HDR_SIZE;
+	len += WMI_TLV_HDR_SIZE + (sizeof(wmi_vdev_ch_power_psd_info) *
+				   param->num_psd_pwr_levels);
+	len += WMI_TLV_HDR_SIZE + (sizeof(wmi_vdev_ch_power_eirp_info) *
+				   param->num_eirp_pwr_levels);
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf)
+		return QDF_STATUS_E_NOMEM;
+
+	buf_ptr = (uint8_t *)wmi_buf_data(buf);
+	set_tpc_fixed_param = (wmi_vdev_set_tpc_power_fixed_param *)buf_ptr;
+
+	WMITLV_SET_HDR(&set_tpc_fixed_param->tlv_header,
+		WMITLV_TAG_STRUC_wmi_vdev_set_tpc_power_cmd_fixed_param,
+		WMITLV_GET_STRUCT_TLVLEN(wmi_vdev_set_tpc_power_fixed_param));
+
+	set_tpc_fixed_param->vdev_id = vdev_id;
+	set_tpc_fixed_param->psd_power = param->is_psd_power;
+	set_tpc_fixed_param->eirp_power = (param->eirp_power *
+					   HOST_TO_FW_DBM_MULTIPLIER);
+	set_tpc_fixed_param->power_type_6ghz = param->power_type_6g;
+
+	wmi_debug("eirp_power = %d is_psd_power = %d",
+		  set_tpc_fixed_param->eirp_power,
+		  set_tpc_fixed_param->psd_power);
+	reg_print_ap_power_type_6ghz(set_tpc_fixed_param->power_type_6ghz);
+
+	buf_ptr += sizeof(wmi_vdev_set_tpc_power_fixed_param);
+
+	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC,
+		       sizeof(wmi_vdev_ch_power_psd_info) * 0);
+	buf_ptr += WMI_TLV_HDR_SIZE;
+
+	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC,
+		       (sizeof(wmi_vdev_ch_power_psd_info) *
+			param->num_psd_pwr_levels));
+
+	buf_ptr += WMI_TLV_HDR_SIZE;
+	ch_power_psd_info = (wmi_vdev_ch_power_psd_info *)buf_ptr;
+
+	wmi_debug("PSD Array");
+	for (idx = 0; idx < param->num_psd_pwr_levels; ++idx) {
+		WMITLV_SET_HDR(&ch_power_psd_info[idx].tlv_header,
+			WMITLV_TAG_STRUC_wmi_vdev_ch_power_psd_info,
+			WMITLV_GET_STRUCT_TLVLEN(wmi_vdev_ch_power_psd_info));
+		ch_power_psd_info[idx].chan_cfreq =
+			param->chan_psd_power_info[idx].chan_cfreq;
+		ch_power_psd_info[idx].psd_power =
+			(param->chan_psd_power_info[idx].tx_power *
+			 HOST_TO_FW_DBM_MULTIPLIER);
+		wmi_debug("chan_cfreq = %d tx_power = %d",
+			  ch_power_psd_info[idx].chan_cfreq,
+			  ch_power_psd_info[idx].psd_power);
+		buf_ptr += sizeof(wmi_vdev_ch_power_psd_info);
+	}
+
+	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC,
+		       (sizeof(wmi_vdev_ch_power_eirp_info) *
+			param->num_eirp_pwr_levels));
+
+	buf_ptr += WMI_TLV_HDR_SIZE;
+	ch_power_eirp_info = (wmi_vdev_ch_power_eirp_info *)buf_ptr;
+
+	wmi_debug("EIRP Array");
+	for (idx = 0; idx < param->num_eirp_pwr_levels; ++idx) {
+		WMITLV_SET_HDR(&ch_power_eirp_info[idx].tlv_header,
+			WMITLV_TAG_STRUC_wmi_vdev_ch_power_eirp_info,
+			WMITLV_GET_STRUCT_TLVLEN(wmi_vdev_ch_power_eirp_info));
+		ch_power_eirp_info[idx].chan_cfreq =
+			param->chan_eirp_power_info[idx].chan_cfreq;
+		ch_power_eirp_info[idx].eirp_power =
+			(param->chan_eirp_power_info[idx].tx_power *
+			 HOST_TO_FW_DBM_MULTIPLIER);
+		wmi_debug("chan_cfreq = %d tx_power = %d",
+			  ch_power_eirp_info[idx].chan_cfreq,
+			  ch_power_eirp_info[idx].eirp_power);
+		buf_ptr += sizeof(wmi_vdev_ch_power_eirp_info);
+	}
+
+	wmi_mtrace(WMI_VDEV_SET_TPC_POWER_CMDID, vdev_id, 0);
+	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
+				   WMI_VDEV_SET_TPC_POWER_CMDID);
+	if (QDF_IS_STATUS_ERROR(ret))
+		wmi_buf_free(buf);
+
+	return ret;
+}
+
+static inline
+bool is_both_psd_eirp_support_present_for_sp(wmi_unified_t wmi_handle,
+					     struct reg_tpc_power_info *param)
+{
+	return (is_service_enabled_tlv(wmi_handle,
+		    WMI_SERVICE_BOTH_PSD_EIRP_FOR_AP_SP_CLIENT_SP_SUPPORT) &&
+		(param->power_type_6g == REG_STANDARD_POWER_AP ||
+			param->is_power_type_client_sp));
+}
+
 /**
  * send_set_tpc_power_cmd_tlv() - Sends the set TPC power level to FW
  * @wmi_handle: wmi handle
@@ -21124,6 +21239,12 @@ static QDF_STATUS send_set_tpc_power_cmd_tlv(wmi_unified_t wmi_handle,
 	uint16_t idx;
 	uint32_t len;
 	QDF_STATUS ret;
+
+	if (is_both_psd_eirp_support_present_for_sp(wmi_handle, param)) {
+		return send_both_eirp_psd_for_set_tpc_tlv(wmi_handle,
+							  vdev_id,
+							  param);
+	}
 
 	len = sizeof(wmi_vdev_set_tpc_power_fixed_param) + WMI_TLV_HDR_SIZE;
 	len += (sizeof(wmi_vdev_ch_power_info) * param->num_pwr_levels);
