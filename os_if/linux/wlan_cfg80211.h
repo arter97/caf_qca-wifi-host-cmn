@@ -187,6 +187,8 @@
  *	latency stats
  * @QCA_NL80211_VENDOR_SUBCMD_HIGH_AP_AVAILABILITY_INDEX: High AP availablility
  * index
+ * @QCA_NL80211_VENDOR_SUBCMD_TTLM_LINK_UPDATE_INDEX: MLO Link
+ * enable/disable event index
  */
 
 enum qca_nl80211_vendor_subcmds_index {
@@ -323,6 +325,7 @@ enum qca_nl80211_vendor_subcmds_index {
 	QCA_NL80211_VENDOR_SUBCMD_TX_LATENCY_INDEX,
 #endif
 	QCA_NL80211_VENDOR_SUBCMD_HIGH_AP_AVAILABILITY_INDEX,
+	QCA_NL80211_VENDOR_SUBCMD_TTLM_LINK_UPDATE_INDEX,
 };
 
 #if !defined(SUPPORT_WDEV_CFG80211_VENDOR_EVENT_ALLOC) && \
