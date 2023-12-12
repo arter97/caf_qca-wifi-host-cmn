@@ -1567,11 +1567,13 @@ struct qdf_tso_info_t {
  * @QDF_SYSTEM_SUSPEND: System suspend triggered wlan suspend
  * @QDF_RUNTIME_SUSPEND: Runtime pm inactivity timer triggered wlan suspend
  * @QDF_UNIT_TEST_WOW_SUSPEND: WoW unit test suspend
+ * @QDF_WOW_UNSUPPORTED_TYPE: Wow unsupported
  */
 enum qdf_suspend_type {
 	QDF_SYSTEM_SUSPEND,
 	QDF_RUNTIME_SUSPEND,
-	QDF_UNIT_TEST_WOW_SUSPEND
+	QDF_UNIT_TEST_WOW_SUSPEND,
+	QDF_WOW_UNSUPPORTED_TYPE
 };
 
 /**

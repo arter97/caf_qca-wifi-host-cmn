@@ -10022,6 +10022,12 @@ void wmi_copy_resource_config(wmi_resource_config *resource_cfg,
 				tgt_res_cfg->max_ndp_sessions;
 	resource_cfg->max_ndi_interfaces = tgt_res_cfg->max_ndi;
 	resource_cfg->num_max_active_vdevs = tgt_res_cfg->num_max_active_vdevs;
+
+	if (tgt_res_cfg->is_qms_smem_supported) {
+		WMI_RSRC_CFG_HOST_SERVICE_FLAG_QMS_DLKM_SUPPORT_SET(
+			resource_cfg->host_service_flags, 1);
+	}
+
 	resource_cfg->num_max_mlo_link_per_ml_bss =
 				tgt_res_cfg->num_max_mlo_link_per_ml_bss;
 
