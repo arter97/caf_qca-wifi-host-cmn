@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1212,7 +1213,8 @@ static inline void
 dp_rx_ipa_wds_srcport_learn(struct dp_soc *soc,
 			    struct dp_peer *ta_peer, qdf_nbuf_t nbuf,
 			    struct hal_rx_msdu_metadata msdu_end_info,
-			    bool ad4_valid, bool chfrag_start)
+			    bool ad4_valid, bool chfrag_start,
+			    bool sa_valid)
 {
 }
 #endif
