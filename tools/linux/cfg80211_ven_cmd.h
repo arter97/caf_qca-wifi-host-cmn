@@ -1507,6 +1507,7 @@ enum _ol_ath_param_t {
 #endif
 	OL_ATH_PARAM_DP_DEBUG_LOG = 543,
 	OL_ATH_PARAM_RTT_SKIP_VDEV_RESTART = 544,
+	OL_ATH_PARAM_ACS_SEC20_WEIGHTAGE = 545,
 };
 
 #ifdef CONFIG_SUPPORT_VENCMDTABLE
@@ -3465,6 +3466,10 @@ struct vendor_commands radio_vendor_cmds[] = {
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_ACS_FAR_RANGE_WEIGHTAGE, SET_PARAM, 1},
 	{"get_acs_far_range_weightage",
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_ACS_FAR_RANGE_WEIGHTAGE, GET_PARAM, 0},
+	{"set_acs_sec20_weightage",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_ACS_SEC20_WEIGHTAGE, SET_PARAM, 1},
+	{"get_acs_sec20_weightage",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_ACS_SEC20_WEIGHTAGE, GET_PARAM, 0},
 	{"set_mgmt_ttl",
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_MGMT_TTL, SET_PARAM, 1},
 	{"get_mgmt_ttl",
