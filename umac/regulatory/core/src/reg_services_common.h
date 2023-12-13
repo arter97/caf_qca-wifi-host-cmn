@@ -2089,8 +2089,8 @@ QDF_STATUS reg_get_client_power_for_connecting_ap(struct wlan_objmgr_pdev *pdev,
 						  enum reg_6g_ap_type ap_type,
 						  qdf_freq_t chan_freq,
 						  bool is_psd,
-						  uint16_t *tx_power,
-						  uint16_t *eirp_psd_power);
+						  int16_t *tx_power,
+						  int16_t *eirp_psd_power);
 
 /**
  * reg_get_client_power_for_6ghz_ap() - Find the channel information when
@@ -2113,8 +2113,8 @@ QDF_STATUS reg_get_client_power_for_connecting_ap(struct wlan_objmgr_pdev *pdev,
 QDF_STATUS reg_get_client_power_for_6ghz_ap(struct wlan_objmgr_pdev *pdev,
 					    enum reg_6g_client_type client_type,
 					    qdf_freq_t chan_freq,
-					    bool *is_psd, uint16_t *tx_power,
-					    uint16_t *eirp_psd_power);
+					    bool *is_psd, int16_t *tx_power,
+					    int16_t *eirp_psd_power);
 
 /**
  * reg_set_ap_pwr_and_update_chan_list() - Set the AP power mode and recompute
@@ -2233,8 +2233,8 @@ QDF_STATUS reg_get_client_power_for_connecting_ap(struct wlan_objmgr_pdev *pdev,
 						  enum reg_6g_ap_type ap_type,
 						  qdf_freq_t chan_freq,
 						  bool is_psd,
-						  uint16_t *tx_power,
-						  uint16_t *eirp_psd_power)
+						  int16_t *tx_power,
+						  int16_t *eirp_psd_power)
 {
 	*tx_power = 0;
 	*eirp_psd_power = 0;
@@ -2245,8 +2245,8 @@ static inline
 QDF_STATUS reg_get_client_power_for_6ghz_ap(struct wlan_objmgr_pdev *pdev,
 					    enum reg_6g_client_type client_type,
 					    qdf_freq_t chan_freq,
-					    bool *is_psd, uint16_t *tx_power,
-					    uint16_t *eirp_psd_power)
+					    bool *is_psd, int16_t *tx_power,
+					    int16_t *eirp_psd_power)
 {
 	*is_psd = false;
 	*tx_power = 0;
@@ -2776,12 +2776,12 @@ enum reg_6g_ap_type reg_get_best_pwr_mode(struct wlan_objmgr_pdev *pdev,
  *
  * Return: EIRP power
  */
-int8_t reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
-			qdf_freq_t cen320,
-			uint16_t bw, enum reg_6g_ap_type ap_pwr_type,
-			uint16_t in_punc_pattern,
-			bool is_client_list_lookup_needed,
-			enum reg_6g_client_type client_type);
+int16_t reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
+			 qdf_freq_t cen320,
+			 uint16_t bw, enum reg_6g_ap_type ap_pwr_type,
+			 uint16_t in_punc_pattern,
+			 bool is_client_list_lookup_needed,
+			 enum reg_6g_client_type client_type);
 
 #else
 static inline

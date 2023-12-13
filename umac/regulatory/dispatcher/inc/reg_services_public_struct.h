@@ -91,6 +91,7 @@
 #define BW_40_MHZ     40
 
 #define MAX_NUM_PWR_LEVEL 16
+#define MAX_NUM_EIRP_PWR_LEVEL 5
 
 #ifdef CONFIG_REG_CLIENT
 #define MAX_NUM_FCC_RULES 2
@@ -1875,7 +1876,7 @@ enum reg_phymode {
  */
 struct chan_power_info {
 	qdf_freq_t chan_cfreq;
-	int8_t tx_power;
+	int16_t tx_power;
 };
 
 /**
@@ -1884,24 +1885,34 @@ struct chan_power_info {
  * @eirp_power: Maximum EIRP power (dBm), valid only if power is PSD
  * @power_type_6g: type of power (SP/LPI/VLP)
  * @num_pwr_levels: number of power levels
+ * @num_psd_pwr_levels: number of PSD power levels
+ * @num_eirp_pwr_levels: number of EIRP power levels
  * @reg_max: Array of maximum TX power (dBm) per PSD value
  * @ap_constraint_power: AP constraint power (dBm)
  * @frequency: Array of operating frequency
  * @tpe: TPE values processed from TPE IE
  * @chan_power_info: power info to send to FW
+ * @chan_psd_power_info: PSD power values to be sent to FW
+ * @chan_eirp_power_info: EIRP power values to be sent to FW
  * @is_power_constraint_abs: is power constraint absolute or not
+ * @is_power_type_client_sp: If the power mode is SP Client type
  */
 struct reg_tpc_power_info {
 	bool is_psd_power;
-	int8_t eirp_power;
+	int16_t eirp_power;
 	uint8_t power_type_6g;
 	uint8_t num_pwr_levels;
+	uint8_t num_psd_pwr_levels;
+	uint8_t num_eirp_pwr_levels;
 	uint8_t reg_max[MAX_NUM_PWR_LEVEL];
 	uint8_t ap_constraint_power;
 	qdf_freq_t frequency[MAX_NUM_PWR_LEVEL];
 	uint8_t tpe[MAX_NUM_PWR_LEVEL];
 	struct chan_power_info chan_power_info[MAX_NUM_PWR_LEVEL];
+	struct chan_power_info chan_psd_power_info[MAX_NUM_PWR_LEVEL];
+	struct chan_power_info chan_eirp_power_info[MAX_NUM_EIRP_PWR_LEVEL];
 	bool is_power_constraint_abs;
+	bool is_power_type_client_sp;
 };
 
 #ifdef FEATURE_WLAN_CH_AVOID_EXT

@@ -1673,8 +1673,8 @@ bool wlan_reg_is_6g_psd_power(struct wlan_objmgr_pdev *pdev)
 
 QDF_STATUS wlan_reg_get_6g_chan_ap_power(struct wlan_objmgr_pdev *pdev,
 					 qdf_freq_t chan_freq, bool *is_psd,
-					 uint16_t *tx_power,
-					 uint16_t *eirp_psd_power)
+					 int16_t *tx_power,
+					 int16_t *eirp_psd_power)
 {
 	return reg_get_6g_chan_ap_power(pdev, chan_freq, is_psd,
 					tx_power, eirp_psd_power);
@@ -1686,8 +1686,8 @@ QDF_STATUS
 wlan_reg_get_client_power_for_connecting_ap(struct wlan_objmgr_pdev *pdev,
 					    enum reg_6g_ap_type ap_type,
 					    qdf_freq_t chan_freq,
-					    bool is_psd, uint16_t *tx_power,
-					    uint16_t *eirp_psd_power)
+					    bool is_psd, int16_t *tx_power,
+					    int16_t *eirp_psd_power)
 {
 	return reg_get_client_power_for_connecting_ap(pdev, ap_type, chan_freq,
 						      is_psd, tx_power,
@@ -1698,8 +1698,8 @@ QDF_STATUS
 wlan_reg_get_client_power_for_6ghz_ap(struct wlan_objmgr_pdev *pdev,
 				      enum reg_6g_client_type client_type,
 				      qdf_freq_t chan_freq,
-				      bool *is_psd, uint16_t *tx_power,
-				      uint16_t *eirp_psd_power)
+				      bool *is_psd, int16_t *tx_power,
+				      int16_t *eirp_psd_power)
 {
 	return reg_get_client_power_for_6ghz_ap(pdev, client_type, chan_freq,
 						is_psd, tx_power,
@@ -1853,12 +1853,12 @@ wlan_reg_get_best_pwr_mode(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
 
 qdf_export_symbol(wlan_reg_get_best_pwr_mode);
 
-int8_t wlan_reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
-			     qdf_freq_t cen320, uint16_t bw,
-			     enum reg_6g_ap_type ap_pwr_type,
-			     uint16_t in_punc_pattern,
-			     bool is_client_list_lookup_needed,
-			     enum reg_6g_client_type client_type)
+int16_t wlan_reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
+			      qdf_freq_t cen320, uint16_t bw,
+			      enum reg_6g_ap_type ap_pwr_type,
+			      uint16_t in_punc_pattern,
+			      bool is_client_list_lookup_needed,
+			      enum reg_6g_client_type client_type)
 {
 	return reg_get_eirp_pwr(pdev, freq, cen320, bw, ap_pwr_type,
 				in_punc_pattern, is_client_list_lookup_needed,

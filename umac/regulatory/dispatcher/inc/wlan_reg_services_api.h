@@ -2392,8 +2392,8 @@ bool wlan_reg_is_6g_psd_power(struct wlan_objmgr_pdev *pdev);
  */
 QDF_STATUS wlan_reg_get_6g_chan_ap_power(struct wlan_objmgr_pdev *pdev,
 					 qdf_freq_t chan_freq, bool *is_psd,
-					 uint16_t *tx_power,
-					 uint16_t *eirp_psd_power);
+					 int16_t *tx_power,
+					 int16_t *eirp_psd_power);
 
 /**
  * wlan_reg_get_client_power_for_connecting_ap() - Find the channel information
@@ -2417,8 +2417,8 @@ QDF_STATUS
 wlan_reg_get_client_power_for_connecting_ap(struct wlan_objmgr_pdev *pdev,
 					    enum reg_6g_ap_type ap_type,
 					    qdf_freq_t chan_freq,
-					    bool is_psd, uint16_t *tx_power,
-					    uint16_t *eirp_psd_power);
+					    bool is_psd, int16_t *tx_power,
+					    int16_t *eirp_psd_power);
 
 /**
  * wlan_reg_get_client_power_for_6ghz_ap() - Find the channel information when
@@ -2442,8 +2442,8 @@ QDF_STATUS
 wlan_reg_get_client_power_for_6ghz_ap(struct wlan_objmgr_pdev *pdev,
 				      enum reg_6g_client_type client_type,
 				      qdf_freq_t chan_freq,
-				      bool *is_psd, uint16_t *tx_power,
-				      uint16_t *eirp_psd_power);
+				      bool *is_psd, int16_t *tx_power,
+				      int16_t *eirp_psd_power);
 
 /**
  * wlan_reg_set_ap_pwr_and_update_chan_list() - Set the AP power mode and
@@ -2547,8 +2547,8 @@ bool wlan_reg_is_6g_psd_power(struct wlan_objmgr_pdev *pdev)
 static inline
 QDF_STATUS wlan_reg_get_6g_chan_ap_power(struct wlan_objmgr_pdev *pdev,
 					 qdf_freq_t chan_freq, bool *is_psd,
-					 uint16_t *tx_power,
-					 uint16_t *eirp_psd_power)
+					 int16_t *tx_power,
+					 int16_t *eirp_psd_power)
 {
 	*is_psd = false;
 	*tx_power = 0;
@@ -2560,8 +2560,8 @@ static inline QDF_STATUS
 wlan_reg_get_client_power_for_connecting_ap(struct wlan_objmgr_pdev *pdev,
 					    enum reg_6g_ap_type ap_type,
 					    qdf_freq_t chan_freq,
-					    bool is_psd, uint16_t *tx_power,
-					    uint16_t *eirp_psd_power)
+					    bool is_psd, int16_t *tx_power,
+					    int16_t *eirp_psd_power)
 {
 	*tx_power = 0;
 	*eirp_psd_power = 0;
@@ -2572,8 +2572,8 @@ static inline QDF_STATUS
 wlan_reg_get_client_power_for_6ghz_ap(struct wlan_objmgr_pdev *pdev,
 				      enum reg_6g_client_type client_type,
 				      qdf_freq_t chan_freq,
-				      bool *is_psd, uint16_t *tx_power,
-				      uint16_t *eirp_psd_power)
+				      bool *is_psd, int16_t *tx_power,
+				      int16_t *eirp_psd_power)
 {
 	*is_psd = false;
 	*tx_power = 0;
@@ -2698,12 +2698,12 @@ wlan_reg_get_best_pwr_mode(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
  *
  * Return: EIRP power
  */
-int8_t wlan_reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
-			     qdf_freq_t cen320, uint16_t bw,
-			     enum reg_6g_ap_type ap_pwr_type,
-			     uint16_t in_punc_pattern,
-			     bool is_client_list_lookup_needed,
-			     enum reg_6g_client_type client_type);
+int16_t wlan_reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
+			      qdf_freq_t cen320, uint16_t bw,
+			      enum reg_6g_ap_type ap_pwr_type,
+			      uint16_t in_punc_pattern,
+			      bool is_client_list_lookup_needed,
+			      enum reg_6g_client_type client_type);
 #else
 static inline
 qdf_freq_t wlan_reg_get_thresh_priority_freq(struct wlan_objmgr_pdev *pdev)
@@ -2736,7 +2736,7 @@ static inline QDF_STATUS wlan_reg_eirp_2_psd(struct wlan_objmgr_pdev *pdev,
 	return QDF_STATUS_E_FAILURE;
 }
 
-static inline int8_t
+static inline int16_t
 wlan_reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev,
 		      qdf_freq_t freq,
 		      qdf_freq_t cen320, uint16_t bw,
