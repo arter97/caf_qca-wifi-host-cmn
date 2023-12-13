@@ -4085,10 +4085,9 @@ QDF_STATUS dp_ipa_ast_create(struct cdp_soc_t *soc_hdl,
 			     qdf_ipa_ast_info_type_t *data)
 {
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
-	uint8_t *rx_tlv_hdr;
-	struct dp_peer *peer;
-	struct hal_rx_msdu_metadata msdu_metadata;
+	struct hal_rx_msdu_metadata msdu_metadata = {0};
 	qdf_ipa_ast_info_type_t *ast_info;
+	struct dp_peer *peer;
 
 	if (!data) {
 		dp_err("Data is NULL !!!");
@@ -4096,7 +4095,6 @@ QDF_STATUS dp_ipa_ast_create(struct cdp_soc_t *soc_hdl,
 	}
 	ast_info = data;
 
-	rx_tlv_hdr = qdf_nbuf_data(ast_info->skb);
 	peer = dp_peer_get_ref_by_id(soc, ast_info->ta_peer_id,
 				     DP_MOD_ID_IPA);
 	if (!peer) {
@@ -4104,11 +4102,13 @@ QDF_STATUS dp_ipa_ast_create(struct cdp_soc_t *soc_hdl,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	hal_rx_msdu_metadata_get(soc->hal_soc, rx_tlv_hdr, &msdu_metadata);
+	msdu_metadata.sa_idx = ast_info->sa_idx;
+	msdu_metadata.sa_sw_peer_id = ast_info->sa_peer_id;
 
 	dp_rx_ipa_wds_srcport_learn(soc, peer, ast_info->skb, msdu_metadata,
 				    ast_info->mac_addr_ad4_valid,
-				    ast_info->first_msdu_in_mpdu_flag);
+				    ast_info->first_msdu_in_mpdu_flag,
+				    ast_info->sa_valid);
 
 	dp_peer_unref_delete(peer, DP_MOD_ID_IPA);
 
