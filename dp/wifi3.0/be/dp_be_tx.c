@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1972,10 +1972,10 @@ qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	tx_desc->length = pkt_len;
 	tx_desc->flags |= pdev->tx_fast_flag;
 
-	tx_desc->nbuf->fast_recycled = 1;
-
-	if (nbuf->is_from_recycler && nbuf->fast_xmit)
+	if (nbuf->is_from_recycler && nbuf->fast_xmit) {
 		tx_desc->flags |= DP_TX_DESC_FLAG_FAST;
+		tx_desc->nbuf->fast_recycled = 1;
+	}
 
 	paddr =  dp_tx_nbuf_map_be(vdev, tx_desc, nbuf);
 	if (!paddr) {
