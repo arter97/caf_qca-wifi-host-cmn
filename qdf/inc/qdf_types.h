@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -37,14 +37,17 @@
 /* Preprocessor definitions and constants */
 #define QDF_MAX_SGLIST 4
 
+#define __QDF_DECLARE_FLEX_ARRAY(type, name) \
+	struct { \
+		struct {} dummy_struct; \
+		type name[]; \
+	}
+
 /* Define a QDF macro for declaring flexible arrays */
 #define QDF_FLEX_ARRAY(type, name) \
 	union { \
 		type name ## _first_element; \
-		struct { \
-			struct {} dummy_struct; \
-			type name[]; \
-		}; \
+		__QDF_DECLARE_FLEX_ARRAY(type, name); \
 	}
 
 /*

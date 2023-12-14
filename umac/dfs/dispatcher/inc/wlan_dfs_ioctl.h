@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011, 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * Copyright (c) 2010, Atheros Communications Inc.
  * All Rights Reserved.
  *
@@ -358,7 +358,7 @@ struct synthetic_pulse {
 struct synthetic_seq {
 	uint8_t num_pulses;
 	uint32_t total_len_seq;
-	struct synthetic_pulse *pulse[0];
+	struct synthetic_pulse *pulse[];
 };
 
 /**
@@ -370,7 +370,7 @@ struct synthetic_seq {
 
 struct seq_store {
 	uint8_t num_sequence;
-	struct synthetic_seq *seq_arr[0];
+	struct synthetic_seq *seq_arr[];
 };
 #endif /* WLAN_DFS_PARTIAL_OFFLOAD && WLAN_DFS_SYNTHETIC_RADAR */
 
