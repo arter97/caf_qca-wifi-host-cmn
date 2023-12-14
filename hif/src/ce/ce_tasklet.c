@@ -822,9 +822,20 @@ static int ce_poll_reap_by_id(struct hif_softc *scn, enum ce_id_type ce_id)
 int hif_drain_fw_diag_ce(struct hif_softc *scn)
 {
 	uint8_t ce_id;
+	struct HIF_CE_state *hif_ce_state = (struct HIF_CE_state *)scn;
+	struct ce_tasklet_entry *tasklet_entry;
 
 	if (hif_get_fw_diag_ce_id(scn, &ce_id))
 		return 0;
+
+	tasklet_entry = &hif_ce_state->tasklets[ce_id];
+
+	/* If CE7 tasklet is triggered, no need to poll CE explicitly,
+	 * CE7 SIRQ could reschedule until there is no pending entries
+	 */
+	if (test_bit(TASKLET_STATE_SCHED, &tasklet_entry->intr_tq.state) ||
+	    test_bit(TASKLET_STATE_RUN, &tasklet_entry->intr_tq.state))
+		return -EBUSY;
 
 	return ce_poll_reap_by_id(scn, ce_id);
 }

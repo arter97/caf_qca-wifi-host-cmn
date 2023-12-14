@@ -259,7 +259,7 @@ struct mlo_link_info
 	struct mlo_link_info *link_info;
 	uint8_t link_info_iter;
 
-	if (!mlo_dev_ctx || link_id < 0 || link_id > 15)
+	if (!mlo_dev_ctx || link_id < 0 || link_id >= MAX_MLO_LINK_ID)
 		return NULL;
 
 	link_info = &mlo_dev_ctx->link_ctx->links_info[0];

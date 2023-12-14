@@ -2337,11 +2337,10 @@ target_if_spectral_get_bin_count_after_len_adj(
 				fft_bin_count >>= 1;
 			break;
 		case SPECTRAL_FFTBIN_SIZE_NO_WAR:
+			fallthrough;
+		default:
 			*fft_bin_size = 1;
 			/* No length adjustment */
-			break;
-		default:
-			return 0;
 		}
 
 		if (rpt_mode == 2 && swar->inband_fftbin_size_adj)
@@ -2374,7 +2373,7 @@ target_if_process_sfft_report_gen3(
 	if (!p_fft_report || !p_sfft || !rparams) {
 		spectral_err("null params: p_fft_report %pK p_sfft %pK rparams %pK",
 			     p_fft_report, p_sfft, rparams);
-		return 1;
+		return -EINVAL;
 	}
 
 	/*
@@ -2417,7 +2416,7 @@ target_if_process_sfft_report_gen3(
 	default:
 		spectral_err_rl("Invalid spectral report format: %d",
 				rparams->version);
-		return 1;
+		return -EINVAL;
 	}
 
 	p_sfft->fft_peak_sidx = unsigned_to_signed(peak_sidx, 11);

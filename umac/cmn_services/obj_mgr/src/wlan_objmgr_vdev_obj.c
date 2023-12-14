@@ -359,8 +359,6 @@ static QDF_STATUS wlan_objmgr_vdev_obj_destroy(struct wlan_objmgr_vdev *vdev)
 					    (uint8_t *)mld_addr)
 					    != QDF_STATUS_SUCCESS) {
 			obj_mgr_err("Failed to detach DP vdev from DP MLO Dev ctxt");
-			QDF_BUG(0);
-			return QDF_STATUS_E_FAILURE;
 		}
 	}
 

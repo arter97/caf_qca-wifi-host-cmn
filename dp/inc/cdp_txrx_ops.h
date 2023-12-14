@@ -2523,6 +2523,16 @@ struct cdp_sawf_ops {
 				uint8_t start_or_stop, uint8_t *peer_mac,
 				uint16_t peer_id);
 #endif
+#ifdef WLAN_FEATURE_11BE_MLO_3_LINK_TX
+	uint16_t
+	(*get_peer_msduq)(struct net_device *netdev, uint8_t *dest_mac,
+			  uint32_t dscp_pcp, bool pcp);
+	QDF_STATUS
+	(*sawf_3_link_peer_flow_count)(struct cdp_soc_t *hdl,
+				       uint8_t *mac_addr,
+				       uint16_t peer_id,
+				       uint32_t mark_metadata);
+#endif
 };
 #endif
 

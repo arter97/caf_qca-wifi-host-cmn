@@ -3740,6 +3740,16 @@ dp_htt_peer_ext_evt(struct htt_soc *soc, uint32_t *msg_word)
 		    info.peer_id, info.vdev_id, info.link_id,
 		    info.link_id_valid, QDF_MAC_ADDR_REF(info.peer_mac_addr));
 
+	/* Sanitize the link_id value reported from target,
+	 * if it is marked as valid.
+	 * Return directly if sanity failed.
+	 */
+	if (info.link_id_valid && (info.link_id >= DP_MAX_MLO_LINKS)) {
+		dp_htt_err("Invalid link_id %d, ignore PEER_EXTENDED_EVENT",
+			   info.link_id);
+		return;
+	}
+
 	dp_rx_peer_ext_evt(soc->dp_soc, &info);
 }
 #else

@@ -6637,6 +6637,8 @@ more_data:
 		return 0;
 	}
 
+	hal_srng_update_ring_usage_wm_no_lock(soc->hal_soc, hal_ring_hdl);
+
 	if (!num_avail_for_reap)
 		num_avail_for_reap = hal_srng_dst_num_valid(hal_soc,
 							    hal_ring_hdl, 0);

@@ -831,6 +831,11 @@
  *
  *	The attributes used with this subcommand are defined in
  *	enum qca_wlan_vendor_attr_tx_latency.
+ *
+ * @QCA_NL80211_VENDOR_SUBCMD_RECONFIG_REMOVE_COMPLETE_EVENT: This vendor
+ *	subcommand is used to send event to the user space once the MLD remove
+ *	link process is completed in the API mlme_ext_vap_down and the event
+ *	is sent through wlan_cfg80211_reconfig_remove_complete_event.
  */
 
 enum qca_nl80211_vendor_subcmds {
@@ -1094,6 +1099,7 @@ enum qca_nl80211_vendor_subcmds {
 	QCA_NL80211_VENDOR_SUBCMD_TDLS_DISC_RSP_EXT = 231,
 	QCA_NL80211_VENDOR_SUBCMD_AUDIO_TRANSPORT_SWITCH = 232,
 	QCA_NL80211_VENDOR_SUBCMD_TX_LATENCY = 233,
+	QCA_NL80211_VENDOR_SUBCMD_RECONFIG_REMOVE_COMPLETE_EVENT = 234,
 };
 
 enum qca_wlan_vendor_tos {
@@ -17343,4 +17349,20 @@ enum qca_wlan_vendor_attr_tx_latency {
 	QCA_WLAN_VENDOR_ATTR_TX_LATENCY_MAX =
 	QCA_WLAN_VENDOR_ATTR_TX_LATENCY_AFTER_LAST - 1,
 };
+
+/**
+ * qca_wlan_vendor_attr_RECONFIG_REMOVE_COMPLETE_EVENT - Defines attributes for
+ * ML Reconfig (Mlo Link removal) parameters used by the attribute
+ * @QCA_WLAN_VENDOR_ATTR_RECONFIG_REMOVE_COMPLETE_EVENT_IFINDEX: u32 attribute
+ * used to pass the netdev ifindex of the MLO Reconfiguration link.
+ */
+enum qca_wlan_vendor_attr_reconfig_remove_complete_EVENT {
+	QCA_WLAN_VENDOR_ATTR_RECONFIG_REMOVE_COMPLETE_EVENT_IFINDEX = 0,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_RECONFIG_REMOVE_COMPLETE_EVENT_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_RECONFIG_REMOVE_COMPLETE_EVENT_MAX =
+	QCA_WLAN_VENDOR_ATTR_RECONFIG_REMOVE_COMPLETE_EVENT_AFTER_LAST - 1,
+};
+
 #endif

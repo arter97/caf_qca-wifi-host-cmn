@@ -69,22 +69,24 @@ void
 wlan_wifi_pos_cfg80211_set_wiphy_ext_feature(struct wiphy *wiphy,
 					     struct wlan_objmgr_psoc *psoc)
 {
-	bool enable_rsta_11az_ranging;
+	uint32_t enable_rsta_11az_ranging;
 
 	enable_rsta_11az_ranging = ucfg_wifi_pos_get_rsta_11az_ranging_cap();
 	if (!enable_rsta_11az_ranging)
 		return;
 
-	if (wlan_psoc_nif_fw_ext_cap_get(psoc, WLAN_RTT_11AZ_NTB_SUPPORT)) {
+	if ((enable_rsta_11az_ranging & CFG_RESPONDER_11AZ_NTB_SUPPORT) &&
+	    (wlan_psoc_nif_fw_ext_cap_get(psoc, WLAN_RTT_11AZ_NTB_SUPPORT))) {
 		wlan_extended_caps_iface[WLAN_EXT_RANGING_CAP_IDX] |=
 					WLAN_EXT_CAPA11_NTB_RANGING_RESPONDER;
 		wlan_extended_caps_iface_mask[WLAN_EXT_RANGING_CAP_IDX] |=
 					WLAN_EXT_CAPA11_NTB_RANGING_RESPONDER;
 	}
 
-	if (wlan_psoc_nif_fw_ext2_cap_get(psoc, WLAN_RTT_11AZ_TB_SUPPORT) ||
+	if ((enable_rsta_11az_ranging & CFG_RESPONDER_11AZ_TB_SUPPORT) &&
+	    (wlan_psoc_nif_fw_ext2_cap_get(psoc, WLAN_RTT_11AZ_TB_SUPPORT) ||
 	    wlan_psoc_nif_fw_ext2_cap_get(psoc,
-					  WLAN_RTT_11AZ_TB_RSTA_SUPPORT)) {
+					  WLAN_RTT_11AZ_TB_RSTA_SUPPORT))) {
 		wlan_extended_caps_iface[WLAN_EXT_RANGING_CAP_IDX] |=
 					WLAN_EXT_CAPA11_TB_RANGING_RESPONDER;
 		wlan_extended_caps_iface_mask[WLAN_EXT_RANGING_CAP_IDX] |=

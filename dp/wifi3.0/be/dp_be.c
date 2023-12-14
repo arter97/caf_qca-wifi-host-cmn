@@ -190,6 +190,11 @@ static void dp_soc_cfg_attach_be(struct dp_soc *soc)
 	/* this is used only when dmac mode is enabled */
 	soc->num_rx_refill_buf_rings = 1;
 
+	/*
+	 * do not allocate TCL credit ring for BE as we already have
+	 * 4 TCL_DATA rings
+	 */
+	soc->init_tcl_cmd_cred_ring = false;
 	soc->wlan_cfg_ctx->notify_frame_support =
 				DP_MARK_NOTIFY_FRAME_SUPPORT;
 }
@@ -1582,10 +1587,22 @@ fail:
 	}
 }
 
+static inline
+void dp_tx_update_vp_profile(struct dp_soc_be *soc,
+			     struct dp_vdev_be *vdev)
+{
+	dp_tx_ppeds_vp_profile_update(soc, vdev);
+}
 #else
 static inline
 void dp_soc_txrx_peer_setup_be(struct dp_soc *soc, uint8_t vdev_id,
 			       uint8_t *peer_mac)
+{
+}
+
+static inline
+void dp_tx_update_vp_profile(struct dp_soc_be *soc,
+			     struct dp_vdev_be *vdev)
 {
 }
 #endif
@@ -2964,6 +2981,7 @@ QDF_STATUS dp_txrx_set_vdev_param_be(struct dp_soc *soc,
 	case CDP_UPDATE_DSCP_TO_TID_MAP:
 	case CDP_UPDATE_TDLS_FLAGS:
 		dp_tx_update_bank_profile(be_soc, be_vdev);
+		dp_tx_update_vp_profile(be_soc, be_vdev);
 		break;
 	case CDP_ENABLE_CIPHER:
 		if (vdev->tx_encap_type == htt_cmn_pkt_type_raw)

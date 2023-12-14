@@ -619,4 +619,23 @@ QDF_STATUS
 dp_disable_enhanced_stats_2_0(struct cdp_soc_t *soc, uint8_t pdev_id);
 #endif /* QCA_ENHANCED_STATS_SUPPORT */
 
+#ifdef WLAN_PKT_CAPTURE_RX_2_0
+static inline unsigned long long
+dp_mon_get_debug_desc_addr(union dp_mon_desc_list_elem_t **desc_list)
+{
+	unsigned long long desc;
+
+	desc = (unsigned long)&((*desc_list)->mon_desc);
+	desc = (unsigned long long)((unsigned long long)desc & DP_MON_DESC_ADDR_MASK);
+	desc = (desc | ((unsigned long long)(*desc_list)->mon_desc.cookie_2 << DP_MON_DESC_ADDR_SHIFT));
+	return desc;
+}
+#else
+static inline unsigned long long
+dp_mon_get_debug_desc_addr(union dp_mon_desc_list_elem_t **desc_list)
+{
+	unsigned long long desc = (unsigned long long)&((*desc_list)->mon_desc);
+	return desc;
+}
+#endif
 #endif /* _DP_MON_2_0_H_ */

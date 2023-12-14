@@ -5753,6 +5753,9 @@ typedef enum {
 		   PDEV_PARAM_ATF_VO_DEDICATED_TIME),
 	PDEV_PARAM(pdev_param_atf_vi_dedicated_time,
 		   PDEV_PARAM_ATF_VI_DEDICATED_TIME),
+	PDEV_PARAM(pdev_param_ul_ofdma_rtd, PDEV_PARAM_UL_OFDMA_RTD),
+	PDEV_PARAM(pdev_param_tid_mapping_3link_mlo,
+		   PDEV_PARAM_TID_MAPPING_3LINK_MLO),
 	pdev_param_max,
 } wmi_conv_pdev_params_id;
 
@@ -6466,6 +6469,10 @@ typedef enum {
 #endif
 	wmi_service_fisa_dynamic_msdu_aggr_size_support,
 	wmi_service_radar_flags_support,
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+	wmi_service_5ghz_hi_rssi_roam_support,
+#endif
+	wmi_service_pdev_param_in_utf_wmi,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -7400,6 +7407,7 @@ enum {
 	PEER_PARAM(PEER_CHWIDTH_PUNCTURE_20MHZ_BITMAP),
 	PEER_PARAM(PEER_FT_ROAMING_PEER_UPDATE),
 	PEER_PARAM(PEER_PARAM_DMS_SUPPORT),
+	PEER_PARAM(PEER_PARAM_UL_OFDMA_RTD),
 
 };
 #define WMI_HOST_PEER_MIMO_PS_NONE	0x0

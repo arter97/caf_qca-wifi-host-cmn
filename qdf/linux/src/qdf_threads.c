@@ -362,11 +362,19 @@ qdf_cpumask_equal(const qdf_cpu_mask *src1p, const qdf_cpu_mask *src2p)
 
 qdf_export_symbol(qdf_cpumask_equal);
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 2, 0))
+void
+qdf_cpumask_complement(qdf_cpu_mask *dstp, const qdf_cpu_mask *srcp)
+{
+	cpumask_andnot(dstp, cpu_possible_mask, srcp);
+}
+#else
 void
 qdf_cpumask_complement(qdf_cpu_mask *dstp, const qdf_cpu_mask *srcp)
 {
 	cpumask_complement(dstp, srcp);
 }
+#endif
 
 qdf_export_symbol(qdf_cpumask_complement);
 

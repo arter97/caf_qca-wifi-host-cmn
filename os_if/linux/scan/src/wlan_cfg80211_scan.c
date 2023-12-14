@@ -1505,8 +1505,9 @@ int wlan_cfg80211_scan(struct wlan_objmgr_vdev *vdev,
 	}
 	opmode = wlan_vdev_mlme_get_opmode(vdev);
 
-	osif_debug("%s(vdev%d): mode %d", request->wdev->netdev->name,
-		   wlan_vdev_get_id(vdev), opmode);
+	osif_debug("%s(vdev%d): mode %d flags 0x%x",
+		   request->wdev->netdev->name,
+		   wlan_vdev_get_id(vdev), opmode, request->flags);
 
 	if (!wlan_is_scan_allowed(vdev))
 		return -EBUSY;

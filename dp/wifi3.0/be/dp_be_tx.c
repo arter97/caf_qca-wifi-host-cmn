@@ -973,45 +973,54 @@ bool dp_tx_mlo_is_mcast_primary_be(struct dp_soc *soc,
  * @nbuf: skb buffer
  * @msdu_info: msdu info
  *
- * Return: void
+ * Return: tid value in mark metadata
  */
-void dp_sawf_config_be(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
-		       uint16_t *fw_metadata, qdf_nbuf_t nbuf,
-		       struct dp_tx_msdu_info_s *msdu_info)
+uint8_t dp_sawf_config_be(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
+			  uint16_t *fw_metadata, qdf_nbuf_t nbuf,
+			  struct dp_tx_msdu_info_s *msdu_info)
 {
 	uint8_t q_id = 0;
+	uint8_t tid = HTT_TX_EXT_TID_INVALID;
 
 	q_id = dp_sawf_queue_id_get(nbuf);
 
 	if (q_id == DP_SAWF_DEFAULT_Q_INVALID)
-		return;
-	msdu_info->tid = (q_id & (CDP_DATA_TID_MAX - 1));
+		return HTT_TX_EXT_TID_INVALID;
+
+	tid = (q_id & (CDP_DATA_TID_MAX - 1));
+	if (msdu_info)
+		msdu_info->tid = tid;
+
 	hal_tx_desc_set_hlos_tid(hal_tx_desc_cached,
 				 (q_id & (CDP_DATA_TID_MAX - 1)));
 
 	if ((q_id >= DP_SAWF_DEFAULT_QUEUE_MIN) &&
 	    (q_id < DP_SAWF_DEFAULT_QUEUE_MAX))
-		return;
+		return tid;
 
 	if (!wlan_cfg_get_sawf_config(soc->wlan_cfg_ctx))
-		return;
+		return tid;
 
-	dp_sawf_tcl_cmd(fw_metadata, nbuf);
+	if (fw_metadata)
+		dp_sawf_tcl_cmd(fw_metadata, nbuf);
 	hal_tx_desc_set_flow_override_enable(hal_tx_desc_cached,
 					     DP_TX_FLOW_OVERRIDE_ENABLE);
 	hal_tx_desc_set_flow_override(hal_tx_desc_cached,
 				      DP_TX_FLOW_OVERRIDE_GET(q_id));
 	hal_tx_desc_set_who_classify_info_sel(hal_tx_desc_cached,
 					      DP_TX_WHO_CLFY_INF_SEL_GET(q_id));
+
+	return tid;
 }
 
 #else
 
 static inline
-void dp_sawf_config_be(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
-		       uint16_t *fw_metadata, qdf_nbuf_t nbuf,
-		       struct dp_tx_msdu_info_s *msdu_info)
+uint8_t dp_sawf_config_be(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
+			  uint16_t *fw_metadata, qdf_nbuf_t nbuf,
+			  struct dp_tx_msdu_info_s *msdu_info)
 {
+	return HTT_TX_EXT_TID_INVALID;
 }
 
 static inline
@@ -1848,6 +1857,7 @@ qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	void *hal_tx_desc;
 	uint8_t tid = HTT_TX_EXT_TID_INVALID;
 	uint8_t xmit_type = qdf_nbuf_get_vdev_xmit_type(nbuf);
+	uint8_t sawf_tid = HTT_TX_EXT_TID_INVALID;
 
 	if (qdf_unlikely(vdev_id >= MAX_VDEV_CNT))
 		return nbuf;
@@ -1929,6 +1939,13 @@ qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 
 	hal_tx_desc_cached[5] = vdev->lmac_id << TCL_DATA_CMD_PMAC_ID_LSB;
 	hal_tx_desc_cached[5] |= vdev->vdev_id << TCL_DATA_CMD_VDEV_ID_LSB;
+
+	if (qdf_unlikely(dp_sawf_tag_valid_get(nbuf))) {
+		sawf_tid = dp_sawf_config_be(soc, hal_tx_desc_cached,
+					     NULL, nbuf, NULL);
+		if (sawf_tid != HTT_TX_EXT_TID_INVALID)
+			tid = sawf_tid;
+	}
 
 	if (tid != HTT_TX_EXT_TID_INVALID) {
 		hal_tx_desc_cached[5] |= tid << TCL_DATA_CMD_HLOS_TID_LSB;

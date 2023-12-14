@@ -8363,12 +8363,27 @@ void dp_dump_srng_high_wm_stats(struct dp_soc *soc, uint64_t srng_mask)
 		"ring_id", "high_wm", "time", "<50", "50-60", "60-70",
 		"70-80", "80-90", "90-100");
 
-	if (srng_mask & (1 << REO_DST)) {
+	if (srng_mask & DP_SRNG_WM_MASK_REO_DST) {
 		for (ring = 0; ring < soc->num_reo_dest_rings; ring++) {
 			pos = 0;
 			pos += hal_dump_srng_high_wm_stats(soc->hal_soc,
 					    soc->reo_dest_ring[ring].hal_srng,
 					    buf, buf_len, pos);
+			dp_info("%s", srng_high_wm_str);
+		}
+	}
+
+	if (srng_mask & DP_SRNG_WM_MASK_TX_COMP) {
+		for (ring = 0; ring < soc->num_tcl_data_rings; ring++) {
+			if (wlan_cfg_get_wbm_ring_num_for_index(
+						soc->wlan_cfg_ctx, ring) ==
+			    INVALID_WBM_RING_NUM)
+				continue;
+
+			pos = 0;
+			pos += hal_dump_srng_high_wm_stats(soc->hal_soc,
+					soc->tx_comp_ring[ring].hal_srng,
+					buf, buf_len, pos);
 			dp_info("%s", srng_high_wm_str);
 		}
 	}

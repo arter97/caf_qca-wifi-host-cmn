@@ -2012,6 +2012,29 @@ QDF_STATUS mlo_sta_handle_csa_standby_link(
 	qdf_mem_free(params.chan);
 	return status;
 }
+
+static void mlo_sta_handle_link_reconfig_standby_link(
+			struct wlan_objmgr_vdev *vdev,
+			struct ml_rv_info *reconfig_info)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme)
+		return;
+	if (vdev_mlme->ops &&
+	    vdev_mlme->ops->mlme_vdev_reconfig_notify_standby) {
+		vdev_mlme->ops->mlme_vdev_reconfig_notify_standby(
+				vdev_mlme,
+				reconfig_info);
+	}
+}
+#else
+static void mlo_sta_handle_link_reconfig_standby_link(
+			struct wlan_objmgr_vdev *vdev,
+			struct ml_rv_info *reconfig_info)
+{
+}
 #endif
 
 QDF_STATUS mlo_sta_csa_save_params(struct wlan_mlo_dev_context *mlo_dev_ctx,
@@ -2703,6 +2726,8 @@ check_ml_rv:
 							&reconfig_info.link_info[i]);
 		}
 	}
+
+	mlo_sta_handle_link_reconfig_standby_link(vdev, &reconfig_info);
 
 err_release_refs:
 
