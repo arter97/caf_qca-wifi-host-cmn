@@ -978,6 +978,37 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_rel_cb(void *ipa_ctx);
  */
 void wlan_ipa_wdi_opt_dpath_notify_flt_rlsd(int result0, int result1);
 
+#ifdef IPA_OPT_WIFI_DP_CTRL
+/**
+ * wlan_ipa_wdi_opt_dpath_ctrl_flt_add_cb - Add filter tuple to lce filter
+ * @ipa_ctx: IPA context
+ * @in_out: filter tuple info
+ *
+ * Return: 0 on success, negative on failure
+ */
+int wlan_ipa_wdi_opt_dpath_ctrl_flt_add_cb(
+			    void *ipa_ctx,
+			    struct ipa_wdi_opt_dpath_flt_add_cb_params *in_out);
+/**
+ * wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb -remove filter tuple from lce filter
+ * @ipa_ctx: IPA context
+ * @in: filter tuple info
+ *
+ * Return: 0 on success, negative on failure
+ */
+int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
+			   void *ipa_ctx,
+			   struct ipa_wdi_opt_dpath_flt_rem_cb_params *in);
+/**
+ * wlan_ipa_wdi_opt_dpath_clk_status_cb - notify clock enable
+ * @ipa_ctx: IPA context
+ * @status: status of clock
+ *
+ * Return: 0 on success, negative on failure
+ */
+int wlan_ipa_wdi_opt_dpath_clk_status_cb(void *ipa_ctx, bool status);
+
+#endif
 #endif /* IPA_OPT_WIFI_DP */
 
 #ifdef IPA_WDI3_TX_TWO_PIPES

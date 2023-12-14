@@ -4432,6 +4432,69 @@ static void wlan_ipa_mcc_work_handler(void *data)
 #endif
 
 #ifdef IPA_OPT_WIFI_DP
+#ifdef IPA_OPT_WIFI_DP_CTRL
+/**
+ * __wlan_ipa_reg_flt_cbs() - register cb functions with IPA
+ * for optional wifi datapath
+ * @hdl: ipa hdl
+ * @flt_rsrv_cb: cb for filter reservation
+ * @flt_rsrv_rel_cb: cb for filter release
+ * @flt_add_cb: cb for filter addition
+ * @flt_rem_cb: cb for filter removal
+ *
+ * Return: 0 on success, negative on failure
+ */
+static inline QDF_STATUS __wlan_ipa_reg_flt_cbs(
+			      ipa_wdi_hdl_t hdl,
+			      ipa_wdi_opt_dpath_flt_rsrv_cb flt_rsrv_cb,
+			      ipa_wdi_opt_dpath_flt_rsrv_rel_cb flt_rsrv_rel_cb,
+			      ipa_wdi_opt_dpath_flt_add_cb flt_add_cb,
+			      ipa_wdi_opt_dpath_flt_rem_cb flt_rem_cb)
+{
+	QDF_STATUS status;
+
+	ipa_wdi_opt_dpath_ctrl_flt_add_cb ctrl_flt_add_cb =
+					&wlan_ipa_wdi_opt_dpath_ctrl_flt_add_cb;
+	ipa_wdi_opt_dpath_ctrl_flt_rem_cb ctrl_flt_rem_cb =
+					&wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb;
+	ipa_wdi_opt_dpath_clk_status_cb clk_cb =
+					&wlan_ipa_wdi_opt_dpath_clk_status_cb;
+
+	status = qdf_ipa_wdi_register_flt_cb_v2(hdl, flt_rsrv_cb,
+						flt_rsrv_rel_cb,
+						flt_add_cb,
+						flt_rem_cb,
+						ctrl_flt_add_cb,
+						ctrl_flt_rem_cb,
+						clk_cb);
+	return status;
+}
+#else
+/**
+ * __wlan_ipa_reg_flt_cbs() - register cb functions with IPA
+ * for optional wifi datapath
+ * @hdl: ipa hdl
+ * @flt_rsrv_cb: cb for filter reservation
+ * @flt_rsrv_rel_cb: cb for filter release
+ * @flt_add_cb: cb for filter addition
+ * @flt_rem_cb: cb for filter removal
+ *
+ * Return: 0 on success, negative on failure
+ */
+static inline QDF_STATUS __wlan_ipa_reg_flt_cbs(
+			      ipa_wdi_hdl_t hdl,
+			      ipa_wdi_opt_dpath_flt_rsrv_cb flt_rsrv_cb,
+			      ipa_wdi_opt_dpath_flt_rsrv_rel_cb flt_rsrv_rel_cb,
+			      ipa_wdi_opt_dpath_flt_add_cb flt_add_cb,
+			      ipa_wdi_opt_dpath_flt_rem_cb flt_rem_cb)
+{
+	return qdf_ipa_wdi_register_flt_cb(hdl, flt_rsrv_cb,
+					   flt_rsrv_rel_cb,
+					   flt_add_cb,
+					   flt_rem_cb);
+}
+#endif
+
 /**
  * wlan_ipa_reg_flt_cbs() - register filter cbs with IPA to set up Rx CCE filter
  * rules for optional wifi datapath
@@ -4453,10 +4516,10 @@ static inline QDF_STATUS wlan_ipa_reg_flt_cbs(struct wlan_ipa_priv *ipa_ctx)
 	ipa_wdi_opt_dpath_flt_add_cb flt_add_cb =
 					     &wlan_ipa_wdi_opt_dpath_flt_add_cb;
 
-	status = qdf_ipa_wdi_register_flt_cb(ipa_ctx->hdl, flt_rsrv_cb,
-					     flt_rsrv_rel_cb,
-					     flt_add_cb,
-					     flt_rem_cb);
+	status = __wlan_ipa_reg_flt_cbs(ipa_ctx->hdl, flt_rsrv_cb,
+					flt_rsrv_rel_cb,
+					flt_add_cb,
+					flt_rem_cb);
 	return status;
 }
 
@@ -5865,6 +5928,27 @@ void wlan_ipa_wdi_opt_dpath_notify_flt_add_rem_cb(int flt0_rslt, int flt1_rslt)
 		  dp_flt_params->ipa_flt_evnt_response);
 	qdf_event_set(&ipa_obj->ipa_flt_evnt);
 }
+
+#ifdef IPA_OPT_WIFI_DP_CTRL
+int wlan_ipa_wdi_opt_dpath_ctrl_flt_add_cb(
+			    void *ipa_ctx,
+			    struct ipa_wdi_opt_dpath_flt_add_cb_params *in_out)
+{
+	return 0;
+}
+
+int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
+			   void *ipa_ctx,
+			   struct ipa_wdi_opt_dpath_flt_rem_cb_params *in)
+{
+	return 0;
+}
+
+int wlan_ipa_wdi_opt_dpath_clk_status_cb(void *ipa_ctx, bool status)
+{
+	return 0;
+}
+#endif
 #endif /* IPA_OPT_WIFI_DP */
 
 #ifdef IPA_WDI3_TX_TWO_PIPES
