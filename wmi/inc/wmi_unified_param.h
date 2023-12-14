@@ -1704,7 +1704,7 @@ struct scan_chan_list_params {
 	uint16_t nallchans;
 	bool append;
 	bool max_bw_support_present;
-	struct channel_param ch_param[1];
+	QDF_FLEX_ARRAY(struct channel_param, ch_param);
 };
 
 #ifdef QCA_SUPPORT_AGILE_DFS
@@ -4877,7 +4877,7 @@ typedef struct {
 	uint32_t flag;
 	uint32_t payload_len;
 	uint32_t buffer_len;
-	uint8_t buffer[1];
+	QDF_FLEX_ARRAY(uint8_t, buffer);
 } wmi_unit_test_event;
 
 
@@ -7321,7 +7321,7 @@ typedef struct {
  */
 typedef struct {
 	uint32_t num_entry;
-	wmi_host_mcast_ageout_entry entry[1];
+	QDF_FLEX_ARRAY(wmi_host_mcast_ageout_entry, entry);
 } wmi_host_mcast_list_ageout_event;
 
 /**
@@ -7349,7 +7349,7 @@ typedef struct {
 	uint32_t frag_id;
 	uint32_t more_frag;
 	uint32_t buf_len;
-	uint32_t buf_info[1];
+	QDF_FLEX_ARRAY(uint32_t, buf_info);
 } wmi_host_pdev_generic_buffer_event;
 
 /**
