@@ -37,6 +37,16 @@
 /* Preprocessor definitions and constants */
 #define QDF_MAX_SGLIST 4
 
+/* Define a QDF macro for declaring flexible arrays */
+#define QDF_FLEX_ARRAY(type, name) \
+	union { \
+		type name ## _first_element; \
+		struct { \
+			struct {} dummy_struct; \
+			type name[]; \
+		}; \
+	}
+
 /*
  * Add more levels here based on the number of perf clusters in SoC
  * Also modify hif_get_perf_cluster_bitmap
