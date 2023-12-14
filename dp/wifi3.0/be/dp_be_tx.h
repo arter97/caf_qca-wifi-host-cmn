@@ -371,4 +371,18 @@ QDF_STATUS dp_tx_desc_pool_alloc_be(struct dp_soc *soc, uint32_t num_elem,
  * Return: none
  */
 void dp_tx_desc_pool_free_be(struct dp_soc *soc, uint8_t pool_id);
+
+/**
+ * dp_tx_comp_handler_be()- Handle tx completions for wbm2sw ring
+ * @int_ctx: Interrupt context
+ * @soc: Handle to DP Soc structure
+ * @hal_ring_hdl: TX completion ring handle
+ * @ring_id: TX completion ring number
+ * @quota: Max number of tx completions to process
+ *
+ * Return: Number of tx completions processed
+ */
+uint32_t dp_tx_comp_handler_be(struct dp_intr *int_ctx, struct dp_soc *soc,
+			       hal_ring_handle_t hal_ring_hdl,
+			       uint8_t ring_id, uint32_t quota);
 #endif

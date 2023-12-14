@@ -20,6 +20,7 @@
 #define __DP_BE_H
 
 #include <dp_types.h>
+#include <dp_tx.h>
 #include <hal_be_tx.h>
 #ifdef WLAN_MLO_MULTI_CHIP
 #include "mlo/dp_mlo.h"

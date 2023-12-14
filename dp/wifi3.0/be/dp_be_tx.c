@@ -189,6 +189,24 @@ dp_tx_comp_get_params_from_hal_desc_be(struct dp_soc *soc,
 	return status;
 }
 #else
+#ifdef WLAN_MLO_MULTI_CHIP
+QDF_STATUS
+dp_tx_comp_get_params_from_hal_desc_be(struct dp_soc *soc,
+				       void *tx_comp_hal_desc,
+				       struct dp_tx_desc_s **r_tx_desc)
+{
+	uint64_t tx_desc_va;
+	QDF_STATUS status;
+
+	tx_desc_va = hal_tx_comp_get_desc_va(tx_comp_hal_desc);
+	*r_tx_desc = (struct dp_tx_desc_s *)(uintptr_t)tx_desc_va;
+
+	status = dp_tx_comp_desc_check_and_invalidate(tx_comp_hal_desc,
+						      r_tx_desc, tx_desc_va,
+						      true);
+	return status;
+}
+#else
 QDF_STATUS
 dp_tx_comp_get_params_from_hal_desc_be(struct dp_soc *soc,
 				       void *tx_comp_hal_desc,
@@ -210,6 +228,7 @@ dp_tx_comp_get_params_from_hal_desc_be(struct dp_soc *soc,
 
 	return status;
 }
+#endif /* WLAN_MLO_MULTI_CHIP */
 #endif /* DP_HW_COOKIE_CONVERT_EXCEPTION */
 #else
 
@@ -1298,6 +1317,9 @@ int dp_ppeds_tx_comp_handler(struct dp_soc_be *be_soc, uint32_t quota)
 		}
 
 		tx_desc->buffer_src = buf_src;
+		tx_desc->peer_id = dp_tx_comp_get_peer_id_be(
+							soc,
+							tx_comp_hal_desc);
 
 		if (qdf_unlikely(buf_src == HAL_TX_COMP_RELEASE_SOURCE_FW)) {
 			uint8_t htt_tx_status[HAL_TX_COMP_HTT_STATUS_LEN];
@@ -2176,4 +2198,223 @@ QDF_STATUS dp_tx_desc_pool_alloc_be(struct dp_soc *soc, uint32_t num_elem,
 
 void dp_tx_desc_pool_free_be(struct dp_soc *soc, uint8_t pool_id)
 {
+}
+
+uint32_t dp_tx_comp_handler_be(struct dp_intr *int_ctx, struct dp_soc *soc,
+			       hal_ring_handle_t hal_ring_hdl,
+			       uint8_t ring_id, uint32_t quota)
+{
+	void *tx_comp_hal_desc;
+	void *last_prefetched_hw_desc = NULL;
+	void *last_hw_desc = NULL;
+	struct dp_tx_desc_s *last_prefetched_sw_desc = NULL;
+	hal_soc_handle_t hal_soc;
+	uint8_t buffer_src;
+	struct dp_tx_desc_s *tx_desc = NULL;
+	struct dp_tx_desc_s *head_desc = NULL;
+	struct dp_tx_desc_s *tail_desc = NULL;
+	struct dp_tx_desc_s *fast_head_desc = NULL;
+	struct dp_tx_desc_s *fast_tail_desc = NULL;
+	uint32_t num_processed = 0;
+	uint32_t fast_desc_count = 0;
+	uint32_t count;
+	uint32_t num_avail_for_reap = 0;
+	uint32_t num_entries;
+	qdf_nbuf_queue_head_t h;
+	QDF_STATUS status;
+
+	num_entries = hal_srng_get_num_entries(soc->hal_soc, hal_ring_hdl);
+	dp_tx_nbuf_queue_head_init(&h);
+
+more_data:
+
+	hal_soc = soc->hal_soc;
+	/* Re-initialize local variables to be re-used */
+	head_desc = NULL;
+	tail_desc = NULL;
+	count = 0;
+
+	if (qdf_unlikely(dp_srng_access_start(int_ctx, soc, hal_ring_hdl))) {
+		dp_err("HAL RING Access Failed -- %pK", hal_ring_hdl);
+		return 0;
+	}
+
+	if (!num_avail_for_reap)
+		num_avail_for_reap = hal_srng_dst_num_valid(hal_soc,
+							    hal_ring_hdl, 0);
+
+	if (num_avail_for_reap >= quota)
+		num_avail_for_reap = quota;
+
+	last_hw_desc = dp_srng_dst_inv_cached_descs(soc, hal_ring_hdl,
+						    num_avail_for_reap);
+	dp_srng_dst_inv_cached_descs(soc, hal_ring_hdl, num_avail_for_reap);
+	last_prefetched_hw_desc = dp_srng_dst_prefetch_32_byte_desc(
+							hal_soc,
+							hal_ring_hdl,
+							num_avail_for_reap);
+
+	/* Find head descriptor from completion ring */
+	while (qdf_likely(num_avail_for_reap--)) {
+		tx_comp_hal_desc =  dp_srng_dst_get_next(soc, hal_ring_hdl);
+		if (qdf_unlikely(!tx_comp_hal_desc))
+			break;
+
+		buffer_src = HAL_WBM2SW_RELEASE_SRC_GET(tx_comp_hal_desc);
+		status = dp_tx_comp_get_params_from_hal_desc_be(
+							soc, tx_comp_hal_desc,
+							&tx_desc);
+		if (qdf_unlikely(!tx_desc)) {
+			dp_err("unable to retrieve tx_desc!");
+			hal_dump_comp_desc(tx_comp_hal_desc);
+			DP_STATS_INC(soc, tx.invalid_tx_comp_desc, 1);
+			QDF_BUG(0);
+			continue;
+		}
+		tx_desc->buffer_src = buffer_src;
+		tx_desc->peer_id = dp_tx_comp_get_peer_id_be(
+							  soc,
+							  tx_comp_hal_desc);
+		/*
+		 * If the release source is FW, process the HTT status
+		 */
+		if (qdf_unlikely(buffer_src ==
+					HAL_TX_COMP_RELEASE_SOURCE_FW)) {
+			uint8_t htt_tx_status[HAL_TX_COMP_HTT_STATUS_LEN];
+
+			hal_tx_comp_get_htt_desc(tx_comp_hal_desc,
+						 htt_tx_status);
+			/* Collect hw completion contents */
+			hal_tx_comp_desc_sync(tx_comp_hal_desc,
+					      &tx_desc->comp, 1);
+			dp_tx_process_htt_completion_be(soc, tx_desc,
+							htt_tx_status,
+							ring_id);
+			if (qdf_unlikely(!tx_desc->pdev))
+				dp_tx_dump_tx_desc(tx_desc);
+		} else {
+			if (tx_desc->flags & DP_TX_DESC_FLAG_FASTPATH_SIMPLE ||
+			    tx_desc->flags & DP_TX_DESC_FLAG_PPEDS)
+				goto add_to_pool2;
+
+			tx_desc->tx_status =
+				hal_tx_comp_get_tx_status(tx_comp_hal_desc);
+			/*
+			 * If the fast completion mode is enabled extended
+			 * metadata from descriptor is not copied
+			 */
+			if (qdf_likely(tx_desc->flags &
+						DP_TX_DESC_FLAG_SIMPLE))
+				goto add_to_pool2;
+
+			/*
+			 * If the descriptor is already freed in vdev_detach,
+			 * continue to next descriptor
+			 */
+			if (qdf_unlikely
+				((tx_desc->vdev_id == DP_INVALID_VDEV_ID) &&
+				 !tx_desc->flags)) {
+				 dp_tx_comp_info_rl("Descriptor freed in vdev_detach %d",
+						    tx_desc->id);
+				DP_STATS_INC(soc, tx.tx_comp_exception, 1);
+				dp_tx_desc_check_corruption(tx_desc);
+				continue;
+			}
+
+			if (qdf_unlikely(!tx_desc->pdev)) {
+				dp_tx_comp_warn("The pdev is NULL in TX desc, ignored.");
+				dp_tx_dump_tx_desc(tx_desc);
+				DP_STATS_INC(soc, tx.tx_comp_exception, 1);
+				continue;
+			}
+
+			if (qdf_unlikely(tx_desc->pdev->is_pdev_down)) {
+				dp_tx_comp_info_rl("pdev in down state %d",
+						   tx_desc->id);
+				tx_desc->flags |= DP_TX_DESC_FLAG_TX_COMP_ERR;
+				dp_tx_comp_free_buf(soc, tx_desc, false);
+				dp_tx_desc_release(soc, tx_desc,
+						   tx_desc->pool_id);
+				goto next_desc;
+			}
+
+			if (!(tx_desc->flags & DP_TX_DESC_FLAG_ALLOCATED) ||
+			    !(tx_desc->flags & DP_TX_DESC_FLAG_QUEUED_TX)) {
+				dp_tx_comp_alert("Txdesc invalid, flgs = %x,id = %d",
+						 tx_desc->flags, tx_desc->id);
+				qdf_assert_always(0);
+			}
+
+			/* Collect hw completion contents */
+			hal_tx_comp_desc_sync(tx_comp_hal_desc,
+					      &tx_desc->comp, 1);
+add_to_pool2:
+			/* First ring descriptor on the cycle */
+
+			if (tx_desc->flags & DP_TX_DESC_FLAG_FASTPATH_SIMPLE ||
+			    tx_desc->flags & DP_TX_DESC_FLAG_PPEDS) {
+				dp_tx_nbuf_dev_queue_free(&h, tx_desc);
+				fast_desc_count++;
+				if (!fast_head_desc) {
+					fast_head_desc = tx_desc;
+					fast_tail_desc = tx_desc;
+				}
+				fast_tail_desc->next = tx_desc;
+				fast_tail_desc = tx_desc;
+				dp_tx_desc_clear(tx_desc);
+			} else {
+				if (!head_desc) {
+					head_desc = tx_desc;
+					tail_desc = tx_desc;
+				}
+
+				tail_desc->next = tx_desc;
+				tx_desc->next = NULL;
+				tail_desc = tx_desc;
+			}
+		}
+next_desc:
+		num_processed += !(count & DP_TX_NAPI_BUDGET_DIV_MASK);
+
+		/*
+		 * Processed packet count is more than given quota
+		 * stop to processing
+		 */
+
+		count++;
+
+		dp_tx_prefetch_hw_sw_nbuf_desc(soc, hal_soc,
+					       num_avail_for_reap,
+					       hal_ring_hdl,
+					       &last_prefetched_hw_desc,
+					       &last_prefetched_sw_desc,
+					       last_hw_desc);
+	}
+
+	dp_srng_access_end(int_ctx, soc, hal_ring_hdl);
+
+	/* Process the reaped descriptors */
+	if (head_desc)
+		dp_tx_comp_process_desc_list(soc, head_desc, ring_id);
+
+	DP_STATS_INC(soc, tx.tx_comp[ring_id], count);
+
+	/* Reap more descriptors until quota is completed */
+	num_avail_for_reap = dp_tx_check_if_more_desc_available(
+							num_processed,
+							quota,
+							hal_ring_hdl,
+							hal_soc);
+	if (num_avail_for_reap)
+		goto more_data;
+
+	/* Process the reaped descriptors that were sent via fast path */
+	if (fast_head_desc) {
+		dp_tx_comp_process_desc_list_fast(soc, fast_head_desc,
+						  fast_tail_desc, ring_id,
+						  fast_desc_count);
+		dp_tx_nbuf_dev_kfree_list(&h);
+	}
+
+	return num_processed;
 }

@@ -6365,70 +6365,6 @@ dp_tx_mcast_reinject_handler(struct dp_soc *soc, struct dp_tx_desc_s *desc)
 }
 #endif
 
-#ifdef QCA_DP_TX_NBUF_LIST_FREE
-static inline void
-dp_tx_nbuf_queue_head_init(qdf_nbuf_queue_head_t *nbuf_queue_head)
-{
-	qdf_nbuf_queue_head_init(nbuf_queue_head);
-}
-
-static inline void
-dp_tx_nbuf_dev_queue_free(qdf_nbuf_queue_head_t *nbuf_queue_head,
-			  struct dp_tx_desc_s *desc)
-{
-	qdf_nbuf_t nbuf = NULL;
-
-	nbuf = desc->nbuf;
-	if (qdf_likely(desc->flags & DP_TX_DESC_FLAG_FAST))
-		qdf_nbuf_dev_queue_head(nbuf_queue_head, nbuf);
-	else
-		qdf_nbuf_free(nbuf);
-}
-
-static inline void
-dp_tx_nbuf_dev_queue_free_no_flag(qdf_nbuf_queue_head_t *nbuf_queue_head,
-				  qdf_nbuf_t nbuf)
-{
-	if (!nbuf)
-		return;
-
-	if (nbuf->is_from_recycler)
-		qdf_nbuf_dev_queue_head(nbuf_queue_head, nbuf);
-	else
-		qdf_nbuf_free(nbuf);
-}
-
-static inline void
-dp_tx_nbuf_dev_kfree_list(qdf_nbuf_queue_head_t *nbuf_queue_head)
-{
-	qdf_nbuf_dev_kfree_list(nbuf_queue_head);
-}
-#else
-static inline void
-dp_tx_nbuf_queue_head_init(qdf_nbuf_queue_head_t *nbuf_queue_head)
-{
-}
-
-static inline void
-dp_tx_nbuf_dev_queue_free(qdf_nbuf_queue_head_t *nbuf_queue_head,
-			  struct dp_tx_desc_s *desc)
-{
-	qdf_nbuf_free(desc->nbuf);
-}
-
-static inline void
-dp_tx_nbuf_dev_queue_free_no_flag(qdf_nbuf_queue_head_t *nbuf_queue_head,
-				  qdf_nbuf_t nbuf)
-{
-	qdf_nbuf_free(nbuf);
-}
-
-static inline void
-dp_tx_nbuf_dev_kfree_list(qdf_nbuf_queue_head_t *nbuf_queue_head)
-{
-}
-#endif
-
 #ifdef WLAN_SUPPORT_PPEDS
 static inline void
 dp_tx_update_ppeds_tx_comp_stats(struct dp_soc *soc,
@@ -6590,44 +6526,6 @@ dp_tx_comp_process_desc_list(struct dp_soc *soc,
 	if (txrx_peer)
 		dp_txrx_peer_unref_delete(txrx_ref_handle, DP_MOD_ID_TX_COMP);
 }
-
-#ifndef WLAN_SOFTUMAC_SUPPORT
-/**
- * dp_tx_dump_tx_desc() - Dump tx desc for debugging
- * @tx_desc: software descriptor head pointer
- *
- * This function will dump tx desc for further debugging
- *
- * Return: none
- */
-static
-void dp_tx_dump_tx_desc(struct dp_tx_desc_s *tx_desc)
-{
-	if (tx_desc) {
-		dp_tx_comp_warn("tx_desc->nbuf: %pK", tx_desc->nbuf);
-		dp_tx_comp_warn("tx_desc->flags: 0x%x", tx_desc->flags);
-		dp_tx_comp_warn("tx_desc->id: %u", tx_desc->id);
-		dp_tx_comp_warn("tx_desc->dma_addr: 0x%x",
-				tx_desc->dma_addr);
-		dp_tx_comp_warn("tx_desc->vdev_id: %u",
-				tx_desc->vdev_id);
-		dp_tx_comp_warn("tx_desc->tx_status: %u",
-				tx_desc->tx_status);
-		dp_tx_comp_warn("tx_desc->pdev: %pK",
-				tx_desc->pdev);
-		dp_tx_comp_warn("tx_desc->tx_encap_type: %u",
-				tx_desc->tx_encap_type);
-		dp_tx_comp_warn("tx_desc->buffer_src: %u",
-				tx_desc->buffer_src);
-		dp_tx_comp_warn("tx_desc->frm_type: %u",
-				tx_desc->frm_type);
-		dp_tx_comp_warn("tx_desc->pkt_offset: %u",
-				tx_desc->pkt_offset);
-		dp_tx_comp_warn("tx_desc->pool_id: %u",
-				tx_desc->pool_id);
-	}
-}
-#endif
 
 #ifdef WLAN_FEATURE_RX_SOFTIRQ_TIME_LIMIT
 static inline
