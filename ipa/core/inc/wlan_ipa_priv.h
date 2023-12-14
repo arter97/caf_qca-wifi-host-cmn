@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -209,7 +209,7 @@ struct wlan_ipa_tx_hdr {
  * @reserved: Reserved not used
  */
 struct frag_header {
-	uint8_t reserved[0];
+	__QDF_DECLARE_FLEX_ARRAY(uint8_t, reserved);
 };
 #elif defined(QCA_WIFI_3_0)
 /**
@@ -241,7 +241,7 @@ struct frag_header {
  * @reserved: Reserved not used
  */
 struct ipa_header {
-	uint8_t reserved[0];
+	__QDF_DECLARE_FLEX_ARRAY(uint8_t, reserved);
 };
 #else
 /**
