@@ -2950,6 +2950,11 @@ static void cm_update_candidate_list_for_vendor(qdf_list_t *candidate_list)
 		for (i = 0; i < num_link; i++) {
 			tmp_scan_entry = util_scan_copy_cache_entry(
 						scan_entry->entry);
+			if (!tmp_scan_entry) {
+				mlme_err("Copy cache entry failed");
+				goto next;
+			}
+
 			scan_node = qdf_mem_malloc_atomic(sizeof(*scan_node));
 			if (!scan_node) {
 				util_scan_free_cache_entry(tmp_scan_entry);
@@ -2968,6 +2973,11 @@ static void cm_update_candidate_list_for_vendor(qdf_list_t *candidate_list)
 			if (i == 1) {
 				tmp_scan_entry = util_scan_copy_cache_entry(
 							scan_entry->entry);
+				if (!tmp_scan_entry) {
+					mlme_err("Copy cache entry failed");
+					goto next;
+				}
+
 				scan_node = qdf_mem_malloc_atomic(
 						sizeof(*scan_node));
 				if (!scan_node) {
