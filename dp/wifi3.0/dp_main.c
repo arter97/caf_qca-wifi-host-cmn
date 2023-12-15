@@ -3469,6 +3469,43 @@ static inline void dp_soc_tx_history_detach(struct dp_soc *soc)
 }
 #endif /* WLAN_FEATURE_DP_TX_DESC_HISTORY */
 
+#ifdef DP_RX_MSDU_DONE_FAIL_HISTORY
+static void dp_soc_msdu_done_fail_history_attach(struct dp_soc *soc)
+{
+	soc->msdu_done_fail_hist =
+		qdf_mem_malloc(sizeof(struct dp_msdu_done_fail_history));
+	if (soc->msdu_done_fail_hist)
+		qdf_atomic_init(&soc->msdu_done_fail_hist->index);
+}
+
+static void dp_soc_msdu_done_fail_history_detach(struct dp_soc *soc)
+{
+	if (soc->msdu_done_fail_hist)
+		qdf_mem_free(soc->msdu_done_fail_hist);
+}
+#else
+static inline void dp_soc_msdu_done_fail_history_attach(struct dp_soc *soc)
+{
+}
+
+static inline void dp_soc_msdu_done_fail_history_detach(struct dp_soc *soc)
+{
+}
+#endif
+
+#ifdef DP_RX_PEEK_MSDU_DONE_WAR
+static void dp_soc_msdu_done_fail_desc_list_attach(struct dp_soc *soc)
+{
+	qdf_atomic_init(&soc->msdu_done_fail_desc_list.index);
+	qdf_atomic_set(&soc->msdu_done_fail_desc_list.index,
+		       DP_MSDU_DONE_FAIL_DESCS_MAX - 1);
+}
+#else
+static void dp_soc_msdu_done_fail_desc_list_attach(struct dp_soc *soc)
+{
+}
+#endif
+
 #ifdef WLAN_SUPPORT_RX_FLOW_TAG
 QDF_STATUS
 dp_rx_fst_attach_wrapper(struct dp_soc *soc, struct dp_pdev *pdev)
@@ -4030,6 +4067,7 @@ static void dp_soc_detach(struct cdp_soc_t *txrx_soc)
 	dp_soc_mon_status_ring_history_detach(soc);
 	dp_soc_rx_history_detach(soc);
 	dp_soc_cfg_history_detach(soc);
+	dp_soc_msdu_done_fail_history_detach(soc);
 
 	if (!dp_monitor_modularized_enable()) {
 		dp_mon_soc_detach_wrapper(soc);
@@ -5568,7 +5606,6 @@ dp_txrx_peer_reset_local_link_id(struct dp_txrx_peer *txrx_peer)
 {
 	int i;
 
-	txrx_peer->local_link_id = 0;
 	for (i = 0; i <= DP_MAX_MLO_LINKS; i++)
 		txrx_peer->ll_band[i] = DP_BAND_INVALID;
 }
@@ -13651,6 +13688,8 @@ dp_soc_attach(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 	dp_soc_rx_history_attach(soc);
 	dp_soc_mon_status_ring_history_attach(soc);
 	dp_soc_tx_history_attach(soc);
+	dp_soc_msdu_done_fail_desc_list_attach(soc);
+	dp_soc_msdu_done_fail_history_attach(soc);
 	wlan_set_srng_cfg(&soc->wlan_srng_cfg);
 	soc->wlan_cfg_ctx = wlan_cfg_soc_attach(soc->ctrl_psoc);
 	if (!soc->wlan_cfg_ctx) {
@@ -13744,6 +13783,7 @@ fail4:
 fail3:
 	wlan_cfg_soc_detach(soc->wlan_cfg_ctx);
 fail2:
+	dp_soc_msdu_done_fail_history_detach(soc);
 	qdf_mem_free(soc->cdp_soc.ops);
 fail1:
 	qdf_mem_common_free(soc);

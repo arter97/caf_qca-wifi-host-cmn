@@ -2511,6 +2511,45 @@ static void dp_peer_setup_get_reo_hash(struct dp_vdev *vdev,
 }
 #endif /* IPA_OFFLOAD */
 #if defined WLAN_FEATURE_11BE_MLO && defined DP_MLO_LINK_STATS_SUPPORT
+
+static inline uint8_t
+dp_peer_get_local_link_id(struct dp_peer *peer, struct dp_txrx_peer *txrx_peer)
+{
+	struct dp_local_link_id_peer_map *ll_id_peer_map =
+						&txrx_peer->ll_id_peer_map[0];
+	int i;
+
+	/*
+	 * Search for the peer entry in the
+	 * local_link_id to peer mac_addr mapping table
+	 */
+	for (i = 0; i < DP_MAX_MLO_LINKS; i++) {
+		if (ll_id_peer_map[i].in_use &&
+		    !qdf_mem_cmp(&peer->mac_addr.raw[0],
+				 &ll_id_peer_map[i].mac_addr.raw[0],
+				 QDF_MAC_ADDR_SIZE))
+			return ll_id_peer_map[i].local_link_id + 1;
+	}
+
+	/*
+	 * Create new entry for peer in the
+	 * local_link_id to peer mac_addr mapping table
+	 */
+	for (i = 0; i < DP_MAX_MLO_LINKS; i++) {
+		if (ll_id_peer_map[i].in_use)
+			continue;
+
+		ll_id_peer_map[i].in_use = 1;
+		ll_id_peer_map[i].local_link_id = i;
+		qdf_mem_copy(&ll_id_peer_map[i].mac_addr.raw[0],
+			     &peer->mac_addr.raw[0], QDF_MAC_ADDR_SIZE);
+		return ll_id_peer_map[i].local_link_id + 1;
+	}
+
+	/* We should not hit this case..!! Assert ?? */
+	return 0;
+}
+
 /**
  *  dp_peer_set_local_link_id() - Set local link id
  *  @peer: dp peer handle
@@ -2527,7 +2566,12 @@ dp_peer_set_local_link_id(struct dp_peer *peer)
 
 	txrx_peer = dp_get_txrx_peer(peer);
 	if (txrx_peer)
-		peer->local_link_id = ++txrx_peer->local_link_id;
+		peer->local_link_id = dp_peer_get_local_link_id(peer,
+								txrx_peer);
+
+	dp_info("Peer " QDF_MAC_ADDR_FMT " txrx_peer %pK local_link_id %d",
+		QDF_MAC_ADDR_REF(peer->mac_addr.raw), txrx_peer,
+		peer->local_link_id);
 }
 #else
 static inline void
@@ -2642,7 +2686,7 @@ dp_peer_setup_wifi3(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 					dp_peer_err("MLD peer null. Primary link peer:%pK", peer);
 			}
 		} else {
-			dp_peer_rx_init(pdev, peer);
+			dp_peer_rx_init_wrapper(pdev, peer, setup_info);
 		}
 	}
 

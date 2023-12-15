@@ -621,6 +621,25 @@ static uint32_t hal_rx_msdu_end_l3_hdr_padding_get_6750(uint8_t *buf)
 }
 
 /**
+ * hal_rx_tlv_l3_type_get_6750: API to get the l3 type from
+ * from rx_msdu_end tlv
+ *
+ * @buf: pointer to the start of RX PKT TLV headers
+ * Return: uint32_t(l3 type)
+ */
+static inline uint32_t
+hal_rx_tlv_l3_type_get_6750(uint8_t *buf)
+{
+	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+	struct rx_msdu_end *msdu_end = &pkt_tlvs->msdu_end_tlv.rx_msdu_end;
+	uint32_t l3_type;
+
+	l3_type =  HAL_RX_MSDU_END_L3_TYPE_GET(msdu_end);
+
+	return l3_type;
+}
+
+/**
  * hal_rx_encryption_info_valid_6750() - Returns encryption type.
  * @buf: rx_tlv_hdr of the received packet
  *
@@ -1979,6 +1998,7 @@ static void hal_hw_txrx_ops_attach_qca6750(struct hal_soc *hal_soc)
 					hal_rx_desc_is_first_msdu_6750;
 	hal_soc->ops->hal_rx_msdu_end_l3_hdr_padding_get =
 		hal_rx_msdu_end_l3_hdr_padding_get_6750;
+	hal_soc->ops->hal_rx_tlv_l3_type_get = hal_rx_tlv_l3_type_get_6750;
 	hal_soc->ops->hal_rx_encryption_info_valid =
 					hal_rx_encryption_info_valid_6750;
 	hal_soc->ops->hal_rx_print_pn = hal_rx_print_pn_6750;

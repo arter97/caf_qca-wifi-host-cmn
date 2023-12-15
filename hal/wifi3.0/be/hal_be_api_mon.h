@@ -911,7 +911,7 @@ hal_get_mac_addr1(hal_rx_mon_mpdu_start_t *rx_mpdu_start,
 			rx_mpdu_start->rx_mpdu_info_details.mac_addr_ad1_31_0;
 		if (ppdu_info->sw_frame_group_id ==
 		    HAL_MPDU_SW_FRAME_GROUP_CTRL_RTS) {
-			*(uint32_t *)&ppdu_info->rx_info.mac_addr1[4] =
+			*(uint16_t *)&ppdu_info->rx_info.mac_addr1[4] =
 				rx_mpdu_start->rx_mpdu_info_details.mac_addr_ad1_47_32;
 		}
 	}

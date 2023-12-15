@@ -1534,10 +1534,6 @@ static inline QDF_STATUS dp_peer_map_ast(struct dp_soc *soc,
 	if (soc->ast_offload_support && !wlan_cfg_get_dp_soc_dpdk_cfg(soc->ctrl_psoc))
 		return QDF_STATUS_SUCCESS;
 
-	if (!peer) {
-		return QDF_STATUS_E_INVAL;
-	}
-
 	dp_peer_err("%pK: peer %pK ID %d vid %d mac " QDF_MAC_ADDR_FMT,
 		    soc, peer, hw_peer_id, vdev_id,
 		    QDF_MAC_ADDR_REF(mac_addr));
@@ -1547,6 +1543,21 @@ static inline QDF_STATUS dp_peer_map_ast(struct dp_soc *soc,
 	ast_entry = dp_peer_ast_hash_find_by_vdevid(soc, mac_addr, vdev_id);
 
 	if (is_wds) {
+		/*
+		 * While processing peer map of AST entry if the next hop peer is
+		 * deleted free the AST entry as it is not attached to peer yet
+		 */
+		if (!peer) {
+			if (ast_entry)
+				dp_peer_free_ast_entry(soc, ast_entry);
+
+			qdf_spin_unlock_bh(&soc->ast_lock);
+
+			dp_peer_alert("Peer is NULL for WDS entry mac "
+				      QDF_MAC_ADDR_FMT " ",
+				      QDF_MAC_ADDR_REF(mac_addr));
+			return QDF_STATUS_E_INVAL;
+		}
 		/*
 		 * In certain cases like Auth attack on a repeater
 		 * can result in the number of ast_entries falling
@@ -1595,6 +1606,13 @@ static inline QDF_STATUS dp_peer_map_ast(struct dp_soc *soc,
 
 			return err;
 		}
+	}
+
+	if (!peer) {
+		qdf_spin_unlock_bh(&soc->ast_lock);
+		dp_peer_alert("Peer is NULL for mac " QDF_MAC_ADDR_FMT " ",
+			      QDF_MAC_ADDR_REF(mac_addr));
+		return QDF_STATUS_E_INVAL;
 	}
 
 	if (ast_entry) {
@@ -2347,13 +2365,17 @@ dp_peer_clean_wds_entries(struct dp_soc *soc, struct dp_peer *peer,
 			  uint32_t free_wds_count)
 {
 	uint32_t wds_deleted = 0;
+	bool ast_ind_disable;
 
 	if (soc->ast_offload_support && !soc->host_ast_db_enable)
 		return;
 
+	ast_ind_disable = wlan_cfg_get_ast_indication_disable
+		(soc->wlan_cfg_ctx);
+
 	wds_deleted = dp_peer_ast_free_wds_entries(soc, peer);
 	if ((DP_PEER_WDS_COUNT_INVALID != free_wds_count) &&
-	    (free_wds_count != wds_deleted)) {
+	    (free_wds_count != wds_deleted) && !ast_ind_disable) {
 		DP_STATS_INC(soc, ast.ast_mismatch, 1);
 		dp_alert("For peer %pK (mac: "QDF_MAC_ADDR_FMT")number of wds entries deleted by fw = %d during peer delete is not same as the numbers deleted by host = %d",
 			 peer, peer->mac_addr.raw, free_wds_count,
@@ -3222,6 +3244,62 @@ void dp_peer_rx_init(struct dp_pdev *pdev, struct dp_peer *peer)
 			peer->txrx_peer->security[dp_sec_mcast].sec_type =
 				cdp_sec_type_none;
 }
+
+#ifdef WLAN_FEATURE_11BE_MLO
+static void dp_peer_rx_init_reorder_queue(struct dp_pdev *pdev,
+					  struct dp_peer *peer)
+{
+	struct dp_soc *soc = pdev->soc;
+	struct dp_peer *mld_peer = DP_GET_MLD_PEER_FROM_PEER(peer);
+	struct dp_rx_tid *rx_tid = NULL;
+	uint32_t ba_window_size, tid;
+	QDF_STATUS status;
+
+	if (dp_get_peer_vdev_roaming_in_progress(peer))
+		return;
+
+	tid = DP_NON_QOS_TID;
+	rx_tid = &mld_peer->rx_tid[tid];
+	ba_window_size = rx_tid->ba_status == DP_RX_BA_ACTIVE ?
+					rx_tid->ba_win_size : 1;
+	status = dp_peer_rx_reorder_queue_setup(soc, peer, tid, ba_window_size);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		dp_info("peer %pK " QDF_MAC_ADDR_FMT " type %d failed to setup tid %d ba_win_size %d",
+			peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw),
+			peer->peer_type, tid, ba_window_size);
+		/* Do not return, continue for other tids. */
+	}
+
+	for (tid = 0; tid < DP_MAX_TIDS - 1; tid++) {
+		rx_tid = &mld_peer->rx_tid[tid];
+		ba_window_size = rx_tid->ba_status == DP_RX_BA_ACTIVE ?
+						rx_tid->ba_win_size : 1;
+		status = dp_peer_rx_reorder_queue_setup(soc, peer,
+							tid, ba_window_size);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			dp_info("peer %pK " QDF_MAC_ADDR_FMT " type %d failed to setup tid %d ba_win_size %d",
+				peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw),
+				peer->peer_type, tid, ba_window_size);
+			/* Do not return, continue for other tids. */
+		}
+	}
+}
+
+void dp_peer_rx_init_wrapper(struct dp_pdev *pdev, struct dp_peer *peer,
+			     struct cdp_peer_setup_info *setup_info)
+{
+	if (setup_info && !setup_info->is_first_link)
+		dp_peer_rx_init_reorder_queue(pdev, peer);
+	else
+		dp_peer_rx_init(pdev, peer);
+}
+#else
+void dp_peer_rx_init_wrapper(struct dp_pdev *pdev, struct dp_peer *peer,
+			     struct cdp_peer_setup_info *setup_info)
+{
+	dp_peer_rx_init(pdev, peer);
+}
+#endif
 
 void dp_peer_cleanup(struct dp_vdev *vdev, struct dp_peer *peer)
 {

@@ -192,6 +192,11 @@ bool wlan_cm_is_vdev_disconnected(struct wlan_objmgr_vdev *vdev)
 	return cm_is_vdev_disconnected(vdev);
 }
 
+bool wlan_cm_is_vdev_idle_due_to_link_switch(struct wlan_objmgr_vdev *vdev)
+{
+	return cm_is_vdev_idle_due_to_link_switch(vdev);
+}
+
 bool wlan_cm_is_vdev_roaming(struct wlan_objmgr_vdev *vdev)
 {
 	return cm_is_vdev_roaming(vdev);

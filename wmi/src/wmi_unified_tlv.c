@@ -744,6 +744,8 @@ static const uint32_t vdev_param_tlv[] = {
 		  VDEV_PARAM_RTT_11AZ_NTB_MIN_TIME_BW_MEAS),
 	PARAM_MAP(vdev_param_11az_security_config,
 		  VDEV_PARAM_11AZ_SECURITY_CONFIG),
+	PARAM_MAP(vdev_param_mlo_max_recom_active_links,
+		  VDEV_PARAM_MLO_MAX_RECOM_ACTIVE_LINKS),
 };
 #endif
 
@@ -6800,6 +6802,14 @@ static bool is_service_enabled_tlv(wmi_unified_t wmi_handle,
 	if (soc->wmi_ext2_service_bitmap) {
 		if (!soc->wmi_ext_service_bitmap) {
 			wmi_err("WMI service ext bit map is not saved yet");
+			return false;
+		}
+
+		if (service_id > WMI_MAX_EXT_SERVICE &&
+		    (service_id - WMI_MAX_EXT_SERVICE) / 32 >=
+		    soc->wmi_ext2_service_bitmap_len) {
+			wmi_err("WMI service ext2 bit = %d is not advertised by fw",
+				service_id);
 			return false;
 		}
 
@@ -22907,6 +22917,9 @@ static void populate_tlv_service(uint32_t *wmi_service)
 #endif
 	wmi_service[wmi_service_pdev_param_in_utf_wmi] =
 			WMI_SERVICE_PDEV_PARAM_IN_UTF_WMI;
+#ifdef WLAN_FEATURE_LL_LT_SAP
+	wmi_service[wmi_service_xpan_support] = WMI_SERVICE_XPAN_SUPPORT;
+#endif
 }
 
 /**
