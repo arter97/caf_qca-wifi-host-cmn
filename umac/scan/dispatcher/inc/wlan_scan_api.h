@@ -559,6 +559,7 @@ wlan_scan_get_mld_addr_by_link_addr(struct wlan_objmgr_pdev *pdev,
 				    struct qdf_mac_addr *link_addr,
 				    struct qdf_mac_addr *mld_mac_addr);
 
+#ifdef WLAN_AUX_SUPPORT
 /**
  * wlan_scan_get_aux_support() - get aux scan policy
  * @psoc: psoc object
@@ -568,5 +569,10 @@ wlan_scan_get_mld_addr_by_link_addr(struct wlan_objmgr_pdev *pdev,
  * Return: true/false
  */
 bool wlan_scan_get_aux_support(struct wlan_objmgr_psoc *psoc);
-
+#else
+static inline bool wlan_scan_get_aux_support(struct wlan_objmgr_psoc *psoc)
+{
+	return false;
+}
+#endif /*WLAN_AUX_SUPPORT*/
 #endif

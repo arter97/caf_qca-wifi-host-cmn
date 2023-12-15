@@ -29,6 +29,10 @@
 #include "wlan_policy_mgr_public_struct.h"
 #endif
 
+#ifdef WLAN_AUX_SUPPORT
+#include "wlan_mlme_api.h"
+#endif
+
 void wlan_scan_cfg_get_passive_dwelltime(struct wlan_objmgr_psoc *psoc,
 					 uint32_t *dwell_time)
 {
@@ -909,20 +913,16 @@ wlan_scan_get_scan_entry_by_mac_freq(struct wlan_objmgr_pdev *pdev,
 	return scm_scan_get_scan_entry_by_mac_freq(pdev, bssid, freq);
 }
 
+#ifdef WLAN_AUX_SUPPORT
 bool wlan_scan_get_aux_support(struct wlan_objmgr_psoc *psoc)
 
 {
-	struct wlan_scan_obj *scan_obj;
+	bool aux_scan;
 
-	scan_obj = wlan_psoc_get_scan_obj(psoc);
-	if (!scan_obj)
-		return false;
+	aux_scan = wlan_mlme_is_aux_scan_support(psoc);
 
-	if (scan_obj->aux_mac_support)
-		scm_debug("aux mac support: %d", scan_obj->aux_mac_support);
-	else
-		scm_debug("aux mac not supported");
+	scm_debug("aux scan is %s", aux_scan ? "supported" : "not supported");
 
-	return scan_obj->aux_mac_support;
+	return aux_scan;
 }
-
+#endif
