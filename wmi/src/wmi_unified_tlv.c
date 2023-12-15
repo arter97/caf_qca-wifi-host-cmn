@@ -23564,6 +23564,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 	wmi_service[wmi_service_pcie_data_rate_led_blink_support] =
 				WMI_SERVICE_PCIE_DATA_RATE_LED_BLINK_SUPPORT;
 #endif
+	wmi_service[wmi_service_p2p_device_update_mac_addr_support] =
+			WMI_SERVICE_P2P_DEVICE_UPDATE_MAC_ADDR_SUPPORT;
 }
 
 /**

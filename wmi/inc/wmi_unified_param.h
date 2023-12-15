@@ -6682,6 +6682,7 @@ typedef enum {
 #if defined(OL_ATH_SUPPORT_LED) && (OL_ATH_SUPPORT_LED == 1)
 	wmi_service_pcie_data_rate_led_blink_support,
 #endif
+	wmi_service_p2p_device_update_mac_addr_support,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
