@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -21,6 +21,30 @@
 
 #include <cdp_txrx_cmn_struct.h>
 #include <cdp_txrx_cmn.h>
+
+#ifdef SAWF_ADMISSION_CONTROL
+enum cdp_sawf_peer_msduq_event {
+	SAWF_PEER_MSDUQ_ADD_EVENT,
+	SAWF_PEER_MSDUQ_DELETE_EVENT,
+	SAWF_PEER_MSDUQ_UPDATE_EVENT,
+};
+
+struct cdp_sawf_peer_msduq_event_intf {
+	enum cdp_sawf_peer_msduq_event event_type;
+	uint16_t hw_link_id;
+	uint8_t peer_mac[QDF_MAC_ADDR_SIZE];
+	uint8_t vdev_id;
+	uint8_t queue_id;
+	uint8_t svc_id;
+	uint8_t tid;
+	uint8_t ac;
+	uint8_t priority;
+	uint32_t service_interval;
+	uint32_t min_throughput;
+	uint32_t burst_size;
+	uint32_t delay_bound;
+};
+#endif
 
 static inline QDF_STATUS
 cdp_sawf_peer_svcid_map(ol_txrx_soc_handle soc,
