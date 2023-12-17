@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -381,6 +381,8 @@ struct twt_ack_complete_event_param {
  * @sp_offset_us: Time until initial TWT SP occurs
  * @sp_tsf_us_lo: TWT wake time TSF in usecs lower bits - 31:0
  * @sp_tsf_us_hi: TWT wake time TSF in usecs higher bits - 63:32
+ * @curr_tsf_us_lo: Current TSF in usecs lower bits - 31:0
+ * @curr_tsf_us_hi: Current TSF in usecs higher bits - 63:32
  */
 struct twt_session_stats_info {
 	uint32_t vdev_id;
@@ -400,6 +402,8 @@ struct twt_session_stats_info {
 	uint32_t sp_offset_us;
 	uint32_t sp_tsf_us_lo;
 	uint32_t sp_tsf_us_hi;
+	uint32_t curr_tsf_us_lo;
+	uint32_t curr_tsf_us_hi;
 };
 
 /**

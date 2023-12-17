@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1093,13 +1093,21 @@ extract_twt_session_stats_event_data(wmi_unified_t wmi_handle,
 		return QDF_STATUS_E_INVAL;
 	}
 
-	if (idx >= param_buf->num_twt_sessions) {
+	/* For LL_LT_SAP vdev, firmware can send current tsf stats
+	 * even if twt session is not present using event_type as
+	 * WMI_TWT_SESSION_QUERY_RSP
+	 */
+	if (idx > param_buf->num_twt_sessions) {
 		wmi_err("wrong idx, idx=%d, num_sessions=%d",
 			 idx, param_buf->num_twt_sessions);
 		return QDF_STATUS_E_INVAL;
 	}
 
 	twt_session = &param_buf->twt_sessions[idx];
+	if (!twt_session) {
+		wmi_err("twt_session stats not present for idx %d", idx);
+		return QDF_STATUS_E_INVAL;
+	}
 
 	session->vdev_id = twt_session->vdev_id;
 	m1 = &twt_session->peer_mac;
@@ -1124,11 +1132,15 @@ extract_twt_session_stats_event_data(wmi_unified_t wmi_handle,
 	session->sp_offset_us = twt_session->sp_offset_us;
 	session->sp_tsf_us_lo = twt_session->sp_tsf_us_lo;
 	session->sp_tsf_us_hi = twt_session->sp_tsf_us_hi;
-	wmi_debug("type=%d id=%d bcast=%d trig=%d announ=%d diagid=%d wake_dur=%ul wake_int=%ul offset=%ul",
+	session->curr_tsf_us_lo = twt_session->curr_tsf_us_lo;
+	session->curr_tsf_us_hi = twt_session->curr_tsf_us_hi;
+	wmi_debug("type=%d id=%d bcast=%d trig=%d announ=%d diagid=%d wake_dur=%ul wake_int=%ul offset=%ul sp_tsf_us_lo=%ul sp_tsf_us_hi=%ul curr_tsf_us_lo=%ul curr_tsf_us_hi=%ul",
 		 session->event_type, session->flow_id,
 		 session->bcast, session->trig,
 		 session->announ, session->dialog_id, session->wake_dura_us,
-		 session->wake_intvl_us, session->sp_offset_us);
+		 session->wake_intvl_us, session->sp_offset_us,
+		 session->sp_tsf_us_lo, session->sp_tsf_us_hi,
+		 session->curr_tsf_us_lo, session->curr_tsf_us_hi);
 	wmi_debug("resp_pm_valid=%d resp_pm=%d",
 		  session->pm_responder_bit_valid, session->pm_responder_bit);
 
@@ -2235,11 +2247,16 @@ extract_twt_session_stats_event_data(wmi_unified_t wmi_handle,
 	session->sp_offset_us = twt_session->sp_offset_us;
 	session->sp_tsf_us_lo = twt_session->sp_tsf_us_lo;
 	session->sp_tsf_us_hi = twt_session->sp_tsf_us_hi;
-	wmi_debug("type=%d id=%d bcast=%d trig=%d announ=%d diagid=%d wake_dur=%ul wake_int=%ul offset=%ul",
+	session->curr_tsf_us_lo = twt_session->curr_tsf_us_lo;
+	session->curr_tsf_us_hi = twt_session->curr_tsf_us_hi;
+	wmi_debug("type=%d id=%d bcast=%d trig=%d announ=%d diagid=%d wake_dur=%ul wake_int=%ul offset=%ul sp_tsf_us_lo=%ul sp_tsf_us_hi=%ul curr_tsf_us_lo=%ul curr_tsf_us_hi=%ul",
 		 session->event_type, session->flow_id,
 		 session->bcast, session->trig,
 		 session->announ, session->dialog_id, session->wake_dura_us,
-		 session->wake_intvl_us, session->sp_offset_us);
+		 session->wake_intvl_us, session->sp_offset_us,
+		 session->wake_intvl_us, session->sp_offset_us,
+		 session->sp_tsf_us_lo, session->sp_tsf_us_hi,
+		 session->curr_tsf_us_lo, session->curr_tsf_us_hi);
 	wmi_debug("resp_pm_valid=%d resp_pm=%d",
 		  session->pm_responder_bit_valid, session->pm_responder_bit);
 

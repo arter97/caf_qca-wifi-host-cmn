@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -41,6 +41,9 @@
 #include "cdp_txrx_cmn_struct.h"
 #include "cdp_txrx_ctrl.h"
 #include "cp_stats/core/src/wlan_cp_stats_comp_handler.h"
+#ifdef WLAN_FEATURE_LL_LT_SAP
+#include <target_if_ll_sap.h>
+#endif
 
 #ifdef WLAN_SUPPORT_INFRA_CTRL_PATH_STATS
 #ifdef WLAN_SUPPORT_TWT
@@ -308,6 +311,45 @@ int target_if_infra_cp_stats_event_handler(ol_scn_t scn, uint8_t *data,
 }
 #endif /* WLAN_SUPPORT_INFRA_CTRL_PATH_STATS */
 
+#ifdef WLAN_FEATURE_LL_LT_SAP
+/**
+ * target_if_ll_sap_twt_session_params() - TWT session params for LL_SAP
+ * @psoc: psoc object
+ * @evt_buf: event buf
+ * @params: pointer to twt_session_stats_event_param structure
+ * @twt_params: pointer to twt_session_stats_info structure
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS
+target_if_ll_sap_twt_session_params(
+			struct wlan_objmgr_psoc *psoc,
+			uint8_t *evt_buf,
+			struct twt_session_stats_event_param *params,
+			struct twt_session_stats_info *twt_params)
+{
+	if (target_if_ll_sap_is_twt_event_type_query_rsp(
+						psoc, evt_buf,
+						params, twt_params)) {
+		target_if_ll_sap_continue_csa_after_tsf_rsp(
+						psoc, twt_params);
+		return QDF_STATUS_SUCCESS;
+	}
+
+	return QDF_STATUS_E_INVAL;
+}
+#else
+static inline QDF_STATUS
+target_if_ll_sap_twt_session_params(
+			struct wlan_objmgr_psoc *psoc,
+			uint8_t *evt_buf,
+			struct twt_session_stats_event_param *params,
+			struct twt_session_stats_info *twt_params)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+#endif
+
 #if defined(WLAN_SUPPORT_TWT) && defined(WLAN_TWT_CONV_SUPPORTED)
 static int
 target_if_twt_session_params_event_handler(ol_scn_t scn,
@@ -367,6 +409,12 @@ target_if_twt_session_params_event_handler(ol_scn_t scn,
 			      params.num_sessions, WLAN_MAX_TWT_SESSIONS_PER_PEER);
 		return -EINVAL;
 	}
+
+	status = target_if_ll_sap_twt_session_params(
+						psoc, evt_buf,
+						&params, &twt_params);
+	if (QDF_IS_STATUS_SUCCESS(status))
+		return 0;
 
 	for (i = 0; i < params.num_sessions; i++) {
 		status = wmi_extract_twt_session_stats_data(wmi_hdl, evt_buf,

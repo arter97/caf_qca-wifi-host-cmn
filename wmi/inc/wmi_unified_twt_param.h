@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -190,6 +190,7 @@ enum host_twt_session_stats_type {
 	HOST_TWT_SESSION_SETUP     = 1,
 	HOST_TWT_SESSION_TEARDOWN  = 2,
 	HOST_TWT_SESSION_UPDATE    = 3,
+	HOST_TWT_SESSION_QUERY_RSP = 4,
 };
 
 /**
@@ -211,6 +212,8 @@ enum host_twt_session_stats_type {
  * @sp_offset_us: Time until initial TWT SP occurs
  * @sp_tsf_us_lo: TWT wake time TSF in usecs lower bits - 31:0
  * @sp_tsf_us_hi: TWT wake time TSF in usecs higher bits - 63:32
+ * @curr_tsf_us_lo: Current TSF in usecs lower bits - 31:0
+ * @curr_tsf_us_hi: Current TSF in usecs higher bits - 63:32
  */
 struct wmi_host_twt_session_stats_info {
 	uint32_t vdev_id;
@@ -230,6 +233,8 @@ struct wmi_host_twt_session_stats_info {
 	uint32_t sp_offset_us;
 	uint32_t sp_tsf_us_lo;
 	uint32_t sp_tsf_us_hi;
+	uint32_t curr_tsf_us_lo;
+	uint32_t curr_tsf_us_hi;
 };
 
 /**
