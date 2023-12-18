@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -511,6 +511,14 @@ bool ucfg_ipa_set_perf_level_bw_enabled(struct wlan_objmgr_pdev *pdev);
 void ucfg_ipa_set_perf_level_bw(struct wlan_objmgr_pdev *pdev,
 				enum wlan_ipa_bw_level lvl);
 
+/**
+ * ucfg_ipa_is_two_tx_pipes_enabled() - get IPA two tx pipes feature enable
+ *					status
+ *
+ * Return: true if IPA two tx pipes feature is enabled. Otherwise false;
+ */
+bool ucfg_ipa_is_two_tx_pipes_enabled(void);
+
 #else
 static inline void ucfg_ipa_set_pld_enable(bool flag)
 {
@@ -794,5 +802,9 @@ static inline void ucfg_ipa_set_perf_level_bw(struct wlan_objmgr_pdev *pdev,
 {
 }
 
+static inline bool ucfg_ipa_is_two_tx_pipes_enabled(void)
+{
+	return false;
+}
 #endif /* IPA_OFFLOAD */
 #endif /* _WLAN_IPA_UCFG_API_H_ */

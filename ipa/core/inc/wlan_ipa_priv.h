@@ -86,6 +86,10 @@
 #define WLAN_IPA_UC_STA_ENABLE_MASK         BIT(6)
 #define WLAN_IPA_REAL_TIME_DEBUGGING        BIT(8)
 #define WLAN_IPA_OPT_WIFI_DP                BIT(9)
+/* With CONFIG_IPA_WDI3_TX_TWO_PIPES=y, this bitmask is added to support
+ * runtime IPA two tx pipes feature enablement.
+ */
+#define WLAN_IPA_TWO_TX_PIPES_ENABLE_MASK   BIT(10)
 
 #ifdef QCA_IPA_LL_TX_FLOW_CONTROL
 #define WLAN_IPA_MAX_BANDWIDTH              4800
