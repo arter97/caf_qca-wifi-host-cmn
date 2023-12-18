@@ -109,6 +109,13 @@ bool ipa_config_is_vlan_enabled(void)
 	return g_ipa_config ? g_ipa_config->ipa_vlan_support : 0;
 }
 
+bool ipa_config_is_two_tx_pipes_enabled(void)
+{
+	return g_ipa_config ? (ipa_config_is_enabled() ?
+		wlan_ipa_is_two_tx_pipes_enabled(g_ipa_config) : 0) :
+		0;
+}
+
 QDF_STATUS ipa_obj_setup(struct wlan_ipa_priv *ipa_ctx)
 {
 	return wlan_ipa_setup(ipa_ctx, g_ipa_config);
