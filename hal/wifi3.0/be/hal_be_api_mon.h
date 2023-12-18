@@ -112,7 +112,7 @@ defined(QCA_SINGLE_WIFI_3_0)
 #define RX_MON_MPDU_START_WMASK_V2            0x007F0
 #define RX_MON_MPDU_END_WMASK_V2              0xFF
 #define RX_MON_MSDU_END_WMASK                 0x0AE1
-#define RX_MON_PPDU_END_USR_STATS_WMASK       0xB7E
+#define RX_MON_PPDU_END_USR_STATS_WMASK       0xB7F
 
 #ifdef CONFIG_MON_WORD_BASED_TLV
 #ifndef BIG_ENDIAN_HOST
@@ -271,6 +271,12 @@ struct rx_msdu_end_mon_data {
 };
 
 struct rx_ppdu_end_user_mon_data {
+	struct   rx_rxpcu_classification_overview rxpcu_classification_details;
+	uint32_t sta_full_aid                      : 13,
+		 mcs                               : 4,
+		 nss                               : 3,
+		 expected_response_ack_or_be       : 1,
+		 reserved_1a                       : 11;
 	uint32_t sw_peer_id                        : 16,
 		 mpdu_cnt_fcs_err                  : 11,
 		 sw2rxdma0_buf_source_used         :  1,
@@ -484,6 +490,12 @@ struct rx_msdu_end_mon_data {
 };
 
 struct rx_ppdu_end_user_mon_data {
+	struct   rx_rxpcu_classification_overview rxpcu_classification_details;
+	uint32_t reserved_1a                       : 11,
+		 expected_response_ack_or_ba       : 1,
+		 nss                               : 3,
+		 mcs                               : 4,
+		 sta_full_aid                      : 13;
 	uint32_t fw2rxdma_pmac1_buf_source_used    :  1,
 		 sw2rxdma_exception_buf_source_used:  1,
 		 sw2rxdma1_buf_source_used         :  1,
@@ -836,7 +848,8 @@ hal_rx_populate_mu_user_info(hal_rx_mon_ppdu_end_user_t *rx_ppdu_end_user,
 	}
 	mon_rx_user_status->he_flags = ppdu_info->rx_status.he_flags;
 	mon_rx_user_status->rs_flags = ppdu_info->rx_status.rs_flags;
-
+	mon_rx_user_status->mcs = ppdu_info->rx_status.mcs;
+	mon_rx_user_status->nss = ppdu_info->rx_status.nss;
 	mon_rx_user_status->mpdu_cnt_fcs_ok =
 		ppdu_info->com_info.mpdu_cnt_fcs_ok;
 	mon_rx_user_status->mpdu_cnt_fcs_err =
@@ -2670,6 +2683,9 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 
 		ppdu_info->com_info.mpdu_fcs_ok_bitmap[1] =
 				rx_ppdu_end_user->fcs_ok_bitmap_63_32;
+
+		ppdu_info->rx_status.nss = rx_ppdu_end_user->nss + 1;
+		ppdu_info->rx_status.mcs = rx_ppdu_end_user->mcs;
 
 		if (user_id < HAL_MAX_UL_MU_USERS) {
 			mon_rx_user_status =

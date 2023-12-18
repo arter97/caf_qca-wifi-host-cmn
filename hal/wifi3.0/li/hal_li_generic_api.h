@@ -493,7 +493,8 @@ hal_rx_populate_mu_user_info(void *rx_tlv, void *ppduinfo, uint32_t user_id,
 	mon_rx_user_status->vht_flags = ppdu_info->rx_status.vht_flags;
 	mon_rx_user_status->he_flags = ppdu_info->rx_status.he_flags;
 	mon_rx_user_status->rs_flags = ppdu_info->rx_status.rs_flags;
-
+	mon_rx_user_status->nss = ppdu_info->rx_status.nss;
+	mon_rx_user_status->mcs = ppdu_info->rx_status.mcs;
 	mon_rx_user_status->mpdu_cnt_fcs_ok =
 		ppdu_info->com_info.mpdu_cnt_fcs_ok;
 	mon_rx_user_status->mpdu_cnt_fcs_err =
@@ -771,6 +772,11 @@ hal_rx_status_get_tlv_info_generic_li(void *rx_tlv_hdr, void *ppduinfo,
 	{
 		unsigned long tid = 0;
 		uint16_t seq = 0;
+
+		ppdu_info->rx_status.nss = HAL_RX_GET(rx_tlv, RX_PPDU_END_USER_STATS_1,
+					   NSS) + 1;
+		ppdu_info->rx_status.mcs = HAL_RX_GET(rx_tlv, RX_PPDU_END_USER_STATS_1,
+					   MCS);
 
 		ppdu_info->rx_status.ast_index =
 				HAL_RX_GET(rx_tlv, RX_PPDU_END_USER_STATS_4,
