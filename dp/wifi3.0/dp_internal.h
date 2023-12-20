@@ -4814,7 +4814,7 @@ struct dp_frag_history_opaque_atomic {
 	qdf_atomic_t index;
 	uint16_t num_entries_per_slot;
 	uint16_t allocated;
-	void *entry[0];
+	void *entry[];
 };
 
 static inline QDF_STATUS
