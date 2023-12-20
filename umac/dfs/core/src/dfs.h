@@ -2437,6 +2437,21 @@ void dfs_deliver_cac_state_events(struct wlan_dfs *dfs)
 {
 }
 #endif
+
+/*
+ * dfs_deliver_cac_state_events_for_prevchan() - Deliver the DFS CAC events
+ * on dfs_prevchan.
+ *
+ * @dfs: Pointer to wlan_dfs structure.
+ */
+#if defined(WLAN_DISP_CHAN_INFO)
+void dfs_deliver_cac_state_events_for_prevchan(struct wlan_dfs *dfs);
+#else
+static inline
+void dfs_deliver_cac_state_events_for_prevchan(struct wlan_dfs *dfs)
+{
+}
+#endif
 #else
 static inline
 void dfs_stacac_stop(struct wlan_dfs *dfs)
@@ -2529,6 +2544,11 @@ void dfs_cac_timer_detach(struct wlan_dfs *dfs)
 
 static inline
 void dfs_deliver_cac_state_events(struct wlan_dfs *dfs)
+{
+}
+
+static inline
+void dfs_deliver_cac_state_events_for_prevchan(struct wlan_dfs *dfs)
 {
 }
 

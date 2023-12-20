@@ -199,6 +199,26 @@ QDF_STATUS utils_dfs_cancel_cac_timer(struct wlan_objmgr_pdev *pdev);
 QDF_STATUS utils_dfs_start_cac_timer(struct wlan_objmgr_pdev *pdev);
 
 /**
+ * utils_dfs_deliver_cac_state_events() - Deliver CAC related user space
+ * events.
+ * @pdev: Pointer to DFS pdev object.
+ *
+ * wrapper function for dfs_deliver_cac_state_events(). this
+ * function called from outside of dfs component.
+ */
+QDF_STATUS utils_dfs_deliver_cac_state_events(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * utils_dfs_deliver_cac_state_events_for_prevchan() - Deliver CAC
+ * related user space events.
+ * @pdev: Pointer to DFS pdev object.
+ *
+ * wrapper function for dfs_deliver_cac_state_events_for_prevchan(). this
+ * function called from outside of dfs component.
+ */
+QDF_STATUS
+utils_dfs_deliver_cac_state_events_for_prevchan(struct wlan_objmgr_pdev *pdev);
+/**
  * utils_dfs_cac_stop() - Clear the AP CAC timer.
  * @pdev: Pointer to DFS pdev object.
  *

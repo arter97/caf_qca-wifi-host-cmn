@@ -205,6 +205,33 @@ QDF_STATUS utils_dfs_start_cac_timer(struct wlan_objmgr_pdev *pdev)
 }
 qdf_export_symbol(utils_dfs_start_cac_timer);
 
+QDF_STATUS utils_dfs_deliver_cac_state_events(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_dfs *dfs;
+
+	dfs = wlan_pdev_get_dfs_obj(pdev);
+	if (!dfs)
+		return  QDF_STATUS_E_FAILURE;
+
+	dfs_deliver_cac_state_events(dfs);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS
+utils_dfs_deliver_cac_state_events_for_prevchan(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_dfs *dfs;
+
+	dfs = wlan_pdev_get_dfs_obj(pdev);
+	if (!dfs)
+		return  QDF_STATUS_E_FAILURE;
+
+	dfs_deliver_cac_state_events_for_prevchan(dfs);
+
+	return QDF_STATUS_SUCCESS;
+}
+
 QDF_STATUS utils_dfs_cac_stop(struct wlan_objmgr_pdev *pdev)
 {
 	struct wlan_dfs *dfs;
