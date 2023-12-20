@@ -45,6 +45,32 @@ QDF_STATUS tgt_reg_process_master_chan_list(struct cur_regulatory_info
 QDF_STATUS tgt_reg_process_master_chan_list_ext(struct cur_regulatory_info
 						*reg_info);
 
+/**
+ * tgt_reg_set_both_psd_eirp_preferred_support() - Set PSD and EIRP as the
+ * preferred support for TPC power command.
+ * @psoc: psoc pointer
+ * @reg_is_both_psd_eirp_support_preferred: Boolean to indicate if target
+ * prefers both PSD and EIRP support for TPC power command.
+ *
+ * Return: Success or Failure
+ */
+QDF_STATUS tgt_reg_set_both_psd_eirp_preferred_support(
+				struct wlan_objmgr_psoc *psoc,
+				bool reg_is_both_psd_eirp_support_preferred);
+
+/**
+ * tgt_reg_get_both_psd_eirp_preferred_support() - Check if both PSD and  EIRP
+ * support is preferred by the target for TPC power command
+ * @psoc: psoc pointer
+ * @reg_is_both_psd_eirp_support_preferred: Pointer to
+ * reg_is_both_psd_eirp_support_preferred.
+ *
+ * Return: Success or Failure
+ */
+QDF_STATUS tgt_reg_get_both_psd_eirp_preferred_support(
+				struct wlan_objmgr_psoc *psoc,
+				bool *reg_is_both_psd_eirp_support_preferred);
+
 #ifdef CONFIG_AFC_SUPPORT
 /**
  * tgt_reg_process_afc_event() - process the AFC event

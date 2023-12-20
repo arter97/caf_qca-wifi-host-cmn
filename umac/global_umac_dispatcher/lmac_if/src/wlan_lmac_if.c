@@ -391,6 +391,15 @@ static void wlan_lmac_if_register_super_chan_display(
 		wlan_reg_display_super_chan_list;
 }
 
+static void wlan_lmac_if_register_both_psd_eirp_preferred(
+					struct wlan_lmac_if_rx_ops *rx_ops)
+{
+	rx_ops->reg_rx_ops.reg_set_both_psd_eirp_support =
+				tgt_reg_set_both_psd_eirp_preferred_support;
+	rx_ops->reg_rx_ops.reg_get_both_psd_eirp_support =
+				tgt_reg_get_both_psd_eirp_preferred_support;
+}
+
 #ifdef CONFIG_AFC_SUPPORT
 static void wlan_lmac_if_register_afc_handlers(
 					struct wlan_lmac_if_rx_ops *rx_ops)
@@ -422,6 +431,11 @@ static inline void wlan_lmac_if_register_afc_handlers(
 }
 
 static inline void wlan_lmac_if_register_super_chan_display(
+					struct wlan_lmac_if_rx_ops *rx_ops)
+{
+}
+
+static inline void wlan_lmac_if_register_both_psd_eirp_preferred(
 					struct wlan_lmac_if_rx_ops *rx_ops)
 {
 }
@@ -540,6 +554,8 @@ static void wlan_lmac_if_umac_reg_rx_ops_register(
 	wlan_lmac_if_register_afc_handlers(rx_ops);
 
 	wlan_lmac_if_register_super_chan_display(rx_ops);
+
+	wlan_lmac_if_register_both_psd_eirp_preferred(rx_ops);
 
 	rx_ops->reg_rx_ops.reg_r2p_table_update_response_handler =
 		tgt_reg_process_r2p_table_update_response;

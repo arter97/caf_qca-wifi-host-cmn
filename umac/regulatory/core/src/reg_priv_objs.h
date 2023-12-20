@@ -206,6 +206,8 @@ struct indoor_concurrency_list {
  * supported
  * @is_upper_6g_edge_ch_disabled: whether upper 6ghz edge channel 7115MHz is
  * disabled
+ * @reg_is_both_psd_eirp_support_preferred: Whether target prefers both PSD and
+ * EIRP format for WMI Set TPC command when in SP or Client SP power mode.
  * @ch_avoid_ext_ind: whether need to update extended channel frequency list
  * @avoid_freq_ext_list: the extended avoid channel frequency list
  * @coex_unsafe_chan_nb_user_prefer: Honor coex unsafe chan cmd from firmware or
@@ -287,6 +289,7 @@ struct wlan_regulatory_psoc_priv_obj {
 #if defined(CONFIG_BAND_6GHZ)
 	bool is_lower_6g_edge_ch_supported;
 	bool is_upper_6g_edge_ch_disabled;
+	bool reg_is_both_psd_eirp_support_preferred;
 #endif
 #ifdef FEATURE_WLAN_CH_AVOID_EXT
 	bool ch_avoid_ext_ind;

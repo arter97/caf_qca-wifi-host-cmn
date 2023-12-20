@@ -77,6 +77,22 @@ QDF_STATUS tgt_reg_process_master_chan_list_ext(struct cur_regulatory_info
 	return reg_process_master_chan_list_ext(reg_info);
 }
 
+QDF_STATUS
+tgt_reg_set_both_psd_eirp_preferred_support(struct wlan_objmgr_psoc *psoc,
+					    bool reg_is_both_psd_eirp_support)
+{
+	return reg_set_both_psd_eirp_preferred_support(psoc,
+						reg_is_both_psd_eirp_support);
+}
+
+QDF_STATUS
+tgt_reg_get_both_psd_eirp_preferred_support(struct wlan_objmgr_psoc *psoc,
+					    bool *reg_is_both_psd_eirp_support)
+{
+	return reg_get_both_psd_eirp_preferred_support(psoc,
+						reg_is_both_psd_eirp_support);
+}
+
 #ifdef CONFIG_AFC_SUPPORT
 QDF_STATUS
 tgt_reg_process_afc_event(struct afc_regulatory_info *afc_info)

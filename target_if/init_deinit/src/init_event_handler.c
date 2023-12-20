@@ -642,6 +642,8 @@ static int init_deinit_service_ext2_ready_event_handler(ol_scn_t scn_handle,
 
 	target_if_set_regulatory_eirp_preferred_support(psoc);
 
+	target_if_set_regulatory_is_both_psd_eirp_support_for_sp(psoc);
+
 	tgt_if_set_reg_afc_configure(tgt_hdl, psoc);
 
 	/* send init command */

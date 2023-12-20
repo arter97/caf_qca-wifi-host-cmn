@@ -1119,6 +1119,45 @@ target_if_reg_set_disable_upper_6g_edge_ch_info(struct wlan_objmgr_psoc *psoc)
 
 	return QDF_STATUS_SUCCESS;
 }
+
+/**
+ * tgt_if_regulatory_is_both_psd_eirp_support_for_sp() - Check if for 6 GHz SP
+ * power mode both PSD and EIRP power are to be sent to the target.
+ * @psoc: Pointer to psoc
+ *
+ * Return: true if regdb if both PSD and EIRP are needed, else false.
+ */
+static bool
+tgt_if_regulatory_is_both_psd_eirp_support_for_sp(struct wlan_objmgr_psoc *psoc)
+{
+	wmi_unified_t wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
+
+	if (!wmi_handle)
+		return false;
+
+	return wmi_service_enabled(wmi_handle,
+			wmi_service_both_psd_eirp_for_ap_sp_client_sp_support);
+}
+
+QDF_STATUS
+target_if_set_regulatory_is_both_psd_eirp_support_for_sp(
+						struct wlan_objmgr_psoc *psoc)
+{
+	struct wlan_lmac_if_reg_rx_ops *reg_rx_ops;
+
+	reg_rx_ops = target_if_regulatory_get_rx_ops(psoc);
+	if (!reg_rx_ops) {
+		target_if_err("reg_rx_ops is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (reg_rx_ops->reg_set_both_psd_eirp_support)
+		reg_rx_ops->reg_set_both_psd_eirp_support(
+		    psoc,
+		    tgt_if_regulatory_is_both_psd_eirp_support_for_sp(psoc));
+
+	return QDF_STATUS_SUCCESS;
+}
 #else
 static inline bool
 tgt_if_regulatory_is_lower_6g_edge_ch_supp(struct wlan_objmgr_psoc *psoc)

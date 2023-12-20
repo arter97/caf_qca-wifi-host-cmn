@@ -8318,6 +8318,42 @@ QDF_STATUS reg_set_ap_pwr_and_update_chan_list(struct wlan_objmgr_pdev *pdev,
 
 	return QDF_STATUS_SUCCESS;
 }
+
+QDF_STATUS reg_set_both_psd_eirp_preferred_support(
+				struct wlan_objmgr_psoc *psoc,
+				bool reg_is_both_psd_eirp_support_preferred)
+{
+	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
+
+	psoc_priv_obj = reg_get_psoc_obj(psoc);
+	if (!IS_VALID_PSOC_REG_OBJ(psoc_priv_obj)) {
+		reg_err("psoc reg component is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	psoc_priv_obj->reg_is_both_psd_eirp_support_preferred =
+					reg_is_both_psd_eirp_support_preferred;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS reg_get_both_psd_eirp_preferred_support(
+				struct wlan_objmgr_psoc *psoc,
+				bool *reg_is_both_psd_eirp_support_preferred)
+{
+	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
+
+	psoc_priv_obj = reg_get_psoc_obj(psoc);
+	if (!IS_VALID_PSOC_REG_OBJ(psoc_priv_obj)) {
+		reg_err("psoc reg component is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	*reg_is_both_psd_eirp_support_preferred =
+			psoc_priv_obj->reg_is_both_psd_eirp_support_preferred;
+
+	return QDF_STATUS_SUCCESS;
+}
 #endif
 
 bool reg_is_regdb_offloaded(struct wlan_objmgr_psoc *psoc)

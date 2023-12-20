@@ -6680,6 +6680,7 @@ typedef enum {
 	wmi_service_xpan_support,
 #endif
 	wmi_service_multiple_reorder_queue_setup_support,
+	wmi_service_both_psd_eirp_for_ap_sp_client_sp_support,
 #if defined(OL_ATH_SUPPORT_LED) && (OL_ATH_SUPPORT_LED == 1)
 	wmi_service_pcie_data_rate_led_blink_support,
 #endif

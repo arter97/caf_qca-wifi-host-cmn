@@ -1989,6 +1989,10 @@ struct wlan_lmac_if_mgmt_txrx_rx_ops {
  * @reg_set_disable_upper_6g_edge_ch_supp:
  * @reg_display_super_chan_list:
  * @reg_display_super_chan_list: function pointer to print super channel list
+ * @reg_set_both_psd_eirp_support: Function pointer to set the target preference
+ * to send both PSD and EIRP in WMI TPC command.
+ * @reg_get_both_psd_eirp_support: Function pointer to get the target preference
+ * to send both PSD and EIRP in WMI TPC command.
  * @reg_set_afc_dev_type:
  * @reg_get_afc_dev_type:
  * @reg_set_eirp_preferred_support:
@@ -2058,6 +2062,14 @@ struct wlan_lmac_if_reg_rx_ops {
 						 bool val);
 	QDF_STATUS
 	(*reg_display_super_chan_list)(struct wlan_objmgr_pdev *pdev);
+	QDF_STATUS
+	(*reg_set_both_psd_eirp_support)(
+				struct wlan_objmgr_psoc *psoc,
+				bool reg_is_eirp_support_preferred);
+	QDF_STATUS
+	(*reg_get_both_psd_eirp_support)(
+				struct wlan_objmgr_psoc *psoc,
+				bool *reg_is_eirp_support_preferred);
 #endif
 
 #ifdef CONFIG_AFC_SUPPORT

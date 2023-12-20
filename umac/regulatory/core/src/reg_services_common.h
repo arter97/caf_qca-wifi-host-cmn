@@ -2156,6 +2156,31 @@ reg_find_txpower_from_6g_list(qdf_freq_t freq,
 			      struct regulatory_channel *chan_list,
 			      int16_t *reg_eirp);
 
+/**
+ * reg_set_both_psd_eirp_preferred_support() - Set both PSD and EIRP as
+ * preferred by the target for TPC power command.
+ * @psoc: psoc pointer
+ * @reg_is_both_psd_eirp_support_preferred: Boolean to indicate if target
+ * prefers PSD and EIRP support for TPC power command.
+ *
+ * Return: Success or Failure
+ */
+QDF_STATUS reg_set_both_psd_eirp_preferred_support(
+				struct wlan_objmgr_psoc *psoc,
+				bool reg_is_both_psd_eirp_support_preferred);
+
+/**
+ * reg_get_both_psd_eirp_preferred_support() - Check if both PSD and EIRP
+ * support is preferred by the target for TPC power command.
+ * @psoc: psoc pointer
+ * @reg_is_both_psd_eirp_support_preferred: Pointer to
+ * reg_is_both_psd_eirp_support_preferred.
+ *
+ * Return: Success or Failure
+ */
+QDF_STATUS reg_get_both_psd_eirp_preferred_support(
+				struct wlan_objmgr_psoc *psoc,
+				bool *reg_is_both_psd_eirp_support_preferred);
 #else
 static inline QDF_STATUS
 reg_set_cur_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
@@ -2276,6 +2301,23 @@ reg_find_txpower_from_6g_list(qdf_freq_t freq,
 			      int16_t *reg_eirp)
 {
 	*reg_eirp = 0;
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline QDF_STATUS reg_set_both_psd_eirp_preferred_support(
+				struct wlan_objmgr_psoc *psoc,
+				bool reg_is_both_psd_eirp_support_preferred)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline QDF_STATUS reg_get_both_psd_eirp_preferred_support(
+				struct wlan_objmgr_psoc *psoc,
+				bool *reg_is_both_psd_eirp_support_preferred)
+{
+	if (reg_is_both_psd_eirp_support_preferred)
+		*reg_is_both_psd_eirp_support_preferred = false;
+
 	return QDF_STATUS_E_NOSUPPORT;
 }
 #endif
