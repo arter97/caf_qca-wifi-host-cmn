@@ -1297,6 +1297,51 @@ hal_rx_flow_setup_fse_9224(uint8_t *rx_fst, uint32_t table_offset,
 	return fse;
 }
 
+#ifdef CONFIG_WORD_BASED_TLV
+/**
+ * hal_rx_priv_info_set_in_tlv_9224() - Save the private info to
+ *                             the reserved bytes of rx_tlv_hdr
+ * @buf: start of rx_tlv_hdr
+ * @priv_data: hal_wbm_err_desc_info structure
+ * @len: length of the private data
+ *
+ * Return: void
+ */
+static inline void hal_rx_priv_info_set_in_tlv_9224(uint8_t *buf,
+						    uint8_t *priv_data,
+						    uint32_t len)
+{
+	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+	uint32_t copy_len = (len > HAL_RX_TLV_PRIV_INFO_BYTES) ?
+			     HAL_RX_TLV_PRIV_INFO_BYTES : len;
+
+	qdf_mem_copy(&(HAL_RX_MSDU_END(pkt_tlvs).ppdu_start_timestamp_63_32),
+		     priv_data, copy_len);
+}
+
+/**
+ * hal_rx_priv_info_get_from_tlv_9224() - retrieve the private data from
+ *                             the reserved bytes of rx_tlv_hdr.
+ * @buf: start of rx_tlv_hdr
+ * @priv_data: Handle to get the private data, output parameter.
+ * @len: length of the private data
+ *
+ * Return: void
+ */
+static inline void hal_rx_priv_info_get_from_tlv_9224(uint8_t *buf,
+						      uint8_t *priv_data,
+						      uint32_t len)
+{
+	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+	uint32_t copy_len = (len > HAL_RX_TLV_PRIV_INFO_BYTES) ?
+			     HAL_RX_TLV_PRIV_INFO_BYTES : len;
+
+	qdf_mem_copy(priv_data,
+		     &(HAL_RX_MSDU_END(pkt_tlvs).ppdu_start_timestamp_63_32),
+		     copy_len);
+}
+#endif
+
 /**
  * hal_rx_dump_pkt_hdr_tlv_9224() - dump RX pkt header TLV in hex format
  * @pkt_tlvs: pointer the pkt_hdr_tlv in pkt.
@@ -1819,10 +1864,17 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 					hal_rx_tlv_get_is_decrypted_be;
 	hal_soc->ops->hal_rx_msdu_get_keyid = hal_rx_msdu_get_keyid_be;
 	hal_soc->ops->hal_rx_tlv_get_freq = hal_rx_tlv_get_freq_be;
+#ifdef CONFIG_WORD_BASED_TLV
+	hal_soc->ops->hal_rx_priv_info_set_in_tlv =
+			hal_rx_priv_info_set_in_tlv_9224;
+	hal_soc->ops->hal_rx_priv_info_get_from_tlv =
+			hal_rx_priv_info_get_from_tlv_9224;
+#else
 	hal_soc->ops->hal_rx_priv_info_set_in_tlv =
 			hal_rx_priv_info_set_in_tlv_be;
 	hal_soc->ops->hal_rx_priv_info_get_from_tlv =
 			hal_rx_priv_info_get_from_tlv_be;
+#endif
 	hal_soc->ops->hal_rx_pkt_hdr_get = hal_rx_pkt_hdr_get_be;
 	hal_soc->ops->hal_reo_setup = hal_reo_setup_9224;
 	hal_soc->ops->hal_reo_config_reo2ppe_dest_info = NULL;

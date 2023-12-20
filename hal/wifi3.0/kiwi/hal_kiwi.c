@@ -1144,6 +1144,51 @@ hal_rx_tlv_populate_mpdu_desc_info_kiwi(uint8_t *buf,
 	mpdu_desc_info->bar_frame = mpdu_info->bar_frame;
 }
 
+#ifdef CONFIG_WORD_BASED_TLV
+/**
+ * hal_rx_priv_info_set_in_tlv_kiwi() - Save the private info to
+ *                              the reserved bytes of rx_tlv_hdr
+ * @buf: start of rx_tlv_hdr
+ * @priv_data: hal_wbm_err_desc_info structure
+ * @len: length of the private data
+ *
+ * Return: void
+ */
+static inline void hal_rx_priv_info_set_in_tlv_kiwi(uint8_t *buf,
+						    uint8_t *priv_data,
+						    uint32_t len)
+{
+	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+	uint32_t copy_len = (len > HAL_RX_TLV_PRIV_INFO_BYTES) ?
+			     HAL_RX_TLV_PRIV_INFO_BYTES : len;
+
+	qdf_mem_copy(&(HAL_RX_MSDU_END(pkt_tlvs).ipv6_options_crc),
+		     priv_data, copy_len);
+}
+
+/**
+ * hal_rx_priv_info_get_from_tlv_kiwi() - retrieve the private data from
+ *                             the reserved bytes of rx_tlv_hdr.
+ * @buf: start of rx_tlv_hdr
+ * @priv_data: Handle to get the private data, output parameter.
+ * @len: length of the private data
+ *
+ * Return: void
+ */
+static inline void hal_rx_priv_info_get_from_tlv_kiwi(uint8_t *buf,
+						      uint8_t *priv_data,
+						      uint32_t len)
+{
+	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+	uint32_t copy_len = (len > HAL_RX_TLV_PRIV_INFO_BYTES) ?
+			     HAL_RX_TLV_PRIV_INFO_BYTES : len;
+
+	qdf_mem_copy(priv_data,
+		     &(HAL_RX_MSDU_END(pkt_tlvs).ipv6_options_crc),
+		     copy_len);
+}
+#endif
+
 /**
  * hal_reo_status_get_header_kiwi() - Process reo desc info
  * @ring_desc: Pointer to reo descriptor
@@ -2165,10 +2210,17 @@ static void hal_hw_txrx_ops_attach_kiwi(struct hal_soc *hal_soc)
 					hal_rx_status_get_tlv_info_wrapper_be;
 	hal_soc->ops->hal_rx_wbm_err_info_get =
 					hal_rx_wbm_err_info_get_generic_be;
+#ifdef CONFIG_WORD_BASED_TLV
+	hal_soc->ops->hal_rx_priv_info_set_in_tlv =
+					hal_rx_priv_info_set_in_tlv_kiwi;
+	hal_soc->ops->hal_rx_priv_info_get_from_tlv =
+					hal_rx_priv_info_get_from_tlv_kiwi;
+#else
 	hal_soc->ops->hal_rx_priv_info_set_in_tlv =
 					hal_rx_priv_info_set_in_tlv_be;
 	hal_soc->ops->hal_rx_priv_info_get_from_tlv =
 					hal_rx_priv_info_get_from_tlv_be;
+#endif
 
 	hal_soc->ops->hal_tx_set_pcp_tid_map =
 					hal_tx_set_pcp_tid_map_generic_be;

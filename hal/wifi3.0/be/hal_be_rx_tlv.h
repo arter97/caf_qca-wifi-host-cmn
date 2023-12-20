@@ -33,7 +33,9 @@
 #define TLV_TAG_T uint64_t
 #endif
 
-#define HAL_RX_BE_PKT_HDR_TLV_LEN		112
+#define HAL_RX_BE_PKT_HDR_TLV_LEN	112
+/* Number of bytes to store SW private info in rx_pkt_tlvs */
+#define HAL_RX_TLV_PRIV_INFO_BYTES	4
 
 #ifndef BIG_ENDIAN_HOST
 struct rx_pkt_hdr_tlv {
@@ -1154,49 +1156,6 @@ static inline bool hal_rx_is_unicast_be(uint8_t *buf)
 	hal_rx_mpdu_get_addr1_be(buf, &mac[0]);
 
 	return !IS_ADDR_MULTICAST(mac);
-}
-
-/**
- * hal_rx_priv_info_set_in_tlv_be() - Save the private info to
- *                             the reserved bytes of rx_tlv_hdr
- * @buf: start of rx_tlv_hdr
- * @priv_data: hal_wbm_err_desc_info structure
- * @len: length of the private data
- *
- * Return: void
- */
-static inline void hal_rx_priv_info_set_in_tlv_be(uint8_t *buf,
-						  uint8_t *priv_data,
-						  uint32_t len)
-{
-	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)buf;
-	uint32_t copy_len = (len > RX_BE_PADDING0_BYTES) ?
-			    RX_BE_PADDING0_BYTES : len;
-
-	qdf_mem_copy(&(HAL_RX_MSDU_END(pkt_tlvs).ppdu_start_timestamp_63_32),
-		     priv_data, copy_len);
-}
-
-/**
- * hal_rx_priv_info_get_from_tlv_be() - retrieve the private data from
- *                             the reserved bytes of rx_tlv_hdr.
- * @buf: start of rx_tlv_hdr
- * @priv_data: Handle to get the private data, output parameter.
- * @len: length of the private data
- *
- * Return: void
- */
-static inline void hal_rx_priv_info_get_from_tlv_be(uint8_t *buf,
-						    uint8_t *priv_data,
-						    uint32_t len)
-{
-	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)buf;
-	uint32_t copy_len = (len > RX_BE_PADDING0_BYTES) ?
-			    RX_BE_PADDING0_BYTES : len;
-
-	qdf_mem_copy(priv_data,
-		     &(HAL_RX_MSDU_END(pkt_tlvs).ppdu_start_timestamp_63_32),
-		     copy_len);
 }
 
 /**
