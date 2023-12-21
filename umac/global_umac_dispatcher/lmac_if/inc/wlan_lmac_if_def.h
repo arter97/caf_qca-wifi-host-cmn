@@ -791,6 +791,20 @@ struct wlan_lmac_if_sa_api_tx_ops {
 
 #endif
 
+#ifdef WLAN_WIFI_RADAR_ENABLE
+/**
+ * struct wlan_lmac_if_wifi_radar_tx_ops - wifi_radar tx function pointers
+ * @wifi_radar_init_pdev: Initialize wifi radar
+ * @wifi_radar_deinit_pdev: De-initialize wifi_radar
+ */
+struct wlan_lmac_if_wifi_radar_tx_ops {
+	QDF_STATUS (*wifi_radar_init_pdev)(struct wlan_objmgr_psoc *psoc,
+					   struct wlan_objmgr_pdev *pdev);
+	QDF_STATUS (*wifi_radar_deinit_pdev)(struct wlan_objmgr_psoc *psoc,
+					     struct wlan_objmgr_pdev *pdev);
+};
+#endif
+
 #ifdef WLAN_CFR_ENABLE
 /**
  * struct wlan_lmac_if_cfr_tx_ops - CFR specific tx function pointers
@@ -1806,6 +1820,7 @@ struct wlan_lmac_if_sawf_tx_ops {
  * @spatial_reuse_tx_ops: Spatial Reuse tx ops
  * @coap_ops: COAP tx ops
  * @sawf_tx_ops: SAWF tx ops
+ * @wifi_radar_tx_ops: WiFi Radar tx ops
  *
  * Callback function tabled to be registered with umac.
  * umac will use the functional table to send events/frames to wmi
@@ -1914,6 +1929,9 @@ struct wlan_lmac_if_tx_ops {
 #endif
 #ifdef CONFIG_SAWF
 	struct wlan_lmac_if_sawf_tx_ops sawf_tx_ops;
+#endif
+#ifdef WLAN_WIFI_RADAR_ENABLE
+	struct wlan_lmac_if_wifi_radar_tx_ops wifi_radar_tx_ops;
 #endif
 };
 
@@ -2289,6 +2307,22 @@ struct wlan_lmac_if_sa_api_rx_ops {
 	uint32_t (*sa_api_get_sa_mode)(struct wlan_objmgr_pdev *pdev);
 	uint32_t (*sa_api_get_beacon_txantenna)(struct wlan_objmgr_pdev *pdev);
 	uint32_t (*sa_api_cwm_action)(struct wlan_objmgr_pdev *pdev);
+};
+#endif
+
+#ifdef WLAN_WIFI_RADAR_ENABLE
+/**
+ * struct wlan_lmac_if_wifi_radar_rx_ops - wifi_radar south bound rx
+ *					   function pointers
+ * @wifi_radar_support_set: Set the wifi radar support based on FW advert
+ * @wifi_radar_info_send: Send wifi radar info to upper layers
+ */
+struct wlan_lmac_if_wifi_radar_rx_ops {
+	void (*wifi_radar_support_set)(struct wlan_objmgr_psoc *psoc,
+				       uint32_t value);
+	uint32_t (*wifi_radar_info_send)(struct wlan_objmgr_pdev *pdev,
+					 void *head, size_t hlen, void *data,
+					 size_t dlen, void *tail, size_t tlen);
 };
 #endif
 
@@ -2780,6 +2814,7 @@ struct wlan_lmac_if_green_ap_rx_ops {
  * @mlo_rx_ops: mlo rx ops
  * @twt_rx_ops: twt rx ops
  * @dbam_rx_ops: dbam rx ops
+ * @wifi_radar_rx_ops: wifi radar rx ops
  *
  * Callback function tabled to be registered with lmac/wmi.
  * lmac will use the functional table to send events/frames to umac
@@ -2851,6 +2886,9 @@ struct wlan_lmac_if_rx_ops {
 #endif
 #ifdef WLAN_FEATURE_DBAM_CONFIG
 	struct wlan_lmac_if_dbam_rx_ops dbam_rx_ops;
+#endif
+#ifdef WLAN_WIFI_RADAR_ENABLE
+	struct wlan_lmac_if_wifi_radar_rx_ops wifi_radar_rx_ops;
 #endif
 };
 
