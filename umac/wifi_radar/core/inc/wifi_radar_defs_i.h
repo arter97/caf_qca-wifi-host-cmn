@@ -121,7 +121,7 @@ wifi_radar_streamfs_remove(struct wlan_objmgr_pdev *pdev);
 
 /**
  * wifi_radar_streamfs_write() - write to stream filesystem
- * @pa: pointer to pdev_cfr object
+ * @pa: pointer to pdev_wifi_radar object
  * @write_data: Pointer to data
  * @write_len: data len
  *
@@ -129,15 +129,15 @@ wifi_radar_streamfs_remove(struct wlan_objmgr_pdev *pdev);
  */
 QDF_STATUS
 wifi_radar_streamfs_write(
-struct pdev_cfr *pa, const void *write_data,
+struct pdev_wifi_radar *pa, const void *write_data,
 size_t write_len);
 
 /**
  * wifi_radar_streamfs_flush() - flush the write to streamfs
- * @pa: pointer to pdev_cfr object
+ * @pa: pointer to pdev_wifi_radar object
  *
  * Return: status of fs flush
  */
 QDF_STATUS
-wifi_radar_streamfs_flush(struct pdev_cfr *pa);
+wifi_radar_streamfs_flush(struct pdev_wifi_radar *pa);
 #endif
