@@ -90,6 +90,10 @@
 #include <wlan_coap_main.h>
 #endif
 
+#ifdef WLAN_WIFI_RADAR_ENABLE
+#include <wlan_wifi_radar_utils_api.h>
+#endif
+
 /**
  * DOC: This file provides various init/deinit trigger point for new
  * components.
