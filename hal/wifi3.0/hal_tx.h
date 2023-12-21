@@ -110,6 +110,8 @@ do {                                            \
 
 #define HAL_TX_COMPLETION_DESC_LEN_DWORDS (NUM_OF_DWORDS_WBM_RELEASE_RING)
 #define HAL_TX_COMPLETION_DESC_LEN_BYTES (NUM_OF_DWORDS_WBM_RELEASE_RING*4)
+#define HAL_TX_COMPLETION_DESC_LEN_BYTES_WO_VA \
+	(HAL_TX_COMPLETION_DESC_LEN_BYTES - 8)
 #define HAL_TX_BITS_PER_TID 3
 #define HAL_TX_TID_BITS_MASK ((1 << HAL_TX_BITS_PER_TID) - 1)
 #define HAL_TX_NUM_DSCP_PER_REGISTER 10
@@ -191,12 +193,24 @@ do {                                            \
   ---------------------------------------------------------------------------*/
 /**
  * struct hal_tx_completion_status - HAL Tx completion descriptor contents
- * @status: frame acked/failed
+ * The fields of this struct are aligned to WBM2SW TX comp Desc to populate
+ * them efficiently. Do not add/removed the fields of the struct.
  * @release_src: release source = TQM/FW
+ * @reserved1: reserved
+ * @status: frame acked/failed
+ * @reserved2: reserved
+ * @ppdu_id: TSF, snapshot of this value when transmission of the
+ *           PPDU containing the frame finished.
+ * @transmit_cnt: Number of times this frame has been transmitted
+ * @reserved3: reserved
  * @ack_frame_rssi: RSSI of the received ACK or BA frame
  * @first_msdu: Indicates this MSDU is the first MSDU in AMSDU
  * @last_msdu: Indicates this MSDU is the last MSDU in AMSDU
  * @msdu_part_of_amsdu : Indicates this MSDU was part of an A-MSDU in MPDU
+ * @reserved4: reserved
+ * @buffer_timestamp: Frame system entrance timestamp in units of 1024
+ *		      microseconds
+ * @valid:
  * @bw: Indicates the BW of the upcoming transmission -
  *       <enum 0 transmit_bw_20_MHz>
  *       <enum 1 transmit_bw_40_MHz>
@@ -214,24 +228,28 @@ do {                                            \
  * @mcs: Transmit MCS Rate
  * @ofdma: Set when the transmission was an OFDMA transmission
  * @tones_in_ru: The number of tones in the RU used.
- * @valid:
+ * @reserved5: reserved
  * @tsf: Lower 32 bits of the TSF
- * @ppdu_id: TSF, snapshot of this value when transmission of the
- *           PPDU containing the frame finished.
- * @transmit_cnt: Number of times this frame has been transmitted
- * @tid: TID of the flow or MPDU queue
  * @peer_id: Peer ID of the flow or MPDU queue
- * @buffer_timestamp: Frame system entrance timestamp in units of 1024
- *		      microseconds
+ * @tid: TID of the flow or MPDU queue
+ * @reserved6: reserved
  */
 struct hal_tx_completion_status {
-	uint8_t status;
-	uint8_t release_src;
-	uint8_t ack_frame_rssi;
-	uint8_t first_msdu:1,
-		last_msdu:1,
-		msdu_part_of_amsdu:1;
-	uint32_t bw:3,
+	uint32_t release_src:3,
+		 reserved1:10,
+		 status:4,
+		 reserved2:15;
+	uint32_t ppdu_id:24,
+		 transmit_cnt:7,
+		 reserved3:1;
+	uint32_t ack_frame_rssi:8,
+		 first_msdu:1,
+		 last_msdu:1,
+		 msdu_part_of_amsdu:1,
+		 reserved4:2,
+		 buffer_timestamp:19;
+	uint32_t valid:1,
+		 bw:3,
 		 pkt_type:4,
 		 stbc:1,
 		 ldpc:1,
@@ -239,15 +257,11 @@ struct hal_tx_completion_status {
 		 mcs:4,
 		 ofdma:1,
 		 tones_in_ru:12,
-		 valid:1;
+		 reserved5:3;
 	uint32_t tsf;
-	uint32_t ppdu_id;
-	uint8_t transmit_cnt;
-	uint8_t tid;
-	uint16_t peer_id;
-#if defined(WLAN_FEATURE_TSF_AUTO_REPORT) || defined(WLAN_CONFIG_TX_DELAY)
-	uint32_t buffer_timestamp:19;
-#endif
+	uint32_t peer_id:16,
+		 tid:8,
+		 reserved6:8;
 };
 
 /**
@@ -736,10 +750,12 @@ static inline void hal_tx_comp_desc_sync(void *hw_desc,
 					 struct hal_tx_desc_comp_s *comp,
 					 bool read_status)
 {
-	if (!read_status)
+	if (!read_status) {
 		qdf_mem_copy(comp, hw_desc, HAL_TX_COMPLETION_DESC_BASE_LEN);
-	else
-		qdf_mem_copy(comp, hw_desc, HAL_TX_COMPLETION_DESC_LEN_BYTES);
+	} else {
+		qdf_mem_copy(comp, (((uint32_t *)hw_desc) + 2),
+			     HAL_TX_COMPLETION_DESC_LEN_BYTES_WO_VA);
+	}
 }
 
 /**

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -45,19 +45,12 @@ typedef struct pcu_ppdu_setup_init hal_pcu_ppdu_setup_t;
 #endif
 
 #if defined(WLAN_FEATURE_TSF_AUTO_REPORT) || defined(WLAN_CONFIG_TX_DELAY)
-static inline void
-hal_tx_comp_get_buffer_timestamp_be(void *desc,
-				    struct hal_tx_completion_status *ts)
-{
-	ts->buffer_timestamp = HAL_TX_DESC_GET(desc, WBM2SW_COMPLETION_RING_TX,
-					       BUFFER_TIMESTAMP);
-}
+#define HAL_TX_BUFFER_TIMESTAMP_INVALIDATE(_ts)
 #else /* !(WLAN_FEATURE_TSF_AUTO_REPORT || WLAN_CONFIG_TX_DELAY) */
-static inline void
-hal_tx_comp_get_buffer_timestamp_be(void *desc,
-				    struct hal_tx_completion_status *ts)
-{
-}
+#define HAL_TX_BUFFER_TIMESTAMP_INVALIDATE(_ts) \
+do { \
+	(_ts)->buffer_timestamp = 0; \
+} while (0)
 #endif /* WLAN_FEATURE_TSF_AUTO_REPORT || WLAN_CONFIG_TX_DELAY */
 
 /**
@@ -75,65 +68,15 @@ static inline void
 hal_tx_comp_get_status_generic_be(void *desc, void *ts1,
 				  struct hal_soc *hal)
 {
-	uint8_t rate_stats_valid = 0;
-	uint32_t rate_stats = 0;
 	struct hal_tx_completion_status *ts =
 		(struct hal_tx_completion_status *)ts1;
 
-	ts->ppdu_id = HAL_TX_DESC_GET(desc, WBM2SW_COMPLETION_RING_TX,
-				      TQM_STATUS_NUMBER);
-	ts->ack_frame_rssi = HAL_TX_DESC_GET(desc, WBM2SW_COMPLETION_RING_TX,
-					     ACK_FRAME_RSSI);
-	ts->first_msdu = HAL_TX_DESC_GET(desc, WBM2SW_COMPLETION_RING_TX,
-					 FIRST_MSDU);
-	ts->last_msdu = HAL_TX_DESC_GET(desc, WBM2SW_COMPLETION_RING_TX,
-					LAST_MSDU);
+	*ts = *((struct hal_tx_completion_status *)desc);
 
-	/* This can be calculated from first and last msdu. If a msdu is both
-	 * the last and the first msdu, then it does not belong to an amsdu.
-	 */
 	ts->msdu_part_of_amsdu = (ts->first_msdu && ts->last_msdu) ?
 				  false : true;
-	ts->peer_id = HAL_TX_DESC_GET(desc, WBM2SW_COMPLETION_RING_TX,
-				      SW_PEER_ID);
-	ts->tid = HAL_TX_DESC_GET(desc, WBM2SW_COMPLETION_RING_TX, TID);
-	ts->transmit_cnt = HAL_TX_DESC_GET(desc, WBM2SW_COMPLETION_RING_TX,
-					   TRANSMIT_COUNT);
-
-	rate_stats = HAL_TX_DESC_GET(desc, HAL_TX_COMP, TX_RATE_STATS);
-
-	rate_stats_valid = HAL_TX_MS(TX_RATE_STATS_INFO,
-			TX_RATE_STATS_INFO_VALID, rate_stats);
-
-	ts->valid = rate_stats_valid;
-
-	if (rate_stats_valid) {
-		ts->bw = HAL_TX_MS(TX_RATE_STATS_INFO, TRANSMIT_BW,
-				rate_stats);
-		ts->pkt_type = HAL_TX_MS(TX_RATE_STATS_INFO,
-				TRANSMIT_PKT_TYPE, rate_stats);
-		ts->stbc = HAL_TX_MS(TX_RATE_STATS_INFO,
-				TRANSMIT_STBC, rate_stats);
-		ts->ldpc = HAL_TX_MS(TX_RATE_STATS_INFO, TRANSMIT_LDPC,
-				rate_stats);
-		ts->sgi = HAL_TX_MS(TX_RATE_STATS_INFO, TRANSMIT_SGI,
-				rate_stats);
-		ts->mcs = HAL_TX_MS(TX_RATE_STATS_INFO, TRANSMIT_MCS,
-				rate_stats);
-		ts->ofdma = HAL_TX_MS(TX_RATE_STATS_INFO, OFDMA_TRANSMISSION,
-				rate_stats);
-		ts->tones_in_ru = HAL_TX_MS(TX_RATE_STATS_INFO, TONES_IN_RU,
-				rate_stats);
-	}
-
-	ts->release_src = hal_tx_comp_get_buffer_source_generic_be(desc);
-	ts->status = hal_tx_comp_get_release_reason(
-					desc,
-					hal_soc_to_hal_soc_handle(hal));
-
-	ts->tsf = HAL_TX_DESC_GET(desc, UNIFIED_WBM_RELEASE_RING_6,
-			TX_RATE_STATS_INFO_TX_RATE_STATS);
-	hal_tx_comp_get_buffer_timestamp_be(desc, ts);
+	ts->tid = ts->tid & 0xF;
+	HAL_TX_BUFFER_TIMESTAMP_INVALIDATE(ts);
 }
 
 /**
