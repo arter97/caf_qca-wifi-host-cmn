@@ -425,10 +425,10 @@ struct hal_hw_srng_config hw_srng_table_9224v2[] = {
 
 	{ /* DIR_BUF_RX_DMA_SRC */
 		.start_ring_id = HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING,
-		/* one ring for spectral, one ring for cfr and
-		 * another one ring for txbf cv upload
+		/* one ring for spectral, one ring for cfr, one ring for txbf,
+		 * another one ring for  wifi radar
 		 */
-		.max_rings = 3,
+		.max_rings = 4,
 		.entry_size = 2,
 		.lmac_ring = TRUE,
 		.ring_dir = HAL_SRNG_SRC_RING,
