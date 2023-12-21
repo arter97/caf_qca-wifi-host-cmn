@@ -6683,6 +6683,7 @@ typedef enum {
 	wmi_service_pcie_data_rate_led_blink_support,
 #endif
 	wmi_service_p2p_device_update_mac_addr_support,
+	wmi_service_wifi_radar_support,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
