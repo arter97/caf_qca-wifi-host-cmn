@@ -52,7 +52,7 @@ static inline bool dp_is_mon_mask_valid(struct dp_soc *soc,
  */
 static inline int dp_srng_get_cpu(void)
 {
-	return smp_processor_id();
+	return qdf_get_cpu();
 }
 
 #else /* QCA_HOST_MODE_WIFI_DISABLED */
