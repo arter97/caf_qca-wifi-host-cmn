@@ -2792,6 +2792,7 @@ static void util_parse_noninheritance_list(uint8_t *extn_elem,
 }
 
 #ifdef WLAN_FEATURE_11BE_MLO
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 static bool util_is_ml_ie(uint8_t *pos)
 {
 	if (pos[PAYLOAD_START_POS] == WLAN_EXTN_ELEMID_MULTI_LINK)
@@ -2799,7 +2800,12 @@ static bool util_is_ml_ie(uint8_t *pos)
 
 	return false;
 }
-
+#else
+static bool util_is_ml_ie(uint8_t *pos)
+{
+	return false;
+}
+#endif
 /**
  * util_handle_rnr_ie_for_mbssid() - parse and modify RNR IE for MBSSID feature
  * @rnr: The pointer to RNR IE
