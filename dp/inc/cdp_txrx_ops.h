@@ -2335,7 +2335,8 @@ struct cdp_ipa_ops {
 				  uint32_t tx_pipe_handle,
 				  uint32_t rx_pipe_handle,
 				  qdf_ipa_wdi_hdl_t hdl);
-	QDF_STATUS (*ipa_setup_iface)(char *ifname, uint8_t *mac_addr,
+	QDF_STATUS (*ipa_setup_iface)(struct cdp_soc_t *soc_hdl, char *ifname,
+				      uint8_t *mac_addr,
 				      qdf_ipa_client_type_t prod_client,
 				      qdf_ipa_client_type_t cons_client,
 				      uint8_t session_id, bool is_ipv6_enabled,

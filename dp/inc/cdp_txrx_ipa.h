@@ -539,7 +539,7 @@ cdp_ipa_setup_iface(ol_txrx_soc_handle soc, char *ifname, uint8_t *mac_addr,
 	}
 
 	if (soc->ops->ipa_ops->ipa_setup_iface)
-		return soc->ops->ipa_ops->ipa_setup_iface(ifname, mac_addr,
+		return soc->ops->ipa_ops->ipa_setup_iface(soc, ifname, mac_addr,
 							  prod_client,
 							  cons_client,
 							  session_id,

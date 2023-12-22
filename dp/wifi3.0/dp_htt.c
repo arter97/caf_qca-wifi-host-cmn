@@ -3254,7 +3254,7 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 
 	status = dp_get_srng_ring_state_from_hal
 				(pdev->soc, pdev,
-				 &pdev->rx_refill_buf_ring2,
+				 &pdev->soc->rx_refill_buf_ring2,
 				 RXDMA_BUF,
 				 &soc_srngs_state->ring_state[j]);
 

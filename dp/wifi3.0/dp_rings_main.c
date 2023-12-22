@@ -57,6 +57,9 @@
 #include <dp_mon.h>
 #endif
 #include "qdf_ssr_driver_dump.h"
+#ifdef IPA_OFFLOAD
+#include "dp_ipa.h"
+#endif
 
 #ifdef WLAN_FEATURE_STATS_EXT
 #define INIT_RX_HW_STATS_LOCK(_soc) \
@@ -2420,6 +2423,10 @@ void dp_soc_deinit(void *txrx_soc)
 
 	dp_soc_srng_deinit(soc);
 
+	dp_ipa_uc_detach(soc, NULL);
+	dp_deinit_ipa_rx_alt_refill_buf_ring(soc);
+	dp_deinit_ipa_rx_refill_buf_ring(soc);
+
 	dp_hw_link_desc_ring_deinit(soc);
 
 	dp_soc_print_inactive_objects(soc);
@@ -3705,6 +3712,15 @@ void *dp_soc_init(struct dp_soc *soc, HTC_HANDLE htc_handle,
 		}
 	}
 
+	if (dp_init_ipa_rx_refill_buf_ring(soc))
+		goto fail8;
+
+	if (dp_ipa_ring_resource_setup(soc))
+		goto fail9;
+
+	if (dp_ipa_uc_attach(soc, NULL) != QDF_STATUS_SUCCESS)
+		dp_init_err("%pK: dp_ipa_uc_attach failed", soc);
+
 	wlan_cfg_set_rx_hash(soc->wlan_cfg_ctx,
 			     cfg_get(soc->ctrl_psoc, CFG_DP_RX_HASH));
 #ifdef WLAN_SUPPORT_RX_FLOW_TAG
@@ -3803,6 +3819,11 @@ void *dp_soc_init(struct dp_soc *soc, HTC_HANDLE htc_handle,
 	dp_soc_rx_buf_map_lock_init(soc);
 
 	return soc;
+fail9:
+	dp_deinit_ipa_rx_refill_buf_ring(soc);
+fail8:
+	if (soc->arch_ops.txrx_soc_ppeds_stop)
+		soc->arch_ops.txrx_soc_ppeds_stop(soc);
 fail7:
 	dp_soc_tx_desc_sw_pools_deinit(soc);
 fail6:

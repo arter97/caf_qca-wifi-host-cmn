@@ -885,4 +885,30 @@ void dp_soc_reset_dpdk_intr_mask(struct dp_soc *soc);
 static inline void dp_soc_reset_dpdk_intr_mask(struct dp_soc *soc)
 { }
 #endif
+
+/**
+ * dp_deinit_ipa_rx_alt_refill_buf_ring() - deinit IPA Rx alt refill buffer ring
+ * @soc: DP soc context
+ *
+ * Return: None
+ */
+void dp_deinit_ipa_rx_alt_refill_buf_ring(struct dp_soc *soc);
+
+/**
+ * dp_init_ipa_rx_refill_buf_ring() - init Second Rx refill buffer ring
+ * @soc: DP soc context
+ *
+ * Return: QDF_STATUS_SUCCESS: success
+ *         QDF_STATUS_E_RESOURCES: Error return
+ */
+QDF_STATUS dp_init_ipa_rx_refill_buf_ring(struct dp_soc *soc);
+
+/**
+ * dp_deinit_ipa_rx_refill_buf_ring - deinit second Rx refill buffer ring
+ * @soc: DP soc context
+ *
+ * Return: None
+ */
+void dp_deinit_ipa_rx_refill_buf_ring(struct dp_soc *soc);
+
 #endif /* _DP_RINGS_H_ */
