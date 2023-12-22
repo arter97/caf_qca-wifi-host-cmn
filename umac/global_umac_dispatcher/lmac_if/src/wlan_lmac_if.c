@@ -73,6 +73,10 @@
 #include "wlan_cfr_tgt_api.h"
 #endif
 
+#ifdef WLAN_WIFI_RADAR_ENABLE
+#include "wlan_wifi_radar_tgt_api.h"
+#endif
+
 #ifdef WIFI_POS_CONVERGED
 #include "wifi_pos_api.h"
 #endif
@@ -302,6 +306,29 @@ wlan_lmac_if_sa_api_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 #else
 static void
 wlan_lmac_if_sa_api_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
+{
+}
+#endif
+
+#ifdef WLAN_WIFI_RADAR_ENABLE
+/**
+ * wlan_lmac_if_wifi_radar_rx_ops_register() - Function to register
+ *					       wifi radar RX ops
+ * @rx_ops: Pointer to wlan_lmac_if_rx_ops
+ */
+static void
+wlan_lmac_if_wifi_radar_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
+{
+	struct wlan_lmac_if_wifi_radar_rx_ops *wifi_radar_rx_ops =
+			&rx_ops->wifi_radar_rx_ops;
+
+	/* wifi_radar rx ops */
+	wifi_radar_rx_ops->wifi_radar_support_set = tgt_wifi_radar_support_set;
+	wifi_radar_rx_ops->wifi_radar_info_send = tgt_wifi_radar_info_send;
+}
+#else
+static void
+wlan_lmac_if_wifi_radar_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 {
 }
 #endif
@@ -1100,6 +1127,8 @@ wlan_lmac_if_umac_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 	wlan_lmac_if_sa_api_rx_ops_register(rx_ops);
 
 	wlan_lmac_if_cfr_rx_ops_register(rx_ops);
+
+	wlan_lmac_if_wifi_radar_rx_ops_register(rx_ops);
 
 	wlan_lmac_if_crypto_rx_ops_register(rx_ops);
 	/* wifi_pos rx ops */
