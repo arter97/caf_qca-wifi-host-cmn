@@ -106,16 +106,6 @@ void ucfg_ipa_set_dp_handle(struct wlan_objmgr_psoc *psoc,
 			       void *dp_soc);
 
 /**
- * ucfg_ipa_set_pdev_id() - register pdev id
- * @psoc: psoc handle
- * @pdev_id: data path txrx pdev id
- *
- * Return: None
- */
-void ucfg_ipa_set_pdev_id(struct wlan_objmgr_psoc *psoc,
-			  uint8_t pdev_id);
-
-/**
  * ucfg_ipa_set_perf_level() - Set IPA perf level
  * @pdev: pdev obj
  * @tx_packets: Number of packets transmitted in the last sample period
@@ -292,12 +282,12 @@ QDF_STATUS ucfg_ipa_resume(struct wlan_objmgr_pdev *pdev);
 
 /**
  * ucfg_ipa_uc_ol_init() - Initialize IPA uC offload
- * @pdev: pdev obj
+ * @psoc: psoc obj
  * @osdev: OS dev
  *
  * Return: QDF STATUS
  */
-QDF_STATUS ucfg_ipa_uc_ol_init(struct wlan_objmgr_pdev *pdev,
+QDF_STATUS ucfg_ipa_uc_ol_init(struct wlan_objmgr_psoc *psoc,
 			       qdf_device_t osdev);
 
 /**
@@ -566,13 +556,6 @@ QDF_STATUS ucfg_ipa_set_dp_handle(struct wlan_objmgr_psoc *psoc,
 }
 
 static inline
-QDF_STATUS ucfg_ipa_set_pdev_id(struct wlan_objmgr_psoc *psoc,
-				uint8_t pdev_id)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-static inline
 QDF_STATUS ucfg_ipa_set_perf_level(struct wlan_objmgr_pdev *pdev,
 				   uint64_t tx_packets, uint64_t rx_packets)
 {
@@ -674,7 +657,7 @@ QDF_STATUS ucfg_ipa_resume(struct wlan_objmgr_pdev *pdev)
 }
 
 static inline
-QDF_STATUS ucfg_ipa_uc_ol_init(struct wlan_objmgr_pdev *pdev,
+QDF_STATUS ucfg_ipa_uc_ol_init(struct wlan_objmgr_psoc *psoc,
 			       qdf_device_t osdev)
 {
 	return QDF_STATUS_SUCCESS;

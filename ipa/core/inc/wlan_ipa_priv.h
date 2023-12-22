@@ -232,6 +232,12 @@ struct frag_header {
 	uint32_t reserved2;
 } qdf_packed;
 #else
+/**
+ * struct frag_header - fragment header type registered to IPA hardware
+ * @length:    fragment length
+ * @reserved16: Reserved not used
+ * @reserved2: Reserved not used
+ */
 struct frag_header {
 	uint32_t
 		length:16,
@@ -659,12 +665,11 @@ typedef void (*wlan_ipa_rps_enable)(uint8_t vdev_id, bool enable);
 
 /* IPA private context structure definition */
 struct wlan_ipa_priv {
-	struct wlan_objmgr_pdev *pdev;
+	struct wlan_objmgr_psoc *psoc;
 	struct wlan_ipa_sys_pipe sys_pipe[WLAN_IPA_MAX_SYSBAM_PIPE];
 	struct wlan_ipa_iface_context iface_context[WLAN_IPA_MAX_IFACE];
 	uint8_t num_iface;
 	void *dp_soc;
-	uint8_t dp_pdev_id;
 	struct wlan_ipa_config *config;
 	enum wlan_ipa_rm_state rm_state;
 	/*

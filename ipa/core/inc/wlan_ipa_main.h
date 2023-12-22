@@ -109,23 +109,22 @@ bool ipa_get_pld_enable(void);
 bool ipa_check_hw_present(void);
 
 /**
- * ipa_pdev_get_priv_obj() - private API to get ipa pdev object
- * @pdev: pdev object
+ * ipa_psoc_get_priv_obj() - private API to get ipa psoc object
+ * @psoc: psoc object
  *
  * Return: ipa object
  */
 static inline struct wlan_ipa_priv *
-ipa_pdev_get_priv_obj(struct wlan_objmgr_pdev *pdev)
+ipa_psoc_get_priv_obj(struct wlan_objmgr_psoc *psoc)
 {
-	struct wlan_ipa_priv *pdev_obj;
+	struct wlan_ipa_priv *ipa_obj;
 
-	pdev_obj = (struct wlan_ipa_priv *)
-		wlan_objmgr_pdev_get_comp_private_obj(pdev,
-				WLAN_UMAC_COMP_IPA);
+	ipa_obj = (struct wlan_ipa_priv *)
+		wlan_objmgr_psoc_get_comp_private_obj(psoc,
+						      WLAN_UMAC_COMP_IPA);
 
-	return pdev_obj;
+	return ipa_obj;
 }
-
 /**
  * get_ipa_config() - API to get IPAConfig INI
  * @psoc : psoc handle
@@ -135,15 +134,15 @@ ipa_pdev_get_priv_obj(struct wlan_objmgr_pdev *pdev)
 uint32_t get_ipa_config(struct wlan_objmgr_psoc *psoc);
 
 /**
- * ipa_priv_obj_get_pdev() - API to get pdev from IPA object
+ * ipa_priv_obj_get_psoc() - API to get psoc from IPA object
  * @ipa_obj: IPA object
  *
- * Return: pdev object
+ * Return: psoc object
  */
-static inline struct wlan_objmgr_pdev *
-ipa_priv_obj_get_pdev(struct wlan_ipa_priv *ipa_obj)
+static inline struct wlan_objmgr_psoc *
+ipa_priv_obj_get_psoc(struct wlan_ipa_priv *ipa_obj)
 {
-	return ipa_obj->pdev;
+	return ipa_obj->psoc;
 }
 
 /**
@@ -220,23 +219,23 @@ QDF_STATUS ipa_obj_cleanup(struct wlan_ipa_priv *ipa_ctx);
 
 /**
  * ipa_send_uc_offload_enable_disable() - wdi enable/disable notify to fw
- * @pdev: objmgr pdev object
+ * @psoc: objmgr psoc object
  * @req: ipa offload control request
  *
  * Return: QDF status success or failure
  */
-QDF_STATUS ipa_send_uc_offload_enable_disable(struct wlan_objmgr_pdev *pdev,
-				struct ipa_uc_offload_control_params *req);
+QDF_STATUS ipa_send_uc_offload_enable_disable(struct wlan_objmgr_psoc *psoc,
+					      struct ipa_uc_offload_control_params *req);
 
 /**
  * ipa_send_intrabss_enable_disable() - wdi intrabss enable/disable notify to fw
- * @pdev: objmgr pdev object
+ * @psoc: objmgr psoc object
  * @req: ipa intrabss control request
  *
  * Return: QDF status success or failure
  */
 QDF_STATUS
-ipa_send_intrabss_enable_disable(struct wlan_objmgr_pdev *pdev,
+ipa_send_intrabss_enable_disable(struct wlan_objmgr_psoc *psoc,
 				 struct ipa_intrabss_control_params *req);
 
 /**
@@ -247,15 +246,6 @@ ipa_send_intrabss_enable_disable(struct wlan_objmgr_pdev *pdev,
  * Return: None
  */
 void ipa_set_dp_handle(struct wlan_objmgr_psoc *psoc, void *dp_soc);
-
-/**
- * ipa_set_pdev_id() - set dp pdev id
- * @psoc: psoc handle
- * @pdev_id: dp txrx physical device id
- *
- * Return: None
- */
-void ipa_set_pdev_id(struct wlan_objmgr_psoc *psoc, uint8_t pdev_id);
 
 /**
  * ipa_rm_set_perf_level() - set ipa rm perf level
@@ -426,12 +416,12 @@ QDF_STATUS ipa_resume(struct wlan_objmgr_pdev *pdev);
 
 /**
  * ipa_uc_ol_init() - Initialize IPA uC offload
- * @pdev: pdev obj
+ * @psoc: psoc obj
  * @osdev: OS dev
  *
  * Return: QDF STATUS
  */
-QDF_STATUS ipa_uc_ol_init(struct wlan_objmgr_pdev *pdev,
+QDF_STATUS ipa_uc_ol_init(struct wlan_objmgr_psoc *psoc,
 			  qdf_device_t osdev);
 
 /**

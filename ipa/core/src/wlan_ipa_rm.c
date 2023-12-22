@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -73,10 +73,24 @@ QDF_STATUS wlan_ipa_set_perf_level(struct wlan_ipa_priv *ipa_ctx,
 static inline
 QDF_STATUS wlan_ipa_update_perf_level(struct wlan_ipa_priv *ipa_ctx, int client)
 {
-	struct wlan_objmgr_pdev *pdev = ipa_ctx->pdev;
-	qdf_freq_t low_2g, high_2g;
+	struct wlan_objmgr_psoc *psoc = ipa_ctx->psoc;
+	struct wlan_objmgr_pdev *pdev = NULL;
+	qdf_freq_t low_2g = 0;
+	qdf_freq_t high_2g = 0;
+	qdf_freq_t low_5g = 0, high_5g = 0;
+	uint8_t pdev_id = 0;
 
-	wlan_reg_get_freq_range(pdev, &low_2g, &high_2g, NULL, NULL);
+	for (pdev_id = 0; pdev_id < psoc->soc_objmgr.wlan_pdev_count; ++pdev_id) {
+		pdev = psoc->soc_objmgr.wlan_pdev_list[pdev_id];
+
+		wlan_reg_get_freq_range(pdev, &low_2g, &high_2g,
+					&low_5g, &high_5g);
+		if (low_5g != 0 || high_5g != 0) {
+			low_2g = 0;
+			high_2g = 0;
+			break;
+		}
+	}
 
 	if (low_2g != 0 || high_2g != 0) {
 		return cdp_ipa_set_perf_level(

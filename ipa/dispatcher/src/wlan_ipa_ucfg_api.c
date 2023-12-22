@@ -74,14 +74,6 @@ bool ucfg_ipa_is_vlan_enabled(void)
 
 qdf_export_symbol(ucfg_ipa_is_vlan_enabled);
 
-void ucfg_ipa_set_pdev_id(struct wlan_objmgr_psoc *psoc,
-			  uint8_t pdev_id)
-{
-	return ipa_set_pdev_id(psoc, pdev_id);
-}
-
-qdf_export_symbol(ucfg_ipa_set_pdev_id);
-
 void ucfg_ipa_set_dp_handle(struct wlan_objmgr_psoc *psoc,
 				     void *dp_soc)
 {
@@ -224,10 +216,10 @@ QDF_STATUS ucfg_ipa_resume(struct wlan_objmgr_pdev *pdev)
 
 qdf_export_symbol(ucfg_ipa_resume);
 
-QDF_STATUS ucfg_ipa_uc_ol_init(struct wlan_objmgr_pdev *pdev,
+QDF_STATUS ucfg_ipa_uc_ol_init(struct wlan_objmgr_psoc *psoc,
 			       qdf_device_t osdev)
 {
-	return ipa_uc_ol_init(pdev, osdev);
+	return ipa_uc_ol_init(psoc, osdev);
 }
 
 qdf_export_symbol(ucfg_ipa_uc_ol_init);

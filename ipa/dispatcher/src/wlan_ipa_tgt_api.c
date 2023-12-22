@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018, 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021,2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021,2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -27,16 +27,15 @@
 #include <wlan_objmgr_pdev_obj.h>
 #include <wlan_lmac_if_def.h>
 
-QDF_STATUS tgt_ipa_uc_offload_enable_disable(struct wlan_objmgr_pdev *pdev,
-				struct ipa_uc_offload_control_params *req)
+#ifdef IPA_OFFLOAD
+QDF_STATUS tgt_ipa_uc_offload_enable_disable(struct wlan_objmgr_psoc *psoc,
+					     struct ipa_uc_offload_control_params *req)
 {
-	struct wlan_objmgr_psoc *psoc;
 	struct wlan_lmac_if_tx_ops *tx_ops;
 	QDF_STATUS status = QDF_STATUS_E_FAILURE;
 
 	IPA_ENTER();
 
-	psoc = wlan_pdev_get_psoc(pdev);
 	if (!psoc) {
 		ipa_err("NULL psoc");
 		return QDF_STATUS_E_NULL_VALUE;
@@ -54,16 +53,14 @@ QDF_STATUS tgt_ipa_uc_offload_enable_disable(struct wlan_objmgr_pdev *pdev,
 }
 
 QDF_STATUS
-tgt_ipa_intrabss_enable_disable(struct wlan_objmgr_pdev *pdev,
+tgt_ipa_intrabss_enable_disable(struct wlan_objmgr_psoc *psoc,
 				struct ipa_intrabss_control_params *req)
 {
-	struct wlan_objmgr_psoc *psoc;
 	struct wlan_lmac_if_tx_ops *tx_ops;
 	QDF_STATUS status = QDF_STATUS_E_FAILURE;
 
 	IPA_ENTER();
 
-	psoc = wlan_pdev_get_psoc(pdev);
 	if (!psoc) {
 		ipa_err("NULL psoc");
 		return QDF_STATUS_E_NULL_VALUE;
@@ -79,4 +76,4 @@ tgt_ipa_intrabss_enable_disable(struct wlan_objmgr_pdev *pdev,
 	IPA_EXIT();
 	return status;
 }
-
+#endif
