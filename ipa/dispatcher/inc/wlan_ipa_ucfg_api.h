@@ -509,6 +509,21 @@ void ucfg_ipa_set_perf_level_bw(struct wlan_objmgr_pdev *pdev,
  */
 bool ucfg_ipa_is_two_tx_pipes_enabled(void);
 
+#if defined(IPA_OFFLOAD) && defined(QCA_IPA_LL_TX_FLOW_CONTROL)
+/**
+ * ucfg_ipa_event_wq() - Queue WLAN IPA event for later processing
+ * @psoc: psoc handle
+ * @peer_mac_addr: peer mac address
+ * @vdev: vdev object
+ * @wlan_event: wlan event
+ *
+ * Return: None
+ */
+void ucfg_ipa_event_wq(struct wlan_objmgr_psoc *psoc,
+		       uint8_t *peer_mac_addr,
+		       struct wlan_objmgr_vdev *vdev,
+		       enum wlan_ipa_wlan_event wlan_event);
+#endif
 #else
 static inline void ucfg_ipa_set_pld_enable(bool flag)
 {

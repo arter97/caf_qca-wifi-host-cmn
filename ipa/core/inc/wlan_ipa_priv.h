@@ -663,6 +663,51 @@ typedef bool (*wlan_ipa_driver_unloading)(void);
  */
 typedef void (*wlan_ipa_rps_enable)(uint8_t vdev_id, bool enable);
 
+#if defined(IPA_OFFLOAD) && defined(QCA_IPA_LL_TX_FLOW_CONTROL)
+/**
+ * struct wlan_ipa_evt_wq_args - IPA Workqueue arguments
+ * @pdev_obj:           Pdev object
+ * @net_dev:            Network Device
+ * @vdev:               Vdev object
+ * @device_mode:        Device mode type
+ * @ch_freq:            Channel frequency
+ * @vdev_id:            Vdev Id
+ * @mac_addr:           Peer Mac Address
+ * @event:              IPA wlan event
+ * @list_elem:          WQ list elem
+ */
+struct wlan_ipa_evt_wq_args {
+	struct wlan_objmgr_pdev *pdev_obj;
+	struct net_device *net_dev;
+	struct wlan_objmgr_vdev *vdev;
+	enum QDF_OPMODE device_mode;
+	uint16_t ch_freq;
+	uint8_t vdev_id;
+	u_int8_t mac_addr[QDF_MAC_ADDR_SIZE]; /* MAC address */
+	enum wlan_ipa_wlan_event event;
+
+	TAILQ_ENTRY(wlan_ipa_evt_wq_args) list_elem;
+};
+
+/*
+ * NB: not using kernel-doc format since the kernel-doc script doesn't
+ *     handle the TAILQ_HEAD() macro
+ *
+ * struct wlan_ipa_evt_wq - IPA Workqueue structure
+ * @work:               Instance of work
+ * @work_queue:         Wrapper around the real task func
+ * @list_lock:          Lock on WQ
+ * @list:               Queue of IPA event
+ */
+struct wlan_ipa_evt_wq {
+	qdf_work_t work;
+	qdf_workqueue_t *work_queue;
+	qdf_spinlock_t list_lock;
+
+	TAILQ_HEAD(, wlan_ipa_evt_wq_args) list;
+};
+#endif
+
 /* IPA private context structure definition */
 struct wlan_ipa_priv {
 	struct wlan_objmgr_psoc *psoc;
@@ -793,6 +838,9 @@ struct wlan_ipa_priv {
 	qdf_event_t ipa_flt_evnt;
 	qdf_event_t ipa_opt_dp_ctrl_clk_evt;
 	qdf_wake_lock_t opt_dp_wake_lock;
+#endif
+#if defined(QCA_IPA_LL_TX_FLOW_CONTROL)
+	struct wlan_ipa_evt_wq *ipa_evt_wq;
 #endif
 };
 

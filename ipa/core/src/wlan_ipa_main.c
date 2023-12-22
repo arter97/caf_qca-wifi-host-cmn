@@ -1012,3 +1012,170 @@ void ipa_set_perf_level_bw(struct wlan_objmgr_pdev *pdev,
 	wlan_ipa_set_perf_level_bw(ipa_obj, lvl);
 }
 
+#if defined(IPA_OFFLOAD) && defined(QCA_IPA_LL_TX_FLOW_CONTROL)
+/**
+ * ipa_event_wq() - Queue WLAN IPA event for later processing
+ * @psoc: psoc handle
+ * @peer_mac_addr: peer mac address
+ * @vdev: vdev object
+ * @wlan_event: wlan event
+ *
+ * Return: None
+ */
+void ipa_event_wq(struct wlan_objmgr_psoc *psoc, uint8_t *peer_mac_addr,
+		  struct wlan_objmgr_vdev *vdev,
+		  enum wlan_ipa_wlan_event wlan_event)
+{
+	struct wlan_ipa_priv *ipa_obj =
+		wlan_objmgr_psoc_get_comp_private_obj(psoc, WLAN_UMAC_COMP_IPA);
+	struct wlan_ipa_evt_wq_args *ipa_ctx = NULL;
+	struct wlan_objmgr_pdev *pdev = psoc->soc_objmgr.wlan_pdev_list[0];
+	QDF_STATUS ret;
+
+	ipa_ctx = qdf_mem_malloc(sizeof(struct wlan_ipa_evt_wq_args));
+	if (!ipa_ctx) {
+		qdf_err("Memory alloc failed for IPA_CTX !!");
+		return;
+	}
+
+	qdf_spin_lock_bh(&ipa_obj->ipa_evt_wq->list_lock);
+	qdf_mem_copy(ipa_ctx->mac_addr, peer_mac_addr, QDF_MAC_ADDR_SIZE);
+	ipa_ctx->vdev = vdev;
+	ret = wlan_objmgr_vdev_try_get_ref(ipa_ctx->vdev, WLAN_IPA_ID);
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		qdf_mem_free(ipa_ctx);
+		return;
+	}
+
+	ipa_ctx->pdev_obj = pdev;
+	ipa_ctx->net_dev = vdev->vdev_nif.osdev->wdev->netdev;
+	ipa_ctx->ch_freq = vdev->vdev_mlme.bss_chan->ch_freq;
+	ipa_ctx->device_mode = wlan_vdev_mlme_get_opmode(vdev);
+	ipa_ctx->vdev_id = wlan_vdev_get_id(vdev);
+	ipa_ctx->event = wlan_event;
+
+	TAILQ_INSERT_TAIL(&ipa_obj->ipa_evt_wq->list, ipa_ctx, list_elem);
+
+	qdf_spin_unlock_bh(&ipa_obj->ipa_evt_wq->list_lock);
+
+	qdf_queue_work(0, ipa_obj->ipa_evt_wq->work_queue, &ipa_obj->ipa_evt_wq->work);
+}
+
+static
+void wlan_ipa_obj_ipa_evt_wq_handler(void *ctx)
+{
+	struct wlan_ipa_evt_wq_args *ipa_ctx, *ipa_ctx_next;
+	struct wlan_ipa_priv *ipa_obj = (struct wlan_ipa_priv *)ctx;
+
+	TAILQ_HEAD(, wlan_ipa_evt_wq_args) ipa_ctx_list;
+
+	TAILQ_INIT(&ipa_ctx_list);
+
+	qdf_spin_lock_bh(&ipa_obj->ipa_evt_wq->list_lock);
+
+	TAILQ_CONCAT(&ipa_ctx_list, &ipa_obj->ipa_evt_wq->list, list_elem);
+	qdf_spin_unlock_bh(&ipa_obj->ipa_evt_wq->list_lock);
+
+	TAILQ_FOREACH_SAFE(ipa_ctx, &ipa_ctx_list, list_elem, ipa_ctx_next) {
+		TAILQ_REMOVE(&ipa_ctx_list, ipa_ctx, list_elem);
+		if (!ipa_ctx->pdev_obj) {
+			wlan_objmgr_vdev_release_ref(ipa_ctx->vdev, WLAN_IPA_ID);
+			qdf_mem_free(ipa_ctx);
+			continue;
+		}
+		ipa_wlan_evt(ipa_ctx->pdev_obj, ipa_ctx->net_dev,
+			     ipa_ctx->device_mode, ipa_ctx->vdev_id,
+			     ipa_ctx->event, ipa_ctx->mac_addr,
+			     ipa_ctx->ch_freq);
+
+		/* Clean Interface for STA/AP disconnect event */
+		if ((ipa_ctx->event == WLAN_IPA_AP_DISCONNECT) ||
+		    (ipa_ctx->event == WLAN_IPA_STA_DISCONNECT))
+			ipa_flush_pending_vdev_events(ipa_ctx->pdev_obj,
+						      ipa_ctx->vdev_id);
+
+		if (ipa_ctx->event == WLAN_IPA_AP_DISCONNECT)
+			ipa_cleanup_dev_iface(ipa_ctx->pdev_obj,
+					      ipa_ctx->net_dev);
+
+		wlan_objmgr_vdev_release_ref(ipa_ctx->vdev, WLAN_IPA_ID);
+		qdf_mem_free(ipa_ctx);
+	}
+}
+
+/**
+ * wlan_psoc_ipa_evt_wq_attach() - Create WQ to handle IPA event
+ * @psoc: psoc handle
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_psoc_ipa_evt_wq_attach(struct wlan_objmgr_psoc *psoc)
+{
+	struct wlan_ipa_priv *ipa_obj =
+		wlan_objmgr_psoc_get_comp_private_obj(psoc, WLAN_UMAC_COMP_IPA);
+
+	ipa_obj->ipa_evt_wq = qdf_mem_malloc(sizeof(struct wlan_ipa_evt_wq));
+
+	if (!ipa_obj->ipa_evt_wq)
+		return QDF_STATUS_E_FAILURE;
+
+	TAILQ_INIT(&ipa_obj->ipa_evt_wq->list);
+
+	qdf_create_work(0, &ipa_obj->ipa_evt_wq->work,
+			wlan_ipa_obj_ipa_evt_wq_handler, ipa_obj);
+
+	ipa_obj->ipa_evt_wq->work_queue =
+		qdf_alloc_unbound_workqueue("wlan_ipa_evt_work_queue");
+
+	if (!ipa_obj->ipa_evt_wq->work_queue)
+		goto fail;
+
+	qdf_spinlock_create(&ipa_obj->ipa_evt_wq->list_lock);
+	return QDF_STATUS_SUCCESS;
+
+fail:
+	qdf_flush_work(&ipa_obj->ipa_evt_wq->work);
+	qdf_disable_work(&ipa_obj->ipa_evt_wq->work);
+	qdf_mem_free(ipa_obj->ipa_evt_wq);
+	ipa_obj->ipa_evt_wq = NULL;
+	return QDF_STATUS_E_FAILURE;
+}
+
+qdf_export_symbol(wlan_psoc_ipa_evt_wq_attach);
+
+/**
+ * wlan_psoc_ipa_evt_wq_detach() - Detach WQ which handle IPA event
+ * @psoc: psoc handle
+ *
+ * Return: None
+ */
+void wlan_psoc_ipa_evt_wq_detach(struct wlan_objmgr_psoc *psoc)
+{
+	struct wlan_ipa_evt_wq_args *ctx, *ctx_next;
+	struct wlan_ipa_priv *ipa_obj =
+		wlan_objmgr_psoc_get_comp_private_obj(psoc, WLAN_UMAC_COMP_IPA);
+
+	if (!(ipa_obj->ipa_evt_wq && ipa_obj->ipa_evt_wq->work_queue))
+		return;
+
+	qdf_flush_workqueue(0, ipa_obj->ipa_evt_wq->work_queue);
+	qdf_destroy_workqueue(0, ipa_obj->ipa_evt_wq->work_queue);
+	qdf_flush_work(&ipa_obj->ipa_evt_wq->work);
+	qdf_disable_work(&ipa_obj->ipa_evt_wq->work);
+	qdf_spin_lock_bh(&ipa_obj->ipa_evt_wq->list_lock);
+
+	TAILQ_FOREACH_SAFE(ctx, &ipa_obj->ipa_evt_wq->list, list_elem,
+			   ctx_next) {
+		TAILQ_REMOVE(&ipa_obj->ipa_evt_wq->list, ctx, list_elem);
+		wlan_objmgr_vdev_release_ref(ctx->vdev, WLAN_IPA_ID);
+		qdf_mem_free(ctx);
+	}
+
+	qdf_spin_unlock_bh(&ipa_obj->ipa_evt_wq->list_lock);
+	qdf_spinlock_destroy(&ipa_obj->ipa_evt_wq->list_lock);
+	qdf_mem_free(ipa_obj->ipa_evt_wq);
+	ipa_obj->ipa_evt_wq = NULL;
+}
+
+qdf_export_symbol(wlan_psoc_ipa_evt_wq_detach);
+#endif

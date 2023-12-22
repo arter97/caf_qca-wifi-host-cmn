@@ -647,6 +647,38 @@ bool ipa_set_perf_level_bw_enabled(struct wlan_objmgr_pdev *pdev);
 void ipa_set_perf_level_bw(struct wlan_objmgr_pdev *pdev,
 			   enum wlan_ipa_bw_level lvl);
 
+#if defined(QCA_IPA_LL_TX_FLOW_CONTROL)
+/**
+ * ipa_event_wq() - Queue WLAN IPA event for later processing
+ * @psoc: psoc handle
+ * @peer_mac_addr: peer mac address
+ * @vdev: vdev object
+ * @wlan_event: wlan event
+ *
+ * Return: None
+ */
+void ipa_event_wq(struct wlan_objmgr_psoc *psoc, uint8_t *peer_mac_addr,
+		  struct wlan_objmgr_vdev *vdev,
+		  enum wlan_ipa_wlan_event wlan_event);
+
+/**
+ * wlan_psoc_ipa_evt_wq_attach() - Create WQ to handle IPA event
+ * @psoc: psoc handle
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wlan_psoc_ipa_evt_wq_attach(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * wlan_psoc_ipa_evt_wq_detach() - Detach WQ which handle IPA event
+ * @psoc: psoc handle
+ *
+ * Return: None
+ */
+void wlan_psoc_ipa_evt_wq_detach(struct wlan_objmgr_psoc *psoc);
+#endif
+
 #else /* Not IPA_OFFLOAD */
 typedef QDF_STATUS (*wlan_ipa_softap_xmit)(qdf_nbuf_t nbuf, qdf_netdev_t dev);
 typedef void (*wlan_ipa_send_to_nw)(qdf_nbuf_t nbuf, qdf_netdev_t dev);

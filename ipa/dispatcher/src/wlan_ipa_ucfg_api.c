@@ -384,3 +384,15 @@ bool ucfg_ipa_is_two_tx_pipes_enabled(void)
 }
 
 qdf_export_symbol(ucfg_ipa_is_two_tx_pipes_enabled);
+
+#if defined(QCA_IPA_LL_TX_FLOW_CONTROL)
+void ucfg_ipa_event_wq(struct wlan_objmgr_psoc *psoc,
+		       uint8_t *peer_mac_addr,
+		       struct wlan_objmgr_vdev *vdev,
+		       enum wlan_ipa_wlan_event wlan_event)
+{
+	ipa_event_wq(psoc, peer_mac_addr, vdev, wlan_event);
+}
+
+qdf_export_symbol(ucfg_ipa_event_wq);
+#endif
