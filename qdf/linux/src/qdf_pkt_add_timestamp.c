@@ -144,8 +144,7 @@ void qdf_add_ts(qdf_nbuf_t nbuf, uint32_t offset,
 	ts_ptr = (struct ts *)(qdf_nbuf_data(nbuf) + total_offset);
 	ts_info = &ts_ptr->ts_info[index];
 
-	ts_info->sec = time / 1000000;
-	ts_info->usec = time % 1000000;
+	ts_info->sec = div_u64_rem(time, 1000000, (u32 *)&(ts_info->usec));
 }
 
 void qdf_add_dp_pkt_timestamp(qdf_nbuf_t nbuf,

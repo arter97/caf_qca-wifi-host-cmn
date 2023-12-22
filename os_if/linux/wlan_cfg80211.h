@@ -478,15 +478,18 @@ wlan_cfg80211_nla_strscpy(char *dst, const struct nlattr *nla, size_t dstsize)
 static inline
 void wlan_cfg80211_ch_switch_notify(struct net_device *dev,
 				    struct cfg80211_chan_def *chandef,
-				    unsigned int link_id)
+				    unsigned int link_id,
+				    uint16_t puncture_bitmap)
 {
-	cfg80211_ch_switch_notify(dev, chandef, link_id);
+	cfg80211_ch_switch_notify(dev, chandef, link_id,
+					  puncture_bitmap);
 }
 #else
 static inline
 void wlan_cfg80211_ch_switch_notify(struct net_device *dev,
 				    struct cfg80211_chan_def *chandef,
-				    unsigned int link_id)
+				    unsigned int link_id,
+				    uint16_t puncture_bitmap)
 {
 	cfg80211_ch_switch_notify(dev, chandef);
 }
