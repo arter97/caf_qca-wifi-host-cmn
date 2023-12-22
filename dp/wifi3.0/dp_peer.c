@@ -5738,7 +5738,7 @@ uint8_t *dp_peer_get_peer_mac_addr(void *peer_handle)
 }
 
 int dp_get_peer_state(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
-		      uint8_t *peer_mac)
+		      uint8_t *peer_mac, bool slowpath)
 {
 	enum ol_txrx_peer_state peer_state;
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
@@ -5757,12 +5757,13 @@ int dp_get_peer_state(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	tgt_peer = dp_get_tgt_peer_from_peer(peer);
 	peer_state = tgt_peer->state;
 
-	dp_peer_debug("peer %pK tgt_peer: %pK peer MAC "
-		     QDF_MAC_ADDR_FMT " tgt peer MAC "
-		     QDF_MAC_ADDR_FMT " tgt peer state %d",
-		     peer, tgt_peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw),
-		     QDF_MAC_ADDR_REF(tgt_peer->mac_addr.raw),
-		     tgt_peer->state);
+	if (slowpath)
+		dp_peer_info("peer %pK tgt_peer: %pK peer MAC "
+			    QDF_MAC_ADDR_FMT " tgt peer MAC "
+			    QDF_MAC_ADDR_FMT " tgt peer state %d",
+			    peer, tgt_peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw),
+			    QDF_MAC_ADDR_REF(tgt_peer->mac_addr.raw),
+			    tgt_peer->state);
 
 	dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
 
