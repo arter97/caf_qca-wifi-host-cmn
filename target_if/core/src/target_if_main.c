@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -115,6 +115,10 @@
 
 #ifdef WLAN_FEATURE_COAP
 #include <target_if_coap.h>
+#endif
+
+#ifdef WLAN_WIFI_RADAR_ENABLE
+#include <target_if_wifi_radar.h>
 #endif
 
 static struct target_if_ctx *g_target_if_ctx;
@@ -257,6 +261,13 @@ static void target_if_sa_api_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
 
 #ifndef WLAN_CFR_ENABLE
 static void target_if_cfr_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
+{
+}
+#endif
+
+#ifndef WLAN_WIFI_RADAR_ENABLE
+static void
+target_if_wifi_radar_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
 {
 }
 #endif
@@ -616,6 +627,8 @@ QDF_STATUS target_if_register_umac_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 	target_if_cfr_tx_ops_register(tx_ops);
 
 	target_if_wifi_pos_tx_ops_register(tx_ops);
+
+	target_if_wifi_radar_tx_ops_register(tx_ops);
 
 	target_if_dfs_tx_ops_register(tx_ops);
 

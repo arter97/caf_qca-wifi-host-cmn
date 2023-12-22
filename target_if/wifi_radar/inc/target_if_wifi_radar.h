@@ -19,6 +19,43 @@
 
 #include <wlan_objmgr_cmn.h>
 #include <wlan_objmgr_psoc_obj.h>
+#include <wlan_objmgr_pdev_obj.h>
+#include <wlan_objmgr_vdev_obj.h>
+#include <wlan_objmgr_peer_obj.h>
+
+/* currently used dma buf size here. increase it as we add host meta data */
+#define STREAMFS_WIFI_RADAR_MAX_SUBBUF 61464
+#define STREAMFS_WIFI_RADAR_NUM_SUBBUF 127
+
+/**
+ * target_if_wifi_radar_tx_ops_register() - register tx ops
+ * @tx_ops: lmac tx ops to which wifi_radar tx ops to be registered
+ *
+ * Return: none
+ */
+void target_if_wifi_radar_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops);
+
+/**
+ * wifi_radar_init_pdev() - Inits wifi radar pdev and registers necessary
+ *	handlers.
+ * @psoc: pointer to psoc object
+ * @pdev: pointer to pdev object
+ *
+ * Return: Registration status for necessary handlers
+ */
+QDF_STATUS wifi_radar_init_pdev(struct wlan_objmgr_psoc *psoc,
+				struct wlan_objmgr_pdev *pdev);
+
+/**
+ * wifi_radar_deinit_pdev() - De-inits corresponding pdev and handlers.
+ * @psoc: pointer to psoc object
+ * @pdev: pointer to pdev object
+ *
+ * Return: De-registration status for necessary handlers
+ */
+QDF_STATUS wifi_radar_deinit_pdev(struct wlan_objmgr_psoc *psoc,
+				  struct wlan_objmgr_pdev *pdev);
+
 
 /**
  * target_if_wifi_radar_set_support() - Function to set cfr support
