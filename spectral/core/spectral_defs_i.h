@@ -77,6 +77,27 @@
 #define spectral_debug_rl_nofl(format, args...) \
 	QDF_TRACE_DEBUG_RL_NO_FL(QDF_MODULE_ID_SPECTRAL, format, ## args)
 
+#ifdef WLAN_SPECTRAL_STREAMFS
+/** pdev_spectral_streamfs - Radio specific spectral streamfs object
+ * @dir_ptr:              Directory pointer for streamfs channel
+ * @chan_ptr:             Pointer to streamfs channel
+ * @n_subbuf_ptr:         Pointer to debugfs file for num sub-buffers
+ * @subbuf_size_ptr:      Pointer to debugfs file for sub-buffer size
+ * @n_subbuf:             Num of sub-buffers present inside the channel
+ * @subbuf_size:          Size of each sub-buffer in bytes
+ * @streamfs_buf:         Pointer within the sub-buffer in a streamfs channel
+ */
+struct pdev_spectral_streamfs {
+	qdf_dentry_t dir_ptr;
+	qdf_streamfs_chan_t chan_ptr;
+	qdf_dentry_t n_subbuf_ptr;
+	qdf_dentry_t subbuf_size_ptr;
+	uint32_t n_subbuf;
+	uint32_t subbuf_size;
+	void *streamfs_buf[SPECTRAL_MSG_TYPE_MAX];
+};
+#endif
+
 /**
  * struct pdev_spectral - Radio specific spectral object
  * @psptrl_pdev:          Back-pointer to struct wlan_objmgr_pdev
@@ -85,6 +106,7 @@
  * @psptrl_target_handle: reference to spectral lmac object
  * @skb:                  Socket buffer for sending samples to applications
  * @spectral_pid :        Spectral port ID
+ * @streamfs_obj :        Spectral streamfs channel information structure
  */
 struct pdev_spectral {
 	struct wlan_objmgr_pdev *psptrl_pdev;
@@ -92,6 +114,9 @@ struct pdev_spectral {
 	void *psptrl_target_handle;
 	struct sk_buff *skb[SPECTRAL_MSG_TYPE_MAX];
 	uint32_t spectral_pid;
+#ifdef WLAN_SPECTRAL_STREAMFS
+	struct pdev_spectral_streamfs streamfs_obj;
+#endif
 };
 
 struct spectral_wmi_ops;
