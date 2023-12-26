@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -925,18 +925,20 @@ cdp_soc_is_swlm_enabled(ol_txrx_soc_handle soc)
  * cdp_display_txrx_hw_info() - Dump the DP rings info
  * @soc: soc handle
  *
- * Return: none
+ * Return: rings are empty
  */
-static inline void
+static inline bool
 cdp_display_txrx_hw_info(ol_txrx_soc_handle soc)
 {
 	if (!soc || !soc->ops || !soc->ops->misc_ops) {
 		dp_cdp_debug("Invalid Instance:");
-		return;
+		return true;
 	}
 
 	if (soc->ops->misc_ops->display_txrx_hw_info)
 		return soc->ops->misc_ops->display_txrx_hw_info(soc);
+
+	return true;
 }
 
 /**

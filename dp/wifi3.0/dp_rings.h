@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -565,9 +565,9 @@ dp_dump_wbm_idle_hptp(struct dp_soc *soc, struct dp_pdev *pdev);
  * READ NOC error when UMAC is in low power state. MCC does not have
  * device force wake working yet.
  *
- * Return: none
+ * Return: rings are empty
  */
-void dp_display_srng_info(struct cdp_soc_t *soc_hdl);
+bool dp_display_srng_info(struct cdp_soc_t *soc_hdl);
 
 #if defined(DP_POWER_SAVE) || defined(FEATURE_RUNTIME_PM)
 void dp_drain_txrx(struct cdp_soc_t *soc_handle, uint8_t rx_only);
@@ -809,11 +809,12 @@ static inline QDF_STATUS dp_soc_srng_alloc(struct dp_soc *soc)
  *
  * This function dumps the SW Read/Write idx for the important rings.
  *
- * Return: none
+ * Return:  rings are empty
  */
-static inline void dp_display_srng_info(struct cdp_soc_t *soc_hdl)
+static inline bool dp_display_srng_info(struct cdp_soc_t *soc_hdl)
 {
 /*TODO add support display SOFTUMAC data rings info*/
+	return true;
 }
 
 #if defined(DP_POWER_SAVE) || defined(FEATURE_RUNTIME_PM)
