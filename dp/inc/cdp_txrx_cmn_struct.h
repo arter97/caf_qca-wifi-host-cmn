@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1207,6 +1207,7 @@ typedef QDF_STATUS(*ol_txrx_get_tsf_time)(void *osif_dev, uint64_t input_time,
  * @get_key: function pointer to get key of the peer with
  * specific key index
  * @get_tsf_time: function pointer to get TSF
+ * @vdev_del_notify: vdev delete notifier
  */
 struct ol_txrx_ops {
 	struct {
@@ -1239,6 +1240,7 @@ struct ol_txrx_ops {
 
 	ol_txrx_get_key_fp  get_key;
 	ol_txrx_get_tsf_time get_tsf_time;
+	ol_txrx_vdev_delete_cb vdev_del_notify;
 };
 
 /**

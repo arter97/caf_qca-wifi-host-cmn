@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -4161,6 +4161,9 @@ struct dp_vdev {
 
 	/* callback to classify critical packets */
 	ol_txrx_classify_critical_pkt_fp tx_classify_critical_pkt_cb;
+
+	/* delete notifier to DP component */
+	ol_txrx_vdev_delete_cb vdev_del_notify;
 
 	/* deferred vdev deletion state */
 	struct {
