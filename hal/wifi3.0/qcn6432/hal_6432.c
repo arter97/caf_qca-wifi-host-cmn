@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -1149,6 +1149,19 @@ hal_rx_flow_setup_fse_6432(uint8_t *rx_fst, uint32_t table_offset,
 	return fse;
 }
 
+/**
+ * hal_rx_peer_meta_data_get_6432() - get peer meta data from rx_pkt_tlvs
+ * @buf: start of rx_tlv_hdr
+ *
+ * Return: peer meta data
+ */
+static inline uint32_t hal_rx_peer_meta_data_get_6432(uint8_t *buf)
+{
+	struct rx_pkt_tlvs *rx_pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+
+	return HAL_RX_TLV_MSDU_PEER_META_DATA_GET(rx_pkt_tlvs);
+}
+
 #ifdef CONFIG_WORD_BASED_TLV
 /**
  * hal_rx_priv_info_set_in_tlv_6432() - Save the private info to
@@ -1639,7 +1652,7 @@ static void hal_hw_txrx_ops_attach_qcn6432(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_mpdu_start_sw_peer_id_get =
 		hal_rx_mpdu_start_sw_peer_id_get_be;
 	hal_soc->ops->hal_rx_tlv_peer_meta_data_get =
-		hal_rx_msdu_peer_meta_data_get_be;
+		hal_rx_peer_meta_data_get_6432;
 #ifndef CONFIG_WORD_BASED_TLV
 	hal_soc->ops->hal_rx_mpdu_get_addr4 = hal_rx_mpdu_get_addr4_be;
 	hal_soc->ops->hal_rx_mpdu_info_ampdu_flag_get =

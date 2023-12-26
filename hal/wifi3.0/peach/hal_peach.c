@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -470,6 +470,19 @@ static void hal_rx_dump_msdu_end_tlv_peach(void *msduend,
 			msdu_end->rx_bitmap_not_updated,
 			msdu_end->reserved_31b,
 			msdu_end->msdu_done);
+}
+
+/**
+ * hal_rx_peer_meta_data_get_peach() - get peer meta data from rx_pkt_tlvs
+ * @buf: start of rx_tlv_hdr
+ *
+ * Return: peer meta data
+ */
+static inline uint32_t hal_rx_peer_meta_data_get_peach(uint8_t *buf)
+{
+	struct rx_pkt_tlvs *rx_pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+
+	return HAL_RX_TLV_PEER_META_DATA_GET(rx_pkt_tlvs);
 }
 
 #ifdef CONFIG_WORD_BASED_TLV
@@ -1936,7 +1949,7 @@ static void hal_hw_txrx_ops_attach_peach(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_mpdu_start_sw_peer_id_get =
 		hal_rx_mpdu_start_sw_peer_id_get_be;
 	hal_soc->ops->hal_rx_tlv_peer_meta_data_get =
-		hal_rx_mpdu_peer_meta_data_get_be;
+		hal_rx_peer_meta_data_get_peach;
 	hal_soc->ops->hal_rx_mpdu_get_to_ds = hal_rx_mpdu_get_to_ds_be;
 	hal_soc->ops->hal_rx_mpdu_get_fr_ds = hal_rx_mpdu_get_fr_ds_be;
 	hal_soc->ops->hal_rx_get_mpdu_frame_control_valid =

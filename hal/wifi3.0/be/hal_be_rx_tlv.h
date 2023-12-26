@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -635,10 +635,8 @@ struct rx_pkt_tlvs {
 #define HAL_RX_TLV_L3_TYPE_GET(_rx_pkt_tlv)	\
 	HAL_RX_MSDU_END(_rx_pkt_tlv).l3_type
 
-#ifdef RX_MSDU_END_PEER_META_DATA_OFFSET
 #define HAL_RX_TLV_MSDU_PEER_META_DATA_GET(_rx_pkt_tlv)	\
 	HAL_RX_MSDU_END(_rx_pkt_tlv).peer_meta_data
-#endif
 
 #define HAL_RX_TLV_PEER_META_DATA_GET(_rx_pkt_tlv)	\
 	HAL_RX_MPDU_START(_rx_pkt_tlv).peer_meta_data
@@ -856,19 +854,6 @@ static inline bool hal_rx_msdu_cce_match_get_be(uint8_t *buf)
 
 	return HAL_RX_TLV_CCE_MATCH_GET(rx_pkt_tlvs);
 }
-
-#ifdef RX_MSDU_END_PEER_META_DATA_OFFSET
-/*
- * Get peer_meta_data from RX_MSDU_END
- */
-
-static inline uint32_t hal_rx_msdu_peer_meta_data_get_be(uint8_t *buf)
-{
-	struct rx_pkt_tlvs *rx_pkt_tlvs = (struct rx_pkt_tlvs *)buf;
-
-	return HAL_RX_TLV_MSDU_PEER_META_DATA_GET(rx_pkt_tlvs);
-}
-#endif
 
 /**
  * hal_rx_mpdu_get_addr1_be() - API to check get address1 of the mpdu
@@ -1096,32 +1081,6 @@ hal_rx_get_ppdu_id_be(uint8_t *buf)
 	struct rx_pkt_tlvs *rx_pkt_tlvs = (struct rx_pkt_tlvs *)buf;
 
 	return HAL_RX_GET_PPDU_ID(rx_pkt_tlvs);
-}
-
-/**
- * hal_rx_mpdu_peer_meta_data_set_be() - set peer meta data in RX mpdu start tlv
- * @buf: rx_tlv_hdr of the received packet
- * @peer_mdata: peer meta data to be set.
- *
- * Return: void
- */
-static inline void
-hal_rx_mpdu_peer_meta_data_set_be(uint8_t *buf, uint32_t peer_mdata)
-{
-	struct rx_pkt_tlvs *rx_pkt_tlvs = (struct rx_pkt_tlvs *)buf;
-
-	HAL_RX_TLV_PEER_META_DATA_GET(rx_pkt_tlvs) = peer_mdata;
-}
-
-/*
- * Get peer_meta_data from RX_MPDU_INFO within RX_MPDU_START
- */
-
-static inline uint32_t hal_rx_mpdu_peer_meta_data_get_be(uint8_t *buf)
-{
-	struct rx_pkt_tlvs *rx_pkt_tlvs = (struct rx_pkt_tlvs *)buf;
-
-	return HAL_RX_TLV_PEER_META_DATA_GET(rx_pkt_tlvs);
 }
 
 static inline uint8_t hal_rx_get_filter_category_be(uint8_t *buf)

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -833,6 +833,19 @@ void hal_register_rx_pkt_hdr_tlv_api_kiwi(struct hal_soc *hal_soc)
 				hal_rx_pkt_tlv_offset_get_generic;
 }
 #endif
+
+/**
+ * hal_rx_peer_meta_data_get_kiwi() - get peer meta data from rx_pkt_tlvs
+ * @buf: start of rx_tlv_hdr
+ *
+ * Return: peer meta data
+ */
+static inline uint32_t hal_rx_peer_meta_data_get_kiwi(uint8_t *buf)
+{
+	struct rx_pkt_tlvs *rx_pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+
+	return HAL_RX_TLV_PEER_META_DATA_GET(rx_pkt_tlvs);
+}
 
 /**
  * hal_rx_dump_mpdu_start_tlv_kiwi(): dump RX mpdu_start TLV in structured
@@ -2247,7 +2260,7 @@ static void hal_hw_txrx_ops_attach_kiwi(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_mpdu_start_sw_peer_id_get =
 		hal_rx_mpdu_start_sw_peer_id_get_be;
 	hal_soc->ops->hal_rx_tlv_peer_meta_data_get =
-		hal_rx_mpdu_peer_meta_data_get_be;
+		hal_rx_peer_meta_data_get_kiwi;
 	hal_soc->ops->hal_rx_mpdu_get_to_ds = hal_rx_mpdu_get_to_ds_be;
 	hal_soc->ops->hal_rx_mpdu_get_fr_ds = hal_rx_mpdu_get_fr_ds_be;
 	hal_soc->ops->hal_rx_get_mpdu_frame_control_valid =
