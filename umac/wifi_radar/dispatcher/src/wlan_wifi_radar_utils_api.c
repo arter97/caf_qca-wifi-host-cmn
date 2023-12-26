@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -94,6 +94,13 @@ QDF_STATUS wlan_wifi_radar_pdev_open(struct wlan_objmgr_pdev *pdev)
 		return QDF_STATUS_COMP_DISABLED;
 	}
 
+	status = tgt_wifi_radar_init_pdev(pdev);
+	if (status != QDF_STATUS_SUCCESS) {
+		wifi_radar_err("tgt_wifi_radar_init_pdev failed with %d\n",
+			       status);
+		return QDF_STATUS_SUCCESS;
+	}
+
 	/* RealyFS init */
 	status = wifi_radar_streamfs_init(pdev);
 	if (status != QDF_STATUS_SUCCESS) {
@@ -129,6 +136,10 @@ QDF_STATUS wifi_radar_initialize_pdev(struct wlan_objmgr_pdev *pdev)
 		return QDF_STATUS_COMP_DISABLED;
 	}
 
+	status = tgt_wifi_radar_init_pdev(pdev);
+	if (QDF_IS_STATUS_ERROR(status))
+		wifi_radar_err("wifi radar init pdev status = %d\n", status);
+
 	return status;
 }
 
@@ -142,6 +153,10 @@ QDF_STATUS wifi_radar_deinitialize_pdev(struct wlan_objmgr_pdev *pdev)
 		wifi_radar_err("WiFi Radar is disabled");
 		return QDF_STATUS_COMP_DISABLED;
 	}
+
+	status = tgt_wifi_radar_deinit_pdev(pdev);
+	if (QDF_IS_STATUS_ERROR(status))
+		wifi_radar_err("wifi radar deinit pdev status = %d\n", status);
 
 	return status;
 }
@@ -158,3 +173,5 @@ bool wlan_wifi_radar_is_feature_disabled(struct wlan_objmgr_pdev *pdev)
 	return (wlan_pdev_nif_feat_ext_cap_get(
 			pdev, WLAN_PDEV_FEXT_WIFI_RADAR_ENABLE) ? false : true);
 }
+
+qdf_export_symbol(wlan_wifi_radar_is_feature_disabled);
