@@ -1151,6 +1151,37 @@ hal_rx_tlv_populate_mpdu_desc_info_kiwi(uint8_t *buf,
 	mpdu_desc_info->bar_frame = mpdu_info->bar_frame;
 }
 
+/**
+ * hal_rx_tlv_get_freq_kiwi() - API to get the frequency of operating
+ *                              channel from rx_msdu_start
+ * @buf: pointer to the start of RX PKT TLV header
+ *
+ * Return: uint32_t(frequency)
+ */
+
+static inline uint32_t hal_rx_tlv_get_freq_kiwi(uint8_t *buf)
+{
+	struct rx_pkt_tlvs *rx_pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+	uint32_t freq;
+
+	freq = HAL_RX_TLV_FREQ_GET(rx_pkt_tlvs);
+
+	return freq;
+}
+
+/**
+ * hal_rx_mpdu_start_sw_peer_id_get_kiwi() - Retrieve sw peer_id
+ * @buf: network buffer
+ *
+ * Return: sw peer_id
+ */
+static inline uint32_t hal_rx_mpdu_start_sw_peer_id_get_kiwi(uint8_t *buf)
+{
+	struct rx_pkt_tlvs *rx_pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+
+	return HAL_RX_TLV_SW_PEER_ID_GET(rx_pkt_tlvs);
+}
+
 #ifdef CONFIG_WORD_BASED_TLV
 /**
  * hal_rx_priv_info_set_in_tlv_kiwi() - Save the private info to
@@ -2258,7 +2289,7 @@ static void hal_hw_txrx_ops_attach_kiwi(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_get_mpdu_mac_ad4_valid =
 					hal_rx_get_mpdu_mac_ad4_valid_be;
 	hal_soc->ops->hal_rx_mpdu_start_sw_peer_id_get =
-		hal_rx_mpdu_start_sw_peer_id_get_be;
+		hal_rx_mpdu_start_sw_peer_id_get_kiwi;
 	hal_soc->ops->hal_rx_tlv_peer_meta_data_get =
 		hal_rx_peer_meta_data_get_kiwi;
 	hal_soc->ops->hal_rx_mpdu_get_to_ds = hal_rx_mpdu_get_to_ds_be;
@@ -2364,8 +2395,7 @@ static void hal_hw_txrx_ops_attach_kiwi(struct hal_soc *hal_soc)
 						hal_rx_tlv_get_is_decrypted_be;
 	hal_soc->ops->hal_rx_tlv_mic_err_get = hal_rx_tlv_mic_err_get_be;
 	hal_soc->ops->hal_rx_tlv_get_pkt_type = hal_rx_tlv_get_pkt_type_be;
-	hal_soc->ops->hal_rx_tlv_get_freq = hal_rx_tlv_get_freq_be;
-	hal_soc->ops->hal_rx_tlv_get_freq = hal_rx_tlv_get_freq_be;
+	hal_soc->ops->hal_rx_tlv_get_freq = hal_rx_tlv_get_freq_kiwi;
 	hal_soc->ops->hal_rx_tlv_mpdu_len_err_get =
 					hal_rx_tlv_mpdu_len_err_get_be;
 	hal_soc->ops->hal_rx_tlv_mpdu_fcs_err_get =

@@ -528,6 +528,53 @@ static inline void hal_rx_priv_info_get_from_tlv_peach(uint8_t *buf,
 		     &(HAL_RX_MSDU_END(pkt_tlvs).ipv6_options_crc),
 		     copy_len);
 }
+
+/**
+ * hal_rx_tlv_get_freq_peach() - API to get the frequency of operating
+ *                               channel from rx_msdu_start
+ * @buf: pointer to the start of RX PKT TLV header
+ *
+ * Return: uint32_t(frequency)
+ */
+
+static inline uint32_t hal_rx_tlv_get_freq_peach(uint8_t *buf)
+{
+	/* sw_phy_meta_data in rx_msdu_end is not subscribed */
+	hal_warn("sw_phy_meta_data is not subscribed");
+
+	return 0;
+}
+
+/**
+ * hal_rx_mpdu_start_sw_peer_id_get_peach() - Retrieve sw peer_id
+ * @buf: network buffer
+ *
+ * Return: sw peer_id
+ */
+static inline uint32_t hal_rx_mpdu_start_sw_peer_id_get_peach(uint8_t *buf)
+{
+	/* sw_peer_id in rx_mpdu_start is not subscribed */
+	hal_warn("sw_peer_id is not subscribed");
+
+	return 0;
+}
+#else
+static inline uint32_t hal_rx_tlv_get_freq_peach(uint8_t *buf)
+{
+	struct rx_pkt_tlvs *rx_pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+	uint32_t freq;
+
+	freq = HAL_RX_TLV_FREQ_GET(rx_pkt_tlvs);
+
+	return freq;
+}
+
+static inline uint32_t hal_rx_mpdu_start_sw_peer_id_get_peach(uint8_t *buf)
+{
+	struct rx_pkt_tlvs *rx_pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+
+	return HAL_RX_TLV_SW_PEER_ID_GET(rx_pkt_tlvs);
+}
 #endif
 
 #ifdef NO_RX_PKT_HDR_TLV
@@ -1947,7 +1994,7 @@ static void hal_hw_txrx_ops_attach_peach(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_get_mpdu_mac_ad4_valid =
 					hal_rx_get_mpdu_mac_ad4_valid_be;
 	hal_soc->ops->hal_rx_mpdu_start_sw_peer_id_get =
-		hal_rx_mpdu_start_sw_peer_id_get_be;
+		hal_rx_mpdu_start_sw_peer_id_get_peach;
 	hal_soc->ops->hal_rx_tlv_peer_meta_data_get =
 		hal_rx_peer_meta_data_get_peach;
 	hal_soc->ops->hal_rx_mpdu_get_to_ds = hal_rx_mpdu_get_to_ds_be;
@@ -2053,8 +2100,7 @@ static void hal_hw_txrx_ops_attach_peach(struct hal_soc *hal_soc)
 						hal_rx_tlv_get_is_decrypted_be;
 	hal_soc->ops->hal_rx_tlv_mic_err_get = hal_rx_tlv_mic_err_get_be;
 	hal_soc->ops->hal_rx_tlv_get_pkt_type = hal_rx_tlv_get_pkt_type_be;
-	hal_soc->ops->hal_rx_tlv_get_freq = hal_rx_tlv_get_freq_be;
-	hal_soc->ops->hal_rx_tlv_get_freq = hal_rx_tlv_get_freq_be;
+	hal_soc->ops->hal_rx_tlv_get_freq = hal_rx_tlv_get_freq_peach;
 	hal_soc->ops->hal_rx_tlv_mpdu_len_err_get =
 					hal_rx_tlv_mpdu_len_err_get_be;
 	hal_soc->ops->hal_rx_tlv_mpdu_fcs_err_get =

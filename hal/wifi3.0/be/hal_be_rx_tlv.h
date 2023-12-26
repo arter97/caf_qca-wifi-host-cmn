@@ -933,24 +933,6 @@ static inline uint32_t hal_rx_tlv_rate_mcs_get_be(uint8_t *buf)
 }
 
 /**
- * hal_rx_msdu_get_keyid_be() - API to get the key id of the decrypted packet
- *                              from rx_msdu_end
- * @buf: pointer to the start of RX PKT TLV header
- *
- * Return: uint32_t(key id)
- */
-
-static inline uint8_t hal_rx_msdu_get_keyid_be(uint8_t *buf)
-{
-	struct rx_pkt_tlvs *rx_pkt_tlvs = (struct rx_pkt_tlvs *)buf;
-	uint32_t keyid_octet;
-
-	keyid_octet = HAL_RX_TLV_KEYID_OCTET_GET(rx_pkt_tlvs);
-
-	return keyid_octet & 0x3;
-}
-
-/**
  * hal_rx_tlv_get_rssi_be() - API to get the rssi of received pkt from
  *                            rx_msdu_start
  * @buf: pointer to the start of RX PKT TLV header
@@ -967,25 +949,6 @@ static inline uint32_t hal_rx_tlv_get_rssi_be(uint8_t *buf)
 
 	return rssi;
 }
-
-/**
- * hal_rx_tlv_get_freq_be() - API to get the frequency of operating
- *                            channel from rx_msdu_start
- * @buf: pointer to the start of RX PKT TLV header
- *
- * Return: uint32_t(frequency)
- */
-
-static inline uint32_t hal_rx_tlv_get_freq_be(uint8_t *buf)
-{
-	struct rx_pkt_tlvs *rx_pkt_tlvs = (struct rx_pkt_tlvs *)buf;
-	uint32_t freq;
-
-	freq = HAL_RX_TLV_FREQ_GET(rx_pkt_tlvs);
-
-	return freq;
-}
-
 
 /**
  * hal_rx_tlv_get_pkt_type_be() - API to get the pkt type from
@@ -1416,19 +1379,6 @@ static inline bool hal_rx_get_mpdu_mac_ad4_valid_be(uint8_t *buf)
 	ad4_valid = HAL_RX_TLV_MPDU_MAC_ADDR_AD4_VALID_GET(rx_pkt_tlvs);
 
 	return ad4_valid;
-}
-
-/**
- * hal_rx_mpdu_start_sw_peer_id_get_be() - Retrieve sw peer_id
- * @buf: network buffer
- *
- * Return: sw peer_id
- */
-static inline uint32_t hal_rx_mpdu_start_sw_peer_id_get_be(uint8_t *buf)
-{
-	struct rx_pkt_tlvs *rx_pkt_tlvs = (struct rx_pkt_tlvs *)buf;
-
-	return HAL_RX_TLV_SW_PEER_ID_GET(rx_pkt_tlvs);
 }
 
 /**
