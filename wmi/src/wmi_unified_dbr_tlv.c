@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -143,13 +143,17 @@ static QDF_STATUS extract_dbr_buf_release_fixed_tlv(wmi_unified_t wmi_handle,
 	     ((!param_buf->num_cv_meta_data) ||
 	     param_buf->num_cv_meta_data < ev->num_meta_data_entry) &&
 	     ((!param_buf->num_cqi_meta_data) ||
-	     param_buf->num_cqi_meta_data < ev->num_meta_data_entry)) {
+	     param_buf->num_cqi_meta_data < ev->num_meta_data_entry) &&
+	     ((!param_buf->num_wifi_radar_meta_data) ||
+	      param_buf->num_wifi_radar_meta_data < ev->num_meta_data_entry)) {
 		wmi_err(" actual num of meta data entries less than provided entries");
 		return QDF_STATUS_E_INVAL;
 	}
 	param->num_meta_data_entry = param_buf->num_meta_data;
 	param->num_cv_meta_data_entry = param_buf->num_cv_meta_data;
 	param->num_cqi_meta_data_entry = param_buf->num_cqi_meta_data;
+	param->num_wifi_radar_meta_data_entry =
+		param_buf->num_wifi_radar_meta_data;
 	wmi_debug("pdev id %d mod id %d num buf release entry %d",
 		 param->pdev_id, param->mod_id, param->num_buf_release_entry);
 
@@ -293,6 +297,38 @@ static QDF_STATUS extract_dbr_buf_cqi_metadata_tlv(
 	return QDF_STATUS_SUCCESS;
 }
 
+static QDF_STATUS extract_dbr_buf_wifi_radar_metadata_tlv(
+		wmi_unified_t wmi_handle, uint8_t *event,
+		uint8_t idx, struct direct_buf_rx_wifi_radar_metadata *param)
+{
+	WMI_PDEV_DMA_RING_BUF_RELEASE_EVENTID_param_tlvs *param_buf;
+	wmi_dma_buf_release_wifi_radar_meta_data *ev;
+
+	param_buf = (WMI_PDEV_DMA_RING_BUF_RELEASE_EVENTID_param_tlvs *)event;
+	if (!param_buf)
+		return QDF_STATUS_E_INVAL;
+
+	ev = &param_buf->wifi_radar_meta_data[idx];
+
+	if (!ev) {
+		wmi_err("wifi radar metadata is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	param->timestamp_us = ev->timestamp_us;
+	param->phy_mode = ev->phy_mode;
+	param->chan_mhz = ev->chan_mhz;
+	param->band_center_freq1 = ev->band_center_freq1;
+	param->band_center_freq2 = ev->band_center_freq2;
+	param->tx_chain_mask = ev->tx_chain_mask;
+	param->rx_chain_mask = ev->rx_chain_mask;
+	param->num_ltf_tx = ev->num_ltf_tx;
+	param->num_skip_ltf_rx = ev->num_skip_ltf_rx;
+	param->num_ltf_accumulation = ev->num_ltf_accumulation;
+
+	return QDF_STATUS_SUCCESS;
+}
+
 void wmi_dbr_attach_tlv(wmi_unified_t wmi_handle)
 {
 	struct wmi_ops *ops = wmi_handle->ops;
@@ -305,4 +341,6 @@ void wmi_dbr_attach_tlv(wmi_unified_t wmi_handle)
 	ops->extract_dbr_buf_release_fixed = extract_dbr_buf_release_fixed_tlv;
 	ops->extract_scaling_params_service_ready_ext =
 			extract_scaling_params_service_ready_ext_tlv;
+	ops->extract_dbr_buf_wifi_radar_metadata =
+			extract_dbr_buf_wifi_radar_metadata_tlv;
 }

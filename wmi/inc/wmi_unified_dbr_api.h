@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -108,4 +108,19 @@ QDF_STATUS wmi_extract_dbr_buf_cqi_metadata(
 			wmi_unified_t wmi_handle,
 			uint8_t *evt_buf, uint8_t idx,
 			struct direct_buf_rx_cqi_metadata *param);
+
+/**
+ * wmi_extract_dbr_buf_wifi_radar_metadata: Extract wifi radar metadata
+ *
+ * @wmi_handle: WMI handle
+ * @evt_buf: Event buffer
+ * @idx: Index of the module for which capability is received
+ * @param: Pointer to direct buffer wifi radar metadata
+ *
+ * Return: QDF status of operation
+ */
+QDF_STATUS wmi_extract_dbr_buf_wifi_radar_metadata(
+			wmi_unified_t wmi_handle,
+			uint8_t *evt_buf, uint8_t idx,
+			struct direct_buf_rx_wifi_radar_metadata *param);
 #endif /* _WMI_UNIFIED_DBR_API_H_ */

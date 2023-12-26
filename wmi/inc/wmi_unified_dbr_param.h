@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2018, 2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -82,6 +82,7 @@
  * @num_meta_data_entry: Number of meta data released
  * @num_cv_meta_data_entry: Number of cv meta data released
  * @num_cqi_meta_data_entry: Number of cqi meta data released
+ * @num_wifi_radar_meta_data_entry: Number of wifi radar meta data released
  * @dbr_entries: Pointer to direct buffer rx entry struct
  */
 struct direct_buf_rx_rsp {
@@ -91,6 +92,7 @@ struct direct_buf_rx_rsp {
 	uint32_t num_meta_data_entry;
 	uint32_t num_cv_meta_data_entry;
 	uint32_t num_cqi_meta_data_entry;
+	uint32_t num_wifi_radar_meta_data_entry;
 	struct direct_buf_rx_entry *dbr_entries;
 };
 
@@ -226,4 +228,31 @@ struct direct_buf_rx_entry {
 	uint32_t len;
 };
 
+/**
+ * struct direct_buf_rx_wifi_radar_metadata: direct buffer meta data for wifi
+ *	radar feature
+ *
+ * @timestamp_us: timestamp at the time of the capture
+ * @phy_mode: phy mode WLAN_PHY_MODE of the channel defined in wlan_defs.h
+ * @chan_mhz: frequency (in MHz) of the primary 20 MHz channel
+ * @band_center_freq1: Center frequency 1 in MHz
+ * @band_center_freq2: Center frequency 2 in MH
+ * @tx_chain_mask: tx chain mask
+ * @rx_chain_mask: rx chain mask
+ * @num_ltf_tx: number of LTFs sent for capture
+ * @num_skip_ltf_rx: number of LTFs skipped in rx
+ * @num_ltf_accumulation: number of LTFs used for accumulation
+ */
+struct direct_buf_rx_wifi_radar_metadata {
+	uint32_t timestamp_us;
+	uint32_t phy_mode;
+	uint32_t chan_mhz;
+	uint32_t band_center_freq1;
+	uint32_t band_center_freq2;
+	uint32_t tx_chain_mask;
+	uint32_t rx_chain_mask;
+	uint32_t num_ltf_tx;
+	uint32_t num_skip_ltf_rx;
+	uint32_t num_ltf_accumulation;
+};
 #endif /* _WMI_UNIFIED_DBR_PARAM_H_ */
