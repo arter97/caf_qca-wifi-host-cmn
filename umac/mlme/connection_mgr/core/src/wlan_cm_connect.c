@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015, 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -1974,9 +1974,7 @@ cm_connect_req_update_ml_partner_info(struct cnx_mgr *cm_ctx,
 				      &eht_capable);
 	if (!same_candidate_used && eht_capable &&
 	    cm_bss_peer_is_assoc_peer(conn_req)) {
-		cm_get_ml_partner_info(pdev,
-				       conn_req->cur_candidate->entry,
-				       &conn_req->req.ml_parnter_info);
+		cm_get_ml_partner_info(pdev, conn_req);
 		cm_modify_partner_info_based_on_dbs_or_sbs_mode(
 						cm_ctx->vdev, cm_req->cm_id,
 						conn_req->cur_candidate->entry,

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -529,6 +529,8 @@ struct reduced_neighbor_report {
  * @ecsa_ie: Pointer to eCSA IE
  * @max_cst_ie: Pointer to Max Channel Switch Time IE
  * @is_valid_link: The partner link can be used if true
+ * @is_scan_entry_not_found: If set to true, the partner link scan entry is
+ * not present in scan DB (currently using for non-TxMBSSID MLO AP)
  * @op_class: Operating class
  */
 struct partner_link_info {
@@ -539,7 +541,8 @@ struct partner_link_info {
 	const uint8_t *csa_ie;
 	const uint8_t *ecsa_ie;
 	const uint8_t *max_cst_ie;
-	uint8_t  is_valid_link;
+	bool is_valid_link;
+	bool is_scan_entry_not_found;
 	uint8_t op_class;
 };
 
