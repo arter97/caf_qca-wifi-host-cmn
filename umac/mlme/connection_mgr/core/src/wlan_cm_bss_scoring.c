@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -1728,15 +1728,8 @@ static inline int cm_calculate_emlsr_score(struct weight_cfg *weight_config)
 	return weight_config->emlsr_weightage * mlo_boost_pct[MLSR];
 }
 
-/**
- * cm_get_entry() - Get bss scan entry by link mac address
- * @scan_list: Scan entry list of bss candidates after filtering
- * @link_addr: link mac address
- *
- * Return: Pointer to bss scan entry
- */
-static struct scan_cache_entry *cm_get_entry(qdf_list_t *scan_list,
-					     struct qdf_mac_addr *link_addr)
+struct scan_cache_entry *cm_get_entry(qdf_list_t *scan_list,
+				      struct qdf_mac_addr *link_addr)
 {
 	qdf_list_node_t *cur_node = NULL, *next_node = NULL;
 	struct scan_cache_node *curr_entry = NULL;

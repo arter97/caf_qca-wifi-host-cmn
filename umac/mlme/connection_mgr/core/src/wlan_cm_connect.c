@@ -1974,9 +1974,7 @@ cm_connect_req_update_ml_partner_info(struct cnx_mgr *cm_ctx,
 				      &eht_capable);
 	if (!same_candidate_used && eht_capable &&
 	    cm_bss_peer_is_assoc_peer(conn_req)) {
-		cm_get_ml_partner_info(pdev,
-				       conn_req->cur_candidate->entry,
-				       &conn_req->req.ml_parnter_info);
+		cm_get_ml_partner_info(pdev, conn_req);
 		cm_modify_partner_info_based_on_dbs_or_sbs_mode(
 						cm_ctx->vdev, cm_req->cm_id,
 						conn_req->cur_candidate->entry,
