@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -41,6 +41,7 @@
 #include <wlan_action_oui_main.h>
 #include <wlan_action_oui_public_struct.h>
 #endif
+#include <wlan_crypto_global_api.h>
 
 #define MAX_IE_LEN 1024
 #define SHORT_SSID_LEN 4
@@ -123,6 +124,37 @@ util_get_last_scan_time(struct wlan_objmgr_vdev *vdev)
 		return scan_obj->pdev_info[pdev_id].last_scan_time;
 	else
 		return 0;
+}
+
+bool util_is_rsnxe_h2e_capable(const uint8_t *rsnxe)
+{
+	const uint8_t *rsnxe_caps;
+	uint8_t cap_len;
+
+	if (!rsnxe)
+		return false;
+
+	rsnxe_caps = wlan_crypto_parse_rsnxe_ie(rsnxe, &cap_len);
+	if (!rsnxe_caps)
+		return false;
+
+	return *rsnxe_caps & WLAN_CRYPTO_RSNX_CAP_SAE_H2E;
+}
+
+bool util_scan_entry_sae_h2e_capable(struct scan_cache_entry *scan_entry)
+{
+	const uint8_t *rsnxe;
+
+	/* If RSN caps are not there, then return false */
+	if (!util_scan_entry_rsn(scan_entry))
+		return false;
+
+	/* If not SAE AKM no need to check H2E capability */
+	if (!WLAN_CRYPTO_IS_AKM_SAE(scan_entry->neg_sec_info.key_mgmt))
+		return false;
+
+	rsnxe = util_scan_entry_rsnxe(scan_entry);
+	return util_is_rsnxe_h2e_capable(rsnxe);
 }
 
 enum wlan_band util_scan_scm_freq_to_band(uint16_t freq)

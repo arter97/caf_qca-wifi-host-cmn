@@ -3029,6 +3029,41 @@ static void cm_eliminate_common_candidate(qdf_list_t *candidate_list)
 		size--;
 	}
 }
+
+static void cm_validate_partner_links_rsn_cap(struct scan_cache_entry *entry,
+					      qdf_list_t *scan_list)
+{
+	uint8_t idx;
+	struct scan_cache_entry *partner_entry;
+	struct partner_link_info *partner_info;
+
+	if (!entry->ie_list.multi_link_bv || !entry->ml_info.num_links)
+		return;
+
+	for (idx = 0; idx < entry->ml_info.num_links; idx++) {
+		partner_info = &entry->ml_info.link_info[idx];
+		if (!partner_info->is_valid_link)
+			continue;
+
+		/*
+		 * If partner link is not found in the current candidate list
+		 * don't treat it as failure, it can be removed post ML
+		 * probe resp generation time.
+		 */
+		partner_entry = cm_get_entry(scan_list,
+					     &partner_info->link_addr);
+		if (!partner_entry)
+			continue;
+
+		if (wlan_scan_entries_contain_cmn_akm(entry, partner_entry))
+			continue;
+
+		partner_info->is_valid_link = false;
+		mlme_debug(QDF_MAC_ADDR_FMT "link (%d) akm not matching",
+			   QDF_MAC_ADDR_REF(partner_entry->bssid.bytes),
+			   partner_info->freq);
+	}
+}
 #else
 
 static void cm_update_candidate_list_for_vendor(qdf_list_t *candidate_list)
@@ -3036,6 +3071,12 @@ static void cm_update_candidate_list_for_vendor(qdf_list_t *candidate_list)
 }
 
 static void cm_eliminate_common_candidate(qdf_list_t *candidate_list)
+{
+}
+
+static inline void
+cm_validate_partner_links_rsn_cap(struct scan_cache_entry *entry,
+				  qdf_list_t *scan_list)
 {
 }
 #endif
@@ -3128,6 +3169,8 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 			}
 		}
 
+		/* Check if the partner links RSN caps are matching. */
+		cm_validate_partner_links_rsn_cap(scan_entry->entry, scan_list);
 		if (denylist_action == CM_DLM_NO_ACTION ||
 		    (are_all_candidate_denylisted && denylist_action ==
 		     CM_DLM_REMOVE)) {
@@ -3233,25 +3276,6 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 }
 
 #ifdef CONFIG_BAND_6GHZ
-static bool cm_check_h2e_support(const uint8_t *rsnxe)
-{
-	const uint8_t *rsnxe_cap;
-	uint8_t cap_len;
-
-	rsnxe_cap = wlan_crypto_parse_rsnxe_ie(rsnxe, &cap_len);
-	if (!rsnxe_cap) {
-		mlme_debug("RSNXE caps not present");
-		return false;
-	}
-
-	if (*rsnxe_cap & WLAN_CRYPTO_RSNX_CAP_SAE_H2E)
-		return true;
-
-	mlme_debug("RSNXE caps %x dont have H2E support", *rsnxe_cap);
-
-	return false;
-}
-
 #ifdef CONN_MGR_ADV_FEATURE
 static bool wlan_cm_wfa_get_test_feature_flags(struct wlan_objmgr_psoc *psoc)
 {
@@ -3321,7 +3345,7 @@ bool wlan_cm_6ghz_allowed_for_akm(struct wlan_objmgr_psoc *psoc,
 	    QDF_HAS_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_SAE_EXT_KEY)))
 		return true;
 
-	return (cm_check_h2e_support(rsnxe) ||
+	return (util_is_rsnxe_h2e_capable(rsnxe) ||
 		wlan_cm_wfa_get_test_feature_flags(psoc));
 }
 
