@@ -181,6 +181,15 @@ bool wlan_reg_is_freq_indoor_in_secondary_list(struct wlan_objmgr_pdev *pdev,
  * Return: true if channel frequency is 6GHz, else false
  */
 bool wlan_reg_is_6ghz_chan_freq(uint16_t freq);
+
+/**
+ * wlan_reg_is_6g_ap_type_invalid() - Check if the given ap power mode is valid.
+ * @ap_6g_pwr_type: 6 GHz power mode
+ *
+ * Return: true if the power mode is invalid, false otherwise.
+ */
+bool wlan_reg_is_6g_ap_type_invalid(enum reg_6g_ap_type ap_6g_pwr_type);
+
 #define WLAN_REG_IS_6GHZ_CHAN_FREQ(freq) wlan_reg_is_6ghz_chan_freq(freq)
 
 #ifdef CONFIG_6G_FREQ_OVERLAP
@@ -336,6 +345,12 @@ bool wlan_reg_is_6ghz_unii5_chan_freq(qdf_freq_t freq);
 static inline bool wlan_reg_is_6ghz_chan_freq(uint16_t freq)
 {
 	return false;
+}
+
+static inline bool
+wlan_reg_is_6g_ap_type_invalid(enum reg_6g_ap_type ap_6g_pwr_type)
+{
+	return true;
 }
 
 static inline bool wlan_reg_is_range_only6g(qdf_freq_t low_freq,

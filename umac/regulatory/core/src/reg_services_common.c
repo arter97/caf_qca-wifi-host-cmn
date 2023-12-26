@@ -9172,7 +9172,7 @@ reg_get_best_6g_pwr_type(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq)
 	return pdev_priv_obj->super_chan_list[sixg_freq_idx].best_power_mode;
 }
 
-static inline bool reg_is_6g_ap_type_invalid(enum reg_6g_ap_type ap_pwr_type)
+bool reg_is_6g_ap_type_invalid(enum reg_6g_ap_type ap_pwr_type)
 {
 	return ((ap_pwr_type < REG_INDOOR_AP) ||
 		(ap_pwr_type > REG_MAX_SUPP_AP_TYPE));

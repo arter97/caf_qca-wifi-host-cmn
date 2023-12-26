@@ -906,6 +906,11 @@ bool wlan_reg_is_6ghz_chan_freq(uint16_t freq)
 	return reg_is_6ghz_chan_freq(freq);
 }
 
+bool wlan_reg_is_6g_ap_type_invalid(enum reg_6g_ap_type ap_6g_pwr_type)
+{
+	return reg_is_6g_ap_type_invalid(ap_6g_pwr_type);
+}
+
 #ifdef CONFIG_6G_FREQ_OVERLAP
 bool wlan_reg_is_range_only6g(qdf_freq_t low_freq, qdf_freq_t high_freq)
 {
