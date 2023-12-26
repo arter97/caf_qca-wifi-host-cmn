@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011,2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -343,22 +343,22 @@ struct spectral_scan_state {
 struct wlan_objmgr_pdev;
 
 /**
- * struct spectral_nl_cb - Spectral Netlink callbacks
+ * struct spectral_buffer_cb - Spectral buffer callbacks
  * @get_sbuff:      Get the socket buffer to send the data to the application
- * @send_nl_bcast:  Send data to the application using netlink broadcast
- * @send_nl_unicast:  Send data to the application using netlink unicast
+ * @send_bcast:  Send data to the application using broadcast
+ * @send_unicast:  Send data to the application using unicast
  * @free_sbuff: Free the socket buffer for a particular message type
  * @convert_to_nl_ch_width:
  * @convert_to_phy_ch_width:
  */
-struct spectral_nl_cb {
+struct spectral_buffer_cb {
 	void *(*get_sbuff)(struct wlan_objmgr_pdev *pdev,
 			   enum spectral_msg_type smsg_type,
 			   enum spectral_msg_buf_type buf_type);
-	int (*send_nl_bcast)(struct wlan_objmgr_pdev *pdev,
-			     enum spectral_msg_type smsg_type);
-	int (*send_nl_unicast)(struct wlan_objmgr_pdev *pdev,
-			       enum spectral_msg_type smsg_type);
+	int (*send_bcast)(struct wlan_objmgr_pdev *pdev,
+			  enum spectral_msg_type smsg_type);
+	int (*send_unicast)(struct wlan_objmgr_pdev *pdev,
+			    enum spectral_msg_type smsg_type);
 	void (*free_sbuff)(struct wlan_objmgr_pdev *pdev,
 			   enum spectral_msg_type smsg_type);
 	int (*convert_to_nl_ch_width)(uint8_t phy_chwidth);

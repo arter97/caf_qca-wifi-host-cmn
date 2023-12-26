@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011,2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -91,7 +91,7 @@ target_if_spectral_fill_samp_msg(struct target_if_spectral *spectral,
 
 	det_map = &spectral->det_map[params->hw_detector_id];
 
-	spec_samp_msg = spectral->nl_cb.get_sbuff(spectral->pdev_obj,
+	spec_samp_msg = spectral->spectral_buf_cb.get_sbuff(spectral->pdev_obj,
 						  msg_type,
 						  det_map->buf_type);
 	if (!spec_samp_msg) {
@@ -248,7 +248,7 @@ target_if_spectral_fill_samp_msg(struct target_if_spectral *spectral,
 		spec_samp_msg->spectral_mode = spectral_mode;
 		spec_samp_msg->target_reset_count =
 				spectral->timestamp_war.target_reset_count;
-		spec_samp_msg->operating_bw = spectral->nl_cb.
+		spec_samp_msg->operating_bw = spectral->spectral_buf_cb.
 				convert_to_nl_ch_width(rpt_info->operating_bw);
 		if (spec_samp_msg->operating_bw < 0) {
 			spectral_err_rl("Invalid operating channel width %d",
@@ -260,7 +260,7 @@ target_if_spectral_fill_samp_msg(struct target_if_spectral *spectral,
 		spec_samp_msg->cfreq2 = rpt_info->cfreq2;
 		spec_samp_msg->sscan_cfreq1 = rpt_info->sscan_cfreq1;
 		spec_samp_msg->sscan_cfreq2 = rpt_info->sscan_cfreq2;
-		spec_samp_msg->sscan_bw = spectral->nl_cb.
+		spec_samp_msg->sscan_bw = spectral->spectral_buf_cb.
 				convert_to_nl_ch_width(rpt_info->sscan_bw);
 		if (spec_samp_msg->sscan_bw < 0) {
 			spectral_err_rl("Invalid sscan channel width %d",
@@ -335,7 +335,7 @@ target_if_spectral_create_samp_msg(struct target_if_spectral *spectral,
 
 	if (is_primaryseg_rx_inprog(spectral, params->smode)) {
 		spec_samp_msg  = (struct spectral_samp_msg *)
-		      spectral->nl_cb.get_sbuff(spectral->pdev_obj,
+		      spectral->spectral_buf_cb.get_sbuff(spectral->pdev_obj,
 						msg_type,
 						SPECTRAL_MSG_BUF_NEW);
 
@@ -466,7 +466,7 @@ target_if_spectral_create_samp_msg(struct target_if_spectral *spectral,
 
 	if (is_secondaryseg_rx_inprog(spectral, params->smode)) {
 		spec_samp_msg  = (struct spectral_samp_msg *)
-		      spectral->nl_cb.get_sbuff(spectral->pdev_obj,
+		      spectral->spectral_buf_cb.get_sbuff(spectral->pdev_obj,
 						msg_type,
 						SPECTRAL_MSG_BUF_SAVED);
 

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
- *
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -62,9 +62,9 @@ spectral_ctx_init_ol(struct spectral_context *sc)
 	sc->sptrlc_get_spectral_diagstats = tgt_get_spectral_diagstats;
 	sc->sptrlc_register_spectral_wmi_ops = tgt_register_spectral_wmi_ops;
 	sc->sptrlc_register_spectral_tgt_ops = tgt_register_spectral_tgt_ops;
-	sc->sptrlc_register_netlink_cb = tgt_spectral_register_nl_cb;
+	sc->sptrlc_register_buffer_cb = tgt_spectral_register_buffer_cb;
 	sc->sptrlc_use_nl_bcast = tgt_spectral_use_nl_bcast;
-	sc->sptrlc_deregister_netlink_cb = tgt_spectral_deregister_nl_cb;
+	sc->sptrlc_deregister_buffer_cb = tgt_spectral_deregister_buffer_cb;
 	sc->sptrlc_process_spectral_report = tgt_spectral_process_report;
 	spectral_ctx_init_ol_dma_debug(sc);
 }

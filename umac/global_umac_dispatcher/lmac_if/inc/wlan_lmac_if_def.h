@@ -889,9 +889,9 @@ struct spectral_tgt_ops;
  * @sptrlto_get_spectral_diagstats: Get Spectral diagnostic statistics
  * @sptrlto_register_spectral_wmi_ops: Register Spectral WMI operations
  * @sptrlto_register_spectral_tgt_ops: Register Spectral target operations
- * @sptrlto_register_netlink_cb: Register Spectral Netlink callbacks
+ * @sptrlto_register_buffer_cb: Register Spectral buffer callbacks
  * @sptrlto_use_nl_bcast: Get whether to use Netlink broadcast/unicast
- * @sptrlto_deregister_netlink_cb: De-register Spectral Netlink callbacks
+ * @sptrlto_deregister_buffer_cb: De-register Spectral buffer callbacks
  * @sptrlto_process_spectral_report: Process spectral report
  * @sptrlto_set_dma_debug: Set DMA debug for Spectral
  * @sptrlto_direct_dma_support: Whether Direct-DMA is supported on this radio
@@ -945,11 +945,11 @@ struct wlan_lmac_if_sptrl_tx_ops {
 	QDF_STATUS (*sptrlto_register_spectral_tgt_ops)(
 					struct wlan_objmgr_psoc *psoc,
 					struct spectral_tgt_ops *tgt_ops);
-	void (*sptrlto_register_netlink_cb)(
+	void (*sptrlto_register_buffer_cb)(
 		struct wlan_objmgr_pdev *pdev,
-		struct spectral_nl_cb *nl_cb);
+		struct spectral_buffer_cb *spectral_buf_cb);
 	bool (*sptrlto_use_nl_bcast)(struct wlan_objmgr_pdev *pdev);
-	void (*sptrlto_deregister_netlink_cb)(struct wlan_objmgr_pdev *pdev);
+	void (*sptrlto_deregister_buffer_cb)(struct wlan_objmgr_pdev *pdev);
 	int (*sptrlto_process_spectral_report)(
 		struct wlan_objmgr_pdev *pdev,
 		void *payload);

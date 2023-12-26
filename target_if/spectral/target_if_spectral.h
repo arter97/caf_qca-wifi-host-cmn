@@ -1274,7 +1274,7 @@ int get_supported_sscan_bw_pos(enum phy_ch_width sscan_bw);
  * header, for the given hardware generation
  * @tlvhdr_size: Expected PHYERR TLV header size, for the given hardware
  * generation
- * @nl_cb: Netlink callbacks
+ * @spectral_buf_cb: Spectral buffer callbacks
  * @use_nl_bcast: Whether to use Netlink broadcast/unicast
  * @send_phy_data: Send data to the application layer for a particular msg type
  * @len_adj_swar: Spectral fft bin length adjustment SWAR related info
@@ -1402,7 +1402,7 @@ struct target_if_spectral {
 	uint8_t                                tag_sscan_summary_exp;
 	uint8_t                                tag_sscan_fft_exp;
 	uint8_t                                tlvhdr_size;
-	struct spectral_nl_cb nl_cb;
+	struct spectral_buffer_cb spectral_buf_cb;
 	bool use_nl_bcast;
 	int (*send_phy_data)(struct wlan_objmgr_pdev *pdev,
 			     enum spectral_msg_type smsg_type);
@@ -2252,8 +2252,8 @@ free_samp_msg_skb(struct target_if_spectral *spectral,
 			spectral_err("Failed to get spectral message type");
 			return;
 		}
-		spectral->nl_cb.free_sbuff(spectral->pdev_obj,
-					   smsg_type);
+		spectral->spectral_buf_cb.free_sbuff(spectral->pdev_obj,
+						     smsg_type);
 	}
 }
 

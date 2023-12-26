@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -122,9 +122,9 @@ struct spectral_tgt_ops;
  * @sptrlc_get_spectral_diagstats: Get spectral diag status
  * @sptrlc_register_spectral_wmi_ops: Register Spectral WMI operations
  * @sptrlc_register_spectral_tgt_ops: Register Spectral target operations
- * @sptrlc_register_netlink_cb: Register Netlink callbacks
+ * @sptrlc_register_buffer_cb: Register Spectral buffer callbacks
  * @sptrlc_use_nl_bcast: Check whether to use Netlink broadcast/unicast
- * @sptrlc_deregister_netlink_cb: De-register Netlink callbacks
+ * @sptrlc_deregister_buffer_cb: De-register Spectral buffer callbacks
  * @sptrlc_process_spectral_report: Process spectral report
  * @sptrlc_set_dma_debug: Set DMA debug
  */
@@ -177,11 +177,11 @@ struct spectral_context {
 	QDF_STATUS (*sptrlc_register_spectral_tgt_ops)(
 					struct wlan_objmgr_psoc *psoc,
 					struct spectral_tgt_ops *tgt_ops);
-	void (*sptrlc_register_netlink_cb)(
+	void (*sptrlc_register_buffer_cb)(
 			struct wlan_objmgr_pdev *pdev,
-			struct spectral_nl_cb *nl_cb);
+			struct spectral_buffer_cb *spectral_buf_cb);
 	bool (*sptrlc_use_nl_bcast)(struct wlan_objmgr_pdev *pdev);
-	void (*sptrlc_deregister_netlink_cb)(struct wlan_objmgr_pdev *pdev);
+	void (*sptrlc_deregister_buffer_cb)(struct wlan_objmgr_pdev *pdev);
 	int (*sptrlc_process_spectral_report)(
 			struct wlan_objmgr_pdev *pdev,
 			void *payload);

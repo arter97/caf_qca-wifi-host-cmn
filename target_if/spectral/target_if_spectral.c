@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011,2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -6792,16 +6792,16 @@ target_if_register_spectral_tgt_ops(struct wlan_objmgr_psoc *psoc,
 }
 
 /**
- * target_if_register_netlink_cb() - Register Netlink callbacks
+ * target_if_register_buffer_cb() - Register buffer callbacks
  * @pdev: Pointer to pdev object
- * @nl_cb: Netlink callbacks to register
+ * @spectral_buf_cb: Netlink/Streamfs callbacks to register
  *
  * Return: void
  */
 static void
-target_if_register_netlink_cb(
+target_if_register_buffer_cb(
 	struct wlan_objmgr_pdev *pdev,
-	struct spectral_nl_cb *nl_cb)
+	struct spectral_buffer_cb *spectral_buf_cb)
 {
 	struct target_if_spectral *spectral = NULL;
 
@@ -6812,12 +6812,16 @@ target_if_register_netlink_cb(
 		return;
 	}
 
-	qdf_mem_copy(&spectral->nl_cb, nl_cb, sizeof(struct spectral_nl_cb));
+	qdf_mem_copy(&spectral->spectral_buf_cb, spectral_buf_cb,
+		     sizeof(struct spectral_buffer_cb));
 
-	if (spectral->use_nl_bcast)
-		spectral->send_phy_data = spectral->nl_cb.send_nl_bcast;
-	else
-		spectral->send_phy_data = spectral->nl_cb.send_nl_unicast;
+	if (spectral->use_nl_bcast) {
+		spectral->send_phy_data =
+			spectral->spectral_buf_cb.send_bcast;
+	} else {
+		spectral->send_phy_data =
+			spectral->spectral_buf_cb.send_unicast;
+	}
 }
 
 /**
@@ -6843,13 +6847,13 @@ target_if_use_nl_bcast(struct wlan_objmgr_pdev *pdev)
 }
 
 /**
- * target_if_deregister_netlink_cb() - De-register Netlink callbacks
+ * target_if_deregister_buffer_cb() - De-register buffer callbacks
  * @pdev: Pointer to pdev object
  *
  * Return: void
  */
 static void
-target_if_deregister_netlink_cb(struct wlan_objmgr_pdev *pdev)
+target_if_deregister_buffer_cb(struct wlan_objmgr_pdev *pdev)
 {
 	struct target_if_spectral *spectral = NULL;
 
@@ -6859,7 +6863,8 @@ target_if_deregister_netlink_cb(struct wlan_objmgr_pdev *pdev)
 		return;
 	}
 
-	qdf_mem_zero(&spectral->nl_cb, sizeof(struct spectral_nl_cb));
+	qdf_mem_zero(&spectral->spectral_buf_cb,
+		     sizeof(struct spectral_buffer_cb));
 }
 
 static int
@@ -8060,12 +8065,12 @@ target_if_sptrl_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 	    target_if_register_spectral_wmi_ops;
 	tx_ops->sptrl_tx_ops.sptrlto_register_spectral_tgt_ops =
 	    target_if_register_spectral_tgt_ops;
-	tx_ops->sptrl_tx_ops.sptrlto_register_netlink_cb =
-	    target_if_register_netlink_cb;
+	tx_ops->sptrl_tx_ops.sptrlto_register_buffer_cb =
+	    target_if_register_buffer_cb;
 	tx_ops->sptrl_tx_ops.sptrlto_use_nl_bcast =
 	    target_if_use_nl_bcast;
-	tx_ops->sptrl_tx_ops.sptrlto_deregister_netlink_cb =
-	    target_if_deregister_netlink_cb;
+	tx_ops->sptrl_tx_ops.sptrlto_deregister_buffer_cb =
+	    target_if_deregister_buffer_cb;
 	tx_ops->sptrl_tx_ops.sptrlto_process_spectral_report =
 	    target_if_process_spectral_report;
 	tx_ops->sptrl_tx_ops.sptrlto_direct_dma_support =
@@ -8102,7 +8107,7 @@ target_if_spectral_send_intf_found_msg(struct wlan_objmgr_pdev *pdev,
 		return;
 	}
 
-	msg  = (struct spectral_samp_msg *)spectral->nl_cb.get_sbuff(
+	msg  = (struct spectral_samp_msg *)spectral->spectral_buf_cb.get_sbuff(
 			spectral->pdev_obj,
 			SPECTRAL_MSG_INTERFERENCE_NOTIFICATION,
 			SPECTRAL_MSG_BUF_NEW);
