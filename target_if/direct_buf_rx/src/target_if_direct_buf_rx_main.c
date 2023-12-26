@@ -2200,6 +2200,15 @@ static int target_if_direct_buf_rx_rsp_event_handler(ol_scn_t scn,
 				  dbr_rsp.num_buf_release_entry);
 		goto out;
 	}
+	if (dbr_rsp.num_wifi_radar_meta_data_entry >
+			dbr_rsp.num_buf_release_entry) {
+		direct_buf_rx_err("More than expected number of wifi radar metadata");
+		direct_buf_rx_err("meta_data_entry:%d wifi_radar_meta_data_entry:%d buf_release_entry:%d",
+				  dbr_rsp.num_meta_data_entry,
+				  dbr_rsp.num_wifi_radar_meta_data_entry,
+				  dbr_rsp.num_buf_release_entry);
+		goto out;
+	}
 	QDF_ASSERT(!(dbr_rsp.num_cv_meta_data_entry &&
 		     dbr_rsp.num_meta_data_entry));
 	for (i = 0; i < dbr_rsp.num_buf_release_entry; i++) {
@@ -2240,6 +2249,15 @@ static int target_if_direct_buf_rx_rsp_event_handler(ol_scn_t scn,
 				wmi_handle, data_buf, i,
 				&dbr_data.cqi_meta_data) == QDF_STATUS_SUCCESS)
 				dbr_data.cqi_meta_data_valid = true;
+		}
+
+		dbr_data.wifi_radar_meta_data_valid = false;
+		if (i < dbr_rsp.num_wifi_radar_meta_data_entry) {
+			if (wmi_extract_dbr_buf_wifi_radar_metadata
+					(wmi_handle, data_buf, i,
+					 &dbr_data.wifi_radar_meta_data) ==
+						QDF_STATUS_SUCCESS)
+				dbr_data.wifi_radar_meta_data_valid = true;
 		}
 
 		target_if_dbr_add_ring_debug_entry(pdev, dbr_rsp.mod_id,

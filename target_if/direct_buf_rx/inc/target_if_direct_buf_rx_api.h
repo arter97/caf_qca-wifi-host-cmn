@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -29,12 +29,14 @@
  * @DBR_MODULE_SPECTRAL: Module ID for Spectral
  * @DBR_MODULE_CFR: Module ID for CFR
  * @DBR_MODULE_CBF: Module ID for TXBF CBF CV upload
+ * @DBR_MODULE_WIFI_RADAR: Module ID for wifi radar
  * @DBR_MODULE_MAX: Max module ID
  */
 enum DBR_MODULE {
 	DBR_MODULE_SPECTRAL = 0,
 	DBR_MODULE_CFR      = 1,
 	DBR_MODULE_CBF      = 2,
+	DBR_MODULE_WIFI_RADAR = 3,
 	DBR_MODULE_MAX,
 };
 
@@ -89,9 +91,11 @@ struct wlan_lmac_if_tx_ops;
  * @meta_data_valid: Indicates that metadata is valid
  * @cv_meta_data_valid: Indicates that CV upload metadata is valid
  * @cqi_meta_data_valid: Indicates that CQI upload metadata is valid
+ * @wifi_radar_meta_data_valid: Indicates that wifi radar metadata is valid
  * @meta_data: Meta data
  * @cv_meta_data: TxBF CV Meta data
  * @cqi_meta_data: TxBF CQI Meta data
+ * @wifi_radar_meta_data: wifi radar Meta data
  */
 struct direct_buf_rx_data {
 	size_t dbr_len;
@@ -101,10 +105,12 @@ struct direct_buf_rx_data {
 	bool meta_data_valid;
 	bool cv_meta_data_valid;
 	bool cqi_meta_data_valid;
+	bool wifi_radar_meta_data_valid;
 	union {
 		struct direct_buf_rx_metadata meta_data;
 		struct direct_buf_rx_cv_metadata cv_meta_data;
 		struct direct_buf_rx_cqi_metadata cqi_meta_data;
+		struct direct_buf_rx_wifi_radar_metadata wifi_radar_meta_data;
 	};
 };
 #endif
