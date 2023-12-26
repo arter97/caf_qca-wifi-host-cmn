@@ -1447,24 +1447,24 @@ cm_get_band_score(uint32_t freq, struct scoring_cfg *score_config)
 #ifdef WLAN_FEATURE_11BE
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 #if defined (SAP_MULTI_LINK_EMULATION)
-bool wlan_cm_is_eht_allowed_for_current_security(
-			struct wlan_objmgr_psoc *psoc,
-			struct scan_cache_entry *scan_entry)
+bool wlan_cm_is_eht_allowed_for_current_security(struct wlan_objmgr_psoc *psoc,
+						 struct scan_cache_entry *entry,
+						 bool is_mlo_connect)
 {
 	return true;
 }
 #else
-bool wlan_cm_is_eht_allowed_for_current_security(
-			struct wlan_objmgr_psoc *psoc,
-			struct scan_cache_entry *scan_entry)
+bool wlan_cm_is_eht_allowed_for_current_security(struct wlan_objmgr_psoc *psoc,
+						 struct scan_cache_entry *entry,
+						 bool is_mlo_connect)
 {
-	const uint8_t *rsnxe, *rsnxe_caps;
-	uint8_t cap_len;
 	bool rf_test_mode = false;
 	QDF_STATUS status;
+	struct security_info *neg_sec_info;
+	uint32_t oem_eht_cfg = 0x0;
+	bool mlie_present;
 
-	status = wlan_mlme_is_rf_test_mode_enabled(psoc,
-						   &rf_test_mode);
+	status = wlan_mlme_is_rf_test_mode_enabled(psoc, &rf_test_mode);
 	if (!QDF_IS_STATUS_SUCCESS(status)) {
 		mlme_err("Get rf test mode failed");
 		return false;
@@ -1474,56 +1474,120 @@ bool wlan_cm_is_eht_allowed_for_current_security(
 		return true;
 	}
 
-	if (!scan_entry->ie_list.rsn) {
+	if (!entry->ie_list.rsn) {
 		mlme_debug(QDF_MAC_ADDR_FMT ": RSN IE not present",
-			   QDF_MAC_ADDR_REF(scan_entry->bssid.bytes));
+			   QDF_MAC_ADDR_REF(entry->bssid.bytes));
 		return false;
 	}
 
-	if (!(scan_entry->neg_sec_info.rsn_caps &
-	      WLAN_CRYPTO_RSN_CAP_MFP_ENABLED)) {
-		mlme_debug(QDF_MAC_ADDR_FMT " MFPC bit of RSN IE not present",
-			   QDF_MAC_ADDR_REF(scan_entry->bssid.bytes));
+	/* Get the OEM EHT configuration. */
+	status = wlan_mlme_get_oem_eht_mlo_config(psoc, &oem_eht_cfg);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mlme_rl_nofl_err("OEM EHT cfg get failed");
 		return false;
 	}
 
-	if (WLAN_CRYPTO_IS_AKM_ENTERPRISE(scan_entry->neg_sec_info.key_mgmt))
-		return true;
+	/* Check if the AP is ML capable or not */
+	mlie_present = entry->ie_list.multi_link_bv ? true : false;
 
-	/* Return from here if atleast one AKM in list is not WPA3 AKM */
-	if (!WLAN_CRYPTO_IS_WPA3(scan_entry->neg_sec_info.key_mgmt)) {
-		mlme_debug(QDF_MAC_ADDR_FMT ": AKM 0x%x not valid",
-			   QDF_MAC_ADDR_REF(scan_entry->bssid.bytes),
-			   scan_entry->neg_sec_info.key_mgmt);
+	neg_sec_info = &entry->neg_sec_info;
+	if (neg_sec_info->rsn_caps & WLAN_CRYPTO_RSN_CAP_MFP_ENABLED) {
+		/* For entreprise APs, only check if PMF is enabled or not */
+		if (WLAN_CRYPTO_IS_AKM_ENTERPRISE(neg_sec_info->key_mgmt))
+			return true;
+
+		/* For APs which are both WPA3 and WPA2, only check WPA3 as it
+		 * is the more secure AKM.
+		 */
+		if (WLAN_CRYPTO_IS_WPA3(neg_sec_info->key_mgmt)) {
+			if (!WLAN_CRYPTO_IS_AKM_SAE(neg_sec_info->key_mgmt))
+				return true;
+
+			/* If OEM enables APs with HnP to connect, don't check
+			 * whether RSNXE has H2E bit set or not. It will be
+			 * allowing both HnP and H2E APs.
+			 *
+			 * If the AP is ML capable, return:
+			 *    -True, if H2E is not required and not for ML assoc
+			 *    -True, if INI bit value for MLO assoc is set.
+			 *
+			 * If AP is not ML capable, return:
+			 *    -True, if INI bit value for allowing EHT only
+			 *     connection is set.
+			 */
+			if (mlie_present) {
+				if (!is_mlo_connect &&
+				    !WLAN_CRYPTO_WPA3_SAE_OEM_EHT_CFG_IS_STRICT_H2E(oem_eht_cfg)) {
+					return true;
+				} else if (is_mlo_connect &&
+					   (oem_eht_cfg & WLAN_HOST_CRYPTO_WPA3_SAE_ALLOW_MLO_HnP)) {
+					return true;
+				}
+			} else if (!is_mlo_connect &&
+				   (oem_eht_cfg & WLAN_HOST_CRYPTO_WPA3_SAE_ALLOW_NON_MLO_EHT_HnP)) {
+				return true;
+			}
+
+			/* If OEM wants strict H2E mandatory for EHT/MLO, then
+			 * allow only if candidate has H2E capability
+			 */
+			return util_scan_entry_sae_h2e_capable(entry);
+		} else if (WLAN_CRYPTO_IS_WPA2(neg_sec_info->key_mgmt) &&
+			   WLAN_CRYPTO_WPA2_OEM_EHT_CFG_PMF_ALLOWED(oem_eht_cfg)) {
+			/* Only checks whether PMF APs are allowed or not via
+			 * the INI cfg.
+			 * Even if no-PMF APs are allowed to connect, PMF APs
+			 * will not be allowed to connect if the bitmap is not
+			 * set for PMF APs.
+			 *
+			 * If the AP is ML capable, return:
+			 *     -True, if not for MLO connection
+			 *     -INI BIT value for allowing MLO assoc with PMF
+			 *      enabled APs.
+			 *
+			 * If the AP is not ML capable, return:
+			 *     -INI BIT value for allowing EHT only connection
+			 *      for PMF enabled APS.
+			 *
+			 */
+			if (mlie_present) {
+				if (!is_mlo_connect)
+					return true;
+				return (oem_eht_cfg & WLAN_HOST_CRYPTO_WPA2_ALLOW_MLO_MFPC_SET);
+			} else {
+				return (oem_eht_cfg & WLAN_HOST_CRYPTO_WPA2_ALLOW_NON_MLO_EHT_MFPC_SET);
+			}
+		} else {
+			return false;
+		}
+	} else if (!WLAN_CRYPTO_IS_WPA3(neg_sec_info->key_mgmt) &&
+		   WLAN_CRYPTO_IS_WPA2(neg_sec_info->key_mgmt) &&
+		   WLAN_CRYPTO_WPA2_OEM_EHT_CFG_NO_PMF_ALLOWED(oem_eht_cfg)) {
+		/*
+		 * Only checks whether no PMF APs are allowed or not via the INI
+		 * cfg.
+		 * All WPA3 configurations has to be PMF, so only allow
+		 * non-WPA3 WPA2 APs in this condition.
+		 *
+		 * If the AP is ML capable, return:
+		 *     -True, if not for MLO connection
+		 *     -INI BIT value for allowing MLO assoc with Non-PMF
+		 *      capable APs.
+		 *
+		 * If the AP is not ML capable, return:
+		 *     -INI BIT value for allowing EHT only connection
+		 *      for Non-PMF capable APs.
+		 */
+		if (mlie_present) {
+			if (!is_mlo_connect)
+				return true;
+			return (oem_eht_cfg & WLAN_HOST_CRYPTO_WPA2_ALLOW_MLO);
+		} else {
+			return (oem_eht_cfg & WLAN_HOST_CRYPTO_WPA2_ALLOW_NON_MLO_EHT);
+		}
+	} else {
 		return false;
 	}
-
-	/*
-	 * check AKM chosen for connection is SAE or not
-	 * if not connect with EHT enabled for all other AKMs
-	 */
-	if (!WLAN_CRYPTO_IS_AKM_SAE(scan_entry->neg_sec_info.key_mgmt))
-		return true;
-
-	rsnxe = util_scan_entry_rsnxe(scan_entry);
-	if (!rsnxe) {
-		mlme_debug(QDF_MAC_ADDR_FMT ":RSNXE not present, AKM 0x%x",
-			   QDF_MAC_ADDR_REF(scan_entry->bssid.bytes),
-					    scan_entry->neg_sec_info.key_mgmt);
-		return false;
-	}
-	rsnxe_caps = wlan_crypto_parse_rsnxe_ie(rsnxe, &cap_len);
-	if (!rsnxe_caps) {
-		mlme_debug("RSNXE caps not present");
-		return false;
-	}
-	/* check if H2E bit is enabled in RSNXE */
-	if (*rsnxe_caps & WLAN_CRYPTO_RSNX_CAP_SAE_H2E)
-		return true;
-
-	mlme_debug(QDF_MAC_ADDR_FMT ": RSNXE caps (0x%x) dont have H2E support",
-		   QDF_MAC_ADDR_REF(scan_entry->bssid.bytes), *rsnxe_caps);
-	return false;
 }
 #endif
 #endif
@@ -1540,7 +1604,7 @@ static int cm_calculate_eht_score(struct wlan_objmgr_psoc *psoc,
 	if (!phy_config->eht_cap || !entry->ie_list.ehtcap)
 		return 0;
 
-	if (!wlan_cm_is_eht_allowed_for_current_security(psoc, entry))
+	if (!wlan_cm_is_eht_allowed_for_current_security(psoc, entry, false))
 		return 0;
 
 	weight_config = &score_config->weight_config;
@@ -2269,7 +2333,7 @@ static int cm_calculate_ml_scores(struct wlan_objmgr_psoc *psoc,
 	weight_config = &score_config->weight_config;
 	if (IS_LINK_SCORE(ml_flag) || bss_mlo_type == SLO ||
 	    bss_mlo_type == MLSR ||
-	    !wlan_cm_is_eht_allowed_for_current_security(psoc, entry)) {
+	    !wlan_cm_is_eht_allowed_for_current_security(psoc, entry, false)) {
 		rssi_score =
 			cm_calculate_rssi_score(&score_config->rssi_score,
 						entry->rssi_raw,
@@ -3020,7 +3084,8 @@ static void cm_eliminate_common_candidate(qdf_list_t *candidate_list)
 	}
 }
 
-static void cm_validate_partner_links_rsn_cap(struct scan_cache_entry *entry,
+static void cm_validate_partner_links_rsn_cap(struct wlan_objmgr_psoc *psoc,
+					      struct scan_cache_entry *entry,
 					      qdf_list_t *scan_list)
 {
 	uint8_t idx;
@@ -3045,8 +3110,12 @@ static void cm_validate_partner_links_rsn_cap(struct scan_cache_entry *entry,
 		if (!partner_entry)
 			continue;
 
-		if (wlan_scan_entries_contain_cmn_akm(entry, partner_entry))
+		if (wlan_scan_entries_contain_cmn_akm(entry, partner_entry) &&
+		    wlan_cm_is_eht_allowed_for_current_security(psoc,
+								partner_entry,
+								true)) {
 			continue;
+		}
 
 		partner_info->is_valid_link = false;
 		mlme_debug(QDF_MAC_ADDR_FMT "link (%d) akm not matching",
@@ -3065,7 +3134,8 @@ static void cm_eliminate_common_candidate(qdf_list_t *candidate_list)
 }
 
 static inline void
-cm_validate_partner_links_rsn_cap(struct scan_cache_entry *entry,
+cm_validate_partner_links_rsn_cap(struct wlan_objmgr_psoc *psoc,
+				  struct scan_cache_entry *entry,
 				  qdf_list_t *scan_list)
 {
 }
@@ -3160,7 +3230,8 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 		}
 
 		/* Check if the partner links RSN caps are matching. */
-		cm_validate_partner_links_rsn_cap(scan_entry->entry, scan_list);
+		cm_validate_partner_links_rsn_cap(psoc,
+						  scan_entry->entry, scan_list);
 		if (denylist_action == CM_DLM_NO_ACTION ||
 		    (are_all_candidate_denylisted && denylist_action ==
 		     CM_DLM_REMOVE)) {
