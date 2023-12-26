@@ -2237,6 +2237,7 @@ struct cdp_throttle_ops {
  * @ipa_get_smmu_mapped: Get IPA SMMU mapped value
  * @ipa_rx_wdsext_iface: Forward RX exception packets to wdsext interface
  * @ipa_rx_super_rule_setup: Setup cce super rules based on filter tuple
+ * @ipa_tx_super_rule_setup: Setup tx super rules based on filter tuple
  * @ipa_ast_create: Create/Update ast entry
  * @ipa_get_wdi_version: Get WDI version
  */
@@ -2347,6 +2348,8 @@ struct cdp_ipa_ops {
 #endif
 #ifdef IPA_OPT_WIFI_DP
 	QDF_STATUS (*ipa_rx_super_rule_setup)(struct cdp_soc_t *soc_hdl,
+					      void *flt_params);
+	QDF_STATUS (*ipa_tx_super_rule_setup)(struct cdp_soc_t *soc_hdl,
 					      void *flt_params);
 #endif
 #ifdef IPA_WDS_EASYMESH_FEATURE

@@ -3864,6 +3864,12 @@ void dp_ipa_wdi_opt_dpath_notify_flt_rsvd(bool is_success)
 {
 	wlan_ipa_wdi_opt_dpath_notify_flt_rsvd(is_success);
 }
+
+QDF_STATUS dp_ipa_tx_super_rule_setup(struct cdp_soc_t *soc_hdl,
+				      void *flt_params)
+{
+	return QDF_STATUS_SUCCESS;
+}
 #endif
 
 #ifdef IPA_WDS_EASYMESH_FEATURE

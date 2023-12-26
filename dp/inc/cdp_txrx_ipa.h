@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -929,6 +929,7 @@ cdp_ipa_update_peer_rx_stats(ol_txrx_soc_handle soc, uint8_t vdev_id,
 
 #ifdef IPA_OPT_WIFI_DP
 #define RX_CCE_SUPER_RULE_SETUP_NUM 2
+#define TX_SUPER_RULE_SETUP_NUM 3
 struct addr_params {
 	uint8_t valid;
 	uint8_t src_ipv4_addr[4];
@@ -952,6 +953,23 @@ struct wifi_dp_flt_setup {
 	struct addr_params flt_addr_params[RX_CCE_SUPER_RULE_SETUP_NUM];
 };
 
+/*
+ * struct wifi_dp_tx_flt_setup - parameters for tx filter setup
+ * in opt_dp_ctrl
+ * @pdev_id: pdev ID
+ * @op: op code
+ * @num_filters: no. of filters
+ * @ipa_flt_evnt_response: filter event response
+ * @flt_addr_params: filter parameters
+ */
+struct wifi_dp_tx_flt_setup {
+	uint8_t pdev_id;
+	uint8_t op;
+	uint8_t num_filters;
+	uint32_t ipa_flt_evnt_response;
+	struct addr_params flt_addr_params[TX_SUPER_RULE_SETUP_NUM];
+};
+
 static inline QDF_STATUS
 cdp_ipa_rx_cce_super_rule_setup(ol_txrx_soc_handle soc,
 				void *flt_params)
@@ -964,6 +982,23 @@ cdp_ipa_rx_cce_super_rule_setup(ol_txrx_soc_handle soc,
 
 	if (soc->ops->ipa_ops->ipa_rx_super_rule_setup)
 		return soc->ops->ipa_ops->ipa_rx_super_rule_setup(soc,
+								  flt_params);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+cdp_ipa_tx_super_rule_setup(ol_txrx_soc_handle soc,
+			    void *flt_params)
+{
+	if (!soc || !soc->ops || !soc->ops->ipa_ops) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
+			  "%s invalid instance", __func__);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (soc->ops->ipa_ops->ipa_rx_super_rule_setup)
+		return soc->ops->ipa_ops->ipa_tx_super_rule_setup(soc,
 								  flt_params);
 
 	return QDF_STATUS_SUCCESS;

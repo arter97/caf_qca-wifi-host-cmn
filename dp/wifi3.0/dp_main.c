@@ -160,7 +160,6 @@ qdf_size_t dp_get_soc_context_size(uint16_t device_id);
  */
 QDF_COMPILE_TIME_ASSERT(cdp_peer_stats_param_t_max_size,
 			(sizeof(cdp_peer_stats_param_t) <= 16));
-
 #ifdef WLAN_FEATURE_DP_EVENT_HISTORY
 /*
  * If WLAN_CFG_INT_NUM_CONTEXTS is changed, HIF_NUM_INT_CONTEXTS
@@ -13374,6 +13373,7 @@ static struct cdp_ipa_ops dp_ops_ipa = {
 #endif
 #ifdef IPA_OPT_WIFI_DP
 	.ipa_rx_super_rule_setup = dp_ipa_rx_super_rule_setup,
+	.ipa_tx_super_rule_setup = dp_ipa_tx_super_rule_setup,
 	.ipa_pcie_link_up = dp_ipa_pcie_link_up,
 	.ipa_pcie_link_down = dp_ipa_pcie_link_down,
 #endif
