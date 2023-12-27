@@ -23098,6 +23098,10 @@ static void populate_tlv_events_id(WMI_EVT_ID *event_ids)
 	event_ids[wmi_vdev_oob_connection_response_event_id] =
 			WMI_VDEV_OOB_CONNECTION_RESP_EVENTID;
 #endif
+#ifdef WLAN_WIFI_RADAR_ENABLE
+	event_ids[wmi_pdev_wifi_radar_cal_completion_status_event_id] =
+			WMI_PDEV_WIFI_RADAR_CAL_COMPLETION_STATUS_EVENTID;
+#endif
 
 }
 
@@ -23775,6 +23779,7 @@ void wmi_tlv_attach(wmi_unified_t wmi_handle)
 	wmi_11be_attach_tlv(wmi_handle);
 	wmi_coap_attach_tlv(wmi_handle);
 	wmi_mlme_attach_tlv(wmi_handle);
+	wmi_wifi_radar_attach_tlv(wmi_handle);
 }
 qdf_export_symbol(wmi_tlv_attach);
 

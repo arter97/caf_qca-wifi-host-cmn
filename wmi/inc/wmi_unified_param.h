@@ -5567,7 +5567,9 @@ typedef enum {
 	wmi_audio_transport_switch_type_event_id,
 	wmi_vdev_oob_connection_response_event_id,
 #endif
-
+#ifdef WLAN_WIFI_RADAR_ENABLE
+	wmi_pdev_wifi_radar_cal_completion_status_event_id,
+#endif
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -9943,6 +9945,19 @@ struct wmi_cfr_enh_phase_delta_param {
 	uint32_t *enh_phase_delta_array;
 };
 #endif /* WLAN_RCC_ENHANCED_AOA_SUPPORT */
+
+#ifdef WLAN_WIFI_RADAR_ENABLE
+struct wmi_wifi_radar_cal_status_param {
+	uint32_t pdev_id;
+	uint32_t wifi_radar_pkt_bw;
+	uint32_t channel_bw;
+	uint32_t band_center_freq;
+	uint32_t num_ltf_tx;
+	uint32_t num_skip_ltf_rx;
+	uint32_t num_ltf_accumulation;
+	uint32_t per_chain_cal_status[WMI_HOST_MAX_NUM_CHAINS];
+};
+#endif
 
 /**
  * struct wmi_host_oem_indirect_data - Indirect OEM data

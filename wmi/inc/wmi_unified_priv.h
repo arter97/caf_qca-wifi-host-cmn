@@ -3149,6 +3149,14 @@ QDF_STATUS
 #endif /* WLAN_RCC_ENHANCED_AOA_SUPPORT */
 #endif
 
+#ifdef WLAN_WIFI_RADAR_ENABLE
+QDF_STATUS
+(*extract_wifi_radar_cal_status_param)
+			(wmi_unified_t wmi_handle,
+			 void *evt_buf,
+			 struct wmi_wifi_radar_cal_status_param *param);
+#endif
+
 QDF_STATUS (*send_set_halphy_cal)(wmi_unified_t wmi_handle,
 				  struct wmi_host_send_set_halphy_cal_info *param);
 
@@ -4080,6 +4088,14 @@ static inline void wmi_ext_dbg_msg_put(struct wmi_ext_dbg_msg *msg)
 void wmi_cfr_attach_tlv(struct wmi_unified *wmi_handle);
 #else
 static inline void wmi_cfr_attach_tlv(struct wmi_unified *wmi_handle)
+{
+}
+#endif
+
+#ifdef WLAN_WIFI_RADAR_ENABLE
+void wmi_wifi_radar_attach_tlv(struct wmi_unified *wmi_handle);
+#else
+static inline void wmi_wifi_radar_attach_tlv(struct wmi_unified *wmi_handle)
 {
 }
 #endif
