@@ -1973,24 +1973,44 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		_tgtobj->rx.to_stack.bytes += _srcobj->rx.to_stack.bytes; \
 	} while (0)
 
-#define DP_UPDATE_PER_PKT_STATS(_tgtobj, _srcobj) \
+#define DP_UPDATE_PER_PKT_TX_TQM_RR_STATS(_tgtobj, _srcobj) \
 	do { \
-		uint8_t i; \
-		_tgtobj->tx.ucast.num += _srcobj->tx.ucast.num; \
-		_tgtobj->tx.ucast.bytes += _srcobj->tx.ucast.bytes; \
-		_tgtobj->tx.mcast.num += _srcobj->tx.mcast.num; \
-		_tgtobj->tx.mcast.bytes += _srcobj->tx.mcast.bytes; \
-		_tgtobj->tx.bcast.num += _srcobj->tx.bcast.num; \
-		_tgtobj->tx.bcast.bytes += _srcobj->tx.bcast.bytes; \
-		_tgtobj->tx.nawds_mcast.num += _srcobj->tx.nawds_mcast.num; \
-		_tgtobj->tx.nawds_mcast.bytes += \
-					_srcobj->tx.nawds_mcast.bytes; \
-		_tgtobj->tx.tx_success.num += _srcobj->tx.tx_success.num; \
-		_tgtobj->tx.tx_success.bytes += _srcobj->tx.tx_success.bytes; \
-		_tgtobj->tx.nawds_mcast_drop += _srcobj->tx.nawds_mcast_drop; \
-		_tgtobj->tx.ofdma += _srcobj->tx.ofdma; \
-		_tgtobj->tx.non_amsdu_cnt += _srcobj->tx.non_amsdu_cnt; \
-		_tgtobj->tx.amsdu_cnt += _srcobj->tx.amsdu_cnt; \
+		_tgtobj->tx.dropped.fw_rem.num += \
+			_srcobj->tx.tqm_rr_counter.res.fw_rem;\
+		_tgtobj->tx.dropped.fw_rem.bytes += \
+			_srcobj->tx.tqm_rr_counter.res.fw_rem_bytes; \
+		_tgtobj->tx.dropped.fw_rem_notx += \
+			_srcobj->tx.tqm_rr_counter.res.fw_rem_notx; \
+		_tgtobj->tx.dropped.fw_rem_tx.num += \
+			_srcobj->tx.tqm_rr_counter.res.fw_rem_tx; \
+		_tgtobj->tx.dropped.fw_rem_tx.bytes += \
+			_srcobj->tx.tqm_rr_counter.res.fw_rem_tx_bytes; \
+		_tgtobj->tx.dropped.age_out += \
+			_srcobj->tx.tqm_rr_counter.res.age_out; \
+		_tgtobj->tx.dropped.fw_reason1 += \
+			_srcobj->tx.tqm_rr_counter.res.fw_reason1; \
+		_tgtobj->tx.dropped.fw_reason2 += \
+			_srcobj->tx.tqm_rr_counter.res.fw_reason2; \
+		_tgtobj->tx.dropped.fw_reason3 += \
+			_srcobj->tx.tqm_rr_counter.res.fw_reason3; \
+		_tgtobj->tx.dropped.fw_rem_queue_disable += \
+			_srcobj->tx.tqm_rr_counter.res.fw_rem_queue_disable; \
+		_tgtobj->tx.dropped.fw_rem_no_match += \
+			_srcobj->tx.tqm_rr_counter.res.fw_rem_no_match; \
+		_tgtobj->tx.dropped.drop_threshold += \
+			_srcobj->tx.tqm_rr_counter.res.drop_threshold; \
+		_tgtobj->tx.dropped.drop_link_desc_na += \
+			_srcobj->tx.tqm_rr_counter.res.drop_link_desc_na; \
+		_tgtobj->tx.dropped.invalid_drop += \
+			_srcobj->tx.tqm_rr_counter.res.invalid_drop; \
+		_tgtobj->tx.dropped.mcast_vdev_drop += \
+			_srcobj->tx.tqm_rr_counter.res.mcast_vdev_drop; \
+		_tgtobj->tx.dropped.invalid_rr += \
+			_srcobj->tx.tqm_rr_counter.res.invalid_rr; \
+	} while (0)
+
+#define DP_UPDATE_VDEV_TQM_RR_STATS(_tgtobj, _srcobj) \
+	do { \
 		_tgtobj->tx.dropped.fw_rem.num += \
 					_srcobj->tx.dropped.fw_rem.num; \
 		_tgtobj->tx.dropped.fw_rem.bytes += \
@@ -2022,6 +2042,26 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 					_srcobj->tx.dropped.mcast_vdev_drop; \
 		_tgtobj->tx.dropped.invalid_rr += \
 					_srcobj->tx.dropped.invalid_rr; \
+	} while (0)
+
+#define DP_UPDATE_PER_PKT_TX_RX_STATS(_tgtobj, _srcobj) \
+	do { \
+		uint8_t i; \
+		_tgtobj->tx.ucast.num += _srcobj->tx.ucast.num; \
+		_tgtobj->tx.ucast.bytes += _srcobj->tx.ucast.bytes; \
+		_tgtobj->tx.mcast.num += _srcobj->tx.mcast.num; \
+		_tgtobj->tx.mcast.bytes += _srcobj->tx.mcast.bytes; \
+		_tgtobj->tx.bcast.num += _srcobj->tx.bcast.num; \
+		_tgtobj->tx.bcast.bytes += _srcobj->tx.bcast.bytes; \
+		_tgtobj->tx.nawds_mcast.num += _srcobj->tx.nawds_mcast.num; \
+		_tgtobj->tx.nawds_mcast.bytes += \
+					_srcobj->tx.nawds_mcast.bytes; \
+		_tgtobj->tx.tx_success.num += _srcobj->tx.tx_success.num; \
+		_tgtobj->tx.tx_success.bytes += _srcobj->tx.tx_success.bytes; \
+		_tgtobj->tx.nawds_mcast_drop += _srcobj->tx.nawds_mcast_drop; \
+		_tgtobj->tx.ofdma += _srcobj->tx.ofdma; \
+		_tgtobj->tx.non_amsdu_cnt += _srcobj->tx.non_amsdu_cnt; \
+		_tgtobj->tx.amsdu_cnt += _srcobj->tx.amsdu_cnt; \
 		_tgtobj->tx.failed_retry_count += \
 					_srcobj->tx.failed_retry_count; \
 		_tgtobj->tx.inval_link_id_pkt_cnt += \
@@ -2108,6 +2148,18 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		} \
 		DP_IPA_UPDATE_PER_PKT_RX_STATS(_tgtobj, _srcobj); \
 		DP_UPDATE_PROTOCOL_COUNT_STATS(_tgtobj, _srcobj); \
+	} while (0)
+
+#define DP_UPDATE_PER_PKT_STATS(_tgtobj, _srcobj) \
+	do { \
+		DP_UPDATE_PER_PKT_TX_RX_STATS(_tgtobj, _srcobj); \
+		DP_UPDATE_PER_PKT_TX_TQM_RR_STATS(_tgtobj, _srcobj); \
+	} while (0)
+
+#define DP_UPDATE_VDEV_STATS(_tgtobj, _srcobj) \
+	do { \
+		DP_UPDATE_PER_PKT_TX_RX_STATS(_tgtobj, _srcobj); \
+		DP_UPDATE_VDEV_TQM_RR_STATS(_tgtobj, _srcobj); \
 	} while (0)
 
 #define DP_UPDATE_EXTD_STATS(_tgtobj, _srcobj) \
@@ -2273,7 +2325,7 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 #define DP_UPDATE_VDEV_STATS_FOR_UNMAPPED_PEERS(_tgtobj, _srcobj) \
 	do { \
 		DP_UPDATE_BASIC_STATS(_tgtobj, _srcobj); \
-		DP_UPDATE_PER_PKT_STATS(_tgtobj, _srcobj); \
+		DP_UPDATE_VDEV_STATS(_tgtobj, _srcobj); \
 		DP_UPDATE_EXTD_STATS(_tgtobj, _srcobj); \
 	} while (0)
 

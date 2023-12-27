@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1275,6 +1275,22 @@ dp_tx_is_desc_id_valid(struct dp_soc *soc, uint32_t tx_desc_id)
 	return true;
 }
 #endif /* QCA_DP_TX_DESC_ID_CHECK */
+
+#if defined(WLAN_MLO_MULTI_CHIP)
+static inline void dp_tx_desc_update_bcast_flag(struct dp_soc *soc,
+						struct dp_tx_desc_s *desc,
+						qdf_nbuf_t nbuf)
+{
+	if (qdf_nbuf_pkt_type_is_bcast(nbuf))
+		desc->flags |= DP_TX_DESC_FLAG_BCAST;
+}
+#else
+static inline void dp_tx_desc_update_bcast_flag(struct dp_soc *soc,
+						struct dp_tx_desc_s *desc,
+						qdf_nbuf_t nbuf)
+{
+}
+#endif
 
 #ifdef QCA_DP_TX_DESC_FAST_COMP_ENABLE
 static inline void dp_tx_desc_update_fast_comp_flag(struct dp_soc *soc,

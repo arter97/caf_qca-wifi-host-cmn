@@ -4644,20 +4644,21 @@ typedef void *dp_txrx_ref_handle;
  * @ofdma: Total Packets as ofdma
  * @non_amsdu_cnt: Number of MSDUs with no MSDU level aggregation
  * @amsdu_cnt: Number of MSDUs part of AMSDU
- * @dropped: Dropped packet statistics
- * @dropped.fw_rem: Discarded by firmware
- * @dropped.fw_rem_notx: firmware_discard_untransmitted
- * @dropped.fw_rem_tx: firmware_discard_transmitted
- * @dropped.age_out: aged out in mpdu/msdu queues
- * @dropped.fw_reason1: discarded by firmware reason 1
- * @dropped.fw_reason2: discarded by firmware reason 2
- * @dropped.fw_reason3: discarded by firmware reason  3
- * @dropped.fw_rem_no_match: dropped due to fw no match command
- * @dropped.drop_threshold: dropped due to HW threshold
- * @dropped.drop_link_desc_na: dropped due resource not available in HW
- * @dropped.invalid_drop: Invalid msdu drop
- * @dropped.mcast_vdev_drop: MCAST drop configured for VDEV in HW
- * @dropped.invalid_rr: Invalid TQM release reason
+ * @tqm_rr_counter: Counters for dropped packet statistics
+ * @tqm_rr_counter.fw_rem: Discarded by firmware
+ * @tqm_rr_counter.fw_rem_notx: firmware_discard_untransmitted
+ * @tqm_rr_counter.fw_rem_tx: firmware_discard_transmitted
+ * @tqm_rr_counter.age_out: aged out in mpdu/msdu queues
+ * @tqm_rr_counter.fw_reason1: discarded by firmware reason 1
+ * @tqm_rr_counter.fw_reason2: discarded by firmware reason 2
+ * @tqm_rr_counter.fw_reason3: discarded by firmware reason  3
+ * @tqm_rr_counter.fw_rem_no_match: dropped due to fw no match command
+ * @tqm_rr_counter.drop_threshold: dropped due to HW threshold
+ * @tqm_rr_counter.drop_link_desc_na: dropped due resource
+ * not available in HW
+ * @tqm_rr_counter.invalid_drop: Invalid msdu drop
+ * @tqm_rr_counter.mcast_vdev_drop: MCAST drop configured for VDEV in HW
+ * @tqm_rr_counter.invalid_rr: Invalid TQM release reason
  * @failed_retry_count: packets failed due to retry above 802.11 retry limit
  * @retry_count: packets successfully send after one or more retry
  * @multiple_retry_count: packets successfully sent after more than one retry
@@ -4680,22 +4681,35 @@ struct dp_peer_per_pkt_tx_stats {
 	uint32_t ofdma;
 	uint32_t non_amsdu_cnt;
 	uint32_t amsdu_cnt;
-	struct {
-		struct cdp_pkt_info fw_rem;
-		uint32_t fw_rem_notx;
-		struct cdp_pkt_info fw_rem_tx;
-		uint32_t age_out;
-		uint32_t fw_reason1;
-		uint32_t fw_reason2;
-		uint32_t fw_reason3;
-		uint32_t fw_rem_queue_disable;
-		uint32_t fw_rem_no_match;
-		uint32_t drop_threshold;
-		uint32_t drop_link_desc_na;
-		uint32_t invalid_drop;
-		uint32_t mcast_vdev_drop;
-		uint32_t invalid_rr;
-	} dropped;
+	union {
+		struct {
+			uint32_t frame_acked;
+			uint32_t fw_rem;
+			uint32_t fw_rem_tx;
+			uint32_t fw_rem_notx;
+			uint32_t age_out;
+			uint32_t fw_reason1;
+			uint32_t fw_reason2;
+			uint32_t fw_reason3;
+			uint32_t fw_rem_queue_disable;
+			uint32_t fw_rem_no_match;
+			uint32_t drop_threshold;
+			uint32_t drop_link_desc_na;
+			uint32_t invalid_drop;
+			uint32_t mcast_vdev_drop;
+			uint32_t vdev_mismatch_drop;
+			uint32_t invalid_rr;
+			uint64_t fw_rem_bytes;
+			uint64_t fw_rem_tx_bytes;
+		} res;
+		struct {
+			/* Above res structure and tqm_rr_update structure
+			 * should be mapped */
+			uint32_t drop_stats[HAL_TX_TQM_RR_MAX + 1];
+			uint64_t fw_rem_bytes;
+			uint64_t fw_rem_tx_bytes;
+		} tqm_rr_update;
+	} tqm_rr_counter;
 	uint32_t failed_retry_count;
 	uint32_t retry_count;
 	uint32_t multiple_retry_count;

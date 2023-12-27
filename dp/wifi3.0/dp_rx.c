@@ -1210,6 +1210,7 @@ bool dp_rx_intrabss_mcbc_fwd(struct dp_soc *soc, struct dp_txrx_peer *ta_peer,
 {
 	uint16_t len;
 	qdf_nbuf_t nbuf_copy;
+	qdf_ether_header_t *eh;
 
 	if (dp_rx_intrabss_eapol_drop_check(soc, ta_peer, rx_tlv_hdr,
 					    nbuf))
@@ -1240,6 +1241,9 @@ bool dp_rx_intrabss_mcbc_fwd(struct dp_soc *soc, struct dp_txrx_peer *ta_peer,
 		return false;
 
 	/* Don't send packets if tx is paused */
+	eh = (qdf_ether_header_t *)qdf_nbuf_data(nbuf_copy);
+	if (QDF_IS_ADDR_BROADCAST(eh->ether_dhost))
+		nbuf_copy->pkt_type = PACKET_BROADCAST;
 	if (!soc->is_tx_pause &&
 	    !dp_tx_send((struct cdp_soc_t *)soc,
 			ta_peer->vdev->vdev_id, nbuf_copy)) {

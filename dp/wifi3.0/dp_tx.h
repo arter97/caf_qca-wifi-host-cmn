@@ -82,6 +82,7 @@ int dp_tx_proxy_arp(struct dp_vdev *vdev, qdf_nbuf_t nbuf);
 #define DP_TX_DESC_FLAG_PPEDS		0x20000
 #define DP_TX_DESC_FLAG_FAST		0x40000
 #define DP_TX_DESC_FLAG_SPECIAL         0x80000
+#define DP_TX_DESC_FLAG_BCAST           0x100000
 
 #define DP_TX_EXT_DESC_FLAG_METADATA_VALID 0x1
 

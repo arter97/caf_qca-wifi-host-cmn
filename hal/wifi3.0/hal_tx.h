@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -330,7 +330,7 @@ enum hal_tx_encap_type {
  * @HAL_TX_TQM_RR_MULTICAST_DROP: Dropped due mcast drop set for VDEV
  * @HAL_TX_TQM_RR_VDEV_MISMATCH_DROP: Dropped due to being set with
  *				'TCL_drop_reason'
- *
+ * @HAL_TX_TQM_RR_MAX: Max value TQM release reason code
  */
 enum hal_tx_tqm_release_reason {
 	HAL_TX_TQM_RR_FRAME_ACKED,
@@ -348,6 +348,7 @@ enum hal_tx_tqm_release_reason {
 	HAL_TX_TQM_RR_DROP_OR_INVALID_MSDU,
 	HAL_TX_TQM_RR_MULTICAST_DROP,
 	HAL_TX_TQM_RR_VDEV_MISMATCH_DROP,
+	HAL_TX_TQM_RR_MAX,
 };
 
 /* enum - Table IDs for 2 DSCP-TID mapping Tables that TCL H/W supports
