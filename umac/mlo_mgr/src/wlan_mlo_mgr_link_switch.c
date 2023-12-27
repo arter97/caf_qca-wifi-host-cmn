@@ -449,10 +449,23 @@ mlo_mgr_reset_roam_state_for_link_vdev(struct wlan_objmgr_vdev *vdev,
 		mlo_err("vdev:%d failed to change RSO state to deinit",
 			wlan_vdev_get_id(assoc_vdev));
 }
+
+static void
+mlo_mgr_restore_rso_upon_link_switch_failure(struct wlan_objmgr_vdev *vdev)
+{
+	wlan_cm_roam_state_change(wlan_vdev_get_pdev(vdev),
+				  wlan_vdev_get_id(vdev),
+				  WLAN_ROAM_RSO_ENABLED,
+				  REASON_CONNECT);
+}
 #else
 static inline void
 mlo_mgr_reset_roam_state_for_link_vdev(struct wlan_objmgr_vdev *vdev,
 				       struct wlan_objmgr_vdev *assoc_vdev)
+{}
+
+static inline void
+mlo_mgr_restore_rso_upon_link_switch_failure(struct wlan_objmgr_vdev *vdev)
 {}
 #endif
 
@@ -827,12 +840,18 @@ void mlo_mgr_link_switch_connect_done(struct wlan_objmgr_vdev *vdev,
 	struct wlan_mlo_link_switch_req *req;
 
 	req = &vdev->mlo_dev_ctx->link_ctx->last_req;
-	if (QDF_IS_STATUS_SUCCESS(status))
+	if (QDF_IS_STATUS_SUCCESS(status)) {
 		mlo_mgr_link_switch_connect_success_trans_state(vdev);
-	else
+	} else {
+		mlo_update_connected_links(vdev, 0);
 		mlo_err("VDEV %d link switch connect failed", req->vdev_id);
+	}
 
 	mlo_mgr_remove_link_switch_cmd(vdev);
+
+	if (QDF_IS_STATUS_ERROR(status))
+		mlo_mgr_restore_rso_upon_link_switch_failure(
+				wlan_mlo_get_assoc_link_vdev(vdev));
 }
 
 static enum wlan_mlo_link_switch_notify_reason
