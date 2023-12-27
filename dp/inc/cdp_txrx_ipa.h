@@ -961,6 +961,7 @@ struct wifi_dp_flt_setup {
  * @num_filters: no. of filters
  * @ipa_flt_evnt_response: filter event response
  * @flt_addr_params: filter parameters
+ * @flt_rem_lock: spin lock for filter remove
  */
 struct wifi_dp_tx_flt_setup {
 	uint8_t pdev_id;
@@ -968,6 +969,7 @@ struct wifi_dp_tx_flt_setup {
 	uint8_t num_filters;
 	uint32_t ipa_flt_evnt_response;
 	struct addr_params flt_addr_params[TX_SUPER_RULE_SETUP_NUM];
+	qdf_spinlock_t flt_rem_lock;
 };
 
 static inline QDF_STATUS
