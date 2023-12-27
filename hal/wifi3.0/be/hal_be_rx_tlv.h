@@ -70,7 +70,7 @@ struct rx_mpdu_start_tlv {
 
 #ifdef BE_NON_AP_COMPACT_TLV
 struct rx_msdu_end_tlv {
-        hal_rx_msdu_end_t rx_msdu_end;
+	hal_rx_msdu_end_t rx_msdu_end;
 };
 #else
 struct rx_msdu_end_tlv {
@@ -158,9 +158,6 @@ struct rx_pkt_tlvs {
 #define HAL_RX_REO_QUEUE_DESC_ADDR_31_0_GET(_rx_pkt_tlv)	\
 	HAL_RX_MPDU_START(_rx_pkt_tlv).rx_reo_queue_desc_addr_31_0
 
-#define HAL_RX_TLV_AMPDU_FLAG_GET(_rx_pkt_tlv)		\
-	HAL_RX_MPDU_START(_rx_pkt_tlv).ampdu_flag
-
 #define HAL_RX_TLV_MPDU_PN_127_96_GET(_rx_pkt_tlv)	\
 	HAL_RX_MPDU_START(_rx_pkt_tlv).pn_127_96
 
@@ -170,14 +167,8 @@ struct rx_pkt_tlvs {
 #define HAL_RX_TLV_FIRST_MPDU_GET(_rx_pkt_tlv)		\
 	HAL_RX_MPDU_START(_rx_pkt_tlv).first_mpdu
 
-#define HAL_RX_TLV_L3_TYPE_GET(_rx_pkt_tlv)	\
-	HAL_RX_MSDU_END(_rx_pkt_tlv).l3_type
-
 #define HAL_RX_GET_PPDU_ID(_rx_pkt_tlv)	\
 	HAL_RX_MPDU_START(_rx_pkt_tlv).phy_ppdu_id
-
-#define HAL_RX_TLV_PHY_PPDU_ID_GET(_rx_pkt_tlv)		\
-	HAL_RX_MSDU_END(_rx_pkt_tlv).phy_ppdu_id
 
 #define HAL_RX_GET_FILTER_CATEGORY(_rx_pkt_tlv) \
 	HAL_RX_MPDU_START(_rx_pkt_tlv).rxpcu_mpdu_filter_in_category
@@ -206,6 +197,12 @@ struct rx_pkt_tlvs {
 
 #define HAL_RX_TLV_DECAP_FORMAT_GET(_rx_pkt_tlv)	\
 	HAL_RX_MSDU_END(_rx_pkt_tlv).decap_format
+
+#define HAL_RX_TLV_PHY_PPDU_ID_GET(_rx_pkt_tlv)		\
+	HAL_RX_MSDU_END(_rx_pkt_tlv).phy_ppdu_id
+
+#define HAL_RX_TLV_AMPDU_FLAG_GET(_rx_pkt_tlv)		\
+	HAL_RX_MPDU_START(_rx_pkt_tlv).ampdu_flag
 
 #ifdef RECEIVE_OFFLOAD
 #define HAL_RX_TLV_GET_TCP_PURE_ACK(_rx_pkt_tlv) \
@@ -297,6 +294,12 @@ struct rx_pkt_tlvs {
 /*
  * LRO information needed from the TLVs
  */
+#if defined(CONFIG_WORD_BASED_TLV) && defined(BE_NON_AP_COMPACT_TLV)
+#define HAL_RX_TLV_GET_LRO_ELIGIBLE(_rx_pkt_tlv)	0
+#define HAL_RX_TLV_GET_TCP_ACK(_rx_pkt_tlv)	0
+#define HAL_RX_TLV_GET_TCP_SEQ(_rx_pkt_tlv)	0
+#define HAL_RX_TLV_GET_TCP_WIN(_rx_pkt_tlv)	0
+#else
 #define HAL_RX_TLV_GET_LRO_ELIGIBLE(_rx_pkt_tlv) \
 	HAL_RX_MSDU_END(_rx_pkt_tlv).lro_eligible
 
@@ -308,6 +311,7 @@ struct rx_pkt_tlvs {
 
 #define HAL_RX_TLV_GET_TCP_WIN(_rx_pkt_tlv) \
 	HAL_RX_MSDU_END(_rx_pkt_tlv).window_size
+#endif
 #endif
 
 #define HAL_RX_TLV_L3_TYPE_GET(_rx_pkt_tlv)	\
@@ -690,20 +694,6 @@ static inline void hal_rx_priv_info_get_from_tlv_be(uint8_t *buf,
 			    RX_BE_PADDING0_BYTES : len;
 
 	qdf_mem_copy(priv_data, pkt_tlvs->rx_padding0, copy_len);
-}
-
-/**
- * hal_rx_tlv_l3_type_get_be() - API to get the l3 type from
- *                               rx_msdu_start TLV
- * @buf: pointer to the start of RX PKT TLV headers
- *
- * Return: uint32_t(l3 type)
- */
-static inline uint32_t hal_rx_tlv_l3_type_get_be(uint8_t *buf)
-{
-	struct rx_pkt_tlvs *rx_pkt_tlvs = (struct rx_pkt_tlvs *)buf;
-
-	return HAL_RX_TLV_L3_TYPE_GET(rx_pkt_tlvs);
 }
 
 /**

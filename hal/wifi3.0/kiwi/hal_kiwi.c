@@ -1182,6 +1182,20 @@ static inline uint32_t hal_rx_mpdu_start_sw_peer_id_get_kiwi(uint8_t *buf)
 	return HAL_RX_TLV_SW_PEER_ID_GET(rx_pkt_tlvs);
 }
 
+/**
+ * hal_rx_tlv_l3_type_get_kiwi() - API to get the l3 type from
+ *                               rx_msdu_start TLV
+ * @buf: pointer to the start of RX PKT TLV headers
+ *
+ * Return: uint32_t(l3 type)
+ */
+static inline uint32_t hal_rx_tlv_l3_type_get_kiwi(uint8_t *buf)
+{
+	struct rx_pkt_tlvs *rx_pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+
+	return HAL_RX_TLV_L3_TYPE_GET(rx_pkt_tlvs);
+}
+
 #ifdef CONFIG_WORD_BASED_TLV
 /**
  * hal_rx_priv_info_set_in_tlv_kiwi() - Save the private info to
@@ -2433,7 +2447,7 @@ static void hal_hw_txrx_ops_attach_kiwi(struct hal_soc *hal_soc)
 #endif
 	hal_soc->ops->hal_compute_reo_remap_ix0 = NULL;
 
-	hal_soc->ops->hal_rx_tlv_l3_type_get = hal_rx_tlv_l3_type_get_be;
+	hal_soc->ops->hal_rx_tlv_l3_type_get = hal_rx_tlv_l3_type_get_kiwi;
 	hal_soc->ops->hal_tx_vdev_mismatch_routing_set =
 		hal_tx_vdev_mismatch_routing_set_generic_be;
 	hal_soc->ops->hal_tx_mcast_mlo_reinject_routing_set =
