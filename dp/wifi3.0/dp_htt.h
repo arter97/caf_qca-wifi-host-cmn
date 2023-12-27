@@ -1201,6 +1201,19 @@ dp_htt_get_mon_htt_ring_id(struct dp_soc *soc,
  */
 QDF_STATUS htt_h2t_rx_cce_super_rule_setup(struct htt_soc *htt_soc,
 					   void *flt_params);
+
+#ifdef IPA_OPT_WIFI_DP_CTRL
+/**
+ * htt_h2t_tx_super_rule_setup() - htt message to set tx super rules
+ *
+ * @htt_soc: HTT Soc handle
+ * @flt_params: Filter tuple
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS htt_h2t_tx_super_rule_setup(struct htt_soc *htt_soc,
+				       void *flt_params);
+#endif
 #endif
 
 #ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE

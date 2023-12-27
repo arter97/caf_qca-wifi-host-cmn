@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -602,6 +602,139 @@ QDF_STATUS htt_h2t_rx_cce_super_rule_setup(struct htt_soc *soc, void *param)
 	}
 	return status;
 }
+
+#ifdef IPA_OPT_WIFI_DP_CTRL
+QDF_STATUS htt_h2t_tx_super_rule_setup(struct htt_soc *soc, void *param)
+{
+	struct wifi_dp_tx_flt_setup *flt_params =
+		(struct wifi_dp_tx_flt_setup *)param;
+	struct dp_htt_htc_pkt *pkt;
+	qdf_nbuf_t msg;
+	uint32_t *msg_word;
+	uint8_t *htt_logger_bufp;
+	uint16_t ver = 0;
+	uint8_t i, valid = 0;
+	uint8_t num_filters = flt_params->num_filters;
+	uint8_t pdev_id = flt_params->pdev_id;
+	uint8_t op = flt_params->op;
+	uint16_t ipv4 = qdf_ntohs(QDF_NBUF_TRAC_IPV4_ETH_TYPE);
+	uint16_t ipv6 = qdf_ntohs(QDF_NBUF_TRAC_IPV6_ETH_TYPE);
+	QDF_STATUS status;
+
+	if (num_filters > TX_SUPER_RULE_SETUP_NUM) {
+		dp_htt_err("Wrong tx filter count %d", num_filters);
+		return QDF_STATUS_FILT_REQ_ERROR;
+	}
+	msg = qdf_nbuf_alloc(soc->osdev,
+			     HTT_MSG_BUF_SIZE(HTT_TX_LCE_SUPER_RULE_SETUP_SZ),
+			     HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING, 4,
+			     true);
+	if (!msg) {
+		dp_htt_err("Fail to allocate TX SUPER_RULE_SETUP msg ");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	qdf_nbuf_put_tail(msg, HTT_TX_LCE_SUPER_RULE_SETUP_SZ);
+	msg_word = (uint32_t *)qdf_nbuf_data(msg);
+	memset(msg_word, 0, HTT_TX_LCE_SUPER_RULE_SETUP_SZ);
+
+	qdf_nbuf_push_head(msg, HTC_HDR_ALIGNMENT_PADDING);
+	htt_logger_bufp = (uint8_t *)msg_word;
+
+	*msg_word = 0;
+	HTT_H2T_MSG_TYPE_SET(*msg_word,
+			     HTT_H2T_MSG_TYPE_TX_LCE_SUPER_RULE_SETUP);
+	HTT_TX_LCE_SUPER_RULE_SETUP_PDEV_ID_SET(*msg_word, pdev_id);
+	HTT_TX_LCE_SUPER_RULE_SETUP_OPERATION_SET(*msg_word, op);
+
+	/* Set TX_super_rule_params */
+	for (i = 0; i < TX_SUPER_RULE_SETUP_NUM; i++) {
+		if (!flt_params->flt_addr_params[i].ipa_flt_evnt_required) {
+			msg_word++;
+			msg_word += (QDF_IPV6_ADDR_SIZE / 4) * 2;
+			valid = 0;
+			HTT_TX_LCE_SUPER_RULE_SETUP_IS_VALID_SET(*msg_word,
+								 valid);
+			msg_word++;
+			continue;
+		}
+		valid = flt_params->flt_addr_params[i].valid;
+		ver = flt_params->flt_addr_params[i].l3_type;
+		msg_word++;
+
+		if (ver == ipv4) {
+			HTT_TX_LCE_SUPER_RULE_SETUP_IPV4_ADDR_ARRAY_SET(
+				msg_word,
+				flt_params->flt_addr_params[i].src_ipv4_addr);
+			dp_info("src_ipv4_addr 0x%x in msg_word", *msg_word);
+
+		} else if (ver == ipv6) {
+			HTT_TX_LCE_SUPER_RULE_SETUP_IPV6_ADDR_ARRAY_SET(
+				msg_word,
+				flt_params->flt_addr_params[i].src_ipv6_addr);
+			dp_info("src_ipv6_addr 0x%x in msg_word", *msg_word);
+		}
+		/* move uint32_t *msg_word by IPV6 addr size */
+		msg_word += (QDF_IPV6_ADDR_SIZE / 4);
+
+		if (ver == ipv4) {
+			HTT_TX_LCE_SUPER_RULE_SETUP_IPV4_ADDR_ARRAY_SET(
+				msg_word,
+				flt_params->flt_addr_params[i].dst_ipv4_addr);
+			dp_info("dst_ipv4_addr 0x%x in msg_word", *msg_word);
+		} else if (ver == ipv6) {
+			HTT_TX_LCE_SUPER_RULE_SETUP_IPV6_ADDR_ARRAY_SET(
+				msg_word,
+				flt_params->flt_addr_params[i].dst_ipv6_addr);
+			dp_info("dst_ipv6_addr 0x%x in msg_word", *msg_word);
+		}
+		/* move uint32_t *msg_word by IPV6 addr size */
+		msg_word += (QDF_IPV6_ADDR_SIZE / 4);
+		HTT_TX_LCE_SUPER_RULE_SETUP_L3_TYPE_SET(*msg_word, ver);
+		HTT_TX_LCE_SUPER_RULE_SETUP_L4_TYPE_SET(
+					*msg_word,
+					flt_params->flt_addr_params[i].l4_type);
+		HTT_TX_LCE_SUPER_RULE_SETUP_IS_VALID_SET(*msg_word, valid);
+		msg_word++;
+		HTT_TX_LCE_SUPER_RULE_SETUP_L4_SRC_PORT_SET(
+				       *msg_word,
+				       flt_params->flt_addr_params[i].src_port);
+		dp_info("src_port 0x%x in msg_word", *msg_word);
+		HTT_TX_LCE_SUPER_RULE_SETUP_L4_DST_PORT_SET(
+				       *msg_word,
+				       flt_params->flt_addr_params[i].dst_port);
+		dp_info("dst_port 0x%x in msg_word", *msg_word);
+		dp_info("opt_dp_ctrl:: pdev: %u ver %u, flt_num %u, op %u, valid %u ",
+			pdev_id, ver, i, op, valid);
+	}
+
+	pkt = htt_htc_pkt_alloc(soc);
+	if (!pkt) {
+		dp_htt_err("Fail to allocate dp_htt_htc_pkt buffer");
+		qdf_assert(0);
+		qdf_nbuf_free(msg);
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	pkt->soc_ctxt = NULL; /*not used during send-done callback */
+	SET_HTC_PACKET_INFO_TX(&pkt->htc_pkt,
+			       dp_htt_h2t_send_complete_free_netbuf,
+			       qdf_nbuf_data(msg), qdf_nbuf_len(msg),
+			       soc->htc_endpoint,
+			       HTC_TX_PACKET_TAG_RUNTIME_PUT);
+
+	SET_HTC_PACKET_NET_BUF_CONTEXT(&pkt->htc_pkt, msg);
+	status = DP_HTT_SEND_HTC_PKT(soc, pkt,
+				     HTT_H2T_MSG_TYPE_TX_LCE_SUPER_RULE_SETUP,
+				     htt_logger_bufp);
+
+	if (status != QDF_STATUS_SUCCESS) {
+		qdf_nbuf_free(msg);
+		htt_htc_pkt_free(soc, pkt);
+	}
+	return status;
+}
+#endif
 #endif /* IPA_OPT_WIFI_DP */
 
 int htt_srng_setup(struct htt_soc *soc, int mac_id,

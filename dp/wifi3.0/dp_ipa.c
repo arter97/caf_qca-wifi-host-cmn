@@ -3865,12 +3865,29 @@ void dp_ipa_wdi_opt_dpath_notify_flt_rsvd(bool is_success)
 	wlan_ipa_wdi_opt_dpath_notify_flt_rsvd(is_success);
 }
 
+#ifdef IPA_OPT_WIFI_DP_CTRL
+/**
+ * dp_ipa_tx_super_rule_setup()- pass tx super rule params to fw from ipa
+ *
+ * @soc_hdl: cdp soc
+ * @flt_params: filter tuple
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_ipa_tx_super_rule_setup(struct cdp_soc_t *soc_hdl,
+				      void *flt_params)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+
+	return htt_h2t_tx_super_rule_setup(soc->htt_handle, flt_params);
+}
+#else
 QDF_STATUS dp_ipa_tx_super_rule_setup(struct cdp_soc_t *soc_hdl,
 				      void *flt_params)
 {
 	return QDF_STATUS_SUCCESS;
 }
-
+#endif
 QDF_STATUS dp_ipa_tx_opt_dp_ctrl_pkt(struct cdp_soc_t *soc_hdl,
 				     uint8_t vdev_id,
 				     qdf_nbuf_t nbuf)
