@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021, 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -35,6 +35,78 @@
 #define wifi_radar_debug(format, args...) \
 	QDF_TRACE_DEBUG(QDF_MODULE_ID_WIFI_RADAR, format, ## args)
 
+#define DBR_EVENT_TIMEOUT_IN_MS_WIFI_RADAR 1
+#define DBR_NUM_RESP_PER_EVENT_WIFI_RADAR 1
+
+#define HOST_MAX_CHAINS 8
+
+enum wifi_radar_data_version {
+	WR_DATA_VERSION_NONE,
+	WR_DATA_VERSION_1,
+	WR_DATA_VERSION_MAX = 0xFF,
+};
+
+enum wifi_radar_platform_type {
+	WR_PLATFORM_TYPE_NONE,
+	WR_PLATFORM_TYPE_MIPS,
+	WR_PLATFORM_TYPE_ARM,
+	WR_PLATFFORM_TYPE_MAX = 0xFF,
+};
+
+enum wifi_radar_radio_type {
+	WIFI_RADAR_RADIO_WAIKIKI = 0,
+	WIFI_RADAR_RADIO_MAX = 0xFF,
+};
+
+/* struct wifi_radar_header - structure holding wifi radar metadata
+ * @start_magic_num: magic number from which wifi radar capture starts
+ * @vendorid: vendor id
+ * @metadata_version: header format version info
+ * @data_version: wifi radar data format version info
+ * @chip_type: chip type which is defined in enum wifi_radar_radio_type
+ * @pltform_type: platform type
+ * @metadata_len: length of the metadata
+ * @host_real_ts: timestamp at host when metadata prepared
+ * @fw_timestamp_us: timestamp at FW during capture
+ * @phy_mode: phy mode of the channel at the time of capture
+ * @prim20_chan: frequency (in MHz) of the primary 20 MHz channel
+ * @center_freq1: Center frequency 1 in MHz
+ * @center_freq2: Center frequency 2 in MHz
+ * @tx_chain_mask: tx chain mask
+ * @rx_chain_mask: rx chain mask
+ * @num_ltf_tx: number of LTFs sent for capture
+ * @num_skip_ltf_rx: number of LTFs skipped in rx
+ * @num_ltf_accumulation: number of LTFs used for accumulation
+ * @cal_num_ltf_tx: Number of LTF configured in the WiFi Radar Tx packet during
+ *	calibration
+ * @cal_num_skip_ltf_rx: Number of LTF skipped during Rx of the calibration pkt
+ * @cal_num_ltf_accumulation: Number of LTF accumulated during Rx of the
+ *	calibration packet
+ */
+struct wifi_radar_header {
+	u_int32_t start_magic_num;
+	u_int32_t vendorid;
+	u_int8_t metadata_version;
+	u_int8_t data_version;
+	u_int8_t chip_type;
+	u_int8_t pltform_type;
+	u_int32_t metadata_len;
+	u_int64_t host_real_ts;
+	u_int32_t fw_timestamp_us;
+	u_int8_t phy_mode;
+	u_int16_t prim20_chan;
+	u_int16_t center_freq1;
+	u_int16_t center_freq2;
+	u_int16_t tx_chain_mask;
+	u_int16_t rx_chain_mask;
+	u_int32_t num_ltf_tx;
+	u_int32_t num_skip_ltf_rx;
+	u_int32_t num_ltf_accumulation;
+	u_int32_t cal_num_ltf_tx;
+	u_int32_t cal_num_skip_ltf_rx;
+	u_int32_t cal_num_ltf_accumulation;
+};
+
 /**
  * struct psoc_wifi_radar - private psoc object for WiFi Radar
  * @psoc_obj: pointer to psoc object
@@ -53,6 +125,27 @@ struct psoc_wifi_radar {
  * @dir_ptr: Parent directory of relayfs file
  * @num_subbufs: No. of sub-buffers used in relayfs
  * @subbuf_size: Size of sub-buffer used in relayfs
+ * @chip_type: chip type which is defined in enum wifi_radar_radio_type
+ * @header: header table used to store dbr events meta data & host header
+ *	associated with each wifi radar capture
+ * @header_entries: number of entries in @header
+ * @wifi_radar_pkt_bw: Packet bandwidth of WiFi Radar packet used in calibration
+ * @channel_bw: Channel bandwidth
+ * @band_center_freq: Channel Center frequency in MHz used in calibration
+ * @cal_num_ltf_tx: Number of LTF configured in the WiFi Radar Tx packet during
+ *	calibration
+ * @cal_num_skip_ltf_rx: Number of LTF skipped during Rx of the calibration
+ *	packet
+ * @cal_num_ltf_accumulation: Number of LTF accumulated during Rx of the
+ *	calibration packet
+ * @per_chain_comb_cal_status: each tx rx chain combination calibration status
+ * @host_timestamp_of_cal_status_evt: host timestamp at the reception of cal
+ *	status event
+ * @cal_status_lock: Lock to protect access to wifi radar cal status params
+ * @cal_status_lock_initialized: Check status lock initialized or not
+ * @max_num_ltf_tx: target specific max allowed num_ltf_tx
+ * @max_num_skip_ltf_rx: target specific max allowed num_skip_ltf_rx
+ * @max_num_ltf_accumulation: target specific max allowed num_ltf_accumulation.
  */
 struct pdev_wifi_radar {
 	struct wlan_objmgr_pdev *pdev_obj;
@@ -61,6 +154,22 @@ struct pdev_wifi_radar {
 	qdf_dentry_t dir_ptr;
 	uint32_t num_subbufs;
 	uint32_t subbuf_size;
+	uint8_t chip_type;
+	struct wifi_radar_header **header;
+	uint32_t header_entries;
+	uint32_t wifi_radar_pkt_bw;
+	uint32_t channel_bw;
+	uint32_t band_center_freq;
+	uint32_t cal_num_ltf_tx;
+	uint32_t cal_num_skip_ltf_rx;
+	uint32_t cal_num_ltf_accumulation;
+	bool per_chain_comb_cal_status[HOST_MAX_CHAINS][HOST_MAX_CHAINS];
+	uint64_t host_timestamp_of_cal_status_evt;
+	qdf_spinlock_t cal_status_lock;
+	bool cal_status_lock_initialized;
+	uint32_t max_num_ltf_tx;
+	uint32_t max_num_skip_ltf_rx;
+	uint32_t max_num_ltf_accumulation;
 };
 
 /**

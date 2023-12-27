@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021, 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -65,11 +65,55 @@ struct wlan_objmgr_psoc *psoc, void *arg)
 	return QDF_STATUS_SUCCESS;
 }
 
+#define MAX_ENTRIES 30
+
+static uint32_t
+wlan_wifi_radar_get_dbr_num_entries(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_objmgr_psoc *psoc;
+	struct wlan_psoc_host_dbr_ring_caps *dbr_ring_cap;
+	uint8_t num_dbr_ring_caps, cap_idx, pdev_id;
+	struct target_psoc_info *tgt_psoc_info;
+	uint32_t num_entries = MAX_ENTRIES;
+
+	if (!pdev) {
+		wifi_radar_err("Invalid pdev");
+		return num_entries;
+	}
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		wifi_radar_err("psoc is null");
+		return num_entries;
+	}
+
+	tgt_psoc_info = wlan_psoc_get_tgt_if_handle(psoc);
+	if (!tgt_psoc_info) {
+		wifi_radar_err("target_psoc_info is null");
+		return num_entries;
+	}
+
+	num_dbr_ring_caps = target_psoc_get_num_dbr_ring_caps(tgt_psoc_info);
+	dbr_ring_cap = target_psoc_get_dbr_ring_caps(tgt_psoc_info);
+	pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
+
+	for (cap_idx = 0; cap_idx < num_dbr_ring_caps; cap_idx++) {
+		if (dbr_ring_cap[cap_idx].pdev_id == pdev_id &&
+		    dbr_ring_cap[cap_idx].mod_id == DBR_MODULE_WIFI_RADAR)
+			num_entries = dbr_ring_cap[cap_idx].ring_elems_min;
+	}
+
+	num_entries = QDF_MIN(num_entries, MAX_ENTRIES);
+
+	return num_entries;
+}
+
 QDF_STATUS
 wlan_wifi_radar_pdev_obj_create_handler(
 struct wlan_objmgr_pdev *pdev, void *arg)
 {
 	struct pdev_wifi_radar *pa = NULL;
+	int idx;
 
 	if (!pdev) {
 		wifi_radar_err("PDEV is NULL\n");
@@ -85,6 +129,25 @@ struct wlan_objmgr_pdev *pdev, void *arg)
 		return QDF_STATUS_E_NOMEM;
 	}
 	pa->pdev_obj = pdev;
+	pa->header_entries = wlan_wifi_radar_get_dbr_num_entries(pdev);
+	if (!pa->header_entries) {
+		wifi_radar_err("header entries 0");
+		qdf_mem_free(pa);
+		return QDF_STATUS_E_INVAL;
+	}
+	pa->header = (struct wifi_radar_header **)qdf_mem_malloc
+			(pa->header_entries *
+			 sizeof(struct wifi_radar_header *));
+	if (!pa->header) {
+		wifi_radar_err("Failed to allocate header");
+		qdf_mem_free(pa);
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	for (idx = 0; idx < pa->header_entries; idx++)
+		pa->header[idx] = (struct wifi_radar_header *)qdf_mem_malloc
+					(sizeof(struct wifi_radar_header));
+
 	wlan_objmgr_pdev_component_obj_attach(pdev, WLAN_UMAC_COMP_WIFI_RADAR,
 					      (void *)pa, QDF_STATUS_SUCCESS);
 
@@ -108,6 +171,11 @@ struct wlan_objmgr_pdev *pdev, void *arg)
 	if (pa) {
 		wlan_objmgr_pdev_component_obj_detach(
 		pdev, WLAN_UMAC_COMP_WIFI_RADAR, (void *)pa);
+		if (pa->header_entries) {
+			for (idx = 0; idx < pa->header_entries; idx++)
+				qdf_mem_free(pa->header[idx]);
+			qdf_mem_free(pa->header);
+		}
 		qdf_mem_free(pa);
 	}
 
@@ -226,7 +294,7 @@ QDF_STATUS wifi_radar_streamfs_init(struct wlan_objmgr_pdev *pdev)
 	}
 
 	if (wlan_wifi_radar_is_feature_disabled(pdev)) {
-		wifi_radr_info("WiFi Radar is disabled");
+		wifi_radar_info("WiFi Radar is disabled");
 		return QDF_STATUS_COMP_DISABLED;
 	}
 
