@@ -24,6 +24,168 @@
 #include <wlan_wifi_radar_utils_api.h>
 #include <wlan_objmgr_pdev_obj.h>
 #include <wmi_unified_wifi_radar_api.h>
+#include <wlan_lmac_if_def.h>
+#include <target_if_direct_buf_rx_api.h>
+
+static u_int32_t end_magic = 0xBEAFDEAD;
+
+#ifdef DIRECT_BUF_RX_ENABLE
+static bool wifi_radar_dbr_event_handler(struct wlan_objmgr_pdev *pdev,
+					 struct direct_buf_rx_data *payload)
+{
+	uint8_t *data = NULL;
+	int data_len = 0, status;
+	struct wlan_lmac_if_rx_ops *rx_ops;
+	struct wlan_lmac_if_wifi_radar_rx_ops *wr_rx_ops = NULL;
+	struct pdev_wifi_radar *pwr;
+	struct wlan_objmgr_psoc *psoc;
+	uint32_t cookie = 0;
+	struct wifi_radar_ucode_header uheader = {0};
+
+	if ((!pdev) || (!payload)) {
+		wifi_radar_err("pdev or payload is null");
+		return true;
+	}
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		wifi_radar_err("psoc is null");
+		return true;
+	}
+
+	rx_ops = wlan_psoc_get_lmac_if_rxops(psoc);
+	if (!rx_ops) {
+		wifi_radar_err("rx_ops is null");
+		return true;
+	}
+
+	wr_rx_ops = &rx_ops->wifi_radar_rx_ops;
+
+	pwr = wlan_objmgr_pdev_get_comp_private_obj(pdev,
+						    WLAN_UMAC_COMP_WIFI_RADAR);
+	if (!pwr) {
+		wifi_radar_err("pdev object for Wifi radar is NULL");
+		return true;
+	}
+
+	data = payload->vaddr;
+	cookie = payload->cookie;
+
+	wifi_radar_debug("<DBRCOMP><%u>:bufferaddr: 0x%pK cookie: %u\n", cookie,
+			 (void *)((uintptr_t)payload->paddr), cookie);
+
+	qdf_mem_copy(&uheader, &data[0],
+		     sizeof(struct wifi_radar_ucode_header));
+
+	data_len = uheader.ucode_header_len_32bit_dwords * 4;
+	data_len += uheader.capture_len; /* length of capture */
+	if (cookie >= pwr->header_entries) {
+		wifi_radar_err("Invalid cookie offset");
+		return true;
+	}
+	pwr->header[cookie]->start_magic_num = 0xDEADBEAF;
+	pwr->header[cookie]->vendorid = 0x8cfdf0;
+	pwr->header[cookie]->pltform_type = WR_PLATFORM_TYPE_ARM;
+	pwr->header[cookie]->metadata_version = 1;
+	pwr->header[cookie]->data_version = WR_DATA_VERSION_1;
+	pwr->header[cookie]->chip_type = pwr->chip_type;
+	pwr->header[cookie]->metadata_len = sizeof(struct wifi_radar_header);
+	pwr->header[cookie]->host_real_ts =
+		qdf_ktime_to_ns(qdf_ktime_real_get());
+	pwr->header[cookie]->fw_timestamp_us =
+		payload->wifi_radar_meta_data.timestamp_us;
+	pwr->header[cookie]->phy_mode = payload->wifi_radar_meta_data.phy_mode;
+	pwr->header[cookie]->prim20_chan =
+		payload->wifi_radar_meta_data.chan_mhz;
+	pwr->header[cookie]->center_freq1 =
+		payload->wifi_radar_meta_data.band_center_freq1;
+	pwr->header[cookie]->center_freq2 =
+		payload->wifi_radar_meta_data.band_center_freq2;
+	pwr->header[cookie]->tx_chain_mask =
+		payload->wifi_radar_meta_data.tx_chain_mask;
+	pwr->header[cookie]->rx_chain_mask =
+		payload->wifi_radar_meta_data.rx_chain_mask;
+	pwr->header[cookie]->num_ltf_tx =
+		payload->wifi_radar_meta_data.num_ltf_tx;
+	pwr->header[cookie]->num_skip_ltf_rx =
+		payload->wifi_radar_meta_data.num_skip_ltf_rx;
+	pwr->header[cookie]->num_ltf_accumulation =
+		payload->wifi_radar_meta_data.num_ltf_accumulation;
+	pwr->header[cookie]->cal_num_ltf_tx = pwr->cal_num_ltf_tx;
+	pwr->header[cookie]->cal_num_skip_ltf_rx = pwr->cal_num_skip_ltf_rx;
+	pwr->header[cookie]->cal_num_ltf_accumulation =
+		pwr->cal_num_ltf_accumulation;
+	if (wr_rx_ops->wifi_radar_info_send)
+		status = wr_rx_ops->wifi_radar_info_send(pdev,
+							 &pwr->header[cookie],
+							 sizeof(struct
+							 wifi_radar_header),
+							 data,
+							 data_len,
+							 &end_magic, 4);
+	return true;
+}
+
+static QDF_STATUS
+target_if_register_wifi_radar_to_dbr(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_objmgr_psoc *psoc;
+	struct wlan_lmac_if_direct_buf_rx_tx_ops *dbr_tx_ops = NULL;
+	struct dbr_module_config dbr_config;
+	struct wlan_lmac_if_tx_ops *tx_ops;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	tx_ops = wlan_psoc_get_lmac_if_txops(psoc);
+	if (!tx_ops) {
+		wifi_radar_err("tx_ops is NULL");
+		return QDF_STATUS_SUCCESS;
+	}
+	dbr_tx_ops = &tx_ops->dbr_tx_ops;
+	dbr_config.num_resp_per_event = DBR_NUM_RESP_PER_EVENT_WIFI_RADAR;
+	dbr_config.event_timeout_in_ms = DBR_EVENT_TIMEOUT_IN_MS_WIFI_RADAR;
+	if (dbr_tx_ops->direct_buf_rx_module_register) {
+		return dbr_tx_ops->direct_buf_rx_module_register
+			(pdev, DBR_MODULE_WIFI_RADAR, &dbr_config,
+			 wifi_radar_dbr_event_handler);
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS
+target_if_unregister_wifi_radar_to_dbr(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_objmgr_psoc *psoc;
+	struct wlan_lmac_if_direct_buf_rx_tx_ops *dbr_tx_ops = NULL;
+	struct wlan_lmac_if_tx_ops *tx_ops;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	tx_ops = wlan_psoc_get_lmac_if_txops(psoc);
+	if (!tx_ops) {
+		wifi_radar_err("tx_ops is NULL");
+		return QDF_STATUS_SUCCESS;
+	}
+	dbr_tx_ops = &tx_ops->dbr_tx_ops;
+	if (dbr_tx_ops->direct_buf_rx_module_unregister) {
+		return dbr_tx_ops->direct_buf_rx_module_unregister
+			(pdev, DBR_MODULE_WIFI_RADAR);
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+#else
+static QDF_STATUS
+target_if_register_wifi_radar_to_dbr(struct wlan_objmgr_pdev *pdev)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static QDF_STATUS
+target_if_unregister_wifi_radar_to_dbr(struct wlan_objmgr_pdev *pdev)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+#endif
 
 static QDF_STATUS
 target_if_unregister_wifi_radar_cal_status_event_handler
@@ -161,7 +323,6 @@ target_if_register_wifi_radar_cal_status_event_handler(struct wlan_objmgr_psoc
 	return ret;
 }
 
-
 QDF_STATUS wifi_radar_deinit_pdev(struct wlan_objmgr_psoc *psoc,
 				  struct wlan_objmgr_pdev *pdev)
 {
@@ -182,6 +343,10 @@ QDF_STATUS wifi_radar_deinit_pdev(struct wlan_objmgr_psoc *psoc,
 		qdf_spinlock_destroy(&pwr->cal_status_lock);
 		pwr->cal_status_lock_initialized = false;
 	}
+
+	status = target_if_unregister_wifi_radar_to_dbr(pdev);
+	if (QDF_IS_STATUS_ERROR(status))
+		wifi_radar_err("Failed to unregister with dbr");
 
 	return status;
 }
@@ -221,6 +386,12 @@ QDF_STATUS wifi_radar_init_pdev(struct wlan_objmgr_psoc *psoc,
 	status = target_if_register_wifi_radar_cal_status_event_handler(psoc);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		wifi_radar_err("Failed to register with wifi radar cal status handler");
+		return status;
+	}
+
+	status = target_if_register_wifi_radar_to_dbr(pdev);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		wifi_radar_err("Failed to register with dbr");
 		return status;
 	}
 

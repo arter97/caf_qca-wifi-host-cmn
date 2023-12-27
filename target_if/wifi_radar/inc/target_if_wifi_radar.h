@@ -4,7 +4,7 @@
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
  * copyright notice and this permission notice appear in all copies.
-
+ *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
  * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
@@ -26,6 +26,30 @@
 /* currently used dma buf size here. increase it as we add host meta data */
 #define STREAMFS_WIFI_RADAR_MAX_SUBBUF 61464
 #define STREAMFS_WIFI_RADAR_NUM_SUBBUF 127
+
+struct wifi_radar_ucode_header {
+	uint32_t  ucode_header_tag :8,
+		  ucode_header_len_32bit_dwords :8,
+		  preamble_type    :1,// vht or he
+		  nss_num          :3,
+		  nss_rx           :2,
+		  tx_pkt_bw        :3,
+		  upload_bw        :4,
+		  reserved_1       :3;
+	uint32_t  tx_gain_index_1  :16,
+		  tx_gain_index_2  :8,
+		  pri20_loc        :8;
+	uint32_t  rx_gain_index_ch0 :8,
+		  rx_gain_index_ch1 :8,
+		  rx_gain_index_ch2 :8,
+		  rx_gain_index_ch3 :8;
+	uint32_t  phase_diff;
+	uint16_t  capture_len;
+	uint16_t  tx_chain_mask     :4,
+		  reserved_2_a      :4,
+		  reserved_2_b      :8;
+	uint32_t  reserved_3;
+};
 
 /**
  * target_if_wifi_radar_tx_ops_register() - register tx ops
@@ -55,7 +79,6 @@ QDF_STATUS wifi_radar_init_pdev(struct wlan_objmgr_psoc *psoc,
  */
 QDF_STATUS wifi_radar_deinit_pdev(struct wlan_objmgr_psoc *psoc,
 				  struct wlan_objmgr_pdev *pdev);
-
 
 /**
  * target_if_wifi_radar_set_support() - Function to set cfr support
