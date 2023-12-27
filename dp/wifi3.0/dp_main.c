@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -6022,7 +6022,7 @@ QDF_STATUS dp_peer_mlo_setup(
 		dp_peer_unref_delete(mld_peer, DP_MOD_ID_CDP);
 	} else {
 		peer->mld_peer = NULL;
-		dp_err("mld peer" QDF_MAC_ADDR_FMT "not found!",
+		dp_err("mld peer " QDF_MAC_ADDR_FMT " not found!",
 		       QDF_MAC_ADDR_REF(setup_info->mld_peer_mac));
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -10154,26 +10154,18 @@ dp_fw_stats_process(struct dp_vdev *vdev,
 	 *   - config_param2 : stats bmask from start offset + 32
 	 *   - config_param3 : stats bmask from start offset + 64
 	 */
-	if (req->stats == CDP_TXRX_STATS_0) {
+	if (stats == CDP_TXRX_STATS_0) {
 		req->param0 = HTT_DBG_EXT_STATS_PDEV_TX;
 		req->param1 = 0xFFFFFFFF;
 		req->param2 = 0xFFFFFFFF;
 		req->param3 = 0xFFFFFFFF;
-	} else if (req->stats == (uint8_t)HTT_DBG_EXT_STATS_PDEV_TX_MU) {
+	} else if (stats == (uint8_t)HTT_DBG_EXT_STATS_PDEV_TX_MU) {
 		req->param0 = HTT_DBG_EXT_STATS_SET_VDEV_MASK(vdev->vdev_id);
 	}
 
-	if (req->stats == (uint8_t)HTT_DBG_EXT_STATS_PDEV_RX_RATE_EXT) {
-		dp_h2t_ext_stats_msg_send(pdev,
-					  HTT_DBG_EXT_STATS_PDEV_RX_RATE_EXT,
-					  req->param0, req->param1, req->param2,
-					  req->param3, 0, cookie_val,
-					  mac_id);
-	} else {
-		dp_h2t_ext_stats_msg_send(pdev, stats, req->param0,
-					  req->param1, req->param2, req->param3,
-					  0, cookie_val, mac_id);
-	}
+	dp_h2t_ext_stats_msg_send(pdev, stats, req->param0,
+				  req->param1, req->param2, req->param3,
+				  0, cookie_val, mac_id);
 
 	dp_sysfs_event_trigger(soc, cookie_val);
 
