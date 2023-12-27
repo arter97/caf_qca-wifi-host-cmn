@@ -160,8 +160,10 @@
 
 #define WLAN_SEQ_SEQ_SHIFT 4
 
-#define P2P_WFA_OUI {0x50, 0x6f, 0x9a}
+#define WFA_OUI {0x50, 0x6f, 0x9a}
 #define P2P_WFA_VER 0x09
+
+#define NAN_WFA_VER 0x13
 
 #define WSC_OUI 0x0050f204
 #define MBO_OCE_OUI 0x506f9a16
@@ -4072,13 +4074,32 @@ is_sfa_oui(uint8_t *frm)
 static inline bool
 is_p2p_oui(const uint8_t *frm)
 {
-	const uint8_t wfa_oui[3] = P2P_WFA_OUI;
+	const uint8_t wfa_oui[3] = WFA_OUI;
 
 	return (frm[1] >= 4) &&
 		(frm[2] == wfa_oui[0]) &&
 		(frm[3] == wfa_oui[1]) &&
 		(frm[4] == wfa_oui[2]) &&
 		(frm[5] == P2P_WFA_VER);
+}
+
+/**
+ * is_nan_oui() - If vendor OUI is NAN type
+ * @frm: pointer to OUI array
+ *
+ * API to check if frame is NAN
+ *
+ * Return: true if its NAN frame otherwise false
+ */
+static inline bool
+is_nan_oui(const uint8_t *frm)
+{
+	const uint8_t wfa_oui[3] = WFA_OUI;
+
+	return (frm[0] == wfa_oui[0]) &&
+		(frm[1] == wfa_oui[1]) &&
+		(frm[2] == wfa_oui[2]) &&
+		(frm[3] == NAN_WFA_VER);
 }
 
 /**
