@@ -146,4 +146,20 @@ struct ipa_intrabss_control_params {
 	uint32_t vdev_id;
 	uint32_t enable;
 };
+
+#ifdef IPA_OPT_WIFI_DP_CTRL
+/*
+ * struct filter_response - filter response from  fw
+ *	for filter add/remove request
+ * @dst_port: dst_port added/removed
+ * @valid: is filter valid
+ * @result: result of filter add/remove
+ */
+struct filter_response {
+	uint16_t dst_port;
+	uint8_t valid;
+	uint8_t result;
+};
+#endif
+
 #endif /* end  of _WLAN_IPA_PUBLIC_STRUCT_H_ */

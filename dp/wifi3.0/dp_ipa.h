@@ -18,6 +18,7 @@
 #ifndef _DP_IPA_H_
 #define _DP_IPA_H_
 
+#include "wlan_ipa_public_struct.h"
 #if defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_KIWI_V2)
 /* Index into soc->tcl_data_ring[] */
 #define IPA_TCL_DATA_RING_IDX	3
@@ -381,6 +382,30 @@ QDF_STATUS dp_ipa_tx_opt_dp_ctrl_pkt(struct cdp_soc_t *soc_hdl,
 
 int dp_ipa_pcie_link_up(struct cdp_soc_t *soc_hdl);
 void dp_ipa_pcie_link_down(struct cdp_soc_t *soc_hdl);
+#ifdef IPA_OPT_WIFI_DP_CTRL
+/**
+ * dp_ipa_wdi_opt_dpath_ctrl_notify_flt_install() - send tx super rule filter
+ * add result to ipa
+ *
+ * @flt_resp_params : array of filter parameters
+ *
+ * Return: void
+ */
+void dp_ipa_wdi_opt_dpath_ctrl_notify_flt_install(struct filter_response
+						  *flt_resp_params);
+
+/**
+ * dp_ipa_wdi_opt_dpath_ctrl_notify_flt_delete() - send tx super rule filter
+ * delete result to ipa
+ *
+ * @flt_resp_params : array of filter parameters
+ *
+ * Return: void
+ */
+void dp_ipa_wdi_opt_dpath_ctrl_notify_flt_delete(struct filter_response
+						 *flt_resp_params);
+#endif
+
 #endif
 
 #ifdef QCA_SUPPORT_WDS_EXTENDED

@@ -44,6 +44,7 @@
 #include <dp_sawf_htt.h>
 #endif
 #include <wbuff.h>
+#include "wlan_ipa_public_struct.h"
 
 #define HTT_TLV_HDR_LEN HTT_T2H_EXT_STATS_CONF_TLV_HDR_SIZE
 
@@ -3853,12 +3854,68 @@ static void dp_ipa_rx_cce_super_rule_setup_done_handler(struct htt_soc *soc,
 	dp_info("num_rules_avail: %d, rslt0: %d, rslt1: %d",
 		num_rules_avail, filter0_result, filter1_result);
 }
+
+#ifdef IPA_OPT_WIFI_DP_CTRL
+static void dp_ipa_tx_super_rule_setup_done_handler(struct htt_soc *soc,
+						    uint32_t *msg_word)
+{
+	int i;
+	uint8_t pdev_id = 0;
+	uint8_t resp_type = 0;
+	struct filter_response flt_resp_params[TX_SUPER_RULE_SETUP_NUM];
+
+	pdev_id = HTT_TX_LCE_SUPER_RULE_SETUP_DONE_PDEV_ID_GET(*msg_word);
+	resp_type = HTT_TX_LCE_SUPER_RULE_SETUP_DONE_RESPONSE_TYPE_GET(
+								*msg_word);
+	dp_info("opt_dp_ctrl:: tx_super_rule_rsp, pdev_id: %d resp_type: %d",
+		pdev_id, resp_type);
+
+	for (i = 0; i < TX_SUPER_RULE_SETUP_NUM; i++) {
+		msg_word++;
+		flt_resp_params[i].valid =
+			HTT_TX_LCE_SUPER_RULE_SETUP_DONE_IS_VALID_GET(
+								*msg_word);
+		flt_resp_params[i].result =
+			HTT_TX_LCE_SUPER_RULE_SETUP_DONE_RESULT_GET(
+								*msg_word);
+		flt_resp_params[i].dst_port =
+			HTT_TX_LCE_SUPER_RULE_SETUP_DONE_L4_DST_PORT_GET(
+								*msg_word);
+		dp_info("response receives by FW, flt_hld: %d, valid: %u, result: %u, dst_port: %u",
+			i, flt_resp_params[i].valid, flt_resp_params[i].result,
+			flt_resp_params[i].dst_port);
+	}
+
+	switch (resp_type) {
+	case HTT_TX_LCE_SUPER_RULE_INSTALL_RESPONSE:
+	{
+		dp_ipa_wdi_opt_dpath_ctrl_notify_flt_install(flt_resp_params);
+		break;
+	}
+	case HTT_TX_LCE_SUPER_RULE_RELEASE_RESPONSE:
+	{
+		dp_ipa_wdi_opt_dpath_ctrl_notify_flt_delete(flt_resp_params);
+		break;
+	}
+	default:
+		dp_info("opt_dp:: Wrong Super rule setup response");
+	}
+}
+#endif /* IPA_OPT_WIFI_DP_CTRL */
 #else
 static void dp_ipa_rx_cce_super_rule_setup_done_handler(struct htt_soc *soc,
 							uint32_t *msg_word)
 {
 }
 #endif
+
+#ifndef IPA_OPT_WIFI_DP_CTRL
+static inline void dp_ipa_tx_super_rule_setup_done_handler(struct htt_soc *soc,
+							   uint32_t *msg_word)
+{
+}
+#endif
+
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
 static inline void
 dp_htt_peer_ext_evt(struct htt_soc *soc, uint32_t *msg_word)
@@ -4583,6 +4640,11 @@ void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 	case HTT_T2H_MSG_TYPE_RX_CCE_SUPER_RULE_SETUP_DONE:
 	{
 		dp_ipa_rx_cce_super_rule_setup_done_handler(soc, msg_word);
+		break;
+	}
+	case HTT_T2H_MSG_TYPE_TX_LCE_SUPER_RULE_SETUP_DONE:
+	{
+		dp_ipa_tx_super_rule_setup_done_handler(soc, msg_word);
 		break;
 	}
 	case HTT_T2H_MSG_TYPE_PEER_EXTENDED_EVENT:

@@ -121,6 +121,7 @@
  * @WLAN_IPA_SMMU_MAP: IPA SMMU map call
  * @WLAN_IPA_SMMU_UNMAP: IPA SMMU unmap call
  * @WLAN_IPA_CTRL_TX_REINJECT: REINJECT TO TX
+ * @WLAN_IPA_CTRL_FILTER_DEL_NOTIFY: OPT WIFI DP CTRL filter delete notification
  * @WLAN_IPA_UC_OPCODE_MAX: IPA UC max operation code
  */
 enum wlan_ipa_uc_op_code {
@@ -140,6 +141,7 @@ enum wlan_ipa_uc_op_code {
 	WLAN_IPA_SMMU_MAP = 11,
 	WLAN_IPA_SMMU_UNMAP = 12,
 	WLAN_IPA_CTRL_TX_REINJECT = 13,
+	WLAN_IPA_CTRL_FILTER_DEL_NOTIFY = 14,
 	/* keep this last */
 	WLAN_IPA_UC_OPCODE_MAX
 };

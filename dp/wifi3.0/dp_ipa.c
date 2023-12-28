@@ -4082,6 +4082,34 @@ tx_nbuf_free:
 	qdf_nbuf_free(nbuf);
 	return QDF_STATUS_E_FAILURE;
 }
+
+/*
+ * dp_ipa_wdi_opt_dpath_ctrl_notify_flt_install()- send tx super rule filter
+ * add result to ipa
+ *
+ * @flt_resp_params : array of filter parameters
+ *
+ * Return: void
+ */
+void dp_ipa_wdi_opt_dpath_ctrl_notify_flt_install(struct filter_response
+						  *flt_resp_params)
+{
+	wlan_ipa_wdi_opt_dpath_ctrl_notify_flt_install(flt_resp_params);
+}
+
+/**
+ * dp_ipa_wdi_opt_dpath_ctrl_notify_flt_delete()- send tx super rule filter
+ * delete result to ipa
+ *
+ * @flt_resp_params : array of filter parameters
+ *
+ * Return: void
+ */
+void dp_ipa_wdi_opt_dpath_ctrl_notify_flt_delete(struct filter_response
+						 *flt_resp_params)
+{
+	wlan_ipa_wdi_opt_dpath_ctrl_notify_flt_delete(flt_resp_params);
+}
 #else
 QDF_STATUS dp_ipa_tx_super_rule_setup(struct cdp_soc_t *soc_hdl,
 				      void *flt_params)
@@ -4096,7 +4124,7 @@ QDF_STATUS dp_ipa_tx_opt_dp_ctrl_pkt(struct cdp_soc_t *soc_hdl,
 	return QDF_STATUS_SUCCESS;
 }
 #endif
-#endif
+#endif /* IPA_OPT_WIFI_DP */
 
 #ifdef IPA_WDS_EASYMESH_FEATURE
 /**

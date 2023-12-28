@@ -1022,6 +1022,28 @@ void wlan_ipa_wdi_opt_dpath_enable_clk_req(void *ipa_ctx);
  * @nbuf: nbuf
  */
 void wlan_ipa_tx_pkt_opt_dp_ctrl(uint8_t vdev_id, qdf_nbuf_t nbuf);
+
+/**
+ * wlan_ipa_wdi_opt_dpath_ctrl_notify_flt_install()- send tx super rule filter
+ * add result to ipa
+ *
+ * @flt_resp_params : array of filter parameters
+ *
+ * Return: void
+ */
+void wlan_ipa_wdi_opt_dpath_ctrl_notify_flt_install(struct filter_response
+						    *flt_resp_params);
+
+/**
+ * wlan_ipa_wdi_opt_dpath_ctrl_notify_flt_delete()- send tx super rule filter
+ * delete result to ipa
+ *
+ * @flt_resp_params : array of filter parameters
+ *
+ * Return: void
+ */
+void wlan_ipa_wdi_opt_dpath_ctrl_notify_flt_delete(struct filter_response
+						   *flt_resp_params);
 #endif
 #endif /* IPA_OPT_WIFI_DP */
 
