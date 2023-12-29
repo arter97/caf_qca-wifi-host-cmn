@@ -799,6 +799,7 @@ ucfg_cfr_set_frame_type_subtype(struct wlan_objmgr_vdev *vdev,
 		cfr_err("err parameter grp_id, value=%u, max=%u\n",
 			params->grp_id,
 			MAX_TA_RA_ENTRIES);
+		wlan_objmgr_pdev_release_ref(pdev, WLAN_CFR_ID);
 		return QDF_STATUS_E_INVAL;
 	}
 
@@ -843,6 +844,7 @@ QDF_STATUS ucfg_cfr_set_bw_nss(struct wlan_objmgr_vdev *vdev,
 		cfr_err("err parameter grp_id, value=%u, max=%u\n",
 			params->grp_id,
 			MAX_TA_RA_ENTRIES);
+		wlan_objmgr_pdev_release_ref(pdev, WLAN_CFR_ID);
 		return QDF_STATUS_E_INVAL;
 	}
 
@@ -885,6 +887,7 @@ QDF_STATUS ucfg_cfr_set_tara_config(struct wlan_objmgr_vdev *vdev,
 		cfr_err("err parameter grp_id, value=%u, max=%u\n",
 			params->grp_id,
 			MAX_TA_RA_ENTRIES);
+		wlan_objmgr_pdev_release_ref(pdev, WLAN_CFR_ID);
 		return QDF_STATUS_E_INVAL;
 	}
 
@@ -1454,6 +1457,7 @@ bool ucfg_cfr_get_rcc_enabled(struct wlan_objmgr_vdev *vdev)
 		cfr_debug("vdev id mismatch, input %d, pcfr %d",
 			  wlan_vdev_get_id(vdev),
 			  pcfr->rcc_param.vdev_id);
+		wlan_objmgr_pdev_release_ref(pdev, WLAN_CFR_ID);
 		return false;
 	}
 
