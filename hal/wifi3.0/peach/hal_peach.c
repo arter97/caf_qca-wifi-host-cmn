@@ -1235,6 +1235,19 @@ static inline uint32_t hal_rx_mpdu_start_sw_peer_id_get_peach(uint8_t *buf)
 
 	return 0;
 }
+
+/**
+ * hal_rx_mpdu_start_tlv_tag_valid_peach() - API to check if RX_MPDU_START
+ *                                           tlv tag is valid
+ * @rx_tlv_hdr: start address of rx_pkt_tlvs
+ *
+ * Return: true if RX_MPDU_START is valid, else false.
+ */
+static inline uint8_t hal_rx_mpdu_start_tlv_tag_valid_peach(void *rx_tlv_hdr)
+{
+	/* RX TLV TAG is not subscribed */
+	return true;
+}
 #else
 static inline uint32_t hal_rx_tlv_get_freq_peach(uint8_t *buf)
 {
@@ -2424,11 +2437,19 @@ static void hal_hw_txrx_ops_attach_peach(struct hal_soc *hal_soc)
 					hal_rx_priv_info_set_in_tlv_peach;
 	hal_soc->ops->hal_rx_priv_info_get_from_tlv =
 					hal_rx_priv_info_get_from_tlv_peach;
+	hal_soc->ops->hal_rx_mpdu_start_wmask_get =
+					hal_rx_mpdu_start_wmask_get_be;
+	hal_soc->ops->hal_rx_msdu_end_wmask_get =
+					hal_rx_msdu_end_wmask_get_be;
+	hal_soc->ops->hal_rx_mpdu_start_tlv_tag_valid =
+					hal_rx_mpdu_start_tlv_tag_valid_peach;
 #else
 	hal_soc->ops->hal_rx_priv_info_set_in_tlv =
 					hal_rx_priv_info_set_in_tlv_be;
 	hal_soc->ops->hal_rx_priv_info_get_from_tlv =
 					hal_rx_priv_info_get_from_tlv_be;
+	hal_soc->ops->hal_rx_mpdu_start_tlv_tag_valid =
+					hal_rx_mpdu_start_tlv_tag_valid_be;
 #endif
 	hal_soc->ops->hal_tx_set_pcp_tid_map =
 					hal_tx_set_pcp_tid_map_generic_be;
@@ -2533,8 +2554,6 @@ static void hal_hw_txrx_ops_attach_peach(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_get_fisa_flow_agg_count =
 					hal_rx_get_flow_agg_count_be;
 	hal_soc->ops->hal_rx_get_fisa_timeout = hal_rx_get_fisa_timeout_be;
-	hal_soc->ops->hal_rx_mpdu_start_tlv_tag_valid =
-		hal_rx_mpdu_start_tlv_tag_valid_be;
 	hal_soc->ops->hal_rx_reo_prev_pn_get = hal_rx_reo_prev_pn_get_peach;
 
 	/* rx - TLV struct offsets */
