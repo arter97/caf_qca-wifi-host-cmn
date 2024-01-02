@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -72,6 +72,14 @@ extern uint8_t g_instances_added;
 	QDF_TRACE_ENTER(QDF_MODULE_ID_IPA, "enter")
 #define IPA_EXIT() \
 	QDF_TRACE_EXIT(QDF_MODULE_ID_IPA, "exit")
+
+/**
+ * ipa_set_cap_offload() - set IPA capability offload support
+ * @flag: flag to set
+ *
+ * Return: None
+ */
+void ipa_set_cap_offload(bool flag);
 
 /**
  * ipa_set_pld_enable() - set g_ipa_pld_enable
