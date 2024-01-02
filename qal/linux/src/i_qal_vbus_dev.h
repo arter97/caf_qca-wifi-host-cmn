@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -34,6 +34,9 @@
 #include <linux/platform_device.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 9, 0)
 #include <linux/reset.h>
+#endif
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 2, 0))
+#include <i_qdf_trace.h>
 #endif
 
 struct qdf_vbus_resource;
