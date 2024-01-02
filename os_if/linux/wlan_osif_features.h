@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -345,6 +345,11 @@
 #elif (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0) || \
 	(defined NL80211_EHT_MIN_CAPABILITY_LEN))
 #define WLAN_EHT_CAPABILITY_PRESENT 1
+#endif
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0) && \
+	defined(WLAN_FEATURE_11BE_MLO))
+#define CFG80211_CTRL_FRAME_SRC_ADDR_TA_ADDR 1
 #endif
 
 #endif
