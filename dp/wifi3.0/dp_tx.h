@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1062,6 +1062,33 @@ static inline hal_ring_handle_t dp_tx_get_hal_ring_hdl(struct dp_soc *soc,
 						       uint8_t ring_id)
 {
 	return soc->tcl_data_ring[ring_id].hal_srng;
+}
+#endif
+
+#if defined(TX_MULTI_TCL) && defined(WLAN_FEATURE_11BE_MLO) && \
+	defined(WLAN_DP_TXPOOL_SHARE)
+/**
+ * dp_tx_override_flow_pool_id() - Override the pool id of the tx desc pool
+ * @queue: queue ids container for nbuf
+ * @pool_id: tx desc pool id
+ * @override: indicate if need to overwrite the flow pool id or not
+ *
+ * Return: None
+ */
+static inline void
+dp_tx_override_flow_pool_id(struct dp_tx_queue *queue,
+			    uint8_t pool_id,
+			    bool override)
+{
+	if (override)
+		queue->desc_pool_id = pool_id;
+}
+#else
+static inline void
+dp_tx_override_flow_pool_id(struct dp_tx_queue *queue,
+			    uint8_t pool_id,
+			    bool override)
+{
 }
 #endif
 
