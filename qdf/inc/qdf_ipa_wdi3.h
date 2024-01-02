@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2019, 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -520,6 +520,65 @@ static inline int qdf_ipa_uc_bw_monitor(qdf_ipa_wdi_bw_info_t *bw_info)
 #endif
 
 #ifdef IPA_OPT_WIFI_DP
+#ifdef IPA_OPT_WIFI_DP_CTRL
+/**
+ * qdf_ipa_wdi_register_flt_cb_v2() - register cb functions with IPA
+ * for optional wifi datapath
+ * @hdl: ipa hdl
+ * @flt_rsrv_cb: cb for filter reservation
+ * @flt_rsrv_rel_cb: cb for filter release
+ * @flt_add_cb: cb for filter addition
+ * @flt_rem_cb: cb for filter removal
+ * @ctrl_flt_add_cb: opt_dp_ctrl filter add cb function
+ * @ctrl_flt_rem_cb: opt_dp_ctrl filter remove cb function
+ * @clk_cb: clock status cb function
+ *
+ * Return: 0 on success, negative on failure
+ */
+static inline int qdf_ipa_wdi_register_flt_cb_v2(
+			ipa_wdi_hdl_t hdl,
+			ipa_wdi_opt_dpath_flt_rsrv_cb flt_rsrv_cb,
+			ipa_wdi_opt_dpath_flt_rsrv_rel_cb flt_rsrv_rel_cb,
+			ipa_wdi_opt_dpath_flt_add_cb flt_add_cb,
+			ipa_wdi_opt_dpath_flt_rem_cb flt_rem_cb,
+			ipa_wdi_opt_dpath_ctrl_flt_add_cb ctrl_flt_add_cb,
+			ipa_wdi_opt_dpath_ctrl_flt_rem_cb ctrl_flt_rem_cb,
+			ipa_wdi_opt_dpath_clk_status_cb clk_cb)
+{
+	return __qdf_ipa_wdi_register_flt_cb_v2((__qdf_ipa_wdi_hdl_t)hdl,
+					     flt_rsrv_cb, flt_rsrv_rel_cb,
+					     flt_add_cb, flt_rem_cb,
+					     ctrl_flt_add_cb, ctrl_flt_rem_cb,
+					     clk_cb);
+}
+
+/**
+ * qdf_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst() - notify IPA with filter
+ * delete response for optional wifi ctrl datapath
+ * @hdl: ipa hdl
+ * @fltr_hdl : filter handle
+ *
+ * Return: 0 on success, negative on failure
+ */
+static inline int qdf_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
+				ipa_wdi_hdl_t hdl, u32 fltr_hdl)
+{
+	return __qdf_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(hdl,
+								    fltr_hdl);
+}
+
+/**
+ * qdf_ipa_wdi_opt_dpath_enable_clk_req - request IPA to enable clock
+ * @hdl: ipa hdl
+ *
+ * Return: 0 on success, negative on failure
+ */
+static inline int qdf_ipa_wdi_opt_dpath_enable_clk_req(
+						       ipa_wdi_hdl_t hdl)
+{
+	return __qdf_ipa_wdi_opt_dpath_enable_clk_req(hdl);
+}
+#else
 /**
  * qdf_ipa_wdi_register_flt_cb() - register cb functions with IPA
  * for optional wifi datapath
@@ -542,6 +601,14 @@ static inline int qdf_ipa_wdi_register_flt_cb(
 					     flt_rsrv_cb, flt_rsrv_rel_cb,
 					     flt_add_cb, flt_rem_cb);
 }
+
+static inline int qdf_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
+				ipa_wdi_hdl_t hdl, u32 fltr_hdl)
+{
+	return 0;
+}
+
+#endif
 
 /**
  * ipa_wdi_opt_dpath_notify_flt_rsvd_per_inst() - notify IPA with filter
