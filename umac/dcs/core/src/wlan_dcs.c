@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -293,6 +293,114 @@ static void wlan_dcs_update_chan_util(struct pdev_dcs_im_stats *p_dcs_im_stats,
 	}
 }
 
+#ifdef WLAN_FEATURE_VDEV_DCS
+#define STATS_DELTA(cur , prev) \
+	((cur >= prev) ? (cur - prev) : ((cur + 0xffffffff) - prev))
+
+/**
+ * wlan_dcs_wlan_interference_get_stats_delta() - Get wlan interference dcs
+ * stats delta
+ * @curr_stats: current stats
+ * @prev_stats: previous stats
+ * @dcs_host_params: dcs host params
+ * @rxclr_delta: rxclr delta
+ * @rxclr_ext_delta: rxclr_ext delta
+ * @tx_frame_delta: tx_frame delta
+ * @rx_frame_delta: rx_frame delta
+ * @cycle_count_delta: cycle_count delta
+ * @my_bss_rx_delta: my_bss_rx delta
+ * @reg_tsf_delta: reg_tsf delta
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS
+wlan_dcs_wlan_interference_get_stats_delta(
+			struct wlan_host_dcs_im_tgt_stats *curr_stats,
+			struct wlan_host_dcs_im_tgt_stats *prev_stats,
+			struct pdev_dcs_params *dcs_host_params,
+			uint32_t *rxclr_delta, uint32_t *rxclr_ext_delta,
+			uint32_t *tx_frame_delta, uint32_t *rx_frame_delta,
+			uint32_t *cycle_count_delta, uint32_t *my_bss_rx_delta,
+			uint32_t *reg_tsf_delta)
+{
+	*rxclr_delta = STATS_DELTA(curr_stats->mib_stats.reg_rxclr_cnt,
+				   prev_stats->mib_stats.reg_rxclr_cnt);
+	*rxclr_ext_delta = STATS_DELTA(curr_stats->mib_stats.reg_rxclr_ext_cnt,
+				       prev_stats->mib_stats.reg_rxclr_ext_cnt);
+	*tx_frame_delta = STATS_DELTA(curr_stats->mib_stats.reg_tx_frame_cnt,
+				      prev_stats->mib_stats.reg_tx_frame_cnt);
+
+	*rx_frame_delta = STATS_DELTA(curr_stats->mib_stats.reg_rx_frame_cnt,
+				      prev_stats->mib_stats.reg_rx_frame_cnt);
+
+	*cycle_count_delta = STATS_DELTA(curr_stats->mib_stats.reg_cycle_cnt,
+					 prev_stats->mib_stats.reg_cycle_cnt);
+
+	*my_bss_rx_delta = STATS_DELTA(curr_stats->my_bss_rx_cycle_count,
+				       prev_stats->my_bss_rx_cycle_count);
+
+	*reg_tsf_delta = STATS_DELTA(curr_stats->reg_tsf32,
+				     prev_stats->reg_tsf32);
+	return QDF_STATUS_SUCCESS;
+}
+#else
+static inline QDF_STATUS
+wlan_dcs_wlan_interference_get_stats_delta(
+			struct wlan_host_dcs_im_tgt_stats *curr_stats,
+			struct wlan_host_dcs_im_tgt_stats *prev_stats,
+			struct pdev_dcs_params *dcs_host_params,
+			uint32_t *rxclr_delta, uint32_t *rxclr_ext_delta,
+			uint32_t *tx_frame_delta, uint32_t *rx_frame_delta,
+			uint32_t *cycle_count_delta, uint32_t *my_bss_rx_delta,
+			uint32_t *reg_tsf_delta)
+{
+	/*
+	 * Counters would have wrapped. Ideally we should be able to figure this
+	 * out, but we never know how many times counters wrapped, just ignore.
+	 */
+	if ((curr_stats->mib_stats.listen_time <= 0) ||
+	    (curr_stats->reg_tsf32 <= prev_stats->reg_tsf32)) {
+		if (unlikely(dcs_host_params->dcs_debug >= DCS_DEBUG_VERBOSE))
+			dcs_debug("ignoring due to negative TSF value");
+			goto copy_stats;
+	}
+
+	*reg_tsf_delta = curr_stats->reg_tsf32 - prev_stats->reg_tsf32;
+
+	/*
+	 * Do nothing if current stats are not seeming good, probably
+	 * a reset happened on chip, force cleared
+	 */
+	if (prev_stats->mib_stats.reg_rxclr_cnt >
+			curr_stats->mib_stats.reg_rxclr_cnt) {
+		if (unlikely(dcs_host_params->dcs_debug >= DCS_DEBUG_VERBOSE))
+			dcs_debug("ignoring due to negative rxclr count");
+			goto copy_stats;
+	}
+
+	*rxclr_delta = curr_stats->mib_stats.reg_rxclr_cnt -
+			prev_stats->mib_stats.reg_rxclr_cnt;
+	*rxclr_ext_delta = curr_stats->mib_stats.reg_rxclr_ext_cnt -
+				prev_stats->mib_stats.reg_rxclr_ext_cnt;
+	*tx_frame_delta = curr_stats->mib_stats.reg_tx_frame_cnt -
+				prev_stats->mib_stats.reg_tx_frame_cnt;
+
+	*rx_frame_delta = curr_stats->mib_stats.reg_rx_frame_cnt -
+				prev_stats->mib_stats.reg_rx_frame_cnt;
+
+	*cycle_count_delta = curr_stats->mib_stats.reg_cycle_cnt -
+				prev_stats->mib_stats.reg_cycle_cnt;
+
+	*my_bss_rx_delta = curr_stats->my_bss_rx_cycle_count -
+				prev_stats->my_bss_rx_cycle_count;
+
+	return QDF_STATUS_SUCCESS;
+
+copy_stats:
+	wlan_dcs_im_copy_stats(prev_stats, curr_stats);
+	return QDF_STATUS_E_FAILURE;
+}
+#endif
 /**
  * wlan_dcs_wlan_interference_process() - dcs detection algorithm handling
  * @curr_stats: current target im stats pointer
@@ -336,6 +444,7 @@ wlan_dcs_wlan_interference_process(
 	uint32_t wasted_tx_cu = 0;
 	uint32_t tx_err = 0;
 	uint32_t too_many_phy_errors = 0;
+	QDF_STATUS status;
 
 	if (!curr_stats) {
 		dcs_err("curr_stats is NULL");
@@ -354,45 +463,16 @@ wlan_dcs_wlan_interference_process(
 	if (unlikely(dcs_host_params.dcs_debug >= DCS_DEBUG_VERBOSE))
 		wlan_dcs_im_print_stats(prev_stats, curr_stats);
 
-	/*
-	 * Counters would have wrapped. Ideally we should be able to figure this
-	 * out, but we never know how many times counters wrapped, just ignore.
-	 */
-	if ((curr_stats->mib_stats.listen_time <= 0) ||
-	    (curr_stats->reg_tsf32 <= prev_stats->reg_tsf32)) {
-		if (unlikely(dcs_host_params.dcs_debug >= DCS_DEBUG_VERBOSE))
-			dcs_debug("ignoring due to negative TSF value");
-		goto copy_stats;
-	}
+	status = wlan_dcs_wlan_interference_get_stats_delta(
+					curr_stats, prev_stats,
+					&dcs_host_params, &rxclr_delta,
+					&rxclr_ext_delta, &tx_frame_delta,
+					&rx_frame_delta, &cycle_count_delta,
+					&my_bss_rx_delta, &reg_tsf_delta);
 
-	reg_tsf_delta = curr_stats->reg_tsf32 - prev_stats->reg_tsf32;
+	if (QDF_IS_STATUS_ERROR(status))
+		goto end;
 
-	/*
-	 * Do nothing if current stats are not seeming good, probably
-	 * a reset happened on chip, force cleared
-	 */
-	if (prev_stats->mib_stats.reg_rxclr_cnt >
-		curr_stats->mib_stats.reg_rxclr_cnt) {
-		if (unlikely(dcs_host_params.dcs_debug >= DCS_DEBUG_VERBOSE))
-			dcs_debug("ignoring due to negative rxclr count");
-		goto copy_stats;
-	}
-
-	rxclr_delta = curr_stats->mib_stats.reg_rxclr_cnt -
-			prev_stats->mib_stats.reg_rxclr_cnt;
-	rxclr_ext_delta = curr_stats->mib_stats.reg_rxclr_ext_cnt -
-				prev_stats->mib_stats.reg_rxclr_ext_cnt;
-	tx_frame_delta = curr_stats->mib_stats.reg_tx_frame_cnt -
-				prev_stats->mib_stats.reg_tx_frame_cnt;
-
-	rx_frame_delta = curr_stats->mib_stats.reg_rx_frame_cnt -
-				prev_stats->mib_stats.reg_rx_frame_cnt;
-
-	cycle_count_delta = curr_stats->mib_stats.reg_cycle_cnt -
-				prev_stats->mib_stats.reg_cycle_cnt;
-
-	my_bss_rx_delta = curr_stats->my_bss_rx_cycle_count -
-				prev_stats->my_bss_rx_cycle_count;
 
 	if (unlikely(dcs_host_params.dcs_debug >= DCS_DEBUG_VERBOSE))
 		dcs_debug("rxclr_delta: %u, rxclr_ext_delta: %u, tx_frame_delta: %u, rx_frame_delta: %u, cycle_count_delta: %u, my_bss_rx_delta: %u",
