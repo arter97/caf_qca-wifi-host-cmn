@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1253,4 +1253,30 @@ QDF_STATUS dp_htt_reo_migration(struct dp_soc *soc, uint16_t peer_id,
 				uint16_t ml_peer_id, uint16_t vdev_id,
 				uint8_t pdev_id, uint8_t chip_id);
 #endif
+
+#ifdef CONFIG_WORD_BASED_TLV
+/**
+ * dp_htt_rxdma_ring_wmask_cfg() - Setup RXDMA ring word mask config
+ * @soc: Common DP soc handle
+ * @htt_tlv_filter: Rx SRNG TLV and filter setting
+ *
+ * Return: none
+ */
+static inline void
+dp_htt_rxdma_ring_wmask_cfg(struct dp_soc *soc,
+			    struct htt_rx_ring_tlv_filter *htt_tlv_filter)
+{
+	htt_tlv_filter->rx_msdu_end_wmask =
+				 hal_rx_msdu_end_wmask_get(soc->hal_soc);
+	htt_tlv_filter->rx_mpdu_start_wmask =
+				 hal_rx_mpdu_start_wmask_get(soc->hal_soc);
+}
+#else
+static inline void
+dp_htt_rxdma_ring_wmask_cfg(struct dp_soc *soc,
+			    struct htt_rx_ring_tlv_filter *htt_tlv_filter)
+{
+}
+#endif
+
 #endif /* _DP_HTT_H_ */

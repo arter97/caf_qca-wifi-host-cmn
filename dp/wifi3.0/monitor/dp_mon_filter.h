@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -82,8 +82,15 @@ do { \
 do { \
 	(dst)->rx_hdr_length = src.rx_hdr_length; \
 } while (0)
+
+#define DP_RX_MON_FILTER_SET_WMASK(_dst, _src) \
+do { \
+	_dst->rx_mpdu_start_wmask = _src.rx_mpdu_start_wmask; \
+	_dst->rx_msdu_end_wmask = _src.rx_msdu_end_wmask; \
+} while (0)
 #else
 #define DP_RX_MON_FILTER_SET_RX_HDR_LEN(dst, src)
+#define DP_RX_MON_FILTER_SET_WMASK(_dst, _src)
 #endif
 
 #define DP_MON_FILTER_PRINT(fmt, args ...) \

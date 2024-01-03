@@ -1825,6 +1825,10 @@ void dp_rx_word_mask_subscribe_be(struct dp_soc *soc,
 	if (!msg_word || !tlv_filter)
 		return;
 
+	dp_info("enable %d, rx_mpdu_start_wmask 0x%x, rx_msdu_end_wmask 0x%x",
+		tlv_filter->enable, tlv_filter->rx_mpdu_start_wmask,
+		tlv_filter->rx_msdu_end_wmask);
+
 	/* tlv_filter->enable is set to 1 for monitor rings */
 	if (tlv_filter->enable)
 		return;

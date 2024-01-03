@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1686,30 +1686,6 @@ qdf_size_t dp_get_soc_context_size_be(void)
 	return sizeof(struct dp_soc_be);
 }
 
-#ifdef CONFIG_WORD_BASED_TLV
-/**
- * dp_rxdma_ring_wmask_cfg_be() - Setup RXDMA ring word mask config
- * @soc: Common DP soc handle
- * @htt_tlv_filter: Rx SRNG TLV and filter setting
- *
- * Return: none
- */
-static inline void
-dp_rxdma_ring_wmask_cfg_be(struct dp_soc *soc,
-			   struct htt_rx_ring_tlv_filter *htt_tlv_filter)
-{
-	htt_tlv_filter->rx_msdu_end_wmask =
-				 hal_rx_msdu_end_wmask_get(soc->hal_soc);
-	htt_tlv_filter->rx_mpdu_start_wmask =
-				 hal_rx_mpdu_start_wmask_get(soc->hal_soc);
-}
-#else
-static inline void
-dp_rxdma_ring_wmask_cfg_be(struct dp_soc *soc,
-			   struct htt_rx_ring_tlv_filter *htt_tlv_filter)
-{
-}
-#endif
 #ifdef WLAN_SUPPORT_PPEDS
 static
 void dp_free_ppeds_interrupts(struct dp_soc *soc, struct dp_srng *srng,
@@ -1881,7 +1857,7 @@ dp_rxdma_ring_sel_cfg_be(struct dp_soc *soc)
 	htt_tlv_filter.rx_msdu_end_offset =
 				hal_rx_msdu_end_offset_get(soc->hal_soc);
 
-	dp_rxdma_ring_wmask_cfg_be(soc, &htt_tlv_filter);
+	dp_htt_rxdma_ring_wmask_cfg(soc, &htt_tlv_filter);
 
 	for (i = 0; i < MAX_PDEV_CNT; i++) {
 		struct dp_pdev *pdev = soc->pdev_list[i];
@@ -2011,7 +1987,7 @@ dp_rxdma_ring_sel_cfg_be(struct dp_soc *soc)
 		htt_tlv_filter.rx_header_offset,
 		htt_tlv_filter.rx_packet_offset);
 
-	dp_rxdma_ring_wmask_cfg_be(soc, &htt_tlv_filter);
+	dp_htt_rxdma_ring_wmask_cfg(soc, &htt_tlv_filter);
 	for (i = 0; i < MAX_PDEV_CNT; i++) {
 		struct dp_pdev *pdev = soc->pdev_list[i];
 

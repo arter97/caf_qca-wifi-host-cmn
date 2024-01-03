@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -278,6 +278,8 @@ void dp_mon_filter_h2t_setup(struct dp_soc *soc, struct dp_pdev *pdev,
 				mon_filter->tlv_filter.enable_mon_mac_filter;
 		DP_RX_MON_FILTER_SET_RX_HDR_LEN(tlv_filter,
 						mon_filter->tlv_filter);
+		DP_RX_MON_FILTER_SET_WMASK(tlv_filter,
+					   mon_filter->tlv_filter);
 	}
 
 	dp_mon_filter_show_filter(mon_pdev, 0, filter);
@@ -721,6 +723,7 @@ void dp_mon_filter_adjust(struct dp_pdev *pdev, struct dp_mon_filter *filter)
 		filter->tlv_filter.mpdu_end = 0;
 		filter->tlv_filter.packet_header = 0;
 		filter->tlv_filter.attention = 0;
+		dp_htt_rxdma_ring_wmask_cfg(soc, &filter->tlv_filter);
 		break;
 	default:
 		break;
