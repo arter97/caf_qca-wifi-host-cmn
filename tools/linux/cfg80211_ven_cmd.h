@@ -885,13 +885,21 @@ enum {
 #endif
 	IEEE80211_PARAM_VDEV_UP = 819, /* Flag to indicate if vdev is in UP State*/
 #ifdef WLAN_FEATURE_11BE_MLO
-	IEEE80211_PARAM_MLO_MAX_RECOM_ACTIVE_LINKS = 820, /* MLO Max Simultaneous Active links */
+	/* User configuration for MLO RMSL advertisement */
+	IEEE80211_PARAM_MLO_MAX_RECOM_ACTIVE_LINKS = 820,
+#endif
+	IEEE80211_PARAM_NOACK_MAP = 821, /* Get NoAck map for vdev */
+	IEEE80211_PARAM_SET_RTT_RESPONDER_ROLE = 822,
+#ifdef WLAN_FEATURE_11BE_MLO
+	/* MLO enable/disable EXTMLD CAP advertisement */
+	IEEE80211_PARAM_MLO_EXTMLDCAPOP_FLAG = 823,
 #endif
 	/* User config to set common PSD value for all 20MHz subchannels of the
 	 * current channel in the TPE IE
 	 */
-	IEEE80211_PARAM_TPE_COMMON_PSD = 821,
-	IEEE80211_PARAM_TPE_PWR_UNIT = 822, /* User config to choose PSD or EIRP in a TPE IE */
+	IEEE80211_PARAM_TPE_COMMON_PSD = 824,
+	IEEE80211_PARAM_TPE_PWR_UNIT = 825, /* User config to choose PSD or EIRP in a TPE IE */
+	IEEE80211_PARAM_TPE_PUNC_PWR = 826, /* User config to set the PSD power of the punctured channel */
 };
 
 enum {
@@ -2662,6 +2670,10 @@ struct vendor_commands vap_vendor_cmds[] = {
 		SET_PARAM, 1},
 	{"g_max_recom_active_links", IEEE80211_PARAM_MLO_MAX_RECOM_ACTIVE_LINKS,
 		GET_PARAM, 0},
+	{"extmldcap_enable_advertisement", IEEE80211_PARAM_MLO_EXTMLDCAPOP_FLAG,
+		SET_PARAM, 1},
+	{"g_extmldcap_enable_advertisement",
+		IEEE80211_PARAM_MLO_EXTMLDCAPOP_FLAG, GET_PARAM, 0},
 #endif
 #ifdef WLAN_FEATURE_11BE
 	{"set_tpe_common_psd", IEEE80211_PARAM_TPE_COMMON_PSD, SET_PARAM, 1},
