@@ -2643,6 +2643,30 @@ struct test_qaddr_del {
 	uint8_t chip_id;
 };
 
+#ifdef DP_RX_MSDU_DONE_FAIL_HISTORY
+
+#define DP_MSDU_DONE_FAIL_HIST_MAX 128
+
+struct dp_msdu_done_fail_entry {
+	qdf_dma_addr_t paddr;
+	uint32_t sw_cookie;
+};
+
+struct dp_msdu_done_fail_history {
+	qdf_atomic_t index;
+	struct dp_msdu_done_fail_entry entry[DP_MSDU_DONE_FAIL_HIST_MAX];
+};
+#endif
+
+#ifdef DP_RX_PEEK_MSDU_DONE_WAR
+#define DP_MSDU_DONE_FAIL_DESCS_MAX 64
+
+struct dp_rx_msdu_done_fail_desc_list {
+	qdf_atomic_t index;
+	struct dp_rx_desc *msdu_done_fail_descs[DP_MSDU_DONE_FAIL_DESCS_MAX];
+};
+#endif
+
 /* SOC level structure for data path */
 struct dp_soc {
 	/**
@@ -3211,6 +3235,12 @@ struct dp_soc {
 		uint32_t detected;
 		uint64_t start_time;
 	} stale_entry[MAX_TCL_DATA_RINGS];
+#endif
+#ifdef DP_RX_MSDU_DONE_FAIL_HISTORY
+	struct dp_msdu_done_fail_history *msdu_done_fail_hist;
+#endif
+#ifdef DP_RX_PEEK_MSDU_DONE_WAR
+	struct dp_rx_msdu_done_fail_desc_list msdu_done_fail_desc_list;
 #endif
 };
 
