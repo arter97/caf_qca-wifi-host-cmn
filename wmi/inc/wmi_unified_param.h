@@ -5959,6 +5959,8 @@ typedef enum {
 		   PDEV_PARAM_ENABLE_SMALL_MRU),
 	PDEV_PARAM(pdev_param_enable_large_mru,
 		   PDEV_PARAM_ENABLE_LARGE_MRU),
+	PDEV_PARAM(pdev_param_pwr_reduction_in_quarter_db,
+		   PDEV_PARAM_PWR_REDUCTION_IN_QUARTER_DB),
 	pdev_param_max,
 } wmi_conv_pdev_params_id;
 
