@@ -61,6 +61,7 @@
 
 #define IPA_SESSION_ID_SHIFT 1
 #endif /* IPA_WDI3_TX_TWO_PIPES */
+#define MAX_IPA_RX_FREE_DESC 32
 
 /**
  * struct dp_ipa_uc_tx_hdr - full tx header registered to IPA hardware
@@ -443,6 +444,29 @@ QDF_STATUS dp_ipa_handle_rx_buf_smmu_mapping(struct dp_soc *soc,
 					     const char *func,
 					     uint32_t line,
 					     uint8_t caller);
+#ifdef IPA_OPT_WIFI_DP_CTRL
+
+/**
+ * dp_rx_add_to_ipa_desc_free_list() - make a free list of descriptors
+ * from free desc list for ipa to be used in opt dp ctrl.
+ * @soc: core txrx main context
+ * @rx_desc: free desc from rx desc pool
+ *
+ * Return: QDF_STATUS
+ *
+ */
+QDF_STATUS
+dp_rx_add_to_ipa_desc_free_list(struct dp_soc *soc,
+				struct dp_rx_desc *rx_desc);
+#else
+static inline QDF_STATUS
+dp_rx_add_to_ipa_desc_free_list(struct dp_soc *soc,
+				struct dp_rx_desc *rx_desc)
+{
+	return QDF_STATUS_E_FAILURE;
+}
+#endif
+
 /**
  * dp_ipa_tx_buf_smmu_mapping() - Create SMMU mappings for IPA
  *				  allocated TX buffers
@@ -707,6 +731,13 @@ static inline bool
 dp_ipa_is_ring_ipa_tx(struct dp_soc *soc, uint8_t ring_id)
 {
 	return false;
+}
+
+static inline QDF_STATUS
+dp_rx_add_to_ipa_desc_free_list(struct dp_soc *soc,
+				struct dp_rx_desc *rx_desc)
+{
+	return QDF_STATUS_E_FAILURE;
 }
 #endif
 #endif /* _DP_IPA_H_ */

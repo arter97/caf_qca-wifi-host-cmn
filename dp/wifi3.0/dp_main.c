@@ -3810,6 +3810,34 @@ void dp_vdev_stats_hw_offload_target_clear(struct dp_soc *soc, uint8_t pdev_id,
 }
 #endif /*QCA_VDEV_STATS_HW_OFFLOAD_SUPPORT */
 
+#ifdef IPA_OPT_WIFI_DP_CTRL
+/**
+ * dp_ipa_rx_desc_list_deinit() - Deinit rx desc list for opt_dp_ctrl
+ * @pdev: pdev handle
+ *
+ * Return: None
+ */
+static
+void dp_ipa_rx_desc_list_deinit(struct dp_pdev *pdev)
+{
+	struct dp_soc *soc = pdev->soc;
+	struct dp_ipa_rx_desc_list *free_list;
+
+	free_list = &soc->ipa_rx_desc_freelist;
+	qdf_spin_lock_bh(&free_list->lock);
+	dp_info("deinit desc list allocated for opt_dp_ctrl");
+	free_list->head = NULL;
+	free_list->tail = NULL;
+	free_list->list_size = 0;
+	qdf_spin_unlock_bh(&free_list->lock);
+}
+#else
+static
+void dp_ipa_rx_desc_list_deinit(struct dp_pdev *pdev)
+{
+}
+#endif
+
 /**
  * dp_pdev_deinit() - Deinit txrx pdev
  * @txrx_pdev: Datapath PDEV handle
@@ -3849,7 +3877,7 @@ static void dp_pdev_deinit(struct cdp_pdev *txrx_pdev, int force)
 	dp_deinit_ipa_rx_alt_refill_buf_ring(pdev->soc, pdev);
 	dp_deinit_ipa_rx_refill_buf_ring(pdev->soc, pdev);
 	dp_rxdma_ring_cleanup(pdev->soc, pdev);
-
+	dp_ipa_rx_desc_list_deinit(pdev);
 	curr_nbuf = pdev->invalid_peer_head_msdu;
 	while (curr_nbuf) {
 		next_nbuf = qdf_nbuf_next(curr_nbuf);
@@ -14563,6 +14591,54 @@ dp_init_link_peer_stats_enabled(struct dp_pdev *pdev)
 }
 #endif
 
+#ifdef IPA_OPT_WIFI_DP_CTRL
+/**
+ * dp_ipa_rx_desc_list_init() - Init rx desc list for opt_dp_ctrl
+ * @pdev: pdev handle
+ *
+ * Return: number of desc added o the list
+ */
+static
+uint16_t dp_ipa_rx_desc_list_init(struct dp_pdev *pdev)
+{
+	int mac_id = pdev->lmac_id;
+	struct dp_soc *soc = pdev->soc;
+	struct rx_desc_pool *rx_desc_pool;
+	uint16_t num_desc;
+	struct dp_ipa_rx_desc_list *free_list;
+	union dp_rx_desc_list_elem_t *desc_list = NULL;
+	union dp_rx_desc_list_elem_t *tail = NULL;
+	union dp_rx_desc_list_elem_t *next;
+	uint16_t count = 0;
+
+	rx_desc_pool = &soc->rx_desc_buf[mac_id];
+	free_list = &soc->ipa_rx_desc_freelist;
+	num_desc = MAX_IPA_RX_FREE_DESC - free_list->list_size;
+	dp_info("num of desc required: %u", num_desc);
+	count = dp_rx_get_free_desc_list(soc, mac_id, rx_desc_pool,
+					 num_desc, &desc_list,
+					 &tail);
+	qdf_spin_lock_bh(&free_list->lock);
+	while (desc_list) {
+		next = desc_list->next;
+		dp_rx_add_to_free_desc_list(&free_list->head,
+					    &free_list->tail,
+					    &desc_list->rx_desc);
+		free_list->list_size++;
+		desc_list = next;
+	}
+	dp_info("num of desc allocated: %u", count);
+	qdf_spin_unlock_bh(&free_list->lock);
+	return count;
+}
+#else
+static
+uint16_t dp_ipa_rx_desc_list_init(struct dp_pdev *pdev)
+{
+	return 0;
+}
+#endif
+
 static QDF_STATUS dp_pdev_init(struct cdp_soc_t *txrx_soc,
 				      HTC_HANDLE htc_handle,
 				      qdf_device_t qdf_osdev,
@@ -14709,6 +14785,8 @@ static QDF_STATUS dp_pdev_init(struct cdp_soc_t *txrx_soc,
 
 	/* initialize sw rx descriptors */
 	dp_rx_pdev_desc_pool_init(pdev);
+	/* add rx desc to free list for opt_dp_ctrl */
+	dp_ipa_rx_desc_list_init(pdev);
 	/* allocate buffers and replenish the RxDMA ring */
 	dp_rx_pdev_buffers_alloc(pdev);
 

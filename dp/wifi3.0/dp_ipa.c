@@ -223,6 +223,28 @@ QDF_STATUS dp_ipa_handle_rx_buf_smmu_mapping(struct dp_soc *soc,
 						func, line);
 }
 
+#ifdef IPA_OPT_WIFI_DP_CTRL
+QDF_STATUS
+dp_rx_add_to_ipa_desc_free_list(struct dp_soc *soc,
+				struct dp_rx_desc *rx_desc)
+{
+	uint16_t num_entries;
+	struct dp_ipa_rx_desc_list *free_list;
+
+	free_list = &soc->ipa_rx_desc_freelist;
+	num_entries = free_list->list_size;
+	if (num_entries >= MAX_IPA_RX_FREE_DESC)
+		return QDF_STATUS_E_FAILURE;
+
+	qdf_spin_lock_bh(&free_list->lock);
+	dp_rx_add_to_free_desc_list(&free_list->head,
+				    &free_list->tail, rx_desc);
+	free_list->list_size++;
+	qdf_spin_unlock_bh(&free_list->lock);
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 static QDF_STATUS __dp_ipa_tx_buf_smmu_mapping(
 	struct dp_soc *soc,
 	struct dp_pdev *pdev,

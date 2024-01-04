@@ -604,11 +604,15 @@ more_data:
 								soc, rx_desc,
 								reo_ring_num);
 			if (qdf_likely(old_rx_desc)) {
-				rx_bufs_reaped[rx_desc->chip_id][rx_desc->pool_id]++;
-				dp_rx_add_to_free_desc_list
-					(&head[rx_desc->chip_id][rx_desc->pool_id],
-					 &tail[rx_desc->chip_id][rx_desc->pool_id],
-					 old_rx_desc);
+				if (dp_rx_add_to_ipa_desc_free_list(soc,
+								    old_rx_desc)
+							!= QDF_STATUS_SUCCESS) {
+					rx_bufs_reaped[rx_desc->chip_id][rx_desc->pool_id]++;
+					dp_rx_add_to_free_desc_list
+					    (&head[rx_desc->chip_id][rx_desc->pool_id],
+					     &tail[rx_desc->chip_id][rx_desc->pool_id],
+					     old_rx_desc);
+				}
 				quota -= 1;
 				num_pending -= 1;
 				num_rx_bufs_reaped++;
@@ -626,8 +630,6 @@ more_data:
 		    !(qdf_nbuf_is_rx_chfrag_cont(rx_desc->nbuf)))
 			is_prev_msdu_last = true;
 
-		rx_bufs_reaped[rx_desc->chip_id][rx_desc->pool_id]++;
-
 		/*
 		 * move unmap after scattered msdu waiting break logic
 		 * in case double skb unmap happened.
@@ -639,9 +641,14 @@ more_data:
 		quota -= 1;
 		num_pending -= 1;
 
-		dp_rx_add_to_free_desc_list
-			(&head[rx_desc->chip_id][rx_desc->pool_id],
-			 &tail[rx_desc->chip_id][rx_desc->pool_id], rx_desc);
+		if (dp_rx_add_to_ipa_desc_free_list(soc, rx_desc) !=
+						QDF_STATUS_SUCCESS) {
+			rx_bufs_reaped[rx_desc->chip_id][rx_desc->pool_id]++;
+			dp_rx_add_to_free_desc_list
+				(&head[rx_desc->chip_id][rx_desc->pool_id],
+				 &tail[rx_desc->chip_id][rx_desc->pool_id],
+				 rx_desc);
+		}
 		num_rx_bufs_reaped++;
 
 		dp_rx_prefetch_hw_sw_nbuf_32_byte_desc(soc, hal_soc,

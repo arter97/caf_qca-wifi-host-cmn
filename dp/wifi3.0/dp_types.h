@@ -2784,6 +2784,19 @@ struct dp_rx_msdu_done_fail_desc_list {
 };
 #endif
 
+/* struct dp_ipa_rx_desc_list: free desc list for ipa in opt_dp_ctrl
+ * @head: head pointer
+ * @tail: tail pointer
+ * @lock: spin lock
+ * @list_size: size of list
+ */
+struct dp_ipa_rx_desc_list {
+	union dp_rx_desc_list_elem_t *head;
+	union dp_rx_desc_list_elem_t *tail;
+	qdf_spinlock_t lock;
+	uint16_t list_size;
+};
+
 /* SOC level structure for data path */
 struct dp_soc {
 	/**
@@ -3115,7 +3128,9 @@ struct dp_soc {
 
 	qdf_list_t reo_desc_freelist;
 	qdf_spinlock_t reo_desc_freelist_lock;
-
+#ifdef IPA_OPT_WIFI_DP_CTRL
+	struct dp_ipa_rx_desc_list ipa_rx_desc_freelist;
+#endif
 	/* htt stats */
 	struct htt_t2h_stats htt_stats;
 
