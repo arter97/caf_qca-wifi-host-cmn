@@ -705,6 +705,8 @@ struct mlo_vdev_start_partner_links {
  * @mlo_partner: Partner links for multi-link operation
  * @mbssid_multi_group_flag: Flag to identify multi group mbssid support
  * @mbssid_multi_group_id: Group id of current vdev
+ * @target_tsf_us_lo: Target TSF value of current vdev from bits 31:0
+ * @target_tsf_us_hi: Target TSF value of current vdev from bits 63:32
  */
 struct vdev_start_params {
 	uint8_t vdev_id;
@@ -735,6 +737,8 @@ struct vdev_start_params {
 #endif
 	uint8_t mbssid_multi_group_flag;
 	uint32_t mbssid_multi_group_id;
+	uint32_t target_tsf_us_lo;
+	uint32_t target_tsf_us_hi;
 };
 
 /**

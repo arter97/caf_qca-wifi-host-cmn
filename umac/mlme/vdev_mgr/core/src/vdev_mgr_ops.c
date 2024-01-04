@@ -43,6 +43,9 @@
 #endif
 #include <wlan_vdev_mgr_utils_api.h>
 #include <wlan_vdev_mgr_api.h>
+#ifdef WLAN_FEATURE_LL_LT_SAP
+#include "wlan_ll_sap_api.h"
+#endif
 
 #ifdef QCA_VDEV_STATS_HW_OFFLOAD_SUPPORT
 /**
@@ -572,6 +575,40 @@ static QDF_STATUS vdev_mgr_start_param_update(
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef WLAN_FEATURE_LL_LT_SAP
+#define TSF_UPPER_MASK 0xFFFFFFFF00000000
+#define TSF_LOWER_MASK 0xFFFFFFFF
+
+/**
+ * vdev_mgr_get_target_tsf() - Get target_tsf for given vdev
+ * @param: pointer to vdev_start_params
+ * @vdev: vdev pointer
+ *
+ * Return: None
+ */
+static
+void vdev_mgr_get_target_tsf(struct vdev_start_params *param,
+			     struct wlan_objmgr_vdev *vdev)
+{
+	uint64_t target_tsf = 0;
+
+	param->target_tsf_us_lo = 0;
+	param->target_tsf_us_hi = 0;
+	target_tsf = wlan_ll_sap_get_target_tsf_for_vdev_restart(vdev);
+	if (target_tsf) {
+		param->target_tsf_us_lo = (target_tsf & TSF_LOWER_MASK);
+		param->target_tsf_us_hi = (target_tsf & TSF_UPPER_MASK) >> 32;
+	}
+}
+#else
+static inline
+void vdev_mgr_get_target_tsf(struct vdev_start_params *param,
+			     struct wlan_objmgr_vdev *vdev)
+{
+	param->target_tsf_us_lo = 0;
+	param->target_tsf_us_hi = 0;
+}
+#endif
 QDF_STATUS vdev_mgr_start_send(
 			struct vdev_mlme_obj *mlme_obj,
 			bool restart)
@@ -591,6 +628,9 @@ QDF_STATUS vdev_mgr_start_send(
 	}
 
 	param.is_restart = restart;
+	if (param.is_restart)
+		vdev_mgr_get_target_tsf(&param, mlme_obj->vdev);
+
 	status = tgt_vdev_mgr_start_send(mlme_obj, &param);
 
 	return status;

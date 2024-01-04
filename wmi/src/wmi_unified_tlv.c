@@ -1393,6 +1393,11 @@ static QDF_STATUS send_vdev_start_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->regdomain = req->regdomain;
 	cmd->he_ops = req->he_ops;
 
+	if (req->is_restart) {
+		cmd->target_tsf_us_lo = req->target_tsf_us_lo;
+		cmd->target_tsf_us_hi = req->target_tsf_us_hi;
+	}
+
 	buf_ptr = (uint8_t *) (((uintptr_t) cmd) + sizeof(*cmd) +
 			       sizeof(wmi_channel));
 	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC,
@@ -1409,15 +1414,16 @@ static QDF_STATUS send_vdev_start_cmd_tlv(wmi_unified_t wmi_handle,
 		 "beacon interval %d dtim %d center_chan %d center_freq2 %d "
 		 "reg_info_1: 0x%x reg_info_2: 0x%x, req->max_txpow: 0x%x "
 		 "Tx SS %d, Rx SS %d, ldpc_rx: %d, cac %d, regd %d, HE ops: %d"
-		 "req->dis_hw_ack: %d ", req->vdev_id,
-		 chan->mhz, req->channel.phy_mode, chan->info,
+		 "req->dis_hw_ack: %d target_tsf_us_lo %ul target_tsf_us_hi %ul",
+		 req->vdev_id, chan->mhz, req->channel.phy_mode, chan->info,
 		 req->channel.dfs_set, req->beacon_interval, cmd->dtim_period,
 		 chan->band_center_freq1, chan->band_center_freq2,
 		 chan->reg_info_1, chan->reg_info_2, req->channel.maxregpower,
 		 req->preferred_tx_streams, req->preferred_rx_streams,
 		 req->ldpc_rx_enabled, req->cac_duration_ms,
 		 req->regdomain, req->he_ops,
-		 req->disable_hw_ack);
+		 req->disable_hw_ack, req->target_tsf_us_lo,
+		 req->target_tsf_us_hi);
 
 	vdev_start_cmd_fill_11be(cmd, req);
 
