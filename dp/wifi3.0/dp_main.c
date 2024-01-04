@@ -840,6 +840,9 @@ dp_peer_send_wds_disconnect(struct dp_soc *soc, struct dp_peer *peer)
 	struct dp_ast_entry *ase = NULL;
 	struct dp_ast_entry *temp_ase;
 
+	if (!soc->cdp_soc.ol_ops->peer_send_wds_disconnect)
+		return;
+
 	DP_PEER_ITERATE_ASE_LIST(peer, ase, temp_ase) {
 		if (ase->type == CDP_TXRX_AST_TYPE_WDS) {
 			soc->cdp_soc.ol_ops->peer_send_wds_disconnect(soc->ctrl_psoc,
