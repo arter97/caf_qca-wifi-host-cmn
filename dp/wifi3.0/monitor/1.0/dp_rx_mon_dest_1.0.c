@@ -1688,6 +1688,7 @@ dp_rx_mon_restitch_mpdu_from_msdus(struct dp_soc *soc,
 				   struct cdp_mon_status *rx_status)
 {
 	qdf_nbuf_t msdu, mpdu_buf, prev_buf, msdu_orig, head_frag_list;
+	qdf_nbuf_t first_rx_msdu;
 	uint32_t wifi_hdr_len, sec_hdr_len, msdu_llc_len,
 		mpdu_buf_len, decap_hdr_pull_bytes, frag_list_sum_len, dir,
 		is_amsdu, is_first_frag, amsdu_pad;
@@ -1719,8 +1720,9 @@ dp_rx_mon_restitch_mpdu_from_msdus(struct dp_soc *soc,
 		goto mpdu_stitch_fail;
 
 	msdu_orig = head_msdu;
+	first_rx_msdu = DP_RX_MON_FIRST_RX_MSDU_IN_LIST(head_msdu);
 
-	rx_desc = qdf_nbuf_data(msdu_orig);
+	rx_desc = qdf_nbuf_data(first_rx_msdu);
 	qdf_mem_zero(&buf_info, sizeof(buf_info));
 	hal_rx_populate_buf_info(soc, &buf_info, rx_desc);
 
@@ -1740,7 +1742,7 @@ dp_rx_mon_restitch_mpdu_from_msdus(struct dp_soc *soc,
 	/* Fill out the rx_status from the PPDU start and end fields */
 	/*   HAL_RX_GET_PPDU_STATUS(soc, mac_id, rx_status); */
 
-	rx_desc = qdf_nbuf_data(head_msdu);
+	rx_desc = qdf_nbuf_data(first_rx_msdu);
 
 	/* Easy case - The MSDU status indicates that this is a non-decapped
 	 * packet in RAW mode.
@@ -1749,23 +1751,10 @@ dp_rx_mon_restitch_mpdu_from_msdus(struct dp_soc *soc,
 		/* Note that this path might suffer from headroom unavailabilty
 		 * - but the RX status is usually enough
 		 */
-
-		l2_hdr_offset = hal_rx_frag_msdu_get_l2_hdr_offset(soc,
-								   &buf_info,
-								   rx_desc,
-								   true);
-		dp_rx_msdus_set_payload(soc, head_msdu, l2_hdr_offset);
-
-		dp_rx_mon_dest_debug("%pK: decap format raw head %pK head->next %pK last_msdu %pK last_msdu->next %pK",
-				     soc, head_msdu, head_msdu->next,
-				     last_msdu, last_msdu->next);
-
 		mpdu_buf = head_msdu;
 
-		prev_buf = mpdu_buf;
-
 		frag_list_sum_len = 0;
-		msdu = qdf_nbuf_next(head_msdu);
+		msdu = first_rx_msdu;
 		is_first_frag = 1;
 
 		while (msdu) {
@@ -1774,15 +1763,15 @@ dp_rx_mon_restitch_mpdu_from_msdus(struct dp_soc *soc,
 							rx_desc, false);
 			dp_rx_msdus_set_payload(soc, msdu, l2_hdr_offset);
 
-			if (is_first_frag) {
+			/* Find the 1st msdu to append in mpdu_buf->frag_list */
+			if (msdu != head_msdu && is_first_frag) {
 				is_first_frag = 0;
 				head_frag_list  = msdu;
 			}
 
-			frag_list_sum_len += qdf_nbuf_len(msdu);
-
-			/* Maintain the linking of the cloned MSDUS */
-			qdf_nbuf_set_next_ext(prev_buf, msdu);
+			/* calculate frag_list length */
+			if (!is_first_frag)
+				frag_list_sum_len += qdf_nbuf_len(msdu);
 
 			/* Move to the next */
 			prev_buf = msdu;

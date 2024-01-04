@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -685,6 +685,9 @@ uint8_t *dp_rx_mon_get_buffer_data(struct dp_rx_desc *rx_desc)
 	return rx_desc->rx_buf_start;
 }
 
+#define DP_RX_MON_FIRST_RX_MSDU_IN_LIST(_head_msdu) \
+	(_head_msdu)
+
 #else
 
 #define DP_RX_MON_GET_NBUF_FROM_DESC(rx_desc) \
@@ -733,11 +736,42 @@ dp_rx_mon_buffer_unmap(struct dp_soc *soc, struct dp_rx_desc *rx_desc,
 				     QDF_DMA_FROM_DEVICE, size);
 }
 
+#ifdef CONFIG_WORD_BASED_TLV
+/*
+ * Get the first msdu received from HW, the head msdu
+ * is added by host sw to accommodate radiotap header if
+ * Qword based TLV is enabled.
+ */
+#define DP_RX_MON_FIRST_RX_MSDU_IN_LIST(_head_msdu) \
+	qdf_nbuf_next((_head_msdu))
+
+static inline
+QDF_STATUS dp_rx_mon_alloc_parent_buffer(qdf_nbuf_t *head_msdu)
+{
+	/* reserve 256 bytes for radiotap header */
+	*head_msdu = qdf_nbuf_alloc(NULL, 2 * DP_RX_MON_MAX_RADIO_TAP_HDR,
+				    2 * DP_RX_MON_MAX_RADIO_TAP_HDR,
+				    4, false);
+
+	if (!(*head_msdu))
+		return QDF_STATUS_E_FAILURE;
+
+	qdf_mem_zero(qdf_nbuf_head(*head_msdu), qdf_nbuf_headroom(*head_msdu));
+
+	qdf_nbuf_set_next(*head_msdu, NULL);
+
+	return QDF_STATUS_SUCCESS;
+}
+#else
+#define DP_RX_MON_FIRST_RX_MSDU_IN_LIST(_head_msdu) \
+	 (_head_msdu)
+
 static inline
 QDF_STATUS dp_rx_mon_alloc_parent_buffer(qdf_nbuf_t *head_msdu)
 {
 	return QDF_STATUS_SUCCESS;
 }
+#endif
 
 #ifdef QCA_WIFI_MONITOR_MODE_NO_MSDU_START_TLV_SUPPORT
 
@@ -868,6 +902,8 @@ QDF_STATUS dp_rx_mon_add_msdu_to_list(struct dp_soc *soc, qdf_nbuf_t *head_msdu,
 	} else {
 		if (*last)
 			qdf_nbuf_set_next(*last, msdu);
+		else
+			qdf_nbuf_set_next(*head_msdu, msdu);
 	}
 	*last = msdu;
 	return QDF_STATUS_SUCCESS;
