@@ -1611,8 +1611,8 @@ static inline QDF_STATUS dp_peer_map_ast(struct dp_soc *soc,
 
 	if (!peer) {
 		qdf_spin_unlock_bh(&soc->ast_lock);
-		dp_peer_alert("Peer is NULL for mac " QDF_MAC_ADDR_FMT " ",
-			      QDF_MAC_ADDR_REF(mac_addr));
+		dp_peer_err("Peer is NULL for mac " QDF_MAC_ADDR_FMT " ",
+			    QDF_MAC_ADDR_REF(mac_addr));
 		return QDF_STATUS_E_INVAL;
 	}
 
