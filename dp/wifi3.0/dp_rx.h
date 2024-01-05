@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -37,6 +37,13 @@
 #define RX_DATA_BUFFER_ALIGNMENT        4
 #define RX_MONITOR_BUFFER_ALIGNMENT     4
 #endif /* RXDMA_OPTIMIZATION */
+
+#ifdef DP_RX_BUFFER_OPTIMIZATION
+/* no extra alignment need */
+#define RX_DATA_BUFFER_OPT_ALIGNMENT	0
+#else
+#define RX_DATA_BUFFER_OPT_ALIGNMENT	RX_DATA_BUFFER_ALIGNMENT
+#endif
 
 #if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
 #define DP_WBM2SW_RBM(sw0_bm_id)	HAL_RX_BUF_RBM_SW1_BM(sw0_bm_id)

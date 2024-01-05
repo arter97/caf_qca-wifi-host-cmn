@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -3042,15 +3042,40 @@ QDF_STATUS dp_rx_vdev_detach(struct dp_vdev *vdev)
 	return QDF_STATUS_SUCCESS;
 }
 
-static QDF_STATUS
-dp_pdev_nbuf_alloc_and_map(struct dp_soc *dp_soc,
-			   struct dp_rx_nbuf_frag_info *nbuf_frag_info_t,
-			   struct dp_pdev *dp_pdev,
-			   struct rx_desc_pool *rx_desc_pool,
-			   bool dp_buf_page_frag_alloc_enable)
+#ifdef DP_RX_BUFFER_OPTIMIZATION
+/**
+ *dp_rx_nbuf_alloc_for_frag_info() - allocate RX nbuf to fill in
+ *                                   dp_rx_nbuf_frag_info structure.
+ * @dp_soc: DP SOC handle
+ * @nbuf_frag_info_t: pointer to dp_rx_nbuf_frag_info structure
+ * @rx_desc_pool: pointer to RX Desc pool
+ * @dp_buf_page_frag_alloc_enable: flag to allocate nbuf by page frag
+ *
+ * If DP_RX_BUFFER_OPTIMIZATION is enabled, this function will stick to
+ * qdf_nbuf_alloc() way to allocate RX nbuf, this is required to ensure
+ * 2K slab memory allocation for skb->head buffer which will be 128 bytes
+ * aligned.
+ *
+ * Return: None
+ */
+static inline void
+dp_rx_nbuf_alloc_for_frag_info(struct dp_soc *dp_soc,
+			       struct dp_rx_nbuf_frag_info *nbuf_frag_info_t,
+			       struct rx_desc_pool *rx_desc_pool,
+			       bool dp_buf_page_frag_alloc_enable)
 {
-	QDF_STATUS ret = QDF_STATUS_E_FAILURE;
-
+	(nbuf_frag_info_t->virt_addr).nbuf =
+		qdf_nbuf_alloc(dp_soc->osdev, rx_desc_pool->buf_size,
+			       RX_BUFFER_RESERVATION,
+			       rx_desc_pool->buf_alignment, FALSE);
+}
+#else
+static inline void
+dp_rx_nbuf_alloc_for_frag_info(struct dp_soc *dp_soc,
+			       struct dp_rx_nbuf_frag_info *nbuf_frag_info_t,
+			       struct rx_desc_pool *rx_desc_pool,
+			       bool dp_buf_page_frag_alloc_enable)
+{
 	if (dp_buf_page_frag_alloc_enable) {
 		(nbuf_frag_info_t->virt_addr).nbuf =
 			qdf_nbuf_frag_alloc(dp_soc->osdev,
@@ -3063,6 +3088,22 @@ dp_pdev_nbuf_alloc_and_map(struct dp_soc *dp_soc,
 				       RX_BUFFER_RESERVATION,
 				       rx_desc_pool->buf_alignment, FALSE);
 	}
+}
+#endif
+
+static QDF_STATUS
+dp_pdev_nbuf_alloc_and_map(struct dp_soc *dp_soc,
+			   struct dp_rx_nbuf_frag_info *nbuf_frag_info_t,
+			   struct dp_pdev *dp_pdev,
+			   struct rx_desc_pool *rx_desc_pool,
+			   bool dp_buf_page_frag_alloc_enable)
+{
+	QDF_STATUS ret = QDF_STATUS_E_FAILURE;
+
+	dp_rx_nbuf_alloc_for_frag_info(dp_soc, nbuf_frag_info_t,
+				       rx_desc_pool,
+				       dp_buf_page_frag_alloc_enable);
+
 	if (!((nbuf_frag_info_t->virt_addr).nbuf)) {
 		dp_err("nbuf alloc failed");
 		DP_STATS_INC(dp_pdev, replenish.nbuf_alloc_fail, 1);
@@ -3378,7 +3419,7 @@ QDF_STATUS dp_rx_pdev_desc_pool_init(struct dp_pdev *pdev)
 
 	rx_desc_pool->owner = dp_rx_get_rx_bm_id(soc);
 	rx_desc_pool->buf_size = buf_size;
-	rx_desc_pool->buf_alignment = RX_DATA_BUFFER_ALIGNMENT;
+	rx_desc_pool->buf_alignment = RX_DATA_BUFFER_OPT_ALIGNMENT;
 	/* Disable monitor dest processing via frag */
 	if (target_type == TARGET_TYPE_QCN9160) {
 		rx_desc_pool->buf_size = RX_MONITOR_BUFFER_SIZE;
