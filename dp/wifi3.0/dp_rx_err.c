@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1325,6 +1325,66 @@ process_next_msdu:
 }
 
 #endif /* QCA_HOST_MODE_WIFI_DISABLED */
+
+#ifdef WLAN_MLO_MULTI_CHIP
+/**
+ * dp_rx_amsdu_adr_mismatch_hdl() - Function to handle rxdma address mismatch
+ *                                  errors.
+ *
+ * @soc: core DP main context
+ * @nbuf: buffer pointer
+ * @rx_tlv_hdr: start of rx tlv header
+ * @txrx_peer: txrx peer handle
+ * @mac_id: mac id/pool id
+ * @link_id: link id on which the packet is received
+ *
+ * Function to handle rxdma address mismatch as a WAR for ME6 Feature on
+ * IPQ9574-QCN9224, if vdev operation mode is STA.
+ *
+ * Return: void
+ */
+static void
+dp_rx_amsdu_adr_mismatch_hdl(struct dp_soc *soc, qdf_nbuf_t nbuf,
+			     uint8_t *rx_tlv_hdr,
+			     struct dp_txrx_peer *txrx_peer,
+			     uint8_t mac_id, uint8_t link_id)
+{
+	struct dp_vdev *vdev =  txrx_peer->vdev;
+
+	if (!vdev) {
+		dp_rx_err_info_rl("%pK: INVALID vdev %pK OR osif_rx", soc,
+				  vdev);
+		DP_STATS_INC(soc, rx.err.invalid_vdev, 1);
+		/* Drop & free packet */
+		goto free_nbuff;
+	}
+
+	/*
+	 * Only process for STA operation mode and eth packet type
+	 * as WAR for ME6
+	 */
+	if ((vdev->opmode == wlan_op_mode_sta) &&
+	    (vdev->rx_decap_type == htt_cmn_pkt_type_ethernet) &&
+	    hal_rx_msdu_end_da_is_mcbc_get(soc->hal_soc, rx_tlv_hdr)) {
+		dp_rx_process_rxdma_err(soc, nbuf, rx_tlv_hdr, txrx_peer,
+					HAL_RXDMA_AMSDU_ADDR_MISMATCH,
+					mac_id, link_id);
+		return;
+	}
+free_nbuff:
+	dp_rx_nbuf_free(nbuf);
+}
+#else /* WLAN_MLO_MULTI_CHIP */
+static void
+dp_rx_amsdu_adr_mismatch_hdl(struct dp_soc *soc, qdf_nbuf_t nbuf,
+			    uint8_t *rx_tlv_hdr, struct dp_txrx_peer *txrx_peer,
+			    uint8_t mac_id, uint8_t link_id)
+{
+	dp_rx_nbuf_free(nbuf);
+	dp_err_rl("RXDMA error %d", HAL_RXDMA_AMSDU_ADDR_MISMATCH);
+}
+
+#endif /* WLAN_MLO_MULTI_CHIP */
 
 void
 dp_rx_process_rxdma_err(struct dp_soc *soc, qdf_nbuf_t nbuf,
@@ -2828,6 +2888,16 @@ dp_rx_wbm_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
 									      qdf_nbuf_len(nbuf),
 									      link_id);
 					dp_rx_nbuf_free(nbuf);
+					break;
+				case HAL_RXDMA_AMSDU_ADDR_MISMATCH:
+					/* WAR for ME6 - IPQ9574-QCN9224 */
+					pool_id = wbm_err.info_bit.pool_id;
+					tlv_hdr = rx_tlv_hdr;
+					dp_rx_amsdu_adr_mismatch_hdl(soc, nbuf,
+								     tlv_hdr,
+								     txrx_peer,
+								     pool_id,
+								     link_id);
 					break;
 				case HAL_RXDMA_UNAUTHORIZED_WDS:
 					pool_id = wbm_err.info_bit.pool_id;
