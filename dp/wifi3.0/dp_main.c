@@ -4327,6 +4327,7 @@ QDF_STATUS dp_soc_target_ppe_rxole_rxdma_cfg(struct dp_soc *soc)
 	htt_cfg.decap_raw_override = 1;
 	htt_cfg.decap_nwifi_override = 1;
 	htt_cfg.ip_frag_override = 1;
+	htt_cfg.intra_bss_override = 0;
 
 	status = dp_htt_rxdma_rxole_ppe_cfg_set(soc, &htt_cfg);
 	if (status != QDF_STATUS_SUCCESS)
