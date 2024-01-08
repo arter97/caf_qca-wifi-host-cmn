@@ -4618,6 +4618,24 @@ struct dp_mld_link_peers {
 #define DP_MAX_MLO_LINKS 0
 #endif
 
+/**
+ * struct dp_peer_setup_info - MLD peer setup information
+ * @mld_mac_addr: mld peer mac address
+ * @is_first_link: set true for first MLO link peer
+ * @is_primary_link: set true for MLO primary link peer
+ * @primary_umac_id: primary umac_id
+ * @num_links: number of links in MLO
+ * @is_bridge_peer: flag to indicate if peer is bridge peer or not
+ */
+struct dp_peer_setup_info {
+	union dp_align_mac_addr mld_mac_addr;
+	uint8_t is_first_link:1,
+		is_primary_link:1;
+	uint8_t primary_umac_id;
+	uint8_t num_links;
+	uint8_t is_bridge_peer;
+};
+
 typedef void *dp_txrx_ref_handle;
 
 /**
@@ -5259,6 +5277,9 @@ struct dp_peer {
 
 	/* Peer Frequency */
 	uint32_t freq;
+
+	/* peer setup info */
+	struct dp_peer_setup_info setup_info;
 };
 
 /**

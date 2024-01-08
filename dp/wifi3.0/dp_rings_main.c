@@ -2657,6 +2657,17 @@ dp_peer_setup_wifi3(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	if (!peer)
 		return QDF_STATUS_E_FAILURE;
 
+	if (setup_info) {
+		qdf_mem_copy(&peer->setup_info.mld_mac_addr.raw[0],
+			     setup_info->mld_peer_mac,
+			     QDF_MAC_ADDR_SIZE);
+		peer->setup_info.is_first_link = setup_info->is_first_link;
+		peer->setup_info.is_primary_link = setup_info->is_primary_link;
+		peer->setup_info.primary_umac_id = setup_info->primary_umac_id;
+		peer->setup_info.num_links = setup_info->num_links;
+		peer->setup_info.is_bridge_peer = setup_info->is_bridge_peer;
+	}
+
 	vdev = peer->vdev;
 	if (!vdev) {
 		status = QDF_STATUS_E_FAILURE;
