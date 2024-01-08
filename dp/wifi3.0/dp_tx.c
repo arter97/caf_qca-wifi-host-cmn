@@ -6704,6 +6704,7 @@ uint32_t dp_tx_comp_handler(struct dp_intr *int_ctx, struct dp_soc *soc,
 {
 	void *tx_comp_hal_desc;
 	void *last_prefetched_hw_desc = NULL;
+	void *last_hw_desc = NULL;
 	struct dp_tx_desc_s *last_prefetched_sw_desc = NULL;
 	hal_soc_handle_t hal_soc;
 	uint8_t buffer_src;
@@ -6753,7 +6754,8 @@ more_data:
 	if (num_avail_for_reap >= quota)
 		num_avail_for_reap = quota;
 
-	dp_srng_dst_inv_cached_descs(soc, hal_ring_hdl, num_avail_for_reap);
+	last_hw_desc = dp_srng_dst_inv_cached_descs(soc, hal_ring_hdl,
+						    num_avail_for_reap);
 	last_prefetched_hw_desc = dp_srng_dst_prefetch_32_byte_desc(hal_soc,
 							    hal_ring_hdl,
 							    num_avail_for_reap);
@@ -6954,7 +6956,8 @@ next_desc:
 					       num_avail_for_reap,
 					       hal_ring_hdl,
 					       &last_prefetched_hw_desc,
-					       &last_prefetched_sw_desc);
+					       &last_prefetched_sw_desc,
+					       last_hw_desc);
 
 		if (dp_tx_comp_loop_pkt_limit_hit(soc, count, max_reap_limit))
 			break;
