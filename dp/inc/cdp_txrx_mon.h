@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -34,7 +34,6 @@ static inline QDF_STATUS cdp_reset_monitor_mode(ol_txrx_soc_handle soc,
 {
 	if (!soc || !soc->ops) {
 		dp_cdp_debug("Invalid Instance");
-		QDF_BUG(0);
 		return 0;
 	}
 
@@ -58,7 +57,6 @@ cdp_deliver_tx_mgmt(ol_txrx_soc_handle soc, uint8_t pdev_id,
 {
 	if (!soc || !soc->ops) {
 		dp_cdp_debug("Invalid Instance");
-		QDF_BUG(0);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -262,7 +260,6 @@ cdp_set_params_rssi_dbm_conversion(ol_txrx_soc_handle soc,
 {
 	if (!soc || !soc->ops) {
 		dp_cdp_debug("Invalid Instance:");
-		QDF_BUG(0);
 		return QDF_STATUS_E_FAILURE;
 	}
 
