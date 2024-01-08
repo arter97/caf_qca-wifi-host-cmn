@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -34,7 +34,9 @@ u8 wlan_extended_caps_iface_mask[WLAN_EXTCAP_IE_MAX_LEN] = {0};
 
 struct wiphy_iftype_ext_capab iftype_ext_cap;
 
-#if !defined(CNSS_GENL) && (LINUX_VERSION_CODE == KERNEL_VERSION(5, 4, 0))
+#if !defined(CNSS_GENL) && \
+	(defined(CFG80211_SUPPORT_AUTH_DEAUTH_TA_RANDOMIZATION) || \
+	 (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)))
 /**
  * wlan_wifi_pos_cfg80211_set_auth_deauth_random_ta_flag() - API to set
  * NL80211_EXT_FEATURE_AUTH_AND_DEAUTH_RANDOM_TA flag
