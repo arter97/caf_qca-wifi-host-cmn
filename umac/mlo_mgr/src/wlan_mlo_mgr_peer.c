@@ -1015,7 +1015,17 @@ static QDF_STATUS mlo_peer_detach_link_peer(
 
 	return status;
 }
-
+#if defined (SAP_MULTI_LINK_EMULATION)
+/*Skip link vdev check. Second link does not have vdev*/
+static QDF_STATUS mlo_dev_get_link_vdevs(
+			struct wlan_objmgr_vdev *vdev,
+			struct wlan_mlo_dev_context *ml_dev,
+			struct mlo_partner_info *ml_info,
+			struct wlan_objmgr_vdev *link_vdevs[])
+{
+	return QDF_STATUS_SUCCESS;
+}
+#else
 static QDF_STATUS mlo_dev_get_link_vdevs(
 			struct wlan_objmgr_vdev *vdev,
 			struct wlan_mlo_dev_context *ml_dev,
@@ -1059,6 +1069,7 @@ static QDF_STATUS mlo_dev_get_link_vdevs(
 
 	return QDF_STATUS_SUCCESS;
 }
+#endif
 
 static void mlo_dev_release_link_vdevs(
 			struct wlan_objmgr_vdev *link_vdevs[])
@@ -1453,7 +1464,22 @@ QDF_STATUS wlan_mlo_peer_asreq(struct wlan_objmgr_vdev *vdev,
 
 	return QDF_STATUS_SUCCESS;
 }
-
+#if defined (SAP_MULTI_LINK_EMULATION)
+static void
+set_assoc_peer_for_2link_sap(struct wlan_objmgr_peer *assoc_peer,
+			     struct wlan_mlo_peer_context *ml_peer)
+{
+	assoc_peer = ml_peer->peer_list[0].link_peer;
+	if (assoc_peer)
+		mlo_mlme_peer_assoc_resp(assoc_peer);
+}
+#else
+static void
+set_assoc_peer_for_2link_sap(struct wlan_objmgr_peer *assoc_peer,
+			     struct wlan_mlo_peer_context *ml_peer)
+{
+}
+#endif
 QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 				struct wlan_objmgr_peer *link_peer,
 				struct mlo_partner_info *ml_info,
@@ -1467,7 +1493,7 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 	struct wlan_objmgr_vdev *vdev_link;
 	QDF_STATUS status;
 	uint16_t i, j;
-	struct wlan_objmgr_peer *assoc_peer;
+	struct wlan_objmgr_peer *assoc_peer = NULL;
 	uint8_t bridge_peer_psoc_id = WLAN_OBJMGR_MAX_DEVICES;
 	bool is_ml_peer_attached = false;
 
@@ -1505,7 +1531,6 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 				QDF_MAC_ADDR_REF(link_peer->mldaddr));
 			return QDF_STATUS_E_FAILURE;
 		}
-
 		for (i = 0; i < WLAN_UMAC_MLO_MAX_VDEVS; i++) {
 			vdev_link = link_vdevs[i];
 			if (!vdev_link) {
@@ -1787,8 +1812,11 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 			assoc_peer = ml_peer->peer_list[0].link_peer;
 			if (assoc_peer)
 				mlo_mlme_peer_assoc_resp(assoc_peer);
+		} else {
+			set_assoc_peer_for_2link_sap(assoc_peer, ml_peer);
 		}
 	}
+
 
 	if (wlan_vdev_mlme_get_opmode(vdev) == QDF_STA_MODE)
 		wlan_clear_peer_level_tid_to_link_mapping(vdev);
@@ -2449,6 +2477,37 @@ static uint32_t wlan_mlo_psoc_get_ix_in_grp(struct mlo_mgr_context *mlo_mgr,
 	return 0xFF;
 }
 
+static uint32_t
+wlan_mlo_get_wsi_next_psoc(struct mlo_wsi_psoc_grp *mlo_psoc_grp,
+			   uint32_t prim_psoc_id, uint32_t n)
+{
+	uint32_t i, j;
+	uint32_t psoc_index = MLO_WSI_PSOC_ID_MAX;
+
+	if (!n)
+		return psoc_index;
+
+	for (i = 0; i < mlo_psoc_grp->num_psoc; i++) {
+		if (mlo_psoc_grp->psoc_order[i] == prim_psoc_id) {
+			psoc_index = i;
+			break;
+		}
+	}
+
+	if (psoc_index == MLO_WSI_PSOC_ID_MAX)
+		return psoc_index;
+
+	for (i = 1; i <= WLAN_OBJMGR_MAX_DEVICES; i++) {
+		j = (psoc_index + i) % WLAN_OBJMGR_MAX_DEVICES;
+		if (mlo_psoc_grp->psoc_order[j] != MLO_WSI_PSOC_ID_MAX)
+			n--;
+		if (!n)
+			return mlo_psoc_grp->psoc_order[j];
+	}
+
+	return MLO_WSI_PSOC_ID_MAX;
+}
+
 static QDF_STATUS
 wlan_mlo_peer_wsi_link_update(struct wlan_mlo_peer_context *ml_peer, bool add)
 {
@@ -2460,7 +2519,7 @@ wlan_mlo_peer_wsi_link_update(struct wlan_mlo_peer_context *ml_peer, bool add)
 	uint32_t hops, hop_id;
 	uint32_t prim_grp_idx, sec_grp_idx;
 	uint32_t prim_psoc_ix_grp, sec_psoc_ix_grp;
-	uint32_t i, j;
+	uint32_t i, j, n;
 	struct mlo_wsi_psoc_grp *mlo_psoc_grp;
 	struct wlan_objmgr_psoc *psoc;
 
@@ -2534,19 +2593,31 @@ wlan_mlo_peer_wsi_link_update(struct wlan_mlo_peer_context *ml_peer, bool add)
 	/*
 	 * Logic for finding ingress and egress stats:
 	 * For a given MLO group, there is a PSOC order
+	 *
+	 * If there is secondary link, Increment the egress count for
+	 * the primary PSOC
 	 * (1) Iterate through each secondary link
 	 *      (1.1) Set the WMI command to true for that PSOC
-	 *      (1.2) Increment the ingress count for that PSOC
-	 *      (1.3) Calculate the number of hops from the secondary link
+	 *      (1.2) Calculate the number of hops from the secondary link
 	 *            to that primary link within the group.
-	 *      (1.4) Iterate through a decrement sequence from the hop_count
-	 *            (1.4.1) Increment the egress count for that PSOC index
+	 *      (1.3) Iterate through a decrement sequence from the hop_count
+	 *            (1.3.1) Increment the ingress count for that PSOC index
 	 */
 	prim_psoc_ix_grp = wlan_mlo_psoc_get_ix_in_grp(mlo_mgr, prim_grp_idx,
 						       prim_psoc_id);
 
 	wsi_info->link_stats[prim_psoc_id].send_wmi_cmd = true;
 	mlo_psoc_grp = &wsi_info->mlo_psoc_grp[prim_grp_idx];
+
+	if (j) {
+		wsi_info->link_stats[prim_psoc_id].send_wmi_cmd = true;
+		if (add)
+			wsi_info->link_stats[prim_psoc_id].egress_cnt++;
+		else
+			wsi_info->link_stats[prim_psoc_id].egress_cnt--;
+	}
+
+	n = 1;
 	for (i = 0; i < j; i++) {
 		sec_psoc_ix_grp = wlan_mlo_psoc_get_ix_in_grp(mlo_mgr,
 							      prim_grp_idx,
@@ -2555,20 +2626,19 @@ wlan_mlo_peer_wsi_link_update(struct wlan_mlo_peer_context *ml_peer, bool add)
 			       (prim_psoc_ix_grp - sec_psoc_ix_grp),
 				(sec_psoc_ix_grp - prim_psoc_ix_grp));
 
-		wsi_info->link_stats[sec_psoc_id[i]].send_wmi_cmd = true;
-		if (add)
-			wsi_info->link_stats[sec_psoc_id[i]].ingress_cnt++;
-		else
-			wsi_info->link_stats[sec_psoc_id[i]].ingress_cnt--;
 
-		while (hops > 1) {
-			hops--;
-			hop_id = mlo_psoc_grp->psoc_order[hops];
+		if (hops > n) {
+			hop_id = wlan_mlo_get_wsi_next_psoc(mlo_psoc_grp,
+							    prim_psoc_id, n);
+			n++;
+			if (hop_id == MLO_WSI_PSOC_ID_MAX)
+				continue;
+
 			wsi_info->link_stats[hop_id].send_wmi_cmd = true;
 			if (add)
-				wsi_info->link_stats[hop_id].egress_cnt++;
+				wsi_info->link_stats[hop_id].ingress_cnt++;
 			else
-				wsi_info->link_stats[hop_id].egress_cnt--;
+				wsi_info->link_stats[hop_id].ingress_cnt--;
 		}
 	}
 
@@ -2663,3 +2733,129 @@ QDF_STATUS wlan_mlo_peer_wsi_link_delete(struct wlan_mlo_peer_context *ml_peer)
 	return QDF_STATUS_SUCCESS;
 }
 #endif
+
+void wlan_mlo_ap_vdev_add_assoc_entry(struct wlan_objmgr_vdev *vdev,
+				      struct qdf_mac_addr *mld_addr)
+{
+	struct wlan_mlo_dev_context *mld_ctx = vdev->mlo_dev_ctx;
+	struct wlan_mlo_sta_assoc_pending_list *assoc_list;
+	struct wlan_mlo_sta_entry *sta_entry = NULL;
+
+	if (!mld_ctx || !wlan_vdev_mlme_is_mlo_ap(vdev))
+		return;
+
+	assoc_list = &mld_ctx->ap_ctx->assoc_list;
+
+	sta_entry = wlan_mlo_ap_vdev_find_assoc_entry(vdev, mld_addr);
+	if (sta_entry) {
+		mlo_err("Duplicate entry " QDF_MAC_ADDR_FMT,
+			QDF_MAC_ADDR_REF(mld_addr->bytes));
+		return;
+	}
+
+	sta_entry = qdf_mem_malloc(sizeof(*sta_entry));
+	if (!sta_entry)
+		return;
+
+	qdf_copy_macaddr((struct qdf_mac_addr *)&sta_entry->peer_mld_addr,
+			 (struct qdf_mac_addr *)&mld_addr[0]);
+
+	qdf_spin_lock_bh(&assoc_list->list_lock);
+	qdf_list_insert_back(&assoc_list->peer_list, &sta_entry->mac_node);
+	qdf_spin_unlock_bh(&assoc_list->list_lock);
+}
+
+void wlan_mlo_ap_vdev_del_assoc_entry(struct wlan_objmgr_vdev *vdev,
+				      struct qdf_mac_addr *mld_addr)
+{
+	struct wlan_mlo_dev_context *mld_ctx = vdev->mlo_dev_ctx;
+	struct wlan_mlo_sta_assoc_pending_list *assoc_list;
+	struct wlan_mlo_sta_entry *sta_entry = NULL;
+
+	if (!mld_ctx || !wlan_vdev_mlme_is_mlo_ap(vdev))
+		return;
+
+	assoc_list = &mld_ctx->ap_ctx->assoc_list;
+	sta_entry = wlan_mlo_ap_vdev_find_assoc_entry(vdev, mld_addr);
+	if (!sta_entry)
+		return;
+
+	qdf_spin_lock_bh(&assoc_list->list_lock);
+	qdf_list_remove_node(&assoc_list->peer_list, &sta_entry->mac_node);
+	qdf_spin_unlock_bh(&assoc_list->list_lock);
+
+	qdf_mem_free(sta_entry);
+}
+
+static inline struct wlan_mlo_sta_entry *
+wlan_mlo_assoc_list_peek_head(qdf_list_t *assoc_list)
+{
+	struct wlan_mlo_sta_entry *sta_entry = NULL;
+	qdf_list_node_t *list_node = NULL;
+
+	/* This API is invoked with lock acquired, do not add log prints */
+	if (qdf_list_peek_front(assoc_list, &list_node) != QDF_STATUS_SUCCESS)
+		return NULL;
+
+	sta_entry = qdf_container_of(list_node,
+				     struct wlan_mlo_sta_entry, mac_node);
+	return sta_entry;
+}
+
+static inline struct wlan_mlo_sta_entry *
+wlan_mlo_sta_get_next_sta_entry(qdf_list_t *assoc_list,
+				struct wlan_mlo_sta_entry *sta_entry)
+{
+	struct wlan_mlo_sta_entry *next_sta_entry = NULL;
+	qdf_list_node_t *node = &sta_entry->mac_node;
+	qdf_list_node_t *next_node = NULL;
+
+	/* This API is invoked with lock acquired, do not add log prints */
+	if (!node)
+		return NULL;
+
+	if (qdf_list_peek_next(assoc_list, node, &next_node) !=
+				QDF_STATUS_SUCCESS)
+		return NULL;
+
+	next_sta_entry = qdf_container_of(next_node,
+					  struct wlan_mlo_sta_entry, mac_node);
+	return next_sta_entry;
+}
+
+struct wlan_mlo_sta_entry *
+wlan_mlo_ap_vdev_find_assoc_entry(struct wlan_objmgr_vdev *vdev,
+				  struct qdf_mac_addr *mld_addr)
+{
+	struct wlan_mlo_dev_context *mld_ctx = vdev->mlo_dev_ctx;
+	struct wlan_mlo_sta_assoc_pending_list *assoc_list;
+	struct wlan_mlo_sta_entry *sta_entry = NULL;
+	struct wlan_mlo_sta_entry *next_sta_entry = NULL;
+
+	if (!mld_ctx || !wlan_vdev_mlme_is_mlo_ap(vdev))
+		return NULL;
+
+	assoc_list = &mld_ctx->ap_ctx->assoc_list;
+	if (qdf_list_empty(&assoc_list->peer_list)) {
+		mlo_info("list is empty");
+		return NULL;
+	}
+	qdf_spin_lock_bh(&assoc_list->list_lock);
+
+	sta_entry = wlan_mlo_assoc_list_peek_head(&assoc_list->peer_list);
+	while (sta_entry) {
+		if (qdf_is_macaddr_equal(&sta_entry->peer_mld_addr, mld_addr)) {
+			qdf_spin_unlock_bh(&assoc_list->list_lock);
+			return sta_entry;
+		}
+
+		next_sta_entry =
+		wlan_mlo_sta_get_next_sta_entry(&assoc_list->peer_list,
+						sta_entry);
+		sta_entry = next_sta_entry;
+	}
+	qdf_spin_unlock_bh(&assoc_list->list_lock);
+
+	return NULL;
+}
+

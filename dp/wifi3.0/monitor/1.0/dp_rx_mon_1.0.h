@@ -904,6 +904,7 @@ uint8_t *dp_rx_mon_get_buffer_data(struct dp_rx_desc *rx_desc)
 
 #endif
 
+#ifndef WLAN_SOFTUMAC_SUPPORT
 /**
  * dp_rx_cookie_2_mon_link_desc() - Retrieve Link descriptor based on target
  * @pdev: core physical device context
@@ -924,7 +925,6 @@ void *dp_rx_cookie_2_mon_link_desc(struct dp_pdev *pdev,
 	return dp_rx_cookie_2_link_desc_va(pdev->soc, buf_info);
 }
 
-#ifndef WLAN_SOFTUMAC_SUPPORT
 /**
  * dp_rx_monitor_link_desc_return() - Return Link descriptor based on target
  * @pdev: core physical device context
@@ -948,6 +948,14 @@ QDF_STATUS dp_rx_monitor_link_desc_return(struct dp_pdev *pdev,
 				      bm_action);
 }
 #else
+static inline
+void *dp_rx_cookie_2_mon_link_desc(struct dp_pdev *pdev,
+				   struct hal_buf_info *buf_info,
+				   uint8_t mac_id)
+{
+	return dp_rx_cookie_2_mon_link_desc_va(pdev, buf_info, mac_id);
+}
+
 static inline
 QDF_STATUS dp_rx_monitor_link_desc_return(struct dp_pdev *pdev,
 					  hal_buff_addrinfo_t

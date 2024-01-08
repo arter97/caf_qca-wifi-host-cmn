@@ -134,6 +134,7 @@ __dp_rx_mon_free_ppdu_info(struct dp_mon_pdev *mon_pdev,
 
 	qdf_spin_lock_bh(&mon_pdev_be->ppdu_info_lock);
 	if (ppdu_info) {
+		qdf_mem_zero(ppdu_info, sizeof(struct hal_rx_ppdu_info));
 		TAILQ_INSERT_TAIL(&mon_pdev_be->rx_mon_free_queue, ppdu_info,
 				  ppdu_free_list_elem);
 		mon_pdev_be->total_free_elem++;
@@ -322,7 +323,7 @@ dp_rx_mon_pf_tag_to_buf_headroom_2_0(void *nbuf,
 	}
 
 	user_id = ppdu_info->user_id;
-	if (qdf_unlikely(user_id > HAL_MAX_UL_MU_USERS)) {
+	if (qdf_unlikely(user_id >= HAL_MAX_UL_MU_USERS)) {
 		dp_mon_debug("Invalid user_id user_id: %d pdev: %pK", user_id, pdev);
 		return;
 	}
@@ -752,6 +753,7 @@ dp_rx_mon_process_ppdu_info(struct dp_pdev *pdev,
 
 			mpdu_meta = (struct hal_rx_mon_mpdu_info *)qdf_nbuf_data(mpdu);
 
+			ppdu_info->rx_status.rs_fcs_err = mpdu_meta->fcs_err;
 			if (dp_lite_mon_is_rx_enabled(mon_pdev)) {
 				status = dp_lite_mon_rx_mpdu_process(pdev, ppdu_info,
 								     mpdu, mpdu_idx, user);
@@ -800,6 +802,7 @@ dp_rx_mon_process_ppdu_info(struct dp_pdev *pdev,
 				if (status != QDF_STATUS_SUCCESS)
 					dp_mon_free_parent_nbuf(mon_pdev, mpdu);
 			}
+			ppdu_info->rx_status.rs_fcs_err = false;
 		}
 	}
 
@@ -932,6 +935,15 @@ dp_rx_mon_handle_full_mon(struct dp_pdev *pdev,
 	mpdu_meta = (struct hal_rx_mon_mpdu_info *)qdf_nbuf_data(mpdu);
 
 	if (mpdu_meta->decap_type == HAL_HW_RX_DECAP_FORMAT_RAW) {
+		if (qdf_unlikely(ppdu_info->rx_status.rs_fcs_err)) {
+			hdr_desc = qdf_nbuf_get_frag_addr(mpdu, 0);
+			wh = (struct ieee80211_frame *)hdr_desc;
+			if ((wh->i_fc[0] & QDF_IEEE80211_FC0_VERSION_MASK) !=
+			    QDF_IEEE80211_FC0_VERSION_0) {
+				DP_STATS_INC(pdev, dropped.mon_ver_err, 1);
+				return QDF_STATUS_E_FAILURE;
+			}
+		}
 		qdf_nbuf_trim_add_frag_size(mpdu,
 					    qdf_nbuf_get_nr_frags(mpdu) - 1,
 					    -HAL_RX_FCS_LEN, 0);
@@ -1227,6 +1239,7 @@ dp_rx_mon_flush_packet_tlv(struct dp_pdev *pdev, void *buf, uint16_t end_offset,
 	uint8_t *rx_tlv_start;
 	uint16_t tlv_status = HAL_TLV_STATUS_BUF_DONE;
 	struct hal_rx_ppdu_info *ppdu_info;
+	uint32_t cookie_2;
 
 	if (!buf)
 		return work_done;
@@ -1247,9 +1260,19 @@ dp_rx_mon_flush_packet_tlv(struct dp_pdev *pdev, void *buf, uint16_t end_offset,
 							buf);
 
 		if (tlv_status == HAL_TLV_STATUS_MON_BUF_ADDR) {
-			struct dp_mon_desc *mon_desc = (struct dp_mon_desc *)(uintptr_t)ppdu_info->packet_info.sw_cookie;
+			struct dp_mon_desc *mon_desc;
+			unsigned long long desc = ppdu_info->packet_info.sw_cookie;
+
+			cookie_2 = DP_MON_GET_COOKIE(desc);
+			mon_desc = DP_MON_GET_DESC(desc);
 
 			qdf_assert_always(mon_desc);
+
+			if (mon_desc->cookie_2 != cookie_2) {
+				mon_pdev->rx_mon_stats.dup_mon_sw_desc++;
+				qdf_err("duplicate cookie found mon_desc:%pK", mon_desc);
+				qdf_assert_always(0);
+			}
 
 			/* WAR: sometimes duplicate pkt desc are received
 			 * from HW, this check gracefully handles
@@ -1356,8 +1379,6 @@ dp_rx_mon_flush_status_buf_queue(struct dp_pdev *pdev)
 		qdf_frag_free(buf);
 		DP_STATS_INC(mon_soc, frag_free, 1);
 	}
-	mon_pdev_be->prev_rxmon_pkt_desc = NULL;
-	mon_pdev_be->prev_rxmon_pkt_cookie = 0;
 
 	if (work_done) {
 		mon_pdev->rx_mon_stats.mon_rx_bufs_replenished_dest +=
@@ -1381,9 +1402,6 @@ dp_rx_mon_handle_flush_n_trucated_ppdu(struct dp_soc *soc,
 				       struct dp_pdev *pdev,
 				       struct dp_mon_desc *mon_desc)
 {
-	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
-	struct dp_mon_pdev_be *mon_pdev_be =
-			dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
 	union dp_mon_desc_list_elem_t *desc_list = NULL;
 	union dp_mon_desc_list_elem_t *tail = NULL;
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
@@ -1406,9 +1424,6 @@ dp_rx_mon_handle_flush_n_trucated_ppdu(struct dp_soc *soc,
 		qdf_frag_free(buf);
 		DP_STATS_INC(mon_soc, frag_free, 1);
 	}
-
-	mon_pdev_be->prev_rxmon_desc = NULL;
-	mon_pdev_be->prev_rxmon_cookie = 0;
 
 	if (desc_list)
 		dp_mon_add_desc_list_to_free_list(soc, &desc_list, &tail,
@@ -1455,6 +1470,7 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 	uint8_t num_buf_reaped = 0;
 	bool rx_hdr_valid = true;
 	QDF_STATUS status;
+	uint32_t cookie_2;
 
 	if (!mon_pdev->monitor_configured &&
 	    !dp_lite_mon_is_rx_enabled(mon_pdev)) {
@@ -1565,10 +1581,19 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 		struct hal_rx_mon_msdu_info *buf_info;
 		struct hal_mon_packet_info *packet_info = &ppdu_info->packet_info;
 		struct dp_mon_desc *mon_desc = (struct dp_mon_desc *)(uintptr_t)ppdu_info->packet_info.sw_cookie;
+		unsigned long long desc = ppdu_info->packet_info.sw_cookie;
 		struct hal_rx_mon_mpdu_info *mpdu_info;
 		uint16_t frag_idx = 0;
 
+		cookie_2 = DP_MON_GET_COOKIE(desc);
+		mon_desc = DP_MON_GET_DESC(desc);
 		qdf_assert_always(mon_desc);
+
+		if (mon_desc->cookie_2 != cookie_2) {
+			mon_pdev->rx_mon_stats.dup_mon_sw_desc++;
+			qdf_err("duplicate cookie found mon_desc:%pK", mon_desc);
+			qdf_assert_always(0);
+		}
 
 		if (mon_desc->magic != DP_MON_DESC_MAGIC)
 			qdf_assert_always(0);
@@ -1818,7 +1843,6 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 		mpdu_meta = (struct hal_rx_mon_mpdu_info *)qdf_nbuf_data(nbuf);
 		mpdu_meta->mpdu_length_err = mpdu_info->mpdu_length_err;
 		mpdu_meta->fcs_err = mpdu_info->fcs_err;
-		ppdu_info->rx_status.rs_fcs_err = mpdu_info->fcs_err;
 		mpdu_meta->overflow_err = mpdu_info->overflow_err;
 		mpdu_meta->decrypt_err = mpdu_info->decrypt_err;
 		mpdu_meta->full_pkt = mpdu_info->full_pkt;
@@ -1864,7 +1888,6 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 	union dp_mon_desc_list_elem_t *desc_list = NULL;
 	union dp_mon_desc_list_elem_t *tail = NULL;
 	struct dp_mon_desc *mon_desc;
-	uint8_t user;
 	uint16_t idx;
 	void *buf;
 	struct hal_rx_ppdu_info *ppdu_info;
@@ -1891,11 +1914,7 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 		return NULL;
 	}
 
-	qdf_mem_zero(ppdu_info, sizeof(struct hal_rx_ppdu_info));
 	mon_pdev->rx_mon_stats.total_ppdu_info_alloc++;
-
-	for (user = 0; user < HAL_MAX_UL_MU_USERS; user++)
-		qdf_nbuf_queue_init(&ppdu_info->mpdu_q[user]);
 
 	status_buf_count = mon_pdev_be->desc_count;
 	for (idx = 0; idx < status_buf_count; idx++) {
@@ -1952,10 +1971,6 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 		mon_pdev->rx_mon_stats.status_buf_count++;
 		dp_mon_record_index_update(mon_pdev_be);
 	}
-	mon_pdev_be->prev_rxmon_desc = NULL;
-	mon_pdev_be->prev_rxmon_cookie = 0;
-	mon_pdev_be->prev_rxmon_pkt_desc = NULL;
-	mon_pdev_be->prev_rxmon_pkt_cookie = 0;
 
 	dp_mon_rx_stats_update_rssi_dbm_params(mon_pdev, ppdu_info);
 	if (work_done) {
@@ -1973,6 +1988,38 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 				    << 32);
 
 	return ppdu_info;
+}
+
+/**
+ * dp_mon_pdev_flush_desc() - Flush status and packet desc during deinit
+ *
+ * @pdev: DP pdev handle
+ *
+ * Return
+ */
+static QDF_STATUS dp_mon_pdev_flush_desc(struct dp_pdev *pdev)
+{
+	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	struct dp_mon_pdev_be *mon_pdev_be;
+
+	if (qdf_unlikely(!mon_pdev)) {
+		dp_mon_debug("monitor pdev is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
+
+	qdf_spin_lock_bh(&mon_pdev->mon_lock);
+
+	if (mon_pdev_be->desc_count) {
+		mon_pdev->rx_mon_stats.pending_desc_count +=
+						mon_pdev_be->desc_count;
+		dp_rx_mon_flush_status_buf_queue(pdev);
+	}
+
+	qdf_spin_unlock_bh(&mon_pdev->mon_lock);
+
+	return QDF_STATUS_SUCCESS;
 }
 
 #ifdef WLAN_FEATURE_11BE_MLO
@@ -2155,6 +2202,7 @@ dp_rx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 	uint32_t work_done = 0;
 	struct hal_rx_ppdu_info *ppdu_info = NULL;
 	QDF_STATUS status;
+	uint32_t cookie_2;
 	if (!pdev || !hal_soc) {
 		dp_mon_err("%pK: pdev or hal_soc is null, mac_id = %d",
 			   soc, mac_id);
@@ -2185,6 +2233,7 @@ dp_rx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 				&& quota--)) {
 		struct hal_mon_desc hal_mon_rx_desc = {0};
 		struct dp_mon_desc *mon_desc;
+		unsigned long long desc;
 		hal_be_get_mon_dest_status(soc->hal_soc,
 					   rx_mon_dst_ring_desc,
 					   &hal_mon_rx_desc);
@@ -2199,8 +2248,17 @@ dp_rx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 			dp_rx_mon_update_drop_cnt(mon_pdev, &hal_mon_rx_desc);
 			continue;
 		}
-		mon_desc = (struct dp_mon_desc *)(uintptr_t)(hal_mon_rx_desc.buf_addr);
+		desc = hal_mon_rx_desc.buf_addr;
+		cookie_2 = DP_MON_GET_COOKIE(desc);
+		mon_desc = DP_MON_GET_DESC(desc);
+
 		qdf_assert_always(mon_desc);
+
+		if (mon_desc->cookie_2 != cookie_2) {
+			mon_pdev->rx_mon_stats.dup_mon_sw_desc++;
+			qdf_err("duplicate cookie found mon_desc:%pK", mon_desc);
+			qdf_assert_always(0);
+		}
 
 		if ((mon_desc == mon_pdev_be->prev_rxmon_desc) &&
 		    (mon_desc->cookie == mon_pdev_be->prev_rxmon_cookie)) {
@@ -2330,6 +2388,7 @@ QDF_STATUS dp_rx_mon_ppdu_info_cache_create(struct dp_pdev *pdev)
 		ppdu_info =  (struct hal_rx_ppdu_info *)qdf_kmem_cache_alloc(mon_pdev_be->ppdu_info_cache);
 
 		if (ppdu_info) {
+			qdf_mem_zero(ppdu_info, sizeof(struct hal_rx_ppdu_info));
 			TAILQ_INSERT_TAIL(&mon_pdev_be->rx_mon_free_queue,
 					  ppdu_info,
 					  ppdu_free_list_elem);
@@ -2412,6 +2471,8 @@ QDF_STATUS dp_mon_pdev_ext_deinit_2_0(struct dp_pdev *pdev)
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be =
 			dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
+
+	dp_mon_pdev_flush_desc(pdev);
 
 	if (!mon_pdev_be->rx_mon_workqueue)
 		return QDF_STATUS_E_FAILURE;
@@ -2572,6 +2633,8 @@ void dp_mon_rx_print_advanced_stats_2_0(struct dp_soc *soc,
 		       rx_mon_stats->rx_hdr_invalid_cnt);
 	DP_PRINT_STATS("invalid_dma_length Received = %d",
 		       rx_mon_stats->invalid_dma_length);
+	DP_PRINT_STATS("pending_desc_count= %d",
+		       mon_pdev->rx_mon_stats.pending_desc_count);
 }
 #endif
 

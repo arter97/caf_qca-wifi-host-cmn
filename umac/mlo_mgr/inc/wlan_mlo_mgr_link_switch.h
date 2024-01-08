@@ -210,6 +210,17 @@ void mlo_mgr_update_ap_link_info(struct wlan_objmgr_vdev *vdev, uint8_t link_id,
 				 struct wlan_channel channel);
 
 /**
+ * mlo_mgr_clear_ap_link_info() - Clear AP link information
+ * @vdev: Object Manager vdev
+ * @ap_link_addr: AP link addresses
+ *
+ * Clear AP link info
+ * Return: void
+ */
+void mlo_mgr_clear_ap_link_info(struct wlan_objmgr_vdev *vdev,
+				uint8_t *ap_link_addr);
+
+/**
  * mlo_mgr_reset_ap_link_info() - Reset AP links information
  * @vdev: Object Manager vdev
  *
@@ -233,6 +244,17 @@ void mlo_mgr_update_ap_channel_info(struct wlan_objmgr_vdev *vdev,
 				    struct wlan_channel channel);
 
 /**
+ * mlo_mgr_get_ap_link() - Assoc mlo link info from link id
+ * @vdev: Object Manager vdev
+ *
+ * Get Assoc link info.
+ *
+ * Return: Pointer of link info
+ */
+struct mlo_link_info *mlo_mgr_get_ap_link(struct wlan_objmgr_vdev *vdev);
+
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+/**
  * mlo_mgr_get_ap_link_by_link_id() - Get mlo link info from link id
  * @mlo_dev_ctx: mlo context
  * @link_id: Link id of the AP MLD link
@@ -247,17 +269,6 @@ struct mlo_link_info*
 mlo_mgr_get_ap_link_by_link_id(struct wlan_mlo_dev_context *mlo_dev_ctx,
 			       int link_id);
 
-/**
- * mlo_mgr_get_ap_link() - Assoc mlo link info from link id
- * @vdev: Object Manager vdev
- *
- * Get Assoc link info.
- *
- * Return: Pointer of link info
- */
-struct mlo_link_info *mlo_mgr_get_ap_link(struct wlan_objmgr_vdev *vdev);
-
-#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 /**
  * mlo_mgr_update_csa_link_info - update mlo sta csa params
  * @mlo_dev_ctx: mlo dev ctx
@@ -610,6 +621,13 @@ mlo_mgr_is_link_switch_supported(struct wlan_objmgr_vdev *vdev)
 }
 
 #else
+static inline struct mlo_link_info
+*mlo_mgr_get_ap_link_by_link_id(struct wlan_mlo_dev_context *mlo_dev_ctx,
+				int link_id)
+{
+	return NULL;
+}
+
 static inline bool
 mlo_mgr_is_link_switch_supported(struct wlan_objmgr_vdev *vdev)
 {

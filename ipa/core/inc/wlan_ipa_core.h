@@ -25,6 +25,7 @@
 #include "wlan_ipa_priv.h"
 #include "wlan_ipa_public_struct.h"
 
+#define WLAN_IPA_NBUF_CB_PEER_ID_OFFSET		5
 /**
  * wlan_ipa_is_enabled() - Is IPA enabled?
  * @ipa_cfg: IPA config
@@ -864,6 +865,30 @@ void wlan_ipa_fw_rejuvenate_send_msg(struct wlan_ipa_priv *ipa_ctx);
  */
 void wlan_ipa_flush_pending_vdev_events(struct wlan_ipa_priv *ipa_ctx,
 					uint8_t vdev_id);
+
+/**
+ * wlan_ipa_set_perf_level_bw_enabled - Get bandwidth based IPA perf voting
+ *					status
+ * @ipa_ctx: IPA context
+ *
+ * This function returns true or false for bandwidth based IPA perf level
+ * voting.
+ *
+ * Return: true - bandwidth based IPA perf voting is enabld. Otherwise false.
+ */
+bool wlan_ipa_set_perf_level_bw_enabled(struct wlan_ipa_priv *ipa_ctx);
+
+/**
+ * wlan_ipa_set_perf_level_bw() - Set IPA perf level based on BW
+ * @ipa_ctx: IPA context
+ * @lvl: enum wlan_ipa_bw_level
+ *
+ * This function is to set IPA perf level based on bw level
+ *
+ * Return: None
+ */
+void wlan_ipa_set_perf_level_bw(struct wlan_ipa_priv *ipa_ctx,
+				enum wlan_ipa_bw_level lvl);
 
 #ifdef IPA_OPT_WIFI_DP
 /**

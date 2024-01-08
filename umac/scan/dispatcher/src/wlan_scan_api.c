@@ -163,6 +163,20 @@ void wlan_scan_cfg_get_min_dwelltime_6g(struct wlan_objmgr_psoc *psoc,
 		return;
 	*min_dwell_time_6ghz = scan_obj->scan_def.min_dwell_time_6g;
 }
+
+QDF_STATUS wlan_scan_cfg_set_scan_mode_6g(struct wlan_objmgr_psoc *psoc,
+					  enum scan_mode_6ghz scan_mode_6g)
+{
+	struct wlan_scan_obj *scan_obj;
+
+	scan_obj = wlan_psoc_get_scan_obj(psoc);
+	if (!scan_obj)
+		return QDF_STATUS_E_INVAL;
+
+	scan_obj->scan_def.scan_mode_6g = scan_mode_6g;
+
+	return QDF_STATUS_SUCCESS;
+}
 #endif
 
 #ifdef WLAN_POLICY_MGR_ENABLE
@@ -821,7 +835,15 @@ void wlan_scan_update_low_latency_profile_chnlist(
 		return;
 	}
 
+/*
+ * Get ll_sap freq api will be cleaned up once macro is enabled
+ */
+#ifndef WLAN_FEATURE_LL_LT_SAP
 	ll_sap_freq = policy_mgr_get_ll_sap_freq(psoc);
+#else
+	ll_sap_freq = policy_mgr_get_ll_ht_sap_freq(psoc);
+#endif
+
 	if (!ll_sap_freq)
 		return;
 
@@ -886,3 +908,21 @@ wlan_scan_get_scan_entry_by_mac_freq(struct wlan_objmgr_pdev *pdev,
 {
 	return scm_scan_get_scan_entry_by_mac_freq(pdev, bssid, freq);
 }
+
+bool wlan_scan_get_aux_support(struct wlan_objmgr_psoc *psoc)
+
+{
+	struct wlan_scan_obj *scan_obj;
+
+	scan_obj = wlan_psoc_get_scan_obj(psoc);
+	if (!scan_obj)
+		return false;
+
+	if (scan_obj->aux_mac_support)
+		scm_debug("aux mac support: %d", scan_obj->aux_mac_support);
+	else
+		scm_debug("aux mac not supported");
+
+	return scan_obj->aux_mac_support;
+}
+

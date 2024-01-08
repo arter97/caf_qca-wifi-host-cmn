@@ -254,6 +254,7 @@ struct wlan_objmgr_pdev_objmgr {
  * @peer_free_list:    list to hold freed peer
  * @peer_obj_free_work:delayed work to be queued into workqueue
  * @active_work_cnt:   active work counts
+ * @standby_active: Pdev in standby mode while power down
 */
 struct wlan_objmgr_pdev {
 	struct wlan_chan_list *current_chan_list;
@@ -271,6 +272,7 @@ struct wlan_objmgr_pdev {
 	qdf_work_t peer_obj_free_work;
 	uint32_t active_work_cnt;
 #endif
+	bool standby_active;
 };
 
 /*

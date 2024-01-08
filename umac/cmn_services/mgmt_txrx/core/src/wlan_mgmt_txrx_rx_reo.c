@@ -3133,6 +3133,11 @@ mgmt_rx_reo_release_frames(uint8_t mlo_grp_id, uint32_t link_bitmap)
 	QDF_STATUS ret;
 	struct mgmt_rx_reo_context_info ctx_info = {0};
 
+	if (mlo_grp_id >= WLAN_MAX_MLO_GROUPS) {
+		mgmt_rx_reo_err("Invalid mlo grp id");
+		return QDF_STATUS_E_INVAL;
+	}
+
 	reo_context = mgmt_rx_reo_get_context(mlo_grp_id);
 	if (!reo_context) {
 		mgmt_rx_reo_err("Mgmt rx reo context is null");

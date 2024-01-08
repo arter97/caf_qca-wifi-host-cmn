@@ -735,6 +735,21 @@ reg_dmn_fill_cfis(const struct reg_dmn_op_class_map_t *op_class_tbl,
 }
 
 /**
+ * reg_is_unsupported_opclass() - Checks if the given opclass is unsupported or
+ * not.
+ * @pdev: Pointer to pdev.
+ * @op_class: Opclass number.
+ *
+ * Return: True if opclass is unsupported, else false.
+ */
+static bool
+reg_is_unsupported_opclass(struct wlan_objmgr_pdev *pdev, uint8_t op_class)
+{
+	return ((op_class == GLOBAL_6G_OPCLASS_80P80) &&
+		(!reg_is_dev_supports_80p80(pdev)));
+}
+
+/**
  * reg_dmn_fill_6g_opcls_chan_lists() - Copy the channel lists for 6g opclasses
  * to the output argument list ('channel_lists')
  * @pdev: Pointer to pdev.
@@ -764,6 +779,11 @@ static void reg_dmn_fill_6g_opcls_chan_lists(struct wlan_objmgr_pdev *pdev,
 			uint8_t *dst;
 			uint8_t num_valid_cfi = 0;
 
+			if (reg_is_unsupported_opclass(pdev, op_class_tbl->op_class)) {
+				op_class_tbl++;
+				continue;
+			}
+
 			dst = channel_lists[i];
 			if (!dst) {
 				reg_debug("dest list empty\n");
@@ -777,21 +797,6 @@ static void reg_dmn_fill_6g_opcls_chan_lists(struct wlan_objmgr_pdev *pdev,
 		}
 		op_class_tbl++;
 	}
-}
-
-/**
- * reg_is_unsupported_opclass() - Checks if the given opclass is unsupported or
- * not.
- * @pdev: Pointer to pdev.
- * @op_class: Opclass number.
- *
- * Return: True if opclass is unsupported, else false.
- */
-static bool
-reg_is_unsupported_opclass(struct wlan_objmgr_pdev *pdev, uint8_t op_class)
-{
-	return ((op_class == GLOBAL_6G_OPCLASS_80P80) &&
-		(!reg_is_dev_supports_80p80(pdev)));
 }
 
 QDF_STATUS reg_dmn_get_6g_opclasses_and_channels(struct wlan_objmgr_pdev *pdev,

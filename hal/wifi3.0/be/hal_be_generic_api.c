@@ -993,4 +993,6 @@ void hal_hw_txrx_default_ops_attach_be(struct hal_soc *hal_soc)
 				hal_rx_en_mcast_fp_data_filter_generic_be;
 	hal_soc->ops->hal_rx_get_phy_ppdu_id_size =
 					hal_rx_get_phy_ppdu_id_size_be;
+	hal_soc->ops->hal_rx_phy_legacy_get_rssi =
+					hal_rx_phy_legacy_get_rssi_be;
 }

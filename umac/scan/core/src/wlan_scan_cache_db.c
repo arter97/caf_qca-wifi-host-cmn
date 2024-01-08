@@ -1679,12 +1679,12 @@ scm_scan_apply_filter_flush_entry(struct wlan_objmgr_psoc *psoc,
  * @psoc: psoc ptr
  * @scan_db: scan db
  * @filter: filter
+ * @pdev_id: pdev id of the scan db
  *
  * Return: void
  */
 static void scm_flush_scan_entries(struct wlan_objmgr_psoc *psoc,
-	struct scan_dbs *scan_db,
-	struct scan_filter *filter)
+	struct scan_dbs *scan_db, struct scan_filter *filter, uint8_t pdev_id)
 {
 	int i;
 	struct scan_cache_node *cur_node;
@@ -1701,6 +1701,9 @@ static void scm_flush_scan_entries(struct wlan_objmgr_psoc *psoc,
 			cur_node = next_node;
 		}
 	}
+	/* if all scan results are flushed reset scan channel info as well */
+	if (!filter)
+		scm_reset_scan_chan_info(psoc, pdev_id);
 }
 
 QDF_STATUS scm_flush_results(struct wlan_objmgr_pdev *pdev,
@@ -1727,7 +1730,8 @@ QDF_STATUS scm_flush_results(struct wlan_objmgr_pdev *pdev,
 		return QDF_STATUS_E_INVAL;
 	}
 
-	scm_flush_scan_entries(psoc, scan_db, filter);
+	scm_flush_scan_entries(psoc, scan_db, filter,
+			       wlan_objmgr_pdev_get_pdev_id(pdev));
 
 	return status;
 }
@@ -1849,6 +1853,19 @@ QDF_STATUS scm_scan_register_bcn_cb(struct wlan_objmgr_psoc *psoc,
 	return QDF_STATUS_SUCCESS;
 }
 
+void scm_reset_scan_chan_info(struct wlan_objmgr_psoc *psoc, uint8_t pdev_id)
+{
+	struct wlan_scan_obj *scan_obj;
+
+	scan_obj = wlan_psoc_get_scan_obj(psoc);
+	if (!scan_obj)
+		return;
+
+	scm_debug("pdev %d, Reset all channel info", pdev_id);
+	qdf_mem_zero(&scan_obj->pdev_info[pdev_id].chan_scan_info,
+		     sizeof(scan_obj->pdev_info[pdev_id].chan_scan_info));
+}
+
 QDF_STATUS scm_db_init(struct wlan_objmgr_psoc *psoc)
 {
 	int i, j;
@@ -1871,6 +1888,7 @@ QDF_STATUS scm_db_init(struct wlan_objmgr_psoc *psoc)
 		for (j = 0; j < SCAN_HASH_SIZE; j++)
 			qdf_list_create(&scan_db->scan_hash_tbl[j],
 				MAX_SCAN_CACHE_SIZE);
+		scm_reset_scan_chan_info(psoc, i);
 	}
 	return QDF_STATUS_SUCCESS;
 }
@@ -1893,7 +1911,7 @@ QDF_STATUS scm_db_deinit(struct wlan_objmgr_psoc *psoc)
 			continue;
 		}
 
-		scm_flush_scan_entries(psoc, scan_db, NULL);
+		scm_flush_scan_entries(psoc, scan_db, NULL, i);
 		for (j = 0; j < SCAN_HASH_SIZE; j++)
 			qdf_list_destroy(&scan_db->scan_hash_tbl[j]);
 		qdf_spinlock_destroy(&scan_db->scan_db_lock);

@@ -322,6 +322,8 @@ uint8_t *peer_assoc_add_mlo_params(uint8_t *buf_ptr,
 			req->mlo_params.link_switch_in_progress;
 	mlo_params->nstr_indication_bitmap =
 		req->mlo_params.nstr_indication_bitmap;
+	mlo_params->recommended_max_num_simultaneous_links =
+		req->mlo_params.rec_max_simultaneous_links;
 
 	wmi_debug("emlsr_support %d mlo_flags 0x%x logical_link_index %d mld_peer_id %d ieee_link_id %d "
 		  "emlsr_trans_timeout_us %d emlsr_trans_delay_us %d "
@@ -342,7 +344,7 @@ uint8_t *peer_assoc_add_mlo_params(uint8_t *buf_ptr,
 		  mlo_params->mlo_flags.nstr_bitmap_size,
 		  mlo_params->mlo_flags.mlo_link_switch,
 		  mlo_params->nstr_indication_bitmap,
-		  req->mlo_params.mld_mac);
+		  QDF_MAC_ADDR_REF(req->mlo_params.mld_mac));
 
 	return buf_ptr + sizeof(wmi_peer_assoc_mlo_params);
 }
@@ -2285,6 +2287,7 @@ QDF_STATUS mlo_teardown_cmd_send_tlv(struct wmi_unified *wmi_handle,
 	}
 
 	cmd->trigger_umac_reset = param->umac_reset;
+	cmd->erp_standby_mode = param->standby_active;
 
 	wmi_mtrace(WMI_MLO_TEARDOWN_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,

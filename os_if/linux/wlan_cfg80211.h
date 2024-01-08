@@ -185,6 +185,8 @@
  * switch event index
  * @QCA_NL80211_VENDOR_SUBCMD_TX_LATENCY_INDEX: event index for transmit
  *	latency stats
+ * @QCA_NL80211_VENDOR_SUBCMD_RECONFIG_REMOVE_COMPLETE_EVENT_INDEX: ML Reconfig
+ * remove complete event index
  */
 
 enum qca_nl80211_vendor_subcmds_index {
@@ -320,6 +322,7 @@ enum qca_nl80211_vendor_subcmds_index {
 #ifdef WLAN_FEATURE_TX_LATENCY_STATS
 	QCA_NL80211_VENDOR_SUBCMD_TX_LATENCY_INDEX,
 #endif
+	QCA_NL80211_VENDOR_SUBCMD_RECONFIG_REMOVE_COMPLETE_EVENT_INDEX,
 };
 
 #if !defined(SUPPORT_WDEV_CFG80211_VENDOR_EVENT_ALLOC) && \

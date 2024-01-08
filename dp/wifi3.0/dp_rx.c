@@ -239,7 +239,7 @@ dp_pdev_frag_alloc_and_map(struct dp_soc *dp_soc,
 	QDF_STATUS ret = QDF_STATUS_E_FAILURE;
 
 	(nbuf_frag_info_t->virt_addr).vaddr =
-			qdf_frag_alloc(NULL, rx_desc_pool->buf_size);
+			qdf_frag_alloc(&rx_desc_pool->pf_cache, rx_desc_pool->buf_size);
 
 	if (!((nbuf_frag_info_t->virt_addr).vaddr)) {
 		dp_err("Frag alloc failed");
@@ -385,7 +385,8 @@ dp_pdev_nbuf_alloc_and_map_replenish(struct dp_soc *dp_soc,
 QDF_STATUS
 __dp_rx_buffers_no_map_lt_replenish(struct dp_soc *soc, uint32_t mac_id,
 				    struct dp_srng *dp_rxdma_srng,
-				    struct rx_desc_pool *rx_desc_pool)
+				    struct rx_desc_pool *rx_desc_pool,
+				    bool force_replenish)
 {
 	struct dp_pdev *dp_pdev = dp_get_pdev_for_lmac_id(soc, mac_id);
 	uint32_t count;
@@ -421,8 +422,8 @@ __dp_rx_buffers_no_map_lt_replenish(struct dp_soc *soc, uint32_t mac_id,
 	dp_rx_debug("%pK: no of available entries in rxdma ring: %d",
 		    soc, num_entries_avail);
 
-	if (qdf_unlikely(num_entries_avail <
-			 ((dp_rxdma_srng->num_entries * 3) / 4))) {
+	if (qdf_unlikely(!force_replenish && (num_entries_avail <
+			 ((dp_rxdma_srng->num_entries * 3) / 4)))) {
 		hal_srng_access_end(soc->hal_soc, rxdma_srng);
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -757,8 +758,10 @@ QDF_STATUS __dp_pdev_rx_buffers_no_map_attach(struct dp_soc *soc,
 					       rx_desc_pool->buf_size);
 		rxdma_ring_entry = (struct dp_buffer_addr_info *)
 			hal_srng_src_get_next(soc->hal_soc, rxdma_srng);
-		if (!rxdma_ring_entry)
+		if (!rxdma_ring_entry) {
+			qdf_nbuf_free(nbuf);
 			break;
+		}
 
 		desc_list->rx_desc.nbuf = nbuf;
 		dp_rx_set_reuse_nbuf(&desc_list->rx_desc, nbuf);
@@ -913,7 +916,8 @@ QDF_STATUS __dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 				uint32_t num_req_buffers,
 				union dp_rx_desc_list_elem_t **desc_list,
 				union dp_rx_desc_list_elem_t **tail,
-				bool req_only, const char *func_name)
+				bool req_only, bool force_replenish,
+				const char *func_name)
 {
 	uint32_t num_alloc_desc;
 	uint16_t num_desc_to_free = 0;
@@ -957,8 +961,9 @@ QDF_STATUS __dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 	dp_verbose_debug("%pK: no of available entries in rxdma ring: %d",
 			 dp_soc, num_entries_avail);
 
-	if (!req_only && !(*desc_list) && (num_entries_avail >
-		((dp_rxdma_srng->num_entries * 3) / 4))) {
+	if (!req_only && !(*desc_list) &&
+	    (force_replenish || (num_entries_avail >
+	     ((dp_rxdma_srng->num_entries * 3) / 4)))) {
 		num_req_buffers = num_entries_avail;
 		DP_STATS_INC(dp_pdev, replenish.low_thresh_intrs, 1);
 	} else if (num_entries_avail < num_req_buffers) {
@@ -2013,7 +2018,7 @@ static inline int dp_rx_drop_nbuf_list(struct dp_pdev *pdev,
  *
  * Return: true if packet is delivered to netdev per STA.
  */
-static inline bool
+bool
 dp_rx_deliver_to_stack_ext(struct dp_soc *soc, struct dp_vdev *vdev,
 			   struct dp_txrx_peer *txrx_peer, qdf_nbuf_t nbuf_head)
 {
@@ -3234,6 +3239,8 @@ void dp_rx_enable_mon_dest_frag(struct rx_desc_pool *rx_desc_pool,
 	rx_desc_pool->rx_mon_dest_frag_enable = is_mon_dest_desc;
 	if (is_mon_dest_desc)
 		dp_alert("Feature DP_RX_MON_MEM_FRAG for mon_dest is enabled");
+	else
+		qdf_frag_cache_drain(&rx_desc_pool->pf_cache);
 }
 #else
 void dp_rx_enable_mon_dest_frag(struct rx_desc_pool *rx_desc_pool,

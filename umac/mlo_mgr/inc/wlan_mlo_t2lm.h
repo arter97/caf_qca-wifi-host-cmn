@@ -397,6 +397,9 @@ typedef QDF_STATUS (*wlan_mlo_t2lm_link_update_handler)(
  * @is_valid_handler: T2LM handler is valid or not
  * @mst_start_tsf: calculated mapping switch start tsf
  * @mst_end_tsf: calculated mapping switch end tsf
+ * @link_update_callback_index: Link update callback index. This callback is
+ *                              invoked as part of mapping switch time and
+ *                              expected duration expiry.
  */
 struct wlan_t2lm_context {
 	struct wlan_mlo_t2lm_ie established_t2lm;
@@ -415,6 +418,7 @@ struct wlan_t2lm_context {
 	uint64_t mst_start_tsf;
 	uint64_t mst_end_tsf;
 #endif
+	int link_update_callback_index;
 };
 
 #ifdef WLAN_FEATURE_11BE
@@ -707,6 +711,17 @@ QDF_STATUS
 wlan_handle_t2lm_timer(struct wlan_objmgr_vdev *vdev);
 
 /**
+ * wlan_mlo_t2lm_register_link_update_notify_handler() - API to register a T2LM
+ * callback that needs to be invoked on mapping switch time expiry and expected
+ * duration expiry.
+ * @ml_dev: Pointer MLO dev context
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_mlo_t2lm_register_link_update_notify_handler(
+		struct wlan_mlo_dev_context *ml_dev);
+
+/**
  * wlan_process_bcn_prbrsp_t2lm_ie() - API to process the received T2LM IE from
  * beacon/probe response.
  * @vdev: Pointer to vdev
@@ -841,6 +856,13 @@ static inline QDF_STATUS
 wlan_handle_t2lm_timer(struct wlan_objmgr_vdev *vdev)
 {
 	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline
+QDF_STATUS wlan_mlo_t2lm_register_link_update_notify_handler(
+		struct wlan_mlo_dev_context *ml_dev)
+{
+	return QDF_STATUS_SUCCESS;
 }
 
 static inline QDF_STATUS

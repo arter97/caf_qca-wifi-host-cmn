@@ -54,7 +54,17 @@
 
 /* MAX MLO Assoc Links per MLD */
 #ifndef WLAN_UMAC_MLO_ASSOC_MAX_SUPPORTED_LINKS
+#ifdef SAP_MULTI_LINK_EMULATION
+#define WLAN_UMAC_MLO_ASSOC_MAX_SUPPORTED_LINKS 2
+#else
 #define WLAN_UMAC_MLO_ASSOC_MAX_SUPPORTED_LINKS 1
+#endif
+#endif
+
+
+/* Default Initialization value for Max Recommended Simultaneous Links */
+#ifndef WLAN_UMAC_MLO_RECOM_MAX_SIMULT_LINKS_DEFAULT
+#define WLAN_UMAC_MLO_RECOM_MAX_SIMULT_LINKS_DEFAULT 2
 #endif
 
 /* Max PEER support */
@@ -344,6 +354,7 @@ struct mlo_wsi_info {
  * @force_non_assoc_prim_umac: Force non-assoc link to be primary umac
  * @lswitch_notifier: Link switch notifier callbacks
  * @wsi_info: WSI stats info
+ * @disable_eml: Disable Enhanced Multi Link features(eMLSR and eMLMR).
  */
 struct mlo_mgr_context {
 #ifdef WLAN_MLO_USE_SPINLOCK
@@ -375,6 +386,7 @@ struct mlo_mgr_context {
 	struct wlan_mlo_link_switch_notifier lswitch_notifier[WLAN_UMAC_COMP_ID_MAX];
 #endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
 	struct mlo_wsi_info *wsi_info;
+	bool disable_eml;
 };
 
 /**
@@ -414,6 +426,25 @@ struct mlo_link_bss_params {
 };
 
 #ifdef WLAN_FEATURE_11BE_MLO
+
+/**
+ * enum mlo_link_info_event_status - link info event status
+ * @WLAN_LINK_INFO_EVENT_SUCCESS: success
+ * @WLAN_LINK_INFO_EVENT_REJECT_FAILURE: reject due to common failure reason
+ * @WLAN_LINK_INFO_EVENT_REJECT_VDEV_NOT_UP: reject as vdev is not up
+ * @WLAN_LINK_INFO_EVENT_REJECT_ROAMING_IN_PROGRESS: reject as roaming
+ *						     is in progress
+ * @WLAN_LINK_INFO_EVENT_REJECT_NON_MLO_CONNECTION: reject as it's not
+ *						    MLO connection
+ */
+enum mlo_link_info_event_status {
+	WLAN_LINK_INFO_EVENT_SUCCESS,
+	WLAN_LINK_INFO_EVENT_REJECT_FAILURE,
+	WLAN_LINK_INFO_EVENT_REJECT_VDEV_NOT_UP,
+	WLAN_LINK_INFO_EVENT_REJECT_ROAMING_IN_PROGRESS,
+	WLAN_LINK_INFO_EVENT_REJECT_NON_MLO_CONNECTION,
+};
+
 /**
  * struct mlo_link_state_cmd_params - MLO link state params
  * @vdev_id: Vdev id
@@ -651,6 +682,16 @@ struct emlsr_capability {
 #endif
 
 /**
+ * struct wlan_mlo_sta_assoc_pending_list - MLO sta assoc pending list entry
+ * @peer_list: MLO peer list
+ * @list_lock: lock to access members of structure
+ */
+struct wlan_mlo_sta_assoc_pending_list {
+	qdf_list_t peer_list;
+	qdf_spinlock_t list_lock;
+};
+
+/**
  * struct wlan_mlo_sta - MLO sta additional info
  * @wlan_connect_req_links: list of vdevs selected for connection with the MLAP
  * @wlan_connected_links: list of vdevs associated with this MLO connection
@@ -711,6 +752,7 @@ struct wlan_mlo_sta {
  * @mlo_ap_lock: lock to sync VDEV SM event
  * @mlo_vdev_quiet_bmap: Bitmap of vdevs for which quiet ie needs to enabled
  * @mlo_vdev_up_bmap: Bitmap of vdevs for which sync complete can be dispatched
+ * @assoc_list: MLO sta assoc pending list entry (for FT-over-DS)
  */
 struct wlan_mlo_ap {
 	uint8_t num_ml_vdevs;
@@ -722,6 +764,7 @@ struct wlan_mlo_ap {
 #endif
 	qdf_bitmap(mlo_vdev_quiet_bmap, WLAN_UMAC_MLO_MAX_VDEVS);
 	qdf_bitmap(mlo_vdev_up_bmap, WLAN_UMAC_MLO_MAX_VDEVS);
+	struct wlan_mlo_sta_assoc_pending_list assoc_list;
 };
 
 /**
@@ -781,6 +824,7 @@ struct wlan_mlo_link_mac_update {
  * @ptqm_migrate_timer: timer for ptqm migration
  * @mlo_peer_id_bmap: mlo_peer_id bitmap for ptqm migration
  * @link_ctx: link related information
+ * @mlo_max_recom_simult_links: Max Recommended Simultaneous Links
  */
 struct wlan_mlo_dev_context {
 	qdf_list_node_t node;
@@ -813,6 +857,7 @@ struct wlan_mlo_dev_context {
 	qdf_bitmap(mlo_peer_id_bmap, MAX_MLO_PEER_ID);
 #endif
 	struct mlo_link_switch_context *link_ctx;
+	uint8_t mlo_max_recom_simult_links;
 };
 
 /**
@@ -1608,4 +1653,16 @@ struct peer_entry_ptqm_migrate_event_params {
 	enum primary_link_peer_migration_evenr_status status;
 };
 #endif /* QCA_SUPPORT_PRIMARY_LINK_MIGRATE */
+
+/**
+ * struct wlan_mlo_sta_entry - MLO sta entry
+ * @mac_node: QDF list mac_node member
+ * @peer_mld_addr: MLO peer MAC address
+ */
+
+struct wlan_mlo_sta_entry {
+	qdf_list_node_t mac_node;
+	struct qdf_mac_addr peer_mld_addr;
+};
+
 #endif

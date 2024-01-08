@@ -809,19 +809,19 @@ dp_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 			dp_tx_desc_pool_deinit(soc, desc_pool_id, false);
 			dp_tx_desc_pool_free(soc, desc_pool_id, false);
 			qdf_spin_unlock_bh(&pool->flow_pool_lock);
-			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-				  "%s %d pool is freed!!",
-				  __func__, __LINE__);
+			dp_err_rl("pool %d is freed!!", desc_pool_id);
 			return;
 		}
 		break;
 
 	case FLOW_POOL_ACTIVE_UNPAUSED:
 		break;
+
+	case FLOW_POOL_ACTIVE_UNPAUSED_REATTACH:
+		fallthrough;
 	default:
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  "%s %d pool is INACTIVE State!!",
-			  __func__, __LINE__);
+		dp_err_rl("pool %d status: %d",
+			  desc_pool_id, pool->status);
 		break;
 	};
 
@@ -1280,10 +1280,14 @@ static inline void dp_tx_desc_update_fast_comp_flag(struct dp_soc *soc,
 						    uint8_t allow_fast_comp)
 {
 	if (qdf_likely(!(desc->flags & DP_TX_DESC_FLAG_TO_FW)) &&
-	    qdf_likely(allow_fast_comp)) {
+	    qdf_likely(allow_fast_comp))
 		desc->flags |= DP_TX_DESC_FLAG_SIMPLE;
-	}
+
+	if (qdf_likely(desc->nbuf->is_from_recycler) &&
+	    qdf_likely(desc->nbuf->fast_xmit))
+		desc->flags |= DP_TX_DESC_FLAG_FAST;
 }
+
 #else
 static inline void dp_tx_desc_update_fast_comp_flag(struct dp_soc *soc,
 						    struct dp_tx_desc_s *desc,
