@@ -22553,6 +22553,10 @@ struct wmi_ops tlv_ops =  {
 #ifdef WLAN_FEATURE_11BE_MLO
 static void populate_tlv_events_id_mlo(WMI_EVT_ID *event_ids)
 {
+#if defined(WLAN_FEATURE_MULTI_LINK_SAP) && defined(WLAN_FEATURE_11BE_MLO)
+	event_ids[wmi_mlo_link_info_sync_event_id] =
+			WMI_MLO_LINK_INFO_SYNC_EVENTID;
+#endif
 	event_ids[wmi_mlo_setup_complete_event_id] =
 			WMI_MLO_SETUP_COMPLETE_EVENTID;
 	event_ids[wmi_mlo_teardown_complete_event_id] =
