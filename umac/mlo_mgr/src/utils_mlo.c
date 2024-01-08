@@ -6110,7 +6110,7 @@ util_parse_pamlie_perstaprofile_stactrl(uint8_t *subelempayload,
 					     subelempayload,
 					     sizeof(struct edca_ie));
 			} else {
-				epcs_debug("Invalid edca length %d in PAV IE",
+				mlo_err("Invalid edca length %d in PAV IE",
 					   ie->ie_len);
 			}
 			break;
@@ -6120,11 +6120,11 @@ util_parse_pamlie_perstaprofile_stactrl(uint8_t *subelempayload,
 				pa_link_info->ven_wme_ie_present = true;
 				qdf_mem_copy(&pa_link_info->ven_wme_ie_bytes,
 					     subelempayload,
-					     sizeof(WLAN_VENDOR_WME_IE_LEN +
-						    sizeof(struct ie_header)));
+					     (WLAN_VENDOR_WME_IE_LEN +
+					      sizeof(struct ie_header)));
 				pa_link_info->edca_ie_present = false;
 			} else {
-				epcs_debug("Unrelated Venfor IE reecived ie_id %d ie_len %d",
+				mlo_err("Unrelated Venfor IE reecived ie_id %d ie_len %d",
 					   ie->ie_id,
 					   ie->ie_len);
 			}
@@ -6139,12 +6139,12 @@ util_parse_pamlie_perstaprofile_stactrl(uint8_t *subelempayload,
 						     subelempayload,
 						     sizeof(struct muedca_ie));
 				} else {
-					epcs_debug("Invalid muedca length %d in PAV IE",
+					mlo_err("Invalid muedca length %d in PAV IE",
 						   ie->ie_len);
 				}
 				break;
 			default:
-				epcs_debug("Unrelated Extn IE reecived ie_id %d ie_len %d extid %d IN PAV IE",
+				mlo_err("Unrelated Extn IE reecived ie_id %d ie_len %d extid %d IN PAV IE",
 					   ie->ie_id,
 					   ie->ie_len,
 					   extn_ie->ie_extn_id);
@@ -6152,7 +6152,7 @@ util_parse_pamlie_perstaprofile_stactrl(uint8_t *subelempayload,
 			}
 			break;
 		default:
-			epcs_debug("Unrelated IE reecived ie_id %d ie_len %d in PAV IE",
+			mlo_err("Unrelated IE reecived ie_id %d ie_len %d in PAV IE",
 				   ie->ie_id,
 				   ie->ie_len);
 			break;
@@ -6162,11 +6162,11 @@ util_parse_pamlie_perstaprofile_stactrl(uint8_t *subelempayload,
 	} while (parsed_payload_len < subelempayloadlen);
 
 	if (parsed_payload_len != subelempayloadlen)
-		epcs_debug("Error in processing per sta profile of PA ML IE %zu %zu",
+		mlo_err("Error in processing per sta profile of PA ML IE %zu %zu",
 			   parsed_payload_len,
 			   subelempayloadlen);
 
-	epcs_debug("Link id %d presence of edca %d muedca %d wme %d",
+	mlo_debug("Link id %d presence of edca %d muedca %d wme %d",
 		   pa_link_info->link_id,
 		   pa_link_info->edca_ie_present,
 		   pa_link_info->muedca_ie_present,
