@@ -1516,8 +1516,12 @@ util_add_mlie_for_prb_rsp_gen(const uint8_t *reportingsta_ie,
 	status = util_get_mlie_common_info_len((uint8_t *)reportingsta_ie,
 					       reportingsta_ie_len,
 					       &common_info_len);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		mlo_err("Failed while parsing the common info length");
+	if (QDF_IS_STATUS_ERROR(status) ||
+	    common_info_len > reportingsta_ie_len ||
+	    (reportingsta_ie_len - common_info_len <
+	     sizeof(struct wlan_ie_multilink))) {
+		mlo_err("Failed to parse common info, mlie len %d common info len %d",
+			reportingsta_ie_len, common_info_len);
 		return status;
 	}
 
@@ -1570,9 +1574,9 @@ util_add_mlie_for_prb_rsp_gen(const uint8_t *reportingsta_ie,
 		     reportingsta_ie + sizeof(struct wlan_ie_multilink),
 		     mlie_len - sizeof(struct wlan_ie_multilink));
 
-	if (linkid == 0xFF) {
+	if (linkid == 0xFF || mlie_len <= link_id_offset) {
 		qdf_mem_free(mlie_frame);
-		mlo_err("Link id is invalid");
+		mlo_err("Failed to process link id, link_id %d", linkid);
 		return QDF_STATUS_E_INVAL;
 	}
 	mlie_frame[link_id_offset] = (mlie_frame[link_id_offset] & ~0x0f) |
