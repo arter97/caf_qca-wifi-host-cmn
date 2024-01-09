@@ -814,6 +814,7 @@ dp_tx_mlo_mcast_pkt_send(struct dp_vdev_be *be_vdev,
 	qdf_nbuf_t  nbuf_clone;
 	struct dp_vdev_be *be_ptnr_vdev = NULL;
 	struct dp_tx_msdu_info_s msdu_info;
+	struct dp_soc *soc = NULL;
 
 	be_ptnr_vdev = dp_get_be_vdev_from_dp_vdev(ptnr_vdev);
 	if (be_vdev != be_ptnr_vdev) {
@@ -844,6 +845,9 @@ dp_tx_mlo_mcast_pkt_send(struct dp_vdev_be *be_vdev,
 
 	qdf_mem_zero(&msdu_info, sizeof(msdu_info));
 	dp_tx_get_queue(ptnr_vdev, nbuf_clone, &msdu_info.tx_queue);
+
+	soc = ptnr_vdev->pdev->soc;
+	dp_tx_override_flow_pool_id(soc, ptnr_vdev, &msdu_info);
 
 	msdu_info.gsn = qdf_atomic_read(&be_vdev->mlo_dev_ctxt->seq_num);
 	msdu_info.xmit_type = qdf_nbuf_get_vdev_xmit_type(nbuf_clone);
