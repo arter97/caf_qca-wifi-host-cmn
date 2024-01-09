@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -321,7 +321,7 @@ static QDF_STATUS wlan_mgmt_txrx_pdev_obj_destroy_notification(
 	qdf_wake_lock_destroy(&mgmt_txrx_pdev_ctx->wakelock_tx_cmp);
 	qdf_mem_free(mgmt_txrx_pdev_ctx);
 
-	mgmt_txrx_debug("mgmt txrx deletion successful, pdev: %pK", pdev);
+	mgmt_txrx_debug("mgmt txrx deletion successful");
 
 	return QDF_STATUS_SUCCESS;
 }
