@@ -4217,6 +4217,38 @@ QDF_STATUS dp_ipa_tx_opt_dp_ctrl_pkt(struct cdp_soc_t *soc_hdl,
 
 #ifdef IPA_WDS_EASYMESH_FEATURE
 /**
+ * dp_peer_get_ref_by_ast() - Returns peer object given the ast
+ *                        mac address if ast_entry is active
+ *
+ * @soc:	core DP soc context
+ * @peer_mac:	mac address to find out ast entry
+ * @mod_id:	ID of module requesting reference
+ *
+ * Return: struct dp_peer*: Pointer to DP peer object
+ */
+static struct dp_peer *dp_peer_get_ref_by_ast(struct dp_soc *soc,
+					      uint8_t *peer_mac,
+					      enum dp_mod_id mod_id)
+{
+	struct dp_ast_entry *ast_entry;
+	struct dp_peer *peer;
+
+	qdf_spin_lock_bh(&soc->ast_lock);
+	ast_entry = dp_peer_ast_hash_find_soc(soc, peer_mac);
+
+	if ((!ast_entry) ||
+	    (ast_entry->delete_in_progress && !ast_entry->callback)) {
+		qdf_spin_unlock_bh(&soc->ast_lock);
+		return NULL;
+	}
+
+	peer = dp_peer_get_ref_by_id(soc, ast_entry->peer_id, mod_id);
+	qdf_spin_unlock_bh(&soc->ast_lock);
+
+	return peer;
+}
+
+/**
  * dp_ipa_peer_check() - Check for peer for given mac
  * @soc: dp soc object
  * @peer_mac_addr: peer mac address
@@ -4224,41 +4256,27 @@ QDF_STATUS dp_ipa_tx_opt_dp_ctrl_pkt(struct cdp_soc_t *soc_hdl,
  *
  * Return: true if peer is found, else false
  */
-static inline bool dp_ipa_peer_check(struct dp_soc *soc,
-				     uint8_t *peer_mac_addr, uint8_t vdev_id)
+static bool dp_ipa_peer_check(struct dp_soc *soc,
+			      uint8_t *peer_mac_addr, uint8_t vdev_id)
 {
-	struct dp_ast_entry *ast_entry = NULL;
 	struct dp_peer *peer = NULL;
 
-	qdf_spin_lock_bh(&soc->ast_lock);
-	ast_entry = dp_peer_ast_hash_find_soc(soc, peer_mac_addr);
-
-	if ((!ast_entry) ||
-	    (ast_entry->delete_in_progress && !ast_entry->callback)) {
-		qdf_spin_unlock_bh(&soc->ast_lock);
-		return false;
-	}
-
-	peer = dp_peer_get_ref_by_id(soc, ast_entry->peer_id,
-				     DP_MOD_ID_IPA);
+	peer = dp_peer_get_ref_by_ast(soc, peer_mac_addr, DP_MOD_ID_IPA);
 
 	if (!peer) {
-		qdf_spin_unlock_bh(&soc->ast_lock);
 		return false;
 	} else {
 		if (peer->vdev->vdev_id == vdev_id) {
 			dp_peer_unref_delete(peer, DP_MOD_ID_IPA);
-			qdf_spin_unlock_bh(&soc->ast_lock);
 			return true;
 		}
 		dp_peer_unref_delete(peer, DP_MOD_ID_IPA);
-		qdf_spin_unlock_bh(&soc->ast_lock);
 		return false;
 	}
 }
 #else
-static inline bool dp_ipa_peer_check(struct dp_soc *soc,
-				     uint8_t *peer_mac_addr, uint8_t vdev_id)
+static bool dp_ipa_peer_check(struct dp_soc *soc,
+			      uint8_t *peer_mac_addr, uint8_t vdev_id)
 {
 	struct cdp_peer_info peer_info = {0};
 	struct dp_peer *peer = NULL;
@@ -4547,6 +4565,43 @@ QDF_STATUS dp_ipa_ast_create(struct cdp_soc_t *soc_hdl,
 #endif
 
 #ifdef QCA_ENHANCED_STATS_SUPPORT
+#ifdef IPA_WDS_EASYMESH_FEATURE
+QDF_STATUS dp_ipa_update_peer_rx_stats(struct cdp_soc_t *soc,
+				       uint8_t vdev_id, uint8_t *peer_mac,
+				       qdf_nbuf_t nbuf)
+{
+	struct dp_peer *peer = dp_peer_get_ref_by_ast((struct dp_soc *)soc,
+						      peer_mac, DP_MOD_ID_IPA);
+	struct dp_txrx_peer *txrx_peer;
+	uint8_t da_is_bcmc;
+	qdf_ether_header_t *eh;
+
+	if (!peer)
+		return QDF_STATUS_E_FAILURE;
+
+	txrx_peer = dp_get_txrx_peer(peer);
+
+	if (!txrx_peer) {
+		dp_peer_unref_delete(peer, DP_MOD_ID_IPA);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	da_is_bcmc = ((uint8_t)nbuf->cb[1]) & 0x2;
+	eh = (qdf_ether_header_t *)qdf_nbuf_data(nbuf);
+
+	if (da_is_bcmc) {
+		DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer, rx.multicast, 1,
+					      qdf_nbuf_len(nbuf), 0);
+		if (QDF_IS_ADDR_BROADCAST(eh->ether_dhost))
+			DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer, rx.bcast,
+						      1, qdf_nbuf_len(nbuf), 0);
+	}
+
+	dp_peer_unref_delete(peer, DP_MOD_ID_IPA);
+
+	return QDF_STATUS_SUCCESS;
+}
+#else
 QDF_STATUS dp_ipa_update_peer_rx_stats(struct cdp_soc_t *soc,
 				       uint8_t vdev_id, uint8_t *peer_mac,
 				       qdf_nbuf_t nbuf)
@@ -4583,6 +4638,7 @@ QDF_STATUS dp_ipa_update_peer_rx_stats(struct cdp_soc_t *soc,
 
 	return QDF_STATUS_SUCCESS;
 }
+#endif /* IPA_WDS_EASYMESH_FEATURE */
 
 void
 dp_peer_aggregate_tid_stats(struct dp_peer *peer)
