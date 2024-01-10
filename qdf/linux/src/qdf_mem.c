@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1668,11 +1668,13 @@ void qdf_mem_free_debug(void *ptr, const char *func, uint32_t line)
 	error_bitmap = qdf_mem_header_validate(header, current_domain);
 	error_bitmap |= qdf_mem_trailer_validate(header);
 
-	if (!error_bitmap) {
+	if (!error_bitmap)
 		header->freed = true;
+
+	if (error_bitmap != QDF_MEM_BAD_NODE)
 		qdf_list_remove_node(qdf_mem_list_get(header->domain),
 				     &header->node);
-	}
+
 	qdf_spin_unlock_irqrestore(&qdf_mem_list_lock);
 
 	qdf_mem_header_assert_valid(header, current_domain, error_bitmap,
