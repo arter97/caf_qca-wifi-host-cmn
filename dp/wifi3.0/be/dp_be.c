@@ -84,6 +84,8 @@ static struct wlan_cfg_tcl_wbm_ring_num_map g_tcl_wbm_map_array[MAX_TCL_DATA_RIN
 
 #ifdef WLAN_SUPPORT_PPEDS
 static struct cdp_ppeds_txrx_ops dp_ops_ppeds_be = {
+	.ppeds_entry_alloc = dp_ppeds_entry_alloc_vdev_be,
+	.ppeds_entry_free = dp_ppeds_entry_free_vdev_be,
 	.ppeds_entry_attach = dp_ppeds_attach_vdev_be,
 	.ppeds_entry_detach = dp_ppeds_detach_vdev_be,
 	.ppeds_set_int_pri2tid = dp_ppeds_set_int_pri2tid_be,

@@ -2590,9 +2590,15 @@ struct cdp_ppeds_txrx_ops {
 	(*ppeds_vp_setup_recovery)(struct cdp_soc_t *soc,
 				   uint8_t vdev_id, uint16_t profile_idx);
 	QDF_STATUS
+	(*ppeds_entry_alloc)(struct cdp_soc_t *soc,
+			     void *vpai,
+			     int32_t *ppe_vp_num,
+			     struct cdp_ds_vp_params *vp_params);
+	void (*ppeds_entry_free)(struct cdp_soc_t *soc, int32_t vp_num);
+	QDF_STATUS
 	(*ppeds_entry_attach)(struct cdp_soc_t *soc,
 			      uint8_t vdev_id, void *vpai,
-			      int32_t *ppe_vp_num,
+			      int32_t vp_num,
 			      struct cdp_ds_vp_params *vp_params);
 	QDF_STATUS
 	(*ppeds_enable_pri2tid)(struct cdp_soc_t *soc,

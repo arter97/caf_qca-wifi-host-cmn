@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -72,18 +72,65 @@ void cdp_ppesds_update_dev_stats(struct cdp_soc_t *soc,
 }
 
 /**
+ * cdp_ppeds_entry_alloc() - allocate the PPE DS VP entry.
+ * @soc: data path soc handle
+ * @vpai: PPE VP opaque
+ * @ppe_vp_num: Allocated VP Port number
+ * @vp_params: VP params
+ *
+ * return: qdf_status where vp got allocated or not.
+ */
+static inline
+QDF_STATUS cdp_ppeds_entry_alloc(struct cdp_soc_t *soc,
+				 void *vpai, int32_t *ppe_vp_num,
+				 struct cdp_ds_vp_params *vp_params)
+{
+	if (!soc || !soc->ops || !soc->ops->ppeds_ops) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
+			  "%s invalid instance", __func__);
+		return QDF_STATUS_E_NOSUPPORT;
+	}
+	if (soc->ops->ppeds_ops->ppeds_entry_alloc)
+		return soc->ops->ppeds_ops->ppeds_entry_alloc(soc,
+							      vpai,
+							      ppe_vp_num,
+							      vp_params);
+
+	return QDF_STATUS_E_INVAL;
+}
+
+/**
+ * cdp_ppeds_entry_free() - Free the PPE DS port
+ * @soc: data path soc handle
+ * @vp_num: VP Port number
+ *
+ * return: void
+ */
+static inline
+void cdp_ppeds_entry_free(struct cdp_soc_t *soc, int32_t vp_num)
+{
+	if (!soc || !soc->ops || !soc->ops->ppeds_ops) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
+			  "%s invalid instance", __func__);
+		return;
+	}
+	if (soc->ops->ppeds_ops->ppeds_entry_free)
+		soc->ops->ppeds_ops->ppeds_entry_free(soc, vp_num);
+}
+
+/**
  * cdp_ppesds_entry_attach() - attach the ppe vp interface.
  * @soc: data path soc handle
  * @vdev_id: vdev id
  * @vpai: PPE VP opaque
- * @ppe_vp_num: Allocated VP Port number
+ * @vp_num: Allocated VP Port number
  * @vp_params: VP params
  *
  * return: qdf_status where vp entry got allocated or not.
  */
 static inline
 QDF_STATUS cdp_ppesds_entry_attach(struct cdp_soc_t *soc, uint8_t vdev_id,
-				   void *vpai, int32_t *ppe_vp_num,
+				   void *vpai, int32_t vp_num,
 				   struct cdp_ds_vp_params *vp_params)
 {
 	if (!soc || !soc->ops || !soc->ops->ppeds_ops) {
@@ -95,7 +142,7 @@ QDF_STATUS cdp_ppesds_entry_attach(struct cdp_soc_t *soc, uint8_t vdev_id,
 	if (soc->ops->ppeds_ops->ppeds_entry_attach)
 		return soc->ops->ppeds_ops->ppeds_entry_attach(soc, vdev_id,
 							       vpai,
-							       ppe_vp_num,
+							       vp_num,
 							       vp_params);
 
 	return QDF_STATUS_E_INVAL;
