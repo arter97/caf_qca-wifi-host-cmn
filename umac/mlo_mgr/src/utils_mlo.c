@@ -397,6 +397,7 @@ util_parse_bvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
 					bool *is_nstrlp_present)
 {
 	qdf_size_t parsed_payload_len = 0;
+	qdf_size_t sta_info_len, parsed_sta_info_len;
 	uint16_t stacontrol;
 	uint8_t completeprofile;
 	uint8_t nstrlppresent;
@@ -466,7 +467,9 @@ util_parse_bvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
 		return QDF_STATUS_E_PROTO;
 	}
 
+	sta_info_len = *(subelempayload + parsed_payload_len);
 	parsed_payload_len += WLAN_ML_BV_LINFO_PERSTAPROF_STAINFO_LENGTH_SIZE;
+	parsed_sta_info_len = WLAN_ML_BV_LINFO_PERSTAPROF_STAINFO_LENGTH_SIZE;
 
 	if (is_macaddr_valid)
 		*is_macaddr_valid = false;
@@ -497,6 +500,7 @@ util_parse_bvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
 		}
 
 		parsed_payload_len += QDF_MAC_ADDR_SIZE;
+		parsed_sta_info_len += QDF_MAC_ADDR_SIZE;
 	}
 
 	/* Check Beacon Interval present bit */
@@ -523,6 +527,7 @@ util_parse_bvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
 				*is_beaconinterval_valid = true;
 		}
 		parsed_payload_len += WLAN_BEACONINTERVAL_LEN;
+		parsed_sta_info_len += WLAN_BEACONINTERVAL_LEN;
 	}
 
 	/* Check TSF Offset present bit */
@@ -555,6 +560,7 @@ util_parse_bvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
 		}
 
 		parsed_payload_len += WLAN_ML_TSF_OFFSET_SIZE;
+		parsed_sta_info_len += WLAN_ML_TSF_OFFSET_SIZE;
 	}
 
 	/* Check DTIM Info present bit */
@@ -572,6 +578,8 @@ util_parse_bvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
 		}
 
 		parsed_payload_len +=
+			sizeof(struct wlan_ml_bv_linfo_perstaprof_stainfo_dtiminfo);
+		parsed_sta_info_len +=
 			sizeof(struct wlan_ml_bv_linfo_perstaprof_stainfo_dtiminfo);
 	}
 
@@ -599,6 +607,7 @@ util_parse_bvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
 			}
 
 			parsed_payload_len += 1;
+			parsed_sta_info_len += 1;
 		} else if (nstrbmsz == WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_NSTRBMSZ_2_OCTETS) {
 			if (subelempayloadlen <
 					(parsed_payload_len + 2)) {
@@ -609,6 +618,7 @@ util_parse_bvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
 			}
 
 			parsed_payload_len += 2;
+			parsed_sta_info_len += 2;
 		} else {
 			/* Though an invalid value cannot occur if only 1 bit is
 			 * used, we check for it in a generic manner in case the
@@ -648,6 +658,7 @@ util_parse_bvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
 		}
 
 		parsed_payload_len += WLAN_ML_BSSPARAMCHNGCNT_SIZE;
+		parsed_sta_info_len += WLAN_ML_BSSPARAMCHNGCNT_SIZE;
 	}
 
 	/* Note: Some implementation versions of hostapd/wpa_supplicant may
@@ -657,6 +668,37 @@ util_parse_bvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
 	 */
 	if (!is_staprof_reqd)
 		return QDF_STATUS_SUCCESS;
+
+	/* If the value in the STA Info Length subfield is greater than
+	 * expected, then this indicates that the sender has included some
+	 * additional subfield(s) in STA Info that the parsing implementation
+	 * does not yet recognize. This could happen in case the sender
+	 * implements a higher standards draft or a new standard that the
+	 * parsing implementation does not yet implement. In this case, skip
+	 * over these unrecognized subfield(s) after verifying that there is
+	 * sufficient space in the subelement to accommodate the unrecognized
+	 * subfield(s). This is in line with the purpose of the STA Info Length
+	 * subfield.
+	 */
+	if (sta_info_len > parsed_sta_info_len) {
+		mlo_debug_rl("STA Info len %zu octets > expected val %zu octets.",
+			     sta_info_len, parsed_sta_info_len);
+
+		if (subelempayloadlen <
+				(parsed_payload_len +
+				 (sta_info_len - parsed_sta_info_len))) {
+			mlo_err_rl("Subelement payload len %zu octets insufficient for unrecognized subfield(s) len %zu octets after parsed payload len %zu octets.",
+				   subelempayloadlen,
+				   sta_info_len - parsed_sta_info_len,
+				   parsed_payload_len);
+			return QDF_STATUS_E_PROTO;
+		}
+
+		mlo_debug_rl("Skipping unrecognized STA Info subfield(s) len %zu octets.",
+			     sta_info_len - parsed_sta_info_len);
+
+		parsed_payload_len += (sta_info_len - parsed_sta_info_len);
+	}
 
 	if (subelempayloadlen == parsed_payload_len) {
 		mlo_err_rl("Subelement payload length %zu == parsed payload length %zu. Unable to get STA profile.",
