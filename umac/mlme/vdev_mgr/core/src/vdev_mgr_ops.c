@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -707,8 +707,12 @@ static QDF_STATUS vdev_mgr_up_param_update(
 	wlan_vdev_mgr_get_param_bssid(vdev, bssid);
 
 	if (wlan_vdev_mlme_get_opmode(vdev) != QDF_SAP_MODE) {
-		if (qdf_mem_cmp(bssid, mbss->non_trans_bssid,
-				QDF_MAC_ADDR_SIZE))
+		mlme_debug("trans BSSID " QDF_MAC_ADDR_FMT " non-trans BSSID " QDF_MAC_ADDR_FMT " profile_num %d, profile_idx %d",
+			   QDF_MAC_ADDR_REF(mbss->trans_bssid),
+			   QDF_MAC_ADDR_REF(mbss->non_trans_bssid),
+			  mbss->profile_idx, mbss->profile_num);
+		if ((qdf_mem_cmp(bssid, mbss->trans_bssid, QDF_MAC_ADDR_SIZE)) &&
+		    (qdf_mem_cmp(bssid, mbss->non_trans_bssid, QDF_MAC_ADDR_SIZE)))
 			return QDF_STATUS_SUCCESS;
 	}
 
