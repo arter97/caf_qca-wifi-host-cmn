@@ -3138,7 +3138,6 @@ void dp_mlo_dev_ctxt_unref_delete(struct dp_mlo_dev_ctxt *mlo_dev_ctxt,
 
 	QDF_ASSERT(mlo_dev_ctxt->ref_delete_pending);
 	qdf_spinlock_destroy(&mlo_dev_ctxt->vdev_list_lock);
-	qdf_spinlock_destroy(&mlo_dev_ctxt->sn_lock);
 	qdf_mem_free(mlo_dev_ctxt);
 }
 
@@ -3237,7 +3236,8 @@ QDF_STATUS dp_mlo_dev_ctxt_create(struct cdp_soc_t *soc_hdl,
 	qdf_mem_set(mlo_dev_ctxt->bridge_vdev,
 		    WLAN_MAX_MLO_CHIPS * WLAN_MAX_MLO_LINKS_PER_SOC,
 		    CDP_INVALID_VDEV_ID);
-	mlo_dev_ctxt->seq_num = 0;
+
+	qdf_atomic_init(&mlo_dev_ctxt->seq_num);
 
 	/* Add mlo_dev_ctxt to the global DP MLO list */
 	qdf_spin_lock_bh(&mlo_dev_obj->mlo_dev_list_lock);
@@ -3250,7 +3250,6 @@ QDF_STATUS dp_mlo_dev_ctxt_create(struct cdp_soc_t *soc_hdl,
 
 	mlo_dev_ctxt->ref_delete_pending = 0;
 	qdf_spinlock_create(&mlo_dev_ctxt->vdev_list_lock);
-	qdf_spinlock_create(&mlo_dev_ctxt->sn_lock);
 	return QDF_STATUS_SUCCESS;
 }
 

@@ -640,7 +640,7 @@ dp_tx_mlo_mcast_multipass_send(struct dp_vdev_be *be_vdev,
 	}
 	qdf_mem_zero(&msdu_info, sizeof(msdu_info));
 	dp_tx_get_queue(ptnr_vdev, nbuf_clone, &msdu_info.tx_queue);
-	msdu_info.gsn = be_vdev->mlo_dev_ctxt->seq_num;
+	msdu_info.gsn = qdf_atomic_read(&be_vdev->mlo_dev_ctxt->seq_num);
 	msdu_info.xmit_type = qdf_nbuf_get_vdev_xmit_type(ptr->nbuf);
 
 
@@ -751,10 +751,11 @@ dp_tx_mlo_mcast_multipass_handler(struct dp_soc *soc,
 		/* send frame on mcast primary vdev */
 		dp_tx_mlo_mcast_multipass_send(be_vdev, vdev, &mpass_buf_copy);
 
-		if (qdf_unlikely(be_vdev->mlo_dev_ctxt->seq_num > MAX_GSN_NUM))
-			be_vdev->mlo_dev_ctxt->seq_num = 0;
+		if (qdf_unlikely(qdf_atomic_read(&be_vdev->mlo_dev_ctxt->seq_num) >
+				 MAX_GSN_NUM))
+			qdf_atomic_set(&be_vdev->mlo_dev_ctxt->seq_num, 0);
 		else
-			be_vdev->mlo_dev_ctxt->seq_num++;
+			qdf_atomic_inc(&be_vdev->mlo_dev_ctxt->seq_num);
 	}
 
 	dp_mlo_iter_ptnr_vdev(be_soc, be_vdev,
@@ -763,10 +764,11 @@ dp_tx_mlo_mcast_multipass_handler(struct dp_soc *soc,
 			      DP_VDEV_ITERATE_SKIP_SELF);
 	dp_tx_mlo_mcast_multipass_send(be_vdev, vdev, &mpass_buf);
 
-	if (qdf_unlikely(be_vdev->mlo_dev_ctxt->seq_num > MAX_GSN_NUM))
-		be_vdev->mlo_dev_ctxt->seq_num = 0;
+	if (qdf_unlikely(qdf_atomic_read(&be_vdev->mlo_dev_ctxt->seq_num) >
+			 MAX_GSN_NUM))
+		qdf_atomic_set(&be_vdev->mlo_dev_ctxt->seq_num, 0);
 	else
-		be_vdev->mlo_dev_ctxt->seq_num++;
+		qdf_atomic_inc(&be_vdev->mlo_dev_ctxt->seq_num);
 
 	return true;
 }
@@ -819,7 +821,7 @@ dp_tx_mlo_mcast_pkt_send(struct dp_vdev_be *be_vdev,
 	qdf_mem_zero(&msdu_info, sizeof(msdu_info));
 	dp_tx_get_queue(ptnr_vdev, nbuf_clone, &msdu_info.tx_queue);
 
-	msdu_info.gsn = be_vdev->mlo_dev_ctxt->seq_num;
+	msdu_info.gsn = qdf_atomic_read(&be_vdev->mlo_dev_ctxt->seq_num);
 	msdu_info.xmit_type = qdf_nbuf_get_vdev_xmit_type(nbuf_clone);
 
 	DP_STATS_INC(ptnr_vdev,
@@ -867,10 +869,11 @@ void dp_tx_mlo_mcast_handler_be(struct dp_soc *soc,
 	/* send frame on mcast primary vdev */
 	dp_tx_mlo_mcast_pkt_send(be_vdev, vdev, nbuf);
 
-	if (qdf_unlikely(be_vdev->mlo_dev_ctxt->seq_num > MAX_GSN_NUM))
-		be_vdev->mlo_dev_ctxt->seq_num = 0;
+	if (qdf_unlikely(qdf_atomic_read(&be_vdev->mlo_dev_ctxt->seq_num) >
+			 MAX_GSN_NUM))
+		qdf_atomic_set(&be_vdev->mlo_dev_ctxt->seq_num, 0);
 	else
-		be_vdev->mlo_dev_ctxt->seq_num++;
+		qdf_atomic_inc(&be_vdev->mlo_dev_ctxt->seq_num);
 }
 
 bool dp_tx_mlo_is_mcast_primary_be(struct dp_soc *soc,
