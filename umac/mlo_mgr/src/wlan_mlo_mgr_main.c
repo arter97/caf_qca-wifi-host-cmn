@@ -1214,8 +1214,7 @@ static QDF_STATUS mlo_dev_ctx_init(struct wlan_objmgr_vdev *vdev)
 	ml_dev->mlo_max_recom_simult_links =
 		WLAN_UMAC_MLO_RECOM_MAX_SIMULT_LINKS_DEFAULT;
 
-	ml_dev->mlo_extmld_cap_advertisement =
-		WLAN_UMAC_MLO_EXTMLDCAP_ENABLE_ADVERTISEMENT;
+	ml_dev->mlo_extmld_cap_advertisement = false;
 
 	mlo_dev_mlpeer_list_init(ml_dev);
 
