@@ -1959,6 +1959,11 @@ QDF_STATUS (*extract_dcs_awgn_info)(
 		wmi_unified_t wmi_handle,
 		void *evt_buf,
 		struct wmi_host_dcs_awgn_info *awgn_info);
+
+QDF_STATUS (*extract_dcs_obss_intf_info)(
+		wmi_unified_t wmi_handle,
+		void *evt_buf,
+		wmi_host_dcs_obss_intf_info *obss_intf_info);
 #endif
 
 QDF_STATUS (*extract_fips_event_data)(wmi_unified_t wmi_handle,

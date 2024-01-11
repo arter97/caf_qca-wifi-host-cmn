@@ -23691,6 +23691,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 			WMI_SERVICE_P2P_DEVICE_UPDATE_MAC_ADDR_SUPPORT;
 	wmi_service[wmi_service_wifi_radar_support] =
 				WMI_SERVICE_WIFI_RADAR_SUPPORT;
+	wmi_service[wmi_service_dcs_obss_int_support] =
+			WMI_SERVICE_DCS_OBSS_INT_SUPPORT;
 }
 
 /**
