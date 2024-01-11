@@ -93,10 +93,18 @@ struct dp_ipa_uc_rx_hdr {
 #define DP_IPA_UC_WLAN_TX_HDR_LEN      sizeof(struct dp_ipa_uc_tx_hdr)
 #define DP_IPA_UC_WLAN_TX_VLAN_HDR_LEN sizeof(struct dp_ipa_uc_tx_vlan_hdr)
 #define DP_IPA_UC_WLAN_RX_HDR_LEN      sizeof(struct dp_ipa_uc_rx_hdr)
+#if defined(QCA_WIFI_QCA6490)
+/* 36 <bytes of rx_msdu_end_tlv> + 16 <bytes of attn tlv> +
+ * 52 <bytes of rx_mpdu_start_tlv> + <L2 Header>
+ */
+#define DP_IPA_UC_WLAN_RX_HDR_LEN_AST  118
+#else
 /* 28 <bytes of rx_msdu_end_tlv> + 16 <bytes of attn tlv> +
  * 52 <bytes of rx_mpdu_start_tlv> + <L2 Header>
  */
 #define DP_IPA_UC_WLAN_RX_HDR_LEN_AST  110
+#endif
+
 #define DP_IPA_UC_WLAN_RX_HDR_LEN_AST_VLAN 114
 #define DP_IPA_UC_WLAN_HDR_DES_MAC_OFFSET	0
 

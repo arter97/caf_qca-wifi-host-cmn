@@ -721,6 +721,28 @@ static inline bool wlan_ipa_opt_wifi_dp_enabled(void)
 #endif
 
 #ifdef IPA_WDS_EASYMESH_FEATURE
+
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)) && \
+	(LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)))
+#if defined(QCA_WIFI_QCA6490)
+static void wlan_ipa_set_rx_tlv_format(struct wlan_ipa_priv *ipa_ctx,
+				       qdf_ipa_wdi_init_in_params_t *in)
+{
+	QDF_IPA_WDI_INIT_IN_PARAMS_RX_TLV_FORMAT(in) = 1;
+}
+#else
+static void wlan_ipa_set_rx_tlv_format(struct wlan_ipa_priv *ipa_ctx,
+				       qdf_ipa_wdi_init_in_params_t *in)
+{
+}
+#endif /* QCA_WIFI_QCA6490 */
+#else
+static void wlan_ipa_set_rx_tlv_format(struct wlan_ipa_priv *ipa_ctx,
+				       qdf_ipa_wdi_init_in_params_t *in)
+{
+}
+#endif
+
 /**
  * wlan_ipa_update_wds_params() - IPA update WDS parameters
  * @ipa_ctx: IPA context
@@ -734,6 +756,7 @@ static void wlan_ipa_update_wds_params(struct wlan_ipa_priv *ipa_ctx,
 				       qdf_ipa_wdi_init_in_params_t *in)
 {
 	QDF_IPA_WDI_INIT_IN_PARAMS_WDS_UPDATE(in) = ipa_ctx->config->ipa_wds;
+	wlan_ipa_set_rx_tlv_format(ipa_ctx, in);
 }
 
 /**
