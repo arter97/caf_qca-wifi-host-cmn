@@ -41,9 +41,7 @@
 #ifdef FEATURE_WDS
 #include "dp_txrx_wds.h"
 #endif
-#ifdef QCA_IPA_LL_TX_FLOW_CONTROL
 #include <pld_common.h>
-#endif
 
 /* Hard coded config parameters until dp_ops_cfg.cfg_attach implemented */
 #define CFG_IPA_UC_TX_BUF_SIZE_DEFAULT            (2048)
@@ -591,6 +589,88 @@ dp_ipa_set_rx_smmu_chip_id(struct dp_soc *soc,
 }
 #endif
 
+/**
+ * dp_ipa_set_smmu_txr_rn_db_addr() - Indicate IPA to set or clear the
+ * 40th bit of transfer ring DB addr
+ * @dev: Pointer to device
+ * @txrx_smmu: WDI TX/RX configuration
+ *
+ * Return: None
+ */
+static void
+dp_ipa_set_smmu_txr_rn_db_addr(struct device *dev,
+			       qdf_ipa_wdi_pipe_setup_info_smmu_t *txrx_smmu)
+{
+	int pcie_slot = pld_get_pci_slot(dev);
+
+	if (pcie_slot)
+		QDF_IPA_WDI_SETUP_INFO_SMMU_IS_TXR_RN_DB_PCIE_ADDR(txrx_smmu) =
+			false;
+	else
+		QDF_IPA_WDI_SETUP_INFO_SMMU_IS_TXR_RN_DB_PCIE_ADDR(txrx_smmu) =
+			true;
+}
+
+/**
+ * dp_ipa_set_smmu_evt_rn_db_addr() - Indicate IPA to set or clear the
+ * 40th bit of evt ring DB addr
+ * @dev: Pointer to device
+ * @txrx_smmu: WDI TX/RX configuration
+ *
+ * Return: None
+ */
+static void
+dp_ipa_set_smmu_evt_rn_db_addr(struct device *dev,
+			       qdf_ipa_wdi_pipe_setup_info_smmu_t *txrx_smmu)
+{
+	int pcie_slot = pld_get_pci_slot(dev);
+
+	if (pcie_slot)
+		QDF_IPA_WDI_SETUP_INFO_SMMU_IS_EVT_RN_DB_PCIE_ADDR(txrx_smmu) =
+			false;
+	else
+		QDF_IPA_WDI_SETUP_INFO_SMMU_IS_EVT_RN_DB_PCIE_ADDR(txrx_smmu) =
+			true;
+}
+
+/**
+ * dp_ipa_set_txr_rn_db_addr() - Indicate IPA to set or clear the 40th
+ * bit of transfer ring DB addr for non-smmu case
+ * @dev: Pointer to device
+ * @txrx: WDI TX/RX configuration
+ *
+ * Return: None
+ */
+static void dp_ipa_set_txr_rn_db_addr(struct device *dev,
+				      qdf_ipa_wdi_pipe_setup_info_t *txrx)
+{
+	int pcie_slot = pld_get_pci_slot(dev);
+
+	if (pcie_slot)
+		QDF_IPA_WDI_SETUP_INFO_IS_TXR_RN_DB_PCIE_ADDR(txrx) = false;
+	else
+		QDF_IPA_WDI_SETUP_INFO_IS_TXR_RN_DB_PCIE_ADDR(txrx) = true;
+}
+
+/**
+ * dp_ipa_set_evt_rn_db_addr() - Indicate IPA to set or clear the 40th
+ * bit of evt ring DB addr for non-smmu case
+ * @dev: Pointer to device
+ * @txrx: WDI TX/RX configuration
+ *
+ * Return: None
+ */
+static void dp_ipa_set_evt_rn_db_addr(struct device *dev,
+				      qdf_ipa_wdi_pipe_setup_info_t *txrx)
+{
+	int pcie_slot = pld_get_pci_slot(dev);
+
+	if (pcie_slot)
+		QDF_IPA_WDI_SETUP_INFO_IS_EVT_RN_DB_PCIE_ADDR(txrx) = false;
+	else
+		QDF_IPA_WDI_SETUP_INFO_IS_EVT_RN_DB_PCIE_ADDR(txrx) = true;
+}
+
 #ifdef IPA_WDI3_TX_TWO_PIPES
 static void dp_ipa_tx_alt_pool_detach(struct dp_soc *soc, struct dp_pdev *pdev)
 {
@@ -977,7 +1057,7 @@ static void dp_ipa_wdi_tx_alt_pipe_params(struct dp_soc *soc,
 	/* WBM Tail Pointer Address */
 	QDF_IPA_WDI_SETUP_INFO_TRANSFER_RING_DOORBELL_PA(tx) =
 		soc->ipa_uc_tx_rsc_alt.ipa_wbm_tp_paddr;
-	QDF_IPA_WDI_SETUP_INFO_IS_TXR_RN_DB_PCIE_ADDR(tx) = true;
+	dp_ipa_set_txr_rn_db_addr(soc->osdev->dev, tx);
 
 	QDF_IPA_WDI_SETUP_INFO_EVENT_RING_BASE_PA(tx) =
 		qdf_mem_get_dma_addr(soc->osdev,
@@ -989,7 +1069,7 @@ static void dp_ipa_wdi_tx_alt_pipe_params(struct dp_soc *soc,
 	/* TCL Head Pointer Address */
 	QDF_IPA_WDI_SETUP_INFO_EVENT_RING_DOORBELL_PA(tx) =
 		soc->ipa_uc_tx_rsc_alt.ipa_tcl_hp_paddr;
-	QDF_IPA_WDI_SETUP_INFO_IS_EVT_RN_DB_PCIE_ADDR(tx) = true;
+	dp_ipa_set_evt_rn_db_addr(soc->osdev->dev, tx);
 
 	QDF_IPA_WDI_SETUP_INFO_NUM_PKT_BUFFERS(tx) =
 		ipa_res->tx_alt_ring_num_alloc_buffer;
@@ -1018,7 +1098,7 @@ dp_ipa_wdi_tx_alt_pipe_smmu_params(struct dp_soc *soc,
 	/* WBM Tail Pointer Address */
 	QDF_IPA_WDI_SETUP_INFO_SMMU_TRANSFER_RING_DOORBELL_PA(tx_smmu) =
 		soc->ipa_uc_tx_rsc_alt.ipa_wbm_tp_paddr;
-	QDF_IPA_WDI_SETUP_INFO_SMMU_IS_TXR_RN_DB_PCIE_ADDR(tx_smmu) = true;
+	dp_ipa_set_smmu_txr_rn_db_addr(soc->osdev->dev, tx_smmu);
 
 	qdf_mem_copy(&QDF_IPA_WDI_SETUP_INFO_SMMU_EVENT_RING_BASE(tx_smmu),
 		     &ipa_res->tx_alt_ring.sgtable,
@@ -1029,7 +1109,7 @@ dp_ipa_wdi_tx_alt_pipe_smmu_params(struct dp_soc *soc,
 	/* TCL Head Pointer Address */
 	QDF_IPA_WDI_SETUP_INFO_SMMU_EVENT_RING_DOORBELL_PA(tx_smmu) =
 		soc->ipa_uc_tx_rsc_alt.ipa_tcl_hp_paddr;
-	QDF_IPA_WDI_SETUP_INFO_SMMU_IS_EVT_RN_DB_PCIE_ADDR(tx_smmu) = true;
+	dp_ipa_set_smmu_evt_rn_db_addr(soc->osdev->dev, tx_smmu);
 
 	QDF_IPA_WDI_SETUP_INFO_SMMU_NUM_PKT_BUFFERS(tx_smmu) =
 		ipa_res->tx_alt_ring_num_alloc_buffer;
@@ -2277,63 +2357,11 @@ bool dp_ipa_is_target_ready(struct dp_soc *soc)
 	else
 		return true;
 }
-
-/**
- * dp_ipa_update_txr_db_status() - Indicate transfer ring DB is SMMU mapped or not
- * @dev: Pointer to device
- * @txrx_smmu: WDI TX/RX configuration
- *
- * Return: None
- */
-static inline
-void dp_ipa_update_txr_db_status(struct device *dev,
-				 qdf_ipa_wdi_pipe_setup_info_smmu_t *txrx_smmu)
-{
-	int pcie_slot = pld_get_pci_slot(dev);
-
-	if (pcie_slot)
-		QDF_IPA_WDI_SETUP_INFO_SMMU_IS_TXR_RN_DB_PCIE_ADDR(txrx_smmu) = false;
-	else
-		QDF_IPA_WDI_SETUP_INFO_SMMU_IS_TXR_RN_DB_PCIE_ADDR(txrx_smmu) = true;
-}
-
-/**
- * dp_ipa_update_evt_db_status() - Indicate evt ring DB is SMMU mapped or not
- * @dev: Pointer to device
- * @txrx_smmu: WDI TX/RX configuration
- *
- * Return: None
- */
-static inline
-void dp_ipa_update_evt_db_status(struct device *dev,
-				 qdf_ipa_wdi_pipe_setup_info_smmu_t *txrx_smmu)
-{
-	int pcie_slot = pld_get_pci_slot(dev);
-
-	if (pcie_slot)
-		QDF_IPA_WDI_SETUP_INFO_SMMU_IS_EVT_RN_DB_PCIE_ADDR(txrx_smmu) = false;
-	else
-		QDF_IPA_WDI_SETUP_INFO_SMMU_IS_EVT_RN_DB_PCIE_ADDR(txrx_smmu) = true;
-}
 #else
 static inline
 bool dp_ipa_is_target_ready(struct dp_soc *soc)
 {
 	return true;
-}
-
-static inline
-void dp_ipa_update_txr_db_status(struct device *dev,
-				 qdf_ipa_wdi_pipe_setup_info_smmu_t *txrx_smmu)
-{
-	QDF_IPA_WDI_SETUP_INFO_SMMU_IS_TXR_RN_DB_PCIE_ADDR(txrx_smmu) = true;
-}
-
-static inline
-void dp_ipa_update_evt_db_status(struct device *dev,
-				 qdf_ipa_wdi_pipe_setup_info_smmu_t *txrx_smmu)
-{
-	QDF_IPA_WDI_SETUP_INFO_SMMU_IS_EVT_RN_DB_PCIE_ADDR(txrx_smmu) = true;
 }
 #endif
 
@@ -2502,7 +2530,7 @@ static void dp_ipa_wdi_tx_params(struct dp_soc *soc,
 	/* WBM Tail Pointer Address */
 	QDF_IPA_WDI_SETUP_INFO_TRANSFER_RING_DOORBELL_PA(tx) =
 		soc->ipa_uc_tx_rsc.ipa_wbm_tp_paddr;
-	QDF_IPA_WDI_SETUP_INFO_IS_TXR_RN_DB_PCIE_ADDR(tx) = true;
+	dp_ipa_set_txr_rn_db_addr(soc->osdev->dev, tx);
 
 	QDF_IPA_WDI_SETUP_INFO_EVENT_RING_BASE_PA(tx) =
 		qdf_mem_get_dma_addr(soc->osdev,
@@ -2514,7 +2542,7 @@ static void dp_ipa_wdi_tx_params(struct dp_soc *soc,
 	/* TCL Head Pointer Address */
 	QDF_IPA_WDI_SETUP_INFO_EVENT_RING_DOORBELL_PA(tx) =
 		soc->ipa_uc_tx_rsc.ipa_tcl_hp_paddr;
-	QDF_IPA_WDI_SETUP_INFO_IS_EVT_RN_DB_PCIE_ADDR(tx) = true;
+	dp_ipa_set_evt_rn_db_addr(soc->osdev->dev, tx);
 
 	QDF_IPA_WDI_SETUP_INFO_NUM_PKT_BUFFERS(tx) =
 		ipa_res->tx_num_alloc_buffer;
@@ -2547,7 +2575,7 @@ static void dp_ipa_wdi_rx_params(struct dp_soc *soc,
 	/* REO Tail Pointer Address */
 	QDF_IPA_WDI_SETUP_INFO_TRANSFER_RING_DOORBELL_PA(rx) =
 		soc->ipa_uc_rx_rsc.ipa_reo_tp_paddr;
-	QDF_IPA_WDI_SETUP_INFO_IS_TXR_RN_DB_PCIE_ADDR(rx) = true;
+	dp_ipa_set_txr_rn_db_addr(soc->osdev->dev, rx);
 
 	QDF_IPA_WDI_SETUP_INFO_EVENT_RING_BASE_PA(rx) =
 		qdf_mem_get_dma_addr(soc->osdev,
@@ -2599,7 +2627,7 @@ dp_ipa_wdi_tx_smmu_params(struct dp_soc *soc,
 	/* WBM Tail Pointer Address */
 	QDF_IPA_WDI_SETUP_INFO_SMMU_TRANSFER_RING_DOORBELL_PA(tx_smmu) =
 		soc->ipa_uc_tx_rsc.ipa_wbm_tp_paddr;
-	dp_ipa_update_txr_db_status(soc->osdev->dev, tx_smmu);
+	dp_ipa_set_smmu_txr_rn_db_addr(soc->osdev->dev, tx_smmu);
 
 	qdf_mem_copy(&QDF_IPA_WDI_SETUP_INFO_SMMU_EVENT_RING_BASE(tx_smmu),
 		     &ipa_res->tx_ring.sgtable,
@@ -2610,7 +2638,7 @@ dp_ipa_wdi_tx_smmu_params(struct dp_soc *soc,
 	/* TCL Head Pointer Address */
 	QDF_IPA_WDI_SETUP_INFO_SMMU_EVENT_RING_DOORBELL_PA(tx_smmu) =
 		soc->ipa_uc_tx_rsc.ipa_tcl_hp_paddr;
-	dp_ipa_update_evt_db_status(soc->osdev->dev, tx_smmu);
+	dp_ipa_set_smmu_evt_rn_db_addr(soc->osdev->dev, tx_smmu);
 
 	QDF_IPA_WDI_SETUP_INFO_SMMU_NUM_PKT_BUFFERS(tx_smmu) =
 		ipa_res->tx_num_alloc_buffer;
@@ -2653,7 +2681,7 @@ dp_ipa_wdi_rx_smmu_params(struct dp_soc *soc,
 	/* REO Tail Pointer Address */
 	QDF_IPA_WDI_SETUP_INFO_SMMU_TRANSFER_RING_DOORBELL_PA(rx_smmu) =
 		soc->ipa_uc_rx_rsc.ipa_reo_tp_paddr;
-	dp_ipa_update_txr_db_status(soc->osdev->dev, rx_smmu);
+	dp_ipa_set_smmu_txr_rn_db_addr(soc->osdev->dev, rx_smmu);
 
 	qdf_mem_copy(&QDF_IPA_WDI_SETUP_INFO_SMMU_EVENT_RING_BASE(rx_smmu),
 		     &ipa_res->rx_refill_ring.sgtable,
@@ -2719,7 +2747,7 @@ dp_ipa_wdi_rx_alt_pipe_smmu_params(struct dp_soc *soc,
 	/* REO Tail Pointer Address */
 	QDF_IPA_WDI_SETUP_INFO_SMMU_TRANSFER_RING_DOORBELL_PA(rx_smmu) =
 		soc->ipa_uc_rx_rsc_alt.ipa_reo_tp_paddr;
-	QDF_IPA_WDI_SETUP_INFO_SMMU_IS_TXR_RN_DB_PCIE_ADDR(rx_smmu) = true;
+	dp_ipa_set_smmu_txr_rn_db_addr(soc->osdev->dev, rx_smmu);
 
 	qdf_mem_copy(&QDF_IPA_WDI_SETUP_INFO_SMMU_EVENT_RING_BASE(rx_smmu),
 		     &ipa_res->rx_alt_refill_ring.sgtable,
@@ -2784,7 +2812,7 @@ static void dp_ipa_wdi_rx_alt_pipe_params(struct dp_soc *soc,
 	/* REO Tail Pointer Address */
 	QDF_IPA_WDI_SETUP_INFO_TRANSFER_RING_DOORBELL_PA(rx) =
 		soc->ipa_uc_rx_rsc_alt.ipa_reo_tp_paddr;
-	QDF_IPA_WDI_SETUP_INFO_IS_TXR_RN_DB_PCIE_ADDR(rx) = true;
+	dp_ipa_set_txr_rn_db_addr(soc->osdev->dev, rx);
 
 	QDF_IPA_WDI_SETUP_INFO_EVENT_RING_BASE_PA(rx) =
 		qdf_mem_get_dma_addr(soc->osdev,
