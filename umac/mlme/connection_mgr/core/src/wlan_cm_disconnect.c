@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015,2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -231,12 +231,6 @@ static QDF_STATUS cm_ser_disconnect_req(struct wlan_objmgr_pdev *pdev,
 	cmd.cmd_cb = cm_ser_disconnect_cb;
 	cmd.source = WLAN_UMAC_COMP_MLME;
 	cmd.is_high_priority = false;
-	/* Set high priority if queueing disconnect as part of
-	 * ho failure
-	 */
-	if (req->req.reason_code == REASON_FW_TRIGGERED_ROAM_FAILURE &&
-	    req->req.source == CM_MLME_DISCONNECT)
-		cmd.is_high_priority = true;
 	cmd.cmd_timeout_duration = DISCONNECT_TIMEOUT;
 	cmd.vdev = cm_ctx->vdev;
 	cmd.is_blocking = cm_ser_get_blocking_cmd();
@@ -729,14 +723,8 @@ cm_handle_discon_req_in_non_connected_state(struct cnx_mgr *cm_ctx,
 						 true);
 		break;
 	case WLAN_CM_S_ROAMING:
-		/* for FW roam/LFR3 remove the req from the list but
-		 * for ho failure don't flush pending requests as disconnect
-		 * should be queued in serialization queue before
-		 * dequeueing roam.
-		 */
-		if (cm_roam_offload_enabled(wlan_vdev_get_psoc(cm_ctx->vdev)) &&
-		    !(cm_req->req.source == CM_MLME_DISCONNECT &&
-		      cm_req->req.reason_code == REASON_FW_TRIGGERED_ROAM_FAILURE))
+		/* for FW roam/LFR3 remove the req from the list */
+		if (cm_roam_offload_enabled(wlan_vdev_get_psoc(cm_ctx->vdev)))
 			cm_flush_pending_request(cm_ctx, ROAM_REQ_PREFIX,
 						 false);
 		fallthrough;
