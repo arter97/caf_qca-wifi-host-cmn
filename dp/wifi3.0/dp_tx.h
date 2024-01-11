@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -39,6 +39,9 @@
 #include "dp_ipa.h"
 #ifdef IPA_OFFLOAD
 #include <wlan_ipa_obj_mgmt_api.h>
+#endif
+#ifdef WLAN_SUPPORT_FLOW_PRIORTIZATION
+#include "wlan_dp_api.h"
 #endif
 
 #define DP_INVALID_VDEV_ID 0xFF
@@ -682,6 +685,18 @@ static inline void dp_tx_hal_ring_access_end_reap(struct dp_soc *soc,
 	((_msdu_info)->tid = qdf_nbuf_get_priority(_nbuf))
 #else
 #define DP_TX_TID_OVERRIDE(_msdu_info, _nbuf)
+#endif
+
+#ifdef WLAN_SUPPORT_FLOW_PRIORTIZATION
+#define DP_FLOW_TX_TID_OVERRIDE(_msdu_info, _nbuf) \
+	do { \
+		uint8_t tid = 0; \
+		if (qdf_unlikely(wlan_dp_fpm_is_tid_override(_nbuf, &tid))) { \
+			(_msdu_info)->tid = tid; \
+		} \
+	} while (0)
+#else
+#define DP_FLOW_TX_TID_OVERRIDE(_msdu_info, _nbuf)
 #endif
 
 /* TODO TX_FEATURE_NOT_YET */

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1842,6 +1842,7 @@ static inline void dp_tx_classify_tid(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 				      struct dp_tx_msdu_info_s *msdu_info)
 {
 	DP_TX_TID_OVERRIDE(msdu_info, nbuf);
+	DP_FLOW_TX_TID_OVERRIDE(msdu_info, nbuf);
 
 	/*
 	 * skip_sw_tid_classification flag will set in below cases-
