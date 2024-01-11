@@ -117,6 +117,17 @@ typedef struct qdf_sglist {
  */
 #define qdf_toupper __qdf_toupper
 
+/**
+ * enum qdf_buff_type_tx_rx: check buffer type
+ *
+ * @QDF_BUFF_TYPE_TX: TX buff type
+ * @QDF_BUFF_TYPE_RX: RX buff type
+ */
+enum qdf_buff_type_tx_rx {
+	QDF_BUFF_TYPE_TX,
+	QDF_BUFF_TYPE_RX,
+};
+
 typedef void *qdf_net_handle_t;
 
 typedef void *qdf_netlink_handle_t;

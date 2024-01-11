@@ -728,7 +728,7 @@ static void dp_ipa_tx_alt_pool_detach(struct dp_soc *soc, struct dp_pdev *pdev)
 	qdf_mem_free_sgtable(&ipa_res->tx_alt_comp_ring.sgtable);
 }
 
-static int dp_ipa_tx_alt_pool_attach(struct dp_soc *soc)
+static int dp_ipa_tx_alt_pool_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 {
 	uint32_t tx_buffer_count;
 	uint32_t ring_base_align = 8;
@@ -763,8 +763,8 @@ static int dp_ipa_tx_alt_pool_attach(struct dp_soc *soc)
 	hal_get_srng_params(soc->hal_soc,
 			    hal_srng_to_hal_ring_handle(wbm_srng),
 			    &srng_params);
-	num_entries = srng_params.num_entries;
-
+	num_entries = dp_get_num_entries(pdev, srng_params.num_entries,
+					 QDF_BUFF_TYPE_TX);
 	max_alloc_count =
 		num_entries - DP_IPA_WAR_WBM2SW_REL_RING_NO_BUF_ENTRIES;
 	if (max_alloc_count <= 0) {
@@ -1328,7 +1328,8 @@ static inline void dp_ipa_tx_alt_ring_resource_setup(struct dp_soc *soc)
 {
 }
 
-static inline int dp_ipa_tx_alt_pool_attach(struct dp_soc *soc)
+static inline int dp_ipa_tx_alt_pool_attach(struct dp_soc *soc,
+					    struct dp_pdev *pdev)
 {
 	return 0;
 }
@@ -1672,8 +1673,8 @@ static int dp_tx_ipa_uc_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 
 	hal_get_srng_params(soc->hal_soc, hal_srng_to_hal_ring_handle(wbm_srng),
 			    &srng_params);
-	num_entries = srng_params.num_entries;
-
+	num_entries = dp_get_num_entries(pdev, srng_params.num_entries,
+					 QDF_BUFF_TYPE_TX);
 	max_alloc_count =
 		num_entries - DP_IPA_WAR_WBM2SW_REL_RING_NO_BUF_ENTRIES;
 	if (max_alloc_count <= 0) {
@@ -1795,7 +1796,7 @@ int dp_ipa_uc_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 	}
 
 	/* Setup 2nd TX pipe */
-	error = dp_ipa_tx_alt_pool_attach(soc);
+	error = dp_ipa_tx_alt_pool_attach(soc, pdev);
 	if (error) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
 			  "%s: DP IPA TX pool2 attach fail code %d",
