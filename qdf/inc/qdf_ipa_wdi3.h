@@ -75,6 +75,11 @@ typedef __qdf_ipa_wdi_init_in_params_t qdf_ipa_wdi_init_in_params_t;
 #ifdef IPA_WDS_EASYMESH_FEATURE
 #define QDF_IPA_WDI_INIT_IN_PARAMS_WDS_UPDATE(in_params)	\
 	__QDF_IPA_WDI_INIT_IN_PARAMS_WDS_UPDATE(in_params)
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)) && \
+	(LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)))
+#define QDF_IPA_WDI_INIT_IN_PARAMS_RX_TLV_FORMAT(in_params)	\
+	__QDF_IPA_WDI_INIT_IN_PARAMS_RX_TLV_FORMAT(in_params)
+#endif
 #endif
 
 /**
