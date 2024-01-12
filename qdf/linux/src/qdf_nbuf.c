@@ -3717,6 +3717,12 @@ free_buf:
 }
 qdf_export_symbol(qdf_nbuf_free_debug);
 
+#ifdef QCA_DP_NBUF_FAST_RECYCLE_CHECK
+#define __qdf_nbuf_netdev_alloc(d, s, f) __netdev_alloc_skb_fast(d, s, f)
+#else
+#define __qdf_nbuf_netdev_alloc(d, s, f) __netdev_alloc_skb(d, s, f)
+#endif
+
 struct sk_buff *__qdf_nbuf_alloc_simple(qdf_device_t osdev, size_t size,
 					const char *func, uint32_t line)
 {
@@ -3736,8 +3742,7 @@ struct sk_buff *__qdf_nbuf_alloc_simple(qdf_device_t osdev, size_t size,
 #endif
 	}
 
-	skb = __netdev_alloc_skb(NULL, size, flags);
-
+	skb = __qdf_nbuf_netdev_alloc(NULL, size, flags);
 
 	if (qdf_likely(is_initial_mem_debug_disabled)) {
 		if (qdf_likely(skb))
