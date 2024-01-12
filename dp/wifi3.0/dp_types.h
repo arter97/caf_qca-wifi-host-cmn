@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1042,6 +1042,22 @@ struct reo_cmd_event_history {
 };
 #endif /* WLAN_FEATURE_DP_EVENT_HISTORY */
 
+/**
+ * struct htt_t2h_msg_stats: HTT T2H message stats
+ * @peer_map: Peer map event count
+ * @peer_unmap: Peer unmap event count (peer_unmap -= ml_peer_unmap)
+ * @invalid_peer_unmap: Peer unmap with invalid peer id
+ * @ml_peer_map: MLD peer map count
+ * @ml_peer_unmap: MLD peer unmap count
+ */
+struct htt_t2h_msg_stats {
+	uint32_t peer_map;
+	uint32_t peer_unmap;
+	uint32_t invalid_peer_unmap;
+	uint32_t ml_peer_map;
+	uint32_t ml_peer_unmap;
+};
+
 /* SoC level data path statistics */
 struct dp_soc_stats {
 	struct {
@@ -1249,6 +1265,7 @@ struct dp_soc_stats {
 #ifdef WLAN_FEATURE_DP_EVENT_HISTORY
 	struct reo_cmd_event_history cmd_event_history;
 #endif /* WLAN_FEATURE_DP_EVENT_HISTORY */
+	struct htt_t2h_msg_stats t2h_msg_stats;
 };
 
 union dp_align_mac_addr {
