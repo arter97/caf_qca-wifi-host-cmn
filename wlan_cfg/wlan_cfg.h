@@ -361,7 +361,8 @@ struct wlan_srng_cfg {
  * @rx_mon_wq_threshold: rx monitor work queue threshold.
  * @rx_mon_wq_depth: rx monitor work queue depth.
  * @is_lapb_enabled: LAPB feature enable flag.
- *
+ * @is_audio_shared_iommu_group: flag to indicate if iommu group is shared with
+ *  audio
  */
 struct wlan_cfg_dp_soc_ctxt {
 	int num_int_ctxts;
@@ -584,6 +585,9 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint8_t rx_mon_wq_depth;
 #ifdef WLAN_SUPPORT_LAPB
 	bool is_lapb_enabled;
+#endif
+#ifdef FEATURE_DIRECT_LINK
+	bool is_audio_shared_iommu_group;
 #endif
 };
 

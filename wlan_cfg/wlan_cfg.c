@@ -4088,6 +4088,24 @@ bool wlan_cfg_is_lapb_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
 }
 #endif
 
+#ifdef FEATURE_DIRECT_LINK
+static inline void
+wlan_soc_direct_link_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
+				struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
+{
+	qdf_device_t qdf_dev = wlan_psoc_get_qdf_dev((void *)psoc);
+
+	wlan_cfg_ctx->is_audio_shared_iommu_group =
+			pld_is_audio_shared_iommu_group(qdf_dev->dev);
+}
+#else
+static inline void
+wlan_soc_direct_link_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
+				struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
+{
+}
+#endif
+
 #ifdef WLAN_SOFTUMAC_SUPPORT
 struct wlan_cfg_dp_soc_ctxt *
 wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
@@ -4282,6 +4300,8 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 		cfg_get(psoc, CFG_DP_STATS_AVG_RATE_FILTER);
 	wlan_soc_ast_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_sawf_mcast_attach(psoc, wlan_cfg_ctx);
+	wlan_soc_direct_link_cfg_attach(psoc, wlan_cfg_ctx);
+
 	return wlan_cfg_ctx;
 }
 
@@ -4545,6 +4565,8 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 		cfg_get(psoc, CFG_DP_STATS_AVG_RATE_FILTER);
 	wlan_soc_ast_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_sawf_mcast_attach(psoc, wlan_cfg_ctx);
+	wlan_soc_direct_link_cfg_attach(psoc, wlan_cfg_ctx);
+
 	return wlan_cfg_ctx;
 }
 #endif

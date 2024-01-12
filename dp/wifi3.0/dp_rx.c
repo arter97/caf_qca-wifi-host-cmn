@@ -3601,6 +3601,9 @@ QDF_STATUS dp_rx_handle_buf_pool_audio_smmu_mapping(struct dp_soc *soc,
 	else
 		qdf_atomic_set(&soc->direct_link_active, 0);
 
+	if (soc->wlan_cfg_ctx->is_audio_shared_iommu_group)
+		return QDF_STATUS_SUCCESS;
+
 	rx_pool = &soc->rx_desc_buf[pdev_id];
 
 	dp_rx_set_reo_ctx_mapping_lock_required(soc, true);

@@ -2552,7 +2552,8 @@ static inline
 QDF_STATUS dp_audio_smmu_map(struct dp_soc *soc, qdf_nbuf_t nbuf,
 			     qdf_size_t size)
 {
-	if (!qdf_atomic_read(&soc->direct_link_active))
+	if (!qdf_atomic_read(&soc->direct_link_active) ||
+	    soc->wlan_cfg_ctx->is_audio_shared_iommu_group)
 		return QDF_STATUS_SUCCESS;
 
 	if (qdf_unlikely(qdf_nbuf_get_rx_audio_smmu_map(nbuf))) {
@@ -2583,6 +2584,9 @@ QDF_STATUS dp_audio_smmu_unmap(struct dp_soc *soc, qdf_nbuf_t nbuf,
 			       qdf_size_t size)
 {
 	bool mapped = qdf_nbuf_get_rx_audio_smmu_map(nbuf);
+
+	if (soc->wlan_cfg_ctx->is_audio_shared_iommu_group)
+		return QDF_STATUS_SUCCESS;
 
 	if (!qdf_atomic_read(&soc->direct_link_active)) {
 		if (mapped) {
