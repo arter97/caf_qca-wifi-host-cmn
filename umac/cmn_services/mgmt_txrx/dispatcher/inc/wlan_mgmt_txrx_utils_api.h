@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -988,6 +988,22 @@ struct mgmt_rx_event_params {
 	struct frame_pn_params pn_params;
 	struct mgmt_rx_event_ext_params *ext_params;
 	struct frm_conn_ap is_conn_ap;
+#ifdef WLAN_FEATURE_11BE_MLO
+	struct mlo_mgmt_ml_info cu_params;
+	struct mgmt_rx_mlo_link_removal_info *link_removal_info;
+	int num_link_removal_info;
+	struct mlo_bcast_t2lm_info t2lm_params;
+#endif
+};
+
+/**
+ * struct mgmt_mlo_link_info_sync_params - host mgmt mlo link info header params
+ * @cu_params: MLO MGMT Critical Update params
+ * @link_removal_info: MLO link removal information array
+ * @num_link_removal_info: Number of elements in @link_removal_info
+ * @t2lm_params: T2LM related info received from FW
+ */
+struct mgmt_mlo_link_info_sync_params {
 #ifdef WLAN_FEATURE_11BE_MLO
 	struct mlo_mgmt_ml_info cu_params;
 	struct mgmt_rx_mlo_link_removal_info *link_removal_info;
