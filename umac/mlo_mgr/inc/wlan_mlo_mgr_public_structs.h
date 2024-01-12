@@ -575,6 +575,7 @@ struct mlo_sta_quiet_status {
  *  Cancel the force operation of specific links, allow firmware to decide
  * @MLO_LINK_FORCE_MODE_ACTIVE_INACTIVE: Force specific links active and
  *  force specific links inactive
+ * @MLO_LINK_FORCE_MODE_NON_FORCE_UPDATE: Only update mlo disallow mode
  */
 enum mlo_link_force_mode {
 	MLO_LINK_FORCE_MODE_ACTIVE       = 1,
@@ -583,6 +584,7 @@ enum mlo_link_force_mode {
 	MLO_LINK_FORCE_MODE_INACTIVE_NUM = 4,
 	MLO_LINK_FORCE_MODE_NO_FORCE     = 5,
 	MLO_LINK_FORCE_MODE_ACTIVE_INACTIVE = 6,
+	MLO_LINK_FORCE_MODE_NON_FORCE_UPDATE = 7,
 };
 
 /**

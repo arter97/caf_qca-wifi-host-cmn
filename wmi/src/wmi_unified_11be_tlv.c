@@ -548,6 +548,9 @@ force_mode_host_to_fw(enum mlo_link_force_mode host_mode,
 	case MLO_LINK_FORCE_MODE_NO_FORCE:
 		*fw_mode = WMI_MLO_LINK_NO_FORCE;
 		break;
+	case MLO_LINK_FORCE_MODE_NON_FORCE_UPDATE:
+		*fw_mode = WMI_MLO_LINK_NON_FORCE_UPDATE;
+		break;
 	default:
 		wmi_err("Invalid force mode: %d", host_mode);
 		return QDF_STATUS_E_INVAL;
@@ -690,6 +693,8 @@ send_mlo_link_set_active_id_cmd_tlv(wmi_unified_t wmi_handle,
 	case WMI_MLO_LINK_FORCE_ACTIVE_INACTIVE:
 		num_link_bitmap = 1;
 		num_inactive_link_bitmap = 1;
+		break;
+	case WMI_MLO_LINK_NON_FORCE_UPDATE:
 		break;
 	default:
 		wmi_err("Invalid force reason: %d", force_mode);
