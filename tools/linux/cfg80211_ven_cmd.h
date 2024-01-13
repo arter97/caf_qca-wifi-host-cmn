@@ -1479,6 +1479,7 @@ enum _ol_ath_param_t {
 #ifdef WLAN_FEATURE_11BE_MLO
 	OL_ATH_PARAM_DISABLE_EML = 539,
 #endif
+	OL_ATH_PARAM_ALL_CHAN_UTIL = 540,
 };
 
 #ifdef CONFIG_SUPPORT_VENCMDTABLE
@@ -3900,6 +3901,8 @@ struct vendor_commands radio_vendor_cmds[] = {
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_DISABLE_EML, GET_PARAM, 0},
 
 #endif
+	{"g_ch_util_all",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_ALL_CHAN_UTIL, GET_PARAM, 0},
 };
 #endif
 
