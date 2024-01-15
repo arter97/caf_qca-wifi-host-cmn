@@ -6688,6 +6688,7 @@ typedef enum {
 	wmi_service_p2p_device_update_mac_addr_support,
 	wmi_service_wifi_radar_support,
 	wmi_service_dcs_obss_int_support,
+	wmi_service_vdev_dcs_stats_support,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF

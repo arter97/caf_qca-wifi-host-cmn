@@ -23707,6 +23707,9 @@ static void populate_tlv_service(uint32_t *wmi_service)
 				WMI_SERVICE_WIFI_RADAR_SUPPORT;
 	wmi_service[wmi_service_dcs_obss_int_support] =
 			WMI_SERVICE_DCS_OBSS_INT_SUPPORT;
+
+	wmi_service[wmi_service_vdev_dcs_stats_support] =
+				WMI_SERVICE_VDEV_DCS_STATS_SUPPORT;
 }
 
 /**

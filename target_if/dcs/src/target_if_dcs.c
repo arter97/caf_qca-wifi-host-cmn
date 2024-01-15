@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -220,6 +220,21 @@ target_if_send_dcs_cmd_for_vdev(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id,
 	return QDF_STATUS_SUCCESS;
 }
 #endif
+
+bool
+target_if_vdev_level_dcs_is_supported(struct wlan_objmgr_psoc *psoc)
+{
+	struct wmi_unified *wmi_handle;
+
+	wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
+	if (!wmi_handle) {
+		target_if_err("Invalid WMI handle");
+		return false;
+	}
+
+	return wmi_service_enabled(wmi_handle,
+				   wmi_service_vdev_dcs_stats_support);
+}
 
 QDF_STATUS
 target_if_dcs_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
