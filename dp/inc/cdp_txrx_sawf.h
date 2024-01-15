@@ -39,6 +39,8 @@ struct cdp_sawf_peer_msduq_event_intf {
 	uint8_t tid;
 	uint8_t ac;
 	uint8_t priority;
+	uint8_t type;
+	uint32_t mark_metadata;
 	uint32_t service_interval;
 	uint32_t min_throughput;
 	uint32_t burst_size;
