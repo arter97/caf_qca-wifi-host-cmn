@@ -1252,9 +1252,6 @@ void dp_peer_rx_tid_setup(struct dp_peer *peer)
 	struct dp_txrx_peer *txrx_peer = dp_get_txrx_peer(peer);
 	struct dp_vdev *vdev = peer->vdev;
 
-	if (!txrx_peer)
-		return;
-
 	dp_peer_rx_tids_init(peer);
 
 	/* Setup default (non-qos) rx tid queue */

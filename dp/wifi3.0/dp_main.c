@@ -13645,6 +13645,7 @@ static void dp_soc_unset_qref_debug_list(struct dp_soc *soc)
 		return;
 
 	qdf_mem_free(soc->list_shared_qaddr_del);
+	qdf_mem_free(soc->reo_write_list);
 	qdf_mem_free(soc->list_qdesc_addr_free);
 	qdf_mem_free(soc->list_qdesc_addr_alloc);
 }
@@ -13657,6 +13658,10 @@ static void dp_soc_set_qref_debug_list(struct dp_soc *soc)
 		return;
 
 	soc->list_shared_qaddr_del =
+			(struct test_qaddr_del *)
+				qdf_mem_malloc(sizeof(struct test_qaddr_del) *
+					       max_list_size);
+	soc->reo_write_list =
 			(struct test_qaddr_del *)
 				qdf_mem_malloc(sizeof(struct test_qaddr_del) *
 					       max_list_size);

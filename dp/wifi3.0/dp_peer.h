@@ -130,6 +130,29 @@ void add_entry_free_list(struct dp_soc *soc, struct dp_rx_tid *rx_tid)
 		soc->free_addr_list_idx = 0;
 }
 
+static inline
+void add_entry_write_list(struct dp_soc *soc, struct dp_peer *peer,
+			  uint32_t tid)
+{
+	uint32_t max_list_size;
+	unsigned long curr_ts = qdf_get_system_timestamp();
+
+	max_list_size = soc->wlan_cfg_ctx->qref_control_size;
+
+	if (max_list_size == 0)
+		return;
+
+	soc->reo_write_list[soc->write_paddr_list_idx].ts_qaddr_del = curr_ts;
+	soc->reo_write_list[soc->write_paddr_list_idx].peer_id = peer->peer_id;
+	soc->reo_write_list[soc->write_paddr_list_idx].paddr =
+					       peer->rx_tid[tid].hw_qdesc_paddr;
+	soc->reo_write_list[soc->write_paddr_list_idx].tid = tid;
+	soc->write_paddr_list_idx++;
+
+	if (soc->write_paddr_list_idx == max_list_size)
+		soc->write_paddr_list_idx = 0;
+}
+
 #ifdef REO_QDESC_HISTORY
 enum reo_qdesc_event_type {
 	REO_QDESC_UPDATE_CB = 0,

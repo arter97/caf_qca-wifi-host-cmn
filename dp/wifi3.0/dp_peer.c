@@ -30,7 +30,6 @@
 #include <hal_reo.h>
 #include <cdp_txrx_handle.h>
 #include <wlan_cfg.h>
-#include <dp_rings.h>
 #ifdef WIFI_MONITOR_SUPPORT
 #include <dp_mon.h>
 #endif
@@ -2753,7 +2752,6 @@ dp_rx_mlo_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 	enum cdp_txrx_ast_entry_type type = CDP_TXRX_AST_TYPE_STATIC;
 	QDF_STATUS err = QDF_STATUS_SUCCESS;
 	struct dp_soc *primary_soc = NULL;
-	struct dp_pdev *pdev = NULL;
 
 	dp_cfg_event_record_peer_map_unmap_evt(soc, DP_CFG_EVENT_MLO_PEER_MAP,
 					       NULL, peer_mac_addr,
@@ -2810,16 +2808,24 @@ dp_rx_mlo_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 		/* If peer setup and hence rx_tid setup got called
 		 * before htt peer map then Qref write to LUT did not
 		 * happen in rx_tid setup as peer_id was invalid.
-		 * So defer Qref write to peer map handler. initialize
-		 * peer on dp_peer_rx_init
+		 * So defer Qref write to peer map handler. Check if
+		 * rx_tid qdesc for tid 0 is already setup and perform
+		 * qref write to LUT for Tid 0 and 16.
 		 *
 		 * Peer map could be obtained on assoc link, hence
 		 * change to primary link's soc.
 		 */
 		primary_soc = peer->vdev->pdev->soc;
-		if (hal_reo_shared_qaddr_is_enable(primary_soc->hal_soc)) {
-			pdev = peer->vdev->pdev;
-			dp_peer_rx_init(pdev, peer);
+		if (hal_reo_shared_qaddr_is_enable(primary_soc->hal_soc) &&
+		    peer->rx_tid[0].hw_qdesc_vaddr_unaligned) {
+			hal_reo_shared_qaddr_write(primary_soc->hal_soc,
+						   ml_peer_id,
+						   0,
+						   peer->rx_tid[0].hw_qdesc_paddr);
+			hal_reo_shared_qaddr_write(primary_soc->hal_soc,
+						   ml_peer_id,
+						   DP_NON_QOS_TID,
+						   peer->rx_tid[DP_NON_QOS_TID].hw_qdesc_paddr);
 		}
 	}
 
@@ -2887,9 +2893,7 @@ dp_rx_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 		       uint8_t is_wds)
 {
 	struct dp_peer *peer = NULL;
-	struct dp_peer *mld_peer = NULL;
 	struct dp_vdev *vdev = NULL;
-	struct dp_pdev *pdev = NULL;
 	enum cdp_txrx_ast_entry_type type = CDP_TXRX_AST_TYPE_STATIC;
 	QDF_STATUS err = QDF_STATUS_SUCCESS;
 
@@ -2980,20 +2984,23 @@ dp_rx_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 			/* If peer setup and hence rx_tid setup got called
 			 * before htt peer map then Qref write to LUT did
 			 * not happen in rx_tid setup as peer_id was invalid.
-			 * So defer Qref write to peer map handler. initialize
-			 * peer on dp_peer_rx_init
+			 * So defer Qref write to peer map handler. Check if
+			 * rx_tid qdesc for tid 0 is already setup perform qref
+			 * write to LUT for Tid 0 and 16.
 			 */
 			if (hal_reo_shared_qaddr_is_enable(soc->hal_soc) &&
+			    peer->rx_tid[0].hw_qdesc_vaddr_unaligned &&
 			    !IS_MLO_DP_LINK_PEER(peer)) {
-				mld_peer = DP_GET_MLD_PEER_FROM_PEER(peer);
-				pdev = vdev->pdev;
-
-				if (mld_peer) {
-					dp_peer_rx_init(pdev, mld_peer);
-				} else {
-					dp_peer_legacy_setup(soc, peer);
-					dp_peer_rx_init(pdev, peer);
-				}
+				add_entry_write_list(soc, peer, 0);
+				hal_reo_shared_qaddr_write(soc->hal_soc,
+							   peer_id,
+							   0,
+							   peer->rx_tid[0].hw_qdesc_paddr);
+				add_entry_write_list(soc, peer, DP_NON_QOS_TID);
+				hal_reo_shared_qaddr_write(soc->hal_soc,
+							   peer_id,
+							   DP_NON_QOS_TID,
+							   peer->rx_tid[DP_NON_QOS_TID].hw_qdesc_paddr);
 			}
 		}
 
