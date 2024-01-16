@@ -2005,9 +2005,16 @@ QDF_STATUS mlo_sta_handle_csa_standby_link(
 	struct mlo_link_info *link_info;
 	struct mlo_link_bss_params params = {0};
 	struct wlan_objmgr_psoc *psoc;
+	struct wlan_objmgr_pdev *pdev;
 
 	if (!mlo_dev_ctx) {
 		mlo_err("invalid mlo_dev_ctx");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	pdev = wlan_vdev_get_pdev(vdev);
+	if (!pdev) {
+		mlo_err("null pdev");
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
@@ -2031,7 +2038,7 @@ QDF_STATUS mlo_sta_handle_csa_standby_link(
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
-	mlo_mgr_update_csa_link_info(mlo_dev_ctx, csa_param, link_id);
+	mlo_mgr_update_csa_link_info(pdev, mlo_dev_ctx, csa_param, link_id);
 
 	params.link_id = link_info->link_id;
 	params.chan = qdf_mem_malloc(sizeof(struct wlan_channel));
