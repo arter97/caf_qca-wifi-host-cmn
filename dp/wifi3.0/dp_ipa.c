@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -559,6 +559,9 @@ static void dp_ipa_tx_alt_pool_detach(struct dp_soc *soc, struct dp_pdev *pdev)
 	qdf_nbuf_t nbuf;
 	int idx;
 
+	if (!wlan_cfg_is_ipa_two_tx_pipes_enabled(soc->wlan_cfg_ctx))
+		return;
+
 	for (idx = 0; idx < soc->ipa_uc_tx_rsc_alt.alloc_tx_buf_cnt; idx++) {
 		nbuf = (qdf_nbuf_t)
 			soc->ipa_uc_tx_rsc_alt.tx_buf_pool_vaddr_unaligned[idx];
@@ -589,8 +592,7 @@ static int dp_ipa_tx_alt_pool_attach(struct dp_soc *soc)
 	uint32_t tx_buffer_count;
 	uint32_t ring_base_align = 8;
 	qdf_dma_addr_t buffer_paddr;
-	struct hal_srng *wbm_srng = (struct hal_srng *)
-			soc->tx_comp_ring[IPA_TX_ALT_COMP_RING_IDX].hal_srng;
+	struct hal_srng *wbm_srng;
 	struct hal_srng_params srng_params;
 	uint32_t wbm_bm_id;
 	void *ring_entry;
@@ -598,17 +600,24 @@ static int dp_ipa_tx_alt_pool_attach(struct dp_soc *soc)
 	qdf_nbuf_t nbuf;
 	int retval = QDF_STATUS_SUCCESS;
 	int max_alloc_count = 0;
+	unsigned int uc_tx_buf_sz;
+	unsigned int alloc_size;
+
+	if (!wlan_cfg_is_ipa_two_tx_pipes_enabled(soc->wlan_cfg_ctx))
+		return retval;
 
 	/*
 	 * Uncomment when dp_ops_cfg.cfg_attach is implemented
 	 * unsigned int uc_tx_buf_sz =
 	 *		dp_cfg_ipa_uc_tx_buf_size(pdev->osif_pdev);
 	 */
-	unsigned int uc_tx_buf_sz = CFG_IPA_UC_TX_BUF_SIZE_DEFAULT;
-	unsigned int alloc_size = uc_tx_buf_sz + ring_base_align - 1;
+	uc_tx_buf_sz = CFG_IPA_UC_TX_BUF_SIZE_DEFAULT;
+	alloc_size = uc_tx_buf_sz + ring_base_align - 1;
 
 	wbm_bm_id = wlan_cfg_get_rbm_id_for_index(soc->wlan_cfg_ctx,
 						  IPA_TX_ALT_RING_IDX);
+	wbm_srng = (struct hal_srng *)
+			soc->tx_comp_ring[IPA_TX_ALT_COMP_RING_IDX].hal_srng;
 
 	hal_get_srng_params(soc->hal_soc,
 			    hal_srng_to_hal_ring_handle(wbm_srng),
@@ -697,6 +706,9 @@ static QDF_STATUS dp_ipa_tx_alt_ring_get_resource(struct dp_pdev *pdev)
 	struct dp_soc *soc = pdev->soc;
 	struct dp_ipa_resources *ipa_res = &pdev->ipa_resource;
 
+	if (!wlan_cfg_is_ipa_two_tx_pipes_enabled(soc->wlan_cfg_ctx))
+		return QDF_STATUS_SUCCESS;
+
 	ipa_res->tx_alt_ring_num_alloc_buffer =
 		(uint32_t)soc->ipa_uc_tx_rsc_alt.alloc_tx_buf_cnt;
 
@@ -725,6 +737,9 @@ static void dp_ipa_tx_alt_ring_resource_setup(struct dp_soc *soc)
 	struct hal_srng *hal_srng;
 	struct hal_srng_params srng_params;
 	unsigned long addr_offset, dev_base_paddr;
+
+	if (!wlan_cfg_is_ipa_two_tx_pipes_enabled(soc->wlan_cfg_ctx))
+		return;
 
 	/* IPA TCL_DATA Alternative Ring - HAL_SRNG_SW2TCL2 */
 	hal_srng = (struct hal_srng *)
@@ -883,6 +898,9 @@ static QDF_STATUS dp_ipa_tx_alt_buf_smmu_mapping(struct dp_soc *soc,
 	qdf_nbuf_t nbuf;
 	uint32_t index;
 
+	if (!wlan_cfg_is_ipa_two_tx_pipes_enabled(soc->wlan_cfg_ctx))
+		return QDF_STATUS_SUCCESS;
+
 	if (!ipa_is_ready()) {
 		dp_info("IPA is not READY");
 		return QDF_STATUS_SUCCESS;
@@ -992,6 +1010,9 @@ static void dp_ipa_setup_tx_alt_pipe(struct dp_soc *soc,
 	qdf_ipa_wdi_pipe_setup_info_t *tx = NULL;
 	qdf_ipa_ep_cfg_t *tx_cfg;
 
+	if (!wlan_cfg_is_ipa_two_tx_pipes_enabled(soc->wlan_cfg_ctx))
+		return;
+
 	QDF_IPA_WDI_CONN_IN_PARAMS_IS_TX1_USED(in) = true;
 
 	if (qdf_mem_smmu_s1_enabled(soc->osdev)) {
@@ -1013,15 +1034,18 @@ static void dp_ipa_setup_tx_alt_pipe(struct dp_soc *soc,
 	QDF_IPA_EP_CFG_HDR_LITTLE_ENDIAN(tx_cfg) = true;
 }
 
-static void dp_ipa_set_pipe_db(struct dp_ipa_resources *res,
+static void dp_ipa_set_pipe_db(struct dp_soc *soc,
+			       struct dp_ipa_resources *res,
 			       qdf_ipa_wdi_conn_out_params_t *out)
 {
 	res->tx_comp_doorbell_paddr =
 		QDF_IPA_WDI_CONN_OUT_PARAMS_TX_UC_DB_PA(out);
 	res->rx_ready_doorbell_paddr =
 		QDF_IPA_WDI_CONN_OUT_PARAMS_RX_UC_DB_PA(out);
-	res->tx_alt_comp_doorbell_paddr =
-		QDF_IPA_WDI_CONN_OUT_PARAMS_TX_UC_ALT_DB_PA(out);
+
+	if (wlan_cfg_is_ipa_two_tx_pipes_enabled(soc->wlan_cfg_ctx))
+		res->tx_alt_comp_doorbell_paddr =
+			QDF_IPA_WDI_CONN_OUT_PARAMS_TX_UC_ALT_DB_PA(out);
 }
 
 static void dp_ipa_setup_iface_session_id(qdf_ipa_wdi_reg_intf_in_params_t *in,
@@ -1226,7 +1250,8 @@ void dp_ipa_setup_tx_alt_pipe(struct dp_soc *soc, struct dp_ipa_resources *res,
 {
 }
 
-static void dp_ipa_set_pipe_db(struct dp_ipa_resources *res,
+static void dp_ipa_set_pipe_db(struct dp_soc *soc,
+			       struct dp_ipa_resources *res,
 			       qdf_ipa_wdi_conn_out_params_t *out)
 {
 	res->tx_comp_doorbell_paddr =
@@ -2934,7 +2959,7 @@ QDF_STATUS dp_ipa_setup(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 		(unsigned int)QDF_IPA_WDI_CONN_OUT_PARAMS_TX_UC_DB_PA(&pipe_out),
 		(unsigned int)QDF_IPA_WDI_CONN_OUT_PARAMS_RX_UC_DB_PA(&pipe_out));
 
-	dp_ipa_set_pipe_db(ipa_res, &pipe_out);
+	dp_ipa_set_pipe_db(soc, ipa_res, &pipe_out);
 	dp_ipa_set_rx_alt_pipe_db(ipa_res, &pipe_out);
 
 	ipa_res->is_db_ddr_mapped =
