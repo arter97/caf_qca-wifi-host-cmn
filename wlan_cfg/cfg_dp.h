@@ -128,6 +128,10 @@
 /* Tx Descriptor and Tx Extension Descriptor pool sizes */
 #define WLAN_CFG_NUM_TX_DESC  4096
 #define WLAN_CFG_NUM_TX_EXT_DESC 4096
+#elif defined(IPA_OFFLOAD) && defined(QCA_WIFI_QCN9224)
+#define WLAN_CFG_NUM_TX_DESC 0x2000
+#define WLAN_CFG_NUM_TX_EXT_DESC 4096
+#define WLAN_CFG_TX_COMP_RING_SIZE 4096
 #else
 #define WLAN_CFG_TX_COMP_RING_SIZE 1024
 
@@ -203,7 +207,11 @@
 #define WLAN_CFG_TX_COMP_RING_SIZE_MAX 0x80000
 
 #define WLAN_CFG_NUM_TX_DESC_MIN  16
+#if defined(IPA_OFFLOAD) && defined(QCA_WIFI_QCN9224)
+#define WLAN_CFG_NUM_TX_DESC_MAX  0x2000
+#else
 #define WLAN_CFG_NUM_TX_DESC_MAX  0x10000
+#endif
 
 #define WLAN_CFG_NUM_TX_SPL_DESC  1024
 #define WLAN_CFG_NUM_TX_SPL_DESC_MIN  0
