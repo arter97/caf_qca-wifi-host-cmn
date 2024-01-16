@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -273,12 +273,14 @@ mlo_mgr_get_ap_link_by_link_id(struct wlan_mlo_dev_context *mlo_dev_ctx,
 
 /**
  * mlo_mgr_update_csa_link_info - update mlo sta csa params
+ * @pdev: pdev object manager
  * @mlo_dev_ctx: mlo dev ctx
  * @csa_param: csa parameters to be updated
  * @link_id: link id
  * Return : true if csa parameters are updated
  */
-bool mlo_mgr_update_csa_link_info(struct wlan_mlo_dev_context *mlo_dev_ctx,
+bool mlo_mgr_update_csa_link_info(struct wlan_objmgr_pdev *pdev,
+				  struct wlan_mlo_dev_context *mlo_dev_ctx,
 				  struct csa_offload_params *csa_param,
 				  uint8_t link_id);
 
