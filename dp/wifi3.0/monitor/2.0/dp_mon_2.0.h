@@ -35,6 +35,28 @@
 #define DP_MON_QUEUE_DEPTH_MAX 16
 #define DP_MON_MSDU_LOGGING 0
 #define DP_MON_MPDU_LOGGING 1
+#define DP_MON_DESC_ADDR_MASK 0x000000FFFFFFFFFF
+#define DP_MON_DESC_ADDR_SHIFT 40
+#define DP_MON_DESC_FIXED_ADDR_MASK 0xFFFFFF
+#define DP_MON_DESC_FIXED_ADDR ((uint64_t)DP_MON_DESC_FIXED_ADDR_MASK << \
+	DP_MON_DESC_COOKIE_LSB)
+#define DP_MON_DESC_COOKIE_MASK 0xFFFFFF0000000000
+#define DP_MON_DESC_COOKIE_SHIFT 24
+#define DP_MON_DESC_COOKIE_LSB 40
+#define DP_MON_GET_COOKIE(mon_desc) \
+	((uint32_t)(((unsigned long long)(mon_desc) & DP_MON_DESC_COOKIE_MASK) \
+	>> DP_MON_DESC_COOKIE_LSB))
+
+#ifdef DP_RX_MON_DESC_64_BIT
+#define  DP_MON_GET_DESC(mon_desc) \
+	((struct dp_mon_desc *)(uintptr_t)(((unsigned long long)(mon_desc) & \
+	DP_MON_DESC_ADDR_MASK) | ((unsigned long long)DP_MON_DESC_FIXED_ADDR)))
+
+#else
+#define  DP_MON_GET_DESC(mon_desc) \
+	((struct dp_mon_desc *)(uintptr_t)(((unsigned long)(mon_desc) & \
+	DP_MON_DESC_ADDR_MASK)))
+#endif
 
 #define DP_MON_DECAP_FORMAT_INVALID 0xff
 #define DP_MON_MIN_FRAGS_FOR_RESTITCH 2
@@ -168,6 +190,7 @@ struct dp_mon_filter_be {
  * @in_use: desc is in use
  * @unmapped: used to mark desc an unmapped if the corresponding
  * nbuf is already unmapped
+ * @cookie_2: unique cookie provided as part of 64 bit cookie to HW
  * @end_offset: offset in status buffer where DMA ended
  * @cookie: unique desc identifier
  * @magic: magic number to validate desc data
@@ -175,8 +198,9 @@ struct dp_mon_filter_be {
 struct dp_mon_desc {
 	uint8_t *buf_addr;
 	qdf_dma_addr_t paddr;
-	uint8_t in_use:1,
-		unmapped:1;
+	uint32_t in_use:1,
+		unmapped:1,
+		cookie_2:24;
 	uint16_t end_offset;
 	uint32_t cookie;
 	uint32_t magic;
@@ -231,6 +255,7 @@ struct dp_mon_desc_pool {
  * @rx_mon_free_queue: RxMON ppdu info free element queue
  * @ppdu_info_lock: RxPPDU ppdu info queue lock
  * @rx_mon_queue_depth: RxMON queue depth
+ * @ppdu_info_cache: PPDU info cache
  * @desc_count: reaped status desc count
  * @status: reaped status buffer per ppdu
  * @lite_mon_rx_config: rx litemon config
@@ -239,7 +264,6 @@ struct dp_mon_desc_pool {
  * @prev_rxmon_cookie: prev rxmon cookie
  * @prev_rxmon_pkt_desc: prev packet buff desc
  * @prev_rxmon_pkt_cookie: prev packet buff desc cookie
- * @ppdu_info_cache: PPDU info cache
  * @total_free_elem: total free element in queue
  * @rx_tlv_logger: Rx TLV logger struct
  */
@@ -252,6 +276,7 @@ struct dp_mon_pdev_be {
 	struct dp_pdev_tx_monitor_be tx_monitor_be;
 	struct dp_tx_monitor_drop_stats tx_stats;
 #endif
+#if defined(WLAN_PKT_CAPTURE_RX_2_0) && defined(QCA_MONITOR_2_0_PKT_SUPPORT)
 	qdf_spinlock_t rx_mon_wq_lock;
 	qdf_workqueue_t *rx_mon_workqueue;
 	qdf_work_t rx_mon_work;
@@ -259,6 +284,8 @@ struct dp_mon_pdev_be {
 	TAILQ_HEAD(, hal_rx_ppdu_info) rx_mon_queue;
 	TAILQ_HEAD(, hal_rx_ppdu_info) rx_mon_free_queue;
 	qdf_spinlock_t ppdu_info_lock;
+	qdf_kmem_cache_t ppdu_info_cache;
+#endif
 	uint16_t rx_mon_queue_depth;
 	uint16_t desc_count;
 	struct dp_mon_desc *status[DP_MON_MAX_STATUS_BUF];
@@ -270,7 +297,6 @@ struct dp_mon_pdev_be {
 	uint32_t prev_rxmon_cookie;
 	void *prev_rxmon_pkt_desc;
 	uint32_t prev_rxmon_pkt_cookie;
-	qdf_kmem_cache_t ppdu_info_cache;
 	uint32_t total_free_elem;
 #ifdef MONITOR_TLV_RECORDING_ENABLE
 	struct dp_mon_tlv_logger *rx_tlv_log;
@@ -595,4 +621,23 @@ QDF_STATUS
 dp_disable_enhanced_stats_2_0(struct cdp_soc_t *soc, uint8_t pdev_id);
 #endif /* QCA_ENHANCED_STATS_SUPPORT */
 
+#ifdef WLAN_PKT_CAPTURE_RX_2_0
+static inline unsigned long long
+dp_mon_get_debug_desc_addr(union dp_mon_desc_list_elem_t **desc_list)
+{
+	unsigned long long desc;
+
+	desc = (unsigned long)&((*desc_list)->mon_desc);
+	desc = (unsigned long long)((unsigned long long)desc & DP_MON_DESC_ADDR_MASK);
+	desc = (desc | ((unsigned long long)(*desc_list)->mon_desc.cookie_2 << DP_MON_DESC_ADDR_SHIFT));
+	return desc;
+}
+#else
+static inline unsigned long long
+dp_mon_get_debug_desc_addr(union dp_mon_desc_list_elem_t **desc_list)
+{
+	unsigned long long desc = (unsigned long long)&((*desc_list)->mon_desc);
+	return desc;
+}
+#endif
 #endif /* _DP_MON_2_0_H_ */

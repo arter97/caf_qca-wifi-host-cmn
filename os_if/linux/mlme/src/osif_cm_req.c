@@ -39,7 +39,8 @@
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0) && \
-LINUX_VERSION_CODE < KERNEL_VERSION(6, 2, 0)
+LINUX_VERSION_CODE < KERNEL_VERSION(6, 2, 0) && \
+!defined(CFG80211_CRYPTO_WEP_KEYS_REMOVED)
 static QDF_STATUS
 osif_cm_update_wep_seq_info(struct wlan_cm_connect_req *connect_req,
 			    const struct cfg80211_connect_params *req)
@@ -68,6 +69,7 @@ osif_cm_update_wep_seq_info(struct wlan_cm_connect_req *connect_req,
 }
 #endif
 
+#if !defined(CFG80211_CRYPTO_WEP_KEYS_REMOVED)
 static QDF_STATUS
 osif_cm_set_wep_key_params(struct wlan_cm_connect_req *connect_req,
 			   const struct cfg80211_connect_params *req)
@@ -88,6 +90,14 @@ osif_cm_set_wep_key_params(struct wlan_cm_connect_req *connect_req,
 
 	return osif_cm_update_wep_seq_info(connect_req, req);
 }
+#else
+static QDF_STATUS
+osif_cm_set_wep_key_params(struct wlan_cm_connect_req *connect_req,
+			   const struct cfg80211_connect_params *req)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 
 static void osif_cm_set_auth_type(struct wlan_cm_connect_req *connect_req,
 				  const struct cfg80211_connect_params *req)
@@ -160,6 +170,33 @@ uint8_t osif_cm_get_rsn_cap_mfp(enum nl80211_mfp mfp_state)
 	}
 }
 
+#ifdef CONNECTIVITY_DIAG_EVENT
+/**
+ * osif_cm_populate_user_crypto_param() - API to cache crypto param
+ * received from the userspace.
+ * @connect_req: Connect request buffer to cache parameter
+ * @req: Connection request parameter received from userspace.
+ *
+ * Return: None
+ */
+static void
+osif_cm_populate_user_crypto_param(struct wlan_cm_connect_req *connect_req,
+				   const struct cfg80211_connect_params *req)
+{
+	connect_req->crypto.user_cipher_pairwise =
+					req->crypto.ciphers_pairwise[0];
+	connect_req->crypto.user_akm_suite = req->crypto.akm_suites[0];
+	connect_req->crypto.user_auth_type = req->auth_type;
+	connect_req->crypto.user_grp_cipher = req->crypto.cipher_group;
+}
+#else
+static void
+osif_cm_populate_user_crypto_param(struct wlan_cm_connect_req *connect_req,
+				   const struct cfg80211_connect_params *req)
+{
+}
+#endif
+
 static
 QDF_STATUS osif_cm_set_crypto_params(struct wlan_cm_connect_req *connect_req,
 				     const struct cfg80211_connect_params *req)
@@ -202,6 +239,8 @@ QDF_STATUS osif_cm_set_crypto_params(struct wlan_cm_connect_req *connect_req,
 
 	/* Copy user configured MFP capability */
 	connect_req->crypto.user_mfp = osif_cm_get_rsn_cap_mfp(req->mfp);
+
+	osif_cm_populate_user_crypto_param(connect_req, req);
 
 	return status;
 }

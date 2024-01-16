@@ -65,6 +65,14 @@ enum dp_bands {
 	DP_BAND_6GHZ = 3,
 	DP_BAND_UNKNOWN = 4,
 };
+
+/**
+ * dp_freq_to_band() - Convert frequency to band
+ * @freq: peer frequency
+ *
+ * Return: band for input frequency
+ */
+enum dp_bands dp_freq_to_band(qdf_freq_t freq);
 #endif
 
 void check_free_list_for_invalid_flush(struct dp_soc *soc);
@@ -897,6 +905,23 @@ struct dp_ast_entry *dp_peer_ast_hash_find_soc(struct dp_soc *soc,
 					       uint8_t *ast_mac_addr);
 
 /**
+ * dp_peer_ast_hash_find_soc_by_type() - Find AST entry by MAC address
+ * and AST type
+ * @soc: SoC handle
+ * @ast_mac_addr: Mac address
+ * @type: AST entry type
+ *
+ * It assumes caller has taken the ast lock to protect the access to
+ * AST hash table
+ *
+ * Return: AST entry
+ */
+struct dp_ast_entry *dp_peer_ast_hash_find_soc_by_type(
+					struct dp_soc *soc,
+					uint8_t *ast_mac_addr,
+					enum cdp_txrx_ast_entry_type type);
+
+/**
  * dp_peer_ast_get_pdev_id() - get pdev_id from the ast entry
  * @soc: SoC handle
  * @ast_entry: AST entry of the node
@@ -1718,12 +1743,14 @@ void dp_mld_peer_deinit_link_peers_info(struct dp_peer *mld_peer)
  * dp_mld_peer_add_link_peer() - add link peer info to mld peer
  * @mld_peer: mld dp peer pointer
  * @link_peer: link dp peer pointer
+ * @is_bridge_peer: flag to indicate if peer is bridge peer
  *
  * Return: None
  */
 static inline
 void dp_mld_peer_add_link_peer(struct dp_peer *mld_peer,
-			       struct dp_peer *link_peer)
+			       struct dp_peer *link_peer,
+			       uint8_t is_bridge_peer)
 {
 	int i;
 	struct dp_peer_link_info *link_peer_info;
@@ -1740,6 +1767,7 @@ void dp_mld_peer_add_link_peer(struct dp_peer *mld_peer,
 			link_peer_info->vdev_id = link_peer->vdev->vdev_id;
 			link_peer_info->chip_id =
 				dp_get_chip_id(link_peer->vdev->pdev->soc);
+			link_peer_info->is_bridge_peer = is_bridge_peer;
 			mld_peer->num_links++;
 			break;
 		}
@@ -1964,8 +1992,8 @@ struct dp_peer *dp_peer_get_tgt_peer_hash_find(struct dp_soc *soc,
 			ta_peer = peer;
 		}
 	} else {
-		dp_peer_err("fail to find peer:" QDF_MAC_ADDR_FMT,
-			    QDF_MAC_ADDR_REF(peer_mac));
+		dp_peer_err("fail to find peer:" QDF_MAC_ADDR_FMT " vdev_id: %u",
+			    QDF_MAC_ADDR_REF(peer_mac), vdev_id);
 	}
 
 	return ta_peer;
@@ -2430,8 +2458,8 @@ dp_peer_update_state(struct dp_soc *soc,
 	switch (state) {
 	case DP_PEER_STATE_INIT:
 		DP_PEER_STATE_ASSERT
-			(peer, state, (peer_state != DP_PEER_STATE_ACTIVE) ||
-			 (peer_state != DP_PEER_STATE_LOGICAL_DELETE));
+			(peer, state, (peer_state != DP_PEER_STATE_ACTIVE) &&
+			(peer_state != DP_PEER_STATE_LOGICAL_DELETE));
 		break;
 
 	case DP_PEER_STATE_ACTIVE:

@@ -688,13 +688,13 @@ bool wifi_pos_get_rsta_sec_ltf_cap(void);
  * wifi_pos_set_rsta_11az_ranging_cap() - Enable/Disable R-STA 11az ranging
  * @val: Value to set
  */
-void wifi_pos_set_rsta_11az_ranging_cap(bool val);
+void wifi_pos_set_rsta_11az_ranging_cap(uint32_t val);
 
 /**
  * wifi_pos_get_rsta_11az_ranging_cap() - Get if RSTA 11az ranging is enabled
  *
- * Return: True if 11az ranging is enabled
+ * Return: value if 11az TB/NTB ranging is enabled
  */
-bool wifi_pos_get_rsta_11az_ranging_cap(void);
+uint32_t wifi_pos_get_rsta_11az_ranging_cap(void);
 #endif
 #endif /* _WIFI_POS_API_H_ */

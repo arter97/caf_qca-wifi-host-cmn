@@ -1359,13 +1359,14 @@ static void reg_propagate_6g_mas_channel_list(
 		mas_chan_params->reg_6g_superid;
 	pdev_priv_obj->reg_6g_thresh_priority_freq =
 				mas_chan_params->reg_6g_thresh_priority_freq;
-	reg_set_ap_pwr_type(pdev_priv_obj);
 }
 
-#if defined(CONFIG_AFC_SUPPORT) && !defined(CONFIG_REG_CLIENT)
+#ifndef CONFIG_REG_CLIENT
+#ifdef CONFIG_AFC_SUPPORT
+#ifdef CONFIG_6G_FREQ_OVERLAP
 void reg_set_ap_pwr_type(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
 {
-	uint8_t  *num_rules = pdev_priv_obj->reg_rules.num_of_6g_ap_reg_rules;
+	uint8_t  *num_rules;
 	bool is_6ghz_pdev;
 
 	is_6ghz_pdev = reg_is_range_overlap_6g(pdev_priv_obj->range_5g_low,
@@ -1376,6 +1377,7 @@ void reg_set_ap_pwr_type(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
 		return;
 	}
 
+	num_rules = pdev_priv_obj->reg_rules.num_of_6g_ap_reg_rules;
 	if (pdev_priv_obj->reg_afc_dev_deployment_type ==
 	    AFC_DEPLOYMENT_OUTDOOR) {
 		if (num_rules[REG_VERY_LOW_POWER_AP])
@@ -1399,9 +1401,40 @@ void reg_set_ap_pwr_type(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
 #else
 void reg_set_ap_pwr_type(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
 {
+}
+#endif /* CONFIG_6G_FREQ_OVERLAP */
+#else
+void reg_set_ap_pwr_type(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
+{
 	pdev_priv_obj->reg_cur_6g_ap_pwr_type = REG_INDOOR_AP;
 }
 #endif /* CONFIG_AFC_SUPPORT */
+#else
+void reg_set_ap_pwr_type(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
+{
+	enum reg_6g_ap_type ap_pwr_type = REG_CURRENT_MAX_AP_TYPE;
+	uint8_t  *num_rules;
+
+	num_rules = pdev_priv_obj->reg_rules.num_of_6g_ap_reg_rules;
+
+	if (wlan_reg_is_afc_power_event_received(pdev_priv_obj->pdev_ptr) &&
+	    num_rules[REG_STANDARD_POWER_AP]) {
+		ap_pwr_type = REG_STANDARD_POWER_AP;
+	} else if (pdev_priv_obj->indoor_chan_enabled) {
+		if (num_rules[REG_INDOOR_AP])
+			ap_pwr_type = REG_INDOOR_AP;
+		else if (num_rules[REG_VERY_LOW_POWER_AP])
+			ap_pwr_type = REG_VERY_LOW_POWER_AP;
+	} else if (num_rules[REG_VERY_LOW_POWER_AP]) {
+		ap_pwr_type = REG_VERY_LOW_POWER_AP;
+	}
+
+	pdev_priv_obj->reg_cur_6g_ap_pwr_type = ap_pwr_type;
+
+	reg_debug("indoor_chan_enabled %d ap_pwr_type %d",
+		  pdev_priv_obj->indoor_chan_enabled, ap_pwr_type);
+}
+#endif /* CONFIG_REG_CLIENT */
 #else
 static inline void reg_propagate_6g_mas_channel_list(
 		struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj,
@@ -1500,17 +1533,17 @@ reg_modify_chan_list_for_srd_channels(struct wlan_objmgr_pdev *pdev,
 {
 	enum channel_enum chan_enum;
 
-	if (!reg_is_etsi13_regdmn(pdev))
+	if (!reg_is_etsi_regdmn(pdev))
 		return;
 
-	if (reg_is_etsi13_srd_chan_allowed_master_mode(pdev))
+	if (reg_is_etsi_srd_chan_allowed_master_mode(pdev))
 		return;
 
 	for (chan_enum = 0; chan_enum < NUM_CHANNELS; chan_enum++) {
 		if (chan_list[chan_enum].chan_flags & REGULATORY_CHAN_DISABLED)
 			continue;
 
-		if (reg_is_etsi13_srd_chan_for_freq(
+		if (reg_is_etsi_srd_chan_for_freq(
 					pdev,
 					chan_list[chan_enum].center_freq)) {
 			chan_list[chan_enum].state =
@@ -1923,8 +1956,7 @@ static void
 reg_append_mas_chan_list_for_6g(struct wlan_regulatory_pdev_priv_obj
 				*pdev_priv_obj)
 {
-	if (pdev_priv_obj->reg_cur_6g_ap_pwr_type >= REG_CURRENT_MAX_AP_TYPE ||
-	    pdev_priv_obj->reg_cur_6g_client_mobility_type >=
+	if (pdev_priv_obj->reg_cur_6g_client_mobility_type >=
 	    REG_MAX_CLIENT_TYPE) {
 		reg_debug("invalid 6G AP or client power type");
 		return;
@@ -2061,6 +2093,7 @@ reg_populate_secondary_cur_chan_list(struct wlan_regulatory_pdev_priv_obj
 	struct wlan_regulatory_psoc_priv_obj *soc_reg;
 	struct regulatory_channel *chan_list;
 	uint32_t len_6ghz;
+	enum reg_6g_ap_type cur_ap_power_type = REG_CURRENT_MAX_AP_TYPE;
 
 	psoc = wlan_pdev_get_psoc(pdev_priv_obj->pdev_ptr);
 	if (!psoc) {
@@ -2094,14 +2127,14 @@ reg_populate_secondary_cur_chan_list(struct wlan_regulatory_pdev_priv_obj
 	if (!chan_list)
 		return;
 
-	if (pdev_priv_obj->indoor_chan_enabled &&
-	    pdev_priv_obj->reg_rules.num_of_6g_ap_reg_rules[REG_INDOOR_AP]) {
+	reg_get_cur_6g_ap_pwr_type(pdev_priv_obj->pdev_ptr, &cur_ap_power_type);
+
+	if (cur_ap_power_type == REG_INDOOR_AP) {
 		qdf_mem_copy(chan_list,
 			     pdev_priv_obj->mas_chan_list_6g_ap[REG_INDOOR_AP],
 			     len_6ghz);
 		/* has flag REGULATORY_CHAN_INDOOR_ONLY */
-	} else if (pdev_priv_obj->reg_rules.num_of_6g_ap_reg_rules
-		   [REG_VERY_LOW_POWER_AP]) {
+	} else if (cur_ap_power_type == REG_VERY_LOW_POWER_AP) {
 		qdf_mem_copy(chan_list,
 			     pdev_priv_obj->mas_chan_list_6g_ap
 			     [REG_VERY_LOW_POWER_AP],

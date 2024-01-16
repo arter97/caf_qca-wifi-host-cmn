@@ -41,6 +41,10 @@
 #include <qdf_ipa.h>
 #endif
 #endif
+#ifdef WLAN_SUPPORT_DPDK
+#include <cfgmgr_api_if.h>
+#include <dpdk_wlan_msg_types.h>
+#endif
 
 /*
  * bitmap values to indicate special handling of peer_delete
@@ -710,6 +714,8 @@ struct cdp_cmn_ops {
 					 uint8_t vdev_id,
 					 uint8_t *mac,
 					 ol_osif_peer_handle *osif_peer);
+	QDF_STATUS (*set_wds_ext_peer_bit)(ol_txrx_soc_handle soc,
+					   uint8_t *mac);
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
 	void (*txrx_drain)(ol_txrx_soc_handle soc);
 	int (*get_free_desc_poolsize)(struct cdp_soc_t *soc);
@@ -743,6 +749,22 @@ struct cdp_cmn_ops {
 				     uint64_t *value);
 	void (*txrx_get_tqm_offset)(struct cdp_soc_t *soc_hdl, uint64_t *value);
 	uint64_t (*get_fst_cmem_base)(struct cdp_soc_t *soc_hdl, uint64_t size);
+#ifdef WLAN_SUPPORT_DPDK
+	uint8_t (*dpdk_get_ring_info)(struct cdp_soc_t *soc_hdl,
+				      qdf_uio_info_t *uio_info);
+	int (*cfgmgr_get_soc_info)(struct cdp_soc_t *soc_hdl, uint8_t soc_id,
+				   struct dpdk_wlan_soc_info_event *ev_buf);
+	int (*cfgmgr_get_vdev_info)(struct cdp_soc_t *soc_hdl, uint8_t soc_id,
+				    struct dpdk_wlan_vdev_info_event *ev_buf);
+	int (*cfgmgr_get_peer_info)(struct cdp_soc_t *soc_hdl, uint8_t soc_id,
+				    struct dpdk_wlan_peer_info *ev_buf);
+	int (*cfgmgr_get_vdev_create_evt_info)(
+				struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+				struct dpdk_wlan_vdev_create_info *ev_buf);
+	int (*cfgmgr_get_peer_create_evt_info)(
+				struct cdp_soc_t *soc_hdl, uint16_t peer_id,
+				struct dpdk_wlan_peer_create_info *ev_buf);
+#endif
 };
 
 struct cdp_ctrl_ops {
@@ -1305,7 +1327,7 @@ struct cdp_host_stats_ops {
 	QDF_STATUS
 		(*txrx_update_vdev_stats)(struct cdp_soc_t *soc,
 					  uint8_t vdev_id, void *buf,
-					  uint16_t stats_id);
+					  uint16_t stats_id, uint8_t xmit_type);
 	int
 		(*txrx_get_radio_stats)(struct cdp_soc_t *soc, uint8_t pdev_id,
 					void *buf);
@@ -2204,6 +2226,7 @@ struct cdp_throttle_ops {
  * @ipa_rx_buf_smmu_pool_mapping: Create SMMU mapping for Rx
  * @ipa_set_smmu_mapped: Set IPA SMMU mapped value
  * @ipa_get_smmu_mapped: Get IPA SMMU mapped value
+ * @ipa_rx_wdsext_iface: Forward RX exception packets to wdsext interface
  * @ipa_rx_super_rule_setup: Setup cce super rules based on filter tuple
  * @ipa_ast_create: Create/Update ast entry
  * @ipa_get_wdi_version: Get WDI version
@@ -2308,6 +2331,11 @@ struct cdp_ipa_ops {
 	QDF_STATUS (*ipa_set_smmu_mapped)(struct cdp_soc_t *soc_hdl, int val);
 	int (*ipa_get_smmu_mapped)(struct cdp_soc_t *soc_hdl);
 
+#ifdef QCA_SUPPORT_WDS_EXTENDED
+	bool (*ipa_rx_wdsext_iface)(struct cdp_soc_t *soc_hdl,
+				    uint8_t peer_id,
+				    qdf_nbuf_t nbuf_head);
+#endif
 #ifdef IPA_OPT_WIFI_DP
 	QDF_STATUS (*ipa_rx_super_rule_setup)(struct cdp_soc_t *soc_hdl,
 					      void *flt_params);
@@ -2494,6 +2522,16 @@ struct cdp_sawf_ops {
 				uint8_t svc_id, uint8_t direction,
 				uint8_t start_or_stop, uint8_t *peer_mac,
 				uint16_t peer_id);
+#endif
+#ifdef WLAN_FEATURE_11BE_MLO_3_LINK_TX
+	uint16_t
+	(*get_peer_msduq)(struct net_device *netdev, uint8_t *dest_mac,
+			  uint32_t dscp_pcp, bool pcp);
+	QDF_STATUS
+	(*sawf_3_link_peer_flow_count)(struct cdp_soc_t *hdl,
+				       uint8_t *mac_addr,
+				       uint16_t peer_id,
+				       uint32_t mark_metadata);
 #endif
 };
 #endif

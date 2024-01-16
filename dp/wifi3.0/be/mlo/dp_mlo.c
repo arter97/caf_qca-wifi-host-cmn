@@ -26,6 +26,9 @@
 #include <wlan_mlo_mgr_cmn.h>
 #include "dp_umac_reset.h"
 
+#define dp_aggregate_vdev_stats_for_unmapped_peers(_tgtobj, _srcobj) \
+	DP_UPDATE_VDEV_STATS_FOR_UNMAPPED_PEERS(_tgtobj, _srcobj)
+
 #ifdef DP_UMAC_HW_RESET_SUPPORT
 /**
  * dp_umac_reset_update_partner_map() - Update Umac reset partner map
@@ -390,7 +393,7 @@ static void dp_mlo_update_mlo_ts_offset(struct cdp_soc_t *soc_hdl,
 static inline
 void dp_aggregate_vdev_basic_stats(
 			struct cdp_vdev_stats *tgt_vdev_stats,
-			struct cdp_vdev_stats *src_vdev_stats)
+			struct dp_vdev_stats *src_vdev_stats)
 {
 	DP_UPDATE_BASIC_STATS(tgt_vdev_stats, src_vdev_stats);
 }
@@ -399,47 +402,37 @@ void dp_aggregate_vdev_basic_stats(
  * dp_aggregate_vdev_ingress_stats() - aggregate vdev ingress stats
  * @tgt_vdev_stats: target vdev buffer
  * @src_vdev_stats: source vdev buffer
+ * @xmit_type: xmit type of packet - MLD/Link
  *
  * return: void
  */
 static inline
 void dp_aggregate_vdev_ingress_stats(
 			struct cdp_vdev_stats *tgt_vdev_stats,
-			struct cdp_vdev_stats *src_vdev_stats)
+			struct dp_vdev_stats *src_vdev_stats,
+			enum dp_pkt_xmit_type xmit_type)
 {
 	/* Aggregate vdev ingress stats */
-	DP_UPDATE_INGRESS_STATS(tgt_vdev_stats, src_vdev_stats);
-}
-
-/**
- * dp_aggregate_vdev_stats_for_unmapped_peers() - aggregate unmap peer stats
- * @tgt_vdev_stats: target vdev buffer
- * @src_vdev_stats: source vdev buffer
- *
- * return: void
- */
-static inline
-void dp_aggregate_vdev_stats_for_unmapped_peers(
-			struct cdp_vdev_stats *tgt_vdev_stats,
-			struct cdp_vdev_stats *src_vdev_stats)
-{
-	/* Aggregate unmapped peers stats */
-	DP_UPDATE_VDEV_STATS_FOR_UNMAPPED_PEERS(tgt_vdev_stats, src_vdev_stats);
+	DP_UPDATE_LINK_VDEV_INGRESS_STATS(tgt_vdev_stats, src_vdev_stats,
+					 xmit_type);
 }
 
 /**
  * dp_aggregate_all_vdev_stats() - aggregate vdev ingress and unmap peer stats
  * @tgt_vdev_stats: target vdev buffer
  * @src_vdev_stats: source vdev buffer
+ * @xmit_type: xmit type of packet - MLD/Link
  *
  * return: void
  */
 static inline
 void dp_aggregate_all_vdev_stats(
 			struct cdp_vdev_stats *tgt_vdev_stats,
-			struct cdp_vdev_stats *src_vdev_stats)
+			struct dp_vdev_stats *src_vdev_stats,
+			enum dp_pkt_xmit_type xmit_type)
 {
-	dp_aggregate_vdev_ingress_stats(tgt_vdev_stats, src_vdev_stats);
+	dp_aggregate_vdev_ingress_stats(tgt_vdev_stats, src_vdev_stats,
+					xmit_type);
 	dp_aggregate_vdev_stats_for_unmapped_peers(tgt_vdev_stats,
 						   src_vdev_stats);
 }
@@ -449,13 +442,15 @@ void dp_aggregate_all_vdev_stats(
  * @be_vdev: Dp Vdev handle
  * @bridge_vdev: Dp vdev handle for bridge vdev
  * @arg: buffer for target vdev stats
+ * @xmit_type: xmit type of packet - MLD/Link
  *
  * return: void
  */
 static
 void dp_mlo_vdev_stats_aggr_bridge_vap(struct dp_vdev_be *be_vdev,
 				       struct dp_vdev *bridge_vdev,
-				       void *arg)
+				       void *arg,
+				       enum dp_pkt_xmit_type xmit_type)
 {
 	struct cdp_vdev_stats *tgt_vdev_stats = (struct cdp_vdev_stats *)arg;
 	struct dp_vdev_be *bridge_be_vdev = NULL;
@@ -464,10 +459,48 @@ void dp_mlo_vdev_stats_aggr_bridge_vap(struct dp_vdev_be *be_vdev,
 	if (!bridge_be_vdev)
 		return;
 
-	dp_aggregate_all_vdev_stats(tgt_vdev_stats, &bridge_vdev->stats);
-	dp_aggregate_all_vdev_stats(tgt_vdev_stats, &bridge_be_vdev->mlo_stats);
+	dp_aggregate_all_vdev_stats(tgt_vdev_stats, &bridge_vdev->stats,
+				    xmit_type);
+	dp_aggregate_vdev_stats_for_unmapped_peers(tgt_vdev_stats,
+						(&bridge_be_vdev->mlo_stats));
 	dp_vdev_iterate_peer(bridge_vdev, dp_update_vdev_stats, tgt_vdev_stats,
 			     DP_MOD_ID_GENERIC_STATS);
+}
+
+/**
+ * dp_mlo_vdev_stats_aggr_bridge_vap_unified() - aggregate bridge vdev stats for
+ * unified mode, all MLO and legacy packets are submitted to vdev
+ * @be_vdev: Dp Vdev handle
+ * @bridge_vdev: Dp vdev handle for bridge vdev
+ * @arg: buffer for target vdev stats
+ *
+ * return: void
+ */
+static
+void dp_mlo_vdev_stats_aggr_bridge_vap_unified(struct dp_vdev_be *be_vdev,
+				       struct dp_vdev *bridge_vdev,
+				       void *arg)
+{
+	dp_mlo_vdev_stats_aggr_bridge_vap(be_vdev, bridge_vdev, arg,
+					  DP_XMIT_TOTAL);
+}
+
+/**
+ * dp_mlo_vdev_stats_aggr_bridge_vap_mld() - aggregate bridge vdev stats for MLD
+ * mode, all MLO packets are submitted to MLD
+ * @be_vdev: Dp Vdev handle
+ * @bridge_vdev: Dp vdev handle for bridge vdev
+ * @arg: buffer for target vdev stats
+ *
+ * return: void
+ */
+static
+void dp_mlo_vdev_stats_aggr_bridge_vap_mld(struct dp_vdev_be *be_vdev,
+				       struct dp_vdev *bridge_vdev,
+				       void *arg)
+{
+	dp_mlo_vdev_stats_aggr_bridge_vap(be_vdev, bridge_vdev, arg,
+					  DP_XMIT_MLD);
 }
 
 /**
@@ -500,21 +533,21 @@ void dp_aggregate_interface_stats_based_on_peer_type(
 
 	if (peer_type == DP_PEER_TYPE_LEGACY) {
 		dp_aggregate_all_vdev_stats(tgt_vdev_stats,
-					    &vdev->stats);
+					    &vdev->stats, DP_XMIT_LINK);
 	} else {
 		if (be_vdev->mcast_primary) {
 			dp_mlo_iter_ptnr_vdev(be_soc, be_vdev,
-					      dp_mlo_vdev_stats_aggr_bridge_vap,
+					      dp_mlo_vdev_stats_aggr_bridge_vap_mld,
 					      (void *)vdev_stats,
 					      DP_MOD_ID_GENERIC_STATS,
 					      DP_BRIDGE_VDEV_ITER,
 					      DP_VDEV_ITERATE_SKIP_SELF);
 		}
 		dp_aggregate_vdev_ingress_stats(tgt_vdev_stats,
-						&vdev->stats);
+						&vdev->stats, DP_XMIT_MLD);
 		dp_aggregate_vdev_stats_for_unmapped_peers(
-						tgt_vdev_stats,
-						&be_vdev->mlo_stats);
+							tgt_vdev_stats,
+							(&be_vdev->mlo_stats));
 	}
 
 	/* Aggregate associated peer stats */
@@ -549,14 +582,16 @@ void dp_aggregate_interface_stats(struct dp_vdev *vdev,
 
 	if (be_vdev->mcast_primary) {
 		dp_mlo_iter_ptnr_vdev(be_soc, be_vdev,
-				      dp_mlo_vdev_stats_aggr_bridge_vap,
+				      dp_mlo_vdev_stats_aggr_bridge_vap_unified,
 				      (void *)vdev_stats, DP_MOD_ID_GENERIC_STATS,
 				      DP_BRIDGE_VDEV_ITER,
 				      DP_VDEV_ITERATE_SKIP_SELF);
 	}
 
-	dp_aggregate_all_vdev_stats(vdev_stats, &be_vdev->mlo_stats);
-	dp_aggregate_all_vdev_stats(vdev_stats, &vdev->stats);
+	dp_aggregate_vdev_stats_for_unmapped_peers(vdev_stats,
+						(&be_vdev->mlo_stats));
+	dp_aggregate_all_vdev_stats(vdev_stats, &vdev->stats,
+				    DP_XMIT_TOTAL);
 
 	dp_vdev_iterate_peer(vdev, dp_update_vdev_stats, vdev_stats,
 			     DP_MOD_ID_GENERIC_STATS);
@@ -644,7 +679,8 @@ dp_aggregate_sta_interface_stats(struct dp_soc *soc,
 		link_peer = link_peers_info.link_peers[i];
 		dp_update_vdev_stats(soc, link_peer, buf);
 		dp_aggregate_vdev_ingress_stats((struct cdp_vdev_stats *)buf,
-						&link_peer->vdev->stats);
+						&link_peer->vdev->stats,
+						DP_XMIT_TOTAL);
 		dp_aggregate_vdev_basic_stats(
 					(struct cdp_vdev_stats *)buf,
 					&link_peer->vdev->stats);
@@ -695,6 +731,11 @@ static QDF_STATUS dp_mlo_get_mld_vdev_stats(struct cdp_soc_t *soc_hdl,
 				      DP_MOD_ID_GENERIC_STATS,
 				      DP_LINK_VDEV_ITER,
 				      DP_VDEV_ITERATE_SKIP_SELF);
+
+		/* Aggregate vdev stats from MLO ctx for detached MLO Links */
+		dp_update_mlo_link_vdev_ctxt_stats(buf,
+						  &vdev_be->mlo_dev_ctxt->stats,
+						  DP_XMIT_MLD);
 	} else {
 		dp_aggregate_interface_stats(vdev, buf);
 
@@ -707,10 +748,12 @@ static QDF_STATUS dp_mlo_get_mld_vdev_stats(struct cdp_soc_t *soc_hdl,
 				      DP_MOD_ID_GENERIC_STATS,
 				      DP_LINK_VDEV_ITER,
 				      DP_VDEV_ITERATE_SKIP_SELF);
-	}
 
-	/* Aggregate vdev stats from MLO ctx for detached MLO Links */
-	dp_update_mlo_ctxt_stats(buf, &vdev_be->mlo_dev_ctxt->stats);
+		/* Aggregate vdev stats from MLO ctx for detached MLO Links */
+		dp_update_mlo_link_vdev_ctxt_stats(buf,
+						  &vdev_be->mlo_dev_ctxt->stats,
+						  DP_XMIT_TOTAL);
+	}
 
 complete:
 	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_GENERIC_STATS);
@@ -1692,6 +1735,53 @@ dp_get_umac_reset_in_progress_state(struct cdp_soc_t *psoc)
 	return (umac_reset_is_inprogress ?
 			CDP_UMAC_RESET_IN_PROGRESS_DURING_BUFFER_WINDOW :
 			CDP_UMAC_RESET_NOT_IN_PROGRESS);
+}
+
+/**
+ * dp_get_global_tx_desc_cleanup_flag() - Get cleanup needed flag
+ * @soc: dp soc handle
+ *
+ * Return: cleanup needed/ not needed
+ */
+bool dp_get_global_tx_desc_cleanup_flag(struct dp_soc *soc)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	struct dp_mlo_ctxt *mlo_ctx = be_soc->ml_ctxt;
+	struct dp_soc_mlo_umac_reset_ctx *grp_umac_reset_ctx;
+	bool flag;
+
+	if (!mlo_ctx)
+		return true;
+
+	grp_umac_reset_ctx = &mlo_ctx->grp_umac_reset_ctx;
+	qdf_spin_lock_bh(&grp_umac_reset_ctx->grp_ctx_lock);
+
+	flag = grp_umac_reset_ctx->tx_desc_pool_cleaned;
+	if (!flag)
+		grp_umac_reset_ctx->tx_desc_pool_cleaned = true;
+
+	qdf_spin_unlock_bh(&grp_umac_reset_ctx->grp_ctx_lock);
+
+	return !flag;
+}
+
+/**
+ * dp_reset_global_tx_desc_cleanup_flag() - Reset cleanup needed flag
+ * @soc: dp soc handle
+ *
+ * Return: None
+ */
+void dp_reset_global_tx_desc_cleanup_flag(struct dp_soc *soc)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	struct dp_mlo_ctxt *mlo_ctx = be_soc->ml_ctxt;
+	struct dp_soc_mlo_umac_reset_ctx *grp_umac_reset_ctx;
+
+	if (!mlo_ctx)
+		return;
+
+	grp_umac_reset_ctx = &mlo_ctx->grp_umac_reset_ctx;
+	grp_umac_reset_ctx->tx_desc_pool_cleaned = false;
 }
 #endif
 

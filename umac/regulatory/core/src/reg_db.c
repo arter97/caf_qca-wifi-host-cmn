@@ -2113,9 +2113,11 @@ QDF_STATUS reg_get_num_reg_dmn_pairs(int *num_reg_dmn)
 	return QDF_STATUS_SUCCESS;
 }
 
-bool reg_etsi13_regdmn(uint8_t reg_dmn)
+bool reg_etsi_regdmn(uint8_t reg_dmn)
 {
-	return reg_dmn == ETSI13;
+	return ((reg_dmn == ETSI13) ||
+		(reg_dmn == ETSI18) ||
+		(reg_dmn == ETSI20));
 }
 
 bool reg_fcc_regdmn(uint8_t reg_dmn)

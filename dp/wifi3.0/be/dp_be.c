@@ -190,6 +190,11 @@ static void dp_soc_cfg_attach_be(struct dp_soc *soc)
 	/* this is used only when dmac mode is enabled */
 	soc->num_rx_refill_buf_rings = 1;
 
+	/*
+	 * do not allocate TCL credit ring for BE as we already have
+	 * 4 TCL_DATA rings
+	 */
+	soc->init_tcl_cmd_cred_ring = false;
 	soc->wlan_cfg_ctx->notify_frame_support =
 				DP_MARK_NOTIFY_FRAME_SUPPORT;
 }
@@ -1582,10 +1587,22 @@ fail:
 	}
 }
 
+static inline
+void dp_tx_update_vp_profile(struct dp_soc_be *soc,
+			     struct dp_vdev_be *vdev)
+{
+	dp_tx_ppeds_vp_profile_update(soc, vdev);
+}
 #else
 static inline
 void dp_soc_txrx_peer_setup_be(struct dp_soc *soc, uint8_t vdev_id,
 			       uint8_t *peer_mac)
+{
+}
+
+static inline
+void dp_tx_update_vp_profile(struct dp_soc_be *soc,
+			     struct dp_vdev_be *vdev)
 {
 }
 #endif
@@ -2302,6 +2319,7 @@ static void dp_soc_srng_deinit_be(struct dp_soc *soc)
 
 	if (soc->features.dmac_cmn_src_rxbuf_ring_enabled) {
 		for (i = 0; i < soc->num_rx_refill_buf_rings; i++) {
+			dp_ssr_dump_srng_unregister("rx_refill_buf_ring", i);
 			dp_srng_deinit(soc, &soc->rx_refill_buf_ring[i],
 				       RXDMA_BUF, 0);
 		}
@@ -2364,6 +2382,9 @@ static QDF_STATUS dp_soc_srng_init_be(struct dp_soc *soc)
 				       soc);
 				goto fail;
 			}
+			dp_ssr_dump_srng_register("rx_refill_buf_ring",
+						  &soc->rx_refill_buf_ring[i],
+						  i);
 		}
 	}
 
@@ -2774,15 +2795,50 @@ static void dp_txrx_set_mlo_mcast_primary_vdev_param_be(
 	}
 }
 
-static
-void dp_get_vdev_stats_for_unmap_peer_be(struct dp_vdev *vdev,
-					 struct dp_peer *peer,
-					 struct cdp_vdev_stats **vdev_stats)
+static void dp_get_vdev_stats_for_unmap_peer_mlo(struct dp_vdev *vdev,
+						    struct dp_peer *peer)
 {
 	struct dp_vdev_be *be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
+	struct cdp_vdev_stats *vdev_stats = &be_vdev->mlo_stats;
+	struct dp_txrx_peer *txrx_peer = dp_get_txrx_peer(peer);
+	struct dp_pdev *pdev = vdev->pdev;
+	struct dp_soc *soc = vdev->pdev->soc;
+	uint8_t link_id = dp_get_peer_hw_link_id(soc, pdev);
+	struct dp_peer_per_pkt_stats *per_pkt_stats;
 
-	if (!IS_DP_LEGACY_PEER(peer))
-		*vdev_stats = &be_vdev->mlo_stats;
+	if (!txrx_peer)
+		goto link_stats;
+
+	dp_peer_aggregate_tid_stats(peer);
+
+	if (!IS_MLO_DP_LINK_PEER(peer)) {
+		per_pkt_stats = &txrx_peer->stats[0].per_pkt_stats;
+		dp_update_vdev_basic_stats(txrx_peer, vdev_stats);
+		DP_UPDATE_PER_PKT_STATS(vdev_stats, per_pkt_stats);
+	}
+
+	if (IS_MLO_DP_LINK_PEER(peer)) {
+		link_id = dp_get_peer_hw_link_id(soc, pdev);
+		if (link_id > 0) {
+			per_pkt_stats =
+				&txrx_peer->stats[link_id].per_pkt_stats;
+			DP_UPDATE_PER_PKT_STATS(vdev_stats, per_pkt_stats);
+		}
+	}
+
+link_stats:
+	dp_monitor_peer_get_stats(soc, peer, vdev_stats, UPDATE_VDEV_STATS_MLD);
+}
+
+static
+void dp_get_vdev_stats_for_unmap_peer_be(struct dp_vdev *vdev,
+					 struct dp_peer *peer)
+{
+
+	if (IS_DP_LEGACY_PEER(peer))
+		dp_get_vdev_stats_for_unmap_peer_legacy(vdev, peer);
+	else
+		dp_get_vdev_stats_for_unmap_peer_mlo(vdev, peer);
 }
 #else
 static void dp_txrx_set_mlo_mcast_primary_vdev_param_be(
@@ -2880,8 +2936,7 @@ QDF_STATUS dp_txrx_get_vdev_mcast_param_be(struct dp_soc *soc,
 
 static
 void dp_get_vdev_stats_for_unmap_peer_be(struct dp_vdev *vdev,
-					 struct dp_peer *peer,
-					 struct cdp_vdev_stats **vdev_stats)
+					 struct dp_peer *peer)
 {
 }
 #endif
@@ -2926,6 +2981,7 @@ QDF_STATUS dp_txrx_set_vdev_param_be(struct dp_soc *soc,
 	case CDP_UPDATE_DSCP_TO_TID_MAP:
 	case CDP_UPDATE_TDLS_FLAGS:
 		dp_tx_update_bank_profile(be_soc, be_vdev);
+		dp_tx_update_vp_profile(be_soc, be_vdev);
 		break;
 	case CDP_ENABLE_CIPHER:
 		if (vdev->tx_encap_type == htt_cmn_pkt_type_raw)
@@ -3297,10 +3353,10 @@ QDF_STATUS dp_mlo_dev_ctxt_vdev_detach(struct cdp_soc_t *soc_hdl,
 	be_vdev->mlo_dev_ctxt = NULL;
 
 	/* Save vdev stats in MLO dev ctx */
-	dp_update_mlo_ctxt_stats(&mlo_dev_ctxt->stats, &vdev->stats);
+	dp_update_mlo_mld_vdev_ctxt_stats(&mlo_dev_ctxt->stats, &vdev->stats);
 
 	/* reset vdev stats to zero */
-	qdf_mem_set(&vdev->stats, sizeof(struct cdp_vdev_stats), 0);
+	qdf_mem_set(&vdev->stats, sizeof(struct dp_vdev_stats), 0);
 
 	/* unref for mlo ctxt removed from be_vdev*/
 	dp_mlo_dev_ctxt_unref_delete(mlo_dev_ctxt, DP_MOD_ID_CHILD);
@@ -3841,6 +3897,7 @@ QDF_STATUS dp_htt_reo_migration(struct dp_soc *soc, uint16_t peer_id,
 	struct dp_ast_entry *ast_entry;
 	uint16_t hw_peer_id;
 	uint16_t ast_hash;
+	int i = 0;
 
 	if (!dp_mlo) {
 		dp_htt_err("Invalid dp_mlo ctxt");
@@ -3894,7 +3951,10 @@ QDF_STATUS dp_htt_reo_migration(struct dp_soc *soc, uint16_t peer_id,
 
 	/* delete ast entry for current primary peer */
 	qdf_spin_lock_bh(&current_pr_soc->ast_lock);
-	ast_entry = dp_peer_ast_hash_find_soc(current_pr_soc, mld_peer->mac_addr.raw);
+	ast_entry = dp_peer_ast_hash_find_soc_by_type(
+				current_pr_soc,
+				mld_peer->mac_addr.raw,
+				CDP_TXRX_AST_TYPE_MLD);
 	if (!ast_entry) {
 		dp_htt_err("Invalid ast entry");
 		qdf_spin_unlock_bh(&current_pr_soc->ast_lock);
@@ -3923,6 +3983,21 @@ QDF_STATUS dp_htt_reo_migration(struct dp_soc *soc, uint16_t peer_id,
 	peer_info->chip_id = chip_id;
 	peer_info->hw_peer_id = hw_peer_id;
 	peer_info->ast_hash = ast_hash;
+
+
+	for (i = 0; i < DP_MAX_TIDS; i++) {
+		rx_tid = &mld_peer->rx_tid[i];
+		if (!rx_tid)
+			continue;
+
+		qdf_mem_zero(&params, sizeof(params));
+		params.std.need_status = 1;
+		params.std.addr_lo = rx_tid->hw_qdesc_paddr & 0xffffffff;
+		params.std.addr_hi = (uint64_t)(rx_tid->hw_qdesc_paddr) >> 32;
+
+		status = dp_reo_send_cmd(current_pr_soc, CMD_FLUSH_QUEUE, &params,
+					 NULL,NULL);
+	}
 
 	qdf_mem_zero(&params, sizeof(params));
 

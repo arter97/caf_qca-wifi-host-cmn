@@ -69,6 +69,37 @@ dp_rx_update_flow_info(qdf_nbuf_t nbuf, uint8_t *rx_tlv_hdr)
 }
 #endif
 
+#ifdef DP_RX_MSDU_DONE_FAIL_HISTORY
+static inline void
+dp_rx_msdu_done_fail_event_record(struct dp_soc *soc,
+				  struct dp_rx_desc *rx_desc,
+				  qdf_nbuf_t nbuf)
+{
+	struct dp_msdu_done_fail_entry *entry;
+	uint32_t idx;
+
+	if (qdf_unlikely(!soc->msdu_done_fail_hist))
+		return;
+
+	idx = dp_history_get_next_index(&soc->msdu_done_fail_hist->index,
+					DP_MSDU_DONE_FAIL_HIST_MAX);
+	entry = &soc->msdu_done_fail_hist->entry[idx];
+	entry->paddr = qdf_nbuf_get_frag_paddr(nbuf, 0);
+
+	if (rx_desc)
+		entry->sw_cookie = rx_desc->cookie;
+	else
+		entry->sw_cookie = 0xDEAD;
+}
+#else
+static inline void
+dp_rx_msdu_done_fail_event_record(struct dp_soc *soc,
+				  struct dp_rx_desc *rx_desc,
+				  qdf_nbuf_t nbuf)
+{
+}
+#endif
+
 #ifndef AST_OFFLOAD_ENABLE
 static void
 dp_rx_wds_learn(struct dp_soc *soc,
@@ -165,6 +196,84 @@ dp_rx_wds_learn(struct dp_soc *soc,
 		qdf_nbuf_t nbuf)
 {
 	dp_wds_ext_peer_learn_be(soc, ta_txrx_peer, rx_tlv_hdr, nbuf);
+}
+#endif
+
+#ifdef DP_RX_PEEK_MSDU_DONE_WAR
+static inline int dp_rx_war_peek_msdu_done(struct dp_soc *soc,
+					   struct dp_rx_desc *rx_desc)
+{
+	uint8_t *rx_tlv_hdr;
+
+	qdf_nbuf_sync_for_cpu(soc->osdev, rx_desc->nbuf, QDF_DMA_FROM_DEVICE);
+	rx_tlv_hdr = qdf_nbuf_data(rx_desc->nbuf);
+
+	return hal_rx_tlv_msdu_done_get_be(rx_tlv_hdr);
+}
+
+/**
+ * dp_rx_delink_n_rel_rx_desc() - unmap & free the nbuf in the rx_desc
+ * @soc: DP SoC handle
+ * @rx_desc: rx_desc handle of the nbuf to be unmapped & freed
+ * @reo_ring_num: REO_RING_NUM corresponding to the REO for which the
+ *		  bottom half is being serviced.
+ *
+ * Return: None
+ */
+static inline void
+dp_rx_delink_n_rel_rx_desc(struct dp_soc *soc, struct dp_rx_desc *rx_desc,
+			   uint8_t reo_ring_num)
+{
+	if (!rx_desc)
+		return;
+
+	dp_rx_nbuf_unmap(soc, rx_desc, reo_ring_num);
+	dp_rx_nbuf_free(rx_desc->nbuf);
+	/*
+	 * RX_DESC flags:
+	 * in_use = 0 will be set when this rx_desc is added to local freelist
+	 * unmapped = 1 will be set by dp_rx_nbuf_unmap
+	 * in_err_state = 0 will be set during replenish
+	 * has_reuse_nbuf need not be touched.
+	 * msdu_done_fail = 0 should be set here ..!!
+	 */
+	rx_desc->msdu_done_fail = 0;
+}
+
+static inline struct dp_rx_desc *
+dp_rx_war_store_msdu_done_fail_desc(struct dp_soc *soc,
+				    struct dp_rx_desc *rx_desc,
+				    uint8_t reo_ring_num)
+{
+	struct dp_rx_msdu_done_fail_desc_list *msdu_done_fail_desc_list =
+						&soc->msdu_done_fail_desc_list;
+	struct dp_rx_desc *old_rx_desc;
+	uint32_t idx;
+
+	idx = dp_get_next_index(&msdu_done_fail_desc_list->index,
+				DP_MSDU_DONE_FAIL_DESCS_MAX);
+
+	old_rx_desc = msdu_done_fail_desc_list->msdu_done_fail_descs[idx];
+	dp_rx_delink_n_rel_rx_desc(soc, old_rx_desc, reo_ring_num);
+
+	msdu_done_fail_desc_list->msdu_done_fail_descs[idx] = rx_desc;
+
+	return old_rx_desc;
+}
+
+#else
+static inline int dp_rx_war_peek_msdu_done(struct dp_soc *soc,
+					   struct dp_rx_desc *rx_desc)
+{
+	return 1;
+}
+
+static inline struct dp_rx_desc *
+dp_rx_war_store_msdu_done_fail_desc(struct dp_soc *soc,
+				    struct dp_rx_desc *rx_desc,
+				    uint8_t reo_ring_num)
+{
+	return NULL;
 }
 #endif
 
@@ -422,6 +531,29 @@ more_data:
 				}
 				is_prev_msdu_last = false;
 			}
+		} else if (qdf_unlikely(!dp_rx_war_peek_msdu_done(soc,
+								  rx_desc))) {
+			struct dp_rx_desc *old_rx_desc =
+					dp_rx_war_store_msdu_done_fail_desc(
+								soc, rx_desc,
+								reo_ring_num);
+			if (qdf_likely(old_rx_desc)) {
+				rx_bufs_reaped[rx_desc->chip_id][rx_desc->pool_id]++;
+				dp_rx_add_to_free_desc_list
+					(&head[rx_desc->chip_id][rx_desc->pool_id],
+					 &tail[rx_desc->chip_id][rx_desc->pool_id],
+					 old_rx_desc);
+				quota -= 1;
+				num_pending -= 1;
+				num_rx_bufs_reaped++;
+			}
+			rx_desc->msdu_done_fail = 1;
+			DP_STATS_INC(soc, rx.err.msdu_done_fail, 1);
+			dp_err("MSDU DONE failure %d",
+			       soc->stats.rx.err.msdu_done_fail);
+			dp_rx_msdu_done_fail_event_record(soc, rx_desc,
+							  rx_desc->nbuf);
+			continue;
 		}
 
 		if (!is_prev_msdu_last &&
@@ -612,10 +744,12 @@ done:
 		 */
 		if (qdf_unlikely(!qdf_nbuf_is_rx_chfrag_cont(nbuf) &&
 				 !hal_rx_tlv_msdu_done_get_be(rx_tlv_hdr))) {
-			dp_err("MSDU DONE failure");
 			DP_STATS_INC(soc, rx.err.msdu_done_fail, 1);
+			dp_err("MSDU DONE failure %d",
+			       soc->stats.rx.err.msdu_done_fail);
 			hal_rx_dump_pkt_tlvs(hal_soc, rx_tlv_hdr,
 					     QDF_TRACE_LEVEL_INFO);
+			dp_rx_msdu_done_fail_event_record(soc, NULL, nbuf);
 			tid_stats->fail_cnt[MSDU_DONE_FAILURE]++;
 			dp_rx_nbuf_free(nbuf);
 			qdf_assert(0);
@@ -1365,11 +1499,6 @@ dp_rx_intrabss_ucast_check_be(qdf_nbuf_t nbuf,
 	if (!qdf_nbuf_is_intra_bss(nbuf))
 		return false;
 
-	if (!be_vdev->mlo_dev_ctxt) {
-		params->tx_vdev_id = ta_peer->vdev->vdev_id;
-		return true;
-	}
-
 	hal_rx_tlv_get_dest_chip_pmac_id(rx_tlv_hdr,
 					 &dest_chip_id,
 					 &dest_chip_pmac_id);
@@ -1395,6 +1524,11 @@ dp_rx_intrabss_ucast_check_be(qdf_nbuf_t nbuf,
 			return false;
 		}
 		dp_peer_unref_delete(da_peer, DP_MOD_ID_RX);
+	}
+
+	if (!be_vdev->mlo_dev_ctxt) {
+		params->tx_vdev_id = ta_peer->vdev->vdev_id;
+		return true;
 	}
 
 	if (dest_chip_id == be_soc->mlo_chip_id) {
@@ -1749,6 +1883,94 @@ bool dp_rx_intrabss_fwd_be(struct dp_soc *soc, struct dp_txrx_peer *ta_peer,
 }
 #endif
 
+#ifndef BE_WBM_RELEASE_DESC_RX_SG_SUPPORT
+/**
+ * dp_rx_chain_msdus_be() - Function to chain all msdus of a mpdu
+ *			    to pdev invalid peer list
+ *
+ * @soc: core DP main context
+ * @nbuf: Buffer pointer
+ * @rx_tlv_hdr: start of rx tlv header
+ * @mac_id: mac id
+ *
+ *  Return: bool: true for last msdu of mpdu
+ */
+static bool dp_rx_chain_msdus_be(struct dp_soc *soc, qdf_nbuf_t nbuf,
+				 uint8_t *rx_tlv_hdr, uint8_t mac_id)
+{
+	bool mpdu_done = false;
+	qdf_nbuf_t curr_nbuf = NULL;
+	qdf_nbuf_t tmp_nbuf = NULL;
+
+	struct dp_pdev *dp_pdev = dp_get_pdev_for_lmac_id(soc, mac_id);
+
+	if (!dp_pdev) {
+		dp_rx_debug("%pK: pdev is null for mac_id = %d", soc, mac_id);
+		return mpdu_done;
+	}
+	/* if invalid peer SG list has max values free the buffers in list
+	 * and treat current buffer as start of list
+	 *
+	 * current logic to detect the last buffer from attn_tlv is not reliable
+	 * in OFDMA UL scenario hence add max buffers check to avoid list pile
+	 * up
+	 */
+	if (!dp_pdev->first_nbuf ||
+	    (dp_pdev->invalid_peer_head_msdu &&
+	    QDF_NBUF_CB_RX_NUM_ELEMENTS_IN_LIST
+	    (dp_pdev->invalid_peer_head_msdu) >= DP_MAX_INVALID_BUFFERS)) {
+		qdf_nbuf_set_rx_chfrag_start(nbuf, 1);
+		dp_pdev->first_nbuf = true;
+
+		/* If the new nbuf received is the first msdu of the
+		 * amsdu and there are msdus in the invalid peer msdu
+		 * list, then let us free all the msdus of the invalid
+		 * peer msdu list.
+		 * This scenario can happen when we start receiving
+		 * new a-msdu even before the previous a-msdu is completely
+		 * received.
+		 */
+		curr_nbuf = dp_pdev->invalid_peer_head_msdu;
+		while (curr_nbuf) {
+			tmp_nbuf = curr_nbuf->next;
+			dp_rx_nbuf_free(curr_nbuf);
+			curr_nbuf = tmp_nbuf;
+		}
+
+		dp_pdev->invalid_peer_head_msdu = NULL;
+		dp_pdev->invalid_peer_tail_msdu = NULL;
+
+		dp_monitor_get_mpdu_status(dp_pdev, soc, rx_tlv_hdr);
+	}
+
+	if (qdf_nbuf_is_rx_chfrag_end(nbuf) &&
+	    hal_rx_attn_msdu_done_get(soc->hal_soc, rx_tlv_hdr)) {
+		qdf_assert_always(dp_pdev->first_nbuf);
+		dp_pdev->first_nbuf = false;
+		mpdu_done = true;
+	}
+
+	/*
+	 * For MCL, invalid_peer_head_msdu and invalid_peer_tail_msdu
+	 * should be NULL here, add the checking for debugging purpose
+	 * in case some corner case.
+	 */
+	DP_PDEV_INVALID_PEER_MSDU_CHECK(dp_pdev->invalid_peer_head_msdu,
+					dp_pdev->invalid_peer_tail_msdu);
+	DP_RX_LIST_APPEND(dp_pdev->invalid_peer_head_msdu,
+			  dp_pdev->invalid_peer_tail_msdu,
+			  nbuf);
+
+	return mpdu_done;
+}
+#else
+static bool dp_rx_chain_msdus_be(struct dp_soc *soc, qdf_nbuf_t nbuf,
+				 uint8_t *rx_tlv_hdr, uint8_t mac_id)
+{
+	return false;
+}
+#endif
+
 qdf_nbuf_t
 dp_rx_wbm_err_reap_desc_be(struct dp_intr *int_ctx, struct dp_soc *soc,
 			   hal_ring_handle_t hal_ring_hdl, uint32_t quota,
@@ -1835,13 +2057,6 @@ dp_rx_wbm_err_reap_desc_be(struct dp_intr *int_ctx, struct dp_soc *soc,
 			dp_info_rl("Rx error Nbuf %pK sanity check failure!",
 				   rx_desc->nbuf);
 			rx_desc->in_err_state = 1;
-			rx_desc->unmapped = 1;
-			rx_bufs_reaped[rx_desc->chip_id][rx_desc->pool_id]++;
-
-			dp_rx_add_to_free_desc_list(
-				&head[rx_desc->chip_id][rx_desc->pool_id],
-				&tail[rx_desc->chip_id][rx_desc->pool_id],
-				rx_desc);
 			continue;
 		}
 
@@ -2096,6 +2311,15 @@ dp_rx_null_q_desc_handle_be(struct dp_soc *soc, qdf_nbuf_t nbuf,
 							   nbuf,
 							   mpdu_done,
 							   pool_id);
+		} else {
+			mpdu_done = dp_rx_chain_msdus_be(soc, nbuf, rx_tlv_hdr,
+							 pool_id);
+
+			/* Trigger invalid peer handler wrapper */
+			dp_rx_process_invalid_peer_wrapper(
+					soc,
+					pdev->invalid_peer_head_msdu,
+					mpdu_done, pool_id);
 		}
 
 		if (mpdu_done) {

@@ -192,6 +192,11 @@ bool wlan_cm_is_vdev_disconnected(struct wlan_objmgr_vdev *vdev)
 	return cm_is_vdev_disconnected(vdev);
 }
 
+bool wlan_cm_is_vdev_idle_due_to_link_switch(struct wlan_objmgr_vdev *vdev)
+{
+	return cm_is_vdev_idle_due_to_link_switch(vdev);
+}
+
 bool wlan_cm_is_vdev_roaming(struct wlan_objmgr_vdev *vdev)
 {
 	return cm_is_vdev_roaming(vdev);
@@ -233,9 +238,31 @@ bool wlan_cm_get_active_connect_req(struct wlan_objmgr_vdev *vdev,
 	return cm_get_active_connect_req(vdev, req);
 }
 
+QDF_STATUS
+wlan_cm_get_active_connect_req_param(struct wlan_objmgr_vdev *vdev,
+				     struct wlan_cm_connect_req *req)
+{
+	return cm_get_active_connect_req_param(vdev, req);
+}
+
 cm_ext_t *wlan_cm_get_ext_hdl(struct wlan_objmgr_vdev *vdev)
 {
 	return cm_get_ext_hdl(vdev);
+}
+
+bool wlan_cm_is_first_candidate_connect_attempt(struct wlan_objmgr_vdev *vdev)
+{
+	return cm_is_first_candidate_connect_attempt(vdev);
+}
+
+bool wlan_cm_is_link_switch_disconnect_resp(struct wlan_cm_discon_rsp *resp)
+{
+	return cm_is_link_switch_disconnect_resp(resp);
+}
+
+bool wlan_cm_is_link_switch_connect_resp(struct wlan_cm_connect_resp *resp)
+{
+	return cm_is_link_switch_connect_resp(resp);
 }
 
 #ifdef WLAN_FEATURE_HOST_ROAM
@@ -338,6 +365,14 @@ void wlan_cm_hw_mode_change_resp(struct wlan_objmgr_pdev *pdev, uint8_t vdev_id,
 		cm_hw_mode_change_resp(pdev, vdev_id, cm_id, status);
 }
 #endif /* ifdef POLICY_MGR_ENABLE */
+
+#ifdef WLAN_FEATURE_LL_LT_SAP
+void wlan_cm_bearer_switch_resp(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id,
+				wlan_cm_id cm_id, QDF_STATUS status)
+{
+	cm_bearer_switch_resp(psoc, vdev_id, cm_id, status);
+}
+#endif
 
 #ifdef SM_ENG_HIST_ENABLE
 void wlan_cm_sm_history_print(struct wlan_objmgr_vdev *vdev)

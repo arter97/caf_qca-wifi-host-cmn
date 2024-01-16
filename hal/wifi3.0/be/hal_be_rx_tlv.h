@@ -817,6 +817,11 @@ struct rx_mon_pkt_tlvs {
 #define HAL_RX_REO_QUEUE_DESC_ADDR_39_32_GET(_rx_pkt_tlv)	\
 	HAL_RX_MPDU_START(_rx_pkt_tlv).rx_reo_queue_desc_addr_39_32
 
+#ifdef WLAN_FEATURE_MARK_FIRST_WAKEUP_PACKET
+#define HAL_RX_TLV_FIRST_WAKEUP_PKT_GET(_rx_pkt_tlv)	\
+	HAL_RX_MSDU_END(_rx_pkt_tlv).reserved_1a
+#endif
+
 /* used by monitor mode for parsing from full TLV */
 #define HAL_RX_MON_GET_FC_VALID(_rx_mpdu_start)	\
 	HAL_RX_GET(rx_mpdu_start, RX_MPDU_INFO, MPDU_FRAME_CONTROL_VALID)
@@ -1887,6 +1892,18 @@ static inline uint8_t hal_rx_get_mpdu_frame_control_valid_be(uint8_t *buf)
 	struct rx_pkt_tlvs *rx_pkt_tlvs = (struct rx_pkt_tlvs *)buf;
 
 	return HAL_RX_TLV_MPDU_GET_FRAME_CONTROL_VALID(rx_pkt_tlvs);
+}
+
+/**
+ * hal_rx_phy_legacy_get_rssi_be() - API to get RSSI from TLV
+ *                                   WIFIPHYRX_RSSI_LEGACY_E
+ * @buf: pointer to the start of WIFIPHYRX_RSSI_LEGACY_E TLV
+ *
+ * Return: value of RSSI
+ */
+static inline int8_t hal_rx_phy_legacy_get_rssi_be(uint8_t *buf)
+{
+	return HAL_RX_GET_64(buf, PHYRX_RSSI_LEGACY, RSSI_COMB);
 }
 
 /**

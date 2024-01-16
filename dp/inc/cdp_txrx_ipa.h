@@ -650,6 +650,33 @@ cdp_ipa_set_perf_level(ol_txrx_soc_handle soc, int client,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef QCA_SUPPORT_WDS_EXTENDED
+/**
+ * cdp_ipa_rx_wdsext_iface() - Forward RX exception packets to wdsext interface
+ * @soc: data path soc handle
+ * @peer_id: Peer id to get respective peer
+ * @skb: socket buffer
+ *
+ * Return: true if packets sent to wds ext interface, else false.
+ */
+static inline bool
+cdp_ipa_rx_wdsext_iface(ol_txrx_soc_handle soc, uint8_t peer_id,
+			qdf_nbuf_t skb)
+{
+	if (!soc || !soc->ops || !soc->ops->ipa_ops) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
+			  "%s invalid instance", __func__);
+		return false;
+	}
+
+	if (soc->ops->ipa_ops->ipa_rx_wdsext_iface)
+		return soc->ops->ipa_ops->ipa_rx_wdsext_iface(soc, peer_id,
+							      skb);
+
+	return false;
+}
+#endif
+
 /**
  * cdp_ipa_rx_intrabss_fwd() - Perform intra-bss fwd for IPA RX path
  *

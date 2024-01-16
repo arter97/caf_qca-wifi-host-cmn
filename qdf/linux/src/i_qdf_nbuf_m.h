@@ -149,6 +149,8 @@
  * @u.tx.dev.priv_cb_m.dma_option.dma_option.reserved: reserved bits for future
  *                                                     use
  * @u.tx.dev.priv_cb_m.flag_notify_comp: reserved
+ * @u.tx.dev.priv_cb_m.flag_ts_valid: flag to indicate field
+ * u.tx.pa_ts.ts_value is available, it must be cleared before fragment mapping
  * @u.tx.dev.priv_cb_m.rsvd: reserved
  * @u.tx.dev.priv_cb_m.reserved: reserved
  *
@@ -183,7 +185,9 @@
  * @u.tx.trace.print: enable packet logging
  *
  * @u.tx.vaddr: virtual address of ~
- * @u.tx.paddr: physical/DMA address of ~
+ * @u.tx.pa_ts.paddr: physical/DMA address of ~
+ * @u.tx.pa_ts.ts_value: driver ingress timestamp, it must be cleared before
+ * fragment mapping
  */
 struct qdf_nbuf_cb {
 	/* common */
@@ -303,7 +307,8 @@ struct qdf_nbuf_cb {
 					} dma_option;
 					uint8_t flag_notify_comp:1,
 						band:3,
-						rsvd:4;
+						flag_ts_valid:1,
+						rsvd:3;
 					uint8_t reserved[2];
 				} priv_cb_m;
 			} dev;
@@ -337,7 +342,10 @@ struct qdf_nbuf_cb {
 					print:1;
 			} trace;
 			unsigned char *vaddr;
-			qdf_paddr_t paddr;
+			union {
+				qdf_paddr_t paddr;
+				qdf_ktime_t ts_value;
+			} pa_ts;
 		} tx;
 	} u;
 }; /* struct qdf_nbuf_cb: MAX 48 bytes */
@@ -545,7 +553,12 @@ QDF_COMPILE_TIME_ASSERT(qdf_nbuf_cb_size,
 #define QDF_NBUF_CB_TX_EXTRA_FRAG_VADDR(skb) \
 	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.vaddr)
 #define QDF_NBUF_CB_TX_EXTRA_FRAG_PADDR(skb) \
-	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.paddr.dma_addr)
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.pa_ts.paddr.dma_addr)
+
+#define QDF_NBUF_CB_TX_TS_VALID(skb) \
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.priv_cb_m.flag_ts_valid)
+#define QDF_NBUF_CB_TX_TS_VALUE(skb) \
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.pa_ts.ts_value)
 
 /* assume the OS provides a single fragment */
 #define __qdf_nbuf_get_num_frags(skb)		   \
@@ -659,6 +672,22 @@ QDF_COMPILE_TIME_ASSERT(qdf_nbuf_cb_size,
 	QDF_NBUF_CB_TX_DATA_ATTR(skb)
 #define __qdf_nbuf_data_attr_set(skb, data_attr) \
 	(QDF_NBUF_CB_TX_DATA_ATTR(skb) = (data_attr))
+
+#define __qdf_nbuf_set_tx_ts(skb, ts) \
+	do { \
+		QDF_NBUF_CB_TX_TS_VALUE(skb) = (ts); \
+		QDF_NBUF_CB_TX_TS_VALID(skb) = 1; \
+	} while (0)
+
+#define __qdf_nbuf_clear_tx_ts(skb) \
+	do { \
+		QDF_NBUF_CB_TX_TS_VALUE(skb) = 0; \
+		QDF_NBUF_CB_TX_TS_VALID(skb) = 0; \
+	} while (0)
+
+#define __qdf_nbuf_get_tx_ts(skb) \
+	(QDF_NBUF_CB_TX_TS_VALID(skb) ? \
+	 QDF_NBUF_CB_TX_TS_VALUE(skb) : 0)
 
 /**
  * __qdf_nbuf_map_nbytes_single() - map nbytes

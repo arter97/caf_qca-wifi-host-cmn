@@ -28,7 +28,7 @@
 #include <i_qdf_util.h>
 
 #ifdef QCA_CONFIG_SMP
-#define QDF_MAX_AVAILABLE_CPU	8
+#define QDF_MAX_AVAILABLE_CPU	NR_CPUS
 #else
 #define QDF_MAX_AVAILABLE_CPU	1
 #endif
@@ -929,6 +929,20 @@ static inline
 int qdf_fls(uint32_t x)
 {
 	return __qdf_fls(x);
+}
+
+
+/**
+ * qdf_ffs() - find first set bit in a given 32 bit input
+ * @x: 32 bit mask
+ *
+ * Return: zero if the input is zero, otherwise returns the bit
+ * position of the first set bit, where the LSB is 1 and MSB is 32.
+ */
+static inline
+int qdf_ffs(uint32_t x)
+{
+	return __qdf_ffs(x);
 }
 
 /**

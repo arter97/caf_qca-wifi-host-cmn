@@ -131,12 +131,15 @@ struct dp_rx_desc_dbg_info {
  * @magic:
  * @nbuf_data_addr:	VA of nbuf data posted
  * @dbg_info:
+ * @prev_paddr_buf_start: paddr of the prev nbuf attach to rx_desc
  * @in_use:		rx_desc is in use
  * @unmapped:		used to mark rx_desc an unmapped if the corresponding
  *			nbuf is already unmapped
  * @in_err_state:	Nbuf sanity failed for this descriptor.
  * @has_reuse_nbuf:	the nbuf associated with this desc is also saved in
  *			reuse_nbuf field
+ * @msdu_done_fail:	this particular rx_desc was dequeued from REO with
+ *			msdu_done bit not set in data buffer.
  */
 struct dp_rx_desc {
 	qdf_nbuf_t nbuf;
@@ -152,11 +155,13 @@ struct dp_rx_desc {
 	uint32_t magic;
 	uint8_t *nbuf_data_addr;
 	struct dp_rx_desc_dbg_info *dbg_info;
+	qdf_dma_addr_t prev_paddr_buf_start;
 #endif
 	uint8_t	in_use:1,
 		unmapped:1,
 		in_err_state:1,
-		has_reuse_nbuf:1;
+		has_reuse_nbuf:1,
+		msdu_done_fail:1;
 };
 
 #ifndef QCA_HOST_MODE_WIFI_DISABLED
@@ -219,7 +224,7 @@ struct dp_rx_desc {
 				num_buffers, desc_list, tail, req_only) \
 	__dp_rx_buffers_replenish(soc, mac_id, rxdma_srng, rx_desc_pool, \
 				  num_buffers, desc_list, tail, req_only, \
-				  __func__)
+				  false, __func__)
 
 #ifdef WLAN_SUPPORT_RX_FISA
 /**
@@ -1675,6 +1680,9 @@ dp_rx_update_flow_tag(struct dp_soc *soc, struct dp_vdev *vdev,
  *	       interrupt.
  * @tail: tail of descs list
  * @req_only: If true don't replenish more than req buffers
+ * @force_replenish: replenish full ring without limit check this
+ *                   this field will be considered only when desc_list
+ *                   is NULL and req_only is false
  * @func_name: name of the caller function
  *
  * Return: return success or failure
@@ -1686,6 +1694,7 @@ QDF_STATUS __dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 				 union dp_rx_desc_list_elem_t **desc_list,
 				 union dp_rx_desc_list_elem_t **tail,
 				 bool req_only,
+				 bool force_replenish,
 				 const char *func_name);
 
 /**
@@ -1754,13 +1763,15 @@ __dp_rx_comp2refill_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
  * @mac_id: mac_id which is one of 3 mac_ids
  * @dp_rxdma_srng: dp rxdma circular ring
  * @rx_desc_pool: Pointer to free Rx descriptor pool
+ * @force_replenish: Force replenish the ring fully
  *
  * Return: return success or failure
  */
 QDF_STATUS
 __dp_rx_buffers_no_map_lt_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 				    struct dp_srng *dp_rxdma_srng,
-				    struct rx_desc_pool *rx_desc_pool);
+				    struct rx_desc_pool *rx_desc_pool,
+				    bool force_replenish);
 
 /**
  * __dp_pdev_rx_buffers_no_map_attach() - replenish rxdma ring with rx nbufs
@@ -1944,6 +1955,7 @@ void dp_rx_desc_prep(struct dp_rx_desc *rx_desc,
 	rx_desc->unmapped = 0;
 	rx_desc->nbuf_data_addr = (uint8_t *)qdf_nbuf_data(rx_desc->nbuf);
 	dp_rx_set_reuse_nbuf(rx_desc, rx_desc->nbuf);
+	rx_desc->prev_paddr_buf_start = rx_desc->paddr_buf_start;
 	rx_desc->paddr_buf_start = nbuf_frag_info_t->paddr;
 }
 
@@ -2329,25 +2341,27 @@ void dp_rx_cksum_offload(struct dp_pdev *pdev,
 			cksum.l4_result = QDF_NBUF_RX_CKSUM_TCP_UDP_UNNECESSARY;
 			if (qdf_nbuf_is_ipv4_udp_pkt(nbuf) ||
 			    qdf_nbuf_is_ipv4_tcp_pkt(nbuf)) {
-				if (qdf_likely(!tcp_udp_csum_er))
+				if (qdf_likely(!tcp_udp_csum_er)) {
 					cksum.csum_level = 1;
-				else
-					DP_STATS_INCC(pdev,
-						      err.tcp_udp_csum_err, 1,
-						      tcp_udp_csum_er);
+				} else {
+					cksum.l4_result =
+						QDF_NBUF_RX_CKSUM_NONE;
+					DP_STATS_INC(pdev,
+						     err.tcp_udp_csum_err, 1);
+				}
 			}
 		} else {
-			DP_STATS_INCC(pdev, err.ip_csum_err, 1, ip_csum_err);
+			DP_STATS_INC(pdev, err.ip_csum_err, 1);
 		}
 	} else if (qdf_nbuf_is_ipv6_udp_pkt(nbuf) ||
 		   qdf_nbuf_is_ipv6_tcp_pkt(nbuf)) {
-		if (qdf_likely(!tcp_udp_csum_er))
+		if (qdf_likely(!ip_csum_err && !tcp_udp_csum_er))
 			cksum.l4_result = QDF_NBUF_RX_CKSUM_TCP_UDP_UNNECESSARY;
-		else
-			DP_STATS_INCC(pdev, err.tcp_udp_csum_err, 1,
-				      tcp_udp_csum_er);
-	} else {
-		cksum.l4_result = QDF_NBUF_RX_CKSUM_NONE;
+		else if (ip_csum_err) {
+			DP_STATS_INC(pdev, err.ip_csum_err, 1);
+		} else {
+			DP_STATS_INC(pdev, err.tcp_udp_csum_err, 1);
+		}
 	}
 
 	qdf_nbuf_set_rx_cksum(nbuf, &cksum);
@@ -2583,12 +2597,11 @@ static inline
 void dp_rx_buffers_lt_replenish_simple(struct dp_soc *soc, uint32_t mac_id,
 				       struct dp_srng *rxdma_srng,
 				       struct rx_desc_pool *rx_desc_pool,
-				       uint32_t num_req_buffers,
-				       union dp_rx_desc_list_elem_t **desc_list,
-				       union dp_rx_desc_list_elem_t **tail)
+				       bool force_replenish)
 {
 	__dp_rx_buffers_no_map_lt_replenish(soc, mac_id, rxdma_srng,
-					    rx_desc_pool);
+					    rx_desc_pool,
+					    force_replenish);
 }
 
 #ifndef QCA_DP_NBUF_FAST_RECYCLE_CHECK
@@ -2725,12 +2738,11 @@ static inline
 void dp_rx_buffers_lt_replenish_simple(struct dp_soc *soc, uint32_t mac_id,
 				       struct dp_srng *rxdma_srng,
 				       struct rx_desc_pool *rx_desc_pool,
-				       uint32_t num_req_buffers,
-				       union dp_rx_desc_list_elem_t **desc_list,
-				       union dp_rx_desc_list_elem_t **tail)
+				       bool force_replenish)
 {
-	dp_rx_buffers_replenish(soc, mac_id, rxdma_srng, rx_desc_pool,
-				num_req_buffers, desc_list, tail, false);
+	__dp_rx_buffers_replenish(soc, mac_id, rxdma_srng, rx_desc_pool,
+				  0, NULL, NULL, false, force_replenish,
+				  __func__);
 }
 
 static inline
@@ -3478,6 +3490,20 @@ dp_rx_is_list_ready(qdf_nbuf_t nbuf_head,
 
 	return false;
 }
+
+/**
+ * dp_rx_deliver_to_stack_ext() - Deliver to netdev per sta
+ * @soc: core txrx main context
+ * @vdev: vdev
+ * @txrx_peer: txrx peer
+ * @nbuf_head: skb list head
+ *
+ * Return: true if packet is delivered to netdev per STA.
+ */
+bool
+dp_rx_deliver_to_stack_ext(struct dp_soc *soc, struct dp_vdev *vdev,
+			   struct dp_txrx_peer *txrx_peer,
+			   qdf_nbuf_t nbuf_head);
 #else
 static inline bool
 dp_rx_is_list_ready(qdf_nbuf_t nbuf_head,

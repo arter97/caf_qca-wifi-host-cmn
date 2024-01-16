@@ -43,6 +43,9 @@
 #ifdef WLAN_RX_PKT_CAPTURE_ENH
 #include "cdp_txrx_extd_struct.h"
 #endif
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+#include "qdf_list.h"
+#endif
 
 #ifdef WLAN_MAX_CLIENTS_ALLOWED
 #define OL_TXRX_NUM_LOCAL_PEER_IDS (WLAN_MAX_CLIENTS_ALLOWED + 1 + 1 + 1)
@@ -471,6 +474,7 @@ enum cdp_peer_type {
  * @is_primary_link: set true for MLO primary link peer
  * @primary_umac_id: primary umac_id
  * @num_links: number of links in MLO
+ * @is_bridge_peer: flag to indicate if peer is bridge peer or not
  */
 struct cdp_peer_setup_info {
 	uint8_t *mld_peer_mac;
@@ -478,6 +482,7 @@ struct cdp_peer_setup_info {
 		is_primary_link:1;
 	uint8_t primary_umac_id;
 	uint8_t num_links;
+	uint8_t is_bridge_peer;
 };
 
 /**
@@ -1566,6 +1571,7 @@ typedef union cdp_config_param_t {
 	int cdp_psoc_param_preferred_hw_mode;
 	bool cdp_psoc_param_pext_stats;
 	bool cdp_psoc_param_jitter_stats;
+	bool cdp_psoc_param_dp_debug_log;
 
 	bool cdp_skip_bar_update;
 	bool cdp_ipa_enabled;
@@ -1773,6 +1779,7 @@ enum cdp_vdev_param_type {
  * @CDP_CFG_AST_INDICATION_DISABLE: AST indication disable
  * @CDP_CFG_GET_MLO_OPER_MODE: Get MLO operation mode
  * @CDP_CFG_PEER_JITTER_STATS: Peer Jitter Stats
+ * @CDP_CONFIG_DP_DEBUG_LOG: set/get dp debug logging
  */
 enum cdp_psoc_param_type {
 	CDP_ENABLE_RATE_STATS,
@@ -1802,6 +1809,7 @@ enum cdp_psoc_param_type {
 	CDP_CFG_AST_INDICATION_DISABLE,
 	CDP_CFG_GET_MLO_OPER_MODE,
 	CDP_CFG_PEER_JITTER_STATS,
+	CDP_CONFIG_DP_DEBUG_LOG,
 };
 
 #ifdef CONFIG_AP_PLATFORM
@@ -2002,11 +2010,13 @@ enum cdp_stats {
  * @UPDATE_PEER_STATS: update peer stats
  * @UPDATE_VDEV_STATS: update vdev stats
  * @UPDATE_PDEV_STATS: Update pdev stats
+ * @UPDATE_VDEV_STATS_MLD: Update mld vdev stats
  */
 enum cdp_stat_update_type {
 	UPDATE_PEER_STATS = 0,
 	UPDATE_VDEV_STATS = 1,
 	UPDATE_PDEV_STATS = 2,
+	UPDATE_VDEV_STATS_MLD = 3,
 };
 
 /**

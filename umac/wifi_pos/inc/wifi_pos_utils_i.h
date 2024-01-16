@@ -316,7 +316,7 @@ struct wifi_pos_psoc_priv_obj {
 	qdf_spinlock_t wifi_pos_lock;
 	bool oem_6g_support_disable;
 	bool enable_rsta_secure_ltf_support;
-	bool enable_rsta_11az_ranging;
+	uint32_t enable_rsta_11az_ranging;
 	struct wifi_pos_legacy_ops *legacy_ops;
 	QDF_STATUS (*wifi_pos_req_handler)(struct wlan_objmgr_psoc *psoc,
 				    struct wifi_pos_req_msg *req);

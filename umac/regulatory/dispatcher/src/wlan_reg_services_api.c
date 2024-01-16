@@ -51,6 +51,11 @@ QDF_STATUS wlan_reg_read_default_country(struct wlan_objmgr_psoc *psoc,
 	return reg_read_default_country(psoc, country);
 }
 
+enum phy_ch_width wlan_get_next_lower_bandwidth(enum phy_ch_width ch_width)
+{
+	return get_next_lower_bandwidth(ch_width);
+}
+
 QDF_STATUS wlan_reg_read_current_country(struct wlan_objmgr_psoc *psoc,
 					 uint8_t *country)
 {
@@ -710,15 +715,15 @@ bool wlan_reg_11d_enabled_on_host(struct wlan_objmgr_psoc *psoc)
 	return reg_11d_enabled_on_host(psoc);
 }
 
-bool wlan_reg_is_etsi13_regdmn(struct wlan_objmgr_pdev *pdev)
+bool wlan_reg_is_etsi_regdmn(struct wlan_objmgr_pdev *pdev)
 {
-	return reg_is_etsi13_regdmn(pdev);
+	return reg_is_etsi_regdmn(pdev);
 }
 
-bool wlan_reg_is_etsi13_srd_chan_allowed_master_mode(struct wlan_objmgr_pdev
+bool wlan_reg_is_etsi_srd_chan_allowed_master_mode(struct wlan_objmgr_pdev
 						     *pdev)
 {
-	return reg_is_etsi13_srd_chan_allowed_master_mode(pdev);
+	return reg_is_etsi_srd_chan_allowed_master_mode(pdev);
 }
 
 bool wlan_reg_is_6ghz_band_set(struct wlan_objmgr_pdev *pdev)
@@ -879,6 +884,12 @@ enum phy_ch_width
 wlan_reg_get_next_lower_bandwidth(enum phy_ch_width ch_width)
 {
 	return get_next_lower_bandwidth(ch_width);
+}
+
+enum phy_ch_width
+wlan_reg_get_next_higher_bandwidth(enum phy_ch_width ch_width)
+{
+	return reg_get_next_higher_bandwidth(ch_width);
 }
 
 #ifdef CONFIG_REG_CLIENT
@@ -1075,10 +1086,10 @@ bool wlan_reg_is_freq_present_in_cur_chan_list(struct wlan_objmgr_pdev *pdev,
 	return reg_is_freq_present_in_cur_chan_list(pdev, freq);
 }
 
-bool wlan_reg_is_etsi13_srd_chan_for_freq(struct wlan_objmgr_pdev *pdev,
-					  qdf_freq_t freq)
+bool wlan_reg_is_etsi_srd_chan_for_freq(struct wlan_objmgr_pdev *pdev,
+					qdf_freq_t freq)
 {
-	return reg_is_etsi13_srd_chan_for_freq(pdev, freq);
+	return reg_is_etsi_srd_chan_for_freq(pdev, freq);
 }
 
 bool wlan_reg_is_dsrc_freq(qdf_freq_t freq)
@@ -1564,6 +1575,14 @@ uint16_t wlan_reg_chan_opclass_to_freq(uint8_t chan,
 	return reg_chan_opclass_to_freq(chan, op_class, global_tbl_lookup);
 }
 
+qdf_freq_t wlan_reg_compute_6g_center_freq_from_cfi(uint8_t ieee_6g_cfi)
+{
+	if (!ieee_6g_cfi)
+		return 0;
+
+	return reg_compute_6g_center_freq_from_cfi(ieee_6g_cfi);
+}
+
 qdf_freq_t wlan_reg_chan_opclass_to_freq_auto(uint8_t chan, uint8_t op_class,
 					      bool global_tbl_lookup)
 {
@@ -1680,12 +1699,6 @@ wlan_reg_get_client_power_for_6ghz_ap(struct wlan_objmgr_pdev *pdev,
 	return reg_get_client_power_for_6ghz_ap(pdev, client_type, chan_freq,
 						is_psd, tx_power,
 						eirp_psd_power);
-}
-
-enum reg_6g_ap_type
-wlan_reg_decide_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev)
-{
-	return reg_decide_6g_ap_pwr_type(pdev);
 }
 
 QDF_STATUS

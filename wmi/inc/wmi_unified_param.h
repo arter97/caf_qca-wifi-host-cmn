@@ -1261,6 +1261,7 @@ struct wmi_host_link_bss_params {
  * @bssid: AP link address
  * @chan: Wlan channel information
  * @mac_addr: Self mac addresses
+ * @rec_max_simultaneous_links: Max recommended simultaneous links
  */
 struct peer_assoc_mlo_params {
 	uint32_t mlo_enabled:1,
@@ -1294,6 +1295,7 @@ struct peer_assoc_mlo_params {
 	struct qdf_mac_addr bssid;
 	struct wlan_channel chan;
 	struct qdf_mac_addr mac_addr;
+	uint8_t rec_max_simultaneous_links;
 };
 
 /**
@@ -5371,6 +5373,11 @@ typedef enum {
 	wmi_pdev_enhanced_aoa_phasedelta_eventid,
 #endif
 	wmi_peer_oper_mode_change_event_id,
+
+#ifdef WLAN_FEATURE_LL_LT_SAP
+	wmi_audio_transport_switch_type_event_id,
+#endif
+
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -5751,6 +5758,9 @@ typedef enum {
 		   PDEV_PARAM_ATF_VO_DEDICATED_TIME),
 	PDEV_PARAM(pdev_param_atf_vi_dedicated_time,
 		   PDEV_PARAM_ATF_VI_DEDICATED_TIME),
+	PDEV_PARAM(pdev_param_ul_ofdma_rtd, PDEV_PARAM_UL_OFDMA_RTD),
+	PDEV_PARAM(pdev_param_tid_mapping_3link_mlo,
+		   PDEV_PARAM_TID_MAPPING_3LINK_MLO),
 	pdev_param_max,
 } wmi_conv_pdev_params_id;
 
@@ -6081,6 +6091,10 @@ typedef enum {
 		   VDEV_PARAM_RTT_11AZ_NTB_MIN_TIME_BW_MEAS),
 	VDEV_PARAM(vdev_param_disable_2g_twt,
 		   VDEV_PARAM_DISABLE_2G_TWT),
+	VDEV_PARAM(vdev_param_disable_twt_info_frame,
+		   VDEV_PARAM_DISABLE_TWT_INFO_FRAME),
+	VDEV_PARAM(vdev_param_mlo_max_recom_active_links,
+		   VDEV_PARAM_MLO_MAX_RECOM_ACTIVE_LINKS),
 	vdev_param_max,
 } wmi_conv_vdev_param_id;
 
@@ -6454,6 +6468,7 @@ typedef enum {
 	wmi_service_n_link_mlo_support,
 	wmi_service_per_link_stats_support,
 	wmi_service_pdev_wsi_stats_info_support,
+	wmi_service_mlo_tid_to_link_mapping_support,
 #endif
 	wmi_service_aux_mac_support,
 #ifdef WLAN_ATF_INCREASED_STA
@@ -6461,6 +6476,13 @@ typedef enum {
 #endif
 	wmi_service_fisa_dynamic_msdu_aggr_size_support,
 	wmi_service_radar_flags_support,
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+	wmi_service_5ghz_hi_rssi_roam_support,
+#endif
+	wmi_service_pdev_param_in_utf_wmi,
+#ifdef WLAN_FEATURE_LL_LT_SAP
+	wmi_service_xpan_support,
+#endif
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -7395,6 +7417,7 @@ enum {
 	PEER_PARAM(PEER_CHWIDTH_PUNCTURE_20MHZ_BITMAP),
 	PEER_PARAM(PEER_FT_ROAMING_PEER_UPDATE),
 	PEER_PARAM(PEER_PARAM_DMS_SUPPORT),
+	PEER_PARAM(PEER_PARAM_UL_OFDMA_RTD),
 
 };
 #define WMI_HOST_PEER_MIMO_PS_NONE	0x0

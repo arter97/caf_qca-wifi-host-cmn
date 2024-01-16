@@ -26,6 +26,7 @@
 #include <wlan_mlo_mgr_cmn.h>
 #ifdef WLAN_FEATURE_11BE_MLO
 #include <wlan_mlo_mgr_public_structs.h>
+#include <wlan_mlo_mgr_peer.h>
 
 /**
  * mlo_connect - Start the connection process
@@ -294,14 +295,30 @@ static inline
 void mlo_clear_bridge_sta_ctx(struct wlan_objmgr_vdev *vdev)
 {
 	struct wlan_mlo_dev_context *ml_dev = NULL;
+	struct wlan_objmgr_vdev *tmp_vdev = NULL;
+	uint8_t bridge_umac_id = -1;
 
 	if (!vdev || !vdev->mlo_dev_ctx)
 		return;
 
 	ml_dev = vdev->mlo_dev_ctx;
-	if (ml_dev->bridge_sta_ctx)
+	if (ml_dev->bridge_sta_ctx) {
+		bridge_umac_id = ml_dev->bridge_sta_ctx->bridge_umac_id;
 		qdf_mem_zero(ml_dev->bridge_sta_ctx,
-			     sizeof(ml_dev->bridge_sta_ctx));
+			     sizeof(struct wlan_mlo_bridge_sta));
+	}
+	if (mlo_is_force_central_primary(vdev)) {
+		tmp_vdev = mlo_get_link_vdev_from_psoc_id(ml_dev,
+							  bridge_umac_id,
+							  false);
+		if (!tmp_vdev) {
+			mlo_err("VDEV derivation failed for %u psoc wds bridge",
+				bridge_umac_id);
+			return;
+		}
+		tmp_vdev->vdev_objmgr.mlo_central_vdev = false;
+		wlan_objmgr_vdev_release_ref(tmp_vdev, WLAN_MLO_MGR_ID);
+	}
 }
 
 #else
@@ -1158,6 +1175,40 @@ void mlo_defer_set_keys(struct wlan_objmgr_vdev *vdev,
 bool mlo_is_set_key_defered(struct wlan_objmgr_vdev *vdev,
 			    uint8_t link_id);
 
+/**
+ * mlo_is_any_link_disconnecting: Check if any ML link is disconnecting
+ * @vdev: vdev obj
+ *
+ * Check connection manager state machine if any ML link is disconnecting
+ *
+ * Return: boolean value true or false
+ */
+bool mlo_is_any_link_disconnecting(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * mlo_set_chan_switch_in_progress: Set/clear the flag upon CSA at MLD level
+ * @vdev: vdev obj
+ * @val: Carries true if CSA is started on any of the ML links. This carries
+ *       false once CSA is completed.
+ *
+ * This API is to set/clear the flag ml_chan_switch_in_progress upon
+ * CSA start/CSA completion on any of the ML links.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+mlo_set_chan_switch_in_progress(struct wlan_objmgr_vdev *vdev, bool val);
+
+/**
+ * mlo_is_chan_switch_in_progress: Check if ML level CSA flag is set
+ * @vdev: vdev obj
+ *
+ * This API is to check the flag ml_chan_switch_in_progress upon
+ * CSA start/CSA completion on any of the ML links.
+ *
+ * Return: True if flag ml_chan_switch_in_progress is set, false otherwise
+ */
+bool mlo_is_chan_switch_in_progress(struct wlan_objmgr_vdev *vdev);
 #else
 static inline
 void mlo_defer_set_keys(struct wlan_objmgr_vdev *vdev,
@@ -1168,6 +1219,24 @@ void mlo_defer_set_keys(struct wlan_objmgr_vdev *vdev,
 static inline
 bool mlo_is_set_key_defered(struct wlan_objmgr_vdev *vdev,
 			    uint8_t link_id)
+{
+	return false;
+}
+
+static inline
+bool mlo_is_any_link_disconnecting(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
+
+static inline QDF_STATUS
+mlo_set_chan_switch_in_progress(struct wlan_objmgr_vdev *vdev, bool val)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline bool
+mlo_is_chan_switch_in_progress(struct wlan_objmgr_vdev *vdev)
 {
 	return false;
 }

@@ -749,9 +749,6 @@ void dp_rx_mon_dest_process(struct dp_soc *soc, struct dp_intr *int_ctx,
 			rx_mon_stats->ppdu_id_hist_idx =
 				(rx_mon_stats->ppdu_id_hist_idx + 1) &
 					(MAX_PPDU_ID_HIST - 1);
-			mon_pdev->mon_ppdu_status = DP_PPDU_STATUS_START;
-			qdf_mem_zero(&mon_pdev->ppdu_info.rx_status,
-				     sizeof(mon_pdev->ppdu_info.rx_status));
 			dp_rx_mon_dest_debug("%pK: ppdu_id %x != ppdu_info.com_info.ppdu_id %x",
 					     soc, ppdu_id,
 					     mon_pdev->ppdu_info.com_info.ppdu_id);

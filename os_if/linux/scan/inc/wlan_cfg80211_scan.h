@@ -123,6 +123,7 @@ struct scan_req {
  * @scan_probe_unicast_ra: Use BSSID in probe request frame RA.
  * @scan_f_2ghz: Scan only 2GHz channels
  * @scan_f_5ghz: Scan only 5+6GHz channels
+ * @mld_id: MLD ID of the requested BSS within ML probe request
  */
 struct scan_params {
 	uint8_t source;
@@ -140,6 +141,7 @@ struct scan_params {
 	bool scan_probe_unicast_ra;
 	bool scan_f_2ghz;
 	bool scan_f_5ghz;
+	uint8_t mld_id;
 };
 
 /**
@@ -428,4 +430,15 @@ void wlan_cfg80211_scan_done(struct net_device *netdev,
  */
 enum scan_priority convert_nl_scan_priority_to_internal(
 	enum qca_wlan_vendor_scan_priority nl_scan_priority);
+
+/**
+ * wlan_is_scan_allowed() - Allow/reject scan if any scan is running
+ * @vdev: vdev on which current scan issued
+ *
+ * Check if any other scan is in queue and decide whether to allow or reject
+ * current scan based on simultaneous_scan feature support
+ *
+ * Return: True if current scan can be allowed
+ */
+bool wlan_is_scan_allowed(struct wlan_objmgr_vdev *vdev);
 #endif

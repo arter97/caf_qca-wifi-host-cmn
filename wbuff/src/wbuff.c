@@ -463,6 +463,9 @@ qdf_nbuf_t wbuff_buff_put(qdf_nbuf_t buf)
 	uint8_t module_id = 0, pool_id = 0;
 	struct wbuff_pool *wbuff_pool;
 
+	if (qdf_nbuf_get_users(buffer) > 1)
+		return buffer;
+
 	if (!wbuff.initialized)
 		return buffer;
 

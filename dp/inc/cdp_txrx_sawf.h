@@ -451,4 +451,37 @@ cdp_swaf_peer_sla_configuration(ol_txrx_soc_handle soc, uint8_t *mac_addr,
 	return QDF_STATUS_E_FAILURE;
 }
 #endif
+
+#ifdef WLAN_FEATURE_11BE_MLO_3_LINK_TX
+static inline
+uint16_t cdp_sawf_get_peer_msduq(ol_txrx_soc_handle soc,
+				 struct net_device *netdev, uint8_t *dest_mac,
+				 uint32_t dscp_pcp, bool pcp)
+{
+	if (!soc || !soc->ops || !soc->ops->sawf_ops ||
+	    !soc->ops->sawf_ops->get_peer_msduq) {
+		dp_cdp_debug("Invalid Instance");
+		QDF_BUG(0);
+		return false;
+	}
+
+	return soc->ops->sawf_ops->get_peer_msduq
+		(netdev, dest_mac, dscp_pcp, pcp);
+}
+
+static inline QDF_STATUS
+cdp_sawf_3_link_peer_flow_count(ol_txrx_soc_handle soc, uint8_t *mac_addr,
+				uint16_t peer_id, uint32_t mark_metadata)
+{
+	if (!soc || !soc->ops || !soc->ops->sawf_ops ||
+	    !soc->ops->sawf_ops->sawf_3_link_peer_flow_count) {
+		dp_cdp_debug("Invalid Instance");
+		QDF_BUG(0);
+		return false;
+	}
+
+	return soc->ops->sawf_ops->sawf_3_link_peer_flow_count
+		(soc, mac_addr, peer_id, mark_metadata);
+}
+#endif
 #endif /* _CDP_TXRX_SAWF_H_ */

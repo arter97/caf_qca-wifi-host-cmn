@@ -673,6 +673,7 @@ enum element_ie {
  * @WLAN_EXTN_ELEMID_SRP:    spatial reuse parameter IE
  * @WLAN_EXTN_ELEMID_BSS_COLOR_CHANGE_ANNOUNCE: BSS Color Change Announcement IE
  * @WLAN_EXTN_ELEMID_MAX_CHAN_SWITCH_TIME: Maximum Channel Switch Time IE
+ * @WLAN_EXTN_ELEMID_OCI:    OCI IE
  * @WLAN_EXTN_ELEMID_NONINHERITANCE: Non inheritance IE
  * @WLAN_EXTN_ELEMID_EHTOP: EHT Operation IE
  * @WLAN_EXTN_ELEMID_ESP: Estimated Service Parameters Inbound element
@@ -691,6 +692,7 @@ enum extn_element_ie {
 	WLAN_EXTN_ELEMID_SRP         = 39,
 	WLAN_EXTN_ELEMID_BSS_COLOR_CHANGE_ANNOUNCE = 42,
 	WLAN_EXTN_ELEMID_MAX_CHAN_SWITCH_TIME = 52,
+	WLAN_EXTN_ELEMID_OCI         = 54,
 	WLAN_EXTN_ELEMID_NONINHERITANCE = 56,
 	WLAN_EXTN_ELEMID_HE_6G_CAP   = 59,
 #ifdef WLAN_FEATURE_11BE
@@ -2272,6 +2274,8 @@ enum wlan_ml_linfo_subelementid {
 #define WLAN_ML_BV_CTRL_PBM_MLDCAPANDOP_P              ((uint16_t)BIT(4))
 /* MLD ID Present */
 #define WLAN_ML_BV_CTRL_PBM_MLDID_P                    ((uint16_t)BIT(5))
+/* Extended MLD Capabilities and Operations Present */
+#define WLAN_ML_BV_CTRL_PBM_EXT_MLDCAPANDOP_P          ((uint16_t)BIT(6))
 
 /* Definitions related to Basic variant Multi-Link element Common Info field */
 
@@ -2413,7 +2417,6 @@ enum wlan_ml_bv_cinfo_emlcap_emlmrdelay {
 	WLAN_ML_BV_CINFO_EMLCAP_EMLMRDELAY_INVALIDSTART,
 };
 
-#ifdef WLAN_SUPPORT_11BE_D3_0
 /**
  * enum wlan_ml_bv_cinfo_emlcap_transtimeout - Encoding for Transition Timeout
  * sub-sub field in EML Capabilities subfield in Basic variant Multi-Link
@@ -2457,55 +2460,6 @@ enum wlan_ml_bv_cinfo_emlcap_transtimeout {
 	WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_64TU = 10,
 	WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_INVALIDSTART,
 };
-
-#else
-/**
- * enum wlan_ml_bv_cinfo_emlcap_transtimeout - Encoding for Transition Timeout
- * sub-sub field in EML Capabilities subfield in Basic variant Multi-Link
- * element Common Info field.
- * Note: a) In case of holes in the enumeration, scheme for invalid value
- * determination should be changed. b) A mathematical formula could have been
- * used instead of an enumeration. However, the standard explicitly lists out
- * values instead of using a formula, and we reflect this accordingly using an
- * enumeration.
- * @WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_0TU: Transition Timeout value of 0 TUs
- * @WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_128MU: Transition Timeout value of
- *                                              128μs
- * @WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_256MU: Transition Timeout value of
- *                                              256μs
- * @WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_512MU: Transition Timeout value of
- *                                              512μs
- * @WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_1TU: Transition Timeout value of 1 TU
- * @WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_2TU: Transition Timeout value of 2 TUs
- * @WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_4TU: Transition Timeout value of 4 TUs
- * @WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_8TU: Transition Timeout value of 8 TUs
- * @WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_16TU: Transition Timeout value of 16
- *                                             TUs
- * @WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_32TU: Transition Timeout value of 32
- *                                             TUs
- * @WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_64TU: Transition Timeout value of 64
- *                                             TUs
- * @WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_128TU: Transition Timeout value of 128
- *                                             TUs
- * @WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_INVALIDSTART: Start of invalid value
- *                                                     range
- */
-enum wlan_ml_bv_cinfo_emlcap_transtimeout {
-	WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_0TU = 0,
-	WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_128MU = 1,
-	WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_256MU = 2,
-	WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_512MU = 3,
-	WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_1TU = 4,
-	WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_2TU = 5,
-	WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_4TU = 6,
-	WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_8TU = 7,
-	WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_16TU = 8,
-	WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_32TU = 9,
-	WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_64TU = 10,
-	WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_128TU = 11,
-	WLAN_ML_BV_CINFO_EMLCAP_TRANSTIMEOUT_INVALIDSTART,
-};
-#endif /* WLAN_SUPPORT_11BE_D3_0 */
 
 /* Size in octets of MLD Capabilities and operation subfield in Basic variant
  * Multi-Link element Common Info field as per IEEE P802.11be/D1.5.
@@ -2536,6 +2490,22 @@ enum wlan_ml_bv_cinfo_emlcap_transtimeout {
  */
 #define WLAN_ML_BV_CINFO_MLDID_SIZE                                      1
 
+/* Size in octets of Extended MLD Capabilities And Operations subfield in Basic
+ * variant Multi-Link element Common Info field as per IEEE P802.11be/D4.0.
+ */
+#define WLAN_ML_BV_CINFO_EXT_MLDCAPANDOP_SIZE                            2
+
+/* Definitions for sub-sub fields in Extended MLD Capabilities And Operations
+ * subfield in Basic variant Multi-Link element Common Info field. Any unused
+ * bits are reserved.
+ */
+/* Operation Parameter Update Support */
+#define WLAN_ML_BV_CINFO_EXTMLDCAPINFO_OP_PARAM_SUPP_IDX                 0
+#define WLAN_ML_BV_CINFO_EXTMLDCAPINFO_OP_PARAM_SUPP_BITS                1
+/* Recommended Max Simultaneous Links */
+#define WLAN_ML_BV_CINFO_EXTMLDCAPINFO_RECOM_MAX_SIMULT_LINKS_IDX        1
+#define WLAN_ML_BV_CINFO_EXTMLDCAPINFO_RECOM_MAX_SIMULT_LINKS_BITS       4
+
 /* Max value in octets of Common Info Length subfield of Common Info field in
  * Basic variant Multi-Link element
  */
@@ -2547,7 +2517,8 @@ enum wlan_ml_bv_cinfo_emlcap_transtimeout {
 	 WLAN_ML_BV_CINFO_MEDMSYNCDELAYINFO_SIZE + \
 	 WLAN_ML_BV_CINFO_EMLCAP_SIZE + \
 	 WLAN_ML_BV_CINFO_MLDCAPANDOP_SIZE + \
-	 WLAN_ML_BV_CINFO_MLDID_SIZE)
+	 WLAN_ML_BV_CINFO_MLDID_SIZE + \
+	 WLAN_ML_BV_CINFO_EXT_MLDCAPANDOP_SIZE)
 
 /* End of definitions related to Basic variant Multi-Link element Common Info
  * field.

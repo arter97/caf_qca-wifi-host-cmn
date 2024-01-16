@@ -500,6 +500,28 @@ struct wlan_objmgr_vdev *wlan_objmgr_vdev_obj_create(
  */
 QDF_STATUS wlan_objmgr_vdev_obj_delete(struct wlan_objmgr_vdev *vdev);
 
+/**
+ * wlan_objmgr_vdev_mlo_dev_ctxt_attach() - vdev mlo ctxt object attach
+ * @vdev: vdev object
+ *
+ * Attach vdev to mlo dev context object.
+ *
+ * Return: SUCCESS/FAILURE
+ */
+QDF_STATUS
+wlan_objmgr_vdev_mlo_dev_ctxt_attach(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * wlan_objmgr_vdev_mlo_dev_ctxt_detach() - vdev mlo ctxt object delete
+ * @vdev: vdev object
+ *
+ * Detach mlo dev context object from vdev.
+ *
+ * Return: SUCCESS/FAILURE
+ */
+QDF_STATUS
+wlan_objmgr_vdev_mlo_dev_ctxt_detach(struct wlan_objmgr_vdev *vdev);
+
 /*
  * APIs to attach/detach component objects
  */
@@ -2502,4 +2524,11 @@ wlan_vdev_read_skip_pumac_cnt(struct wlan_objmgr_vdev *vdev)
 }
 #endif
 
+/**
+ * wlan_vdev_get_peer_sta_count: Get peer STA count
+ * @vdev: Pointer to vdev
+ *
+ * Return: STA peer count
+ */
+uint8_t wlan_vdev_get_peer_sta_count(struct wlan_objmgr_vdev *vdev);
 #endif /* _WLAN_OBJMGR_VDEV_OBJ_H_*/

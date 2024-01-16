@@ -75,10 +75,12 @@ dp_tx_adjust_tso_download_len_rh(qdf_nbuf_t nbuf,
 }
 #endif /* FEATURE_TSO */
 
-void dp_tx_comp_get_params_from_hal_desc_rh(struct dp_soc *soc,
-					    void *tx_comp_hal_desc,
-					    struct dp_tx_desc_s **r_tx_desc)
+QDF_STATUS
+dp_tx_comp_get_params_from_hal_desc_rh(struct dp_soc *soc,
+				       void *tx_comp_hal_desc,
+				       struct dp_tx_desc_s **r_tx_desc)
 {
+	return QDF_STATUS_SUCCESS;
 }
 
 /**
@@ -376,7 +378,7 @@ dp_tx_hw_enqueue_rh(struct dp_soc *soc, struct dp_vdev *vdev,
 		dp_verbose_debug("CE tx ring full");
 		/* TODO: Should this be a separate ce_ring_full stat? */
 		DP_STATS_INC(soc, tx.tcl_ring_full[0], 1);
-		DP_STATS_INC(vdev, tx_i.dropped.enqueue_fail, 1);
+		DP_STATS_INC(vdev, tx_i[DP_XMIT_LINK].dropped.enqueue_fail, 1);
 		goto enqueue_fail;
 	}
 
@@ -388,8 +390,10 @@ dp_tx_hw_enqueue_rh(struct dp_soc *soc, struct dp_vdev *vdev,
 
 	tx_desc->flags |= DP_TX_DESC_FLAG_QUEUED_TX;
 	dp_vdev_peer_stats_update_protocol_cnt_tx(vdev, nbuf);
-	DP_STATS_INC_PKT(vdev, tx_i.processed, 1, tx_desc->length);
+	DP_STATS_INC_PKT(vdev, tx_i[DP_XMIT_LINK].processed, 1,
+			 tx_desc->length);
 	DP_STATS_INC(soc, tx.tcl_enq[0], 1);
+
 	dp_tx_update_stats(soc, tx_desc, 0);
 	status = QDF_STATUS_SUCCESS;
 

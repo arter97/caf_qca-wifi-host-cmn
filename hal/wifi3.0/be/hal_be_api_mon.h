@@ -108,6 +108,9 @@ defined(QCA_SINGLE_WIFI_3_0)
 
 
 #define RX_MON_MPDU_START_WMASK               0x07F0
+#define RX_MON_MPDU_END_WMASK                 0x7
+#define RX_MON_MPDU_START_WMASK_V2            0x007F0
+#define RX_MON_MPDU_END_WMASK_V2              0xFF
 #define RX_MON_MSDU_END_WMASK                 0x0AE1
 #define RX_MON_PPDU_END_USR_STATS_WMASK       0xB7E
 
@@ -908,7 +911,7 @@ hal_get_mac_addr1(hal_rx_mon_mpdu_start_t *rx_mpdu_start,
 			rx_mpdu_start->rx_mpdu_info_details.mac_addr_ad1_31_0;
 		if (ppdu_info->sw_frame_group_id ==
 		    HAL_MPDU_SW_FRAME_GROUP_CTRL_RTS) {
-			*(uint32_t *)&ppdu_info->rx_info.mac_addr1[4] =
+			*(uint16_t *)&ppdu_info->rx_info.mac_addr1[4] =
 				rx_mpdu_start->rx_mpdu_info_details.mac_addr_ad1_47_32;
 		}
 	}
@@ -968,13 +971,13 @@ defined(WLAN_PKT_CAPTURE_RX_2_0)
 static inline
 void hal_mon_buff_addr_info_set(hal_soc_handle_t hal_soc_hdl,
 				void *mon_entry,
-				void *mon_desc_addr,
+				unsigned long long mon_desc_addr,
 				qdf_dma_addr_t phy_addr)
 {
 	uint32_t paddr_lo = ((uintptr_t)phy_addr & 0x00000000ffffffff);
 	uint32_t paddr_hi = ((uintptr_t)phy_addr & 0xffffffff00000000) >> 32;
-	uint32_t vaddr_lo = ((uintptr_t)mon_desc_addr & 0x00000000ffffffff);
-	uint32_t vaddr_hi = ((uintptr_t)mon_desc_addr & 0xffffffff00000000) >> 32;
+	uint32_t vaddr_lo = ((unsigned long long)mon_desc_addr & 0x00000000ffffffff);
+	uint32_t vaddr_hi = ((unsigned long long)mon_desc_addr & 0xffffffff00000000) >> 32;
 
 	HAL_MON_PADDR_LO_SET(mon_entry, paddr_lo);
 	HAL_MON_PADDR_HI_SET(mon_entry, paddr_hi);
@@ -2521,10 +2524,6 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 			hal_err("Matching ppdu_id(%u) detected",
 				ppdu_info->com_info.last_ppdu_id);
 
-		/* Reset ppdu_info before processing the ppdu */
-		qdf_mem_zero(ppdu_info,
-			     sizeof(struct hal_rx_ppdu_info));
-
 		ppdu_info->com_info.last_ppdu_id =
 			ppdu_info->com_info.ppdu_id =
 				HAL_RX_GET_64(rx_tlv, RX_PPDU_START,
@@ -3393,8 +3392,8 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 				      RECEIVE_RSSI_INFO_PREAMBLE_RSSI_INFO_DETAILS);
 
 		ppdu_info->rx_status.rssi_comb =
-			HAL_RX_GET_64(rx_tlv,
-				      PHYRX_RSSI_LEGACY, RSSI_COMB);
+				hal_rx_phy_legacy_get_rssi(hal_soc_hdl, rx_tlv);
+
 		ppdu_info->rx_status.bw = hal->ops->hal_rx_get_tlv(rx_tlv);
 		ppdu_info->rx_status.he_re = 0;
 
@@ -3574,6 +3573,7 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 			HAL_RX_GET_64(rx_tlv, RX_MPDU_END,
 				      FCS_ERR);
 
+		ppdu_info->mpdu_info[user_id].fcs_err = ppdu_info->fcs_err;
 		hal_rx_record_tlv_info(ppdu_info, tlv_tag);
 		return HAL_TLV_STATUS_MPDU_END;
 	case WIFIRX_MSDU_END_E: {

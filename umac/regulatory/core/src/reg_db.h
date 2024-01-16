@@ -714,12 +714,12 @@ QDF_STATUS reg_get_num_countries(int *num_countries);
 QDF_STATUS reg_get_num_reg_dmn_pairs(int *num_reg_dmn);
 
 /**
- * reg_etsi13_regdmn () - Checks if the reg domain is ETSI13 or not
+ * reg_etsi_regdmn () - Check if the reg domain is ETSI13/ETSI18/ETSI20 or not
  * @reg_dmn: reg domain
  *
  * Return: true or false
  */
-bool reg_etsi13_regdmn(uint8_t reg_dmn);
+bool reg_etsi_regdmn(uint8_t reg_dmn);
 
 /**
  * reg_fcc_regdmn () - Checks if the reg domain is FCC3/FCC8/FCC15/FCC16 or not

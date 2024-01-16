@@ -552,6 +552,7 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 
 		if (qdf_unlikely(tlv_status == HAL_TLV_STATUS_PPDU_NON_STD_DONE)) {
 			dp_rx_mon_deliver_non_std(soc, mac_id);
+			dp_mon_rx_ppdu_status_reset(mon_pdev);
 		} else if ((qdf_likely(tlv_status == HAL_TLV_STATUS_PPDU_DONE)) &&
 				(qdf_likely(!dp_rx_mon_check_phyrx_abort(pdev, ppdu_info)))) {
 			rx_mon_stats->status_ppdu_done++;
@@ -598,7 +599,7 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 				dp_rx_mon_dest_process(soc, int_ctx, mac_id,
 						       quota);
 
-			mon_pdev->mon_ppdu_status = DP_PPDU_STATUS_START;
+			dp_mon_rx_ppdu_status_reset(mon_pdev);
 		} else {
 			dp_rx_mon_handle_ppdu_undecoded_metadata(soc, pdev,
 								 ppdu_info);
@@ -1033,6 +1034,7 @@ QDF_STATUS dp_rx_mon_status_buffers_replenish(struct dp_soc *dp_soc,
 	union dp_rx_desc_list_elem_t *next;
 	void *rxdma_srng;
 	struct dp_pdev *dp_pdev = dp_get_pdev_for_lmac_id(dp_soc, mac_id);
+	uint32_t hp, tp;
 
 	if (!dp_pdev) {
 		dp_rx_mon_status_debug("%pK: pdev is null for mac_id = %d",
@@ -1092,8 +1094,19 @@ QDF_STATUS dp_rx_mon_status_buffers_replenish(struct dp_soc *dp_soc,
 		 * to fill in buffer at current HP.
 		 */
 		if (qdf_unlikely(!rx_netbuf)) {
-			dp_rx_mon_status_err("%pK: qdf_nbuf allocate or map fail, count %d",
-					     dp_soc, count);
+			hal_get_sw_hptp(dp_soc->hal_soc, rxdma_srng, &tp, &hp);
+			dp_err("%pK: qdf_nbuf allocate or map fail, count %d hp:%u tp:%u",
+			       dp_soc, count, hp, tp);
+			/*
+			 * If buffer allocation fails on current HP, then
+			 * decrement HP so it will be set to previous index
+			 * where proper buffer is attached.
+			 */
+			hal_srng_src_dec_hp(dp_soc->hal_soc,
+					    rxdma_srng);
+
+			hal_get_sw_hptp(dp_soc->hal_soc, rxdma_srng, &tp, &hp);
+			dp_err("HP adjusted to proper buffer index, hp:%u tp:%u", hp, tp);
 			break;
 		}
 
