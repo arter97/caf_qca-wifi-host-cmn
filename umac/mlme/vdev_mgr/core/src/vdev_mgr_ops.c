@@ -305,6 +305,8 @@ mlo_ap_append_bridge_vdevs(struct wlan_objmgr_vdev *vdev,
 			wlan_vdev_get_id(bridge_vdev_list[i]);
 		mlo_ptr->partner_info[p_idx].hw_mld_link_id =
 			wlan_mlo_get_pdev_hw_link_id(pdev);
+		mlo_ptr->partner_info[p_idx].is_bridge_vdev =
+			wlan_vdev_mlme_is_mlo_bridge_vdev(bridge_vdev_list[i]);
 		qdf_mem_copy(mlo_ptr->partner_info[p_idx].mac_addr,
 			     wlan_vdev_mlme_get_macaddr(bridge_vdev_list[i]),
 			     QDF_MAC_ADDR_SIZE);
@@ -410,7 +412,9 @@ vdev_mgr_start_param_update_mlo(struct vdev_mlme_obj *mlme_obj,
 		if (wlan_vdev_mlme_op_flags_get(
 			vdev, WLAN_VDEV_OP_MLO_LINK_ADD))
 			param->mlo_flags.mlo_link_add  = 1;
-
+		/* Update the bridge vdev bit */
+		param->mlo_flags.is_bridge_vdev =
+			wlan_vdev_mlme_is_mlo_bridge_vdev(vdev);
 		vdev_mgr_start_param_update_mlo_mcast(vdev, param);
 		vdev_mgr_start_param_update_mlo_partner(vdev, param);
 	}

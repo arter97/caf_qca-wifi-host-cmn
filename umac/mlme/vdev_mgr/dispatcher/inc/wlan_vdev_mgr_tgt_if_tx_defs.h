@@ -642,6 +642,7 @@ struct vdev_scan_nac_rssi_params {
  * @mlo_mcast_vdev: MLO cast vdev
  * @emlsr_support: indicate non AP MLD STA supports eMLSR mode
  * @mlo_link_add: Dynamic link addition
+ * @is_bridge_vdev: Indicate the vdev is a bridge vdev
  * @rsvd: reserved bits
  */
 struct mlo_vdev_start_flags {
@@ -650,7 +651,8 @@ struct mlo_vdev_start_flags {
 		 mlo_mcast_vdev:1,
 		 emlsr_support:1,
 		 mlo_link_add:1,
-		 rsvd:27;
+		 is_bridge_vdev:1,
+		 rsvd:26;
 };
 
 /**
@@ -658,11 +660,13 @@ struct mlo_vdev_start_flags {
  * @vdev_id: vdev id
  * @hw_mld_link_id: unique hw link id across SoCs
  * @mac_addr: Partner mac address
+ * @is_bridge_vdev: Indicate the vdev is bridge vdev
  */
 struct ml_vdev_start_partner_info {
 	uint32_t vdev_id;
 	uint32_t hw_mld_link_id;
 	uint8_t mac_addr[QDF_MAC_ADDR_SIZE];
+	bool is_bridge_vdev;
 };
 
 /**
