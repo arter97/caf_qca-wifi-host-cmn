@@ -2127,23 +2127,35 @@ static int wlan_ipa_get_ifaceid(struct wlan_ipa_priv *ipa_ctx,
 #define WLAN_IPA_SESSION_ID_SHIFT 1
 static uint8_t wlan_ipa_set_session_id(uint8_t session_id, bool is_2g_iface)
 {
-	return (session_id << WLAN_IPA_SESSION_ID_SHIFT) | is_2g_iface;
+	bool alt_pipe;
+
+	/* If two tx pipes feature is enabled, honor the selection from
+	 * UMAC. Otherwise forcefully use the primary pipe.
+	 */
+	if (ipa_config_is_two_tx_pipes_enabled())
+		alt_pipe = is_2g_iface;
+	else
+		alt_pipe = false;
+
+	return (session_id << WLAN_IPA_SESSION_ID_SHIFT) | alt_pipe;
 }
 
 static void
 wlan_ipa_setup_iface_alt_pipe(struct wlan_ipa_iface_context *iface_context,
 			      bool alt_pipe)
 {
-	iface_context->alt_pipe = alt_pipe;
+	if (ipa_config_is_two_tx_pipes_enabled())
+		iface_context->alt_pipe = alt_pipe;
 }
 
 static void
 wlan_ipa_cleanup_iface_alt_pipe(struct wlan_ipa_iface_context *iface_context)
 {
-	iface_context->alt_pipe = false;
+	if (ipa_config_is_two_tx_pipes_enabled())
+		iface_context->alt_pipe = false;
 }
 
-#else
+#else /* !IPA_WDI3_TX_TWO_PIPES */
 static uint8_t wlan_ipa_set_session_id(uint8_t session_id, bool is_2g_iface)
 {
 	return session_id;
@@ -2160,7 +2172,7 @@ wlan_ipa_cleanup_iface_alt_pipe(struct wlan_ipa_iface_context *iface_context)
 {
 }
 
-#endif
+#endif /* IPA_WDI3_TX_TWO_PIPES */
 
 /**
  * wlan_ipa_cleanup_iface() - Cleanup IPA on a given interface
