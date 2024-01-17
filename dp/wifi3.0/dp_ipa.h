@@ -458,6 +458,15 @@ QDF_STATUS dp_ipa_handle_rx_buf_smmu_mapping(struct dp_soc *soc,
 QDF_STATUS
 dp_rx_add_to_ipa_desc_free_list(struct dp_soc *soc,
 				struct dp_rx_desc *rx_desc);
+
+/**
+ * dp_ipa_tx_pkt_opt_dp_ctrl() - Handle opt_dp_ctrl tx pkt
+ * @soc: data path SoC handle
+ * @vdev_id: vdev id
+ * @nbuf: nbuf
+ */
+void dp_ipa_tx_pkt_opt_dp_ctrl(struct dp_soc *soc, uint8_t vdev_id,
+			       qdf_nbuf_t nbuf);
 #else
 static inline QDF_STATUS
 dp_rx_add_to_ipa_desc_free_list(struct dp_soc *soc,

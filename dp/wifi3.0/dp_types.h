@@ -2360,6 +2360,7 @@ enum dp_context_type {
  * @dp_partner_chips_unmap:
  * @ipa_get_bank_id: Get TCL bank id used by IPA
  * @ipa_get_wdi_ver: Get WDI version
+ * @dp_tx_ipa_opt_dp_ctrl: Handle opt_dp_ctrl tx pkt
  * @dp_txrx_ppeds_rings_status:
  * @dp_tx_ppeds_inuse_desc:
  * @dp_ppeds_clear_stats: Clear ppeds related stats
@@ -2602,6 +2603,10 @@ struct dp_arch_ops {
 #ifdef IPA_OFFLOAD
 	int8_t (*ipa_get_bank_id)(struct dp_soc *soc);
 	void (*ipa_get_wdi_ver)(uint8_t *wdi_ver);
+#endif
+#ifdef IPA_OPT_WIFI_DP_CTRL
+	void (*dp_tx_ipa_opt_dp_ctrl)(struct dp_soc *soc, uint8_t vdev_id,
+				      qdf_nbuf_t nbuf);
 #endif
 #ifdef WLAN_SUPPORT_PPEDS
 	void (*dp_txrx_ppeds_rings_status)(struct dp_soc *soc);

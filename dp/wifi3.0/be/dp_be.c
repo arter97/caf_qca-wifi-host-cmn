@@ -3794,6 +3794,26 @@ static inline void dp_initialize_arch_ops_be_ipa(struct dp_arch_ops *arch_ops)
 }
 #endif /* IPA_OFFLOAD */
 
+#ifdef IPA_OPT_WIFI_DP_CTRL
+static inline
+void dp_tx_ipa_opt_dp_ctrl_be(struct dp_soc *soc, uint8_t vdev_id,
+			      qdf_nbuf_t nbuf)
+{
+	dp_ipa_tx_pkt_opt_dp_ctrl(soc, vdev_id, nbuf);
+}
+
+static inline
+void dp_initialize_arch_ops_be_ipa_opt_dp_ctrl(struct dp_arch_ops *arch_ops)
+{
+	arch_ops->dp_tx_ipa_opt_dp_ctrl = dp_tx_ipa_opt_dp_ctrl_be;
+}
+#else
+static inline
+void dp_initialize_arch_ops_be_ipa_opt_dp_ctrl(struct dp_arch_ops *arch_ops)
+{
+}
+#endif
+
 void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 {
 #ifndef QCA_HOST_MODE_WIFI_DISABLED
@@ -3908,6 +3928,7 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 	dp_initialize_arch_ops_be_ipa(arch_ops);
 	dp_initialize_arch_ops_be_single_dev(arch_ops);
 	dp_initialize_arch_ops_be_fisa(arch_ops);
+	dp_initialize_arch_ops_be_ipa_opt_dp_ctrl(arch_ops);
 }
 
 #ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE

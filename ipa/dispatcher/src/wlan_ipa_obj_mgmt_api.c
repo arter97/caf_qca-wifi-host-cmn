@@ -28,6 +28,7 @@
 #include "wlan_ipa_ucfg_api.h"
 #include "qdf_platform.h"
 #include "qdf_module.h"
+#include "wlan_ipa_core.h"
 
 /* This is as per IPA capbility */
 #define MAX_INSTANCES_SUPPORTED 2
@@ -331,6 +332,14 @@ QDF_STATUS ipa_deinit(void)
 
 	return status;
 }
+
+#ifdef IPA_OPT_WIFI_DP_CTRL
+void ipa_tx_pkt_opt_dp_ctrl(uint8_t vdev_id,
+			    qdf_nbuf_t nbuf)
+{
+	wlan_ipa_tx_pkt_opt_dp_ctrl(vdev_id, nbuf);
+}
+#endif
 
 qdf_ipa_wdi_hdl_t wlan_ipa_get_hdl(void *soc, uint8_t pdev_id)
 {

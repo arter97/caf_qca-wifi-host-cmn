@@ -1015,6 +1015,13 @@ int wlan_ipa_wdi_opt_dpath_clk_status_cb(void *ipa_ctx, bool status);
  *
  */
 void wlan_ipa_wdi_opt_dpath_enable_clk_req(void *ipa_ctx);
+
+/**
+ * wlan_ipa_tx_pkt_opt_dp_ctrl() - handle opt_dp_ctrl tx pkt
+ * @vdev_id: vdev id
+ * @nbuf: nbuf
+ */
+void wlan_ipa_tx_pkt_opt_dp_ctrl(uint8_t vdev_id, qdf_nbuf_t nbuf);
 #endif
 #endif /* IPA_OPT_WIFI_DP */
 

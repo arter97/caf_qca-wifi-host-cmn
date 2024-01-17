@@ -120,6 +120,7 @@
  * @WLAN_IPA_FILTER_REL_NOTIFY: OPT WIFI DP filter release notification
  * @WLAN_IPA_SMMU_MAP: IPA SMMU map call
  * @WLAN_IPA_SMMU_UNMAP: IPA SMMU unmap call
+ * @WLAN_IPA_CTRL_TX_REINJECT: REINJECT TO TX
  * @WLAN_IPA_UC_OPCODE_MAX: IPA UC max operation code
  */
 enum wlan_ipa_uc_op_code {
@@ -138,6 +139,7 @@ enum wlan_ipa_uc_op_code {
 	WLAN_IPA_FILTER_REL_NOTIFY = 10,
 	WLAN_IPA_SMMU_MAP = 11,
 	WLAN_IPA_SMMU_UNMAP = 12,
+	WLAN_IPA_CTRL_TX_REINJECT = 13,
 	/* keep this last */
 	WLAN_IPA_UC_OPCODE_MAX
 };
@@ -449,6 +451,8 @@ struct ipa_uc_stas_map {
  * @op_code: IPA Operation type
  * @len: IPA message length
  * @rsvd_snd: Reserved
+ * @vdev_id: vdev id
+ * @nbuf: tx nbuf
  */
 struct op_msg_type {
 	uint8_t msg_t;
@@ -456,6 +460,8 @@ struct op_msg_type {
 	uint16_t op_code;
 	uint16_t len;
 	uint16_t rsvd_snd;
+	uint8_t vdev_id;
+	qdf_nbuf_t nbuf;
 };
 
 /**

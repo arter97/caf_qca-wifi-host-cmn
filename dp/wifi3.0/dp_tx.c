@@ -4645,6 +4645,40 @@ dp_tx_reinject_mlo_hdl(struct dp_soc *soc, struct dp_vdev *vdev,
 }
 #endif
 
+#ifdef IPA_OPT_WIFI_DP_CTRL
+static inline bool
+dp_ipa_tx_opt_dp_ctrl_reinject(struct dp_soc *soc, struct dp_vdev *vdev,
+			       struct dp_tx_desc_s *tx_desc,
+			       qdf_nbuf_t nbuf,
+			       uint8_t reinject_reason)
+{
+	if (tx_desc->msdu_ext_desc) {
+		dp_err("extension descriptor should not be required for opt_dp_ctrl");
+		qdf_assert_always(0);
+	}
+	if (reinject_reason == HTT_TX_FW2WBM_REINJECT_REASON_OPT_DP_CTRL) {
+		if (soc->arch_ops.dp_tx_ipa_opt_dp_ctrl)
+			soc->arch_ops.dp_tx_ipa_opt_dp_ctrl(soc,
+							    tx_desc->vdev_id,
+							    nbuf);
+		dp_tx_outstanding_dec(tx_desc->pdev);
+		dp_tx_nbuf_unmap(soc, tx_desc);
+		dp_tx_desc_release(soc, tx_desc, tx_desc->pool_id);
+		return true;
+	}
+	return false;
+}
+#else
+static inline bool
+dp_ipa_tx_opt_dp_ctrl_reinject(struct dp_soc *soc, struct dp_vdev *vdev,
+			       struct dp_tx_desc_s *tx_desc,
+			       qdf_nbuf_t nbuf,
+			       uint8_t reinject_reason)
+{
+	return false;
+}
+#endif
+
 void dp_tx_reinject_handler(struct dp_soc *soc,
 			    struct dp_vdev *vdev,
 			    struct dp_tx_desc_s *tx_desc,
@@ -4673,6 +4707,9 @@ void dp_tx_reinject_handler(struct dp_soc *soc,
 			 qdf_nbuf_len(tx_desc->nbuf));
 
 	if (dp_tx_reinject_mlo_hdl(soc, vdev, tx_desc, nbuf, reinject_reason))
+		return;
+	if (dp_ipa_tx_opt_dp_ctrl_reinject(soc, vdev, tx_desc, nbuf,
+					   reinject_reason))
 		return;
 
 #ifdef WDS_VENDOR_EXTENSION

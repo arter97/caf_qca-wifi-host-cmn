@@ -3904,6 +3904,12 @@ QDF_STATUS dp_ipa_tx_super_rule_setup(struct cdp_soc_t *soc_hdl,
 
 	return htt_h2t_tx_super_rule_setup(soc->htt_handle, flt_params);
 }
+
+void dp_ipa_tx_pkt_opt_dp_ctrl(struct dp_soc *soc, uint8_t vdev_id,
+			       qdf_nbuf_t nbuf)
+{
+	ipa_tx_pkt_opt_dp_ctrl(vdev_id, nbuf);
+}
 #else
 QDF_STATUS dp_ipa_tx_super_rule_setup(struct cdp_soc_t *soc_hdl,
 				      void *flt_params)

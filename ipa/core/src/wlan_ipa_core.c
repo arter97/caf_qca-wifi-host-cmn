@@ -5096,6 +5096,13 @@ static void wlan_ipa_uc_op_cb(struct op_msg_type *op_msg,
 		qdf_ipa_wdi_opt_dpath_notify_flt_rlsd_per_inst(ipa_ctx->hdl,
 							       msg->rsvd);
 		qdf_mutex_release(&ipa_ctx->ipa_lock);
+	} else if (msg->op_code == WLAN_IPA_CTRL_TX_REINJECT) {
+		ipa_info("opt_dp_ctrl: handle opt_dp_ctrl tx pkt");
+		qdf_mutex_acquire(&ipa_ctx->ipa_lock);
+		cdp_ipa_tx_opt_dp_ctrl_pkt(ipa_ctx->dp_soc,
+					   msg->vdev_id,
+					   msg->nbuf);
+		qdf_mutex_release(&ipa_ctx->ipa_lock);
 	} else if (msg->op_code == WLAN_IPA_SMMU_MAP) {
 		ipa_info("opt_dp: IPA smmu pool map");
 		qdf_mutex_acquire(&ipa_ctx->ipa_lock);
@@ -6293,4 +6300,27 @@ QDF_STATUS wlan_ipa_get_alt_pipe(struct wlan_ipa_priv *ipa_ctx,
 	return QDF_STATUS_SUCCESS;
 }
 #endif /* IPA_WDI3_TX_TWO_PIPES */
+#ifdef IPA_OPT_WIFI_DP_CTRL
+void wlan_ipa_tx_pkt_opt_dp_ctrl(uint8_t vdev_id, qdf_nbuf_t nbuf)
+{
+	struct op_msg_type *notify_msg;
+	struct uc_op_work_struct *uc_op_work;
+	struct wlan_ipa_priv *ipa_ctx = gp_ipa;
+
+	notify_msg = qdf_mem_malloc(sizeof(*notify_msg));
+	if (!notify_msg) {
+		ipa_err("Message memory allocation failed");
+		return;
+	}
+	ipa_debug("schedule WQ for vdev id %u", vdev_id);
+	notify_msg->op_code = WLAN_IPA_CTRL_TX_REINJECT;
+	notify_msg->nbuf = nbuf;
+	notify_msg->vdev_id = vdev_id;
+	uc_op_work =
+		&ipa_ctx->uc_op_work[WLAN_IPA_CTRL_TX_REINJECT];
+	uc_op_work->msg = notify_msg;
+	qdf_sched_work(0, &uc_op_work->work);
+}
+
+#endif
 
