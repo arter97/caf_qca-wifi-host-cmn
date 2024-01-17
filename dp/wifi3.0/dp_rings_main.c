@@ -2951,7 +2951,7 @@ QDF_STATUS dp_set_vdev_pcp_tid_map_wifi3(struct cdp_soc_t *soc_hdl,
 }
 
 #if defined(FEATURE_RUNTIME_PM) || defined(DP_POWER_SAVE)
-void dp_drain_txrx(struct cdp_soc_t *soc_handle)
+void dp_drain_txrx(struct cdp_soc_t *soc_handle, uint8_t rx_only)
 {
 	struct dp_soc *soc = (struct dp_soc *)soc_handle;
 	uint32_t cur_tx_limit, cur_rx_limit;
@@ -2971,8 +2971,11 @@ void dp_drain_txrx(struct cdp_soc_t *soc_handle)
 	 */
 	dp_update_soft_irq_limits(soc, budget, budget);
 
-	for (i = 0; i < wlan_cfg_get_num_contexts(soc->wlan_cfg_ctx); i++)
+	for (i = 0; i < wlan_cfg_get_num_contexts(soc->wlan_cfg_ctx); i++) {
+		if (rx_only && !soc->intr_ctx[i].rx_ring_mask)
+			continue;
 		soc->arch_ops.dp_service_srngs(&soc->intr_ctx[i], budget, cpu);
+	}
 
 	dp_update_soft_irq_limits(soc, cur_tx_limit, cur_rx_limit);
 

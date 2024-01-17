@@ -2697,8 +2697,11 @@ void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id)
 			} else {
 				rem_entries = num_entries_per_buf;
 				scatter_buf_num++;
-				if (scatter_buf_num >= num_scatter_bufs)
+				if (scatter_buf_num >= num_scatter_bufs) {
+					scatter_buf_num--;
 					break;
+				}
+
 				scatter_buf_ptr = (uint8_t *)
 					(soc->wbm_idle_scatter_buf_base_vaddr[
 					 scatter_buf_num]);
@@ -2713,7 +2716,7 @@ void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id)
 			num_scatter_bufs, soc->wbm_idle_scatter_buf_size,
 			(uint32_t)(scatter_buf_ptr -
 			(uint8_t *)(soc->wbm_idle_scatter_buf_base_vaddr[
-			scatter_buf_num-1])), total_link_descs);
+			scatter_buf_num])), total_link_descs);
 	}
 }
 
@@ -9549,10 +9552,9 @@ QDF_STATUS dp_get_per_link_peer_stats(struct dp_peer *peer,
 				      enum cdp_peer_type peer_type,
 				      uint8_t num_link)
 {
-	uint8_t i, index = 0;
+	uint8_t i, min_num_links;
 	struct dp_peer *link_peer;
 	struct dp_mld_link_peers link_peers_info;
-	struct cdp_peer_stats *stats;
 	struct dp_soc *soc = peer->vdev->pdev->soc;
 
 	dp_get_peer_calibr_stats(peer, peer_stats);
@@ -9563,19 +9565,18 @@ QDF_STATUS dp_get_per_link_peer_stats(struct dp_peer *peer,
 		dp_get_link_peers_ref_from_mld_peer(soc, peer,
 						    &link_peers_info,
 						    DP_MOD_ID_GENERIC_STATS);
-		for (i = 0; i < link_peers_info.num_links; i++) {
+		if (link_peers_info.num_links > num_link)
+			dp_info("Req stats of %d link. less than total link %d",
+				num_link, link_peers_info.num_links);
+
+		min_num_links = num_link < link_peers_info.num_links ?
+				num_link : link_peers_info.num_links;
+		for (i = 0; i < min_num_links; i++) {
 			link_peer = link_peers_info.link_peers[i];
 			if (qdf_unlikely(!link_peer))
 				continue;
-			if (index > num_link) {
-				dp_err("Request stats for %d link(s) is less than total link(s) %d",
-				       num_link, link_peers_info.num_links);
-				break;
-			}
-			stats = &peer_stats[index];
-			dp_get_peer_per_pkt_stats(link_peer, stats);
-			dp_get_peer_extd_stats(link_peer, stats);
-			index++;
+			dp_get_peer_per_pkt_stats(link_peer, peer_stats);
+			dp_get_peer_extd_stats(link_peer, peer_stats);
 		}
 		dp_release_link_peers_ref(&link_peers_info,
 					  DP_MOD_ID_GENERIC_STATS);
@@ -11218,6 +11219,11 @@ static QDF_STATUS dp_soc_set_param(struct cdp_soc_t  *soc_hdl,
 		soc->features.umac_hw_reset_support = value;
 		dp_info("UMAC HW reset support :%u",
 			soc->features.umac_hw_reset_support);
+		break;
+	case DP_SOC_PARAM_MULTI_RX_REORDER_SETUP_SUPPORT:
+		soc->features.multi_rx_reorder_q_setup_support = value;
+		dp_info("Multi rx reorder queue setup support: %u",
+			soc->features.multi_rx_reorder_q_setup_support);
 		break;
 	default:
 		dp_info("not handled param %d ", param);

@@ -4336,7 +4336,39 @@ struct rx_reorder_queue_setup_params {
 	uint16_t queue_no;
 	uint8_t ba_window_size_valid;
 	uint16_t ba_window_size;
+};
 
+#define WMI_MAX_TIDS 17 /* This should be kept the same as (C)DP_MAX_TIDS */
+
+/**
+ * struct rx_reorder_queue_params_list  - Specific params for each tid
+ * @hw_qdesc_paddr: 64 bits of queue desc address
+ * @queue_no: 16-bit number assigned by host for queue
+ * @ba_window_size: BA window size
+ * @ba_window_size_valid: BA window size validity flag
+ */
+struct rx_reorder_queue_params_list {
+	qdf_dma_addr_t hw_qdesc_paddr;
+	uint16_t queue_no;
+	uint16_t ba_window_size;
+	uint8_t ba_window_size_valid;
+};
+
+/**
+ * struct multi_rx_reorder_queue_setup_params  - Multi reorder
+ *	queue setup params
+ * @queue_params_list: An array for recording the specific params for each tid.
+ * @peer_macaddr: Peer mac address
+ * @tid_bitmap: A group of TIDs to be set at a time
+ * @tid_num: The number of TIDs to be set
+ * @vdev_id: vdev id
+ */
+struct multi_rx_reorder_queue_setup_params {
+	struct rx_reorder_queue_params_list queue_params_list[WMI_MAX_TIDS];
+	uint8_t *peer_macaddr;
+	uint32_t tid_bitmap;
+	uint8_t tid_num;
+	uint16_t vdev_id;
 };
 
 /**
@@ -6289,6 +6321,7 @@ typedef enum {
 	wmi_service_tx_compl_tsf64,
 	wmi_service_vdev_delete_all_peer,
 	wmi_service_three_way_coex_config_legacy,
+	wmi_service_multiple_coex_config_support,
 	wmi_service_rx_fse_support,
 	wmi_service_dynamic_hw_mode,
 	wmi_service_sae_roam_support,
@@ -6483,6 +6516,8 @@ typedef enum {
 #ifdef WLAN_FEATURE_LL_LT_SAP
 	wmi_service_xpan_support,
 #endif
+	wmi_service_multiple_reorder_queue_setup_support,
+	wmi_service_p2p_device_update_mac_addr_support,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -6658,7 +6693,6 @@ typedef enum {
  * @enable_tdls_offchannel: Enable tdls offchannel
  * @enable_tdls_capability_enhance: Enable tdls capability enhance
  * @max_tdls_peers: Max tdls peers
- * @sta_dual_p2p_support: Indicates sta+p2p+p2p support
  * @peer_bigdata_getbssinfo_support: Indicates bigdata getbssinfo support
  * @peer_bigdata_assocreject_info_support: Indicates bigdata assoc reject
  *                                         info support
@@ -6666,6 +6700,7 @@ typedef enum {
  * @feature_set_version: Indicates feature set version info
  * @num_antennas: Indicates number of antennas supported
  * @sta_dump_support: Indicates sta dump info support
+ * @iface_combinations: Iface combination bit map
  */
 struct target_feature_set {
 	WMI_HOST_WIFI_STANDARD wifi_standard;
@@ -6719,13 +6754,13 @@ struct target_feature_set {
 	bool enable_tdls_offchannel;
 	bool enable_tdls_capability_enhance;
 	uint8_t max_tdls_peers;
-	bool sta_dual_p2p_support;
 	bool peer_bigdata_getbssinfo_support;
 	bool peer_bigdata_assocreject_info_support;
 	bool peer_getstainfo_support;
 	uint16_t feature_set_version;
 	WMI_HOST_NUM_ANTENNAS num_antennas;
 	bool sta_dump_support;
+	uint32_t iface_combinations;
 };
 #endif
 
@@ -8764,6 +8799,40 @@ struct coex_config_params {
 	uint32_t config_arg4;
 	uint32_t config_arg5;
 	uint32_t config_arg6;
+};
+
+/**
+ * struct coex_config_item - Multiple coex config item
+ * @config_type: Configuration type - wmi_coex_config_type enum
+ * @config_arg1: Configuration argument based on config type
+ * @config_arg2: Configuration argument based on config type
+ * @config_arg3: Configuration argument based on config type
+ * @config_arg4: Configuration argument based on config type
+ * @config_arg5: Configuration argument based on config type
+ * @config_arg6: Configuration argument based on config type
+ */
+struct coex_config_item {
+	uint32_t config_type;
+	uint32_t config_arg1;
+	uint32_t config_arg2;
+	uint32_t config_arg3;
+	uint32_t config_arg4;
+	uint32_t config_arg5;
+	uint32_t config_arg6;
+};
+
+#define COEX_MULTI_CONFIG_MAX_CNT  32
+
+/**
+ * struct coex_multi_config - Multiple coex config command parameters
+ * @vdev_id: Vdev id
+ * @num_configs: Number of config items
+ * @cfg_items: Array of coex config items
+ */
+struct coex_multi_config {
+	uint32_t vdev_id;
+	uint32_t num_configs;
+	struct coex_config_item cfg_items[COEX_MULTI_CONFIG_MAX_CNT];
 };
 
 #define WMI_HOST_PDEV_ID_SOC 0xFF

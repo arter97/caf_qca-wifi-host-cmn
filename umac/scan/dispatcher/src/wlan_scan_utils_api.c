@@ -37,6 +37,10 @@
 #endif
 #include "wlan_psoc_mlme_api.h"
 #include "reg_services_public_struct.h"
+#ifdef WLAN_FEATURE_ACTION_OUI
+#include <wlan_action_oui_main.h>
+#include <wlan_action_oui_public_struct.h>
+#endif
 
 #define MAX_IE_LEN 1024
 #define SHORT_SSID_LEN 4
@@ -994,13 +998,12 @@ util_scan_is_hidden_ssid(struct ie_ssid *ssid)
 }
 
 #ifdef WLAN_FEATURE_11BE_MLO
-static void
-util_scan_update_rnr_mld(struct rnr_bss_info *rnr,
-			 struct neighbor_ap_info_field *ap_info, uint8_t *data)
+static void util_scan_update_rnr_mld(struct rnr_bss_info *rnr, uint8_t *data,
+				     uint8_t tbtt_info_length)
 {
 	bool mld_info_present = false;
 
-	switch (ap_info->tbtt_header.tbtt_info_length) {
+	switch (tbtt_info_length) {
 	case TBTT_NEIGHBOR_AP_BSSID_S_SSID_BSS_PARAM_20MHZ_PSD_MLD_PARAM:
 		qdf_mem_copy(&rnr->mld_info, &data[13],
 			     sizeof(struct rnr_mld_info));
@@ -1011,9 +1014,9 @@ util_scan_update_rnr_mld(struct rnr_bss_info *rnr,
 	rnr->mld_info_valid = mld_info_present;
 }
 #else
-static void
-util_scan_update_rnr_mld(struct rnr_bss_info *rnr,
-			 struct neighbor_ap_info_field *ap_info, uint8_t *data)
+static inline void
+util_scan_update_rnr_mld(struct rnr_bss_info *rnr, uint8_t *data,
+			 uint8_t tbtt_info_length)
 {
 }
 #endif
@@ -1026,6 +1029,17 @@ util_scan_update_rnr(struct rnr_bss_info *rnr,
 	uint8_t tbtt_info_length;
 
 	tbtt_info_length = ap_info->tbtt_header.tbtt_info_length;
+
+	/*
+	 * Max TBTT sub-element length in RNR IE is 255 bytes and AP can send
+	 * data above defined length and the bytes in excess to this length
+	 * shall be treated as reserved.
+	 *
+	 * Limit the TBTT sub-element read operation to current supported
+	 * length i.e TBTT_NEIGHBOR_AP_PARAM_MAX
+	 */
+	if (tbtt_info_length > TBTT_NEIGHBOR_AP_PARAM_MAX)
+		tbtt_info_length = TBTT_NEIGHBOR_AP_PARAM_MAX;
 
 	switch (tbtt_info_length) {
 	case TBTT_NEIGHBOR_AP_OFFSET_ONLY:
@@ -1058,7 +1072,7 @@ util_scan_update_rnr(struct rnr_bss_info *rnr,
 		break;
 
 	case TBTT_NEIGHBOR_AP_BSSID_S_SSID_BSS_PARAM_20MHZ_PSD_MLD_PARAM:
-		util_scan_update_rnr_mld(rnr, ap_info, data);
+		util_scan_update_rnr_mld(rnr, data, tbtt_info_length);
 		fallthrough;
 	case TBTT_NEIGHBOR_AP_BSSID_S_SSID_BSS_PARAM_20MHZ_PSD:
 		rnr->psd_20mhz = data[12];
@@ -2953,17 +2967,54 @@ static int util_handle_rnr_ie_for_mbssid(const uint8_t *rnr,
 }
 #endif
 
-static uint32_t util_gen_new_ie(uint8_t *ie, uint32_t ielen,
+#ifdef WLAN_FEATURE_ACTION_OUI
+static uint8_t *util_copy_reporting_ap_vendor_ies(struct wlan_objmgr_psoc *psoc,
+						  const uint8_t *ie,
+						  uint32_t ie_len,
+						  uint8_t *buf_ie)
+{
+	struct action_oui_search_attr attr;
+	enum action_oui_id oui_id = ACTION_OUI_RESTRICT_MAX_MLO_LINKS;
+
+	attr.ie_data = (uint8_t *)ie;
+	attr.ie_length = ie_len;
+
+	if (wlan_action_oui_search(psoc, &attr, oui_id)) {
+		qdf_mem_copy(buf_ie, ie, ie_len);
+		buf_ie += ie_len;
+	}
+
+	return buf_ie;
+}
+#else
+static inline uint8_t *
+util_copy_reporting_ap_vendor_ies(struct wlan_objmgr_psoc *psoc,
+				  const uint8_t *ie, uint32_t ie_len,
+				  uint8_t *buf_ie)
+{
+	return buf_ie;
+}
+#endif
+
+static uint32_t util_gen_new_ie(struct wlan_objmgr_pdev *pdev,
+				uint8_t *ie, uint32_t ielen,
 				uint8_t *subelement,
 				size_t subie_len, uint8_t *new_ie,
 				uint8_t bssid_index)
 {
+	struct wlan_objmgr_psoc *psoc;
 	uint8_t *pos, *tmp;
 	const uint8_t *tmp_old, *tmp_new;
 	uint8_t *sub_copy, *extn_elem = NULL;
 	struct non_inheritance_ie ninh = {0};
 	uint8_t *elem_list = NULL, *extn_elem_list = NULL;
 	size_t tmp_rem_len;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		scm_err("NULL PSOC");
+		return 0;
+	}
 
 	/* copy subelement as we need to change its content to
 	 * mark an ie after it is processed.
@@ -3058,6 +3109,18 @@ static uint32_t util_gen_new_ie(uint8_t *ie, uint32_t ielen,
 			tmp_rem_len = subie_len - (tmp - sub_copy);
 			if (tmp_old[0] == WLAN_ELEMID_VENDOR &&
 			    tmp_rem_len >= MIN_VENDOR_TAG_LEN) {
+				/*
+				 * In order to identify few Vendor APs the
+				 * generated frame should contain the reporting
+				 * APs matching VSIE or else the entry generated
+				 * will not have this VSIE and logic kept to
+				 * take certain action on specific Vendor APs
+				 * will fail.
+				 */
+				pos = util_copy_reporting_ap_vendor_ies(psoc,
+									tmp_old,
+									tmp_old[1] + MIN_IE_LEN,
+									pos);
 				/* If Vendor IE also presents in STA profile,
 				 * then ignore the Vendor IE which is for
 				 * reporting STA. It only needs to copy Vendor
@@ -3065,7 +3128,6 @@ static uint32_t util_gen_new_ie(uint8_t *ie, uint32_t ielen,
 				 * The copy happens when going through the
 				 * remaining IEs.
 				 */
-				;
 			} else if (tmp_old[0] == WLAN_ELEMID_EXTN_ELEM) {
 				if (tmp_old[PAYLOAD_START_POS] ==
 				    tmp[PAYLOAD_START_POS] &&
@@ -3497,7 +3559,7 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 			}
 
 			new_ie_len =
-				util_gen_new_ie(ie, ielen,
+				util_gen_new_ie(pdev, ie, ielen,
 						(nontx_profile +
 						 PAYLOAD_START_POS),
 						subie_len, new_ie,

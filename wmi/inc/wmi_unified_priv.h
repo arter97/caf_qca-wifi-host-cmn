@@ -1905,6 +1905,10 @@ QDF_STATUS
 (*send_coex_config_cmd)(wmi_unified_t wmi_handle,
 			struct coex_config_params *param);
 
+QDF_STATUS
+(*send_coex_multi_config_cmd)(wmi_unified_t wmi_handle,
+			      struct coex_multi_config *param);
+
 #ifdef WLAN_FEATURE_DBAM_CONFIG
 QDF_STATUS
 (*send_dbam_config_cmd)(wmi_unified_t wmi_handle,
@@ -2246,6 +2250,9 @@ QDF_STATUS (*send_action_oui_cmd)(wmi_unified_t wmi_handle,
 
 QDF_STATUS (*send_peer_rx_reorder_queue_setup_cmd)(wmi_unified_t wmi_handle,
 		struct rx_reorder_queue_setup_params *param);
+
+QDF_STATUS (*send_peer_multi_rx_reorder_queue_setup_cmd)(wmi_unified_t wmi_hdl,
+		struct multi_rx_reorder_queue_setup_params *param);
 
 QDF_STATUS (*send_peer_rx_reorder_queue_remove_cmd)(wmi_unified_t wmi_handle,
 		struct rx_reorder_queue_remove_params *param);

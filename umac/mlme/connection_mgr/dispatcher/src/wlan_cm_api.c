@@ -265,6 +265,12 @@ bool wlan_cm_is_link_switch_connect_resp(struct wlan_cm_connect_resp *resp)
 	return cm_is_link_switch_connect_resp(resp);
 }
 
+void wlan_cm_trigger_panic_on_cmd_timeout(struct wlan_objmgr_vdev *vdev,
+					  enum qdf_hang_reason reason)
+{
+	cm_trigger_panic_on_cmd_timeout(vdev, reason);
+}
+
 #ifdef WLAN_FEATURE_HOST_ROAM
 bool wlan_cm_get_active_reassoc_req(struct wlan_objmgr_vdev *vdev,
 				    struct wlan_cm_vdev_reassoc_req *req)

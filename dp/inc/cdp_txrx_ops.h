@@ -717,7 +717,7 @@ struct cdp_cmn_ops {
 	QDF_STATUS (*set_wds_ext_peer_bit)(ol_txrx_soc_handle soc,
 					   uint8_t *mac);
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
-	void (*txrx_drain)(ol_txrx_soc_handle soc);
+	void (*txrx_drain)(ol_txrx_soc_handle soc, uint8_t rx_only);
 	int (*get_free_desc_poolsize)(struct cdp_soc_t *soc);
 #ifdef WLAN_SYSFS_DP_STATS
 	QDF_STATUS (*txrx_sysfs_fill_stats)(ol_txrx_soc_handle soc,
@@ -1524,6 +1524,10 @@ struct ol_if_ops {
 				       uint16_t queue_num,
 				       uint8_t ba_window_size_valid,
 				       uint16_t ba_window_size);
+	QDF_STATUS
+	(*peer_multi_rx_reorder_queue_setup)(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
+					     uint8_t pdev_id,
+					     struct multi_rx_reorder_queue_setup_params *tid_params);
 	QDF_STATUS
 	(*peer_rx_reorder_queue_remove)(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 					uint8_t pdev_id,

@@ -2177,17 +2177,17 @@ cm_sort_vendor_algo_mlo_bss_entry(struct wlan_objmgr_psoc *psoc,
 			freq[i] = link[i].freq;
 
 		if (policy_mgr_2_freq_always_on_same_mac(psoc, freq[i],
-							 freq_entry) &&
-		    !wlan_mlme_is_5gl_5gh_mlsr_supported(psoc)) {
+							 freq_entry)) {
 			total_score[i] = 0;
-			mlme_nofl_debug("Partner(" QDF_MAC_ADDR_FMT " freq %d): assoc freq %d can't be MLMR",
-					QDF_MAC_ADDR_REF(link[i].link_addr.bytes),
-					freq[i], freq_entry);
-			if (mlo_support_link_num <= WLAN_MAX_ML_DEFAULT_LINK ||
-			    entry->ml_info.num_links <
-			    WLAN_MAX_ML_DEFAULT_LINK)
-				link[i].is_valid_link = false;
-
+			if (!wlan_mlme_is_5gl_5gh_mlsr_supported(psoc)) {
+				mlme_nofl_debug("Partner(" QDF_MAC_ADDR_FMT " freq %d): assoc freq %d can't be MLMR",
+						QDF_MAC_ADDR_REF(link[i].link_addr.bytes),
+						freq[i], freq_entry);
+				if (mlo_support_link_num <= WLAN_MAX_ML_DEFAULT_LINK ||
+				    entry->ml_info.num_links <
+				    WLAN_MAX_ML_DEFAULT_LINK)
+					link[i].is_valid_link = false;
+			}
 			continue;
 		}
 
@@ -2950,6 +2950,11 @@ static void cm_update_candidate_list_for_vendor(qdf_list_t *candidate_list)
 		for (i = 0; i < num_link; i++) {
 			tmp_scan_entry = util_scan_copy_cache_entry(
 						scan_entry->entry);
+			if (!tmp_scan_entry) {
+				mlme_err("Copy cache entry failed");
+				goto next;
+			}
+
 			scan_node = qdf_mem_malloc_atomic(sizeof(*scan_node));
 			if (!scan_node) {
 				util_scan_free_cache_entry(tmp_scan_entry);
@@ -2968,6 +2973,11 @@ static void cm_update_candidate_list_for_vendor(qdf_list_t *candidate_list)
 			if (i == 1) {
 				tmp_scan_entry = util_scan_copy_cache_entry(
 							scan_entry->entry);
+				if (!tmp_scan_entry) {
+					mlme_err("Copy cache entry failed");
+					goto next;
+				}
+
 				scan_node = qdf_mem_malloc_atomic(
 						sizeof(*scan_node));
 				if (!scan_node) {

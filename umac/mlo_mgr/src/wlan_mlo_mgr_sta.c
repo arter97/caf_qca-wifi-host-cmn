@@ -2875,5 +2875,30 @@ bool mlo_is_any_link_disconnecting(struct wlan_objmgr_vdev *vdev)
 
 	return status;
 }
+
+QDF_STATUS
+mlo_set_chan_switch_in_progress(struct wlan_objmgr_vdev *vdev, bool val)
+{
+	struct wlan_mlo_dev_context *mlo_dev_ctx = vdev->mlo_dev_ctx;
+
+	if (!mlo_dev_ctx || !mlo_dev_ctx->sta_ctx)
+		return QDF_STATUS_E_INVAL;
+
+	mlo_dev_ctx->sta_ctx->ml_chan_switch_in_progress = val;
+	mlo_debug("Set ml_chan_switch_in_progress: %d vdev %d",
+		  val, wlan_vdev_get_id(vdev));
+
+	return QDF_STATUS_SUCCESS;
+}
+
+bool mlo_is_chan_switch_in_progress(struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_mlo_dev_context *mlo_dev_ctx = vdev->mlo_dev_ctx;
+
+	if (!mlo_dev_ctx || !mlo_dev_ctx->sta_ctx)
+		return false;
+
+	return mlo_dev_ctx->sta_ctx->ml_chan_switch_in_progress;
+}
 #endif
 #endif
