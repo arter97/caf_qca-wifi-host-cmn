@@ -227,12 +227,17 @@ static const  uint8_t rxdma2host_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
 #endif /* CONFIG_BERYLLIUM */
 
 #ifdef CONFIG_BERYLLIUM
+#ifdef FEATURE_ML_MONITOR_MODE_SUPPORT
+static const  uint8_t rx_mon_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
+	[13] = WLAN_CFG_RX_MON_RING_MASK_0, [14] = WLAN_CFG_RX_MON_RING_MASK_1};
+#else
 #ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
 static const  uint8_t rx_mon_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
 	[14] = WLAN_CFG_RX_MON_RING_MASK_0 | WLAN_CFG_RX_MON_RING_MASK_1};
 #else
 static const  uint8_t rx_mon_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
 	[5] = WLAN_CFG_RX_MON_RING_MASK_0};
+#endif
 #endif
 #else
 static const  uint8_t rx_mon_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
