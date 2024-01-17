@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * Copyright (c) 2018-2019 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -64,8 +65,34 @@
 	CFG_INI_BOOL("poison_spectral_bufs", false, \
 			"Enable spectral bufs poison at init")
 
+/*
+ * <ini>
+ * spectral_data_transport_mechanism - Set the transport mechanism to be
+ * used for spectral data buffers
+ * @Netlink: 0
+ * @Streamfs: 1
+ * @Default: 0
+ *
+ * This ini is used to choose the transport mechanism for spectral data
+ * transfer from driver to userspace.
+ *
+ * Related: None
+ *
+ * Supported Feature: Spectral
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+
+#define CFG_SPECTRAL_DATA_TRANSPORT_MECHANISM \
+	CFG_INI_UINT("spectral_data_transport_mechanism", 0, \
+		1, 0, CFG_VALUE_OR_DEFAULT, \
+		"Streamfs/Netlink mode to transfer spectral data")
+
 #define CFG_SPECTRAL_ALL \
 	CFG(CFG_SPECTRAL_DISABLE) \
-	CFG(CFG_SPECTRAL_POISON_BUFS)
+	CFG(CFG_SPECTRAL_POISON_BUFS) \
+	CFG(CFG_SPECTRAL_DATA_TRANSPORT_MECHANISM)
 
 #endif
