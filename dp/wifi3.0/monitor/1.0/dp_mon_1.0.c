@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -299,7 +299,7 @@ QDF_STATUS dp_mon_rings_init_1_0(struct dp_pdev *pdev)
 							 pdev->pdev_id);
 
 		if (dp_srng_init(soc, &soc->rxdma_mon_status_ring[lmac_id],
-				 RXDMA_MONITOR_STATUS, 0, lmac_id)) {
+				 RXDMA_MONITOR_STATUS, mac_id, lmac_id)) {
 			dp_mon_err("%pK: " RNG_ERR "rxdma_mon_status_ring",
 				   soc);
 			goto fail1;
