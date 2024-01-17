@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018, 2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -149,6 +149,16 @@ void qdf_streamfs_subbufs_consumed(qdf_streamfs_chan_t chan,
  */
 void qdf_streamfs_write(qdf_streamfs_chan_t chan, const void *data,
 			size_t length);
+
+/**
+ * qdf_streamfs_reserve() - Reserves a slot in the channel
+ * @chan: relay channel
+ * @length: number of bytes to reserve in the channel
+ *
+ * Reserves a slot in the channel buffer which can be written to later.
+ */
+
+void *qdf_streamfs_reserve(qdf_streamfs_chan_t chan, size_t length);
 #else
 static inline qdf_dentry_t qdf_streamfs_create_dir(
 			const char *name, qdf_dentry_t parent)
@@ -203,6 +213,13 @@ static inline void
 qdf_streamfs_write(qdf_streamfs_chan_t chan, const void *data,
 		   size_t length)
 {
+}
+
+static inline void*
+qdf_streamfs_reserve(qdf_streamfs_chan_t chan,
+		     size_t length)
+{
+	return NULL;
 }
 #endif /* WLAN_STREAMFS */
 #endif /* _QDF_STREAMFS_H */
