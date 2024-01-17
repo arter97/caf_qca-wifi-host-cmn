@@ -2036,6 +2036,8 @@ void wlan_mlo_peer_get_links_info(struct wlan_objmgr_peer *peer,
 		ml_links->link_info[ix].emlsr_support = ml_emlcap->emlsr_supp;
 		ml_links->link_info[ix].logical_link_index = idx - 1;
 		ml_links->link_info[ix].mlo_bridge_peer = link_peer->mlo_bridge_peer;
+		ml_links->link_info[ix].ieee_link_id =
+			wlan_vdev_get_link_id(link_vdev);
 		ml_links->num_partner_links++;
 	}
 	mlo_peer_lock_release(ml_peer);

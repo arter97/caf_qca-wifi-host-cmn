@@ -1209,6 +1209,7 @@ struct ml_rv_info {
  * @emlmr_support: indicate if eMLMR supported
  * @msd_cap_support: indicate if MSD supported
  * @mlo_bridge_peer: indicate if it is bridge peer
+ * @ieee_link_id: IEEE link ID of the link peer
  * @unused: spare bits
  * @logical_link_index: Unique index for links of the mlo. Starts with Zero
  */
@@ -1225,7 +1226,8 @@ struct mlo_tgt_link_info {
 		 emlmr_support:1,
 		 msd_cap_support:1,
 		 mlo_bridge_peer:1,
-		 unused:22;
+		 ieee_link_id:4,
+		 unused:18;
 	uint32_t logical_link_index;
 
 };
