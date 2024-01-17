@@ -3734,6 +3734,20 @@ QDF_STATUS wmi_extract_sar_cap_service_ready_ext(
 			struct wlan_psoc_host_service_ext_param *ext_param);
 
 /**
+ * wmi_extract_sar_cap_service_ready_ext2() - extract SAR cap - flag from
+ *					      FW service ready ext2 event
+ * @wmi_handle: wmi handle
+ * @evt_buf: event buffer received from firmware
+ * @ext2_param: extended target info
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+QDF_STATUS wmi_extract_sar_cap_service_ready_ext2(
+			wmi_unified_t wmi_handle,
+			uint8_t *evt_buf,
+			struct wlan_psoc_host_service_ext2_param *ext2_param);
+
+/**
  * wmi_unified_fw_test_cmd() - send fw test command to fw.
  * @wmi_handle: wmi handle
  * @wmi_fwtest: fw test command

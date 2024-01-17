@@ -2686,6 +2686,19 @@ QDF_STATUS wmi_extract_sar_cap_service_ready_ext(
 	return QDF_STATUS_E_FAILURE;
 }
 
+QDF_STATUS wmi_extract_sar_cap_service_ready_ext2(
+			wmi_unified_t wmi_handle,
+			uint8_t *evt_buf,
+			struct wlan_psoc_host_service_ext2_param *ext2_param)
+{
+	if (wmi_handle->ops->extract_sar_cap_service_ready_ext2)
+		return wmi_handle->ops->extract_sar_cap_service_ready_ext2(
+				wmi_handle,
+				evt_buf, ext2_param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
 QDF_STATUS wmi_extract_hw_mode_cap_service_ready_ext(
 			wmi_unified_t wmi_handle,
 			uint8_t *evt_buf, uint8_t hw_mode_idx,
