@@ -1014,8 +1014,11 @@ static bool cm_is_retry_with_same_candidate(struct cnx_mgr *cm_ctx,
 	is_mlo_vdev = wlan_vdev_mlme_is_mlo_vdev(cm_ctx->vdev);
 	mlo_link_num = wlan_mlme_get_sta_mlo_conn_max_num(psoc);
 
-	/* Try once again for the invalid PMKID case without PMKID */
-	if (resp->status_code == STATUS_INVALID_PMKID)
+	/* Try once again for the invalid PMKID case without PMKID or
+	 * Association request rejected temporarily; try again later
+	*/
+	if (resp->status_code == STATUS_INVALID_PMKID ||
+	    resp->status_code == STATUS_ASSOC_REJECTED_TEMPORARILY)
 		goto use_same_candidate;
 
 	sae_connection = key_mgmt & (1 << WLAN_CRYPTO_KEY_MGMT_SAE |
