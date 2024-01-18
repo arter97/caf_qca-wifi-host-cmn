@@ -3870,6 +3870,13 @@ QDF_STATUS dp_ipa_tx_super_rule_setup(struct cdp_soc_t *soc_hdl,
 {
 	return QDF_STATUS_SUCCESS;
 }
+
+QDF_STATUS dp_ipa_tx_opt_dp_ctrl_pkt(struct cdp_soc_t *soc_hdl,
+				     uint8_t vdev_id,
+				     qdf_nbuf_t nbuf)
+{
+	return QDF_STATUS_SUCCESS;
+}
 #endif
 
 #ifdef IPA_WDS_EASYMESH_FEATURE

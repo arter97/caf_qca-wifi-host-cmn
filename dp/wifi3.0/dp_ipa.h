@@ -366,6 +366,18 @@ QDF_STATUS dp_ipa_rx_super_rule_setup(struct cdp_soc_t *soc_hdl,
  */
 QDF_STATUS dp_ipa_tx_super_rule_setup(struct cdp_soc_t *soc_hdl,
 				      void *flt_params);
+/**
+ * dp_ipa_tx_opt_dp_ctrl_pkt() - handle tx pkt of opt_dp_ctrl
+ * @soc_hdl: handle to the soc
+ * @vdev_id: vdev id
+ * @nbuf: nbuf
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_ipa_tx_opt_dp_ctrl_pkt(struct cdp_soc_t *soc_hdl,
+				     uint8_t vdev_id,
+				     qdf_nbuf_t nbuf);
+
 int dp_ipa_pcie_link_up(struct cdp_soc_t *soc_hdl);
 void dp_ipa_pcie_link_down(struct cdp_soc_t *soc_hdl);
 #endif

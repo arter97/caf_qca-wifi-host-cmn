@@ -1005,6 +1005,23 @@ cdp_ipa_tx_super_rule_setup(ol_txrx_soc_handle soc,
 }
 
 static inline QDF_STATUS
+cdp_ipa_tx_opt_dp_ctrl_pkt(ol_txrx_soc_handle soc,
+			   uint8_t vdev_id, qdf_nbuf_t nbuf)
+{
+	if (!soc || !soc->ops || !soc->ops->ipa_ops) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
+			  "%s invalid instance", __func__);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (soc->ops->ipa_ops->ipa_tx_opt_dp_ctrl_pkt)
+		return soc->ops->ipa_ops->ipa_tx_opt_dp_ctrl_pkt(soc,
+								 vdev_id,
+								 nbuf);
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
 cdp_ipa_opt_dp_enable_disable_low_power_mode(struct wlan_objmgr_pdev *pdev,
 					     uint32_t pdev_id, int param_val)
 {

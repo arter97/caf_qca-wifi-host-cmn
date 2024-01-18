@@ -13384,6 +13384,7 @@ static struct cdp_ipa_ops dp_ops_ipa = {
 #ifdef IPA_OPT_WIFI_DP
 	.ipa_rx_super_rule_setup = dp_ipa_rx_super_rule_setup,
 	.ipa_tx_super_rule_setup = dp_ipa_tx_super_rule_setup,
+	.ipa_tx_opt_dp_ctrl_pkt = dp_ipa_tx_opt_dp_ctrl_pkt,
 	.ipa_pcie_link_up = dp_ipa_pcie_link_up,
 	.ipa_pcie_link_down = dp_ipa_pcie_link_down,
 #endif
