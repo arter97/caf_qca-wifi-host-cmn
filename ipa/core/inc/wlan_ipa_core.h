@@ -1008,6 +1008,13 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
  */
 int wlan_ipa_wdi_opt_dpath_clk_status_cb(void *ipa_ctx, bool status);
 
+/**
+ * wlan_ipa_wdi_opt_dpath_enable_clk_req() - send clock enable request
+ *			to ipa
+ * @ipa_ctx: IPA context
+ *
+ */
+void wlan_ipa_wdi_opt_dpath_enable_clk_req(void *ipa_ctx);
 #endif
 #endif /* IPA_OPT_WIFI_DP */
 

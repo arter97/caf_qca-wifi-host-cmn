@@ -4544,6 +4544,7 @@ QDF_STATUS wlan_ipa_opt_dp_init(struct wlan_ipa_priv *ipa_ctx)
 			ipa_debug("opt_dp: Register flt cb. status %d", status);
 			qdf_wake_lock_create(&ipa_ctx->opt_dp_wake_lock,
 					     "opt_dp");
+			qdf_event_create(&ipa_ctx->ipa_opt_dp_ctrl_clk_evt);
 		} else {
 			ipa_debug("opt_dp: Disabled from WLAN INI");
 		}
@@ -4578,8 +4579,10 @@ void wlan_ipa_opt_dp_deinit(struct wlan_ipa_priv *ipa_ctx)
 	if (ipa_ctx->uc_loaded)
 		wlan_ipa_destroy_opt_wifi_flt_cb_event(ipa_ctx);
 
-	if (ipa_ctx->opt_wifi_datapath && ipa_config_is_opt_wifi_dp_enabled())
+	if (ipa_ctx->opt_wifi_datapath && ipa_config_is_opt_wifi_dp_enabled()) {
 		qdf_wake_lock_destroy(&ipa_ctx->opt_dp_wake_lock);
+		qdf_event_destroy(&ipa_ctx->ipa_opt_dp_ctrl_clk_evt);
+	}
 
 	if (cdp_ipa_get_smmu_mapped(ipa_ctx->dp_soc)) {
 		cdp_ipa_set_smmu_mapped(ipa_ctx->dp_soc, 0);
@@ -6241,7 +6244,20 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
 
 int wlan_ipa_wdi_opt_dpath_clk_status_cb(void *ipa_ctx, bool status)
 {
-	return 0;
+	struct wlan_ipa_priv *ipa_obj = (struct wlan_ipa_priv *)ipa_ctx;
+
+	if (status)
+		qdf_event_set(&ipa_obj->ipa_opt_dp_ctrl_clk_evt);
+	return QDF_STATUS_SUCCESS;
+}
+
+void wlan_ipa_wdi_opt_dpath_enable_clk_req(void *ipa_ctx)
+{
+	struct wlan_ipa_priv *ipa_obj = (struct wlan_ipa_priv *)ipa_ctx;
+
+	qdf_event_reset(&ipa_obj->ipa_opt_dp_ctrl_clk_evt);
+	ipa_debug("request ipa to enable clock");
+	qdf_ipa_wdi_opt_dpath_enable_clk_req(ipa_obj->hdl);
 }
 #endif
 #endif /* IPA_OPT_WIFI_DP */
