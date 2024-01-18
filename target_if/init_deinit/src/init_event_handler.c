@@ -46,6 +46,7 @@
 #endif
 #include <target_if_twt.h>
 #include <target_if_scan.h>
+#include "cdp_txrx_ctrl.h"
 
 static void init_deinit_set_send_init_cmd(struct wlan_objmgr_psoc *psoc,
 					  struct target_psoc_info *tgt_hdl)
@@ -497,6 +498,8 @@ static int init_deinit_service_ext2_ready_event_handler(ol_scn_t scn_handle,
 	struct wmi_unified *wmi_handle;
 	struct tgt_info *info;
 	wmi_legacy_service_ready_callback legacy_callback;
+	cdp_config_param_type val;
+	QDF_STATUS status;
 
 	if (!scn_handle) {
 		target_if_err("scn handle NULL in service ready ext2 handler");
@@ -633,6 +636,12 @@ static int init_deinit_service_ext2_ready_event_handler(ol_scn_t scn_handle,
 	}
 
 	target_if_wifi_radar_support_enable(psoc, tgt_hdl, event);
+
+	val.cdp_fw_support_ml_mon = info->service_ext2_param.fw_support_ml_mon;
+	status = cdp_txrx_set_psoc_param(wlan_psoc_get_dp_handle(psoc),
+					 CDP_FW_SUPPORT_ML_MON, val);
+	if (QDF_IS_STATUS_ERROR(status))
+		target_if_err("Failed to set fw_support_ml_mon");
 
 	target_if_regulatory_set_ext_tpc(psoc);
 
