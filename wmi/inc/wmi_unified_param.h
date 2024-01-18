@@ -7079,6 +7079,7 @@ struct target_feature_set {
  * @fw_ast_indication_disable: Disable AST indication
  * @is_full_bw_nol_supported: Is full bandwidth needed to put to NOL
  * @is_smem_mailbox_supported: Is smem mailbox functionality supported
+ * @con_mode_monitor: Device is in Full monitor mode
  */
 typedef struct {
 	uint32_t num_vdevs;
@@ -7215,6 +7216,7 @@ typedef struct {
 	bool fw_ast_indication_disable;
 	bool is_full_bw_nol_supported;
 	bool is_smem_mailbox_supported;
+	bool con_mode_monitor;
 } target_resource_config;
 
 /**
