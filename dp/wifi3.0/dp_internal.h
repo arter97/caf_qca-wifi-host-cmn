@@ -1468,10 +1468,12 @@ void DP_PRINT_STATS(const char *fmt, ...);
 #define DP_TX_HIST_STATS_PER_PDEV()
 #endif /* DISABLE_DP_STATS */
 
-#define FRAME_MASK_IPV4_ARP   1
-#define FRAME_MASK_IPV4_DHCP  2
-#define FRAME_MASK_IPV4_EAPOL 4
-#define FRAME_MASK_IPV6_DHCP  8
+#define FRAME_MASK_IPV4_ARP   0x1
+#define FRAME_MASK_IPV4_DHCP  0x2
+#define FRAME_MASK_IPV4_EAPOL 0x4
+#define FRAME_MASK_IPV6_DHCP  0x8
+#define FRAME_MASK_DNS_QUERY  0x10
+#define FRAME_MASK_DNS_RESP   0x20
 
 static inline int dp_log2_ceil(unsigned int value)
 {

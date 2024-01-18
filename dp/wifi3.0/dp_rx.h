@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -267,7 +267,11 @@ bool dp_rx_is_special_frame(qdf_nbuf_t nbuf, uint32_t frame_mask)
 	    ((frame_mask & FRAME_MASK_IPV4_EAPOL) &&
 	     qdf_nbuf_is_ipv4_eapol_pkt(nbuf)) ||
 	    ((frame_mask & FRAME_MASK_IPV6_DHCP) &&
-	     qdf_nbuf_is_ipv6_dhcp_pkt(nbuf)))
+	     qdf_nbuf_is_ipv6_dhcp_pkt(nbuf)) ||
+	    ((frame_mask & FRAME_MASK_DNS_QUERY) &&
+	     qdf_nbuf_data_is_dns_query(nbuf)) ||
+	    ((frame_mask & FRAME_MASK_DNS_RESP) &&
+	     qdf_nbuf_data_is_dns_response(nbuf)))
 		return true;
 
 	return false;
