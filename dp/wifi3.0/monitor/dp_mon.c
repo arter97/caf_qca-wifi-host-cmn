@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -6018,6 +6018,40 @@ void dp_mon_register_lpc_ops_1_0(struct dp_mon_ops *mon_ops)
 }
 #endif
 
+/**
+ * dp_ch_band_lmac_id_mapping_init() - Initialize lmac band mapping
+ * @pdev: dp pdev handle
+ *
+ * Return: None
+ *
+ */
+static inline void
+dp_ch_band_lmac_id_mapping_init(struct dp_pdev *pdev)
+{
+	int target_type = hal_get_target_type(pdev->soc->hal_soc);
+
+	switch (target_type) {
+	case TARGET_TYPE_QCA6750:
+	case TARGET_TYPE_WCN6450:
+		pdev->ch_band_lmac_id_mapping[REG_BAND_2G] = DP_MAC0_LMAC_ID;
+		pdev->ch_band_lmac_id_mapping[REG_BAND_5G] = DP_MAC0_LMAC_ID;
+		pdev->ch_band_lmac_id_mapping[REG_BAND_6G] = DP_MAC0_LMAC_ID;
+		break;
+	case TARGET_TYPE_KIWI:
+	case TARGET_TYPE_MANGO:
+	case TARGET_TYPE_PEACH:
+		pdev->ch_band_lmac_id_mapping[REG_BAND_2G] = DP_MAC0_LMAC_ID;
+		pdev->ch_band_lmac_id_mapping[REG_BAND_5G] = DP_MAC0_LMAC_ID;
+		pdev->ch_band_lmac_id_mapping[REG_BAND_6G] = DP_MAC0_LMAC_ID;
+		break;
+	default:
+		pdev->ch_band_lmac_id_mapping[REG_BAND_2G] = DP_MAC1_LMAC_ID;
+		pdev->ch_band_lmac_id_mapping[REG_BAND_5G] = DP_MAC0_LMAC_ID;
+		pdev->ch_band_lmac_id_mapping[REG_BAND_6G] = DP_MAC0_LMAC_ID;
+		break;
+	}
+}
+
 QDF_STATUS dp_mon_pdev_init(struct dp_pdev *pdev)
 {
 	struct dp_mon_pdev *mon_pdev;
@@ -6120,6 +6154,7 @@ QDF_STATUS dp_mon_pdev_init(struct dp_pdev *pdev)
 
 	mon_pdev->is_dp_mon_pdev_initialized = true;
 	dp_mon_set_local_pkt_capture_running(mon_pdev, false);
+	dp_ch_band_lmac_id_mapping_init(pdev);
 
 	return QDF_STATUS_SUCCESS;
 
