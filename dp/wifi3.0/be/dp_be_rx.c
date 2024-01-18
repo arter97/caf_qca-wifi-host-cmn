@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -641,6 +641,7 @@ done:
 		dp_rx_prefetch_nbuf_data_be(nbuf, next);
 		if (qdf_unlikely(dp_rx_is_raw_frame_dropped(nbuf))) {
 			nbuf = next;
+			dp_verbose_debug("drop raw frame");
 			DP_STATS_INC(soc, rx.err.raw_frm_drop, 1);
 			continue;
 		}
@@ -663,6 +664,7 @@ done:
 		tid = qdf_nbuf_get_tid_val(nbuf);
 		if (qdf_unlikely(tid >= CDP_MAX_DATA_TIDS)) {
 			DP_STATS_INC(soc, rx.err.rx_invalid_tid_err, 1);
+			dp_verbose_debug("drop invalid tid");
 			dp_rx_nbuf_free(nbuf);
 			nbuf = next;
 			continue;
@@ -677,6 +679,7 @@ done:
 								 &rx_pdev, &dsf,
 								 &old_tid);
 			if (qdf_unlikely(!txrx_peer) || qdf_unlikely(!vdev)) {
+				dp_verbose_debug("drop no peer frame");
 				nbuf = next;
 				continue;
 			}
@@ -693,6 +696,7 @@ done:
 								 &rx_pdev, &dsf,
 								 &old_tid);
 			if (qdf_unlikely(!txrx_peer) || qdf_unlikely(!vdev)) {
+				dp_verbose_debug("drop by unmatch peer_id");
 				nbuf = next;
 				continue;
 			}
@@ -859,6 +863,7 @@ done:
 				DP_PEER_PER_PKT_STATS_INC(txrx_peer,
 							  rx.peer_unauth_rx_pkt_drop,
 							  1, link_id);
+				dp_verbose_debug("drop by unauthorized peer");
 				dp_rx_nbuf_free(nbuf);
 				nbuf = next;
 				continue;
@@ -879,6 +884,7 @@ done:
 						(txrx_peer,
 						 rx.multipass_rx_pkt_drop,
 						 1, link_id);
+					dp_verbose_debug("drop multi pass");
 					dp_rx_nbuf_free(nbuf);
 					nbuf = next;
 					continue;
@@ -893,6 +899,7 @@ done:
 				DP_PEER_PER_PKT_STATS_INC(txrx_peer,
 							  rx.nawds_mcast_drop,
 							  1, link_id);
+				dp_verbose_debug("drop nawds");
 				dp_rx_nbuf_free(nbuf);
 				nbuf = next;
 				continue;
