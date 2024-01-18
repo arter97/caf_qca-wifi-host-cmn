@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2018, 2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -417,6 +417,146 @@ void wmi_p2p_listen_offload_attach_tlv(wmi_unified_t wmi_handle)
 }
 #endif /* FEATURE_P2P_LISTEN_OFFLOAD */
 
+#ifdef FEATURE_WLAN_SUPPORT_USD
+/**
+ * send_p2p_usd_req_cmd_tlv() - send P2P USD command to target
+ * @wmi_handle: WMI handle
+ * @param: P2P USD attributes parameters
+ *
+ * Return: QDF status
+ */
+static QDF_STATUS
+send_p2p_usd_req_cmd_tlv(wmi_unified_t wmi_handle,
+			 struct p2p_usd_attr_params *param)
+{
+	wmi_buf_t buf;
+	wmi_usd_service_cmd_fixed_param *cmd;
+	int32_t len = sizeof(*cmd);
+	uint8_t *buf_ptr;
+	QDF_STATUS status;
+	uint32_t num_chan_len = 0;
+	uint32_t sdf_len = 0;
+	uint32_t sdf_len_aligned = 0;
+	uint32_t num_channel_aligned = 0;
+	uint32_t ssi_len = 0;
+	uint32_t ssi_len_aligned = 0;
+
+	if (!param) {
+		wmi_err("lo start param is null");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (param->op_type == WMI_USD_MODE_PUBLISH ||
+	    param->op_type == WMI_USD_MODE_SUBSCRIBE) {
+		num_chan_len = param->freq_config.freq_list.len;
+		num_channel_aligned = qdf_roundup(num_chan_len,
+						  sizeof(uint32_t));
+
+		ssi_len = param->ssi.len;
+		ssi_len_aligned = qdf_roundup(ssi_len, sizeof(uint32_t));
+
+		sdf_len = param->frame.len;
+		sdf_len_aligned = qdf_roundup(sdf_len, sizeof(uint32_t));
+
+		len += 3 * WMI_TLV_HDR_SIZE + sdf_len_aligned +
+					ssi_len_aligned + num_channel_aligned;
+	} else if (param->op_type == WMI_USD_MODE_UPDATE_PUBLISH) {
+		ssi_len = param->ssi.len;
+		ssi_len_aligned = qdf_roundup(ssi_len, sizeof(uint32_t));
+		len += WMI_TLV_HDR_SIZE + ssi_len_aligned;
+	}
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf)
+		return QDF_STATUS_E_NOMEM;
+
+	cmd = (wmi_usd_service_cmd_fixed_param *)wmi_buf_data(buf);
+	buf_ptr = (uint8_t *)wmi_buf_data(buf);
+
+	qdf_mem_zero(cmd, sizeof(*cmd));
+
+	wmi_debug("vdev: %d len %d, num_chan_len %d, num_channel_aligned %d sdf_len_aligned %d",
+		  param->vdev_id, len, num_chan_len, num_channel_aligned,
+		  sdf_len_aligned);
+
+	WMITLV_SET_HDR(
+		&cmd->tlv_header,
+		WMITLV_TAG_STRUC_wmi_usd_service_cmd_fixed_param,
+		WMITLV_GET_STRUCT_TLVLEN(wmi_usd_service_cmd_fixed_param));
+
+	cmd->vdev_id = param->vdev_id;
+	cmd->usd_mode = param->op_type;
+	cmd->instance_id = param->instance_id;
+
+	if (param->op_type == WMI_USD_MODE_PUBLISH ||
+	    param->op_type == WMI_USD_MODE_SUBSCRIBE) {
+		cmd->protocol_type = param->service_info.protocol_type;
+		cmd->time_to_live = param->ttl;
+		cmd->element_container_attr_data_len = sdf_len;
+		cmd->service_specific_info_len = ssi_len;
+		cmd->default_freq = param->freq_config.default_freq;
+
+		WMI_CHAR_ARRAY_TO_MAC_ADDR(param->p2p_mac_addr.bytes,
+					   &cmd->device_mac_addr);
+
+		WMI_CHAR_ARRAY_TO_GENERIC_HASH(param->service_info.service_id,
+					       &cmd->service_id);
+
+		buf_ptr += sizeof(*cmd);
+		WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_BYTE,
+			       sdf_len_aligned);
+		buf_ptr += WMI_TLV_HDR_SIZE;
+		qdf_mem_copy(buf_ptr, param->frame.data, sdf_len);
+
+		buf_ptr += sdf_len_aligned;
+		WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_UINT32,
+			       num_channel_aligned);
+		buf_ptr += WMI_TLV_HDR_SIZE;
+		qdf_mem_copy(buf_ptr, param->freq_config.freq_list.freq,
+			     num_chan_len);
+
+		buf_ptr += num_channel_aligned;
+		WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_BYTE, ssi_len_aligned);
+		buf_ptr += WMI_TLV_HDR_SIZE;
+		qdf_mem_copy(buf_ptr, param->ssi.data, ssi_len);
+	} else if (param->op_type == WMI_USD_MODE_UPDATE_PUBLISH) {
+		buf_ptr += sizeof(*cmd);
+		WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_BYTE, ssi_len_aligned);
+		buf_ptr += WMI_TLV_HDR_SIZE;
+		qdf_mem_copy(buf_ptr, param->ssi.data, ssi_len);
+	}
+
+	wmi_debug("Sending USD req: vdev %d, usd_mode %d, ttl %d, freq %d sdf_len %d",
+		  cmd->vdev_id, cmd->usd_mode, cmd->time_to_live,
+		  cmd->default_freq, cmd->element_container_attr_data_len);
+
+	wmi_mtrace(WMI_USD_SERVICE_CMDID, cmd->vdev_id, 0);
+	status = wmi_unified_cmd_send(wmi_handle,
+				      buf, len,
+				      WMI_USD_SERVICE_CMDID);
+
+	if (status != QDF_STATUS_SUCCESS)
+		wmi_buf_free(buf);
+
+	return status;
+}
+
+/**
+ * wmi_p2p_attach_usd_tlv() - attach USD tlv to P2P ops
+ * @ops: pointer to WMI ops structure
+ *
+ * Return: none
+ */
+static void wmi_p2p_attach_usd_tlv(struct wmi_ops *ops)
+{
+	ops->send_p2p_usd_req_cmd = send_p2p_usd_req_cmd_tlv;
+}
+#else
+static inline void wmi_p2p_attach_usd_tlv(struct wmi_ops *ops)
+{
+}
+#endif /* FEATURE_WLAN_SUPPORT_USD */
+
 void wmi_p2p_attach_tlv(wmi_unified_t wmi_handle)
 {
 	struct wmi_ops *ops = wmi_handle->ops;
@@ -425,7 +565,7 @@ void wmi_p2p_attach_tlv(wmi_unified_t wmi_handle)
 	ops->send_set_p2pgo_noa_req_cmd = send_set_p2pgo_noa_req_cmd_tlv;
 	ops->extract_p2p_noa_ev_param = extract_p2p_noa_ev_param_tlv;
 	ops->extract_mac_addr_rx_filter_evt_param =
-				extract_mac_addr_rx_filter_evt_param_tlv,
+				extract_mac_addr_rx_filter_evt_param_tlv;
+	wmi_p2p_attach_usd_tlv(ops);
 	wmi_p2p_listen_offload_attach_tlv(wmi_handle);
 }
-
