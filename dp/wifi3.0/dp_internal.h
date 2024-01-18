@@ -2803,6 +2803,23 @@ void dp_peer_rx_init_wrapper(struct dp_pdev *pdev, struct dp_peer *peer,
  */
 void dp_peer_cleanup(struct dp_vdev *vdev, struct dp_peer *peer);
 
+/**
+ * dp_pdev_nbuf_alloc_and_map - allocate and map buffer
+ * @dp_soc: dp soc
+ * @nbuf_frag_info_t: nbuf frag info
+ * @dp_pdev: struct dp_pdev *
+ * @rx_desc_pool: Rx desc pool
+ * @dp_buf_page_frag_alloc_enable: is frag alloc enable
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+dp_pdev_nbuf_alloc_and_map(struct dp_soc *dp_soc,
+			   struct dp_rx_nbuf_frag_info *nbuf_frag_info_t,
+			   struct dp_pdev *dp_pdev,
+			   struct rx_desc_pool *rx_desc_pool,
+			   bool dp_buf_page_frag_alloc_enable);
+
 #ifdef DP_PEER_EXTENDED_API
 /**
  * dp_register_peer() - Register peer into physical device

@@ -219,6 +219,7 @@ struct dp_tx_queue {
  * @buf_len:
  * @payload_addr:
  * @driver_ingress_ts: driver ingress timestamp
+ * @is_opt_dp_ctrl: opt_dp_ctrl pkt
  *
  * This structure holds the complete MSDU information needed to program the
  * Hardware TCL and MSDU extension descriptors for different frame types
@@ -252,6 +253,9 @@ struct dp_tx_msdu_info_s {
 #endif
 #ifdef WLAN_FEATURE_TX_LATENCY_STATS
 	qdf_ktime_t driver_ingress_ts;
+#endif
+#ifdef IPA_OPT_WIFI_DP
+	bool is_opt_dp_ctrl;
 #endif
 };
 

@@ -3097,7 +3097,7 @@ dp_rx_nbuf_alloc_for_frag_info(struct dp_soc *dp_soc,
 }
 #endif
 
-static QDF_STATUS
+QDF_STATUS
 dp_pdev_nbuf_alloc_and_map(struct dp_soc *dp_soc,
 			   struct dp_rx_nbuf_frag_info *nbuf_frag_info_t,
 			   struct dp_pdev *dp_pdev,

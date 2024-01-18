@@ -43,6 +43,8 @@
 #endif
 #include <pld_common.h>
 
+#define IPA_CLK_ENABLE_WAIT_TIME_MS 500
+
 /* Hard coded config parameters until dp_ops_cfg.cfg_attach implemented */
 #define CFG_IPA_UC_TX_BUF_SIZE_DEFAULT            (2048)
 
@@ -3910,19 +3912,190 @@ void dp_ipa_tx_pkt_opt_dp_ctrl(struct dp_soc *soc, uint8_t vdev_id,
 {
 	ipa_tx_pkt_opt_dp_ctrl(vdev_id, nbuf);
 }
+
+static inline QDF_STATUS
+dp_ipa_rx_buf_alloc_opt_dp_ctrl(struct dp_soc *soc, qdf_nbuf_t nbuf,
+				struct dp_rx_desc *rx_desc,
+				struct dp_pdev *pdev,
+				struct rx_desc_pool *rx_desc_pool)
+{
+	struct dp_rx_nbuf_frag_info nbuf_frag_info = {0};
+	QDF_STATUS ret, status = QDF_STATUS_SUCCESS;
+	uint8_t *dst_addr;
+
+	dp_info("allocate and map nbuf");
+	ret = dp_pdev_nbuf_alloc_and_map(soc, &nbuf_frag_info, pdev,
+					 rx_desc_pool, false);
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		dp_err("nbuf allocation failed");
+		return ret;
+	}
+
+	dp_rx_desc_prep(rx_desc, &nbuf_frag_info);
+
+	if (!qdf_nbuf_is_rx_ipa_smmu_map(rx_desc->nbuf) &&
+	    qdf_mem_smmu_s1_enabled(soc->osdev)) {
+		DP_STATS_INC(soc, rx.err.ipa_smmu_map_dup, 1);
+		qdf_nbuf_set_rx_ipa_smmu_map(rx_desc->nbuf, true);
+		qdf_nbuf_set_rx_ipa_smmu_map_caller(rx_desc->nbuf,
+						    DP_RX_IPA_SMMU_MAP_BUFF_ATTACH);
+		dp_info("smmu map nbuf");
+		status = __dp_ipa_handle_buf_smmu_mapping(soc, rx_desc->nbuf,
+							  rx_desc_pool->buf_size,
+							  true, __func__,
+							  __LINE__);
+		if (status != QDF_STATUS_SUCCESS) {
+			dp_info("smmu map failed");
+			qdf_nbuf_unmap_nbytes_single(soc->osdev, rx_desc->nbuf,
+						     QDF_DMA_FROM_DEVICE,
+						     rx_desc_pool->buf_size);
+			rx_desc->unmapped = 1;
+			qdf_nbuf_free(rx_desc->nbuf);
+			return status;
+		}
+	}
+
+	dst_addr = qdf_nbuf_data(rx_desc->nbuf) + soc->curr_rx_pkt_tlv_size;
+	qdf_mem_copy(dst_addr, qdf_nbuf_data(nbuf), qdf_nbuf_len(nbuf));
+	rx_desc->in_use = 1;
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+struct dp_rx_desc *dp_ipa_rx_get_free_desc(struct dp_soc *soc)
+{
+	struct dp_ipa_rx_desc_list *free_list;
+	struct dp_rx_desc *rx_desc = NULL;
+
+	free_list = &soc->ipa_rx_desc_freelist;
+	if (!free_list->head) {
+		dp_err("free list is empty");
+		return rx_desc;
+	}
+	qdf_spin_lock_bh(&free_list->lock);
+	rx_desc = &free_list->head->rx_desc;
+	free_list->head = free_list->head->next;
+	dp_info("rx desc allocated");
+	qdf_spin_unlock_bh(&free_list->lock);
+	return rx_desc;
+}
+
+/**
+ * dp_ipa_tx_opt_dp_ctrl_pkt() - handle tx pkt of opt_dp_ctrl
+ * @soc_hdl: handle to the soc
+ * @vdev_id: vdev id
+ * @nbuf: nbuf
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_ipa_tx_opt_dp_ctrl_pkt(struct cdp_soc_t *soc_hdl,
+				     uint8_t vdev_id,
+				     qdf_nbuf_t nbuf)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct dp_tx_msdu_info_s msdu_info;
+	struct dp_vdev *vdev;
+	struct dp_rx_desc *rx_desc;
+	qdf_dma_addr_t paddr;
+	uint32_t cookie;
+	uint8_t manager;
+	uint8_t  pool_id;
+	QDF_STATUS status, ret;
+	struct dp_pdev *pdev;
+	int mac_id;
+	struct rx_desc_pool *rx_desc_pool;
+	uint32_t paddr_lo, paddr_hi;
+
+	vdev = dp_vdev_get_ref_by_id(soc, vdev_id, DP_MOD_ID_HTT_COMP);
+	if (!vdev)
+		goto tx_nbuf_free;
+
+	pdev = vdev->pdev;
+	mac_id = pdev->lmac_id;
+	rx_desc_pool = &soc->rx_desc_buf[mac_id];
+
+	status = ipa_opt_dpath_enable_clk_req(soc->ctrl_psoc, pdev->pdev_id);
+	if (status != QDF_STATUS_SUCCESS) {
+		ipa_err("clock enable timed out");
+		goto vdev_ref_release;
+	}
+
+	rx_desc = dp_ipa_rx_get_free_desc(soc);
+	if (!rx_desc)
+		goto vdev_ref_release;
+
+	ret = dp_ipa_rx_buf_alloc_opt_dp_ctrl(soc, nbuf, rx_desc,
+					      pdev, rx_desc_pool);
+	if (ret != QDF_STATUS_SUCCESS)
+		goto release_rx_desc;
+
+	paddr = rx_desc->paddr_buf_start;
+	cookie = rx_desc->cookie;
+	pool_id = rx_desc->pool_id;
+	manager = soc->rx_desc_buf[pool_id].owner;
+
+	paddr_lo = ((u64)paddr & 0x00000000ffffffff);
+	paddr_hi = ((u64)paddr & 0xffffffff00000000) >> 32;
+	qdf_mem_zero(&msdu_info, sizeof(msdu_info));
+	HTT_RX_BUFFER_ADDR_INFO_ADDR_31_0_SET(msdu_info.meta_data[7], paddr_lo);
+	HTT_RX_BUFFER_ADDR_INFO_ADDR_39_32_SET(msdu_info.meta_data[8],
+					       paddr_hi);
+	HTT_RX_BUFFER_ADDR_INFO_RETURN_BUFFER_MANAGER_SET(msdu_info.meta_data[8],
+							  manager);
+	HTT_RX_BUFFER_ADDR_INFO_SW_BUFFER_COOKIE_SET(msdu_info.meta_data[8],
+						     cookie);
+	dp_tx_get_queue(vdev, nbuf, &msdu_info.tx_queue);
+	msdu_info.xmit_type = qdf_nbuf_get_vdev_xmit_type(nbuf);
+	msdu_info.is_opt_dp_ctrl = true;
+
+	nbuf = dp_tx_send_msdu_single(vdev, nbuf, &msdu_info,
+				      HTT_INVALID_PEER, NULL);
+	if (nbuf)
+		goto smmu_unmap_rx_nbuf;
+
+	return QDF_STATUS_SUCCESS;
+
+smmu_unmap_rx_nbuf:
+	dp_info("unmap rx buffer");
+	dp_ipa_handle_rx_buf_smmu_mapping(soc, rx_desc->nbuf,
+					  rx_desc_pool->buf_size,
+					  false, __func__, __LINE__, 0);
+	qdf_nbuf_unmap_nbytes_single(soc->osdev, rx_desc->nbuf,
+				     QDF_DMA_FROM_DEVICE,
+				     rx_desc_pool->buf_size);
+	rx_desc->unmapped = 1;
+	rx_desc->in_use = 0;
+	qdf_nbuf_free(rx_desc->nbuf);
+
+release_rx_desc:
+	dp_info("release rx descriptor and add to freelist");
+	if (dp_rx_add_to_ipa_desc_free_list(soc, rx_desc) !=
+						QDF_STATUS_SUCCESS) {
+		dp_rx_add_to_free_desc_list(&pdev->free_list_head,
+					    &pdev->free_list_tail, rx_desc);
+	}
+
+vdev_ref_release:
+	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_HTT_COMP);
+
+tx_nbuf_free:
+	qdf_nbuf_free(nbuf);
+	return QDF_STATUS_E_FAILURE;
+}
 #else
 QDF_STATUS dp_ipa_tx_super_rule_setup(struct cdp_soc_t *soc_hdl,
 				      void *flt_params)
 {
 	return QDF_STATUS_SUCCESS;
 }
-#endif
+
 QDF_STATUS dp_ipa_tx_opt_dp_ctrl_pkt(struct cdp_soc_t *soc_hdl,
 				     uint8_t vdev_id,
 				     qdf_nbuf_t nbuf)
 {
 	return QDF_STATUS_SUCCESS;
 }
+#endif
 #endif
 
 #ifdef IPA_WDS_EASYMESH_FEATURE

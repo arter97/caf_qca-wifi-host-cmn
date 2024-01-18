@@ -1155,6 +1155,30 @@ dp_tx_is_wds_ast_override_en(struct dp_soc *soc,
 }
 #endif
 
+#ifdef IPA_OPT_WIFI_DP_CTRL
+static bool is_msdu_opt_dp_ctrl(struct dp_tx_msdu_info_s *msdu_info)
+{
+	return msdu_info->is_opt_dp_ctrl;
+}
+
+static void dp_tx_opt_dp_wifi_ctrl_process(struct dp_tx_msdu_info_s *msdu_info,
+					   uint16_t *htt_tcl_metadata)
+{
+	if (is_msdu_opt_dp_ctrl(msdu_info))
+		HTT_TX_TCL_METADATA_OPT_DP_CTRL_SET(*htt_tcl_metadata, 1);
+}
+#else
+static bool is_msdu_opt_dp_ctrl(struct dp_tx_msdu_info_s *msdu_info)
+{
+	return false;
+}
+
+static void dp_tx_opt_dp_wifi_ctrl_process(struct dp_tx_msdu_info_s *msdu_info,
+					   uint16_t *htt_tcl_metadata)
+{
+}
+#endif
+
 /**
  * dp_tx_prepare_desc_single() - Allocate and prepare Tx descriptor
  * @vdev: DP vdev handle
@@ -1266,7 +1290,8 @@ struct dp_tx_desc_s *dp_tx_prepare_desc_single(struct dp_vdev *vdev,
 	if (qdf_unlikely((msdu_info->exception_fw)) ||
 				(vdev->opmode == wlan_op_mode_ocb) ||
 				(tx_exc_metadata &&
-				tx_exc_metadata->is_tx_sniffer)) {
+				tx_exc_metadata->is_tx_sniffer) ||
+				is_msdu_opt_dp_ctrl(msdu_info)) {
 		align_pad = ((unsigned long) qdf_nbuf_data(nbuf)) & 0x7;
 
 		if (qdf_unlikely(qdf_nbuf_headroom(nbuf) < align_pad)) {
@@ -3126,6 +3151,8 @@ dp_tx_send_msdu_single(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 	} else
 		htt_tcl_metadata = vdev->htt_tcl_metadata;
 
+	dp_tx_opt_dp_wifi_ctrl_process(msdu_info, &htt_tcl_metadata);
+
 	if (msdu_info->exception_fw)
 		DP_TX_TCL_METADATA_VALID_HTT_SET(htt_tcl_metadata, 1);
 
@@ -4644,7 +4671,6 @@ dp_tx_reinject_mlo_hdl(struct dp_soc *soc, struct dp_vdev *vdev,
 	return false;
 }
 #endif
-
 #ifdef IPA_OPT_WIFI_DP_CTRL
 static inline bool
 dp_ipa_tx_opt_dp_ctrl_reinject(struct dp_soc *soc, struct dp_vdev *vdev,

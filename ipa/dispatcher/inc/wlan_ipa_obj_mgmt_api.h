@@ -78,6 +78,15 @@ static inline bool wlan_ipa_config_is_enabled(void)
  */
 void ipa_tx_pkt_opt_dp_ctrl(uint8_t vdev_id,
 			    qdf_nbuf_t nbuf);
+
+/**
+ * ipa_opt_dpath_enable_clk_req() - send clock enable request io ipa
+ * @soc: soc
+ * @pdev_id: pdev id
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS ipa_opt_dpath_enable_clk_req(void *soc, uint8_t pdev_id);
 #endif
 /**
  * wlan_ipa_get_hdl() - Get ipa hdl set by IPA driver
