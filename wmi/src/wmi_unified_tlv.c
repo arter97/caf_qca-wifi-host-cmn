@@ -10190,7 +10190,9 @@ void wmi_copy_resource_config(wmi_resource_config *resource_cfg,
 		tgt_res_cfg->nan_separate_iface_support);
 	WMI_RSRC_CFG_HOST_SERVICE_FLAG_HOST_SUPPORT_MULTI_RADIO_EVTS_PER_RADIO_SET(
 		resource_cfg->host_service_flags, 1);
-
+	WMI_RSRC_CFG_HOST_SERVICE_FLAG_ML_FULL_MONITOR_MODE_SUPPORT_SET(
+			resource_cfg->host_service_flags,
+			tgt_res_cfg->con_mode_monitor);
 	WMI_RSRC_CFG_FLAG_VIDEO_OVER_WIFI_ENABLE_SET(
 		resource_cfg->flag1, tgt_res_cfg->carrier_vow_optimization);
 
@@ -15353,6 +15355,9 @@ extract_service_ready_ext2_tlv(wmi_unified_t wmi_handle, uint8_t *event,
 
 	extract_ul_mumimo_support(param);
 	wmi_debug("htt peer data :%d", ev->target_cap_flags);
+
+	param->fw_support_ml_mon =
+	       WMI_TARGET_CAP_ML_MONITOR_MODE_SUPPORT_GET(ev->target_cap_flags);
 
 	extract_svc_rdy_ext2_afc_tlv(ev, param);
 
