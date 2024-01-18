@@ -2846,7 +2846,9 @@ void dp_rx_deliver_to_stack_no_peer(struct dp_soc *soc, qdf_nbuf_t nbuf)
 	uint32_t pkt_len = 0;
 	uint8_t *rx_tlv_hdr;
 	uint32_t frame_mask = FRAME_MASK_IPV4_ARP | FRAME_MASK_IPV4_DHCP |
-				FRAME_MASK_IPV4_EAPOL | FRAME_MASK_IPV6_DHCP;
+			      FRAME_MASK_IPV4_EAPOL | FRAME_MASK_IPV6_DHCP |
+			      FRAME_MASK_DNS_QUERY | FRAME_MASK_DNS_RESP;
+
 	bool is_special_frame = false;
 	struct dp_peer *peer = NULL;
 
