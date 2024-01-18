@@ -2427,14 +2427,54 @@ void dp_soc_deinit(void *txrx_soc)
 }
 
 #ifdef QCA_HOST2FW_RXBUF_RING
+#ifdef FEATURE_ML_MONITOR_MODE_SUPPORT
+static inline QDF_STATUS
+dp_pdev_srng_skip_rxdma_dst_ring_setup(struct dp_soc *soc, uint8_t lmac_id)
+{
+	if (QDF_GLOBAL_MONITOR_MODE != dp_soc_get_con_mode(soc))
+		return QDF_STATUS_E_FAILURE;
+
+	/*
+	 * Ring allocation is done before capability exchange and during
+	 * that time host is now aware that if FW supports 2nd destination
+	 * ring setup. So check is done before ring setup is done.
+	 * If FW does not supports 2nd monitor destination ring in that case
+	 * free the 2nd destination ring and skip setup, also set
+	 * num_rxdma_dst_rings_per_pdev = 1.
+	 */
+	if (!soc->features.fw_support_ml_monitor && lmac_id == 1) {
+		soc->wlan_cfg_ctx->num_rxdma_dst_rings_per_pdev = 1;
+		dp_srng_free(soc, &soc->rxdma_err_dst_ring[lmac_id]);
+		dp_info("2nd dest ring setup not supported, skip setup lmac %d",
+			lmac_id);
+		return QDF_STATUS_SUCCESS;
+	}
+
+	return QDF_STATUS_E_FAILURE;
+}
+#else
+static inline QDF_STATUS
+dp_pdev_srng_skip_rxdma_dst_ring_setup(struct dp_soc *soc, uint8_t lmac_id)
+{
+	return QDF_STATUS_E_FAILURE;
+}
+#endif
+
 void
 dp_htt_setup_rxdma_err_dst_ring(struct dp_soc *soc, int mac_id,
 				int lmac_id)
 {
-	if (soc->rxdma_err_dst_ring[lmac_id].hal_srng)
+	QDF_STATUS status;
+
+	if (soc->rxdma_err_dst_ring[lmac_id].hal_srng) {
+		status = dp_pdev_srng_skip_rxdma_dst_ring_setup(soc, lmac_id);
+		if (QDF_IS_STATUS_SUCCESS(status))
+			return;
+
 		htt_srng_setup(soc->htt_handle, mac_id,
 			       soc->rxdma_err_dst_ring[lmac_id].hal_srng,
 			       RXDMA_DST);
+	}
 }
 #endif
 
@@ -3332,6 +3372,21 @@ static void dp_soc_cfg_dump(struct dp_soc *soc, uint32_t target_type)
 	wlan_cfg_dp_soc_ctx_dump(soc->wlan_cfg_ctx);
 }
 
+#ifdef FEATURE_ML_MONITOR_MODE_SUPPORT
+static inline void dp_set_num_rxdma_dst_ring(struct dp_soc *soc)
+{
+	if (QDF_GLOBAL_MONITOR_MODE == dp_soc_get_con_mode(soc))
+		soc->wlan_cfg_ctx->num_rxdma_dst_rings_per_pdev = 2;
+	else
+		soc->wlan_cfg_ctx->num_rxdma_dst_rings_per_pdev = 1;
+}
+#else
+static inline void dp_set_num_rxdma_dst_ring(struct dp_soc *soc)
+{
+	soc->wlan_cfg_ctx->num_rxdma_dst_rings_per_pdev = 1;
+}
+#endif
+
 /**
  * dp_soc_cfg_init() - initialize target specific configuration
  *		       during dp_soc_init
@@ -3388,7 +3443,7 @@ static void dp_soc_cfg_init(struct dp_soc *soc)
 		}
 
 		soc->wlan_cfg_ctx->rxdma1_enable = 0;
-		soc->wlan_cfg_ctx->num_rxdma_dst_rings_per_pdev = 1;
+		dp_set_num_rxdma_dst_ring(soc);
 		break;
 	case TARGET_TYPE_QCA8074:
 		wlan_cfg_set_raw_mode_war(soc->wlan_cfg_ctx, true);
