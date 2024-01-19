@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -69,6 +69,8 @@
  * @mlme_update_scan_channel_list:     Update the scan channel list sent to FW.
  * @mlme_bringdown_vaps:               Bringdown vaps if no chans is present.
  * @mlme_dfs_deliver_event:            Deliver DFS events to user space
+ * @mlme_dfs_alloc_nol:                Allocate a persistent memory for DFS NOL.
+ * @mlme_dfs_get_cc:                   Get current country code.
  * @mlme_is_inter_band_chan_switch_allowed: Check if switch between 5 GHz and
  *                                     6 GHz is allowed.
  * @mlme_acquire_radar_mode_switch_lock: Acquire lock for radar processing over
@@ -205,6 +207,12 @@ struct dfs_to_mlme {
 			(struct wlan_objmgr_pdev *pdev,
 			 uint16_t freq,
 			 enum WLAN_DFS_EVENTS event);
+	void (*mlme_dfs_alloc_nol)
+			(struct wlan_objmgr_pdev *pdev,
+			 struct dfsreq_nolinfo **dfs_mm_nolinfo);
+	void (*mlme_dfs_get_cc)
+			(struct wlan_objmgr_pdev *pdev,
+			 uint16_t *cc);
 	bool (*mlme_is_inter_band_chan_switch_allowed)
 			(struct wlan_objmgr_pdev *pdev);
 	void (*mlme_acquire_radar_mode_switch_lock)

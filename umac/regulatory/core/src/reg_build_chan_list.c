@@ -3710,6 +3710,9 @@ void reg_propagate_mas_chan_list_to_pdev(struct wlan_objmgr_psoc *psoc,
 	reg_modify_chan_list_for_outdoor(pdev_priv_obj);
 	reg_compute_pdev_current_chan_list(pdev_priv_obj);
 
+	if (reg_tx_ops->init_dfs_nol)
+		reg_tx_ops->init_dfs_nol(pdev);
+
 	if (*dir == NORTHBOUND)
 		reg_send_scheduler_msg_nb(psoc, pdev);
 	else

@@ -1148,6 +1148,7 @@ struct wlan_lmac_if_ftm_rx_ops {
  * @get_phy_id_from_pdev_id:
  * @get_pdev_id_from_phy_id:
  * @set_tpc_power: send transmit power control info to firmware
+ * @init_dfs_nol: Initialise NOL list in DFS object
  * @get_opclass_tbl_idx: Get opclass table index value
  * @send_afc_ind: send AFC indication info to firmware.
  * @register_afc_event_handler: pointer to register afc event handler
@@ -1207,6 +1208,7 @@ struct wlan_lmac_if_reg_tx_ops {
 	QDF_STATUS (*set_tpc_power)(struct wlan_objmgr_psoc *psoc,
 				    uint8_t vdev_id,
 				    struct reg_tpc_power_info *param);
+	QDF_STATUS (*init_dfs_nol)(struct wlan_objmgr_pdev *pdev);
 	QDF_STATUS (*get_opclass_tbl_idx)(struct wlan_objmgr_pdev *pdev,
 					  uint8_t *opclass_tbl_idx);
 #ifdef CONFIG_AFC_SUPPORT
@@ -1277,6 +1279,8 @@ struct wlan_lmac_if_reg_tx_ops {
  * @dfs_send_usenol_pdev_param:         Send usenol pdev param to FW.
  * @dfs_send_subchan_marking_pdev_param: Send subchan marking pdev param to FW.
  * @dfs_check_mode_switch_state:        Find if HW mode switch is in progress.
+ * @dfs_get_persistent_nol_status:      Check if config for storing NOL in
+ *                                      persistent memory is enabled.
  */
 
 struct wlan_lmac_if_dfs_tx_ops {
@@ -1336,6 +1340,8 @@ struct wlan_lmac_if_dfs_tx_ops {
 	QDF_STATUS (*dfs_check_mode_switch_state)(
 			struct wlan_objmgr_pdev *pdev,
 			bool *is_hw_mode_switch_in_progress);
+	bool (*dfs_get_persistent_nol_status)(
+			struct wlan_objmgr_pdev *pdev);
 };
 
 /**

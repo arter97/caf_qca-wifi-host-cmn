@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -528,13 +528,19 @@ QDF_STATUS utils_dfs_bw_reduced_channel_for_freq(struct wlan_objmgr_pdev *pdev,
  *
  * Return: None
  */
-#ifdef QCA_DFS_NOL_PLATFORM_DRV_SUPPORT
 void utils_dfs_init_nol(struct wlan_objmgr_pdev *pdev);
-#else
-static inline void utils_dfs_init_nol(struct wlan_objmgr_pdev *pdev)
-{
-}
-#endif
+
+/**
+ * utils_dfs_retrieve_nol() - Retrieve the NOL list from persistent memory.
+ * @pdev: pdev handler.
+ *
+ * Retrieve the NOL list from persistent memory and re-initialise DFS NOL
+ * timers.
+ *
+ * Return: None
+ */
+void utils_dfs_retrieve_nol(struct wlan_objmgr_pdev *pdev);
+
 /**
  * utils_dfs_save_nol() - save nol list to platform driver.
  * @pdev: pdev handler.

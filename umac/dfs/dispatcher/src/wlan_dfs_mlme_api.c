@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -259,6 +259,17 @@ uint32_t dfs_mlme_dfs_ch_flags_ext(struct wlan_objmgr_pdev *pdev)
 				&flag_ext);
 
 	return flag_ext;
+}
+
+struct dfsreq_nolinfo *
+dfs_mlme_nol_alloc_nol(struct wlan_objmgr_pdev *pdev)
+{
+	struct dfsreq_nolinfo *dfs_mm_nolinfo = NULL;
+
+	if (global_dfs_to_mlme.mlme_dfs_alloc_nol)
+		global_dfs_to_mlme.mlme_dfs_alloc_nol(pdev, &dfs_mm_nolinfo);
+
+	return dfs_mm_nolinfo;
 }
 
 void dfs_mlme_channel_change_by_precac(struct wlan_objmgr_pdev *pdev)

@@ -96,9 +96,16 @@ struct dfsreq_nolelem {
 	uint32_t        nol_timeout_ms;
 };
 
+/**
+ * struct dfsreq_nolinfo - NOL information.
+ * @dfs_ch_nchans:     Number of channels present in NOL list.
+ * @dfs_nol:           Array of NOL elements.
+ * @cc:                CC of NOL detection.
+ */
 struct dfsreq_nolinfo {
 	uint32_t  dfs_ch_nchans;
 	struct dfsreq_nolelem dfs_nol[DFS_CHAN_MAX];
+	uint16_t cc;
 };
 
 /*

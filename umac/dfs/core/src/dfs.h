@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013, 2016-2021 The Linux Foundation.  All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * Copyright (c) 2005-2006 Atheros Communications, Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -1140,6 +1140,9 @@ struct dfs_punc_unpunc {
  * @dfs_radarqlock:                  Lock for dfs q.
  * @dfs_arqlock:                     Lock for AR q.
  * @dfs_nol:                         Non occupancy list for radar.
+ * @dfs_mm_nolinfo:                  DFS NOL list present in persistent memory.
+ * @is_retain_nol_cfg_enabled:       Flag to indicate if the config for storing
+ *                                   NOL in persistent memory is enabled.
  * @dfs_nol_count:                   How many items?
  * @wlan_dfs_stats:                  DFS related stats.
  * @pulses:                          Pulse history.
@@ -1321,6 +1324,8 @@ struct wlan_dfs {
 
 	qdf_spinlock_t dfs_arqlock;
 	struct dfs_nolelem    *dfs_nol;
+	struct dfsreq_nolinfo *dfs_mm_nolinfo;
+	bool           is_retain_nol_cfg_enabled;
 	int                   dfs_nol_count;
 	struct dfs_stats      wlan_dfs_stats;
 	struct dfs_pulseline  *pulses;

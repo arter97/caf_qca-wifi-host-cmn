@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -196,6 +196,8 @@ void register_dfs_callbacks(void)
 		mlme_dfs_bringdown_vaps;
 	tmp_dfs_to_mlme->mlme_dfs_deliver_event =
 		mlme_dfs_deliver_event;
+	tmp_dfs_to_mlme->mlme_dfs_alloc_nol = mlme_dfs_alloc_nol;
+	tmp_dfs_to_mlme->mlme_dfs_get_cc = mlme_dfs_get_cc;
 	tmp_dfs_to_mlme->mlme_is_inter_band_chan_switch_allowed =
 		mlme_is_inter_band_chan_switch_allowed;
 
@@ -543,6 +545,13 @@ QDF_STATUS wlan_dfs_pdev_obj_create_notification(struct wlan_objmgr_pdev *pdev,
 	dfs->dfs_soc_obj = dfs_soc_obj;
 	dfs_agile_soc_obj_init(dfs, psoc);
 	dfs_create_punc_sm(dfs);
+
+	if (dfs_tx_ops->dfs_get_persistent_nol_status) {
+		dfs->is_retain_nol_cfg_enabled =
+			dfs_tx_ops->dfs_get_persistent_nol_status(pdev);
+	} else {
+		dfs->is_retain_nol_cfg_enabled = false;
+	}
 
 	if (dfs_attach(dfs) == 1) {
 		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS,  "dfs_attch failed");

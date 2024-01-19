@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -227,6 +227,13 @@ void dfs_mlme_channel_change_by_precac(struct wlan_objmgr_pdev *pdev);
  * @pdev: Pointer to DFS pdev object.
  */
 void dfs_mlme_nol_timeout_notification(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * dfs_mlme_nol_alloc_nol() - Allocate a persistent NOL memory.
+ * @pdev: Pointer to DFS pdev object.
+ */
+struct dfsreq_nolinfo *
+dfs_mlme_nol_alloc_nol(struct wlan_objmgr_pdev *pdev);
 
 /**
  * dfs_mlme_set_tx_flag() - Set the Vap flag to block Tx on Radar detection.
