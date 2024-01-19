@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -231,4 +231,44 @@ bool ucfg_cm_is_link_switch_disconnect_resp(struct wlan_cm_discon_rsp *resp);
  * Return: bool
  */
 bool ucfg_cm_is_link_switch_connect_resp(struct wlan_cm_connect_resp *resp);
+
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_POLICY_MGR_ENABLE)
+/**
+ * ucfg_cm_handle_legacy_conn_fail() - Handle legacy connection
+ * failure.
+ * @psoc: Psoc pointer
+ * @vdev_id: Vdev id
+ *
+ * Return: qdf status
+ */
+QDF_STATUS
+ucfg_cm_handle_legacy_conn_fail(struct wlan_objmgr_psoc *psoc,
+				uint8_t vdev_id);
+
+/**
+ * ucfg_cm_handle_legacy_conn_pre_start() - Handle legacy connection
+ * pre start.
+ * @psoc: Psoc pointer
+ * @vdev_id: Vdev id
+ *
+ * Return: qdf status
+ */
+QDF_STATUS
+ucfg_cm_handle_legacy_conn_pre_start(struct wlan_objmgr_psoc *psoc,
+				     uint8_t vdev_id);
+#else
+static inline QDF_STATUS
+ucfg_cm_handle_legacy_conn_fail(struct wlan_objmgr_psoc *psoc,
+				uint8_t vdev_id)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline QDF_STATUS
+ucfg_cm_handle_legacy_conn_pre_start(struct wlan_objmgr_psoc *psoc,
+				     uint8_t vdev_id)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+#endif
 #endif /* __WLAN_CM_UCFG_API_H */

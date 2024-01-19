@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015,2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -836,8 +836,11 @@ int osif_cm_connect(struct net_device *dev, struct wlan_objmgr_vdev *vdev,
 		goto connect_start_fail;
 
 	status = mlo_connect(vdev, connect_req);
-	if (QDF_IS_STATUS_ERROR(status))
+	if (QDF_IS_STATUS_ERROR(status)) {
 		osif_err("Connect failed with status %d", status);
+		ucfg_cm_handle_legacy_conn_fail(wlan_vdev_get_psoc(vdev),
+						wlan_vdev_get_id(vdev));
+	}
 
 connect_start_fail:
 	ucfg_cm_free_connect_req(connect_req);

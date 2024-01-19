@@ -25,6 +25,7 @@
 #include "wlan_cm_sm.h"
 #ifdef WLAN_POLICY_MGR_ENABLE
 #include "wlan_policy_mgr_api.h"
+#include "wlan_policy_mgr_ucfg.h"
 #endif
 #include <wlan_serialization_api.h>
 #ifdef CONN_MGR_ADV_FEATURE
@@ -2937,6 +2938,7 @@ QDF_STATUS cm_notify_connect_complete(struct cnx_mgr *cm_ctx,
 		if (acquire_lock)
 			cm_req_lock_release(cm_ctx);
 	}
+
 	cm_osif_connect_complete(cm_ctx, resp);
 	cm_if_mgr_inform_connect_complete(cm_ctx->vdev,
 					  resp->connect_status);
@@ -3391,6 +3393,9 @@ QDF_STATUS cm_connect_start_req(struct wlan_objmgr_vdev *vdev,
 		goto err;
 
 	cm_set_crypto_params_from_ie(&connect_req->req);
+
+	ucfg_cm_handle_legacy_conn_pre_start(wlan_vdev_get_psoc(vdev),
+					     wlan_vdev_get_id(vdev));
 
 	cm_handle_connect_start_req(vdev, req);
 
