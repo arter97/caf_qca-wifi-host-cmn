@@ -176,6 +176,29 @@ static void dp_ppeds_clear_rings_stats(struct dp_soc *soc)
 	       sizeof(struct ring_util_stats));
 	memset(&be_soc->ppe2tcl_ring.stats, 0, sizeof(struct ring_util_stats));
 }
+
+static inline
+void dp_vdev_detach_vp_profiles(struct dp_soc_be *be_soc,
+				struct dp_vdev_be *be_vdev)
+{
+	/* Upper layers will be storing vp profiles info, During recovery
+	 * netdevs will be retained, so there won't be any changes to the
+	 * associated VP, once recovery is done same vp profiles will be
+	 * configured back.
+	 * Hence will be avoiding the freeing the VP profile during recovery.
+	 */
+	if (hif_get_target_status(be_soc->soc.hif_handle) ==
+	    TARGET_STATUS_RESET)
+		return;
+
+	dp_ppeds_detach_vp_profile(be_soc, be_vdev);
+}
+#else
+static inline
+void dp_vdev_detach_vp_profiles(struct dp_soc_be *be_soc,
+				struct dp_vdev_be *be_vdev)
+{
+}
 #endif
 
 static void dp_soc_cfg_attach_be(struct dp_soc *soc)
@@ -1566,6 +1589,7 @@ static QDF_STATUS dp_vdev_detach_be(struct dp_soc *soc, struct dp_vdev *vdev)
 		dp_mlo_mcast_deinit(soc, vdev);
 
 	dp_tx_put_bank_profile(be_soc, be_vdev);
+	dp_vdev_detach_vp_profiles(be_soc, be_vdev);
 
 	return QDF_STATUS_SUCCESS;
 }
