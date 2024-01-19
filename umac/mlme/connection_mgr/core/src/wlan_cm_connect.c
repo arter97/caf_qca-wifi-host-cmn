@@ -2710,8 +2710,6 @@ static void cm_update_partner_link_scan_db(struct cnx_mgr *cm_ctx,
 		 * ageing out.
 		 */
 		if (!qdf_is_macaddr_equal(&bss->bssid, &cur_bss->bssid) &&
-		    bss->ml_info.num_links &&
-		    cur_bss->ml_info.num_links &&
 		    qdf_is_macaddr_equal(&bss->ml_info.mld_mac_addr,
 					 &cur_bss->ml_info.mld_mac_addr)) {
 			mlme_debug(CM_PREFIX_FMT "Inform Partner bssid: " QDF_MAC_ADDR_FMT " to kernel",
