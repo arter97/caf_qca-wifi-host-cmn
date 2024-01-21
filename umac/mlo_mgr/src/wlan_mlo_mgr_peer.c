@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -320,6 +320,36 @@ struct wlan_objmgr_peer *wlan_mlo_peer_get_bridge_peer(
 }
 
 qdf_export_symbol(wlan_mlo_peer_get_bridge_peer);
+
+struct wlan_objmgr_peer *wlan_mlo_peer_get_primary_peer(
+					struct wlan_mlo_peer_context *ml_peer)
+{
+	struct wlan_mlo_link_peer_entry *peer_entry = NULL;
+	struct wlan_objmgr_peer *primary_peer = NULL;
+	int i = 0;
+
+	if (!ml_peer)
+		return NULL;
+
+	mlo_peer_lock_acquire(ml_peer);
+
+	for (i = 0; i < MAX_MLO_LINK_PEERS; i++) {
+		peer_entry = &ml_peer->peer_list[i];
+		if (!peer_entry)
+			continue;
+
+		if (!peer_entry->is_primary)
+			continue;
+
+		primary_peer = peer_entry->link_peer;
+		break;
+	}
+	mlo_peer_lock_release(ml_peer);
+
+	return primary_peer;
+}
+
+qdf_export_symbol(wlan_mlo_peer_get_primary_peer);
 
 struct wlan_objmgr_vdev *
 wlan_mlo_peer_get_primary_link_vdev(struct wlan_mlo_peer_context *ml_peer)

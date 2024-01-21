@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -180,6 +180,18 @@ wlan_mlo_peer_get_primary_link_vdev(struct wlan_mlo_peer_context *ml_peer);
  */
 struct wlan_objmgr_peer *wlan_mlo_peer_get_bridge_peer(
 					struct wlan_mlo_peer_context *ml_peer);
+
+/**
+ * wlan_mlo_peer_get_primary_peer() - get primary peer
+ * @ml_peer: MLO peer
+ *
+ * This function returns primary peer of MLO peer
+ *
+ * Return: primary peer, if it is found, otherwise NULL
+ */
+struct wlan_objmgr_peer *wlan_mlo_peer_get_primary_peer(
+					struct wlan_mlo_peer_context *ml_peer);
+
 /**
  * mlo_peer_is_assoc_peer() - check whether the peer is assoc peer
  * @ml_peer: MLO peer
