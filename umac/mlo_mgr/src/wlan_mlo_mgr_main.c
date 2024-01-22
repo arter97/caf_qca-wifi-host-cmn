@@ -33,6 +33,7 @@
 #include <wlan_cm_api.h>
 #include <wlan_mlo_mgr_public_api.h>
 #include "cdp_txrx_cmn.h"
+#include "wlan_mlo_mgr_sta.h"
 
 #ifdef WLAN_WSI_STATS_SUPPORT
 /*
@@ -1170,6 +1171,7 @@ static QDF_STATUS mlo_dev_ctx_init(struct wlan_objmgr_vdev *vdev)
 			return QDF_STATUS_E_NOMEM;
 		}
 		copied_conn_req_lock_create(ml_dev->sta_ctx);
+		mlo_sta_reset_requested_emlsr_mode(ml_dev);
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 		ml_dev->bridge_sta_ctx = qdf_mem_malloc(sizeof(struct wlan_mlo_bridge_sta));
 		if (!ml_dev->bridge_sta_ctx) {
@@ -1365,6 +1367,7 @@ static QDF_STATUS mlo_dev_ctx_deinit(struct wlan_objmgr_vdev *vdev)
 			copied_conn_req_lock_destroy(ml_dev->sta_ctx);
 
 			qdf_mem_free(ml_dev->sta_ctx);
+			mlo_sta_reset_requested_emlsr_mode(ml_dev);
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 			qdf_mem_free(ml_dev->bridge_sta_ctx);
 #endif

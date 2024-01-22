@@ -33,6 +33,9 @@
 #endif
 #include <wlan_mlo_t2lm.h>
 #include <net/cfg80211.h>
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+#include "cfg_mlme_generic.h"
+#endif
 
 /* MAX MLO dev support */
 #ifndef WLAN_UMAC_MLO_MAX_VDEVS
@@ -802,6 +805,7 @@ struct wlan_mlo_sta_assoc_pending_list {
  * @ml_partner_info: mlo partner link info
  * @emlsr_cap: EMLSR capabilities info
  * @link_force_ctx: set link force mode context
+ * @emlsr_mode_req: store requested emlsr mode
  * @ml_link_control_mode: link control mode configured via user space
  * @ml_chan_switch_in_progress: Flag to track CSA at MLD level
  */
@@ -832,6 +836,7 @@ struct wlan_mlo_sta {
 #endif
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 	struct wlan_link_force_context link_force_ctx;
+	enum wlan_emlsr_action_mode emlsr_mode_req;
 #endif
 	uint8_t ml_link_control_mode;
 	bool ml_chan_switch_in_progress;

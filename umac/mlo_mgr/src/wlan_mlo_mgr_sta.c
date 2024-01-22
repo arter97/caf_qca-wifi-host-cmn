@@ -2908,5 +2908,16 @@ bool mlo_is_chan_switch_in_progress(struct wlan_objmgr_vdev *vdev)
 
 	return mlo_dev_ctx->sta_ctx->ml_chan_switch_in_progress;
 }
+
+QDF_STATUS
+mlo_sta_reset_requested_emlsr_mode(struct wlan_mlo_dev_context *ml_dev)
+{
+	if (!ml_dev || !ml_dev->sta_ctx)
+		return QDF_STATUS_E_INVAL;
+
+	ml_dev->sta_ctx->emlsr_mode_req = WLAN_EMLSR_MODE_MAX;
+
+	return QDF_STATUS_SUCCESS;
+}
 #endif
 #endif
