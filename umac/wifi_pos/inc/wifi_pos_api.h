@@ -696,5 +696,11 @@ void wifi_pos_set_rsta_11az_ranging_cap(uint32_t val);
  * Return: value if 11az TB/NTB ranging is enabled
  */
 uint32_t wifi_pos_get_rsta_11az_ranging_cap(void);
+#else
+static inline
+uint32_t wifi_pos_get_rsta_11az_ranging_cap(void)
+{
+	return 0;
+}
 #endif
 #endif /* _WIFI_POS_API_H_ */

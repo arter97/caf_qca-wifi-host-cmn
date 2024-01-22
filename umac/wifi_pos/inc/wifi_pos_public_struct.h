@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -52,6 +52,18 @@ enum wifi_pos_pasn_peer_type {
 enum wifi_pos_pasn_peer_delete_actions {
 	WIFI_POS_PEER_DELETE_ACTION_ALREADY_DELETED = BIT(0),
 	WIFI_POS_PEER_DELETE_ACTION_FLUSH_KEYS = BIT(1),
+};
+
+/**
+ * enum wlan_responder_mode - RTT responder Modes
+ * @RESPONDER_RTT_11MC_SUPPORTED: Responder supports 11mc ranging
+ * @RESPONDER_RTT_11AZ_NTB_RANGING_SUPPORTED: Responder supports NTB ranging
+ * @RESPONDER_RTT_11AZ_TB_RANGING_SUPPORTED: Responder supports TB ranging
+ */
+enum wlan_responder_mode {
+	RESPONDER_RTT_11MC_SUPPORTED = 0,
+	RESPONDER_RTT_11AZ_NTB_RANGING_SUPPORTED = 1,
+	RESPONDER_RTT_11AZ_TB_RANGING_SUPPORTED = 2
 };
 
 #define WIFI_POS_IS_PEER_ALREADY_DELETED(flag) \
