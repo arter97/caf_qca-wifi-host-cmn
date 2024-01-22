@@ -9187,6 +9187,10 @@ dp_set_psoc_param(struct cdp_soc_t *cdp_soc,
 	case CDP_CONFIG_DP_DEBUG_LOG:
 		soc->dp_debug_log_en = val.cdp_psoc_param_dp_debug_log;
 		break;
+	case CDP_FW_SUPPORT_ML_MON:
+		soc->features.fw_support_ml_monitor =
+				val.cdp_fw_support_ml_mon;
+		break;
 	default:
 		break;
 	}
@@ -9301,6 +9305,10 @@ static QDF_STATUS dp_get_psoc_param(struct cdp_soc_t *cdp_soc,
 		break;
 	case CDP_CONFIG_DP_DEBUG_LOG:
 		val->cdp_psoc_param_dp_debug_log = soc->dp_debug_log_en;
+		break;
+	case CDP_FW_SUPPORT_ML_MON:
+		val->cdp_fw_support_ml_mon =
+				soc->features.fw_support_ml_monitor;
 		break;
 	default:
 		dp_warn("Invalid param: %u", param);

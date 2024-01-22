@@ -2668,6 +2668,7 @@ struct dp_arch_ops {
  * @umac_hw_reset_support: UMAC HW reset support
  * @wds_ext_ast_override_enable:
  * @multi_rx_reorder_q_setup_support: multi rx reorder q setup at a time support
+ * @fw_support_ml_monitor: FW support ML monitor mode
  */
 struct dp_soc_features {
 	uint8_t pn_in_reo_dest:1,
@@ -2676,6 +2677,7 @@ struct dp_soc_features {
 	bool umac_hw_reset_support;
 	bool wds_ext_ast_override_enable;
 	bool multi_rx_reorder_q_setup_support;
+	bool fw_support_ml_monitor;
 };
 
 enum sysfs_printing_mode {
