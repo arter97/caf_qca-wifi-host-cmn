@@ -19932,6 +19932,8 @@ wlan_roam_fail_reason_code(uint16_t wmi_roam_fail_reason)
 		return ROAM_FAIL_REASON_NO_CAND_AP_FOUND_AND_FINAL_BMISS_SENT;
 	case WMI_ROAM_FAIL_REASON_CURR_AP_STILL_OK:
 		return ROAM_FAIL_REASON_CURR_AP_STILL_OK;
+	case WMI_ROAM_FAIL_REASON_SCAN_CANCEL:
+		return ROAM_FAIL_REASON_SCAN_CANCEL;
 	default:
 		return ROAM_FAIL_REASON_UNKNOWN;
 	}
@@ -20582,6 +20584,7 @@ extract_roam_result_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	dst->present = true;
 	dst->status = src_data->roam_status;
 	dst->timestamp = src_data->timestamp;
+	dst->roam_abort_reason = src_data->roam_abort_reason;
 	if (src_data->roam_fail_reason != ROAM_SUCCESS)
 		dst->fail_reason =
 			wlan_roam_fail_reason_code(src_data->roam_fail_reason);
