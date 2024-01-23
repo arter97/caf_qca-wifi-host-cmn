@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -8210,10 +8210,12 @@ void dp_print_vdev_mlo_mcast_tx_stats(struct dp_vdev *vdev)
 #ifdef WLAN_SUPPORT_RX_FLOW_TAG
 static inline void dp_rx_basic_fst_stats(struct dp_pdev *pdev)
 {
-	DP_PRINT_STATS("\tNo of IPv4 Flow entries inserted = %d",
-		       qdf_atomic_read(&pdev->soc->ipv4_fse_cnt));
-	DP_PRINT_STATS("\tNo of IPv6 Flow entries inserted = %d",
-		       qdf_atomic_read(&pdev->soc->ipv6_fse_cnt));
+	if (pdev->soc->rx_fst) {
+		DP_PRINT_STATS("\tNo of IPv4 Flow entries inserted = %d",
+			       pdev->soc->rx_fst->ipv4_fse_cnt);
+		DP_PRINT_STATS("\tNo of IPv6 Flow entries inserted = %d",
+			       pdev->soc->rx_fst->ipv6_fse_cnt);
+	}
 }
 #else
 static inline void dp_rx_basic_fst_stats(struct dp_pdev *pdev)

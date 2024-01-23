@@ -3313,12 +3313,6 @@ struct dp_soc {
 #endif
 	bool is_tx_pause;
 
-#ifdef WLAN_SUPPORT_RX_FLOW_TAG
-	/* number of IPv4 flows inserted */
-	qdf_atomic_t ipv4_fse_cnt;
-	/* number of IPv6 flows inserted */
-	qdf_atomic_t ipv6_fse_cnt;
-#endif
 	/* Reo queue ref table items */
 	struct reo_queue_ref_table reo_qref;
 #ifdef DP_TX_PACKET_INSPECT_FOR_ILP
@@ -5362,6 +5356,13 @@ struct dp_rx_fst {
 	bool fse_setup_done;
 	/* Last ring id used to add a flow */
 	uint8_t ring_id;
+	/* number of IPv4 flows inserted */
+	uint16_t ipv4_fse_cnt;
+	/* number of IPv6 flows inserted */
+	uint16_t ipv6_fse_cnt;
+	/* lock to prevent concurrent table access */
+	qdf_spinlock_t fst_lock;
+
 };
 
 #define DP_RX_GET_SW_FT_ENTRY_SIZE sizeof(struct dp_rx_fse)
