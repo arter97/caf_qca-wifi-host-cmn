@@ -854,6 +854,11 @@
  *	information will be set to target. Target will decide the final TX power
  *	based on this and chip specific power conformance test limits (CTL), and
  *	SAR limits.
+ *
+ * @QCA_NL80211_VENDOR_SUBCMD_FW_PAGE_FAULT_REPORT: Event indication from the
+ *      driver to user space which is carrying firmware page fault related
+ *      summary report. The attributes for this command are defined in
+ *      enum qca_wlan_vendor_attr_fw_page_fault_report.
  */
 
 enum qca_nl80211_vendor_subcmds {
@@ -1121,6 +1126,7 @@ enum qca_nl80211_vendor_subcmds {
 	QCA_NL80211_VENDOR_SUBCMD_SDWF_PHY_OPS = 235,
 	QCA_NL80211_VENDOR_SUBCMD_SDWF_DEV_OPS = 236,
 	QCA_NL80211_VENDOR_SUBCMD_REGULATORY_TPC_INFO = 237,
+	QCA_NL80211_VENDOR_SUBCMD_FW_PAGE_FAULT_REPORT = 238,
 	QCA_NL80211_VENDOR_SUBCMD_FLOW_POLICY = 239,
 };
 
@@ -1240,6 +1246,25 @@ enum qca_wlan_vendor_hang_reason {
 	QCA_WLAN_HANG_FLUSH_LOGS = 35,
 	/* Host wakeup because of page fault */
 	QCA_WLAN_HANG_HOST_WAKEUP_REASON_PAGE_FAULT = 36,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_fw_page_fault_report - Used by the vendor
+ * command %QCA_NL80211_VENDOR_SUBCMD_FW_PAGE_FAULT_REPORT.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_FW_PAGE_FAULT_REPORT_DATA: The binary blob data
+ * associated with the firmware page fault that is expected to contain the
+ * required dump to analyze frequent page faults.
+ * NLA_BINARY attribute, the maximum size is QDF_HANG_EVENT_DATA_SIZE
+ */
+enum qca_wlan_vendor_attr_fw_page_fault_report {
+	QCA_WLAN_VENDOR_ATTR_FW_PAGE_FAULT_REPORT_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_FW_PAGE_FAULT_REPORT_DATA = 1,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_FW_PAGE_FAULT_REPORT_LAST,
+	QCA_WLAN_VENDOR_ATTR_FW_PAGE_FAULT_REPORT_MAX =
+	QCA_WLAN_VENDOR_ATTR_FW_PAGE_FAULT_REPORT_LAST - 1,
 };
 
 /**

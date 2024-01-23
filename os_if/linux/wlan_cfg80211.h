@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -189,6 +189,8 @@
  * index
  * @QCA_NL80211_VENDOR_SUBCMD_TTLM_LINK_UPDATE_INDEX: MLO Link
  * enable/disable event index
+ * @QCA_NL80211_VENDOR_SUBCMD_FW_PAGE_FAULT_REPORT_INDEX: Pagefault report
+ * event index
  */
 
 enum qca_nl80211_vendor_subcmds_index {
@@ -326,6 +328,7 @@ enum qca_nl80211_vendor_subcmds_index {
 #endif
 	QCA_NL80211_VENDOR_SUBCMD_HIGH_AP_AVAILABILITY_INDEX,
 	QCA_NL80211_VENDOR_SUBCMD_TTLM_LINK_UPDATE_INDEX,
+	QCA_NL80211_VENDOR_SUBCMD_FW_PAGE_FAULT_REPORT_INDEX,
 };
 
 #if !defined(SUPPORT_WDEV_CFG80211_VENDOR_EVENT_ALLOC) && \
