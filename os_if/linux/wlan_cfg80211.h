@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -187,6 +187,8 @@
  *	latency stats
  * @QCA_NL80211_VENDOR_SUBCMD_RECONFIG_REMOVE_COMPLETE_EVENT_INDEX: ML Reconfig
  * remove complete event index
+ * @QCA_NL80211_VENDOR_SUBCMD_FW_PAGE_FAULT_REPORT_INDEX: Pagefault report
+ * event index
  */
 
 enum qca_nl80211_vendor_subcmds_index {
@@ -323,6 +325,7 @@ enum qca_nl80211_vendor_subcmds_index {
 	QCA_NL80211_VENDOR_SUBCMD_TX_LATENCY_INDEX,
 #endif
 	QCA_NL80211_VENDOR_SUBCMD_RECONFIG_REMOVE_COMPLETE_EVENT_INDEX,
+	QCA_NL80211_VENDOR_SUBCMD_FW_PAGE_FAULT_REPORT_INDEX,
 };
 
 #if !defined(SUPPORT_WDEV_CFG80211_VENDOR_EVENT_ALLOC) && \
