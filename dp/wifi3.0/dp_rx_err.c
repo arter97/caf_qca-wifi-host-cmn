@@ -1670,6 +1670,30 @@ static bool dp_rx_igmp_handler(struct dp_soc *soc,
 }
 #endif
 
+#ifdef WLAN_SUPPORT_RX_FLOW_TAG
+static inline bool
+dp_rx_err_check_flow_drop(struct dp_soc *soc, uint8_t *rx_tlv_hdr)
+{
+	uint32_t fse_metadata;
+
+	if (hal_rx_mpdu_start_tlv_tag_valid(soc->hal_soc, rx_tlv_hdr)) {
+		fse_metadata = hal_rx_msdu_fse_metadata_get(soc->hal_soc,
+							    rx_tlv_hdr);
+
+		if (DP_RX_FSE_FLOW_EXTRACT_DROP_BIT(fse_metadata))
+			return true;
+	}
+
+	return false;
+}
+#else
+static inline bool
+dp_rx_err_check_flow_drop(struct dp_soc *soc, uint8_t *rx_tlv_hdr)
+{
+	return false;
+}
+#endif
+
 /**
  * dp_rx_err_route_hdl() - Function to send EAPOL frames to stack
  *                            Free any other packet which comes in
@@ -1699,6 +1723,9 @@ dp_rx_err_route_hdl(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	struct hal_rx_msdu_metadata msdu_metadata;
 	bool is_eapol;
 	uint16_t buf_size;
+
+	if (dp_rx_err_check_flow_drop(soc, rx_tlv_hdr))
+		goto drop_nbuf;
 
 	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 

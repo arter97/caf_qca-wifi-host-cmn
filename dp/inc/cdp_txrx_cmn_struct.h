@@ -3233,10 +3233,12 @@ struct fse_info_cookie {
 /**
  * struct cdp_rx_flow_info - RX flow info used for addition/deletion
  * @is_addr_ipv4: indicates whether given IP address is IPv4/IPv6
+ * @use_ppe_ds: use DS mode
+ * @drop: drop the packets in the flow
+ * @ring_id: Optional ring id where the rx flow needs to be redirected to
  * @op_code: add/delete/enable/disable operation requested
  * @flow_tuple_info: structure containing tuple info
  * @fse_metadata: metadata to be set in RX flow
- * @use_ppe_ds: use DS mode
  * @priority_vld: is priority valid
  * @tid: tid
  * @service_code: service code for DS
@@ -3244,11 +3246,13 @@ struct fse_info_cookie {
  * @dest_mac: Destination mac address
  */
 struct cdp_rx_flow_info {
-	bool is_addr_ipv4;
+	uint8_t is_addr_ipv4:1,
+		use_ppe_ds:1,
+		drop:1;
+	uint8_t ring_id;
 	enum cdp_flow_fst_operation op_code;
 	struct cdp_rx_flow_tuple_info flow_tuple_info;
 	uint16_t fse_metadata;
-	uint8_t use_ppe_ds;
 	uint8_t priority_vld;
 	uint8_t tid;
 	uint16_t service_code;

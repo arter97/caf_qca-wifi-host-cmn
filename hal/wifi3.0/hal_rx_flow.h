@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -32,6 +32,7 @@
 #define HAL_FST_HASH_MASK 0x7ffff
 #define HAL_RX_FST_ENTRY_SIZE (NUM_OF_DWORDS_RX_FLOW_SEARCH_ENTRY * 4)
 
+#define HAL_REO_DEST_IND_DROP_RING_ID	5
 /*
  * Four possible options for IP SA/DA prefix, currently use 0x0 which
  * maps to type 2 in HW spec
