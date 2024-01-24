@@ -1715,6 +1715,10 @@ struct ol_if_ops {
 	void (*send_wakeup_trigger)(struct cdp_ctrl_objmgr_psoc *soc,
 				    uint8_t vdev_id);
 #endif
+	void (*notify_eapol_tx_compl_status)(struct cdp_ctrl_objmgr_psoc *soc,
+					     qdf_nbuf_t nbuf,
+					     uint8_t vdev_id,
+					     uint8_t tx_status);
 #ifdef QCA_SUPPORT_WDS_EXTENDED
 	void (*rx_wds_ext_peer_learn)(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 				      uint16_t peer_id, uint8_t vdev_id,

@@ -179,7 +179,9 @@ void dp_tx_process_htt_completion_li(struct dp_soc *soc,
 			eapol_type = qdf_nbuf_get_eapol_subtype(tx_desc->nbuf);
 			pairwise = (eapol_type == QDF_PROTO_EAPOL_G1 ||
 				    eapol_type == QDF_PROTO_EAPOL_G2) ? 0 : 1;
-			dp_tx_update_eapol_comp_status_stats(txrx_peer, 0,
+			dp_tx_update_eapol_comp_status_stats(soc, vdev,
+							     tx_desc->nbuf,
+							     txrx_peer, 0,
 							     tx_status,
 							     pairwise);
 		}

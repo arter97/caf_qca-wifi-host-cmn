@@ -438,22 +438,34 @@ dp_tx_desc_release(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 
 /**
  * dp_tx_update_eapol_comp_status_stats() - EAPOL TX status
+ * @soc: soc handle
+ * @vdev: DP vdev handle
+ * @nbuf: skb
  * @txrx_peer: dp_txrx_peer handle
  * @link_id: link id
  * @tx_status: Tx completion status received from firmware
  * @pairwise: indicates if frame is pairwise or group rekey frame
  *
  * This function is to add tx completion stats for EAPOL frames
+ * and also notify the same to hostapd.
  *
  */
 void
-dp_tx_update_eapol_comp_status_stats(struct dp_txrx_peer *txrx_peer,
+dp_tx_update_eapol_comp_status_stats(struct dp_soc *soc, struct dp_vdev *vdev,
+				     qdf_nbuf_t nbuf,
+				     struct dp_txrx_peer *txrx_peer,
 				     uint8_t link_id, uint8_t tx_status,
 				     bool pairwise)
 {
-	if (tx_status >= MAX_EAPOL_TX_COMP_STATUS)
+	if (tx_status >= MAX_EAPOL_TX_COMP_STATUS) {
+		dp_tx_err("Invalid Tx status Received");
 		return;
-
+	}
+	if (soc->cdp_soc.ol_ops->notify_eapol_tx_compl_status)
+		soc->cdp_soc.ol_ops->notify_eapol_tx_compl_status(soc->ctrl_psoc,
+								  nbuf,
+								  vdev->vdev_id,
+								  tx_status);
 	if (pairwise) {
 		DP_PEER_PER_PKT_STATS_INC(txrx_peer,
 					  tx.eapol_tx_comp_failures[tx_status],
