@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -850,17 +850,6 @@ QDF_STATUS mlo_peer_allocate_primary_umac(
 	assoc_peer = peer_entry->link_peer;
 	if (!assoc_peer)
 		return QDF_STATUS_E_FAILURE;
-
-	/* For Station mode, assign assoc peer as primary umac */
-	if (wlan_peer_get_peer_type(assoc_peer) == WLAN_PEER_AP) {
-		mlo_peer_assign_primary_umac(ml_peer, peer_entry);
-		mlo_info("MLD ID %d ML Peer " QDF_MAC_ADDR_FMT " primary umac soc %d ",
-			 ml_dev->mld_id,
-			 QDF_MAC_ADDR_REF(ml_peer->peer_mld_addr.bytes),
-			 ml_peer->primary_umac_psoc_id);
-
-		return QDF_STATUS_SUCCESS;
-	}
 
 	/* Select assoc peer's PSOC as primary UMAC in Multi-chip solution,
 	 * 1) for single link MLO connection

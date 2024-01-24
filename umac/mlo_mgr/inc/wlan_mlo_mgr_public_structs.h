@@ -803,6 +803,7 @@ struct mlo_nstr_info {
  * @t2lm_enable_val: enum wlan_t2lm_enable
  * @nstr_info: NSTR Capability info
  * @num_nstr_info_links: No. of links for which NSTR info is present
+ * @primary_link_id: Link id of primary TQM
  */
 struct mlo_partner_info {
 	uint8_t num_partner_links;
@@ -812,6 +813,7 @@ struct mlo_partner_info {
 	struct mlo_nstr_info nstr_info[WLAN_UMAC_MLO_MAX_VDEVS];
 	uint8_t num_nstr_info_links;
 #endif
+	uint8_t primary_link_id;
 };
 
 #ifdef WLAN_FEATURE_11BE_MLO
