@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015, 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -199,6 +199,46 @@ static void osif_cm_indicate_disconnect_for_non_assoc_link(
 }
 #endif
 
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+void
+osif_cm_indicate_disconnect(struct wlan_objmgr_vdev *vdev,
+			    struct net_device *dev,
+			    enum ieee80211_reasoncode reason,
+			    bool locally_generated, const u8 *ie,
+			    size_t ie_len, int link_id, gfp_t gfp)
+{
+	struct net_device *netdev = dev;
+	struct wlan_objmgr_vdev *anchor_vdev;
+
+	if (!wlan_vdev_mlme_is_mlo_vdev(vdev) || (link_id != -1)) {
+		osif_cm_indicate_disconnect_result(
+				netdev, reason, ie, ie_len,
+				locally_generated, link_id, gfp);
+		return;
+	}
+
+	anchor_vdev = osif_cm_get_anchor_vdev(vdev);
+
+	if (vdev != anchor_vdev)
+		osif_cm_indicate_disconnect_for_non_assoc_link(netdev, vdev);
+
+	if (anchor_vdev && ucfg_mlo_is_mld_disconnected(vdev)) {
+		/**
+		 * Kernel maintains some extra state on the assoc netdev.
+		 * If the assoc vdev exists, send disconnected event on the
+		 * assoc netdev so that kernel cleans up the extra state.
+		 * If the assoc vdev was already removed, kernel would have
+		 * already cleaned up the extra state while processing the
+		 * disconnected event sent as part of the link removal.
+		 */
+		netdev = osif_cm_get_mld_netdev(anchor_vdev);
+		osif_cm_indicate_disconnect_result(
+				netdev, reason,
+				ie, ie_len,
+				locally_generated, link_id, gfp);
+	}
+}
+#else
 void
 osif_cm_indicate_disconnect(struct wlan_objmgr_vdev *vdev,
 			    struct net_device *dev,
@@ -240,6 +280,7 @@ osif_cm_indicate_disconnect(struct wlan_objmgr_vdev *vdev,
 				locally_generated, link_id, gfp);
 	}
 }
+#endif /* ENABLE_CFG80211_BACKPORTS_MLO */
 #endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
 #else /* WLAN_FEATURE_11BE_MLO */
 void
