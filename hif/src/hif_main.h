@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -393,6 +393,7 @@ struct hif_softc {
 	struct ce_int_assignment *int_assignment;
 	atomic_t active_tasklet_cnt;
 	atomic_t active_grp_tasklet_cnt;
+	atomic_t active_oom_work_cnt;
 	atomic_t link_suspended;
 	void *vaddr_rri_on_ddr;
 	atomic_t active_wake_req_cnt;
@@ -573,6 +574,18 @@ void hif_get_cmem_info(struct hif_opaque_softc *hif_hdl,
 static inline int hif_get_num_active_tasklets(struct hif_softc *scn)
 {
 	return qdf_atomic_read(&scn->active_tasklet_cnt);
+}
+
+/**
+ * hif_get_num_active_oom_work() - get the number of active
+ *		oom work pending to be completed.
+ * @scn: HIF context
+ *
+ * Returns: the number of oom works which are active
+ */
+static inline int hif_get_num_active_oom_work(struct hif_softc *scn)
+{
+	return qdf_atomic_read(&scn->active_oom_work_cnt);
 }
 
 /*
