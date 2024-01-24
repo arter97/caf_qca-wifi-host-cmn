@@ -137,6 +137,16 @@ defined(WLAN_PKT_CAPTURE_RX_2_0)
 #include "hal_be_rx_tlv.h"
 #include <hal_be_generic_api.h>
 
+enum hal_all_sigb_pkt_type {
+	HAL_SIGB_RX_PKT_TYPE_11A = 0,
+	HAL_SIGB_RX_PKT_TYPE_11B,
+	HAL_SIGB_RX_PKT_TYPE_HT_MM,
+	HAL_SIGB_RX_PKT_TYPE_11AC,
+	HAL_SIGB_RX_PKT_TYPE_11AX,
+	HAL_SIGB_RX_PKT_TYPE_HT_GF,
+	HAL_SIGB_RX_PKT_TYPE_11BE,
+};
+
 #define PMM_REG_BASE_QCN9224 0xB500F8
 
 /**
@@ -253,6 +263,106 @@ uint8_t hal_rx_wbm_err_msdu_continuation_get_9224(void *wbm_desc)
 	WBM_RELEASE_RING_RX_RX_MSDU_DESC_INFO_DETAILS_MSDU_CONTINUATION_LSB;
 }
 
+static inline void
+hal_rx_parse_eht_sig_user(struct hal_soc *hal_soc, void *tlv,
+			  struct hal_rx_ppdu_info *ppdu_info)
+{
+	if (hal_rx_is_mu_mimo_user(hal_soc, ppdu_info))
+		hal_rx_parse_eht_sig_mumimo_all_user_info(hal_soc, tlv,
+							  ppdu_info);
+	else
+		hal_rx_parse_eht_sig_non_mumimo_all_user_info(hal_soc, tlv,
+							      ppdu_info);
+}
+
+/**
+ * hal_rx_proc_phyrx_all_sigb_tlv_9224(): API to get tlv info
+ *
+ * @rx_tlv_hdr: pointer to TLV header
+ * @ppdu_info_hdl: Handle to PPDU info to update
+ *
+ * Return: void
+ */
+static inline void
+hal_rx_proc_phyrx_all_sigb_tlv_9224(void *rx_tlv_hdr, void *ppdu_info_hdl)
+{
+	struct hal_rx_ppdu_info *ppdu_info  = ppdu_info_hdl;
+	uint32_t tlv_tag;
+	uint32_t pkt_type, cc0_num_user, cc1_num_user, max_num_user;
+	uint32_t i, j;
+	void *rx_tlv = (uint8_t *)rx_tlv_hdr + HAL_RX_TLV64_HDR_SIZE;
+	uint64_t *cc0_blk, *cc1_blk;
+	uint64_t cc0, cc1;
+
+	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(rx_tlv);
+	rx_tlv = (uint8_t *)rx_tlv + HAL_RX_TLV64_HDR_SIZE;
+
+	pkt_type = HAL_RX_GET_64(rx_tlv,
+				 PHYRX_OTHER_RECEIVE_INFO_ALL_SIGB_DETAILS,
+				 PKT_TYPE);
+
+	switch (tlv_tag) {
+	case WIFIPHYRX_OTHER_RECEIVE_INFO_ALL_SIGB_DETAILS_E:
+	{
+		cc0_num_user =
+			HAL_RX_GET_64(rx_tlv,
+				      PHYRX_OTHER_RECEIVE_INFO_ALL_SIGB_DETAILS,
+				      CC0_NUM_USER);
+
+		cc1_num_user =
+			HAL_RX_GET_64(rx_tlv,
+				      PHYRX_OTHER_RECEIVE_INFO_ALL_SIGB_DETAILS,
+				      CC1_NUM_USER);
+
+		cc0_blk = (uint64_t *)
+		       ((uint8_t *)rx_tlv +
+			HAL_RX_OFFSET(PHYRX_OTHER_RECEIVE_INFO_ALL_SIGB_DETAILS,
+				      CC0_2USER_BLK_0_31_0));
+
+		cc1_blk = (uint64_t *)
+		       ((uint8_t *)rx_tlv +
+			HAL_RX_OFFSET(PHYRX_OTHER_RECEIVE_INFO_ALL_SIGB_DETAILS,
+				      CC1_2USER_BLK_0_31_0));
+
+		if (pkt_type == HAL_SIGB_RX_PKT_TYPE_11BE) {
+			max_num_user = cc0_num_user > cc1_num_user ?
+				cc0_num_user : cc1_num_user;
+			i = 0;
+			j = 0;
+			while (max_num_user--) {
+				if (i < cc0_num_user) {
+					if (i & 1)
+						cc0 >>= 22;
+					else
+						cc0 = *cc0_blk++;
+
+					hal_rx_parse_eht_sig_user(NULL, &cc0,
+								  ppdu_info);
+					i++;
+				}
+
+				if (j < cc1_num_user) {
+					if (j & 1)
+						cc1 = *cc1_blk++;
+					else
+						cc1 >>= 22;
+
+					hal_rx_parse_eht_sig_user(NULL, &cc1,
+								  ppdu_info);
+					j++;
+				}
+			}
+			ppdu_info->rx_status.eht_all_user_num = cc0_num_user
+				+ cc1_num_user;
+		}
+	break;
+	}
+
+	default:
+	break;
+	}
+}
+
 /**
  * hal_rx_proc_phyrx_other_receive_info_tlv_9224() - API to get tlv info
  * @rx_tlv_hdr: RX TLV header
@@ -264,6 +374,255 @@ static inline
 void hal_rx_proc_phyrx_other_receive_info_tlv_9224(void *rx_tlv_hdr,
 						   void *ppdu_info_hdl)
 {
+	uint32_t tlv_tag, tlv_len, pkt_type;
+	void *rx_tlv;
+	uint32_t ru_details_channel_0;
+	struct hal_rx_ppdu_info *ppdu_info =
+		(struct hal_rx_ppdu_info *)ppdu_info_hdl;
+
+	hal_rx_proc_phyrx_all_sigb_tlv_9224(rx_tlv_hdr, ppdu_info_hdl);
+
+	tlv_len = HAL_RX_GET_USER_TLV32_LEN(rx_tlv_hdr);
+	rx_tlv = (uint8_t *)rx_tlv_hdr + HAL_RX_TLV64_HDR_SIZE;
+
+	if (!tlv_len)
+		return;
+
+	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(rx_tlv);
+	rx_tlv = (uint8_t *)rx_tlv + HAL_RX_TLV64_HDR_SIZE;
+
+	pkt_type = HAL_RX_GET_64(rx_tlv,
+				 PHYRX_OTHER_RECEIVE_INFO_ALL_SIGB_DETAILS,
+				 PKT_TYPE);
+
+	switch (tlv_tag) {
+	case WIFIPHYRX_OTHER_RECEIVE_INFO_RU_DETAILS_E:
+	if (pkt_type ==
+		HAL_RX_PKT_TYPE_11AX) {
+		ru_details_channel_0 =
+			HAL_RX_GET(rx_tlv,
+				   PHYRX_OTHER_RECEIVE_INFO_RU_DETAILS,
+				   RU_DETAILS_CHANNEL_0);
+
+		qdf_mem_copy(ppdu_info->rx_status.he_RU,
+			     &ru_details_channel_0,
+			     sizeof(ppdu_info->rx_status.he_RU));
+
+		ppdu_info->rx_status.he_flags1 |=
+			QDF_MON_STATUS_CHANNEL_1_RU_KNOWN;
+		if (ppdu_info->rx_status.bw >= HAL_FULL_RX_BW_40) {
+			ppdu_info->rx_status.he_flags1 |=
+				QDF_MON_STATUS_CHANNEL_2_RU_KNOWN;
+		}
+	}
+
+		break;
+	default:
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+			  "%s unhandled TLV type: %d, TLV len:%d",
+			  __func__, tlv_tag, tlv_len);
+	break;
+	}
+}
+
+static inline uint32_t
+hal_rx_parse_ru_allocation_9224(struct hal_soc *hal_soc, void *tlv,
+				struct hal_rx_ppdu_info *ppdu_info)
+{
+	uint64_t *ehtsig_tlv = (uint64_t *)tlv;
+	struct hal_eht_sig_ofdma_cmn_eb1 *ofdma_cc1_cmn_eb1;
+	struct hal_eht_sig_ofdma_cmn_eb1 *ofdma_cc2_cmn_eb1;
+	struct hal_eht_sig_ofdma_cmn_eb2 *ofdma_cc1_cmn_eb2;
+	struct hal_eht_sig_ofdma_cmn_eb2 *ofdma_cc2_cmn_eb2;
+	uint8_t num_ru_allocation_known = 0;
+
+	ofdma_cc1_cmn_eb1 = (struct hal_eht_sig_ofdma_cmn_eb1 *)ehtsig_tlv;
+	ofdma_cc2_cmn_eb1 =
+		(struct hal_eht_sig_ofdma_cmn_eb1 *)(ehtsig_tlv + 1);
+	ofdma_cc1_cmn_eb2 =
+		(struct hal_eht_sig_ofdma_cmn_eb2 *)(ehtsig_tlv + 2);
+	ofdma_cc2_cmn_eb2 =
+		(struct hal_eht_sig_ofdma_cmn_eb2 *)(ehtsig_tlv + 3);
+
+	switch (ppdu_info->u_sig_info.bw) {
+	case HAL_EHT_BW_320_2:
+	case HAL_EHT_BW_320_1:
+		num_ru_allocation_known += 8;
+
+		ppdu_info->rx_status.eht_data[4] |=
+				(ofdma_cc1_cmn_eb2->ru_allocation2_3 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_FIELD1_5_SHIFT);
+		ppdu_info->rx_status.eht_data[4] |= 1 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN1_5_SHIFT;
+
+		ppdu_info->rx_status.eht_data[4] |=
+				(ofdma_cc2_cmn_eb2->ru_allocation2_3 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_FIELD2_5_SHIFT);
+		ppdu_info->rx_status.eht_data[4] |= 1 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN2_5_SHIFT;
+
+		ppdu_info->rx_status.eht_data[5] |=
+				(ofdma_cc1_cmn_eb2->ru_allocation2_4 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_FIELD1_6_SHIFT);
+		ppdu_info->rx_status.eht_data[5] |= 1 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN1_6_SHIFT;
+
+		ppdu_info->rx_status.eht_data[5] |=
+				(ofdma_cc2_cmn_eb2->ru_allocation2_4 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_FIELD2_6_SHIFT);
+		ppdu_info->rx_status.eht_data[5] |= 1 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN2_6_SHIFT;
+
+		ppdu_info->rx_status.eht_data[5] |=
+				(ofdma_cc1_cmn_eb2->ru_allocation2_5 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_FIELD1_7_SHIFT);
+		ppdu_info->rx_status.eht_data[5] |= 1 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN1_7_SHIFT;
+
+		ppdu_info->rx_status.eht_data[6] |=
+				(ofdma_cc2_cmn_eb2->ru_allocation2_5 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_FIELD2_7_SHIFT);
+		ppdu_info->rx_status.eht_data[6] |= 1 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN2_7_SHIFT;
+
+		ppdu_info->rx_status.eht_data[6] |=
+				(ofdma_cc1_cmn_eb2->ru_allocation2_6 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_FIELD1_8_SHIFT);
+		ppdu_info->rx_status.eht_data[6] |= 1 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN1_8_SHIFT;
+
+		ppdu_info->rx_status.eht_data[6] |=
+				(ofdma_cc2_cmn_eb2->ru_allocation2_6 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_FIELD2_8_SHIFT);
+		num_ru_allocation_known += 4;
+		fallthrough;
+
+	case HAL_EHT_BW_160:
+		ppdu_info->rx_status.eht_data[3] |=
+				(ofdma_cc1_cmn_eb2->ru_allocation2_1 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_FIELD1_3_SHIFT);
+		ppdu_info->rx_status.eht_data[3] |= 1 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN1_3_SHIFT;
+		ppdu_info->rx_status.eht_data[3] |=
+				(ofdma_cc2_cmn_eb2->ru_allocation2_1 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_FIELD2_3_SHIFT);
+		ppdu_info->rx_status.eht_data[3] |= 1 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN2_3_SHIFT;
+		ppdu_info->rx_status.eht_data[3] |=
+				(ofdma_cc1_cmn_eb2->ru_allocation2_2 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_FIELD1_4_SHIFT);
+		ppdu_info->rx_status.eht_data[3] |= 1 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN1_4_SHIFT;
+		ppdu_info->rx_status.eht_data[4] |=
+				(ofdma_cc2_cmn_eb2->ru_allocation2_2 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_FIELD2_4_SHIFT);
+		ppdu_info->rx_status.eht_data[4] |= 1 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN2_4_SHIFT;
+		ppdu_info->tlv_aggr.rd_idx += 16;
+		fallthrough;
+
+	case HAL_EHT_BW_80:
+		num_ru_allocation_known += 2;
+
+		ppdu_info->rx_status.eht_data[2] |=
+				(ofdma_cc1_cmn_eb1->ru_allocation1_2 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_FIELD1_2_SHIFT);
+		ppdu_info->rx_status.eht_data[2] |= 1 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN1_2_SHIFT;
+		ppdu_info->rx_status.eht_data[2] |=
+				(ofdma_cc2_cmn_eb1->ru_allocation1_2 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_FIELD2_2_SHIFT);
+		ppdu_info->rx_status.eht_data[2] |= 1 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN2_2_SHIFT;
+		fallthrough;
+
+	case HAL_EHT_BW_40:
+		num_ru_allocation_known += 1;
+
+		ppdu_info->rx_status.eht_data[2] |=
+				(ofdma_cc2_cmn_eb1->ru_allocation1_1 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_FIELD2_1_SHIFT);
+		ppdu_info->rx_status.eht_data[2] |= 1 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN2_1_SHIFT;
+		ppdu_info->tlv_aggr.rd_idx += 8;
+		fallthrough;
+
+	case HAL_EHT_BW_20:
+		num_ru_allocation_known += 1;
+
+		ppdu_info->rx_status.eht_data[1] |=
+				(ofdma_cc1_cmn_eb1->ru_allocation1_1 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_FIELD1_1_SHIFT);
+		ppdu_info->rx_status.eht_data[1] |= 1 <<
+				 QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN1_1_SHIFT;
+		ppdu_info->tlv_aggr.rd_idx += 8;
+		break;
+	default:
+		break;
+	}
+
+	ppdu_info->rx_status.eht_known |= (num_ru_allocation_known <<
+			QDF_MON_STATUS_EHT_NUM_KNOWN_RU_ALLOCATIONS_SHIFT);
+
+	return HAL_TLV_STATUS_PPDU_NOT_DONE;
+}
+
+static inline uint32_t
+hal_rx_parse_eht_sig_non_ofdma_9224(struct hal_soc *hal_soc, void *tlv,
+				    struct hal_rx_ppdu_info *ppdu_info)
+{
+	hal_rx_parse_usig_overflow(hal_soc, tlv, ppdu_info);
+	hal_rx_parse_non_ofdma_users(hal_soc, tlv, ppdu_info);
+
+	if (hal_rx_is_mu_mimo_user(hal_soc, ppdu_info)) {
+		ppdu_info->tlv_aggr.rd_idx += 16;
+		hal_rx_parse_eht_sig_mumimo_user_info(hal_soc, tlv,
+						      ppdu_info);
+	} else {
+		ppdu_info->tlv_aggr.rd_idx += 4;
+		hal_rx_parse_eht_sig_non_mumimo_user_info(hal_soc, tlv,
+							  ppdu_info);
+	}
+
+	return HAL_TLV_STATUS_PPDU_NOT_DONE;
+}
+
+static inline uint32_t
+hal_rx_parse_eht_sig_ofdma_9224(struct hal_soc *hal_soc, void *tlv,
+				struct hal_rx_ppdu_info *ppdu_info)
+{
+	hal_rx_parse_usig_overflow(hal_soc, tlv, ppdu_info);
+	hal_rx_parse_ru_allocation_9224(hal_soc, tlv, ppdu_info);
+	hal_rx_parse_eht_sig_non_mumimo_user_info(hal_soc, tlv,
+						  ppdu_info);
+
+	return HAL_TLV_STATUS_PPDU_NOT_DONE;
+}
+
+/**
+ * hal_rx_parse_eht_sig_hdr_9224()
+ *				    - process eht sig header
+ * @hal_soc: HAL soc handle
+ * @tlv: pointer to EHT SIG TLV buffer
+ * @ppdu_info_handle: pointer to ppdu_info
+ *
+ * Return: None
+ */
+static
+void hal_rx_parse_eht_sig_hdr_9224(struct hal_soc *hal_soc,
+				   uint8_t *tlv,
+				   void *ppdu_info_handle)
+{
+	struct hal_rx_ppdu_info *ppdu_info  = ppdu_info_handle;
+
+	ppdu_info->rx_status.eht_flags = 1;
+
+	if (hal_rx_is_frame_type_ndp(hal_soc, ppdu_info))
+		hal_rx_parse_eht_sig_ndp(hal_soc, tlv, ppdu_info);
+	else if (hal_rx_is_non_ofdma(hal_soc, ppdu_info))
+		hal_rx_parse_eht_sig_non_ofdma_9224(hal_soc, tlv, ppdu_info);
+	else if (hal_rx_is_ofdma(hal_soc, ppdu_info))
+		hal_rx_parse_eht_sig_ofdma_9224(hal_soc, tlv, ppdu_info);
 }
 
 #if defined(WLAN_CFR_ENABLE) && defined(WLAN_ENH_CFR_ENABLE)
@@ -1631,6 +1990,8 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_mon_hw_desc_get_mpdu_status =
 		hal_rx_mon_hw_desc_get_mpdu_status_be;
 	hal_soc->ops->hal_rx_get_tlv = hal_rx_get_tlv_9224;
+	hal_soc->ops->hal_rx_parse_eht_sig_hdr =
+				hal_rx_parse_eht_sig_hdr_9224;
 	hal_soc->ops->hal_rx_proc_phyrx_other_receive_info_tlv =
 				hal_rx_proc_phyrx_other_receive_info_tlv_9224;
 

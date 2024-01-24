@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1072,6 +1072,21 @@ static inline uint8_t hal_rx_get_phy_ppdu_id_size_li(void)
 	return sizeof(uint32_t);
 }
 
+/**
+ * hal_rx_parse_eht_sig_hdr_li()
+ *				    - process eht sig header
+ * @hal_soc: HAL soc handle
+ * @tlv: pointer to EHT SIG TLV buffer
+ * @ppdu_info_handle: pointer to ppdu_info
+ *
+ * Return: None
+ */
+static inline
+void hal_rx_parse_eht_sig_hdr_li(struct hal_soc *hal_soc, uint8_t *tlv,
+				 void *ppdu_info_handle)
+{
+}
+
 void hal_hw_txrx_default_ops_attach_li(struct hal_soc *hal_soc)
 {
 	hal_soc->ops->hal_get_reo_qdesc_size = hal_get_reo_qdesc_size_li;
@@ -1160,4 +1175,5 @@ void hal_hw_txrx_default_ops_attach_li(struct hal_soc *hal_soc)
 						hal_rx_get_phy_ppdu_id_size_li;
 	hal_soc->ops->hal_rx_phy_legacy_get_rssi =
 						hal_rx_phy_legacy_get_rssi_li;
+	hal_soc->ops->hal_rx_parse_eht_sig_hdr = hal_rx_parse_eht_sig_hdr_li;
 }

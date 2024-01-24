@@ -38,6 +38,8 @@
 #include "hal_api_mon.h"
 #include "phyrx_other_receive_info_ru_details.h"
 
+#include "phyrx_other_receive_info_all_sigb_details.h"
+
 #define HAL_RX_MSDU0_BUFFER_ADDR_LSB(link_desc_va)	\
 	(uint8_t *)(link_desc_va) +			\
 	RX_MSDU_LINK_MSDU_0_BUFFER_ADDR_INFO_DETAILS_BUFFER_ADDR_31_0_OFFSET
