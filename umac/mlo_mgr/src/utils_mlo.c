@@ -285,8 +285,8 @@ util_parse_prv_multi_link_ctrl(uint8_t *mlieseqpayload,
 	qdf_size_t parsed_payload_len;
 	uint16_t mlcontrol;
 	uint16_t presence_bm;
-	uint16_t cinfo_len = 0;
-	uint16_t exp_cinfo_len = 0;
+	uint16_t cinfo_len;
+	qdf_size_t parsed_cinfo_len;
 
 	/* This helper returns the location(s) and length(s) of (sub)field(s)
 	 * inferable after parsing the Multi Link element Control field. These
@@ -337,6 +337,7 @@ util_parse_prv_multi_link_ctrl(uint8_t *mlieseqpayload,
 
 	cinfo_len = *(mlieseqpayload + parsed_payload_len);
 	parsed_payload_len += WLAN_ML_PRV_CINFO_LENGTH_SIZE;
+	parsed_cinfo_len = WLAN_ML_PRV_CINFO_LENGTH_SIZE;
 
 	/* Check if MLD ID is present */
 	if (presence_bm & WLAN_ML_PRV_CTRL_PBM_MLDID_P) {
@@ -350,14 +351,49 @@ util_parse_prv_multi_link_ctrl(uint8_t *mlieseqpayload,
 			return QDF_STATUS_E_PROTO;
 		}
 
+		if (cinfo_len <
+				(parsed_cinfo_len +
+				 WLAN_ML_PRV_CINFO_MLDID_SIZE)) {
+			mlo_err_rl("Indicated ML Common Info len %u insufficient for MLD ID size %u after parsed ML Common Info len %zu.",
+				   cinfo_len,
+				   WLAN_ML_PRV_CINFO_MLDID_SIZE,
+				   parsed_cinfo_len);
+			return QDF_STATUS_E_PROTO;
+		}
+
 		parsed_payload_len += WLAN_ML_PRV_CINFO_MLDID_SIZE;
+		parsed_cinfo_len += WLAN_ML_PRV_CINFO_MLDID_SIZE;
 	}
 
-	exp_cinfo_len = parsed_payload_len - WLAN_ML_CTRL_SIZE;
-	if (cinfo_len != exp_cinfo_len) {
-		mlo_err_rl("ML seq common info len %u doesn't match with expected common info len %u",
-			   cinfo_len, exp_cinfo_len);
-		return QDF_STATUS_E_PROTO;
+	/* If the value in the Common Info Length subfield is greater than
+	 * expected, then this indicates that the sender has included some
+	 * additional subfield(s) in Common Info that the parsing implementation
+	 * does not yet recognize. This could happen in case the sender
+	 * implements a higher standards draft or a new standard that the
+	 * parsing implementation does not yet implement. In this case, skip
+	 * over these unrecognized subfield(s) after verifying that there is
+	 * sufficient space in the element to accommodate the unrecognized
+	 * subfield(s). This is in line with the purpose of the Common Info
+	 * Length subfield.
+	 */
+	if (cinfo_len > parsed_cinfo_len) {
+		mlo_debug_rl("Indicated ML Common Info len %u > expected ML Common Info len %zu.",
+			   cinfo_len, parsed_cinfo_len);
+
+		if (mlieseqpayloadlen <
+				(parsed_payload_len +
+				 (cinfo_len - parsed_cinfo_len))) {
+			mlo_err_rl("ML seq payload len %zu octets insufficient for unrecognized ML Common Info subfield(s) len %zu after parsed payload len %zu.",
+				   mlieseqpayloadlen,
+				   cinfo_len - parsed_cinfo_len,
+				   parsed_payload_len);
+			return QDF_STATUS_E_PROTO;
+		}
+
+		mlo_debug_rl("Skipping unrecognized ML Common Info subfield(s) len %zu.",
+			     cinfo_len - parsed_cinfo_len);
+
+		parsed_payload_len += (cinfo_len - parsed_cinfo_len);
 	}
 
 	if (link_info_len) {
