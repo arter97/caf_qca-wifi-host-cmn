@@ -158,6 +158,8 @@ cm_ser_disconnect_cb(struct wlan_serialization_command *cmd,
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	struct wlan_objmgr_vdev *vdev;
 	struct cnx_mgr *cm_ctx;
+	enum qdf_hang_reason hang_reason =
+				QDF_VDEV_ACTIVE_SER_DISCONNECT_TIMEOUT;
 
 	if (!cmd) {
 		mlme_err("cmd is NULL, reason: %d", reason);
@@ -192,7 +194,7 @@ cm_ser_disconnect_cb(struct wlan_serialization_command *cmd,
 	case WLAN_SER_CB_ACTIVE_CMD_TIMEOUT:
 		mlme_err(CM_PREFIX_FMT "Active command timeout",
 			 CM_PREFIX_REF(wlan_vdev_get_id(vdev), cmd->cmd_id));
-		cm_trigger_panic_on_cmd_timeout(cm_ctx->vdev);
+		cm_trigger_panic_on_cmd_timeout(cm_ctx->vdev, hang_reason);
 		cm_send_disconnect_resp(cm_ctx, cmd->cmd_id);
 		break;
 	case WLAN_SER_CB_RELEASE_MEM_CMD:
@@ -229,6 +231,12 @@ static QDF_STATUS cm_ser_disconnect_req(struct wlan_objmgr_pdev *pdev,
 	cmd.cmd_cb = cm_ser_disconnect_cb;
 	cmd.source = WLAN_UMAC_COMP_MLME;
 	cmd.is_high_priority = false;
+	/* Set high priority if queueing disconnect as part of
+	 * ho failure
+	 */
+	if (req->req.reason_code == REASON_FW_TRIGGERED_ROAM_FAILURE &&
+	    req->req.source == CM_MLME_DISCONNECT)
+		cmd.is_high_priority = true;
 	cmd.cmd_timeout_duration = DISCONNECT_TIMEOUT;
 	cmd.vdev = cm_ctx->vdev;
 	cmd.is_blocking = cm_ser_get_blocking_cmd();
@@ -721,8 +729,14 @@ cm_handle_discon_req_in_non_connected_state(struct cnx_mgr *cm_ctx,
 						 true);
 		break;
 	case WLAN_CM_S_ROAMING:
-		/* for FW roam/LFR3 remove the req from the list */
-		if (cm_roam_offload_enabled(wlan_vdev_get_psoc(cm_ctx->vdev)))
+		/* for FW roam/LFR3 remove the req from the list but
+		 * for ho failure don't flush pending requests as disconnect
+		 * should be queued in serialization queue before
+		 * dequeueing roam.
+		 */
+		if (cm_roam_offload_enabled(wlan_vdev_get_psoc(cm_ctx->vdev)) &&
+		    !(cm_req->req.source == CM_MLME_DISCONNECT &&
+		      cm_req->req.reason_code == REASON_FW_TRIGGERED_ROAM_FAILURE))
 			cm_flush_pending_request(cm_ctx, ROAM_REQ_PREFIX,
 						 false);
 		fallthrough;

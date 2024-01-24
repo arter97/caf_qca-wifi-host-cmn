@@ -1596,7 +1596,7 @@ static void ce_update_msi_batch_intr_flags(struct CE_state *ce_state)
 
 static inline void ce_update_wrt_idx_offset(struct hif_softc *scn,
 					    struct CE_state *ce_state,
-					    uint8_t ring_type)
+					    struct CE_attr *attr)
 {
 }
 #else
@@ -1636,12 +1636,16 @@ static void ce_update_msi_batch_intr_flags(struct CE_state *ce_state)
 
 static inline void ce_update_wrt_idx_offset(struct hif_softc *scn,
 					    struct CE_state *ce_state,
-					    uint8_t ring_type)
+					    struct CE_attr *attr)
 {
-	if (ring_type == CE_RING_SRC)
+	/* Do not setup CE write index offset for FW only CE rings */
+	if (!attr->src_nentries && !attr->dest_nentries)
+		return;
+
+	if (attr->src_nentries)
 		ce_state->ce_wrt_idx_offset =
 			CE_SRC_WR_IDX_OFFSET_GET(scn, ce_state->ctrl_addr);
-	else if (ring_type == CE_RING_DEST)
+	else if (attr->dest_nentries)
 		ce_state->ce_wrt_idx_offset =
 			CE_DST_WR_IDX_OFFSET_GET(scn, ce_state->ctrl_addr);
 	else
@@ -2845,9 +2849,7 @@ struct CE_handle *ce_init(struct hif_softc *scn,
 		goto error_target_access;
 
 	ce_update_msi_batch_intr_flags(CE_state);
-	ce_update_wrt_idx_offset(scn, CE_state,
-				 attr->src_nentries ?
-				 CE_RING_SRC : CE_RING_DEST);
+	ce_update_wrt_idx_offset(scn, CE_state, attr);
 
 	return (struct CE_handle *)CE_state;
 

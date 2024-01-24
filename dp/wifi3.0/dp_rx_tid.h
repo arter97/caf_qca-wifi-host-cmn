@@ -45,15 +45,15 @@ void dp_rx_tid_stats_cb(struct dp_soc *soc, void *cb_ctxt,
 void dp_peer_rx_cleanup(struct dp_vdev *vdev, struct dp_peer *peer);
 
 /**
- * dp_rx_tid_setup_wifi3() - Setup receive TID state
+ * dp_rx_tid_setup_wifi3() - Set up receive TID state
  * @peer: Datapath peer handle
- * @tid: TID
+ * @tid_bitmap: TIDs to be set up
  * @ba_window_size: BlockAck window size
  * @start_seq: Starting sequence number
  *
  * Return: QDF_STATUS code
  */
-QDF_STATUS dp_rx_tid_setup_wifi3(struct dp_peer *peer, int tid,
+QDF_STATUS dp_rx_tid_setup_wifi3(struct dp_peer *peer, uint32_t tid_bitmap,
 				 uint32_t ba_window_size, uint32_t start_seq);
 
 /**

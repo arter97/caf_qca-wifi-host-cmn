@@ -2469,7 +2469,7 @@ struct dp_arch_ops {
 				      enum peer_stats_type stats_type);
 	QDF_STATUS (*dp_peer_rx_reorder_queue_setup)(struct dp_soc *soc,
 						     struct dp_peer *peer,
-						     int tid,
+						     uint32_t tid_bitmap,
 						     uint32_t ba_window_size);
 	void (*dp_bank_reconfig)(struct dp_soc *soc, struct dp_vdev *vdev);
 
@@ -2572,6 +2572,7 @@ struct dp_arch_ops {
  * @rssi_dbm_conv_support: Rssi dbm conversion support param.
  * @umac_hw_reset_support: UMAC HW reset support
  * @wds_ext_ast_override_enable:
+ * @multi_rx_reorder_q_setup_support: multi rx reorder q setup at a time support
  */
 struct dp_soc_features {
 	uint8_t pn_in_reo_dest:1,
@@ -2579,6 +2580,7 @@ struct dp_soc_features {
 	bool rssi_dbm_conv_support;
 	bool umac_hw_reset_support;
 	bool wds_ext_ast_override_enable;
+	bool multi_rx_reorder_q_setup_support;
 };
 
 enum sysfs_printing_mode {

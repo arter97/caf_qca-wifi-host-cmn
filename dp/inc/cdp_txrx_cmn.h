@@ -3024,9 +3024,10 @@ cdp_wds_ext_set_bit(ol_txrx_soc_handle soc, uint8_t *mac)
 /**
  * cdp_drain_txrx() - drain TX/RX SRNGs
  * @soc: opaque soc handle
+ * @rx_only: drain only RX rings
  */
 static inline void
-cdp_drain_txrx(ol_txrx_soc_handle soc)
+cdp_drain_txrx(ol_txrx_soc_handle soc, uint8_t rx_only)
 {
 	if (!soc || !soc->ops) {
 		dp_cdp_debug("Invalid Instance");
@@ -3038,7 +3039,7 @@ cdp_drain_txrx(ol_txrx_soc_handle soc)
 	    !soc->ops->cmn_drv_ops->txrx_drain)
 		return;
 
-	return soc->ops->cmn_drv_ops->txrx_drain(soc);
+	return soc->ops->cmn_drv_ops->txrx_drain(soc, rx_only);
 }
 
 /**
