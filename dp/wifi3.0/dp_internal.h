@@ -2083,7 +2083,14 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 			_tgtobj->tx.no_ack_count[i] += \
 					_srcobj->tx.no_ack_count[i];\
 		} \
-		\
+		for (i = 0; i < MAX_EAPOL_TX_COMP_STATUS; i++) { \
+			 _tgtobj->tx.eapol_tx_comp_failures[i] += \
+					 _srcobj->tx.eapol_tx_comp_failures[i];\
+		} \
+		for (i = 0; i < MAX_EAPOL_TX_COMP_STATUS; i++) { \
+			_tgtobj->tx.rekey_tx_comp_failures[i] += \
+					_srcobj->tx.rekey_tx_comp_failures[i];\
+		} \
 		_tgtobj->rx.multicast.num += _srcobj->rx.multicast.num; \
 		_tgtobj->rx.multicast.bytes += _srcobj->rx.multicast.bytes; \
 		_tgtobj->rx.rx_success.num += _srcobj->rx.rx_success.num;\

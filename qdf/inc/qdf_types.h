@@ -1113,6 +1113,8 @@ struct qdf_mac_addr {
  * @QDF_PROTO_EAP_WSC_NACK: EAP expanded type WSC NACK
  * @QDF_PROTO_EAP_WSC_DONE: EAP expanded type WSC DONE
  * @QDF_PROTO_EAP_WSC_FRAG_ACK: EAP expanded type WSC frag ACK
+ * @QDF_PROTO_EAPOL_G1: EAPOL Rekey frame 1/2
+ * @QDF_PROTO_EAPOL_G2: EAPOL Rekey frame 2/2
  * @QDF_PROTO_SUBTYPE_MAX: subtype max
  */
 enum qdf_proto_subtype {
@@ -1176,6 +1178,8 @@ enum qdf_proto_subtype {
 	QDF_PROTO_EAP_WSC_NACK,
 	QDF_PROTO_EAP_WSC_DONE,
 	QDF_PROTO_EAP_WSC_FRAG_ACK,
+	QDF_PROTO_EAPOL_G1,
+	QDF_PROTO_EAPOL_G2,
 	QDF_PROTO_SUBTYPE_MAX
 };
 

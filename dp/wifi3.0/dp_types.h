@@ -4716,6 +4716,8 @@ typedef void *dp_txrx_ref_handle;
  * @release_src_not_tqm: Counter to keep track of release source is not TQM
  *			 in TX completion status processing
  * @inval_link_id_pkt_cnt: Counter to capture Invalid Link Id
+ * @eapol_tx_comp_failures: Eapol Tx completion count
+ * @rekey_tx_comp_failures: GroupRekey Tx completion count
  */
 struct dp_peer_per_pkt_tx_stats {
 	struct cdp_pkt_info ucast;
@@ -4768,6 +4770,8 @@ struct dp_peer_per_pkt_tx_stats {
 #endif
 	uint32_t release_src_not_tqm;
 	uint32_t inval_link_id_pkt_cnt;
+	uint32_t eapol_tx_comp_failures[MAX_EAPOL_TX_COMP_STATUS];
+	uint32_t rekey_tx_comp_failures[MAX_EAPOL_TX_COMP_STATUS];
 };
 
 /**

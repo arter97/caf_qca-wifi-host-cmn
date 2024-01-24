@@ -102,7 +102,8 @@ void dp_tx_process_htt_completion_li(struct dp_soc *soc,
 	dp_txrx_ref_handle txrx_ref_handle = NULL;
 	struct cdp_tid_tx_stats *tid_stats = NULL;
 	struct htt_soc *htt_handle;
-	uint8_t vdev_id;
+	uint8_t vdev_id, eapol_type;
+	bool pairwise;
 
 	tx_status = HTT_TX_WBM_COMPLETION_V2_TX_STATUS_GET(htt_desc[0]);
 	htt_handle = (struct htt_soc *)soc->htt_handle;
@@ -159,6 +160,32 @@ void dp_tx_process_htt_completion_li(struct dp_soc *soc,
 		goto release_tx_desc;
 	}
 
+	if (HTT_TX_WBM_COMPLETION_V2_VALID_GET(htt_desc[2])) {
+		ts.peer_id =
+			HTT_TX_WBM_COMPLETION_V2_SW_PEER_ID_GET(
+					htt_desc[2]);
+		ts.tid =
+			HTT_TX_WBM_COMPLETION_V2_TID_NUM_GET(
+					htt_desc[2]);
+	} else {
+		ts.peer_id = HTT_INVALID_PEER;
+		ts.tid = HTT_INVALID_TID;
+	}
+	txrx_peer = dp_txrx_peer_get_ref_by_id(soc, ts.peer_id,
+					       &txrx_ref_handle,
+					       DP_MOD_ID_HTT_COMP);
+	if (qdf_likely(txrx_peer)) {
+		if (qdf_unlikely(qdf_nbuf_is_ipv4_eapol_pkt(tx_desc->nbuf))) {
+			eapol_type = qdf_nbuf_get_eapol_subtype(tx_desc->nbuf);
+			pairwise = (eapol_type == QDF_PROTO_EAPOL_G1 ||
+				    eapol_type == QDF_PROTO_EAPOL_G2) ? 0 : 1;
+			dp_tx_update_eapol_comp_status_stats(txrx_peer, 0,
+							     tx_status,
+							     pairwise);
+		}
+		dp_txrx_peer_unref_delete(txrx_ref_handle,
+					  DP_MOD_ID_HTT_COMP);
+	}
 	switch (tx_status) {
 	case HTT_TX_FW2WBM_TX_STATUS_OK:
 	case HTT_TX_FW2WBM_TX_STATUS_DROP:
@@ -167,17 +194,6 @@ void dp_tx_process_htt_completion_li(struct dp_soc *soc,
 		uint8_t tid;
 		uint8_t transmit_cnt_valid = 0;
 
-		if (HTT_TX_WBM_COMPLETION_V2_VALID_GET(htt_desc[2])) {
-			ts.peer_id =
-				HTT_TX_WBM_COMPLETION_V2_SW_PEER_ID_GET(
-						htt_desc[2]);
-			ts.tid =
-				HTT_TX_WBM_COMPLETION_V2_TID_NUM_GET(
-						htt_desc[2]);
-		} else {
-			ts.peer_id = HTT_INVALID_PEER;
-			ts.tid = HTT_INVALID_TID;
-		}
 		ts.release_src = HAL_TX_COMP_RELEASE_SOURCE_FW;
 		ts.ppdu_id =
 			HTT_TX_WBM_COMPLETION_V2_SCH_CMD_ID_GET(

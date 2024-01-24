@@ -1502,6 +1502,7 @@ __qdf_nbuf_data_get_dhcp_subtype(uint8_t *data)
 	return subtype;
 }
 
+#define EAPOL_WPA_KEY_INFO_KEY_TYPE BIT(3)
 #define EAPOL_WPA_KEY_INFO_ACK BIT(7)
 #define EAPOL_WPA_KEY_INFO_MIC BIT(8)
 #define EAPOL_WPA_KEY_INFO_ENCR_KEY_DATA BIT(12) /* IEEE 802.11i/RSN only */
@@ -1530,6 +1531,7 @@ __qdf_nbuf_data_get_eapol_key(uint8_t *data)
 	uint16_t key_info, key_data_length;
 	enum qdf_proto_subtype subtype;
 	uint64_t *key_nonce;
+	bool pairwise;
 
 	key_info = qdf_ntohs((uint16_t)(*(uint16_t *)
 			(data + EAPOL_KEY_INFO_OFFSET)));
@@ -1537,18 +1539,21 @@ __qdf_nbuf_data_get_eapol_key(uint8_t *data)
 	key_data_length = qdf_ntohs((uint16_t)(*(uint16_t *)
 				(data + EAPOL_KEY_DATA_LENGTH_OFFSET)));
 	key_nonce = (uint64_t *)(data + EAPOL_WPA_KEY_NONCE_OFFSET);
+	pairwise = key_info & EAPOL_WPA_KEY_INFO_KEY_TYPE;
 
 	if (key_info & EAPOL_WPA_KEY_INFO_ACK)
 		if (key_info &
 		    (EAPOL_WPA_KEY_INFO_MIC | EAPOL_WPA_KEY_INFO_ENCR_KEY_DATA))
-			subtype = QDF_PROTO_EAPOL_M3;
+			subtype = pairwise ?
+				  QDF_PROTO_EAPOL_M3 : QDF_PROTO_EAPOL_G1;
 		else
 			subtype = QDF_PROTO_EAPOL_M1;
 	else
 		if (key_data_length == 0 ||
 		    !((*key_nonce) || (*(key_nonce + 1)) ||
 		      (*(key_nonce + 2)) || (*(key_nonce + 3))))
-			subtype = QDF_PROTO_EAPOL_M4;
+			subtype = pairwise ?
+				  QDF_PROTO_EAPOL_M4 : QDF_PROTO_EAPOL_G2;
 		else
 			subtype = QDF_PROTO_EAPOL_M2;
 

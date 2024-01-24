@@ -54,6 +54,11 @@
 #define MAX_MCS (14 + 1)
 #endif
 
+/* Needs to reflect HTT_TX_FW2WBM_TX_STATUS_MAX
+ * defined in FW
+ */
+#define MAX_EAPOL_TX_COMP_STATUS 7
+
 #define MCS_INVALID_ARRAY_INDEX MAX_MCS
 #define MAX_MCS_11A 8
 #define MAX_MCS_11B 7
@@ -1569,6 +1574,8 @@ struct protocol_trace_count {
  * @tx_ucast_total: Total tx unicast count
  * @tx_ucast_success: Total tx unicast success count
  * @fragment_count: Fragment packet count
+ * @eapol_tx_comp_failures: Eapol Tx completion count
+ * @rekey_tx_comp_failures: GroupRekey Tx completion count
  */
 struct cdp_tx_stats {
 	struct cdp_pkt_info comp_pkt;
@@ -1695,6 +1702,8 @@ struct cdp_tx_stats {
 	struct cdp_pkt_info tx_ucast_total;
 	struct cdp_pkt_info tx_ucast_success;
 	uint32_t fragment_count;
+	uint32_t eapol_tx_comp_failures[MAX_EAPOL_TX_COMP_STATUS];
+	uint32_t rekey_tx_comp_failures[MAX_EAPOL_TX_COMP_STATUS];
 };
 
 /**

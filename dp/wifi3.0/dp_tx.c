@@ -112,6 +112,9 @@
 #define DP_GET_HW_LINK_ID_FRM_PPDU_ID(PPDU_ID, LINK_ID_OFFSET, LINK_ID_BITS) \
 	(((PPDU_ID) >> (LINK_ID_OFFSET)) & ((1 << (LINK_ID_BITS)) - 1))
 
+QDF_COMPILE_TIME_ASSERT(max_fw2wbm_tx_status_check,
+                        MAX_EAPOL_TX_COMP_STATUS == HTT_TX_FW2WBM_TX_STATUS_MAX);
+
 /*mapping between hal encrypt type and cdp_sec_type*/
 uint8_t sec_type_map[MAX_CDP_SEC_TYPE] = {HAL_TX_ENCRYPT_TYPE_NO_CIPHER,
 					  HAL_TX_ENCRYPT_TYPE_WEP_128,
@@ -431,6 +434,34 @@ dp_tx_desc_release(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 	else
 		dp_tx_desc_free(soc, tx_desc, desc_pool_id);
 	return;
+}
+
+/**
+ * dp_tx_update_eapol_comp_status_stats() - EAPOL TX status
+ * @txrx_peer: dp_txrx_peer handle
+ * @link_id: link id
+ * @tx_status: Tx completion status received from firmware
+ * @pairwise: indicates if frame is pairwise or group rekey frame
+ *
+ * This function is to add tx completion stats for EAPOL frames
+ *
+ */
+void
+dp_tx_update_eapol_comp_status_stats(struct dp_txrx_peer *txrx_peer,
+				     uint8_t link_id, uint8_t tx_status,
+				     bool pairwise)
+{
+	if (tx_status >= MAX_EAPOL_TX_COMP_STATUS)
+		return;
+
+	if (pairwise) {
+		DP_PEER_PER_PKT_STATS_INC(txrx_peer,
+					  tx.eapol_tx_comp_failures[tx_status],
+					  1, link_id);
+	} else
+		DP_PEER_PER_PKT_STATS_INC(txrx_peer,
+					  tx.rekey_tx_comp_failures[tx_status],
+					  1, link_id);
 }
 
 /**
