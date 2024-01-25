@@ -274,6 +274,7 @@ struct wlan_srng_cfg {
  * @is_rx_mon_protocol_flow_tag_enabled: flag to enable/disable RX protocol or
  *                                       flow tagging in monitor/mon-lite mode
  * @is_rx_flow_tag_enabled: flag to enable/disable RX flow tagging using FSE
+ * @fse_3_tuple_enable: flag to enable/disable FSE 3 tuple lookup
  * @is_rx_flow_search_table_per_pdev: flag to indicate if a per-SOC or per-pdev
  *                                    table should be used
  * @rx_flow_search_table_size: indicates the number of flows in the flow search
@@ -485,6 +486,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	int rx_sw_desc_num;
 	bool is_rx_mon_protocol_flow_tag_enabled;
 	bool is_rx_flow_tag_enabled;
+	bool fse_3_tuple_enable;
 	bool is_rx_flow_search_table_per_pdev;
 	uint16_t rx_flow_search_table_size;
 	uint16_t rx_flow_max_search;
@@ -1948,6 +1950,14 @@ void wlan_cfg_set_rx_flow_tag_enabled(struct wlan_cfg_dp_soc_ctxt *cfg,
  * Return: true if feature is enabled, else false
  */
 bool wlan_cfg_is_rx_flow_tag_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_get_fse_3_tuple_enable() - API to get FSE 3 tuple match flag
+ * @cfg: Configuration Handle
+ *
+ * Return: true if fse 3 tuple match flag is enabled else false
+ */
+bool wlan_cfg_get_fse_3_tuple_enable(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
  * wlan_cfg_set_rx_flow_search_table_per_pdev() - Set flag to indicate that

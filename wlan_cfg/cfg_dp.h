@@ -1513,6 +1513,10 @@
 	CFG_INI_BOOL("dp_rx_flow_tag_enable", false, \
 		     "Enable/Disable DP Rx Flow Tag")
 
+#define CFG_DP_FSE3_TUPLE_ENABLE \
+	CFG_INI_BOOL("dp_fse_3_tuple_enable", false, \
+	"FSE 3 tuple search enable flag")
+
 #define CFG_DP_RX_FLOW_SEARCH_TABLE_PER_PDEV \
 	CFG_INI_BOOL("dp_rx_per_pdev_flow_search", false, \
 			"DP Rx Flow Search Table Is Per PDev")
@@ -2231,6 +2235,7 @@
 		CFG(CFG_DP_RX_SW_DESC_NUM) \
 		CFG(CFG_DP_RX_FLOW_SEARCH_TABLE_SIZE) \
 		CFG(CFG_DP_RX_FLOW_TAG_ENABLE) \
+		CFG(CFG_DP_FSE3_TUPLE_ENABLE) \
 		CFG(CFG_DP_RX_FLOW_SEARCH_TABLE_PER_PDEV) \
 		CFG(CFG_DP_RX_MON_PROTOCOL_FLOW_TAG_ENABLE) \
 		CFG(CFG_DP_RXDMA_MONITOR_RX_DROP_THRESHOLD) \

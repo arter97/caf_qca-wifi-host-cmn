@@ -4229,6 +4229,8 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	wlan_cfg_ctx->rx_flow_max_search = WLAN_CFG_RX_FST_MAX_SEARCH;
 	wlan_cfg_ctx->is_rx_flow_tag_enabled =
 			cfg_get(psoc, CFG_DP_RX_FLOW_TAG_ENABLE);
+	wlan_cfg_ctx->fse_3_tuple_enable =
+			cfg_get(psoc, CFG_DP_FSE3_TUPLE_ENABLE);
 	wlan_cfg_ctx->is_rx_flow_search_table_per_pdev =
 			cfg_get(psoc, CFG_DP_RX_FLOW_SEARCH_TABLE_PER_PDEV);
 	wlan_cfg_ctx->rx_flow_search_table_size =
@@ -4474,6 +4476,8 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	wlan_cfg_ctx->rx_flow_max_search = WLAN_CFG_RX_FST_MAX_SEARCH;
 	wlan_cfg_ctx->is_rx_flow_tag_enabled =
 			cfg_get(psoc, CFG_DP_RX_FLOW_TAG_ENABLE);
+	wlan_cfg_ctx->fse_3_tuple_enable =
+			cfg_get(psoc, CFG_DP_FSE3_TUPLE_ENABLE);
 	wlan_cfg_ctx->is_rx_flow_search_table_per_pdev =
 			cfg_get(psoc, CFG_DP_RX_FLOW_SEARCH_TABLE_PER_PDEV);
 	wlan_cfg_ctx->rx_flow_search_table_size =
@@ -4608,7 +4612,6 @@ wlan_cfg_pdev_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	wlan_cfg_ctx->num_mac_rings = NUM_RXDMA_RINGS_PER_PDEV;
 	wlan_cfg_ctx->sw2rxdma_link_ring_size = cfg_get(psoc,
 					CFG_DP_SW2RXDMA_LINK_RING);
-
 	return wlan_cfg_ctx;
 }
 
@@ -5568,6 +5571,11 @@ bool wlan_cfg_is_rx_flow_tag_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
 }
 
 qdf_export_symbol(wlan_cfg_is_rx_flow_tag_enabled);
+
+bool wlan_cfg_get_fse_3_tuple_enable(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->fse_3_tuple_enable;
+}
 
 bool wlan_cfg_is_poll_mode_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
 {

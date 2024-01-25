@@ -4277,6 +4277,7 @@ static QDF_STATUS dp_rxdma_ring_config(struct dp_soc *soc)
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	int mac_for_pdev;
 	int lmac_id;
+	uint32_t tuple_mask = 0;
 
 	/* Configure monitor mode rings */
 	dp_monitor_soc_htt_srng_setup(soc);
@@ -4303,9 +4304,17 @@ static QDF_STATUS dp_rxdma_ring_config(struct dp_soc *soc)
 			htt_srng_setup(soc->htt_handle, mac_for_pdev,
 				       soc->rxdma_err_dst_ring[lmac_id].hal_srng,
 				       RXDMA_DST);
-	}
 
+		if (wlan_cfg_get_fse_3_tuple_enable(soc->wlan_cfg_ctx)) {
+			tuple_mask |= HTT_H2T_FLOW_CLASSIFY_3_TUPLE_FIELD_ENABLE_S;
+
+			if (dp_h2t_3tuple_config_send(pdev, tuple_mask, 0) != QDF_STATUS_SUCCESS) {
+				dp_err("3 tuple match configuration set failed");
+			}
+		}
+	}
 	dp_reap_timer_init(soc);
+
 	return status;
 }
 #endif
