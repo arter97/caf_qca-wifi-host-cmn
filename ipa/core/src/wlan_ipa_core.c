@@ -2072,7 +2072,7 @@ static bool wlan_ipa_uc_find_add_assoc_sta(struct wlan_ipa_priv *ipa_ctx,
 					   const uint8_t *mac_addr)
 {
 	bool sta_found = false;
-	uint8_t idx;
+	uint16_t idx;
 
 	for (idx = 0; idx < WLAN_IPA_MAX_STA_COUNT; idx++) {
 		if ((ipa_ctx->assoc_stas_map[idx].is_reserved) &&
