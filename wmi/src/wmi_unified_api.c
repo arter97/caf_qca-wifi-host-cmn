@@ -4197,12 +4197,12 @@ wmi_unified_send_vendor_pdev_cmd(wmi_unified_t wmi_handle,
 QDF_STATUS
 wmi_extract_vendor_peer_event(wmi_unified_t wmi_handle,
 			      void *evt_buf,
-			      struct wmi_vendor_peer_event *param)
+			      void *param, void *subtype)
 {
 	if (wmi_handle->ops->extract_vendor_peer_event)
 		return wmi_handle->ops->extract_vendor_peer_event(
 				wmi_handle,
-				evt_buf, param);
+				evt_buf, param, subtype);
 
 	return QDF_STATUS_E_FAILURE;
 }
@@ -4210,12 +4210,12 @@ wmi_extract_vendor_peer_event(wmi_unified_t wmi_handle,
 QDF_STATUS
 wmi_extract_vendor_vdev_event(wmi_unified_t wmi_handle,
 			      void *evt_buf,
-			      struct wmi_vendor_vdev_event *param)
+			      void *param, void *subtype)
 {
 	if (wmi_handle->ops->extract_vendor_vdev_event)
 		return wmi_handle->ops->extract_vendor_vdev_event(
 				wmi_handle,
-				evt_buf, param);
+				evt_buf, param, subtype);
 
 	return QDF_STATUS_E_FAILURE;
 }
@@ -4223,12 +4223,12 @@ wmi_extract_vendor_vdev_event(wmi_unified_t wmi_handle,
 QDF_STATUS
 wmi_extract_vendor_pdev_event(wmi_unified_t wmi_handle,
 			      void *evt_buf,
-			      struct wmi_vendor_pdev_event *param)
+			      void *param, void *subtype)
 {
 	if (wmi_handle->ops->extract_vendor_pdev_event)
 		return wmi_handle->ops->extract_vendor_pdev_event(
 				wmi_handle,
-				evt_buf, param);
+				evt_buf, param, subtype);
 
 	return QDF_STATUS_E_FAILURE;
 }

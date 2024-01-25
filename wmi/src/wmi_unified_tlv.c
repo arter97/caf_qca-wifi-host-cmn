@@ -21991,10 +21991,12 @@ send_vendor_pdev_cmd_tlv(wmi_unified_t wmi_handle,
 static QDF_STATUS
 extract_vendor_peer_event_tlv(wmi_unified_t wmi_handle,
 			      uint8_t *evt_buf,
-			      struct wmi_vendor_peer_event *param)
+			      void *param, void *subtype)
 {
 	WMI_VENDOR_PEER_EVENTID_param_tlvs *param_buf;
 	wmi_vendor_peer_event_fixed_param *evt_fixed_hdr;
+	struct wmi_vendor_peer_event *evt_param =
+			(struct wmi_vendor_peer_event *)param;
 
 	param_buf = (WMI_VENDOR_PEER_EVENTID_param_tlvs *)evt_buf;
 	if (!param_buf) {
@@ -22003,14 +22005,14 @@ extract_vendor_peer_event_tlv(wmi_unified_t wmi_handle,
 	}
 
 	evt_fixed_hdr = param_buf->fixed_param;
-	param->vdev_id = evt_fixed_hdr->vdev_id;
-	param->pdev_id = evt_fixed_hdr->pdev_id;
+	evt_param->vdev_id = evt_fixed_hdr->vdev_id;
+	evt_param->pdev_id = evt_fixed_hdr->pdev_id;
 	WMI_MAC_ADDR_TO_CHAR_ARRAY(&evt_fixed_hdr->peer_macaddr,
-				   param->peer_mac_addr.bytes);
-	param->sub_type = evt_fixed_hdr->sub_type;
-	param->val.peer_sample1_event =
+				   evt_param->peer_mac_addr.bytes);
+	evt_param->sub_type = evt_fixed_hdr->sub_type;
+	evt_param->val.peer_sample1_event =
 			evt_fixed_hdr->evt.peer_sample1_event;
-	param->val.peer_sample2_event =
+	evt_param->val.peer_sample2_event =
 			evt_fixed_hdr->evt.peer_sample2_event;
 
 	return QDF_STATUS_SUCCESS;
@@ -22019,10 +22021,12 @@ extract_vendor_peer_event_tlv(wmi_unified_t wmi_handle,
 static QDF_STATUS
 extract_vendor_vdev_event_tlv(wmi_unified_t wmi_handle,
 			      uint8_t *evt_buf,
-			      struct wmi_vendor_vdev_event *param)
+			      void *param, void *subtype)
 {
 	WMI_VENDOR_VDEV_EVENTID_param_tlvs *param_buf;
 	wmi_vendor_vdev_event_fixed_param *evt_fixed_hdr;
+	struct wmi_vendor_vdev_event *evt_param =
+			(struct wmi_vendor_vdev_event *)param;
 
 	param_buf = (WMI_VENDOR_VDEV_EVENTID_param_tlvs *)evt_buf;
 	if (!param_buf) {
@@ -22031,12 +22035,12 @@ extract_vendor_vdev_event_tlv(wmi_unified_t wmi_handle,
 	}
 
 	evt_fixed_hdr = param_buf->fixed_param;
-	param->pdev_id = evt_fixed_hdr->pdev_id;
-	param->vdev_id = evt_fixed_hdr->vdev_id;
-	param->sub_type = evt_fixed_hdr->sub_type;
-	param->val.vdev_sample1_event =
+	evt_param->pdev_id = evt_fixed_hdr->pdev_id;
+	evt_param->vdev_id = evt_fixed_hdr->vdev_id;
+	evt_param->sub_type = evt_fixed_hdr->sub_type;
+	evt_param->val.vdev_sample1_event =
 		evt_fixed_hdr->evt.vdev_sample1_event;
-	param->val.vdev_sample2_event =
+	evt_param->val.vdev_sample2_event =
 		evt_fixed_hdr->evt.vdev_sample2_event;
 
 	return QDF_STATUS_SUCCESS;
@@ -22045,10 +22049,12 @@ extract_vendor_vdev_event_tlv(wmi_unified_t wmi_handle,
 static QDF_STATUS
 extract_vendor_pdev_event_tlv(wmi_unified_t wmi_handle,
 			      uint8_t *evt_buf,
-			      struct wmi_vendor_pdev_event *param)
+			      void *param, void *subtype)
 {
 	WMI_VENDOR_PDEV_EVENTID_param_tlvs *param_buf;
 	wmi_vendor_pdev_event_fixed_param *evt_fixed_hdr;
+	struct wmi_vendor_pdev_event *evt_param =
+			(struct wmi_vendor_pdev_event *)param;
 
 	param_buf = (WMI_VENDOR_PDEV_EVENTID_param_tlvs *)evt_buf;
 	if (!param_buf) {
@@ -22057,11 +22063,11 @@ extract_vendor_pdev_event_tlv(wmi_unified_t wmi_handle,
 	}
 
 	evt_fixed_hdr = param_buf->fixed_param;
-	param->pdev_id = evt_fixed_hdr->pdev_id;
-	param->sub_type = evt_fixed_hdr->sub_type;
-	param->val.pdev_sample1_event =
+	evt_param->pdev_id = evt_fixed_hdr->pdev_id;
+	evt_param->sub_type = evt_fixed_hdr->sub_type;
+	evt_param->val.pdev_sample1_event =
 		evt_fixed_hdr->evt.pdev_sample1_event;
-	param->val.pdev_sample2_event =
+	evt_param->val.pdev_sample2_event =
 		evt_fixed_hdr->evt.pdev_sample2_event;
 
 	return QDF_STATUS_SUCCESS;
@@ -23136,6 +23142,11 @@ static void populate_tlv_events_id(WMI_EVT_ID *event_ids)
 	event_ids[wmi_pdev_wifi_radar_cal_completion_status_event_id] =
 			WMI_PDEV_WIFI_RADAR_CAL_COMPLETION_STATUS_EVENTID;
 #endif
+#ifdef WLAN_VENDOR_EXTN
+	event_ids[wmi_vendor_peer_event_id] = WMI_VENDOR_PEER_EVENTID;
+	event_ids[wmi_vendor_vdev_event_id] = WMI_VENDOR_VDEV_EVENTID;
+	event_ids[wmi_vendor_pdev_event_id] = WMI_VENDOR_PDEV_EVENTID;
+#endif /* WLAN_VENDOR_EXTN*/
 
 }
 

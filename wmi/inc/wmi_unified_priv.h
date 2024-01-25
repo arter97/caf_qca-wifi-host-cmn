@@ -3522,13 +3522,13 @@ QDF_STATUS (*send_vendor_pdev_cmd)(wmi_unified_t wmi_handle,
 
 QDF_STATUS (*extract_vendor_peer_event)(wmi_unified_t wmi_handle,
 					uint8_t *evt_buf,
-					struct wmi_vendor_peer_event *param);
+					void *param, void *subtype);
 QDF_STATUS (*extract_vendor_vdev_event)(wmi_unified_t wmi_handle,
 					uint8_t *evt_buf,
-					struct wmi_vendor_vdev_event *param);
+					void *param, void *subtype);
 QDF_STATUS (*extract_vendor_pdev_event)(wmi_unified_t wmi_handle,
 					uint8_t *evt_buf,
-					struct wmi_vendor_pdev_event *param);
+					void *param, void *subtype);
 #endif /* WLAN_VENDOR_EXTN */
 };
 
