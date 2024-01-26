@@ -1583,6 +1583,7 @@ struct wlan_lmac_if_son_rx_ops {
  * @config_set: route son config from cfg80211
  * @config_get: route son config from cfg80211
  * @config_ext_set_get: route extended configs from cfg80211
+ * @get_son_config: get son config
  */
 struct wlan_lmac_if_son_rx_ops {
 	int (*deliver_event)(struct wlan_objmgr_vdev *vdev,
@@ -1601,6 +1602,8 @@ struct wlan_lmac_if_son_rx_ops {
 	int (*config_ext_set_get)(struct wlan_objmgr_vdev *vdev,
 				  void *params,
 				  void *wri);
+	int (*get_son_config)(struct wlan_objmgr_vdev *vdev,
+			      uint32_t data);
 };
 #endif
 
