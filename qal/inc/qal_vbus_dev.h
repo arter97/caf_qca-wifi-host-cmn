@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -297,14 +297,17 @@ qal_vbus_rcu_read_unlock(void);
  * @np: device node to get GPIO from
  * @list_name: property name containing gpio specifier(s)
  * @index: index of the GPIO
- * @flags: a flags pointer to fill in
+ * @active_low: a active_low pointer to fill in
  *
  * The global GPIO number for the GPIO specified by its descriptor.
+ * active_low pointer is 1 for active-low GPIO otherwise 0.
+ *
+ * Return: GPIO number on success and < 0 for failure
  */
 int
 qal_vbus_of_get_named_gpio_flags(struct qdf_device_node *np,
 				 const char *list_name,
-				 int index, qdf_of_gpio_flags *flags);
+				 int index, unsigned int *active_low);
 #else
 static inline QDF_STATUS
 qal_vbus_get_iorsc(int devnum, uint32_t flag, char *devname)
