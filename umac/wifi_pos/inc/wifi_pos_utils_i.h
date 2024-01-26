@@ -222,6 +222,8 @@ typedef void (*wifi_pos_send_rsp_handler)(struct wlan_objmgr_psoc *, uint32_t,
  * @pasn_peer_create_cb: PASN peer create callback
  * @pasn_peer_delete_cb: PASN peer delete callback
  * @pasn_vdev_delete_resume_cb: PASN resume vdev delete callback
+ * @get_rsta_11az_ranging_cap: Get RSTA 11az ranging capability
+ * @get_rsta_sec_ltf_cap: Get RSTA secure LTF capability
  */
 struct wifi_pos_legacy_ops {
 	QDF_STATUS (*pasn_peer_create_cb)(struct wlan_objmgr_psoc *psoc,
@@ -232,6 +234,8 @@ struct wifi_pos_legacy_ops {
 					  uint8_t vdev_id,
 					  bool no_fw_peer_delete);
 	QDF_STATUS (*pasn_vdev_delete_resume_cb)(struct wlan_objmgr_vdev *vdev);
+	uint32_t (*get_rsta_11az_ranging_cap)(struct wlan_objmgr_psoc *psoc);
+	bool (*get_rsta_sec_ltf_cap)(struct wlan_objmgr_psoc *psoc);
 };
 
 /**

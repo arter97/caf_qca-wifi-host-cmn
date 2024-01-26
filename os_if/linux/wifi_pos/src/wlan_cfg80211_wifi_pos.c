@@ -123,14 +123,55 @@ wlan_wifi_pos_set_feature_flags(uint8_t *feature_flags,
 	feature_flags[index] |= bit_mask;
 }
 
+#ifdef CNSS_GENL
+/**
+ * wlan_wifi_pos_get_rsta_11az_ranging_and_sec_ltf_support() - API to read
+ * user configured RSTA 11az ranging and secure LTF support.
+ * @psoc: Pointer to PSOC object
+ * @enable_rsta_11az_ranging: Pointer to save RSTA 11az ranging support value
+ * @rsta_secure_ltf_support: Pointer to save RSTA 11az secure ltf support
+ *
+ * Return: None
+ */
+static void wlan_wifi_pos_get_rsta_11az_ranging_and_sec_ltf_support(
+		struct wlan_objmgr_psoc *psoc,
+		bool *enable_rsta_11az_ranging,
+		bool *rsta_secure_ltf_support)
+{
+	*enable_rsta_11az_ranging = ucfg_wifi_pos_get_rsta_11az_ranging_cap();
+	*rsta_secure_ltf_support = *enable_rsta_11az_ranging &&
+				   wifi_pos_get_rsta_sec_ltf_cap();
+}
+#else
+static void wlan_wifi_pos_get_rsta_11az_ranging_and_sec_ltf_support(
+		struct wlan_objmgr_psoc *psoc,
+		bool *enable_rsta_11az_ranging,
+		bool *rsta_secure_ltf_support)
+{
+	struct wifi_pos_legacy_ops *legacy_cb;
+
+	legacy_cb = wifi_pos_get_legacy_ops();
+	if (!legacy_cb || !legacy_cb->get_rsta_11az_ranging_cap ||
+	    !legacy_cb->get_rsta_sec_ltf_cap) {
+		wifi_pos_err("legacy callback is not registered");
+		return;
+	}
+
+	*enable_rsta_11az_ranging = legacy_cb->get_rsta_11az_ranging_cap(psoc);
+	*rsta_secure_ltf_support = *enable_rsta_11az_ranging &&
+				   legacy_cb->get_rsta_sec_ltf_cap(psoc);
+}
+#endif
+
 void wlan_wifi_pos_cfg80211_set_features(struct wlan_objmgr_psoc *psoc,
 					 uint8_t *feature_flags)
 {
-	bool rsta_secure_ltf_support, enable_rsta_11az_ranging;
+	bool rsta_secure_ltf_support = false, enable_rsta_11az_ranging = false;
 
-	enable_rsta_11az_ranging = ucfg_wifi_pos_get_rsta_11az_ranging_cap();
-	rsta_secure_ltf_support = enable_rsta_11az_ranging &&
-				wifi_pos_get_rsta_sec_ltf_cap();
+	wlan_wifi_pos_get_rsta_11az_ranging_and_sec_ltf_support(
+			psoc, &enable_rsta_11az_ranging,
+			&rsta_secure_ltf_support);
+
 	if (wlan_psoc_nif_fw_ext2_cap_get(psoc,
 					  WLAN_RTT_11AZ_MAC_PHY_SEC_SUPPORT)) {
 		wlan_wifi_pos_set_feature_flags(feature_flags,
