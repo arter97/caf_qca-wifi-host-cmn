@@ -561,6 +561,45 @@ struct mlo_sta_quiet_status {
 	bool valid_status;
 };
 
+/* MLO invalid link bitmap for upto 4 links*/
+#define MLO_INVALID_LINK_BMAP 0xFFFFFFFF
+
+/* Max number of disallowed bitmap combination sent to FW */
+#define MAX_DISALLOW_BMAP_COMB 4
+
+/**
+ * enum mlo_disallowed_mode: MLO disallowed mode reasons
+ * @MLO_DISALLOWED_MODE_NO_RESTRICTION:
+ *  Set disallowed mode has no restrictions(any mode allowed).
+ * @MLO_DISALLOWED_MODE_NO_MLMR:
+ *  Set disallowed mode has restriction set to no MLMR.
+ * @MLO_DISALLOWED_MODE_NO_EMLSR:
+ *  Set disallowed mode has restriction set to no EMLSR.
+ * @MLO_DISALLOWED_MODE_NO_MLMR_EMLSR:
+ *  Set disallowed mode has restriction set to no MLMR or EMLSR
+ */
+enum mlo_disallowed_mode {
+	MLO_DISALLOWED_MODE_NO_RESTRICTION = 0,
+	MLO_DISALLOWED_MODE_NO_MLMR = 1,
+	MLO_DISALLOWED_MODE_NO_EMLSR = 2,
+	MLO_DISALLOWED_MODE_NO_MLMR_EMLSR = 3,
+};
+
+/**
+ * struct ml_link_disallow_mode_bitmap: MLO link disallow mode bitmap params
+ * @disallowed_mode: Bitmap of MLO Modes like MLMR, eMLSR which are not allowed.
+ * @ieee_link_id_comb: MLO IEEE Link Ids for which above,
+ * disallowed_mode_bitmap is applicable.
+ * @ieee_link_id: Each 8-bits in ieee_link_id_comb represents one link ID.
+ **/
+struct ml_link_disallow_mode_bitmap {
+	uint32_t disallowed_mode;
+	union {
+		uint32_t ieee_link_id_comb;
+		uint8_t ieee_link_id[4];
+	};
+};
+
 /**
  * enum mlo_link_force_mode: MLO link force modes
  * @MLO_LINK_FORCE_MODE_ACTIVE:
@@ -672,10 +711,17 @@ struct ml_link_force_state {
  * @force_state: current force active/inactive states which
  * have been sent to target
  * @reqs: request of set link
+ * @emlsr_disable_req_flags: emlsr disable requests
+ * @num_disallow_mode_comb: number of disallowed mode combinations
+ * @disallow_mode_link_bmap: disallow mode link bitmap
  */
 struct wlan_link_force_context {
 	struct ml_link_force_state force_state;
 	struct set_link_req reqs[SET_LINK_SOURCE_MAX];
+	uint32_t emlsr_disable_req_flags;
+	uint32_t num_disallow_mode_comb;
+	struct ml_link_disallow_mode_bitmap
+		disallow_mode_link_bmap[MAX_DISALLOW_BMAP_COMB];
 };
 
 #if defined(UMAC_SUPPORT_MLNAWDS) || defined(MESH_MODE_SUPPORT)
@@ -1445,45 +1491,6 @@ struct ml_link_force_cmd {
 	uint16_t ieee_link_id_bitmap;
 	uint16_t ieee_link_id_bitmap2;
 	uint8_t link_num;
-};
-
-/* MLO invalid link bitmap for upto 4 links*/
-#define MLO_INVALID_LINK_BMAP 0xFFFFFFFF
-
-/* Max number of disallowed bitmap combination sent to FW */
-#define MAX_DISALLOW_BMAP_COMB 4
-
-/**
- * enum mlo_disallowed_mode: MLO disallowed mode reasons
- * @MLO_DISALLOWED_MODE_NO_RESTRICTION:
- *  Set disallowed mode has no restrictions(any mode allowed).
- * @MLO_DISALLOWED_MODE_NO_MLMR:
- *  Set disallowed mode has restriction set to no MLMR.
- * @MLO_DISALLOWED_MODE_NO_EMLSR:
- *  Set disallowed mode has restriction set to no EMLSR.
- * @MLO_DISALLOWED_MODE_NO_MLMR_EMLSR:
- *  Set disallowed mode has restriction set to no MLMR or EMLSR
- */
-enum mlo_disallowed_mode {
-	MLO_DISALLOWED_MODE_NO_RESTRICTION = 0,
-	MLO_DISALLOWED_MODE_NO_MLMR = 1,
-	MLO_DISALLOWED_MODE_NO_EMLSR = 2,
-	MLO_DISALLOWED_MODE_NO_MLMR_EMLSR = 3,
-};
-
-/**
- * struct ml_link_disallow_mode_bitmap: MLO link disallow mode bitmap params
- * @disallowed_mode: Bitmap of MLO Modes like MLMR, eMLSR which are not allowed.
- * @ieee_link_id_comb: MLO IEEE Link Ids for which above,
- * disallowed_mode_bitmap is applicable.
- * @ieee_link_id: Each 8-bits in ieee_link_id_comb represents one link ID.
- **/
-struct ml_link_disallow_mode_bitmap {
-	uint32_t disallowed_mode;
-	union {
-		uint32_t ieee_link_id_comb;
-		uint8_t ieee_link_id[4];
-	};
 };
 
 /**
