@@ -10032,7 +10032,7 @@ void wmi_copy_resource_config(wmi_resource_config *resource_cfg,
 	resource_cfg->max_ndi_interfaces = tgt_res_cfg->max_ndi;
 	resource_cfg->num_max_active_vdevs = tgt_res_cfg->num_max_active_vdevs;
 
-	if (tgt_res_cfg->is_qms_smem_supported) {
+	if (tgt_res_cfg->is_smem_mailbox_supported) {
 		WMI_RSRC_CFG_HOST_SERVICE_FLAG_QMS_DLKM_SUPPORT_SET(
 			resource_cfg->host_service_flags, 1);
 	}
@@ -23729,9 +23729,10 @@ static void populate_tlv_service(uint32_t *wmi_service)
 				WMI_SERVICE_WIFI_RADAR_SUPPORT;
 	wmi_service[wmi_service_dcs_obss_int_support] =
 			WMI_SERVICE_DCS_OBSS_INT_SUPPORT;
-
 	wmi_service[wmi_service_vdev_dcs_stats_support] =
 				WMI_SERVICE_VDEV_DCS_STATS_SUPPORT;
+	wmi_service[wmi_service_smem_mailbox_dlkm_support] =
+			WMI_SERVICE_QMS_DLKM_SUPPORT;
 }
 
 /**
