@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -335,6 +335,15 @@ QDF_STATUS wlan_send_dcs_cmd_for_vdev(struct wlan_objmgr_psoc *psoc,
 				      uint32_t mac_id,
 				      uint8_t vdev_id);
 #endif
+
+/**
+ * wlan_is_vdev_level_dcs_supported() -API to check whether vdev level
+ * DCS is supported or not
+ * @psoc: pointer to psoc object
+ *
+ * Return: True/False
+ */
+bool wlan_is_vdev_level_dcs_supported(struct wlan_objmgr_psoc *psoc);
 
 /**
  * wlan_dcs_process() - dcs process main entry

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -152,6 +152,15 @@ ucfg_wlan_dcs_cmd_for_vdev(struct wlan_objmgr_psoc *psoc, uint32_t mac_id,
 	return QDF_STATUS_SUCCESS;
 }
 #endif
+
+/**
+ * ucfg_is_vdev_level_dcs_supported()- API to check whether vdev level
+ * DCS is supported or not
+ * @psoc: pointer to psoc object
+ *
+ * Return: True/False
+ */
+bool ucfg_is_vdev_level_dcs_supported(struct wlan_objmgr_psoc *psoc);
 
 /**
  * ucfg_config_dcs_enable() - API to config dcs enable
@@ -344,5 +353,10 @@ ucfg_dcs_switch_chan(struct wlan_objmgr_vdev *vdev, qdf_freq_t tgt_freq,
 	return QDF_STATUS_SUCCESS;
 }
 
+static inline
+bool ucfg_is_vdev_level_dcs_supported(struct wlan_objmgr_psoc *psoc)
+{
+	return false;
+}
 #endif
 #endif /* _WLAN_DCS_UCFG_API_H_ */

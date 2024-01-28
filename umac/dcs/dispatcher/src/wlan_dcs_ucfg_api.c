@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -112,6 +112,11 @@ ucfg_wlan_dcs_cmd_for_vdev(struct wlan_objmgr_psoc *psoc, uint32_t mac_id,
 	return wlan_send_dcs_cmd_for_vdev(psoc, mac_id, vdev_id);
 }
 #endif
+
+bool ucfg_is_vdev_level_dcs_supported(struct wlan_objmgr_psoc *psoc)
+{
+	return wlan_is_vdev_level_dcs_supported(psoc);
+}
 
 void ucfg_config_dcs_enable(struct wlan_objmgr_psoc *psoc,
 			    uint32_t mac_id,

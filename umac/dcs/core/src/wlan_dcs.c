@@ -184,6 +184,19 @@ QDF_STATUS wlan_send_dcs_cmd_for_vdev(struct wlan_objmgr_psoc *psoc,
 }
 #endif
 
+bool wlan_is_vdev_level_dcs_supported(struct wlan_objmgr_psoc *psoc)
+{
+	struct wlan_target_if_dcs_tx_ops *dcs_tx_ops;
+
+	dcs_tx_ops = target_if_dcs_get_tx_ops(psoc);
+	if (!dcs_tx_ops || !dcs_tx_ops->dcs_vdev_support) {
+		dcs_err("dcs_vdev_support tx_ops is null");
+		return false;
+	}
+
+	return dcs_tx_ops->dcs_vdev_support(psoc);
+}
+
 /**
  * wlan_dcs_im_copy_stats() - dcs target interference mitigation statistics copy
  * @prev_stats: previous statistics pointer

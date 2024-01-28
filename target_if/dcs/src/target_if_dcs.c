@@ -258,6 +258,7 @@ target_if_dcs_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 		target_if_dcs_unregister_event_handler;
 	dcs_tx_ops->dcs_cmd_send = target_if_dcs_cmd_send;
 	dcs_tx_ops->dcs_cmd_send_for_vdev = target_if_send_dcs_cmd_for_vdev;
+	dcs_tx_ops->dcs_vdev_support = target_if_vdev_level_dcs_is_supported;
 
 	return QDF_STATUS_SUCCESS;
 }

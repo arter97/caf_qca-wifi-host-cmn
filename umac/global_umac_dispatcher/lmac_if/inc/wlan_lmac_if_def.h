@@ -228,6 +228,8 @@ struct wlan_lmac_if_cp_stats_rx_ops {
  * @dcs_detach: function to de-register event handlers with FW
  * @dcs_cmd_send: function to send dcs commands to FW
  * @dcs_cmd_send_for_vdev: Function to send dcs command for vdev to FW
+ * @dcs_vdev_support: Function to check whether firmware supports vdev level
+ * dcs or not
  */
 struct wlan_target_if_dcs_tx_ops {
 	QDF_STATUS (*dcs_attach)(struct wlan_objmgr_psoc *psoc);
@@ -239,6 +241,7 @@ struct wlan_target_if_dcs_tx_ops {
 	QDF_STATUS (*dcs_cmd_send_for_vdev)(struct wlan_objmgr_psoc *psoc,
 					    uint8_t vdev_id,
 					    uint32_t dcs_enable);
+	bool (*dcs_vdev_support)(struct wlan_objmgr_psoc *psoc);
 };
 
 /**
