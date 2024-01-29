@@ -8384,14 +8384,6 @@ static QDF_STATUS dp_get_pdev_param(struct cdp_soc_t *cdp_soc, uint8_t pdev_id,
 		val->cdp_pdev_param_fltr_ucast =
 				dp_monitor_pdev_get_filter_ucast_data(pdev);
 		break;
-	case CDP_MONITOR_CHANNEL:
-		val->cdp_pdev_param_monitor_chan =
-			dp_monitor_get_chan_num((struct dp_pdev *)pdev);
-		break;
-	case CDP_MONITOR_FREQUENCY:
-		val->cdp_pdev_param_mon_freq =
-			dp_monitor_get_chan_freq((struct dp_pdev *)pdev);
-		break;
 	case CDP_CONFIG_RXDMA_BUF_RING_SIZE:
 		val->cdp_rxdma_buf_ring_size =
 			wlan_cfg_get_rx_dma_buf_ring_size(((struct dp_pdev *)pdev)->wlan_cfg_ctx);
@@ -8423,7 +8415,6 @@ static QDF_STATUS dp_set_pdev_param(struct cdp_soc_t *cdp_soc, uint8_t pdev_id,
 	struct dp_pdev *pdev =
 		dp_get_pdev_from_soc_pdev_id_wifi3((struct dp_soc *)cdp_soc,
 						   pdev_id);
-	enum reg_wifi_band chan_band;
 
 	if (!pdev)
 		return QDF_STATUS_E_FAILURE;
@@ -8474,14 +8465,6 @@ static QDF_STATUS dp_set_pdev_param(struct cdp_soc_t *cdp_soc, uint8_t pdev_id,
 	case CDP_FILTER_NEIGH_PEERS:
 		dp_monitor_set_filter_neigh_peers(pdev,
 					val.cdp_pdev_param_fltr_neigh_peers);
-		break;
-	case CDP_MONITOR_CHANNEL:
-		dp_monitor_set_chan_num(pdev, val.cdp_pdev_param_monitor_chan);
-		break;
-	case CDP_MONITOR_FREQUENCY:
-		chan_band = wlan_reg_freq_to_band(val.cdp_pdev_param_mon_freq);
-		dp_monitor_set_chan_freq(pdev, val.cdp_pdev_param_mon_freq);
-		dp_monitor_set_chan_band(pdev, chan_band);
 		break;
 	case CDP_CONFIG_BSS_COLOR:
 		dp_monitor_set_bsscolor(pdev, val.cdp_pdev_param_bss_color);
@@ -8718,7 +8701,13 @@ static QDF_STATUS dp_get_vdev_param(struct cdp_soc_t *cdp_soc, uint8_t vdev_id,
 		val->cdp_vdev_param_traffic_end_ind = vdev->traffic_end_ind_en;
 		break;
 #endif
-
+	case CDP_MONITOR_CHANNEL:
+		val->cdp_vdev_param_monitor_chan =
+			dp_monitor_get_chan_num(vdev);
+		break;
+	case CDP_MONITOR_FREQUENCY:
+		val->cdp_vdev_param_mon_freq = dp_monitor_get_chan_freq(vdev);
+		break;
 	default:
 		dp_cdp_err("%pK: param value %d is wrong",
 			   soc, param);
@@ -8747,6 +8736,7 @@ dp_set_vdev_param(struct cdp_soc_t *cdp_soc, uint8_t vdev_id,
 	struct dp_vdev *vdev =
 		dp_vdev_get_ref_by_id(dsoc, vdev_id, DP_MOD_ID_CDP);
 	uint32_t var = 0;
+	enum reg_wifi_band chan_band;
 
 	if (!vdev)
 		return QDF_STATUS_E_FAILURE;
@@ -8900,6 +8890,14 @@ dp_set_vdev_param(struct cdp_soc_t *cdp_soc, uint8_t vdev_id,
 			QDF_MAC_ADDR_REF(val.mac_addr), vdev->vdev_id);
 		qdf_mem_copy(&vdev->mac_addr.raw[0], val.mac_addr,
 			     QDF_MAC_ADDR_SIZE);
+		break;
+	case CDP_MONITOR_CHANNEL:
+		dp_monitor_set_chan_num(vdev, val.cdp_vdev_param_monitor_chan);
+		break;
+	case CDP_MONITOR_FREQUENCY:
+		chan_band = wlan_reg_freq_to_band(val.cdp_vdev_param_mon_freq);
+		dp_monitor_set_chan_freq(vdev, val.cdp_vdev_param_mon_freq);
+		dp_monitor_set_chan_band(vdev, chan_band);
 		break;
 	default:
 		break;

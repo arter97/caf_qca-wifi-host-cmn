@@ -1280,6 +1280,13 @@ struct  dp_mon_vdev {
 #ifdef QCA_SUPPORT_SCAN_SPCL_VAP_STATS
 	struct cdp_scan_spcl_vap_stats *scan_spcl_vap_stats;
 #endif
+	int mon_chan_num;
+	/* Monitor mode operation frequency */
+	qdf_freq_t mon_chan_freq;
+	/* Monitor mode band */
+	enum reg_wifi_band mon_chan_band;
+	/* MAC ID for vdev*/
+	uint8_t mac_id;
 };
 
 #if defined(QCA_TX_CAPTURE_SUPPORT) || defined(QCA_ENHANCED_STATS_SUPPORT)
@@ -1666,26 +1673,34 @@ static inline void dp_monitor_print_tx_stats(struct dp_pdev *pdev)
 
 /**
  * dp_monitor_set_chan_num() - set channel number
- * @pdev: point to dp pdev
+ * @vdev: point to dp vdev
  * @chan_num: channel number
  *
  */
-static inline void dp_monitor_set_chan_num(struct dp_pdev *pdev, int chan_num)
+static inline void
+dp_monitor_set_chan_num(struct dp_vdev *vdev, int chan_num)
 {
+	struct dp_pdev *pdev = vdev->pdev;
+
 	if (qdf_unlikely(!pdev || !pdev->monitor_pdev))
 		return;
 
 	pdev->monitor_pdev->mon_chan_num = chan_num;
+
+	vdev->monitor_vdev->mon_chan_num = chan_num;
+	dp_info("vdev_id %d channel number: %d", vdev->vdev_id, chan_num);
 }
 
 /**
  * dp_monitor_get_chan_num() - get channel number
- * @pdev: DP pdev handle
+ * @vdev: DP vdev handle
  *
  * Return: channel number
  */
-static inline int dp_monitor_get_chan_num(struct dp_pdev *pdev)
+static inline int dp_monitor_get_chan_num(struct dp_vdev *vdev)
 {
+	struct dp_pdev *pdev = vdev->pdev;
+
 	if (qdf_unlikely(!pdev || !pdev->monitor_pdev))
 		return 0;
 
@@ -1694,28 +1709,35 @@ static inline int dp_monitor_get_chan_num(struct dp_pdev *pdev)
 
 /**
  * dp_monitor_set_chan_freq() - set channel frequency
- * @pdev: point to dp pdev
+ * @vdev: point to dp vdev
  * @chan_freq: channel frequency
  *
  */
 static inline void
-dp_monitor_set_chan_freq(struct dp_pdev *pdev, qdf_freq_t chan_freq)
+dp_monitor_set_chan_freq(struct dp_vdev *vdev, qdf_freq_t chan_freq)
 {
+	struct dp_pdev *pdev = vdev->pdev;
+
 	if (qdf_unlikely(!pdev || !pdev->monitor_pdev))
 		return;
 
 	pdev->monitor_pdev->mon_chan_freq = chan_freq;
+
+	vdev->monitor_vdev->mon_chan_freq = chan_freq;
+	dp_info("vdev_id %d freq: %d", vdev->vdev_id, chan_freq);
 }
 
 /**
  * dp_monitor_get_chan_freq() - get channel frequency
- * @pdev: DP pdev handle
+ * @vdev: DP vdev handle
  *
  * Return: channel frequency
  */
 static inline qdf_freq_t
-dp_monitor_get_chan_freq(struct dp_pdev *pdev)
+dp_monitor_get_chan_freq(struct dp_vdev *vdev)
 {
+	struct dp_pdev *pdev = vdev->pdev;
+
 	if (qdf_unlikely(!pdev || !pdev->monitor_pdev))
 		return 0;
 
@@ -1724,17 +1746,22 @@ dp_monitor_get_chan_freq(struct dp_pdev *pdev)
 
 /**
  * dp_monitor_set_chan_band() - set channel band
- * @pdev: point to dp pdev
+ * @vdev: point to dp vdev
  * @chan_band: channel band
  *
  */
 static inline void
-dp_monitor_set_chan_band(struct dp_pdev *pdev, enum reg_wifi_band chan_band)
+dp_monitor_set_chan_band(struct dp_vdev *vdev, enum reg_wifi_band chan_band)
 {
+	struct dp_pdev *pdev = vdev->pdev;
+
 	if (qdf_unlikely(!pdev || !pdev->monitor_pdev))
 		return;
 
 	pdev->monitor_pdev->mon_chan_band = chan_band;
+
+	vdev->monitor_vdev->mon_chan_band = chan_band;
+	dp_info("vdev_id %d ch band: %d", vdev->vdev_id, chan_band);
 }
 
 /**

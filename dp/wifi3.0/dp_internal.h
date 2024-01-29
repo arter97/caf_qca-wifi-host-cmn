@@ -768,16 +768,17 @@ static inline void dp_monitor_neighbour_peer_add_ast(struct dp_pdev *pdev,
 }
 
 static inline void
-dp_monitor_set_chan_band(struct dp_pdev *pdev, enum reg_wifi_band chan_band)
+dp_monitor_set_chan_band(struct dp_vdev *vdev, enum reg_wifi_band chan_band)
 {
 }
 
 static inline void
-dp_monitor_set_chan_freq(struct dp_pdev *pdev, qdf_freq_t chan_freq)
+dp_monitor_set_chan_freq(struct dp_vdev *vdev, qdf_freq_t chan_freq)
 {
 }
 
-static inline void dp_monitor_set_chan_num(struct dp_pdev *pdev, int chan_num)
+static inline void
+dp_monitor_set_chan_num(struct dp_vdev *vdev, int chan_num)
 {
 }
 
@@ -805,13 +806,13 @@ dp_monitor_get_chan_band(struct dp_pdev *pdev)
 }
 
 static inline int
-dp_monitor_get_chan_num(struct dp_pdev *pdev)
+dp_monitor_get_chan_num(struct dp_pdev *vdev)
 {
 	return 0;
 }
 
 static inline qdf_freq_t
-dp_monitor_get_chan_freq(struct dp_pdev *pdev)
+dp_monitor_get_chan_freq(struct dp_pdev *vdev)
 {
 	return 0;
 }

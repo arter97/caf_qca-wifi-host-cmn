@@ -1357,8 +1357,6 @@ enum cdp_peer_param_type {
  * @CDP_FILTER_UCAST_DATA: filter unicast data
  * @CDP_FILTER_MCAST_DATA: filter multicast data
  * @CDP_FILTER_NO_DATA: filter no data
- * @CDP_MONITOR_CHANNEL: monitor channel
- * @CDP_MONITOR_FREQUENCY: monitor frequency
  * @CDP_CONFIG_BSS_COLOR: configure bss color
  * @CDP_SET_ATF_STATS_ENABLE: set ATF stats flag
  * @CDP_CONFIG_SPECIAL_VAP: Configure Special vap
@@ -1395,8 +1393,6 @@ enum cdp_pdev_param_type {
 	CDP_FILTER_UCAST_DATA,
 	CDP_FILTER_MCAST_DATA,
 	CDP_FILTER_NO_DATA,
-	CDP_MONITOR_CHANNEL,
-	CDP_MONITOR_FREQUENCY,
 	CDP_CONFIG_BSS_COLOR,
 	CDP_SET_ATF_STATS_ENABLE,
 	CDP_CONFIG_SPECIAL_VAP,
@@ -1443,6 +1439,8 @@ enum cdp_pdev_param_type {
  * @cdp_vdev_param_dscp_tid_map_id: set dscp to tid map id
  * @cdp_vdev_param_mcast_vdev: set mcast vdev params
  * @cdp_vdev_param_wrap: qwrap ap vap
+ * @cdp_vdev_param_mon_freq: set monitor frequency
+ * @cdp_vdev_param_monitor_chan: monitor channel
  *
  * @cdp_pdev_param_dbg_snf: Enable debug sniffer feature
  * @cdp_pdev_param_bpr_enable: Enable bcast probe feature
@@ -1463,7 +1461,6 @@ enum cdp_pdev_param_type {
  * @cdp_pdev_param_cfg_vow: set/get vow config
  * @cdp_pdev_param_cfg_delay_stats: set/get delayed stats
  * @cdp_pdev_param_tidq_override: set/get tid queue override
- * @cdp_pdev_param_mon_freq: set monitor frequency
  * @cdp_pdev_param_bss_color: configure bss color
  * @cdp_pdev_param_tidmap_prty: set/get tid map prty
  * @cdp_pdev_param_tx_pending: get tx pending
@@ -1471,7 +1468,6 @@ enum cdp_pdev_param_type {
  * @cdp_pdev_param_fltr_ucast: filter unicast data
  * @cdp_pdev_param_fltr_mcast: filter multicast data
  * @cdp_pdev_param_fltr_none: filter no data
- * @cdp_pdev_param_monitor_chan: monitor channel
  * @cdp_pdev_param_atf_stats_enable: ATF stats enable
  * @cdp_pdev_param_config_special_vap: Configure Special vap
  * @cdp_pdev_param_isolation : set isolation mode
@@ -1547,6 +1543,8 @@ typedef union cdp_config_param_t {
 	uint8_t cdp_vdev_param_dscp_tid_map_id;
 	bool cdp_vdev_param_mcast_vdev;
 	bool cdp_vdev_param_wrap;
+	qdf_freq_t cdp_vdev_param_mon_freq;
+	int cdp_vdev_param_monitor_chan;
 
 	/* pdev params */
 	bool cdp_pdev_param_cptr_latcy;
@@ -1569,10 +1567,8 @@ typedef union cdp_config_param_t {
 	uint8_t cdp_pdev_param_tidq_override;
 	uint8_t cdp_pdev_param_bss_color;
 	uint16_t cdp_pdev_param_chn_noise_flr;
-	qdf_freq_t cdp_pdev_param_mon_freq;
 	int cdp_pdev_param_dbg_snf;
 	int cdp_pdev_param_bpr_enable;
-	int cdp_pdev_param_monitor_chan;
 	uint32_t cdp_pdev_param_ingrs_stats;
 	uint32_t cdp_pdev_param_osif_drop;
 	uint32_t cdp_pdev_param_en_perpkt_txstats;
@@ -1718,6 +1714,8 @@ enum cdp_pdev_bpr_param {
  * @CDP_ENABLE_TRAFFIC_END_INDICATION: enable/disable traffic end indication
  * @CDP_VDEV_TX_TO_FW: Set to_fw bit for tx packets for the vdev
  * @CDP_VDEV_SET_MAC_ADDR: Set mac address for vdev
+ * @CDP_MONITOR_CHANNEL: monitor channel
+ * @CDP_MONITOR_FREQUENCY: monitor frequency
  */
 enum cdp_vdev_param_type {
 	CDP_ENABLE_NAWDS,
@@ -1769,6 +1767,8 @@ enum cdp_vdev_param_type {
 	CDP_VDEV_TX_TO_FW,
 #endif
 	CDP_VDEV_SET_MAC_ADDR,
+	CDP_MONITOR_CHANNEL,
+	CDP_MONITOR_FREQUENCY,
 };
 
 /**
