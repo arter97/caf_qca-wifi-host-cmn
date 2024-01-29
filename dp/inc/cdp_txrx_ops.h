@@ -2560,7 +2560,7 @@ struct cdp_sawf_ops {
 	(*sawf_peer_flow_count)(struct cdp_soc_t *hdl, uint8_t *mac_addr,
 				uint8_t svc_id, uint8_t direction,
 				uint8_t start_or_stop, uint8_t *peer_mac,
-				uint16_t peer_id);
+				uint16_t peer_id, uint16_t flow_count);
 #endif
 #ifdef WLAN_FEATURE_11BE_MLO_3_LINK_TX
 	uint16_t
