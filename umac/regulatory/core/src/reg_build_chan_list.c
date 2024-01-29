@@ -2283,6 +2283,7 @@ reg_intersect_6g_afc_chan_list(struct wlan_regulatory_pdev_priv_obj
 			 */
 			afc_chan_list[i].tx_power = sp_chan_list[i].tx_power;
 			afc_chan_list[i].psd_eirp = sp_chan_list[i].psd_eirp;
+			afc_chan_list[i].psd_flag = sp_chan_list[i].psd_flag;
 			afc_chan_list[i].chan_flags &= ~REGULATORY_CHAN_DISABLED;
 			afc_chan_list[i].chan_flags |= REGULATORY_CHAN_AFC_NOT_DONE;
 			afc_chan_list[i].state = CHANNEL_STATE_ENABLE;
