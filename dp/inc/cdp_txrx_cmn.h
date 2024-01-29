@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -3025,19 +3025,21 @@ cdp_wds_ext_set_bit(ol_txrx_soc_handle soc, uint8_t *mac)
  * cdp_drain_txrx() - drain TX/RX SRNGs
  * @soc: opaque soc handle
  * @rx_only: drain only RX rings
+ *
+ * Return: QDF_STATUS
  */
-static inline void
+static inline QDF_STATUS
 cdp_drain_txrx(ol_txrx_soc_handle soc, uint8_t rx_only)
 {
 	if (!soc || !soc->ops) {
 		dp_cdp_debug("Invalid Instance");
 		QDF_BUG(0);
-		return;
+		return QDF_STATUS_E_FAULT;
 	}
 
 	if (!soc->ops->cmn_drv_ops ||
 	    !soc->ops->cmn_drv_ops->txrx_drain)
-		return;
+		return QDF_STATUS_E_FAULT;
 
 	return soc->ops->cmn_drv_ops->txrx_drain(soc, rx_only);
 }
