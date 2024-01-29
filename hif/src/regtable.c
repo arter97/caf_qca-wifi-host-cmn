@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -235,6 +235,14 @@ void hif_target_register_tbl_attach(struct hif_softc *scn, u32 target_type)
 		break;
 #endif /* WCN6450_HEADERS_DEF */
 
+#if defined(WCN7750_HEADERS_DEF)
+	case TARGET_TYPE_WCN7750:
+		scn->targetdef = WCN7750_TARGETdef;
+		scn->target_ce_def = WCN7750_CE_TARGETdef;
+		hif_info("TARGET_TYPE_WCN7750");
+		break;
+#endif /* WCN7750_HEADERS_DEF */
+
 	default:
 		break;
 	}
@@ -405,6 +413,13 @@ void hif_register_tbl_attach(struct hif_softc *scn, u32 hif_type)
 		hif_info("HIF_TYPE_WCN6450");
 		break;
 #endif /* WCN6450_HEADERS_DEF */
+
+#if defined(WCN7750_HEADERS_DEF)
+	case HIF_TYPE_WCN7750:
+		scn->hostdef = WCN7750_HOSTdef;
+		hif_info("HIF_TYPE_WCN7750");
+		break;
+#endif /* WCN7750_HEADERS_DEF */
 
 	default:
 		break;

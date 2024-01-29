@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -230,7 +230,8 @@ void target_if_cfr_fill_header(struct csi_cfr_header *hdr,
 			 target_type == TARGET_TYPE_KIWI ||
 			 target_type == TARGET_TYPE_MANGO ||
 			 target_type == TARGET_TYPE_PEACH ||
-			 target_type == TARGET_TYPE_WCN6450)
+			 target_type == TARGET_TYPE_WCN6450 ||
+			 target_type == TARGET_TYPE_WCN7750)
 			hdr->cmn.cfr_metadata_version = CFR_META_VERSION_7;
 		else if ((target_type == TARGET_TYPE_QCA6018) ||
 			 ((target_type == TARGET_TYPE_QCA5018) && (!is_rcc)))
@@ -264,6 +265,8 @@ void target_if_cfr_fill_header(struct csi_cfr_header *hdr,
 			hdr->cmn.chip_type = CFR_CAPTURE_RADIO_PEACH;
 		else if (target_type == TARGET_TYPE_WCN6450)
 			hdr->cmn.chip_type = CFR_CAPTURE_RADIO_EVROS;
+		else if (target_type == TARGET_TYPE_WCN7750)
+			hdr->cmn.chip_type = CFR_CAPTURE_RADIO_ORNE;
 		else
 			hdr->cmn.chip_type = CFR_CAPTURE_RADIO_CYP;
 	}
@@ -340,6 +343,8 @@ static QDF_STATUS target_if_cfr_init_target(struct wlan_objmgr_psoc *psoc,
 		cfr_pdev->chip_type = CFR_CAPTURE_RADIO_PEACH;
 	else if (target == TARGET_TYPE_WCN6450)
 		cfr_pdev->chip_type = CFR_CAPTURE_RADIO_EVROS;
+	else if (target == TARGET_TYPE_WCN7750)
+		cfr_pdev->chip_type = CFR_CAPTURE_RADIO_ORNE;
 
 	return status;
 }
@@ -383,7 +388,8 @@ target_if_cfr_init_pdev(struct wlan_objmgr_psoc *psoc,
 	    target_type == TARGET_TYPE_KIWI ||
 	    target_type == TARGET_TYPE_MANGO ||
 	    target_type == TARGET_TYPE_PEACH ||
-	    target_type == TARGET_TYPE_WCN6450) {
+	    target_type == TARGET_TYPE_WCN6450 ||
+	    target_type == TARGET_TYPE_WCN7750) {
 		status = target_if_cfr_init_target(psoc,
 						   pdev, target_type);
 	} else if (target_type == TARGET_TYPE_ADRASTEA) {
@@ -410,7 +416,8 @@ target_if_cfr_deinit_pdev(struct wlan_objmgr_psoc *psoc,
 	    target_type == TARGET_TYPE_KIWI ||
 	    target_type == TARGET_TYPE_MANGO ||
 	    target_type == TARGET_TYPE_PEACH ||
-	    target_type == TARGET_TYPE_WCN6450) {
+	    target_type == TARGET_TYPE_WCN6450 ||
+	    target_type == TARGET_TYPE_WCN7750) {
 		status = target_if_cfr_deinit_target(psoc, pdev);
 	} else if (target_type == TARGET_TYPE_ADRASTEA) {
 		status = cfr_adrastea_deinit_pdev(psoc, pdev);

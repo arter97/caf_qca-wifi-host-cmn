@@ -113,6 +113,8 @@
 /*TODO: change IDs for Evros */
 #define WCN6450_DEVICE_ID (0x1108)
 
+#define WCN7750_DEVICE_ID (0x1110)
+
 #define ADRASTEA_DEVICE_ID_P2_E12 (0x7021)
 #define AR9887_DEVICE_ID    (0x0050)
 #define AR900B_DEVICE_ID    (0x0040)

@@ -1210,6 +1210,33 @@ static struct service_to_pipe target_service_to_ce_map_wcn6450[] = {
 };
 #endif
 
+#if (defined(QCA_WIFI_WCN7750))
+static struct service_to_pipe target_service_to_ce_map_wcn7750[] = {
+	{ WMI_DATA_VO_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_VO_SVC, PIPEDIR_IN, 2, },
+	{ WMI_DATA_BK_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_BK_SVC, PIPEDIR_IN, 2, },
+	{ WMI_DATA_BE_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_BE_SVC, PIPEDIR_IN, 2, },
+	{ WMI_DATA_VI_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_VI_SVC, PIPEDIR_IN, 2, },
+	{ WMI_CONTROL_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_CONTROL_SVC, PIPEDIR_IN, 2, },
+	{ HTC_CTRL_RSVD_SVC, PIPEDIR_OUT, 0, },
+	{ HTC_CTRL_RSVD_SVC, PIPEDIR_IN, 2, },
+	{ HTT_DATA_MSG_SVC, PIPEDIR_OUT, 4, },
+	{ HTT_DATA_MSG_SVC, PIPEDIR_IN, 1, },
+#ifdef WLAN_FEATURE_WMI_DIAG_OVER_CE7
+	{ WMI_CONTROL_DIAG_SVC, PIPEDIR_IN, 7, },
+#endif
+	/* (Additions here) */
+	{ 0, 0, 0, },
+};
+#else
+static struct service_to_pipe target_service_to_ce_map_wcn7750[] = {
+};
+#endif
+
 static struct service_to_pipe target_service_to_ce_map_ar900b[] = {
 	{
 		WMI_DATA_VO_SVC,
@@ -1481,6 +1508,11 @@ static void hif_select_service_to_pipe_map(struct hif_softc *scn,
 			*tgt_svc_map_to_use = target_service_to_ce_map_qca6750;
 			*sz_tgt_svc_map_to_use =
 				sizeof(target_service_to_ce_map_qca6750);
+			break;
+		case TARGET_TYPE_WCN7750:
+			*tgt_svc_map_to_use = target_service_to_ce_map_wcn7750;
+			*sz_tgt_svc_map_to_use =
+				sizeof(target_service_to_ce_map_wcn7750);
 			break;
 		case TARGET_TYPE_KIWI:
 		case TARGET_TYPE_MANGO:
@@ -1921,6 +1953,7 @@ bool ce_srng_based(struct hif_softc *scn)
 	case TARGET_TYPE_QCA9574:
 	case TARGET_TYPE_QCA5332:
 	case TARGET_TYPE_QCN6432:
+	case TARGET_TYPE_WCN7750:
 		return true;
 	default:
 		return false;
@@ -4697,6 +4730,7 @@ int hif_wlan_enable(struct hif_softc *scn)
 	case TARGET_TYPE_MANGO:
 	case TARGET_TYPE_PEACH:
 	case TARGET_TYPE_WCN6450:
+	case TARGET_TYPE_WCN7750:
 		hif_prepare_hal_shadow_reg_cfg_v3(scn, &cfg);
 		break;
 	default:
@@ -5002,6 +5036,14 @@ void hif_ce_prepare_config(struct hif_softc *scn)
 					sizeof(target_ce_config_wlan_qca6750);
 
 		scn->ce_count = QCA_6750_CE_COUNT;
+		break;
+	case TARGET_TYPE_WCN7750:
+		hif_state->host_ce_config = host_ce_config_wlan_wcn7750;
+		hif_state->target_ce_config = target_ce_config_wlan_wcn7750;
+		hif_state->target_ce_config_sz =
+					sizeof(target_ce_config_wlan_wcn7750);
+
+		scn->ce_count = WCN_7750_CE_COUNT;
 		break;
 	case TARGET_TYPE_KIWI:
 	case TARGET_TYPE_MANGO:

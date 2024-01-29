@@ -87,6 +87,7 @@ typedef void *hif_handle_t;
 #define HIF_TYPE_PEACH 32
 #define HIF_TYPE_WCN6450 33
 #define HIF_TYPE_QCN6432 34
+#define HIF_TYPE_WCN7750 35
 
 #define DMA_COHERENT_MASK_DEFAULT   37
 
