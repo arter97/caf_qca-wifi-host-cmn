@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -3566,9 +3566,11 @@ static void wmi_htc_tx_complete(void *ctx, HTC_PACKET *htc_pkt)
 			WMI_MGMT_COMMAND_TX_CMP_RECORD(wmi_handle, cmd_id,
 						       offset_ptr);
 		} else {
-			if (wmi_handle->ops->is_force_fw_hang_cmd(cmd_id)) {
-				wmi_info("Tx completion received for WMI_FORCE_FW_HANG_CMDID, current_time:%ld",
-					 qdf_mc_timer_get_system_time());
+			if (wmi_handle->ops->is_force_fw_hang_cmd) {
+				if (wmi_handle->ops->is_force_fw_hang_cmd(cmd_id)) {
+					wmi_info("Tx completion received for WMI_FORCE_FW_HANG_CMDID, current_time:%ld",
+						 qdf_mc_timer_get_system_time());
+				}
 			}
 
 			WMI_COMMAND_TX_CMP_RECORD(wmi_handle, cmd_id,
