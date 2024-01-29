@@ -117,6 +117,11 @@ INCS += -I$(obj)/$(DEPTH)/component_dev/umac/cfr/dispatcher/inc
 INCS += -I$(obj)/$(DEPTH)/component_dev/qal/inc
 endif
 
+ifeq ($(WLAN_WIFI_RADAR_ENABLE), 1)
+ccflags-y+= -DWLAN_WIFI_RADAR_ENABLE=1
+INCS += -I$(obj)/$(DEPTH)/cmn_dev/umac/wifi_radar/dispatcher/inc/
+endif
+
 INCS += -I$(obj)/$(DEPTH)/cmn_dev/iot_sim/core
 INCS += -I$(obj)/$(DEPTH)/cmn_dev/iot_sim/dispatcher/inc
 
