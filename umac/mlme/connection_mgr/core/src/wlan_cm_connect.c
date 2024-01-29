@@ -2949,6 +2949,25 @@ QDF_STATUS cm_notify_connect_complete(struct cnx_mgr *cm_ctx,
 }
 
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+static enum phy_ch_width
+cm_get_ch_width_from_phymode(enum wlan_phymode phy_mode)
+{
+	enum phy_ch_width ch_width;
+
+	if (IS_WLAN_PHYMODE_320MHZ(phy_mode))
+		ch_width = CH_WIDTH_320MHZ;
+	else if (IS_WLAN_PHYMODE_160MHZ(phy_mode))
+		ch_width = CH_WIDTH_160MHZ;
+	else if (IS_WLAN_PHYMODE_80MHZ(phy_mode))
+		ch_width = CH_WIDTH_80MHZ;
+	else if (IS_WLAN_PHYMODE_40MHZ(phy_mode))
+		ch_width = CH_WIDTH_40MHZ;
+	else
+		ch_width = CH_WIDTH_20MHZ;
+
+	return ch_width;
+}
+
 static void cm_update_link_channel_info(struct wlan_objmgr_vdev *vdev,
 					struct qdf_mac_addr *mac_addr,
 					qdf_freq_t freq)
@@ -2959,23 +2978,29 @@ static void cm_update_link_channel_info(struct wlan_objmgr_vdev *vdev,
 	struct wlan_channel channel;
 
 	pdev = wlan_vdev_get_pdev(vdev);
-
 	cache_entry = wlan_scan_get_scan_entry_by_mac_freq(pdev, mac_addr,
 							   freq);
 	if (!cache_entry) {
 		mlme_debug("not found the mac_addr from scan entry");
 		return;
 	}
-	link_id = wlan_vdev_get_link_id(vdev);
 
+	link_id = wlan_vdev_get_link_id(vdev);
 	channel.ch_freq = cache_entry->channel.chan_freq;
 	channel.ch_ieee = wlan_reg_freq_to_chan(pdev, channel.ch_freq);
 	channel.ch_phymode = cache_entry->phy_mode;
 	channel.ch_cfreq1 = cache_entry->channel.cfreq0;
 	channel.ch_cfreq2 = cache_entry->channel.cfreq1;
+	channel.ch_width = cm_get_ch_width_from_phymode(cache_entry->phy_mode);
+	/*
+	 * Supplicant needs non zero center_freq1 in case of 20 MHz connection
+	 * also as a response of get_channel request. In case of 20 MHz channel
+	 * width central frequency is same as channel frequency
+	 */
+	if (channel.ch_width == CH_WIDTH_20MHZ)
+		channel.ch_cfreq1 = channel.ch_freq;
 
 	util_scan_free_cache_entry(cache_entry);
-
 	mlo_mgr_update_ap_channel_info(vdev, link_id, (uint8_t *)mac_addr,
 				       channel);
 }

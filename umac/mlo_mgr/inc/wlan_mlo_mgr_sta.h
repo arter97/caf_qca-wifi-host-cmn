@@ -1281,4 +1281,25 @@ mlo_sta_reset_requested_emlsr_mode(struct wlan_mlo_dev_context *ml_dev)
 	return QDF_STATUS_E_NOSUPPORT;
 }
 #endif
+
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+/**
+ * mlo_mgr_get_per_link_chan_info: Get wlan channel info per link id
+ * @vdev: vdev obj
+ * @link_id: link id
+ * @chan_info: wlan channel info buffer
+ *
+ * Return: zero for success, non-zero for failure
+ */
+int mlo_mgr_get_per_link_chan_info(struct wlan_objmgr_vdev *vdev, int link_id,
+				   struct wlan_channel *chan_info);
+#else
+static inline int
+mlo_mgr_get_per_link_chan_info(struct wlan_objmgr_vdev *vdev, int link_id,
+			       struct wlan_channel *chan_info)
+{
+	return -EINVAL;
+}
+#endif
+
 #endif
