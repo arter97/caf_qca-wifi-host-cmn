@@ -570,7 +570,7 @@ dp_dump_wbm_idle_hptp(struct dp_soc *soc, struct dp_pdev *pdev);
 bool dp_display_srng_info(struct cdp_soc_t *soc_hdl);
 
 #if defined(DP_POWER_SAVE) || defined(FEATURE_RUNTIME_PM)
-void dp_drain_txrx(struct cdp_soc_t *soc_handle, uint8_t rx_only);
+QDF_STATUS dp_drain_txrx(struct cdp_soc_t *soc_handle, uint8_t rx_only);
 
 /*
  * dp_update_ring_hptp() - update dp rings hptp
@@ -818,9 +818,10 @@ static inline bool dp_display_srng_info(struct cdp_soc_t *soc_hdl)
 }
 
 #if defined(DP_POWER_SAVE) || defined(FEATURE_RUNTIME_PM)
-static inline void dp_drain_txrx(struct cdp_soc_t *soc_handle,
-				 uint8_t rx_only)
+static inline QDF_STATUS dp_drain_txrx(struct cdp_soc_t *soc_handle,
+				       uint8_t rx_only)
 {
+	return QDF_STATUS_SUCCESS;
 }
 #endif
 #endif /* WLAN_SOFTUMAC_SUPPORT */

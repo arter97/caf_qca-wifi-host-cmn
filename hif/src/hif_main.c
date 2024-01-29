@@ -1457,6 +1457,30 @@ QDF_STATUS hif_try_complete_tasks(struct hif_softc *scn)
 	return QDF_STATUS_SUCCESS;
 }
 
+QDF_STATUS hif_try_complete_dp_tasks(struct hif_opaque_softc *hif_ctx)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
+	uint32_t task_drain_wait_cnt = 0;
+	int grp_tasklet = 0, work = 0;
+
+	while ((grp_tasklet = hif_get_num_active_grp_tasklets(scn)) ||
+	       (work = hif_get_num_pending_work(scn))) {
+		if (++task_drain_wait_cnt > HIF_TASK_DRAIN_WAIT_CNT) {
+			hif_err("pending grp tasklets %d work %d",
+				grp_tasklet, work);
+			QDF_DEBUG_PANIC("Complete tasks takes more than %u ms: grp tasklets %d work %d",
+					HIF_TASK_DRAIN_WAIT_CNT * 10,
+					grp_tasklet, work);
+			return QDF_STATUS_E_FAULT;
+		}
+		hif_info("waiting for grp tasklets %d work %d",
+			 grp_tasklet, work);
+		msleep(10);
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
 #ifdef HIF_HAL_REG_ACCESS_SUPPORT
 void hif_reg_window_write(struct hif_softc *scn, uint32_t offset,
 			  uint32_t value)
