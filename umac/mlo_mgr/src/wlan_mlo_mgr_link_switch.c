@@ -137,10 +137,10 @@ void mlo_mgr_update_ap_channel_info(struct wlan_objmgr_vdev *vdev, uint8_t link_
 	qdf_mem_copy(link_info->link_chan_info, &channel,
 		     sizeof(*link_info->link_chan_info));
 
-	mlo_debug("Update AP Channel info link_id: %d, vdev_id:%d, link_addr:" QDF_MAC_ADDR_FMT,
+	mlo_debug("update AP channel info link_id: %d, vdev_id:%d, link_addr:" QDF_MAC_ADDR_FMT,
 		  link_info->link_id, link_info->vdev_id,
 		  QDF_MAC_ADDR_REF(link_info->ap_link_addr.bytes));
-	mlo_debug("Ch_freq: %d, freq1: %d, freq2: %d phy_mode: %d",
+	mlo_debug("ch_freq: %d, freq1: %d, freq2: %d, phy_mode: %d",
 		  link_info->link_chan_info->ch_freq,
 		  link_info->link_chan_info->ch_cfreq1,
 		  link_info->link_chan_info->ch_cfreq2,
