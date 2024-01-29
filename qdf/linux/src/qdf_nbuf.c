@@ -5554,6 +5554,9 @@ unsigned int qdf_nbuf_update_radiotap(struct mon_rx_status *rx_status,
 	if (rx_status->rs_fcs_err)
 		rx_status->rtap_flags |= IEEE80211_RADIOTAP_F_BADFCS;
 
+	if (rx_status->mon_fcs_cap)
+		rx_status->rtap_flags |= IEEE80211_RADIOTAP_F_FCS;
+
 	rtap_buf[rtap_len] = rx_status->rtap_flags;
 	rtap_len += 1;
 
