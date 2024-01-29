@@ -1063,10 +1063,45 @@ struct dp_ring_ppdu_id_tracker {
 	int32_t status_hw_tp;
 };
 
+struct dp_mon_mac {
+	/* mac id */
+	uint8_t mac_id;
+	/* vdev id */
+	uint8_t vdev_id;
+	struct dp_vdev *mvdev;
+	/* Monitor mode operation channel */
+	int mon_chan_num;
+	/* Monitor mode operation frequency */
+	qdf_freq_t mon_chan_freq;
+	/* Monitor mode band */
+	enum reg_wifi_band mon_chan_band;
+	/* Stuck count on monitor destination ring MPDU process */
+	uint32_t mon_dest_ring_stuck_cnt;
+	/* monitor mode lock */
+	qdf_spinlock_t mon_lock;
+	uint32_t mon_ppdu_status;
+	/* monitor mode status/destination ring PPDU and MPDU count */
+	struct cdp_pdev_mon_stats rx_mon_stats;
+	/* Monitor mode interface and status storage */
+	struct cdp_mon_status rx_mon_recv_status;
+	/* to track duplicate link descriptor indications by HW for a WAR */
+	uint64_t mon_last_linkdesc_paddr;
+	/* to track duplicate buffer indications by HW for a WAR */
+	uint32_t mon_last_buf_cookie;
+	qdf_nbuf_queue_t rx_status_q;
+	struct hal_rx_ppdu_info ppdu_info;
+};
+
 struct  dp_mon_pdev {
 	/* monitor */
 	bool monitor_configured;
 	uint32_t mon_vdev_id;
+
+#ifdef FEATURE_ML_MONITOR_MODE_SUPPORT
+	struct dp_mon_mac mon_mac[MAX_NUM_LMAC_HW];
+#else
+	struct dp_mon_mac mon_mac;
+#endif
 
 	struct dp_mon_filter **filter;	/* Monitor Filter pointer */
 
@@ -1288,6 +1323,32 @@ struct  dp_mon_vdev {
 	/* MAC ID for vdev*/
 	uint8_t mac_id;
 };
+
+#ifdef FEATURE_ML_MONITOR_MODE_SUPPORT
+/**
+ * dp_get_mon_mac() - Get mon_mac handle
+ * @pdev: dp pdev handle
+ * @mac_id: MAC ID
+ *
+ * Return: handle to dp_mon_mac
+ */
+static inline
+struct dp_mon_mac *dp_get_mon_mac(struct dp_pdev *pdev, uint8_t mac_id)
+{
+	struct dp_soc *soc = pdev->soc;
+
+	if (soc->wlan_cfg_ctx->num_rxdma_dst_rings_per_pdev == 1)
+		return &pdev->monitor_pdev->mon_mac[0];
+
+	return &pdev->monitor_pdev->mon_mac[mac_id];
+}
+#else
+static inline
+struct dp_mon_mac *dp_get_mon_mac(struct dp_pdev *pdev, uint8_t mac_id)
+{
+	return &pdev->monitor_pdev->mon_mac;
+}
+#endif
 
 #if defined(QCA_TX_CAPTURE_SUPPORT) || defined(QCA_ENHANCED_STATS_SUPPORT)
 void dp_deliver_mgmt_frm(struct dp_pdev *pdev, qdf_nbuf_t nbuf);
