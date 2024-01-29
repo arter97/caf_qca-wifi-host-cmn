@@ -3085,13 +3085,14 @@ static void cm_eliminate_common_candidate(qdf_list_t *candidate_list)
 	}
 }
 
-static void cm_validate_partner_links_rsn_cap(struct wlan_objmgr_psoc *psoc,
-					      struct scan_cache_entry *entry,
-					      qdf_list_t *scan_list)
+static void cm_validate_partner_links(struct wlan_objmgr_psoc *psoc,
+				      struct scan_cache_entry *entry,
+				      qdf_list_t *scan_list)
 {
 	uint8_t idx;
 	struct scan_cache_entry *partner_entry;
 	struct partner_link_info *partner_info;
+	struct wlan_objmgr_peer *peer;
 
 	if (!entry->ie_list.multi_link_bv || !entry->ml_info.num_links)
 		return;
@@ -3100,6 +3101,18 @@ static void cm_validate_partner_links_rsn_cap(struct wlan_objmgr_psoc *psoc,
 		partner_info = &entry->ml_info.link_info[idx];
 		if (!partner_info->is_valid_link)
 			continue;
+
+		peer = wlan_objmgr_get_peer_by_mac(psoc,
+						   partner_info->link_addr.bytes,
+						   WLAN_MLME_CM_ID);
+		if (peer) {
+			mlme_debug(QDF_MAC_ADDR_FMT "link (%d) dup peer existed",
+				   QDF_MAC_ADDR_REF(partner_entry->bssid.bytes),
+				   partner_info->freq);
+			partner_info->is_valid_link = false;
+			wlan_objmgr_peer_release_ref(peer, WLAN_MLME_CM_ID);
+			continue;
+		}
 
 		/*
 		 * If partner link is not found in the current candidate list
@@ -3135,9 +3148,9 @@ static void cm_eliminate_common_candidate(qdf_list_t *candidate_list)
 }
 
 static inline void
-cm_validate_partner_links_rsn_cap(struct wlan_objmgr_psoc *psoc,
-				  struct scan_cache_entry *entry,
-				  qdf_list_t *scan_list)
+cm_validate_partner_links(struct wlan_objmgr_psoc *psoc,
+			  struct scan_cache_entry *entry,
+			  qdf_list_t *scan_list)
 {
 }
 #endif
@@ -3231,8 +3244,7 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 		}
 
 		/* Check if the partner links RSN caps are matching. */
-		cm_validate_partner_links_rsn_cap(psoc,
-						  scan_entry->entry, scan_list);
+		cm_validate_partner_links(psoc, scan_entry->entry, scan_list);
 		if (denylist_action == CM_DLM_NO_ACTION ||
 		    (are_all_candidate_denylisted && denylist_action ==
 		     CM_DLM_REMOVE)) {
