@@ -963,7 +963,7 @@ wlan_ipa_rx_intrabss_fwd(struct wlan_ipa_priv *ipa_ctx,
 			 qdf_nbuf_t nbuf)
 {
 	uint8_t fw_desc = 0;
-	bool fwd_success;
+	bool fwd_success = true;
 	int ret;
 
 	/* legacy intra-bss forwarding for WDI 1.0 and 2.0 */
@@ -974,7 +974,7 @@ wlan_ipa_rx_intrabss_fwd(struct wlan_ipa_priv *ipa_ctx,
 	}
 
 	if (is_rx_dest_bridge_dev(iface_ctx, nbuf)) {
-		fwd_success = 0;
+		fwd_success = false;
 		ret = WLAN_IPA_FORWARD_PKT_LOCAL_STACK;
 		goto exit;
 	}
