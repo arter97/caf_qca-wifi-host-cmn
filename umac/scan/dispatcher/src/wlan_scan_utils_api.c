@@ -1880,6 +1880,7 @@ static void util_get_partner_link_info(struct scan_cache_entry *scan_entry)
 	uint8_t link_idx = 0;
 	uint8_t rnr_idx = 0;
 	struct rnr_bss_info *rnr = NULL;
+	qdf_size_t ml_ie_len = ml_ie[TAG_LEN_POS] + sizeof(struct ie_header);
 
 	/* Update partner info  from RNR IE */
 	while ((rnr_idx < MAX_RNR_BSS) && (rnr_idx < scan_entry->rnr.count)) {
@@ -1899,8 +1900,11 @@ static void util_get_partner_link_info(struct scan_cache_entry *scan_entry)
 	}
 
 	scan_entry->ml_info.num_links = link_idx;
-	if (!offset)
+	if (!offset ||
+	    (offset + sizeof(struct wlan_ml_bv_linfo_perstaprof) >= ml_ie_len)) {
+		scm_err_rl("incorrect offset value %d", offset);
 		return;
+	}
 
 	/* TODO: loop through all the STA info fields */
 
@@ -1915,6 +1919,10 @@ static void util_get_partner_link_info(struct scan_cache_entry *scan_entry)
 		sta_ctrl = *(uint16_t *)(ml_ie + offset);
 		/* Skip STA control field */
 		offset += 2;
+		if (offset >= ml_ie_len) {
+			scm_err_rl("incorrect offset value %d", offset);
+			return;
+		}
 
 		scan_entry->ml_info.link_info[0].link_id = sta_ctrl & 0xF;
 		if (sta_ctrl & LINK_INFO_MAC_ADDR_PRESENT_BIT) {
