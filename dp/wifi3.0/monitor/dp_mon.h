@@ -1122,8 +1122,7 @@ struct  dp_mon_pdev {
 
 	/* tx packet capture enhancement */
 	enum cdp_tx_enh_capture_mode tx_capture_enabled;
-	/* Stuck count on monitor destination ring MPDU process */
-	uint32_t mon_dest_ring_stuck_cnt;
+
 	/* monitor mode lock */
 	qdf_spinlock_t mon_lock;
 
@@ -1177,7 +1176,6 @@ struct  dp_mon_pdev {
 	TAILQ_HEAD(, dp_neighbour_peer) neighbour_peers_list;
 	/* Enhanced Stats is enabled */
 	uint8_t enhanced_stats_en;
-	qdf_nbuf_queue_t rx_status_q;
 
 	/* 128 bytes mpdu header queue per user for ppdu */
 	qdf_nbuf_queue_t mpdu_q[MAX_MU_USERS];

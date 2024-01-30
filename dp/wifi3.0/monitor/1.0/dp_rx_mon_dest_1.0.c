@@ -661,6 +661,7 @@ void dp_rx_mon_dest_process(struct dp_soc *soc, struct dp_intr *int_ctx,
 	int mac_for_pdev = mac_id;
 	struct cdp_pdev_mon_stats *rx_mon_stats;
 	struct dp_mon_pdev *mon_pdev;
+	struct dp_mon_mac *mon_mac;
 
 	if (!pdev) {
 		dp_rx_mon_dest_debug("%pK: pdev is null for mac_id = %d", soc, mac_id);
@@ -668,6 +669,7 @@ void dp_rx_mon_dest_process(struct dp_soc *soc, struct dp_intr *int_ctx,
 	}
 
 	mon_pdev = pdev->monitor_pdev;
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
 	mon_dst_srng = dp_rxdma_get_mon_dst_ring(pdev, mac_for_pdev);
 
 	if (!mon_dst_srng || !hal_srng_initialized(mon_dst_srng)) {
@@ -726,11 +728,11 @@ void dp_rx_mon_dest_process(struct dp_soc *soc, struct dp_intr *int_ctx,
 		rx_bufs_used += mpdu_rx_bufs_used;
 
 		if (mpdu_rx_bufs_used)
-			mon_pdev->mon_dest_ring_stuck_cnt = 0;
+			mon_mac->mon_dest_ring_stuck_cnt = 0;
 		else
-			mon_pdev->mon_dest_ring_stuck_cnt++;
+			mon_mac->mon_dest_ring_stuck_cnt++;
 
-		if (mon_pdev->mon_dest_ring_stuck_cnt >
+		if (mon_mac->mon_dest_ring_stuck_cnt >
 		    MON_DEST_RING_STUCK_MAX_CNT) {
 			dp_info("destination ring stuck");
 			dp_info("ppdu_id status=%d dest=%d",
