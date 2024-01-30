@@ -1123,7 +1123,6 @@ struct  dp_mon_pdev {
 	/* tx packet capture enhancement */
 	enum cdp_tx_enh_capture_mode tx_capture_enabled;
 
-	uint32_t mon_ppdu_status;
 	/* monitor mode status/destination ring PPDU and MPDU count */
 	struct cdp_pdev_mon_stats rx_mon_stats;
 	/* Monitor mode interface and status storage */
@@ -5102,17 +5101,18 @@ dp_check_and_dump_full_mon_info(struct dp_soc *soc, struct dp_pdev *pdev,
 
 /**
  * dp_mon_rx_ppdu_status_reset() - reset and clear ppdu rx status
- * @mon_pdev: monitor pdev
+ * @mon_mac: monitor mac
  *
  * Return: none
  */
 static inline void
-dp_mon_rx_ppdu_status_reset(struct dp_mon_pdev *mon_pdev)
+dp_mon_rx_ppdu_status_reset(struct dp_mon_mac *mon_mac)
 {
-	mon_pdev->mon_ppdu_status = DP_PPDU_STATUS_START;
-	qdf_mem_zero(&mon_pdev->ppdu_info.rx_status,
-		     sizeof(mon_pdev->ppdu_info.rx_status));
+	mon_mac->mon_ppdu_status = DP_PPDU_STATUS_START;
+	qdf_mem_zero(&mon_mac->ppdu_info.rx_status,
+		     sizeof(mon_mac->ppdu_info.rx_status));
 }
+
 #else
 void
 dp_check_and_dump_full_mon_info(struct dp_soc *soc, struct dp_pdev *pdev,
@@ -5122,7 +5122,7 @@ dp_check_and_dump_full_mon_info(struct dp_soc *soc, struct dp_pdev *pdev,
 }
 
 static inline void
-dp_mon_rx_ppdu_status_reset(struct dp_mon_pdev *mon_pdev)
+dp_mon_rx_ppdu_status_reset(struct dp_mon_mac *mon_mac)
 {
 }
 #endif

@@ -253,13 +253,15 @@ dp_rx_mon_check_phyrx_abort(struct dp_pdev *pdev,
 static inline void
 dp_rx_mon_handle_ppdu_undecoded_metadata(struct dp_soc *soc,
 					 struct dp_pdev *pdev,
-					 struct hal_rx_ppdu_info *ppdu_info)
+					 struct hal_rx_ppdu_info *ppdu_info,
+					 struct dp_mon_mac *mon_mac)
 {
 	if (pdev->monitor_pdev->undecoded_metadata_capture)
 		dp_rx_handle_ppdu_undecoded_metadata(soc, pdev, ppdu_info);
 
-	pdev->monitor_pdev->mon_ppdu_status = DP_PPDU_STATUS_START;
+	mon_mac->mon_ppdu_status = DP_PPDU_STATUS_START;
 }
+
 #else
 static inline bool
 dp_rx_mon_check_phyrx_abort(struct dp_pdev *pdev,
@@ -271,9 +273,11 @@ dp_rx_mon_check_phyrx_abort(struct dp_pdev *pdev,
 static inline void
 dp_rx_mon_handle_ppdu_undecoded_metadata(struct dp_soc *soc,
 					 struct dp_pdev *pdev,
-					 struct hal_rx_ppdu_info *ppdu_info)
+					 struct hal_rx_ppdu_info *ppdu_info,
+					 struct dp_mon_mac *mon_mac)
 {
 }
+
 #endif
 
 #ifdef QCA_SUPPORT_SCAN_SPCL_VAP_STATS
@@ -456,7 +460,7 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 	ppdu_info = &mon_pdev->ppdu_info;
 	rx_mon_stats = &mon_pdev->rx_mon_stats;
 
-	if (qdf_unlikely(mon_pdev->mon_ppdu_status != DP_PPDU_STATUS_START))
+	if (qdf_unlikely(mon_mac->mon_ppdu_status != DP_PPDU_STATUS_START))
 		return;
 
 	rx_enh_capture_mode = mon_pdev->rx_enh_capture_mode;
@@ -564,7 +568,7 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 
 		if (qdf_unlikely(tlv_status == HAL_TLV_STATUS_PPDU_NON_STD_DONE)) {
 			dp_rx_mon_deliver_non_std(soc, mac_id);
-			dp_mon_rx_ppdu_status_reset(mon_pdev);
+			dp_mon_rx_ppdu_status_reset(mon_mac);
 		} else if ((qdf_likely(tlv_status == HAL_TLV_STATUS_PPDU_DONE)) &&
 				(qdf_likely(!dp_rx_mon_check_phyrx_abort(pdev, ppdu_info)))) {
 			rx_mon_stats->status_ppdu_done++;
@@ -582,7 +586,7 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 			else if (dp_cfr_rcc_mode_status(pdev))
 				dp_rx_handle_cfr(soc, pdev, ppdu_info);
 
-			mon_pdev->mon_ppdu_status = DP_PPDU_STATUS_DONE;
+			mon_mac->mon_ppdu_status = DP_PPDU_STATUS_DONE;
 
 			/* Collect spcl vap stats if configured */
 			if (qdf_unlikely(mon_pdev->scan_spcl_vap_configured))
@@ -612,10 +616,11 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 				dp_rx_mon_dest_process(soc, int_ctx, mac_id,
 						       quota);
 
-			dp_mon_rx_ppdu_status_reset(mon_pdev);
+			dp_mon_rx_ppdu_status_reset(mon_mac);
 		} else {
 			dp_rx_mon_handle_ppdu_undecoded_metadata(soc, pdev,
-								 ppdu_info);
+								 ppdu_info,
+								 mon_mac);
 		}
 	}
 	return;
@@ -946,7 +951,7 @@ dp_rx_pdev_mon_status_desc_pool_init(struct dp_pdev *pdev, uint32_t mac_id)
 
 	qdf_nbuf_queue_init(&mon_mac->rx_status_q);
 
-	mon_pdev->mon_ppdu_status = DP_PPDU_STATUS_START;
+	mon_mac->mon_ppdu_status = DP_PPDU_STATUS_START;
 
 	qdf_mem_zero(&mon_pdev->ppdu_info, sizeof(mon_pdev->ppdu_info));
 
