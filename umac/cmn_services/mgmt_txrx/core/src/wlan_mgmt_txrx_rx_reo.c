@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -4895,6 +4895,9 @@ log_ingress_frame_exit(struct mgmt_rx_reo_context *reo_ctx,
 
 	if (!reo_ctx || !desc)
 		return QDF_STATUS_E_NULL_VALUE;
+
+	if (link_id >= MAX_MLO_LINKS)
+		return QDF_STATUS_E_INVAL;
 
 	ingress_frame_debug_info = &reo_ctx->ingress_frame_debug_info;
 
