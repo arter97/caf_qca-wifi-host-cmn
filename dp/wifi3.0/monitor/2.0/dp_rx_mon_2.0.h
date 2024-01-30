@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -484,12 +484,12 @@ void dp_rx_mon_drain_wq(struct dp_pdev *pdev);
 /**
  * dp_mon_free_parent_nbuf() - Free parent SKB
  *
- * @mon_pdev: monitor pdev
+ * @pdev: dp pdev handle
  * @nbuf: SKB to be freed
  *
  * Return: void
  */
-void dp_mon_free_parent_nbuf(struct dp_mon_pdev *mon_pdev,
+void dp_mon_free_parent_nbuf(struct dp_pdev *pdev,
 			qdf_nbuf_t nbuf);
 
 #ifdef QCA_ENHANCED_STATS_SUPPORT

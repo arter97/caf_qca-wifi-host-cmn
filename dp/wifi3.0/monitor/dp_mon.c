@@ -835,16 +835,17 @@ QDF_STATUS dp_pdev_get_rx_mon_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 {
 	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
 	struct dp_pdev *pdev = dp_get_pdev_from_soc_pdev_id_wifi3(soc, pdev_id);
-	struct dp_mon_pdev *mon_pdev;
+	struct dp_mon_mac *mon_mac;
+	uint8_t mac_id = 0;
 
 	if (!pdev)
 		return QDF_STATUS_E_FAILURE;
 
-	mon_pdev = pdev->monitor_pdev;
-	if (!mon_pdev)
+	if (!pdev->monitor_pdev)
 		return QDF_STATUS_E_FAILURE;
 
-	qdf_mem_copy(stats, &mon_pdev->rx_mon_stats,
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
+	qdf_mem_copy(stats, &mon_mac->rx_mon_stats,
 		     sizeof(struct cdp_pdev_mon_stats));
 
 	return QDF_STATUS_SUCCESS;
@@ -1019,13 +1020,12 @@ print_ppdu_eth_type_mode_dl_ul(
 }
 
 static inline void
-dp_print_pdev_eht_ppdu_cnt(struct dp_pdev *pdev)
+dp_print_pdev_eht_ppdu_cnt(struct dp_mon_mac *mon_mac)
 {
 	struct cdp_pdev_mon_stats *rx_mon_stats;
-	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 	uint32_t ppdu_type_mode;
 
-	rx_mon_stats = &mon_pdev->rx_mon_stats;
+	rx_mon_stats = &mon_mac->rx_mon_stats;
 	DP_PRINT_STATS("Monitor EHT PPDU  Count");
 	for (ppdu_type_mode = 0; ppdu_type_mode < CDP_EHT_TYPE_MODE_MAX;
 	     ppdu_type_mode++) {
@@ -1035,12 +1035,11 @@ dp_print_pdev_eht_ppdu_cnt(struct dp_pdev *pdev)
 }
 
 static inline void
-dp_print_pdev_mpdu_stats(struct dp_pdev *pdev)
+dp_print_pdev_mpdu_stats(struct dp_mon_mac *mon_mac)
 {
 	struct cdp_pdev_mon_stats *rx_mon_stats;
-	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 
-	rx_mon_stats = &mon_pdev->rx_mon_stats;
+	rx_mon_stats = &mon_mac->rx_mon_stats;
 	DP_PRINT_STATS("Monitor MPDU Count");
 	dp_print_pdev_mpdu_pkt_type(rx_mon_stats);
 }
@@ -1057,7 +1056,7 @@ dp_print_pdev_rx_mon_stats(struct dp_pdev *pdev)
 	uint8_t mac_id = 0;
 
 	mon_mac = dp_get_mon_mac(pdev, mac_id);
-	rx_mon_stats = &mon_pdev->rx_mon_stats;
+	rx_mon_stats = &mon_mac->rx_mon_stats;
 
 	DP_PRINT_STATS("PDEV Rx Monitor Stats:\n");
 
@@ -1145,8 +1144,8 @@ dp_print_pdev_rx_mon_stats(struct dp_pdev *pdev)
 	dp_pdev_get_undecoded_capture_stats(mon_pdev, rx_mon_stats);
 	dp_mon_rx_print_advanced_stats(pdev->soc, pdev);
 
-	dp_print_pdev_mpdu_stats(pdev);
-	dp_print_pdev_eht_ppdu_cnt(pdev);
+	dp_print_pdev_mpdu_stats(mon_mac);
+	dp_print_pdev_eht_ppdu_cnt(mon_mac);
 
 }
 
@@ -7282,19 +7281,19 @@ dp_check_and_dump_full_mon_info(struct dp_soc *soc, struct dp_pdev *pdev,
 
 	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
 		  "mismatch: %d\n",
-		  mon_pdev->rx_mon_stats.ppdu_id_mismatch);
+		  mon_mac->rx_mon_stats.ppdu_id_mismatch);
 	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
 		  "status_ppdu_drop: %d\n",
-		  mon_pdev->rx_mon_stats.status_ppdu_drop);
+		  mon_mac->rx_mon_stats.status_ppdu_drop);
 	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
 		  "dest_ppdu_drop: %d\n",
-		  mon_pdev->rx_mon_stats.dest_ppdu_drop);
+		  mon_mac->rx_mon_stats.dest_ppdu_drop);
 	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
 		  "tlv_tag_status_err: %d\n",
-		  mon_pdev->rx_mon_stats.tlv_tag_status_err);
+		  mon_mac->rx_mon_stats.tlv_tag_status_err);
 	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
 		  "status_buf_done_war: %d\n",
-		  mon_pdev->rx_mon_stats.status_buf_done_war);
+		  mon_mac->rx_mon_stats.status_buf_done_war);
 
 	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
 		  "soc[%pK] pdev[%pK] mac_id[%d]\n",

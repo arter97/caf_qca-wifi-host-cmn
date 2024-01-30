@@ -191,6 +191,7 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 	uint32_t rx_link_buf_info[HAL_RX_BUFFINFO_NUM_DWORDS];
 	struct cdp_mon_status *rs;
 	struct dp_mon_pdev *mon_pdev;
+	struct dp_mon_mac *mon_mac;
 
 	if (qdf_unlikely(!dp_pdev)) {
 		dp_rx_mon_dest_debug("%pK: pdev is null for mac_id = %d", soc, mac_id);
@@ -198,6 +199,7 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 	}
 
 	mon_pdev = dp_pdev->monitor_pdev;
+	mon_mac = dp_get_mon_mac(dp_pdev, mac_id);
 	msdu = 0;
 
 	last = NULL;
@@ -219,7 +221,7 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 		   (rxdma_err == HAL_RXDMA_ERR_FCS &&
 		    mon_pdev->rx_pktlog_cbf))) {
 			drop_mpdu = true;
-			mon_pdev->rx_mon_stats.dest_mpdu_drop++;
+			mon_mac->rx_mon_stats.dest_mpdu_drop++;
 		}
 		rs->cdp_rs_rxdma_err = true;
 	}
@@ -236,7 +238,7 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 		/* WAR for duplicate link descriptors received from HW */
 		if (qdf_unlikely(mon_pdev->mon_last_linkdesc_paddr ==
 		    buf_info.paddr)) {
-			mon_pdev->rx_mon_stats.dup_mon_linkdesc_cnt++;
+			mon_mac->rx_mon_stats.dup_mon_linkdesc_cnt++;
 			return rx_bufs_used;
 		}
 
@@ -272,7 +274,7 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 				 * buffers in this MPDU
 				 */
 				drop_mpdu = true;
-				mon_pdev->rx_mon_stats.dup_mon_buf_cnt++;
+				mon_mac->rx_mon_stats.dup_mon_buf_cnt++;
 				mon_pdev->mon_last_linkdesc_paddr =
 					buf_info.paddr;
 				continue;
@@ -352,9 +354,9 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 							  rx_desc_tlv);
 
 				if (*ppdu_id == msdu_ppdu_id)
-					mon_pdev->rx_mon_stats.ppdu_id_match++;
+					mon_mac->rx_mon_stats.ppdu_id_match++;
 				else
-					mon_pdev->rx_mon_stats.ppdu_id_mismatch
+					mon_mac->rx_mon_stats.ppdu_id_mismatch
 						++;
 
 				mon_pdev->mon_last_linkdesc_paddr =
@@ -491,7 +493,6 @@ static int dp_rx_mon_drop_one_mpdu(struct dp_pdev *pdev,
 				   union dp_rx_desc_list_elem_t **head,
 				   union dp_rx_desc_list_elem_t **tail)
 {
-	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 	struct dp_soc *soc = pdev->soc;
 	hal_soc_handle_t hal_soc = soc->hal_soc;
 	struct hal_buf_info buf_info;
@@ -505,6 +506,7 @@ static int dp_rx_mon_drop_one_mpdu(struct dp_pdev *pdev,
 	uint8_t bm_action = HAL_BM_ACTION_PUT_IN_IDLE_LIST;
 	uint32_t rx_link_buf_info[HAL_RX_BUFFINFO_NUM_DWORDS];
 	struct rx_desc_pool *rx_desc_pool;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
 	rx_desc_pool = dp_rx_get_mon_desc_pool(soc, mac_id, pdev->pdev_id);
 	hal_rx_reo_ent_buf_paddr_get(hal_soc, rxdma_dst_ring_desc,
@@ -515,7 +517,7 @@ static int dp_rx_mon_drop_one_mpdu(struct dp_pdev *pdev,
 								 &buf_info,
 								 mac_id);
 		if (qdf_unlikely(!rx_msdu_link_desc)) {
-			mon_pdev->rx_mon_stats.mon_link_desc_invalid++;
+			mon_mac->rx_mon_stats.mon_link_desc_invalid++;
 			return rx_bufs_used;
 		}
 
@@ -530,7 +532,7 @@ static int dp_rx_mon_drop_one_mpdu(struct dp_pdev *pdev,
 						     msdu_list.sw_cookie[i]);
 
 			if (qdf_unlikely(!rx_desc)) {
-				mon_pdev->rx_mon_stats.
+				mon_mac->rx_mon_stats.
 						mon_rx_desc_invalid++;
 				continue;
 			}
@@ -542,7 +544,7 @@ static int dp_rx_mon_drop_one_mpdu(struct dp_pdev *pdev,
 			if (qdf_unlikely(!rx_desc->in_use || !nbuf ||
 					 msdu_list.paddr[i] !=
 					 buf_paddr)) {
-				mon_pdev->rx_mon_stats.
+				mon_mac->rx_mon_stats.
 						mon_nbuf_sanity_err++;
 				continue;
 			}
@@ -695,7 +697,7 @@ void dp_rx_mon_dest_process(struct dp_soc *soc, struct dp_intr *int_ctx,
 	pdev_id = pdev->pdev_id;
 	ppdu_id = mon_pdev->ppdu_info.com_info.ppdu_id;
 	rx_bufs_used = 0;
-	rx_mon_stats = &mon_pdev->rx_mon_stats;
+	rx_mon_stats = &mon_mac->rx_mon_stats;
 
 	while (qdf_likely(rxdma_dst_ring_desc =
 		hal_srng_dst_peek(hal_soc, mon_dst_srng))) {
@@ -1056,6 +1058,7 @@ dp_mon_dest_srng_drop_for_mac(struct dp_pdev *pdev, uint32_t mac_id)
 	uint32_t reap_cnt = 0;
 	struct dp_mon_pdev *mon_pdev;
 	struct hal_rx_mon_desc_info *desc_info;
+	struct dp_mon_mac *mon_mac;
 
 	if (qdf_unlikely(!soc || !soc->hal_soc))
 		return reap_cnt;
@@ -1065,6 +1068,7 @@ dp_mon_dest_srng_drop_for_mac(struct dp_pdev *pdev, uint32_t mac_id)
 	if (qdf_unlikely(!mon_dst_srng || !hal_srng_initialized(mon_dst_srng)))
 		return reap_cnt;
 
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
 	hal_soc = soc->hal_soc;
 	mon_pdev = pdev->monitor_pdev;
 	desc_info = mon_pdev->mon_desc;
@@ -1092,7 +1096,7 @@ dp_mon_dest_srng_drop_for_mac(struct dp_pdev *pdev, uint32_t mac_id)
 							     mac_id);
 
 			if (qdf_unlikely(!rx_msdu_link_desc)) {
-				mon_pdev->rx_mon_stats.mon_link_desc_invalid++;
+				mon_mac->rx_mon_stats.mon_link_desc_invalid++;
 				goto next_entry;
 			}
 
@@ -1108,7 +1112,7 @@ dp_mon_dest_srng_drop_for_mac(struct dp_pdev *pdev, uint32_t mac_id)
 							   sw_cookie[i]);
 
 				if (qdf_unlikely(!rx_desc)) {
-					mon_pdev->rx_mon_stats.
+					mon_mac->rx_mon_stats.
 							mon_rx_desc_invalid++;
 					continue;
 				}
@@ -1120,7 +1124,7 @@ dp_mon_dest_srng_drop_for_mac(struct dp_pdev *pdev, uint32_t mac_id)
 				if (qdf_unlikely(!rx_desc->in_use || !nbuf ||
 						 msdu_list.paddr[i] !=
 						 buf_paddr)) {
-					mon_pdev->rx_mon_stats.
+					mon_mac->rx_mon_stats.
 							mon_nbuf_sanity_err++;
 					continue;
 				}

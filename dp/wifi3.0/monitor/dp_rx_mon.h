@@ -118,12 +118,13 @@ QDF_STATUS dp_rx_populate_cbf_hdr(struct dp_soc *soc,
  *
  * @pdev: DP pdev handle
  * @mon_status_srng: Monitor status SRNG
+ * @mac_id: MAC ID
  *
  * Return: enum dp_mon_reap_status
  */
 enum dp_mon_reap_status
 dp_rx_mon_handle_status_buf_done(struct dp_pdev *pdev,
-				 void *mon_status_srng);
+				 void *mon_status_srng, uint8_t mac_id);
 
 #ifdef QCA_SUPPORT_FULL_MON
 

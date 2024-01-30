@@ -1014,6 +1014,7 @@ QDF_STATUS dp_mon_start_local_pkt_capture(struct cdp_soc_t *cdp_soc,
 	struct dp_mon_pdev *mon_pdev;
 	struct dp_mon_mac *mon_mac;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	uint8_t mac_id = 0;
 
 	if (!pdev) {
 		dp_mon_filter_err("pdev Context is null");
@@ -1021,7 +1022,7 @@ QDF_STATUS dp_mon_start_local_pkt_capture(struct cdp_soc_t *cdp_soc,
 	}
 
 	mon_pdev = pdev->monitor_pdev;
-	mon_mac = dp_get_mon_mac(pdev, 0);
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
 	local_pkt_capture_running =
 		dp_mon_get_is_local_pkt_capture_running(cdp_soc, pdev_id);
 	if (local_pkt_capture_running) {
@@ -1068,6 +1069,7 @@ QDF_STATUS dp_mon_stop_local_pkt_capture(struct cdp_soc_t *cdp_soc,
 	struct dp_mon_pdev *mon_pdev;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	struct dp_mon_mac *mon_mac;
+	uint8_t mac_id = 0;
 
 	if (!pdev) {
 		dp_mon_filter_err("pdev Context is null");
@@ -1075,7 +1077,7 @@ QDF_STATUS dp_mon_stop_local_pkt_capture(struct cdp_soc_t *cdp_soc,
 	}
 
 	mon_pdev = pdev->monitor_pdev;
-	mon_mac = dp_get_mon_mac(pdev, 0);
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
 	local_pkt_capture_running =
 			dp_mon_get_is_local_pkt_capture_running(cdp_soc, pdev_id);
 	if (!local_pkt_capture_running) {

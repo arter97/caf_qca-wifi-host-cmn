@@ -1417,6 +1417,8 @@ dp_rx_handle_ppdu_undecoded_metadata(struct dp_soc *soc, struct dp_pdev *pdev,
 	uint8_t abort_reason = 0;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 	uint64_t mask64;
+	uint8_t mac_id = 0;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
 	 /* Return if RX_ABORT not set */
 	if (ppdu_info->rx_status.phyrx_abort == 0)
@@ -1446,8 +1448,8 @@ dp_rx_handle_ppdu_undecoded_metadata(struct dp_soc *soc, struct dp_pdev *pdev,
 			return;
 		}
 
-		mon_pdev->rx_mon_stats.rx_undecoded_count++;
-		mon_pdev->rx_mon_stats.rx_undecoded_error[abort_reason] += 1;
+		mon_mac->rx_mon_stats.rx_undecoded_count++;
+		mon_mac->rx_mon_stats.rx_undecoded_error[abort_reason] += 1;
 
 		dp_wdi_event_handler(WDI_EVENT_RX_PPDU_DESC_UNDECODED_METADATA,
 				     soc, ppdu_nbuf, HTT_INVALID_PEER,

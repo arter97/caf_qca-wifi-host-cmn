@@ -1239,7 +1239,9 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 	struct dp_mon_pdev_be *mon_pdev_be;
 	struct dp_pdev_tx_monitor_be *tx_mon_be;
 	struct hal_tx_status_info *tx_status_info;
+	struct dp_mon_mac *mon_mac;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	uint8_t mac_id = 0;
 
 	/* sanity check */
 	if (qdf_unlikely(!pdev))
@@ -1254,6 +1256,7 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 		return QDF_STATUS_E_NOMEM;
 
 	tx_mon_be = &mon_pdev_be->tx_monitor_be;
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
 
 	switch (tlv_status) {
 	case HAL_MON_TX_FES_SETUP:
@@ -1354,7 +1357,7 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 		tx_mon_be->stats.pkt_buf_recv++;
 
 		if (mon_desc->cookie_2 != cookie_2) {
-			mon_pdev->rx_mon_stats.dup_mon_sw_desc++;
+			mon_mac->rx_mon_stats.dup_mon_sw_desc++;
 			qdf_assert_always(0);
 		}
 		if (!mon_desc->unmapped) {

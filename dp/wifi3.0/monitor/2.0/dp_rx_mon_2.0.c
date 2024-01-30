@@ -276,23 +276,23 @@ dp_mon_record_clear_buffer(struct dp_mon_pdev_be *mon_pdev_be)
 /**
  * dp_rx_mon_update_drop_cnt() - Update drop statistics
  *
- * @mon_pdev: monitor pdev
+ * @mon_mac: monitor mac handle
  * @hal_mon_rx_desc: HAL monitor desc
  *
  * Return: void
  */
 static inline void
-dp_rx_mon_update_drop_cnt(struct dp_mon_pdev *mon_pdev,
+dp_rx_mon_update_drop_cnt(struct dp_mon_mac *mon_mac,
 			  struct hal_mon_desc *hal_mon_rx_desc)
 {
-	mon_pdev->rx_mon_stats.empty_desc_ppdu++;
-	mon_pdev->rx_mon_stats.ppdu_drop_cnt +=
+	mon_mac->rx_mon_stats.empty_desc_ppdu++;
+	mon_mac->rx_mon_stats.ppdu_drop_cnt +=
 		hal_mon_rx_desc->ppdu_drop_count;
-	mon_pdev->rx_mon_stats.mpdu_drop_cnt +=
+	mon_mac->rx_mon_stats.mpdu_drop_cnt +=
 		hal_mon_rx_desc->mpdu_drop_count;
 	if (hal_mon_rx_desc->end_of_ppdu_dropped)
-		mon_pdev->rx_mon_stats.end_of_ppdu_drop_cnt++;
-	mon_pdev->rx_mon_stats.tlv_drop_cnt +=
+		mon_mac->rx_mon_stats.end_of_ppdu_drop_cnt++;
+	mon_mac->rx_mon_stats.tlv_drop_cnt +=
 		hal_mon_rx_desc->tlv_drop_count;
 }
 
@@ -823,6 +823,8 @@ dp_rx_mon_handle_mon_buf_addr(struct dp_pdev *pdev,
 	uint8_t user_id = ppdu_info->user_id;
 	bool rx_hdr_valid = true;
 	uint32_t cookie_2;
+	uint8_t mac_id = 0;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
 	if (!mon_pdev->monitor_configured &&
 	    !dp_lite_mon_is_rx_enabled(mon_pdev)) {
@@ -838,7 +840,7 @@ dp_rx_mon_handle_mon_buf_addr(struct dp_pdev *pdev,
 	qdf_assert_always(mon_desc);
 
 	if (mon_desc->cookie_2 != cookie_2) {
-		mon_pdev->rx_mon_stats.dup_mon_sw_desc++;
+		mon_mac->rx_mon_stats.dup_mon_sw_desc++;
 		qdf_err("duplicate cookie found mon_desc:%pK", mon_desc);
 		qdf_assert_always(0);
 	}
@@ -855,7 +857,7 @@ dp_rx_mon_handle_mon_buf_addr(struct dp_pdev *pdev,
 		dp_mon_err("duplicate pkt desc found mon_pdev: %pK mon_desc: %pK cookie: %d",
 			   mon_pdev, mon_desc,
 			   mon_desc->cookie);
-		mon_pdev->rx_mon_stats.dup_mon_buf_cnt++;
+		mon_mac->rx_mon_stats.dup_mon_buf_cnt++;
 		return num_buf_reaped;
 	}
 	mon_pdev_be->prev_rxmon_pkt_desc = mon_desc;
@@ -874,7 +876,7 @@ dp_rx_mon_handle_mon_buf_addr(struct dp_pdev *pdev,
 	dp_mon_add_to_free_desc_list(desc_list, tail, mon_desc);
 	num_buf_reaped++;
 
-	mon_pdev->rx_mon_stats.pkt_buf_count++;
+	mon_mac->rx_mon_stats.pkt_buf_count++;
 
 	/* if rx hdr is not valid free pkt buffer and return */
 	if (qdf_unlikely(!rx_hdr_valid)) {
@@ -885,7 +887,7 @@ dp_rx_mon_handle_mon_buf_addr(struct dp_pdev *pdev,
 
 	if (qdf_unlikely(!ppdu_info->rx_hdr_rcvd[user_id])) {
 		/* WAR: RX_HDR is not received for this MPDU, drop this frame */
-		mon_pdev->rx_mon_stats.rx_hdr_not_received++;
+		mon_mac->rx_mon_stats.rx_hdr_not_received++;
 		DP_STATS_INC(mon_soc, frag_free, 1);
 		qdf_frag_free(addr);
 		return num_buf_reaped;
@@ -894,7 +896,7 @@ dp_rx_mon_handle_mon_buf_addr(struct dp_pdev *pdev,
 	if (packet_info->dma_length >
 			(DP_MON_DATA_BUFFER_SIZE - DP_RX_MON_PACKET_OFFSET)) {
 		/* WAR: Invalid DMA length is received for this MPDU */
-		mon_pdev->rx_mon_stats.invalid_dma_length++;
+		mon_mac->rx_mon_stats.invalid_dma_length++;
 		DP_STATS_INC(mon_soc, frag_free, 1);
 		qdf_frag_free(addr);
 		return num_buf_reaped;
@@ -912,9 +914,9 @@ dp_rx_mon_handle_mon_buf_addr(struct dp_pdev *pdev,
 	mpdu_info = &ppdu_info->mpdu_info[user_id];
 	if (mpdu_info->decap_type == DP_MON_DECAP_FORMAT_INVALID) {
 		/* decap type is invalid, drop the frame */
-		mon_pdev->rx_mon_stats.mpdu_decap_type_invalid++;
+		mon_mac->rx_mon_stats.mpdu_decap_type_invalid++;
 		DP_STATS_INC(mon_soc, frag_free, 1);
-		mon_pdev->rx_mon_stats.parent_buf_free++;
+		mon_mac->rx_mon_stats.parent_buf_free++;
 		qdf_frag_free(addr);
 		qdf_nbuf_queue_remove_last(&ppdu_info->mpdu_q[user_id]);
 		qdf_nbuf_free(nbuf);
@@ -937,14 +939,14 @@ dp_rx_mon_handle_mon_buf_addr(struct dp_pdev *pdev,
 		if (qdf_unlikely(!tmp_nbuf)) {
 			dp_mon_err("nbuf is NULL");
 			DP_STATS_INC(mon_soc, frag_free, 1);
-			mon_pdev->rx_mon_stats.parent_buf_free++;
+			mon_mac->rx_mon_stats.parent_buf_free++;
 			qdf_frag_free(addr);
 			/* remove this nbuf from queue */
 			qdf_nbuf_queue_remove_last(&ppdu_info->mpdu_q[user_id]);
 			qdf_nbuf_free(nbuf);
 			return num_buf_reaped;
 		}
-		mon_pdev->rx_mon_stats.parent_buf_alloc++;
+		mon_mac->rx_mon_stats.parent_buf_alloc++;
 		dp_rx_mon_append_nbuf(nbuf, tmp_nbuf);
 	}
 	mpdu_info->full_pkt = true;
@@ -1014,6 +1016,8 @@ dp_rx_mon_handle_rx_hdr(struct dp_pdev *pdev,
 	qdf_nbuf_t nbuf, tmp_nbuf;
 	uint8_t user_id = ppdu_info->user_id;
 	QDF_STATUS status;
+	uint8_t mac_id = 0;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
 	/* If this is first RX_HEADER for MPDU, allocate skb
 	 * else add frag to already allocated skb
@@ -1036,7 +1040,7 @@ dp_rx_mon_handle_rx_hdr(struct dp_pdev *pdev,
 			return;
 		}
 
-		mon_pdev->rx_mon_stats.parent_buf_alloc++;
+		mon_mac->rx_mon_stats.parent_buf_alloc++;
 
 		dp_rx_mon_set_zero(nbuf);
 
@@ -1085,7 +1089,7 @@ dp_rx_mon_handle_rx_hdr(struct dp_pdev *pdev,
 				dp_mon_err("nbuf is NULL");
 				qdf_assert_always(0);
 			}
-			mon_pdev->rx_mon_stats.parent_buf_alloc++;
+			mon_mac->rx_mon_stats.parent_buf_alloc++;
 			dp_rx_mon_append_nbuf(nbuf, tmp_nbuf);
 		}
 		dp_rx_mon_nbuf_add_rx_frag(tmp_nbuf, status_frag,
@@ -1099,13 +1103,13 @@ dp_rx_mon_handle_rx_hdr(struct dp_pdev *pdev,
 
 /**
  * dp_rx_mon_free_mpdu_queue() - Free MPDU queue
- * @mon_pdev: monitor pdev
+ * @pdev: dp pdev handle
  * @ppdu_info: PPDU info
  *
  * Return: Void
  */
 
-static void dp_rx_mon_free_mpdu_queue(struct dp_mon_pdev *mon_pdev,
+static void dp_rx_mon_free_mpdu_queue(struct dp_pdev *pdev,
 				      struct hal_rx_ppdu_info *ppdu_info)
 {
 	uint8_t user;
@@ -1114,7 +1118,7 @@ static void dp_rx_mon_free_mpdu_queue(struct dp_mon_pdev *mon_pdev,
 	for (user = 0; user < HAL_MAX_UL_MU_USERS; user++) {
 		if (!qdf_nbuf_is_queue_empty(&ppdu_info->mpdu_q[user])) {
 			while ((mpdu = qdf_nbuf_queue_remove(&ppdu_info->mpdu_q[user])) != NULL)
-				dp_mon_free_parent_nbuf(mon_pdev, mpdu);
+				dp_mon_free_parent_nbuf(pdev, mpdu);
 		}
 	}
 }
@@ -1180,26 +1184,18 @@ void
 dp_rx_mon_free_ppdu_info(struct dp_pdev *pdev,
 			 struct hal_rx_ppdu_info *ppdu_info)
 {
-	struct dp_mon_pdev *mon_pdev;
-
-	mon_pdev = (struct dp_mon_pdev *)pdev->monitor_pdev;
-	dp_rx_mon_free_mpdu_queue(mon_pdev, ppdu_info);
-	__dp_rx_mon_free_ppdu_info(mon_pdev, ppdu_info);
+	dp_rx_mon_free_mpdu_queue(pdev, ppdu_info);
+	__dp_rx_mon_free_ppdu_info(pdev->monitor_pdev, ppdu_info);
 }
 #endif
 
-/**
- * dp_mon_free_parent_nbuf() - Free parent SKB
- *
- * @mon_pdev: monitor pdev
- * @nbuf: SKB to be freed
- *
- * Return: void
- */
-void dp_mon_free_parent_nbuf(struct dp_mon_pdev *mon_pdev,
+void dp_mon_free_parent_nbuf(struct dp_pdev *pdev,
 			     qdf_nbuf_t nbuf)
 {
-	mon_pdev->rx_mon_stats.parent_buf_free++;
+	uint8_t mac_id = 0;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
+
+	mon_mac->rx_mon_stats.parent_buf_free++;
 	qdf_nbuf_free(nbuf);
 }
 
@@ -1261,11 +1257,11 @@ dp_rx_mon_deliver_mpdu(struct dp_pdev *pdev,
 	struct dp_vdev *mvdev = mon_mac->mvdev;
 
 	if (mvdev && mvdev->monitor_vdev->osif_rx_mon) {
-		mon_pdev->rx_mon_stats.mpdus_buf_to_stack++;
+		mon_mac->rx_mon_stats.mpdus_buf_to_stack++;
 		nbuf = qdf_nbuf_get_ext_list(mpdu);
 
 		while (nbuf) {
-			mon_pdev->rx_mon_stats.mpdus_buf_to_stack++;
+			mon_mac->rx_mon_stats.mpdus_buf_to_stack++;
 			nbuf = nbuf->next;
 		}
 		mvdev->monitor_vdev->osif_rx_mon(mvdev->osif_vdev,
@@ -1328,24 +1324,24 @@ dp_rx_mon_process_ppdu_info(struct dp_pdev *pdev,
 				status = dp_lite_mon_rx_mpdu_process(pdev, ppdu_info,
 								     mpdu, mpdu_idx, user);
 				if (status != QDF_STATUS_SUCCESS) {
-					dp_mon_free_parent_nbuf(mon_pdev, mpdu);
+					dp_mon_free_parent_nbuf(pdev, mpdu);
 					continue;
 				}
 			} else {
 				if (mpdu_meta->full_pkt) {
 					if (qdf_unlikely(mpdu_meta->truncated)) {
-						dp_mon_free_parent_nbuf(mon_pdev, mpdu);
+						dp_mon_free_parent_nbuf(pdev, mpdu);
 						continue;
 					}
 
 					status = dp_rx_mon_handle_full_mon(pdev,
 									   ppdu_info, mpdu);
 					if (status != QDF_STATUS_SUCCESS) {
-						dp_mon_free_parent_nbuf(mon_pdev, mpdu);
+						dp_mon_free_parent_nbuf(pdev, mpdu);
 						continue;
 					}
 				} else {
-					dp_mon_free_parent_nbuf(mon_pdev, mpdu);
+					dp_mon_free_parent_nbuf(pdev, mpdu);
 					continue;
 				}
 
@@ -1370,13 +1366,13 @@ dp_rx_mon_process_ppdu_info(struct dp_pdev *pdev,
 								mpdu,
 								&ppdu_info->rx_status);
 				if (status != QDF_STATUS_SUCCESS)
-					dp_mon_free_parent_nbuf(mon_pdev, mpdu);
+					dp_mon_free_parent_nbuf(pdev, mpdu);
 			}
 			ppdu_info->rx_status.rs_fcs_err = false;
 		}
 	}
 
-	dp_rx_mon_free_mpdu_queue(mon_pdev, ppdu_info);
+	dp_rx_mon_free_mpdu_queue(pdev, ppdu_info);
 }
 
 /**
@@ -1437,10 +1433,12 @@ static QDF_STATUS
 dp_rx_mon_add_ppdu_info_to_wq(struct dp_pdev *pdev,
 			      struct hal_rx_ppdu_info *ppdu_info)
 {
+	uint8_t mac_id = 0;
 	struct dp_soc *soc = pdev->soc;
 	struct dp_mon_pdev *mon_pdev = (struct dp_mon_pdev *)pdev->monitor_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be =
 		dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
 	/* Full monitor or lite monitor mode is not enabled, return */
 	if (!mon_pdev->monitor_configured &&
@@ -1454,9 +1452,9 @@ dp_rx_mon_add_ppdu_info_to_wq(struct dp_pdev *pdev,
 			TAILQ_INSERT_TAIL(&mon_pdev_be->rx_mon_queue,
 					  ppdu_info, ppdu_list_elem);
 			mon_pdev_be->rx_mon_queue_depth++;
-			mon_pdev->rx_mon_stats.total_ppdu_info_enq++;
+			mon_mac->rx_mon_stats.total_ppdu_info_enq++;
 		} else {
-			mon_pdev->rx_mon_stats.total_ppdu_info_drop++;
+			mon_mac->rx_mon_stats.total_ppdu_info_drop++;
 			dp_rx_mon_free_ppdu_info(pdev, ppdu_info);
 		}
 		qdf_spin_unlock_bh(&mon_pdev_be->rx_mon_wq_lock);
@@ -1837,6 +1835,8 @@ dp_rx_mon_flush_packet_tlv(struct dp_pdev *pdev, void *buf, uint16_t end_offset,
 	uint16_t tlv_status = HAL_TLV_STATUS_BUF_DONE;
 	struct hal_rx_ppdu_info *ppdu_info;
 	uint32_t cookie_2;
+	uint8_t mac_id = 0;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
 	if (!buf)
 		return work_done;
@@ -1866,7 +1866,7 @@ dp_rx_mon_flush_packet_tlv(struct dp_pdev *pdev, void *buf, uint16_t end_offset,
 			qdf_assert_always(mon_desc);
 
 			if (mon_desc->cookie_2 != cookie_2) {
-				mon_pdev->rx_mon_stats.dup_mon_sw_desc++;
+				mon_mac->rx_mon_stats.dup_mon_sw_desc++;
 				qdf_err("duplicate cookie found mon_desc:%pK", mon_desc);
 				qdf_assert_always(0);
 			}
@@ -1881,7 +1881,7 @@ dp_rx_mon_flush_packet_tlv(struct dp_pdev *pdev, void *buf, uint16_t end_offset,
 				dp_mon_err("duplicate pkt desc found mon_pdev: %pK mon_desc: %pK cookie: %d",
 					   mon_pdev, mon_desc,
 					   mon_desc->cookie);
-				mon_pdev->rx_mon_stats.dup_mon_buf_cnt++;
+				mon_mac->rx_mon_stats.dup_mon_buf_cnt++;
 				goto end;
 			}
 			mon_pdev_be->prev_rxmon_pkt_desc = mon_desc;
@@ -1948,6 +1948,8 @@ dp_rx_mon_flush_status_buf_queue(struct dp_pdev *pdev)
 	uint16_t work_done = 0;
 	uint16_t status_buf_count;
 	uint16_t end_offset = 0;
+	uint8_t mac_id = 0;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
 	if (!mon_pdev_be->desc_count) {
 		dp_mon_info("no of status buffer count is zero: %pK", pdev);
@@ -1980,7 +1982,7 @@ dp_rx_mon_flush_status_buf_queue(struct dp_pdev *pdev)
 	}
 
 	if (work_done) {
-		mon_pdev->rx_mon_stats.mon_rx_bufs_replenished_dest +=
+		mon_mac->rx_mon_stats.mon_rx_bufs_replenished_dest +=
 			work_done;
 		if (desc_list)
 			dp_mon_add_desc_list_to_free_list(soc,
@@ -2060,6 +2062,8 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 	uint8_t user_id = ppdu_info->user_id;
 	uint8_t num_buf_reaped = 0;
 	bool rx_hdr_valid = true;
+	uint8_t mac_id = 0;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
 	if (!mon_pdev->monitor_configured &&
 	    !dp_lite_mon_is_rx_enabled(mon_pdev)) {
@@ -2079,7 +2083,7 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 		if (qdf_unlikely(!rx_hdr_valid)) {
 			dp_mon_debug("rx hdr invalid userid: %d, len: %d ",
 				     user_id, ppdu_info->hdr_len);
-			mon_pdev->rx_mon_stats.rx_hdr_invalid_cnt++;
+			mon_mac->rx_mon_stats.rx_hdr_invalid_cnt++;
 			return num_buf_reaped;
 		}
 		dp_rx_mon_handle_rx_hdr(pdev, ppdu_info, status_frag);
@@ -2116,13 +2120,13 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 	break;
 	case HAL_TLV_STATUS_MON_DROP:
 	{
-		mon_pdev->rx_mon_stats.ppdu_drop_cnt +=
+		mon_mac->rx_mon_stats.ppdu_drop_cnt +=
 			ppdu_info->drop_cnt.ppdu_drop_cnt;
-		mon_pdev->rx_mon_stats.mpdu_drop_cnt +=
+		mon_mac->rx_mon_stats.mpdu_drop_cnt +=
 			ppdu_info->drop_cnt.mpdu_drop_cnt;
-		mon_pdev->rx_mon_stats.end_of_ppdu_drop_cnt +=
+		mon_mac->rx_mon_stats.end_of_ppdu_drop_cnt +=
 			ppdu_info->drop_cnt.end_of_ppdu_drop_cnt;
-		mon_pdev->rx_mon_stats.tlv_drop_cnt +=
+		mon_mac->rx_mon_stats.tlv_drop_cnt +=
 			ppdu_info->drop_cnt.tlv_drop_cnt;
 	}
 	break;
@@ -2159,6 +2163,8 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 	struct dp_mon_desc_pool *rx_mon_desc_pool = &mon_soc_be->rx_desc_mon;
 	uint16_t work_done = 0;
 	uint16_t status_buf_count;
+	uint8_t mac_id = 0;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
 	if (!mon_pdev_be->desc_count) {
 		dp_mon_err("no of status buffer count is zero: %pK", pdev);
@@ -2173,7 +2179,7 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 		return NULL;
 	}
 
-	mon_pdev->rx_mon_stats.total_ppdu_info_alloc++;
+	mon_mac->rx_mon_stats.total_ppdu_info_alloc++;
 
 	status_buf_count = mon_pdev_be->desc_count;
 	for (idx = 0; idx < status_buf_count; idx++) {
@@ -2227,13 +2233,13 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 
 		qdf_frag_free(buf);
 		DP_STATS_INC(mon_soc, frag_free, 1);
-		mon_pdev->rx_mon_stats.status_buf_count++;
+		mon_mac->rx_mon_stats.status_buf_count++;
 		dp_mon_record_index_update(mon_pdev_be);
 	}
 
 	dp_mon_rx_stats_update_rssi_dbm_params(mon_pdev, ppdu_info);
 	if (work_done) {
-		mon_pdev->rx_mon_stats.mon_rx_bufs_replenished_dest +=
+		mon_mac->rx_mon_stats.mon_rx_bufs_replenished_dest +=
 			work_done;
 		if (desc_list)
 			dp_mon_add_desc_list_to_free_list(soc,
@@ -2273,7 +2279,7 @@ static QDF_STATUS dp_mon_pdev_flush_desc(struct dp_pdev *pdev)
 	qdf_spin_lock_bh(&mon_mac->mon_lock);
 
 	if (mon_pdev_be->desc_count) {
-		mon_pdev->rx_mon_stats.pending_desc_count +=
+		mon_mac->rx_mon_stats.pending_desc_count +=
 						mon_pdev_be->desc_count;
 		dp_rx_mon_flush_status_buf_queue(pdev);
 	}
@@ -2398,11 +2404,11 @@ dp_rx_he_ppdu_stats_update(
 static inline void
 dp_rx_he_ppdu_stats(struct dp_pdev *pdev, struct hal_rx_ppdu_info *ppdu_info)
 {
-	struct dp_mon_pdev *mon_pdev;
+	uint8_t mac_id = 0;
 	struct cdp_pdev_mon_stats *rx_mon_stats;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
-	mon_pdev = pdev->monitor_pdev;
-	rx_mon_stats = &mon_pdev->rx_mon_stats;
+	rx_mon_stats = &mon_mac->rx_mon_stats;
 
 	if (ppdu_info->u_sig_info.ppdu_type_comp_mode < CDP_EHT_TYPE_MODE_MAX &&
 	    ppdu_info->u_sig_info.ul_dl < CDP_MU_TYPE_MAX)
@@ -2416,13 +2422,13 @@ dp_rx_he_ppdu_stats(struct dp_pdev *pdev, struct hal_rx_ppdu_info *ppdu_info)
 static inline void
 dp_rx_mu_stats(struct dp_pdev *pdev, struct hal_rx_ppdu_info *ppdu_info)
 {
-	struct dp_mon_pdev *mon_pdev;
+	uint8_t mac_id = 0;
 	struct cdp_pdev_mon_stats *rx_mon_stats;
 	struct mon_rx_status *rx_status;
 	uint32_t preamble_type, reception_type, mu_dl_ul, num_users, i;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
-	mon_pdev = pdev->monitor_pdev;
-	rx_mon_stats = &mon_pdev->rx_mon_stats;
+	rx_mon_stats = &mon_mac->rx_mon_stats;
 	rx_status = &ppdu_info->rx_status;
 
 	num_users = ppdu_info->com_info.num_users;
@@ -2509,7 +2515,7 @@ dp_rx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 				     mon_pdev);
 			rx_mon_dst_ring_desc =
 				hal_srng_dst_get_next(hal_soc, mon_dst_srng);
-			dp_rx_mon_update_drop_cnt(mon_pdev, &hal_mon_rx_desc);
+			dp_rx_mon_update_drop_cnt(mon_mac, &hal_mon_rx_desc);
 			continue;
 		}
 		desc = hal_mon_rx_desc.buf_addr;
@@ -2519,7 +2525,7 @@ dp_rx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 		qdf_assert_always(mon_desc);
 
 		if (mon_desc->cookie_2 != cookie_2) {
-			mon_pdev->rx_mon_stats.dup_mon_sw_desc++;
+			mon_mac->rx_mon_stats.dup_mon_sw_desc++;
 			qdf_err("duplicate cookie found mon_desc:%pK", mon_desc);
 			qdf_assert_always(0);
 		}
@@ -2528,7 +2534,7 @@ dp_rx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 		    (mon_desc->cookie == mon_pdev_be->prev_rxmon_cookie)) {
 			dp_mon_err("duplicate descritout found mon_pdev: %pK mon_desc: %pK cookie: %d",
 				   mon_pdev, mon_desc, mon_desc->cookie);
-			mon_pdev->rx_mon_stats.dup_mon_buf_cnt++;
+			mon_mac->rx_mon_stats.dup_mon_buf_cnt++;
 			hal_srng_dst_get_next(hal_soc, mon_dst_srng);
 			continue;
 		}
@@ -2550,7 +2556,7 @@ dp_rx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 		    hal_mon_rx_desc.end_reason == HAL_MON_PPDU_TRUNCATED) {
 			dp_mon_debug("end_resaon: %d mon_pdev: %pK",
 				     hal_mon_rx_desc.end_reason, mon_pdev);
-			mon_pdev->rx_mon_stats.status_ppdu_drop++;
+			mon_mac->rx_mon_stats.status_ppdu_drop++;
 			dp_rx_mon_handle_flush_n_trucated_ppdu(soc,
 							       pdev,
 							       mon_desc);
@@ -2572,16 +2578,16 @@ dp_rx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 		if (hal_mon_rx_desc.end_reason == HAL_MON_STATUS_BUFFER_FULL)
 			continue;
 
-		mon_pdev->rx_mon_stats.status_ppdu_done++;
+		mon_mac->rx_mon_stats.status_ppdu_done++;
 
 		ppdu_info = dp_rx_mon_process_status_tlv(pdev);
 
 		if (ppdu_info) {
-			mon_pdev->rx_mon_stats.start_user_info_cnt +=
+			mon_mac->rx_mon_stats.start_user_info_cnt +=
 				ppdu_info->start_user_info_cnt;
 			ppdu_info->start_user_info_cnt = 0;
 
-			mon_pdev->rx_mon_stats.end_user_stats_cnt +=
+			mon_mac->rx_mon_stats.end_user_stats_cnt +=
 				ppdu_info->end_user_stats_cnt;
 			ppdu_info->end_user_stats_cnt = 0;
 
@@ -2746,13 +2752,15 @@ dp_rx_mon_populate_ppdu_info_2_0(struct hal_rx_ppdu_info *hal_ppdu_info,
 void dp_mon_rx_print_advanced_stats_2_0(struct dp_soc *soc,
 					struct dp_pdev *pdev)
 {
+	uint8_t mac_id = 0;
 	struct cdp_pdev_mon_stats *rx_mon_stats;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 	struct dp_mon_soc *mon_soc = pdev->soc->monitor_soc;
 	struct dp_mon_pdev_be *mon_pdev_be =
 				dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
-	rx_mon_stats = &mon_pdev->rx_mon_stats;
+	rx_mon_stats = &mon_mac->rx_mon_stats;
 
 	DP_PRINT_STATS("total_ppdu_info_alloc = %d",
 		       rx_mon_stats->total_ppdu_info_alloc);
@@ -2783,25 +2791,25 @@ void dp_mon_rx_print_advanced_stats_2_0(struct dp_soc *soc,
 	DP_PRINT_STATS("rx_mon_queue_depth= %d",
 		       mon_pdev_be->rx_mon_queue_depth);
 	DP_PRINT_STATS("empty_desc= %d",
-		       mon_pdev->rx_mon_stats.empty_desc_ppdu);
+		       mon_mac->rx_mon_stats.empty_desc_ppdu);
 	DP_PRINT_STATS("mpdu_dropped_due_invalid_decap= %d",
-		       mon_pdev->rx_mon_stats.mpdu_decap_type_invalid);
+		       mon_mac->rx_mon_stats.mpdu_decap_type_invalid);
 	DP_PRINT_STATS("total_free_elem= %d",
 		       mon_pdev_be->total_free_elem);
 	DP_PRINT_STATS("ppdu_drop_cnt= %d",
-		       mon_pdev->rx_mon_stats.ppdu_drop_cnt);
+		       mon_mac->rx_mon_stats.ppdu_drop_cnt);
 	DP_PRINT_STATS("mpdu_drop_cnt= %d",
-		       mon_pdev->rx_mon_stats.mpdu_drop_cnt);
+		       mon_mac->rx_mon_stats.mpdu_drop_cnt);
 	DP_PRINT_STATS("end_of_ppdu_drop_cnt= %d",
-		       mon_pdev->rx_mon_stats.end_of_ppdu_drop_cnt);
+		       mon_mac->rx_mon_stats.end_of_ppdu_drop_cnt);
 	DP_PRINT_STATS("tlv_drop_cnt= %d",
-		       mon_pdev->rx_mon_stats.tlv_drop_cnt);
+		       mon_mac->rx_mon_stats.tlv_drop_cnt);
 	DP_PRINT_STATS("rx_hdr_invalid_cnt = %d",
 		       rx_mon_stats->rx_hdr_invalid_cnt);
 	DP_PRINT_STATS("invalid_dma_length Received = %d",
 		       rx_mon_stats->invalid_dma_length);
 	DP_PRINT_STATS("pending_desc_count= %d",
-		       mon_pdev->rx_mon_stats.pending_desc_count);
+		       mon_mac->rx_mon_stats.pending_desc_count);
 }
 #endif
 

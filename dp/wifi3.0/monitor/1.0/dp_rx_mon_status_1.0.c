@@ -51,6 +51,7 @@ QDF_STATUS dp_rx_mon_status_buffers_replenish(struct dp_soc *dp_soc,
  *
  * @pdev: DP pdev handle
  * @mon_status_srng: Monitor status SRNG
+ * @mac_id: MAC ID
  *
  * As per MAC team's suggestion, If HP + 2 entry's DMA done is set,
  * skip HP + 1 entry and start processing in next interrupt.
@@ -61,7 +62,7 @@ QDF_STATUS dp_rx_mon_status_buffers_replenish(struct dp_soc *dp_soc,
  */
 enum dp_mon_reap_status
 dp_rx_mon_handle_status_buf_done(struct dp_pdev *pdev,
-				 void *mon_status_srng)
+				 void *mon_status_srng, uint8_t mac_id)
 {
 	struct dp_soc *soc = pdev->soc;
 	hal_soc_handle_t hal_soc;
@@ -71,7 +72,7 @@ dp_rx_mon_handle_status_buf_done(struct dp_pdev *pdev,
 	struct dp_rx_desc *rx_desc;
 	void *rx_tlv;
 	QDF_STATUS buf_status;
-	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
 	hal_soc = soc->hal_soc;
 
@@ -106,11 +107,11 @@ dp_rx_mon_handle_status_buf_done(struct dp_pdev *pdev,
 	if (buf_status != QDF_STATUS_SUCCESS) {
 		dp_err_rl("Monitor status ring: DMA is not done "
 			     "for nbuf: %pK", status_nbuf);
-		mon_pdev->rx_mon_stats.tlv_tag_status_err++;
+		mon_mac->rx_mon_stats.tlv_tag_status_err++;
 		return DP_MON_STATUS_REPLENISH;
 	}
 
-	mon_pdev->rx_mon_stats.status_buf_done_war++;
+	mon_mac->rx_mon_stats.status_buf_done_war++;
 
 	return DP_MON_STATUS_REPLENISH;
 }
@@ -458,7 +459,7 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 	mon_mac = dp_get_mon_mac(pdev, mac_id);
 	mon_pdev = pdev->monitor_pdev;
 	ppdu_info = &mon_pdev->ppdu_info;
-	rx_mon_stats = &mon_pdev->rx_mon_stats;
+	rx_mon_stats = &mon_mac->rx_mon_stats;
 
 	if (qdf_unlikely(mon_mac->mon_ppdu_status != DP_PPDU_STATUS_START))
 		return;
@@ -753,8 +754,9 @@ dp_rx_mon_status_srng_process(struct dp_soc *soc, struct dp_intr *int_ctx,
 				 *    Check status for same buffer for next time
 				 *    dp_rx_mon_status_srng_process
 				 */
-				reap_status = dp_rx_mon_handle_status_buf_done(pdev,
-									mon_status_srng);
+				reap_status =
+					dp_rx_mon_handle_status_buf_done(pdev,
+						mon_status_srng, mac_id);
 				if (qdf_unlikely(reap_status == DP_MON_STATUS_NO_DMA))
 					continue;
 				else if (qdf_unlikely(reap_status == DP_MON_STATUS_REPLENISH)) {
@@ -961,10 +963,10 @@ dp_rx_pdev_mon_status_desc_pool_init(struct dp_pdev *pdev, uint32_t mac_id)
 	 */
 	mon_pdev->ppdu_info.com_info.last_ppdu_id = HAL_INVALID_PPDU_ID;
 
-	qdf_mem_zero(&mon_pdev->rx_mon_stats, sizeof(mon_pdev->rx_mon_stats));
+	qdf_mem_zero(&mon_mac->rx_mon_stats, sizeof(mon_mac->rx_mon_stats));
 
 	dp_rx_mon_init_dbg_ppdu_stats(&mon_pdev->ppdu_info,
-				      &mon_pdev->rx_mon_stats);
+				      &mon_mac->rx_mon_stats);
 
 	for (i = 0; i < MAX_MU_USERS; i++) {
 		qdf_nbuf_queue_init(&mon_pdev->mpdu_q[i]);
@@ -1267,7 +1269,7 @@ dp_mon_status_srng_drop_for_mac(struct dp_pdev *pdev, uint32_t mac_id,
 				 */
 				reap_status =
 					dp_rx_mon_handle_status_buf_done(pdev,
-							       mon_status_srng);
+						mon_status_srng, mac_id);
 				if (reap_status == DP_MON_STATUS_NO_DMA)
 					break;
 			}
