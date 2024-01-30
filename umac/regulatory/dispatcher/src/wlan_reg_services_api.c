@@ -863,6 +863,8 @@ bool wlan_reg_is_range_overlap_2g(qdf_freq_t low_freq, qdf_freq_t high_freq)
 	return reg_is_range_overlap_2g(low_freq, high_freq);
 }
 
+qdf_export_symbol(wlan_reg_is_range_overlap_2g);
+
 bool wlan_reg_is_range_overlap_5g(qdf_freq_t low_freq, qdf_freq_t high_freq)
 {
 	return reg_is_range_overlap_5g(low_freq, high_freq);
