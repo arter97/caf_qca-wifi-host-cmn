@@ -851,6 +851,7 @@ void mlo_mgr_link_switch_connect_done(struct wlan_objmgr_vdev *vdev,
 				      QDF_STATUS status)
 {
 	struct wlan_mlo_link_switch_req *req;
+	struct wlan_objmgr_vdev *assoc_vdev;
 
 	req = &vdev->mlo_dev_ctx->link_ctx->last_req;
 	if (QDF_IS_STATUS_SUCCESS(status)) {
@@ -862,9 +863,15 @@ void mlo_mgr_link_switch_connect_done(struct wlan_objmgr_vdev *vdev,
 
 	mlo_mgr_remove_link_switch_cmd(vdev);
 
-	if (QDF_IS_STATUS_ERROR(status))
-		mlo_mgr_restore_rso_upon_link_switch_failure(
-				wlan_mlo_get_assoc_link_vdev(vdev));
+	if (QDF_IS_STATUS_ERROR(status)) {
+		assoc_vdev = wlan_mlo_get_assoc_link_vdev(vdev);
+		if (!assoc_vdev) {
+			mlo_err("VDEV(%d) assoc vdev not found", req->vdev_id);
+			return;
+		}
+
+		mlo_mgr_restore_rso_upon_link_switch_failure(assoc_vdev);
+	}
 }
 
 static enum wlan_mlo_link_switch_notify_reason
