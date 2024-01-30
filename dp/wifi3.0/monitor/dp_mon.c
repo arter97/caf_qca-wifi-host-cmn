@@ -223,16 +223,17 @@ QDF_STATUS dp_reset_monitor_mode(struct cdp_soc_t *soc_hdl,
 		dp_get_pdev_from_soc_pdev_id_wifi3((struct dp_soc *)soc,
 						   pdev_id);
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
-	struct dp_mon_pdev *mon_pdev;
+	struct dp_mon_mac *mon_mac;
+	uint8_t mac_id = 0;
 
 	if (!pdev)
 		return QDF_STATUS_E_FAILURE;
 
-	mon_pdev = pdev->monitor_pdev;
-	qdf_spin_lock_bh(&mon_pdev->mon_lock);
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
+	qdf_spin_lock_bh(&mon_mac->mon_lock);
 	status = dp_reset_monitor_mode_unlock(soc_hdl, pdev_id,
 					      special_monitor);
-	qdf_spin_unlock_bh(&mon_pdev->mon_lock);
+	qdf_spin_unlock_bh(&mon_mac->mon_lock);
 
 	return status;
 }
@@ -1051,8 +1052,11 @@ dp_print_pdev_rx_mon_stats(struct dp_pdev *pdev)
 	uint32_t *stat_ring_ppdu_ids;
 	uint32_t *dest_ring_ppdu_ids;
 	int i, idx;
+	struct dp_mon_mac *mon_mac;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	uint8_t mac_id = 0;
 
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
 	rx_mon_stats = &mon_pdev->rx_mon_stats;
 
 	DP_PRINT_STATS("PDEV Rx Monitor Stats:\n");
@@ -1115,7 +1119,7 @@ dp_print_pdev_rx_mon_stats(struct dp_pdev *pdev)
 	if (!stat_ring_ppdu_ids || !dest_ring_ppdu_ids)
 		DP_PRINT_STATS("Unable to allocate ppdu id hist mem\n");
 
-	qdf_spin_lock_bh(&mon_pdev->mon_lock);
+	qdf_spin_lock_bh(&mon_mac->mon_lock);
 	idx = rx_mon_stats->ppdu_id_hist_idx;
 	qdf_mem_copy(stat_ring_ppdu_ids,
 		     rx_mon_stats->stat_ring_ppdu_id_hist,
@@ -1123,7 +1127,7 @@ dp_print_pdev_rx_mon_stats(struct dp_pdev *pdev)
 	qdf_mem_copy(dest_ring_ppdu_ids,
 		     rx_mon_stats->dest_ring_ppdu_id_hist,
 		     sizeof(uint32_t) * MAX_PPDU_ID_HIST);
-	qdf_spin_unlock_bh(&mon_pdev->mon_lock);
+	qdf_spin_unlock_bh(&mon_mac->mon_lock);
 
 	DP_PRINT_STATS("PPDU Id history:");
 	DP_PRINT_STATS("stat_ring_ppdu_ids\t dest_ring_ppdu_ids");
@@ -7186,6 +7190,7 @@ dp_check_and_dump_full_mon_info(struct dp_soc *soc, struct dp_pdev *pdev,
 	struct hal_rx_mon_desc_info desc_info = {0};
 	struct dp_rx_desc *rx_desc;
 	uint64_t ppdu_id = 0;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
 	if (!mon_soc) {
 		dp_err("Monitor soc is NULL\n");
@@ -7212,7 +7217,7 @@ dp_check_and_dump_full_mon_info(struct dp_soc *soc, struct dp_pdev *pdev,
 	hal_soc = soc->hal_soc;
 
 	if (!war)
-		qdf_spin_lock_bh(&mon_pdev->mon_lock);
+		qdf_spin_lock_bh(&mon_mac->mon_lock);
 
 	mon_status_srng = soc->rxdma_mon_status_ring[mac_id].hal_srng;
 	if (!mon_status_srng)
@@ -7367,7 +7372,7 @@ dump_mon_destination_ring:
 
 unlock_monitor:
 	if (!war)
-		qdf_spin_unlock_bh(&mon_pdev->mon_lock);
+		qdf_spin_unlock_bh(&mon_mac->mon_lock);
 }
 
 QDF_STATUS dp_rx_mon_config_fcs_cap(struct dp_pdev *pdev, uint8_t value)

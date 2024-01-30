@@ -682,13 +682,13 @@ void dp_rx_mon_dest_process(struct dp_soc *soc, struct dp_intr *int_ctx,
 
 	qdf_assert((hal_soc && pdev));
 
-	qdf_spin_lock_bh(&mon_pdev->mon_lock);
+	qdf_spin_lock_bh(&mon_mac->mon_lock);
 
 	if (qdf_unlikely(dp_srng_access_start(int_ctx, soc, mon_dst_srng))) {
 		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
 			  "%s %d : HAL Mon Dest Ring access Failed -- %pK",
 			  __func__, __LINE__, mon_dst_srng);
-		qdf_spin_unlock_bh(&mon_pdev->mon_lock);
+		qdf_spin_unlock_bh(&mon_mac->mon_lock);
 		return;
 	}
 
@@ -769,7 +769,7 @@ void dp_rx_mon_dest_process(struct dp_soc *soc, struct dp_intr *int_ctx,
 
 	dp_srng_access_end(int_ctx, soc, mon_dst_srng);
 
-	qdf_spin_unlock_bh(&mon_pdev->mon_lock);
+	qdf_spin_unlock_bh(&mon_mac->mon_lock);
 
 	if (rx_bufs_used) {
 		rx_mon_stats->dest_ppdu_done++;
@@ -966,6 +966,7 @@ dp_mon_dest_srng_drop_for_mac(struct dp_pdev *pdev, uint32_t mac_id,
 	uint32_t rx_bufs_dropped;
 	struct dp_mon_pdev *mon_pdev;
 	bool is_rxdma_dst_ring_common;
+	struct dp_mon_mac *mon_mac;
 
 	if (qdf_unlikely(!soc || !soc->hal_soc))
 		return reap_cnt;
@@ -977,11 +978,12 @@ dp_mon_dest_srng_drop_for_mac(struct dp_pdev *pdev, uint32_t mac_id,
 
 	hal_soc = soc->hal_soc;
 	mon_pdev = pdev->monitor_pdev;
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
 
-	qdf_spin_lock_bh(&mon_pdev->mon_lock);
+	qdf_spin_lock_bh(&mon_mac->mon_lock);
 
 	if (qdf_unlikely(hal_srng_access_start(hal_soc, mon_dst_srng))) {
-		qdf_spin_unlock_bh(&mon_pdev->mon_lock);
+		qdf_spin_unlock_bh(&mon_mac->mon_lock);
 		return reap_cnt;
 	}
 
@@ -1020,7 +1022,7 @@ dp_mon_dest_srng_drop_for_mac(struct dp_pdev *pdev, uint32_t mac_id,
 
 	hal_srng_access_end(hal_soc, mon_dst_srng);
 
-	qdf_spin_unlock_bh(&mon_pdev->mon_lock);
+	qdf_spin_unlock_bh(&mon_mac->mon_lock);
 
 	if (rx_bufs_used) {
 		dp_rx_buffers_replenish(soc, mac_id,
@@ -1470,16 +1472,6 @@ dp_rx_pdev_mon_cmn_desc_pool_deinit(struct dp_pdev *pdev, int mac_id)
 	dp_rx_pdev_mon_dest_desc_pool_deinit(pdev, mac_for_pdev);
 }
 
-void
-dp_rx_pdev_mon_desc_pool_deinit(struct dp_pdev *pdev)
-{
-	int mac_id;
-
-	for (mac_id = 0; mac_id < NUM_RXDMA_STATUS_RINGS_PER_PDEV; mac_id++)
-		dp_rx_pdev_mon_cmn_desc_pool_deinit(pdev, mac_id);
-	qdf_spinlock_destroy(&pdev->monitor_pdev->mon_lock);
-}
-
 static void
 dp_rx_pdev_mon_cmn_desc_pool_init(struct dp_pdev *pdev, int mac_id)
 {
@@ -1493,6 +1485,39 @@ dp_rx_pdev_mon_cmn_desc_pool_init(struct dp_pdev *pdev, int mac_id)
 	dp_rx_pdev_mon_dest_desc_pool_init(pdev, mac_for_pdev);
 }
 
+#ifdef FEATURE_ML_MONITOR_MODE_SUPPORT
+void
+dp_rx_pdev_mon_desc_pool_deinit(struct dp_pdev *pdev)
+{
+	int mac_id;
+
+	for (mac_id = 0; mac_id < NUM_RXDMA_STATUS_RINGS_PER_PDEV; mac_id++) {
+		dp_rx_pdev_mon_cmn_desc_pool_deinit(pdev, mac_id);
+		qdf_spinlock_destroy(&pdev->monitor_pdev->mon_mac[mac_id].mon_lock);
+	}
+}
+
+void
+dp_rx_pdev_mon_desc_pool_init(struct dp_pdev *pdev)
+{
+	int mac_id;
+
+	for (mac_id = 0; mac_id < NUM_RXDMA_STATUS_RINGS_PER_PDEV; mac_id++) {
+		dp_rx_pdev_mon_cmn_desc_pool_init(pdev, mac_id);
+		qdf_spinlock_create(&pdev->monitor_pdev->mon_mac[mac_id].mon_lock);
+	}
+}
+#else
+void
+dp_rx_pdev_mon_desc_pool_deinit(struct dp_pdev *pdev)
+{
+	int mac_id;
+
+	for (mac_id = 0; mac_id < NUM_RXDMA_STATUS_RINGS_PER_PDEV; mac_id++)
+		dp_rx_pdev_mon_cmn_desc_pool_deinit(pdev, mac_id);
+	qdf_spinlock_destroy(&pdev->monitor_pdev->mon_mac.mon_lock);
+}
+
 void
 dp_rx_pdev_mon_desc_pool_init(struct dp_pdev *pdev)
 {
@@ -1500,8 +1525,9 @@ dp_rx_pdev_mon_desc_pool_init(struct dp_pdev *pdev)
 
 	for (mac_id = 0; mac_id < NUM_RXDMA_STATUS_RINGS_PER_PDEV; mac_id++)
 		dp_rx_pdev_mon_cmn_desc_pool_init(pdev, mac_id);
-	qdf_spinlock_create(&pdev->monitor_pdev->mon_lock);
+	qdf_spinlock_create(&pdev->monitor_pdev->mon_mac.mon_lock);
 }
+#endif
 
 void
 dp_rx_pdev_mon_buffers_free(struct dp_pdev *pdev)

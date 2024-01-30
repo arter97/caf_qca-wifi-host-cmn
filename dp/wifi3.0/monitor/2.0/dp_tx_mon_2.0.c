@@ -113,6 +113,7 @@ dp_tx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 	struct dp_mon_desc_pool *tx_mon_desc_pool = &mon_soc_be->tx_desc_mon;
 	struct dp_tx_mon_desc_list mon_desc_list;
 	uint32_t replenish_cnt = 0;
+	struct dp_mon_mac *mon_mac;
 
 	if (!pdev) {
 		dp_mon_err("%pK: pdev is null for mac_id = %d", soc, mac_id);
@@ -120,6 +121,7 @@ dp_tx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 	}
 
 	mon_pdev = pdev->monitor_pdev;
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
 	mon_dst_srng = mon_soc_be->tx_mon_dst_ring[mac_id].hal_srng;
 
 	if (!mon_dst_srng || !hal_srng_initialized(mon_dst_srng)) {
@@ -137,7 +139,7 @@ dp_tx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 
 	qdf_assert((hal_soc && pdev));
 
-	qdf_spin_lock_bh(&mon_pdev->mon_lock);
+	qdf_spin_lock_bh(&mon_mac->mon_lock);
 	mon_desc_list.desc_list = NULL;
 	mon_desc_list.tail = NULL;
 	mon_desc_list.tx_mon_reap_cnt = 0;
@@ -145,7 +147,7 @@ dp_tx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 	if (qdf_unlikely(dp_srng_access_start(int_ctx, soc, mon_dst_srng))) {
 		dp_mon_err("%s %d : HAL Mon Dest Ring access Failed -- %pK",
 			   __func__, __LINE__, mon_dst_srng);
-		qdf_spin_unlock_bh(&mon_pdev->mon_lock);
+		qdf_spin_unlock_bh(&mon_mac->mon_lock);
 		return work_done;
 	}
 
@@ -290,7 +292,7 @@ dp_tx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 					 &mon_desc_list.tail,
 					 &replenish_cnt);
 	}
-	qdf_spin_unlock_bh(&mon_pdev->mon_lock);
+	qdf_spin_unlock_bh(&mon_mac->mon_lock);
 	dp_mon_debug("mac_id: %d, work_done:%d tx_monitor_reap_cnt:%d",
 		     mac_id, work_done, mon_desc_list.tx_mon_reap_cnt);
 

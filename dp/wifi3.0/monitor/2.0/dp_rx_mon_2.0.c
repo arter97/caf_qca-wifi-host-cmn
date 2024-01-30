@@ -2258,8 +2258,10 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
  */
 static QDF_STATUS dp_mon_pdev_flush_desc(struct dp_pdev *pdev)
 {
+	uint8_t mac_id = 0;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
 	if (qdf_unlikely(!mon_pdev)) {
 		dp_mon_debug("monitor pdev is NULL");
@@ -2268,7 +2270,7 @@ static QDF_STATUS dp_mon_pdev_flush_desc(struct dp_pdev *pdev)
 
 	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
 
-	qdf_spin_lock_bh(&mon_pdev->mon_lock);
+	qdf_spin_lock_bh(&mon_mac->mon_lock);
 
 	if (mon_pdev_be->desc_count) {
 		mon_pdev->rx_mon_stats.pending_desc_count +=
@@ -2276,7 +2278,7 @@ static QDF_STATUS dp_mon_pdev_flush_desc(struct dp_pdev *pdev)
 		dp_rx_mon_flush_status_buf_queue(pdev);
 	}
 
-	qdf_spin_unlock_bh(&mon_pdev->mon_lock);
+	qdf_spin_unlock_bh(&mon_mac->mon_lock);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -2462,6 +2464,8 @@ dp_rx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 	struct hal_rx_ppdu_info *ppdu_info = NULL;
 	QDF_STATUS status;
 	uint32_t cookie_2;
+	struct dp_mon_mac *mon_mac;
+
 	if (!pdev || !hal_soc) {
 		dp_mon_err("%pK: pdev or hal_soc is null, mac_id = %d",
 			   soc, mac_id);
@@ -2469,6 +2473,7 @@ dp_rx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 	}
 
 	mon_pdev = pdev->monitor_pdev;
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
 	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
 	mon_dst_srng = soc->rxdma_mon_dst_ring[mac_id].hal_srng;
 
@@ -2478,12 +2483,12 @@ dp_rx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 		return work_done;
 	}
 
-	qdf_spin_lock_bh(&mon_pdev->mon_lock);
+	qdf_spin_lock_bh(&mon_mac->mon_lock);
 
 	if (qdf_unlikely(dp_rx_srng_access_start(int_ctx, soc, mon_dst_srng))) {
 		dp_mon_err("%s %d : HAL Mon Dest Ring access Failed -- %pK",
 			   __func__, __LINE__, mon_dst_srng);
-		qdf_spin_unlock_bh(&mon_pdev->mon_lock);
+		qdf_spin_unlock_bh(&mon_mac->mon_lock);
 		return work_done;
 	}
 
@@ -2608,7 +2613,7 @@ dp_rx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 	}
 	dp_rx_srng_access_end(int_ctx, soc, mon_dst_srng);
 
-	qdf_spin_unlock_bh(&mon_pdev->mon_lock);
+	qdf_spin_unlock_bh(&mon_mac->mon_lock);
 	dp_mon_info("mac_id: %d, work_done:%d", mac_id, work_done);
 	return work_done;
 }

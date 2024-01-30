@@ -180,7 +180,6 @@ void dp_flush_monitor_rings(struct dp_soc *soc)
 	uint32_t hp, tp;
 	int budget;
 	void *mon_dst_srng;
-	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
 	struct dp_mon_mac *mon_mac;
 	uint8_t mac_id = 0;
@@ -190,11 +189,12 @@ void dp_flush_monitor_rings(struct dp_soc *soc)
 
 	mon_mac = dp_get_mon_mac(pdev, mac_id);
 	/* Reset monitor filters before reaping the ring*/
-	qdf_spin_lock_bh(&mon_pdev->mon_lock);
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
+	qdf_spin_lock_bh(&mon_mac->mon_lock);
 	dp_mon_filter_reset_mon_mode(pdev);
 	if (dp_mon_filter_update(pdev) != QDF_STATUS_SUCCESS)
 		dp_info("failed to reset monitor filters");
-	qdf_spin_unlock_bh(&mon_pdev->mon_lock);
+	qdf_spin_unlock_bh(&mon_mac->mon_lock);
 
 	if (qdf_unlikely(mon_mac->mon_chan_band >= REG_BAND_UNKNOWN))
 		return;

@@ -1123,9 +1123,6 @@ struct  dp_mon_pdev {
 	/* tx packet capture enhancement */
 	enum cdp_tx_enh_capture_mode tx_capture_enabled;
 
-	/* monitor mode lock */
-	qdf_spinlock_t mon_lock;
-
 	uint32_t mon_ppdu_status;
 	/* monitor mode status/destination ring PPDU and MPDU count */
 	struct cdp_pdev_mon_stats rx_mon_stats;
