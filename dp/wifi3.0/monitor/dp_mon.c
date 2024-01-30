@@ -6078,6 +6078,23 @@ dp_ch_band_lmac_id_mapping_init(struct dp_pdev *pdev)
 	}
 }
 
+#ifdef FEATURE_ML_MONITOR_MODE_SUPPORT
+static inline void
+dp_init_mon_chan_band(struct dp_mon_pdev *mon_pdev)
+{
+	uint8_t mac_id;
+
+	for (mac_id = 0; mac_id < MAX_NUM_LMAC_HW; mac_id++)
+		mon_pdev->mon_mac[mac_id].mon_chan_band = REG_BAND_UNKNOWN;
+}
+#else
+static inline void
+dp_init_mon_chan_band(struct dp_mon_pdev *mon_pdev)
+{
+	mon_pdev->mon_mac.mon_chan_band = REG_BAND_UNKNOWN;
+}
+#endif
+
 QDF_STATUS dp_mon_pdev_init(struct dp_pdev *pdev)
 {
 	struct dp_mon_pdev *mon_pdev;
@@ -6121,7 +6138,7 @@ QDF_STATUS dp_mon_pdev_init(struct dp_pdev *pdev)
 	qdf_spinlock_create(&mon_pdev->ppdu_stats_lock);
 	qdf_spinlock_create(&mon_pdev->neighbour_peer_mutex);
 	mon_pdev->monitor_configured = false;
-	mon_pdev->mon_chan_band = REG_BAND_UNKNOWN;
+	dp_init_mon_chan_band(mon_pdev);
 
 	TAILQ_INIT(&mon_pdev->neighbour_peers_list);
 	mon_pdev->neighbour_peers_added = false;

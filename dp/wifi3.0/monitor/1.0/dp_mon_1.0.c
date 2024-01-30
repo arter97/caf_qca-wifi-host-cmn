@@ -182,10 +182,13 @@ void dp_flush_monitor_rings(struct dp_soc *soc)
 	void *mon_dst_srng;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
+	struct dp_mon_mac *mon_mac;
+	uint8_t mac_id = 0;
 
 	if (qdf_unlikely(mon_soc->full_mon_mode))
 		return;
 
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
 	/* Reset monitor filters before reaping the ring*/
 	qdf_spin_lock_bh(&mon_pdev->mon_lock);
 	dp_mon_filter_reset_mon_mode(pdev);
@@ -193,10 +196,10 @@ void dp_flush_monitor_rings(struct dp_soc *soc)
 		dp_info("failed to reset monitor filters");
 	qdf_spin_unlock_bh(&mon_pdev->mon_lock);
 
-	if (qdf_unlikely(mon_pdev->mon_chan_band >= REG_BAND_UNKNOWN))
+	if (qdf_unlikely(mon_mac->mon_chan_band >= REG_BAND_UNKNOWN))
 		return;
 
-	lmac_id = pdev->ch_band_lmac_id_mapping[mon_pdev->mon_chan_band];
+	lmac_id = pdev->ch_band_lmac_id_mapping[mon_mac->mon_chan_band];
 	if (qdf_unlikely(lmac_id == DP_MON_INVALID_LMAC_ID))
 		return;
 
@@ -510,19 +513,20 @@ static void dp_mon_vdev_timer(void *arg)
 	uint32_t lmac_iter;
 	int max_mac_rings = wlan_cfg_get_num_mac_rings(pdev->wlan_cfg_ctx);
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
-	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	struct dp_mon_mac *mon_mac;
 
 	if (!qdf_atomic_read(&soc->cmn_init_done))
 		return;
-
-	if (mon_pdev->mon_chan_band != REG_BAND_UNKNOWN)
-		lmac_id = pdev->ch_band_lmac_id_mapping[mon_pdev->mon_chan_band];
 
 	start_time = qdf_get_log_timestamp();
 	dp_update_num_mac_rings_for_dbs(soc, &max_mac_rings);
 
 	while (yield == DP_TIMER_NO_YIELD) {
 		for (lmac_iter = 0; lmac_iter < max_mac_rings; lmac_iter++) {
+			mon_mac = dp_get_mon_mac(pdev, lmac_iter);
+			if (mon_mac->mon_chan_band != REG_BAND_UNKNOWN)
+				lmac_id = mon_mac->mac_id;
+
 			if (lmac_iter == lmac_id)
 				work_done = dp_monitor_process(
 						    soc, NULL,

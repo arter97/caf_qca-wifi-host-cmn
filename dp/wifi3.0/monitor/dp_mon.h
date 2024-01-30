@@ -1127,15 +1127,6 @@ struct  dp_mon_pdev {
 	/* monitor mode lock */
 	qdf_spinlock_t mon_lock;
 
-	/* Monitor mode operation channel */
-	int mon_chan_num;
-
-	/* Monitor mode operation frequency */
-	qdf_freq_t mon_chan_freq;
-
-	/* Monitor mode band */
-	enum reg_wifi_band mon_chan_band;
-
 	uint32_t mon_ppdu_status;
 	/* monitor mode status/destination ring PPDU and MPDU count */
 	struct cdp_pdev_mon_stats rx_mon_stats;
@@ -1686,15 +1677,21 @@ dp_monitor_get_rx_status(struct dp_pdev *pdev)
 /**
  * dp_monitor_is_chan_band_known() - check if monitor chan band known
  * @pdev: point to dp pdev
+ * @mac_id: MAC ID
  *
  * Return: true if chan band known
  */
-static inline bool dp_monitor_is_chan_band_known(struct dp_pdev *pdev)
+static inline bool
+dp_monitor_is_chan_band_known(struct dp_pdev *pdev, uint8_t mac_id)
 {
+	struct dp_mon_mac *mon_mac;
+
 	if (qdf_unlikely(!pdev || !pdev->monitor_pdev))
 		return false;
 
-	if (pdev->monitor_pdev->mon_chan_band != REG_BAND_UNKNOWN)
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
+
+	if (mon_mac->mon_chan_band != REG_BAND_UNKNOWN)
 		return true;
 
 	return false;
@@ -1703,13 +1700,16 @@ static inline bool dp_monitor_is_chan_band_known(struct dp_pdev *pdev)
 /**
  * dp_monitor_get_chan_band() - get chan band
  * @pdev: point to dp pdev
+ * @mac_id: MAC ID
  *
  * Return: wifi channel band
  */
 static inline enum reg_wifi_band
-dp_monitor_get_chan_band(struct dp_pdev *pdev)
+dp_monitor_get_chan_band(struct dp_pdev *pdev, uint8_t mac_id)
 {
-	return pdev->monitor_pdev->mon_chan_band;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
+
+	return mon_mac->mon_chan_band;
 }
 
 /**
@@ -1741,12 +1741,10 @@ static inline void dp_monitor_print_tx_stats(struct dp_pdev *pdev)
 static inline void
 dp_monitor_set_chan_num(struct dp_vdev *vdev, int chan_num)
 {
-	struct dp_pdev *pdev = vdev->pdev;
-
-	if (qdf_unlikely(!pdev || !pdev->monitor_pdev))
+	if (qdf_unlikely(!vdev->monitor_vdev)) {
+		dp_err("mon vdev is null for vdev %u", vdev->vdev_id);
 		return;
-
-	pdev->monitor_pdev->mon_chan_num = chan_num;
+	}
 
 	vdev->monitor_vdev->mon_chan_num = chan_num;
 	dp_info("vdev_id %d channel number: %d", vdev->vdev_id, chan_num);
@@ -1760,12 +1758,12 @@ dp_monitor_set_chan_num(struct dp_vdev *vdev, int chan_num)
  */
 static inline int dp_monitor_get_chan_num(struct dp_vdev *vdev)
 {
-	struct dp_pdev *pdev = vdev->pdev;
-
-	if (qdf_unlikely(!pdev || !pdev->monitor_pdev))
+	if (qdf_unlikely(!vdev->monitor_vdev)) {
+		dp_err("mon vdev is null for vdev %u", vdev->vdev_id);
 		return 0;
+	}
 
-	return pdev->monitor_pdev->mon_chan_num;
+	return vdev->monitor_vdev->mon_chan_num;
 }
 
 /**
@@ -1777,15 +1775,44 @@ static inline int dp_monitor_get_chan_num(struct dp_vdev *vdev)
 static inline void
 dp_monitor_set_chan_freq(struct dp_vdev *vdev, qdf_freq_t chan_freq)
 {
-	struct dp_pdev *pdev = vdev->pdev;
-
-	if (qdf_unlikely(!pdev || !pdev->monitor_pdev))
+	if (qdf_unlikely(!vdev->monitor_vdev)) {
+		dp_err("mon vdev is null for vdev %u", vdev->vdev_id);
 		return;
-
-	pdev->monitor_pdev->mon_chan_freq = chan_freq;
+	}
 
 	vdev->monitor_vdev->mon_chan_freq = chan_freq;
 	dp_info("vdev_id %d freq: %d", vdev->vdev_id, chan_freq);
+}
+
+static inline void
+dp_monitor_update_mac_vdev_map(struct dp_vdev *vdev)
+{
+	struct dp_pdev *pdev = vdev->pdev;
+	struct dp_mon_mac *mon_mac;
+
+	if (qdf_unlikely(!pdev || !pdev->monitor_pdev ||
+			 vdev->lmac_id >= MAX_NUM_LMAC_HW)) {
+		dp_err("map skipped pdev: %pK mac_id: %u vdev_id: %u",
+		       pdev, vdev->lmac_id, vdev->vdev_id);
+		return;
+	}
+
+	mon_mac = dp_get_mon_mac(pdev, vdev->lmac_id);
+
+	mon_mac->vdev_id = vdev->vdev_id;
+	mon_mac->mac_id = vdev->lmac_id;
+	mon_mac->mvdev = vdev;
+	mon_mac->mon_chan_band = vdev->monitor_vdev->mon_chan_band;
+	mon_mac->mon_chan_freq = vdev->monitor_vdev->mon_chan_freq;
+	mon_mac->mon_chan_num = vdev->monitor_vdev->mon_chan_num;
+	pdev->ch_band_lmac_id_mapping[mon_mac->mon_chan_band] = vdev->lmac_id;
+	vdev->monitor_vdev->mac_id = vdev->lmac_id;
+
+	dp_info("mac_id %d vdev_id %d ch_num: %d freq: %d band %d",
+		vdev->lmac_id, vdev->vdev_id,
+		vdev->monitor_vdev->mon_chan_num,
+		vdev->monitor_vdev->mon_chan_freq,
+		vdev->monitor_vdev->mon_chan_band);
 }
 
 /**
@@ -1797,12 +1824,12 @@ dp_monitor_set_chan_freq(struct dp_vdev *vdev, qdf_freq_t chan_freq)
 static inline qdf_freq_t
 dp_monitor_get_chan_freq(struct dp_vdev *vdev)
 {
-	struct dp_pdev *pdev = vdev->pdev;
-
-	if (qdf_unlikely(!pdev || !pdev->monitor_pdev))
+	if (qdf_unlikely(!vdev->monitor_vdev)) {
+		dp_err("mon vdev is null for vdev %u", vdev->vdev_id);
 		return 0;
+	}
 
-	return pdev->monitor_pdev->mon_chan_freq;
+	return vdev->monitor_vdev->mon_chan_freq;
 }
 
 /**
@@ -1814,12 +1841,10 @@ dp_monitor_get_chan_freq(struct dp_vdev *vdev)
 static inline void
 dp_monitor_set_chan_band(struct dp_vdev *vdev, enum reg_wifi_band chan_band)
 {
-	struct dp_pdev *pdev = vdev->pdev;
-
-	if (qdf_unlikely(!pdev || !pdev->monitor_pdev))
+	if (qdf_unlikely(!vdev->monitor_vdev)) {
+		dp_err("mon vdev is null for vdev %u", vdev->vdev_id);
 		return;
-
-	pdev->monitor_pdev->mon_chan_band = chan_band;
+	}
 
 	vdev->monitor_vdev->mon_chan_band = chan_band;
 	dp_info("vdev_id %d ch band: %d", vdev->vdev_id, chan_band);

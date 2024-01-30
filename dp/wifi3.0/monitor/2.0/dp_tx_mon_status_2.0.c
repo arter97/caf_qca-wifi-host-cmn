@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -1627,6 +1627,8 @@ dp_tx_mon_process_tlv_2_0(struct dp_pdev *pdev,
 	uint8_t num_users = 0;
 	uint8_t cur_frag_q_idx;
 	bool schedule_wrq = false;
+	uint8_t mac_id = 0;
+	struct dp_mon_mac *mon_mac;
 
 	/* sanity check */
 	if (qdf_unlikely(!pdev))
@@ -1640,6 +1642,7 @@ dp_tx_mon_process_tlv_2_0(struct dp_pdev *pdev,
 	if (qdf_unlikely(!mon_pdev_be))
 		return QDF_STATUS_E_NOMEM;
 
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
 	tx_mon_be = &mon_pdev_be->tx_monitor_be;
 	cur_frag_q_idx = tx_mon_be->cur_frag_q_idx;
 
@@ -1751,14 +1754,14 @@ dp_tx_mon_process_tlv_2_0(struct dp_pdev *pdev,
 						 chan_num))) {
 			/* update channel number, if not fetched properly */
 			TXMON_PPDU_COM(tx_prot_ppdu_info,
-				       chan_num) = mon_pdev->mon_chan_num;
+				       chan_num) = mon_mac->mon_chan_num;
 		}
 
 		if (qdf_unlikely(!TXMON_PPDU_COM(tx_prot_ppdu_info,
 						 chan_freq))) {
 			/* update channel frequency, if not fetched properly */
 			TXMON_PPDU_COM(tx_prot_ppdu_info,
-				       chan_freq) = mon_pdev->mon_chan_freq;
+				       chan_freq) = mon_mac->mon_chan_freq;
 		}
 
 		/*
@@ -1789,14 +1792,14 @@ dp_tx_mon_process_tlv_2_0(struct dp_pdev *pdev,
 						 chan_num))) {
 			/* update channel number, if not fetched properly */
 			TXMON_PPDU_COM(tx_data_ppdu_info,
-				       chan_num) = mon_pdev->mon_chan_num;
+				       chan_num) = mon_mac->mon_chan_num;
 		}
 
 		if (qdf_unlikely(!TXMON_PPDU_COM(tx_data_ppdu_info,
 						 chan_freq))) {
 			/* update channel frequency, if not fetched properly */
 			TXMON_PPDU_COM(tx_data_ppdu_info,
-				       chan_freq) = mon_pdev->mon_chan_freq;
+				       chan_freq) = mon_mac->mon_chan_freq;
 		}
 
 		/*

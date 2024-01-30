@@ -2469,6 +2469,7 @@ void dp_interrupt_timer(void *arg)
 	int max_mac_rings = wlan_cfg_get_num_mac_rings(pdev->wlan_cfg_ctx);
 	enum reg_wifi_band mon_band;
 	int cpu = dp_srng_get_cpu();
+	uint8_t mac_id = 0;
 
 	/*
 	 * this logic makes all data path interfacing rings (UMAC/LMAC)
@@ -2490,8 +2491,8 @@ void dp_interrupt_timer(void *arg)
 	if (!qdf_atomic_read(&soc->cmn_init_done))
 		return;
 
-	if (dp_monitor_is_chan_band_known(pdev)) {
-		mon_band = dp_monitor_get_chan_band(pdev);
+	if (dp_monitor_is_chan_band_known(pdev, mac_id)) {
+		mon_band = dp_monitor_get_chan_band(pdev, mac_id);
 		lmac_id = pdev->ch_band_lmac_id_mapping[mon_band];
 		if (qdf_likely(lmac_id != DP_MON_INVALID_LMAC_ID)) {
 			dp_intr_id = soc->mon_intr_id_lmac_map[lmac_id];
@@ -11069,6 +11070,8 @@ dp_vdev_update_lmacid(struct cdp_soc_t *soc_hdl,
 	dp_info("update mac id %d for vdev id %d", lmac_id, vdev_id);
 
 	vdev->lmac_id = lmac_id;
+	if (wlan_op_mode_monitor == vdev->opmode)
+		dp_monitor_update_mac_vdev_map(vdev);
 	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
 }
 

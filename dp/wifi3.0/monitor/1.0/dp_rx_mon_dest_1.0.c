@@ -610,15 +610,12 @@ dp_rx_mon_check_n_drop_mpdu(struct dp_pdev *pdev, uint32_t mac_id,
 			    uint32_t *rx_bufs_dropped)
 {
 	struct dp_soc *soc = pdev->soc;
-	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
-	uint32_t lmac_id = DP_MON_INVALID_LMAC_ID;
 	uint8_t src_link_id;
 	QDF_STATUS status;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
-	if (mon_pdev->mon_chan_band == REG_BAND_UNKNOWN)
+	if (mon_mac->mon_chan_band == REG_BAND_UNKNOWN)
 		goto drop_mpdu;
-
-	lmac_id = pdev->ch_band_lmac_id_mapping[mon_pdev->mon_chan_band];
 
 	status = hal_rx_reo_ent_get_src_link_id(soc->hal_soc,
 						rxdma_dst_ring_desc,
@@ -626,7 +623,7 @@ dp_rx_mon_check_n_drop_mpdu(struct dp_pdev *pdev, uint32_t mac_id,
 	if (QDF_IS_STATUS_ERROR(status))
 		return QDF_STATUS_E_INVAL;
 
-	if (src_link_id == lmac_id)
+	if (src_link_id == mon_mac->mac_id)
 		return QDF_STATUS_E_INVAL;
 
 drop_mpdu:

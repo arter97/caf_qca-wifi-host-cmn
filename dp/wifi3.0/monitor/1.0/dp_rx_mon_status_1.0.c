@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -435,6 +435,7 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 	uint32_t rx_enh_capture_mode;
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
 	struct dp_mon_pdev *mon_pdev;
+	struct dp_mon_mac *mon_mac;
 
 	if (qdf_unlikely(!pdev)) {
 		dp_rx_mon_status_debug("%pK: pdev is null for mac_id = %d", soc,
@@ -442,6 +443,7 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 		return;
 	}
 
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
 	mon_pdev = pdev->monitor_pdev;
 	ppdu_info = &mon_pdev->ppdu_info;
 	rx_mon_stats = &mon_pdev->rx_mon_stats;
@@ -585,14 +587,14 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 			 */
 			if (qdf_unlikely(mon_pdev->ppdu_info.rx_status.chan_num == 0))
 				mon_pdev->ppdu_info.rx_status.chan_num =
-							mon_pdev->mon_chan_num;
+							mon_mac->mon_chan_num;
 			/*
 			 * if chan_freq is not fetched correctly from ppdu RX TLV,
 			 * get it from pdev saved.
 			 */
 			if (qdf_unlikely(mon_pdev->ppdu_info.rx_status.chan_freq == 0)) {
 				mon_pdev->ppdu_info.rx_status.chan_freq =
-					mon_pdev->mon_chan_freq;
+					mon_mac->mon_chan_freq;
 			}
 
 			if (!mon_soc->full_mon_mode)
