@@ -906,7 +906,9 @@ QDF_STATUS wlan_crypto_setkey(struct wlan_objmgr_vdev *vdev,
 			}
 			if (!HAS_MCAST_CIPHER(crypto_params, req_key->type)
 				&& (req_key->type != WLAN_CRYPTO_CIPHER_WEP)) {
-				return QDF_STATUS_CRYPTO_INVALID_CIPHERTYPE;
+				crypto_err("Set BroadCast key without Mcast "
+					"cipher set for %d", req_key->type);
+				/*Changes done to meet start_disabled feature*/
 			}
 			if (!priv_key->key[req_key->keyix]) {
 				priv_key->key[req_key->keyix]
