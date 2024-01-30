@@ -1130,7 +1130,6 @@ struct  dp_mon_pdev {
 	/* monitor mode status/destination ring PPDU and MPDU count */
 	struct cdp_pdev_mon_stats rx_mon_stats;
 	/* Monitor mode interface and status storage */
-	struct dp_vdev *mvdev;
 	struct cdp_mon_status rx_mon_recv_status;
 	/* to track duplicate link descriptor indications by HW for a WAR */
 	uint64_t mon_last_linkdesc_paddr;
@@ -1948,10 +1947,18 @@ static inline void dp_monitor_vdev_register_osif(struct dp_vdev *vdev,
 static inline struct dp_vdev*
 dp_monitor_get_monitor_vdev_from_pdev(struct dp_pdev *pdev)
 {
-	if (!pdev || !pdev->monitor_pdev || !pdev->monitor_pdev->mvdev)
+	uint8_t mac_id = 0;
+	struct dp_mon_mac *mon_mac;
+
+	if (!pdev || !pdev->monitor_pdev)
 		return NULL;
 
-	return pdev->monitor_pdev->mvdev;
+	/* return 1st monitor vdev */
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
+	if (!mon_mac->mvdev)
+		return NULL;
+
+	return mon_mac->mvdev;
 }
 
 /**
@@ -4067,10 +4074,23 @@ void dp_monitor_neighbour_peer_list_remove(struct dp_pdev *pdev,
 static inline
 void dp_monitor_pdev_set_mon_vdev(struct dp_vdev *vdev)
 {
+	/* Set mov vdev for 1st vdev only as this is done
+	 * during vdev attach and per vdev mac information
+	 * is not available during this time.
+	 *
+	 * vdev - mac mapping will be updated during vdev start.
+	 **/
+	uint8_t mac_id = 0;
+	struct dp_mon_mac *mon_mac;
+
 	if (!vdev->pdev->monitor_pdev)
 		return;
 
-	vdev->pdev->monitor_pdev->mvdev = vdev;
+	mon_mac = dp_get_mon_mac(vdev->pdev, mac_id);
+	if (!mon_mac->mvdev)
+		mon_mac->mvdev = vdev;
+	else
+		dp_info("set mvdev skipped for vdev_id: %u", vdev->vdev_id);
 }
 
 static inline

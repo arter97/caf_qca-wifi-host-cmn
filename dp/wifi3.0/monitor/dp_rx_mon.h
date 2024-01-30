@@ -508,13 +508,14 @@ dp_rx_process_mcopy_mode(struct dp_soc *soc, struct dp_pdev *pdev,
  * @pdev: Datapath PDEV handle
  * @ppdu_info: Structure for rx ppdu info
  * @nbuf: Qdf nbuf abstraction for linux skb
+ * @mac_id: MAC ID
  *
  * Return: 0 on success, 1 on failure
  */
 int
 dp_rx_handle_smart_mesh_mode(struct dp_soc *soc, struct dp_pdev *pdev,
 			      struct hal_rx_ppdu_info *ppdu_info,
-			      qdf_nbuf_t nbuf);
+			      qdf_nbuf_t nbuf, uint8_t mac_id);
 
 /**
  * dp_rx_nbuf_prepare() - prepare RX nbuf
@@ -824,18 +825,19 @@ dp_mon_rx_stats_update_rssi_dbm_params(struct dp_mon_pdev *mon_pdev,
  * @pdev: Datapath PDEV handle
  * @ppdu_info: Structure for rx ppdu info
  * @nbuf: Qdf nbuf abstraction for linux skb
+ * @mac_id: mac id
  *
  * Return: 0 on success, 1 on failure
  */
 int
 dp_rx_handle_local_pkt_capture(struct dp_pdev *pdev,
 			      struct hal_rx_ppdu_info *ppdu_info,
-			      qdf_nbuf_t nbuf);
+			      qdf_nbuf_t nbuf, uint8_t mac_id);
 #else
 static inline int
 dp_rx_handle_local_pkt_capture(struct dp_pdev *pdev,
 			      struct hal_rx_ppdu_info *ppdu_info,
-			      qdf_nbuf_t nbuf)
+			      qdf_nbuf_t nbuf, uint8_t mac_id)
 {
 	return 0;
 }

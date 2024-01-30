@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -38,13 +38,20 @@
  */
 static QDF_STATUS dp_mon_filter_check_co_exist(struct dp_pdev *pdev)
 {
+	/*
+	 * mac_id value is required in case where per MAC mon_mac handle
+	 * is required in single pdev multiple MAC case.
+	 */
+	uint8_t mac_id = 0;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
+
 	/*
 	 * Check if the Rx Enhanced capture mode, monitor mode,
 	 * smart_monitor_mode and mcopy mode can co-exist together.
 	 */
 	if ((mon_pdev->rx_enh_capture_mode != CDP_RX_ENH_CAPTURE_DISABLED) &&
-	    ((mon_pdev->neighbour_peers_added && mon_pdev->mvdev) ||
+	    ((mon_pdev->neighbour_peers_added && mon_mac->mvdev) ||
 		 mon_pdev->mcopy_mode)) {
 		dp_mon_filter_err("%pK:Rx Capture mode can't exist with modes:\n"
 				  "Smart Monitor Mode:%d\n"
@@ -57,7 +64,7 @@ static QDF_STATUS dp_mon_filter_check_co_exist(struct dp_pdev *pdev)
 	/*
 	 * Check if the monitor mode cannot co-exist with any other mode.
 	 */
-	if ((mon_pdev->mvdev && mon_pdev->monitor_configured) &&
+	if ((mon_mac->mvdev && mon_pdev->monitor_configured) &&
 	    (mon_pdev->mcopy_mode || mon_pdev->neighbour_peers_added)) {
 		dp_mon_filter_err("%pK: Monitor mode can't exist with modes\n"
 				  "M_Copy Mode:%d\n"
@@ -85,11 +92,11 @@ static QDF_STATUS dp_mon_filter_check_co_exist(struct dp_pdev *pdev)
 	 * can co-exist together.
 	 */
 	if (mon_pdev->mcopy_mode &&
-	    (mon_pdev->mvdev || mon_pdev->neighbour_peers_added)) {
+	    (mon_mac->mvdev || mon_pdev->neighbour_peers_added)) {
 		dp_mon_filter_err("%pK: mcopy mode can't exist with modes\n"
 				  "Monitor Mode:%pK\n"
 				  "Smart Monitor Mode:%d",
-				  pdev->soc, mon_pdev->mvdev,
+				  pdev->soc, mon_mac->mvdev,
 				  mon_pdev->neighbour_peers_added);
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -100,7 +107,7 @@ static QDF_STATUS dp_mon_filter_check_co_exist(struct dp_pdev *pdev)
 	 */
 	if ((mon_pdev->rx_pktlog_mode != DP_RX_PKTLOG_DISABLED) &&
 	    !mon_pdev->rx_pktlog_cbf &&
-	    (mon_pdev->mvdev || mon_pdev->monitor_configured)) {
+	    (mon_mac->mvdev || mon_pdev->monitor_configured)) {
 		dp_mon_filter_err("%pK: Rx pktlog full/lite can't exist with modes\n"
 				  "Monitor Mode:%d", pdev->soc,
 				  mon_pdev->monitor_configured);
@@ -111,13 +118,19 @@ static QDF_STATUS dp_mon_filter_check_co_exist(struct dp_pdev *pdev)
 #else
 static QDF_STATUS dp_mon_filter_check_co_exist(struct dp_pdev *pdev)
 {
+	/*
+	 * mac_id value is required in case where per MAC mon_mac handle
+	 * is required in single pdev multiple MAC case.
+	 */
+	uint8_t mac_id = 0;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 	/*
 	 * Check if the Rx packet log lite or full can co-exist with
 	 * the enable modes.
 	 */
 	if ((mon_pdev->rx_pktlog_mode != DP_RX_PKTLOG_DISABLED) &&
-	    (mon_pdev->mvdev || mon_pdev->monitor_configured)) {
+	    (mon_mac->mvdev || mon_pdev->monitor_configured)) {
 		 dp_mon_filter_err("%pK: Rx pktlog full/lite can't exist with modes\n"
 				   "Monitor Mode:%d", pdev->soc,
 				   mon_pdev->monitor_configured);
@@ -897,7 +910,14 @@ void dp_mon_filter_reset_rx_pktlog_cbf_1_0(struct dp_pdev *pdev)
  */
 static inline bool dp_mon_should_reset_buf_ring_filter(struct dp_pdev *pdev)
 {
-	return (pdev->monitor_pdev->mvdev) ? true : false;
+	/*
+	 * mac_id value is required in case where per MAC mon_mac handle
+	 * is required in single pdev multiple MAC case.
+	 */
+	uint8_t mac_id = 0;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
+
+	return (mon_mac->mvdev) ? true : false;
 }
 #else
 static inline bool dp_mon_should_reset_buf_ring_filter(struct dp_pdev *pdev)
@@ -1072,6 +1092,7 @@ static void dp_cfr_filter_1_0(struct cdp_soc_t *soc_hdl,
 	int max_mac_rings;
 	uint8_t mac_id = 0;
 	struct dp_mon_pdev *mon_pdev;
+	struct dp_mon_mac *mon_mac;
 
 	pdev = dp_get_pdev_from_soc_pdev_id_wifi3(soc, pdev_id);
 	if (!pdev) {
@@ -1080,8 +1101,9 @@ static void dp_cfr_filter_1_0(struct cdp_soc_t *soc_hdl,
 	}
 
 	mon_pdev = pdev->monitor_pdev;
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
 
-	if (mon_pdev->mvdev) {
+	if (mon_mac->mvdev) {
 		if (enable && cfr_enable_monitor_mode)
 			pdev->cfr_rcc_mode = true;
 		else

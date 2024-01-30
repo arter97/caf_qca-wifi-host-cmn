@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -3369,9 +3369,11 @@ static void dp_cfr_filter_2_0(struct cdp_soc_t *soc_hdl,
 	struct dp_pdev *pdev = NULL;
 	struct htt_rx_ring_tlv_filter *htt_tlv_filter;
 	struct dp_mon_pdev *mon_pdev;
+	struct dp_mon_mac *mon_mac;
 	struct dp_mon_filter_be filter = {0};
 	enum dp_mon_filter_srng_type srng_type =
 		DP_MON_FILTER_SRNG_TYPE_RXMON_DEST;
+	uint8_t mac_id = 0;
 
 	pdev = dp_get_pdev_from_soc_pdev_id_wifi3(soc, pdev_id);
 	if (!pdev) {
@@ -3380,8 +3382,9 @@ static void dp_cfr_filter_2_0(struct cdp_soc_t *soc_hdl,
 	}
 
 	mon_pdev = pdev->monitor_pdev;
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
 
-	if (mon_pdev->mvdev) {
+	if (mon_mac->mvdev) {
 		if (enable && cfr_enable_monitor_mode)
 			pdev->cfr_rcc_mode = true;
 		else

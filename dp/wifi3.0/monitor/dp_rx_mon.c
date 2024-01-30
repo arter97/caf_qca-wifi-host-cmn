@@ -1663,20 +1663,21 @@ end:
 int
 dp_rx_handle_smart_mesh_mode(struct dp_soc *soc, struct dp_pdev *pdev,
 			      struct hal_rx_ppdu_info *ppdu_info,
-			      qdf_nbuf_t nbuf)
+			      qdf_nbuf_t nbuf, uint8_t mac_id)
 {
 	uint8_t size = 0;
 	struct dp_mon_vdev *mon_vdev;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
-	if (!mon_pdev->mvdev) {
+	if (!mon_mac->mvdev) {
 		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
 			  "[%s]:[%d] Monitor vdev is NULL !!",
 			  __func__, __LINE__);
 		return 1;
 	}
 
-	mon_vdev = mon_pdev->mvdev->monitor_vdev;
+	mon_vdev = mon_mac->mvdev->monitor_vdev;
 
 	if (!ppdu_info->msdu_info.first_msdu_payload) {
 		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
@@ -1706,7 +1707,7 @@ dp_rx_handle_smart_mesh_mode(struct dp_soc *soc, struct dp_pdev *pdev,
 		return 1;
 	}
 
-	mon_vdev->osif_rx_mon(mon_pdev->mvdev->osif_vdev,
+	mon_vdev->osif_rx_mon(mon_mac->mvdev->osif_vdev,
 			      nbuf, NULL);
 	mon_pdev->ppdu_info.rx_status.monitor_direct_used = 0;
 	return 0;
@@ -1715,18 +1716,19 @@ dp_rx_handle_smart_mesh_mode(struct dp_soc *soc, struct dp_pdev *pdev,
 #ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
 int dp_rx_handle_local_pkt_capture(struct dp_pdev *pdev,
 				   struct hal_rx_ppdu_info *ppdu_info,
-				   qdf_nbuf_t nbuf)
+				   qdf_nbuf_t nbuf, uint8_t mac_id)
 {
 	uint8_t size;
 	struct dp_mon_vdev *mon_vdev;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
-	if (!mon_pdev->mvdev) {
+	if (!mon_mac->mvdev) {
 		dp_info_rl("Monitor vdev is NULL !!");
 		return 1;
 	}
 
-	mon_vdev = mon_pdev->mvdev->monitor_vdev;
+	mon_vdev = mon_mac->mvdev->monitor_vdev;
 
 	if (!ppdu_info->msdu_info.first_msdu_payload) {
 		dp_info_rl("First msdu payload not present");
@@ -1754,7 +1756,7 @@ int dp_rx_handle_local_pkt_capture(struct dp_pdev *pdev,
 	}
 
 	if (mon_vdev && mon_vdev->osif_rx_mon)
-		mon_vdev->osif_rx_mon(mon_pdev->mvdev->osif_vdev, nbuf, NULL);
+		mon_vdev->osif_rx_mon(mon_mac->mvdev->osif_vdev, nbuf, NULL);
 
 	return 0;
 }
@@ -1946,14 +1948,16 @@ QDF_STATUS dp_rx_mon_deliver(struct dp_soc *soc, uint32_t mac_id,
 	qdf_nbuf_t mon_mpdu = NULL;
 	struct dp_mon_vdev *mon_vdev;
 	struct dp_mon_pdev *mon_pdev;
+	struct dp_mon_mac *mon_mac;
 
 	if (!pdev)
 		goto mon_deliver_fail;
 
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
 	mon_pdev = pdev->monitor_pdev;
 	rs = &mon_pdev->rx_mon_recv_status;
 
-	if (!mon_pdev->mvdev && !mon_pdev->mcopy_mode &&
+	if (!mon_mac && !mon_mac->mvdev && !mon_pdev->mcopy_mode &&
 	    !mon_pdev->rx_pktlog_cbf)
 		goto mon_deliver_fail;
 
@@ -1975,11 +1979,11 @@ QDF_STATUS dp_rx_mon_deliver(struct dp_soc *soc, uint32_t mac_id,
 	if (mon_pdev->mcopy_mode)
 		return dp_send_mgmt_packet_to_stack(soc, mon_mpdu, pdev);
 
-	if (mon_pdev->mvdev &&
-	    mon_pdev->mvdev->osif_vdev &&
-	    mon_pdev->mvdev->monitor_vdev &&
-	    mon_pdev->mvdev->monitor_vdev->osif_rx_mon) {
-		mon_vdev = mon_pdev->mvdev->monitor_vdev;
+	if (mon_mac->mvdev &&
+	    mon_mac->mvdev->osif_vdev &&
+	    mon_mac->mvdev->monitor_vdev &&
+	    mon_mac->mvdev->monitor_vdev->osif_rx_mon) {
+		mon_vdev = mon_mac->mvdev->monitor_vdev;
 
 		mon_pdev->ppdu_info.rx_status.ppdu_id =
 			mon_pdev->ppdu_info.com_info.ppdu_id;
@@ -1997,13 +2001,13 @@ QDF_STATUS dp_rx_mon_deliver(struct dp_soc *soc, uint32_t mac_id,
 		}
 
 		dp_rx_mon_update_pf_tag_to_buf_headroom(soc, mon_mpdu);
-		mon_vdev->osif_rx_mon(mon_pdev->mvdev->osif_vdev,
+		mon_vdev->osif_rx_mon(mon_mac->mvdev->osif_vdev,
 				      mon_mpdu,
 				      &mon_pdev->ppdu_info.rx_status);
 	} else {
 		dp_rx_mon_dest_debug("%pK: mon_mpdu=%pK monitor_vdev %pK osif_vdev %pK"
-				     , soc, mon_mpdu, mon_pdev->mvdev,
-				     (mon_pdev->mvdev ? mon_pdev->mvdev->osif_vdev
+				     , soc, mon_mpdu, mon_mac->mvdev,
+				     (mon_mac->mvdev ? mon_mac->mvdev->osif_vdev
 				     : NULL));
 		qdf_nbuf_free(mon_mpdu);
 		return QDF_STATUS_E_INVAL;
@@ -2033,19 +2037,20 @@ QDF_STATUS dp_rx_mon_deliver_non_std(struct dp_soc *soc,
 	qdf_nbuf_t dummy_msdu;
 	struct dp_mon_pdev *mon_pdev;
 	struct dp_mon_vdev *mon_vdev;
+	struct dp_mon_mac *mon_mac;
 
 	/* Sanity checking */
 	if (!pdev || !pdev->monitor_pdev)
 		goto mon_deliver_non_std_fail;
 
 	mon_pdev = pdev->monitor_pdev;
-
-	if (!mon_pdev->mvdev || !mon_pdev->mvdev ||
-	    !mon_pdev->mvdev->monitor_vdev ||
-	    !mon_pdev->mvdev->monitor_vdev->osif_rx_mon)
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
+	if (!mon_mac || !mon_mac->mvdev ||
+	    !mon_mac->mvdev->monitor_vdev ||
+	    !mon_mac->mvdev->monitor_vdev->osif_rx_mon)
 		goto mon_deliver_non_std_fail;
 
-	mon_vdev = mon_pdev->mvdev->monitor_vdev;
+	mon_vdev = mon_mac->mvdev->monitor_vdev;
 	/* Generate a dummy skb_buff */
 	osif_rx_mon = mon_vdev->osif_rx_mon;
 	dummy_msdu = qdf_nbuf_alloc(soc->osdev, MAX_MONITOR_HEADER,
@@ -2068,7 +2073,7 @@ QDF_STATUS dp_rx_mon_deliver_non_std(struct dp_soc *soc,
 	}
 
 	/* deliver to the user layer application */
-	osif_rx_mon(mon_pdev->mvdev->osif_vdev,
+	osif_rx_mon(mon_mac->mvdev->osif_vdev,
 		    dummy_msdu, NULL);
 
 	return QDF_STATUS_SUCCESS;

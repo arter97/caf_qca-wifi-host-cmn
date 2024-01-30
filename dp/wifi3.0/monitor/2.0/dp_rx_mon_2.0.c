@@ -1240,20 +1240,27 @@ void dp_rx_mon_drain_wq(struct dp_pdev *pdev)
 /**
  * dp_rx_mon_deliver_mpdu() - Deliver MPDU to osif layer
  *
- * @mon_pdev: monitor pdev
+ * @pdev: dp pdev handle
  * @mpdu: MPDU nbuf
  * @rx_status: monitor status
  *
  * Return: QDF_STATUS
  */
 static QDF_STATUS
-dp_rx_mon_deliver_mpdu(struct dp_mon_pdev *mon_pdev,
+dp_rx_mon_deliver_mpdu(struct dp_pdev *pdev,
 		       qdf_nbuf_t mpdu,
 		       struct mon_rx_status *rx_status)
 {
+	/*
+	 * mac_id value is required in case where per MAC mon_mac handle
+	 * is required in single pdev multiple MAC case.
+	 */
+	uint8_t mac_id = 0;
 	qdf_nbuf_t nbuf;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
+	struct dp_vdev *mvdev = mon_mac->mvdev;
 
-	if (mon_pdev->mvdev && mon_pdev->mvdev->monitor_vdev->osif_rx_mon) {
+	if (mvdev && mvdev->monitor_vdev->osif_rx_mon) {
 		mon_pdev->rx_mon_stats.mpdus_buf_to_stack++;
 		nbuf = qdf_nbuf_get_ext_list(mpdu);
 
@@ -1261,7 +1268,7 @@ dp_rx_mon_deliver_mpdu(struct dp_mon_pdev *mon_pdev,
 			mon_pdev->rx_mon_stats.mpdus_buf_to_stack++;
 			nbuf = nbuf->next;
 		}
-		mon_pdev->mvdev->monitor_vdev->osif_rx_mon(mon_pdev->mvdev->osif_vdev,
+		mvdev->monitor_vdev->osif_rx_mon(mvdev->osif_vdev,
 							   mpdu,
 							   rx_status);
 	} else {
@@ -1359,7 +1366,7 @@ dp_rx_mon_process_ppdu_info(struct dp_pdev *pdev,
 							      pdev->pdev_id,
 							      mpdu);
 				/* Deliver MPDU to osif layer */
-				status = dp_rx_mon_deliver_mpdu(mon_pdev,
+				status = dp_rx_mon_deliver_mpdu(pdev,
 								mpdu,
 								&ppdu_info->rx_status);
 				if (status != QDF_STATUS_SUCCESS)

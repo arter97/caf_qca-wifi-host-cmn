@@ -61,10 +61,12 @@
 static inline void
 dp_pdev_disable_mcopy_code(struct dp_pdev *pdev)
 {
+	uint8_t mac_id = 0;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
 	mon_pdev->mcopy_mode = M_COPY_DISABLED;
-	mon_pdev->mvdev = NULL;
+	mon_mac->mvdev = NULL;
 }
 
 static inline void
@@ -93,12 +95,14 @@ dp_reset_mcopy_mode(struct dp_pdev *pdev)
 static QDF_STATUS
 dp_config_mcopy_mode(struct dp_pdev *pdev, int val)
 {
+	uint8_t mac_id = 0;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 	struct dp_mon_ops *mon_ops;
 	struct cdp_mon_ops *cdp_ops;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
-	if (mon_pdev->mvdev)
+	if (mon_mac->mvdev)
 		return QDF_STATUS_E_RESOURCES;
 
 	mon_pdev->mcopy_mode = val;
@@ -170,10 +174,12 @@ dp_reset_undecoded_metadata_capture(struct dp_pdev *pdev)
 static QDF_STATUS
 dp_enable_undecoded_metadata_capture(struct dp_pdev *pdev, int val)
 {
+	uint8_t mac_id = 0;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
-	if (!mon_pdev->mvdev) {
+	if (!mon_mac->mvdev) {
 		qdf_err("monitor_pdev is NULL");
 		return QDF_STATUS_E_RESOURCES;
 	}
@@ -240,8 +246,11 @@ QDF_STATUS dp_reset_monitor_mode_unlock(struct cdp_soc_t *soc_hdl,
 		dp_get_pdev_from_soc_pdev_id_wifi3((struct dp_soc *)soc,
 						   pdev_id);
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	struct dp_mon_mac *mon_mac;
 	struct dp_mon_pdev *mon_pdev;
 	struct cdp_mon_ops *cdp_ops;
+	uint8_t num_dst_rings = soc->wlan_cfg_ctx->num_rxdma_dst_rings_per_pdev;
+	uint8_t mac_id;
 
 	if (!pdev)
 		return QDF_STATUS_E_FAILURE;
@@ -262,7 +271,10 @@ QDF_STATUS dp_reset_monitor_mode_unlock(struct cdp_soc_t *soc_hdl,
 #endif
 	}
 
-	mon_pdev->mvdev = NULL;
+	for (mac_id = 0; mac_id < num_dst_rings; mac_id++) {
+		mon_mac = dp_get_mon_mac(pdev, mac_id);
+		mon_mac->mvdev = NULL;
+	}
 
 	/*
 	 * Lite monitor mode, smart monitor mode and monitor
@@ -307,6 +319,7 @@ dp_pdev_set_advance_monitor_filter(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	/* Many monitor VAPs can exists in a system but only one can be up at
 	 * anytime
 	 */
+	uint8_t mac_id = 0;
 	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
 	struct dp_vdev *vdev;
 	struct dp_pdev *pdev =
@@ -314,12 +327,14 @@ dp_pdev_set_advance_monitor_filter(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 						   pdev_id);
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	struct dp_mon_pdev *mon_pdev;
+	struct dp_mon_mac *mon_mac;
 
 	if (!pdev || !pdev->monitor_pdev)
 		return QDF_STATUS_E_FAILURE;
 
 	mon_pdev = pdev->monitor_pdev;
-	vdev = mon_pdev->mvdev;
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
+	vdev = mon_mac->mvdev;
 
 	if (!vdev)
 		return QDF_STATUS_E_FAILURE;
@@ -327,13 +342,6 @@ dp_pdev_set_advance_monitor_filter(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_WARN,
 		  "pdev=%pK, pdev_id=%d, soc=%pK vdev=%pK",
 		  pdev, pdev_id, soc, vdev);
-
-	/*Check if current pdev's monitor_vdev exists */
-	if (!mon_pdev->mvdev) {
-		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
-			  "vdev=%pK", vdev);
-		qdf_assert(vdev);
-	}
 
 	/* update filter mode, type in pdev structure */
 	mon_pdev->mon_filter_mode = filter_val->mode;
@@ -503,20 +511,21 @@ QDF_STATUS dp_vdev_set_monitor_mode(struct cdp_soc_t *dp_soc,
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	struct dp_mon_pdev *mon_pdev;
 	struct cdp_mon_ops *cdp_ops;
+	uint8_t mac_id = 0;
+	struct dp_mon_mac *mon_mac;
 
 	if (!vdev)
 		return QDF_STATUS_E_FAILURE;
 
 	pdev = vdev->pdev;
-
 	if (!pdev || !pdev->monitor_pdev) {
 		dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
 		return QDF_STATUS_E_FAILURE;
 	}
 
 	mon_pdev = pdev->monitor_pdev;
-
-	mon_pdev->mvdev = vdev;
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
+	mon_mac->mvdev = vdev;
 
 	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_WARN,
 		  "pdev=%pK, pdev_id=%d, soc=%pK vdev=%pK\n",
@@ -573,7 +582,7 @@ QDF_STATUS dp_vdev_set_monitor_mode(struct cdp_soc_t *dp_soc,
 		dp_cdp_err("%pK: Failed to reset monitor filters", soc);
 		dp_mon_filter_reset_mon_mode(pdev);
 		mon_pdev->monitor_configured = false;
-		mon_pdev->mvdev = NULL;
+		mon_mac->mvdev = NULL;
 	}
 
 fail:
@@ -674,10 +683,12 @@ dp_config_debug_sniffer(struct dp_pdev *pdev, int val)
 QDF_STATUS
 dp_mon_config_undecoded_metadata_capture(struct dp_pdev *pdev, int val)
 {
+	uint8_t mac_id = 0;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
-	if (!mon_pdev->mvdev && !mon_pdev->scan_spcl_vap_configured) {
+	if (!mon_mac->mvdev && !mon_pdev->scan_spcl_vap_configured) {
 		qdf_err("No monitor or Special vap, undecoded capture not supported");
 		return QDF_STATUS_E_RESOURCES;
 	}
@@ -736,14 +747,20 @@ dp_monitor_mode_ring_config(struct dp_soc *soc, uint8_t mac_for_pdev,
 static uint8_t dp_get_mon_vdev_from_pdev_wifi3(struct cdp_soc_t *soc_hdl,
 		uint8_t pdev_id)
 {
+	struct dp_mon_mac *mon_mac;
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
 	struct dp_pdev *pdev = dp_get_pdev_from_soc_pdev_id_wifi3(soc, pdev_id);
+	uint8_t mac_id = 0;
 
-	if (qdf_unlikely(!pdev || !pdev->monitor_pdev ||
-				!pdev->monitor_pdev->mvdev))
+	if (qdf_unlikely(!pdev || !pdev->monitor_pdev))
 		return -EINVAL;
 
-	return pdev->monitor_pdev->mvdev->vdev_id;
+	/* return 1st mon vdev id */
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
+	if (qdf_unlikely(!mon_mac->mvdev))
+		return -EINVAL;
+
+	return mon_mac->mvdev->vdev_id;
 }
 
 #if defined(QCA_TX_CAPTURE_SUPPORT) || defined(QCA_ENHANCED_STATS_SUPPORT)
@@ -1153,11 +1170,13 @@ dp_set_hybrid_pktlog_enable(struct dp_pdev *pdev,
 	struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx;
 	struct dp_mon_ops *mon_ops = NULL;
 	uint16_t num_buffers;
+	uint8_t mac_id = 0;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
 	/* Nothing needs to be done if monitor mode is
 	 * enabled
 	 */
-	if (mon_pdev->mvdev)
+	if (mon_mac->mvdev)
 		return false;
 
 	mon_ops = dp_mon_ops_get(pdev->soc);
@@ -1220,6 +1239,7 @@ int dp_set_pktlog_wifi3(struct dp_pdev *pdev, uint32_t event,
 	uint8_t mac_id = 0;
 	struct dp_mon_ops *mon_ops;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
 	soc = pdev->soc;
 	mon_ops = dp_mon_ops_get(soc);
@@ -1239,7 +1259,7 @@ int dp_set_pktlog_wifi3(struct dp_pdev *pdev, uint32_t event,
 			/* Nothing needs to be done if monitor mode is
 			 * enabled
 			 */
-			if (mon_pdev->mvdev)
+			if (mon_mac->mvdev)
 				return 0;
 
 			if (mon_pdev->rx_pktlog_mode == DP_RX_PKTLOG_FULL)
@@ -1264,7 +1284,7 @@ int dp_set_pktlog_wifi3(struct dp_pdev *pdev, uint32_t event,
 			/* Nothing needs to be done if monitor mode is
 			 * enabled
 			 */
-			if (mon_pdev->mvdev)
+			if (mon_mac->mvdev)
 				return 0;
 
 			if (mon_pdev->rx_pktlog_mode == DP_RX_PKTLOG_LITE)
@@ -1304,7 +1324,7 @@ int dp_set_pktlog_wifi3(struct dp_pdev *pdev, uint32_t event,
 			/* Nothing needs to be done if monitor mode is
 			 * enabled
 			 */
-			if (mon_pdev->mvdev)
+			if (mon_mac->mvdev)
 				return 0;
 
 			if (mon_pdev->rx_pktlog_cbf)
@@ -1350,7 +1370,7 @@ int dp_set_pktlog_wifi3(struct dp_pdev *pdev, uint32_t event,
 			/* Nothing needs to be done if monitor mode is
 			 * enabled
 			 */
-			if (mon_pdev->mvdev)
+			if (mon_mac->mvdev)
 				return 0;
 
 			if (mon_pdev->rx_pktlog_mode == DP_RX_PKTLOG_DISABLED)
@@ -1545,9 +1565,11 @@ static
 struct dp_vdev *dp_rx_nac_filter(struct dp_pdev *pdev,
 				 uint8_t *rx_pkt_hdr)
 {
+	uint8_t mac_id = 0;
 	struct ieee80211_frame *wh;
 	struct dp_neighbour_peer *peer = NULL;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
 	wh = (struct ieee80211_frame *)rx_pkt_hdr;
 
@@ -1570,7 +1592,7 @@ struct dp_vdev *dp_rx_nac_filter(struct dp_pdev *pdev,
 
 				qdf_spin_unlock_bh(&mon_pdev->neighbour_peer_mutex);
 
-			return mon_pdev->mvdev;
+			return mon_mac->mvdev;
 		}
 	}
 	qdf_spin_unlock_bh(&mon_pdev->neighbour_peer_mutex);
@@ -6306,12 +6328,17 @@ QDF_STATUS dp_mon_vdev_detach(struct dp_vdev *vdev)
 	struct dp_mon_vdev *mon_vdev = vdev->monitor_vdev;
 	struct dp_pdev *pdev = vdev->pdev;
 	struct dp_mon_ops *mon_ops = dp_mon_ops_get(pdev->soc);
+	uint8_t mac_id;
+	struct dp_mon_mac *mon_mac;
 
 	if (!mon_ops)
 		return QDF_STATUS_E_FAILURE;
 
 	if (!mon_vdev)
 		return QDF_STATUS_E_FAILURE;
+
+	mac_id = mon_vdev->mac_id;
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
 
 	if (pdev->monitor_pdev->scan_spcl_vap_configured)
 		dp_scan_spcl_vap_stats_detach(mon_vdev);
@@ -6323,8 +6350,8 @@ QDF_STATUS dp_mon_vdev_detach(struct dp_vdev *vdev)
 	pdev->monitor_pdev->mon_fcs_cap = 0;
 	/* set mvdev to NULL only if detach is called for monitor/special vap
 	 */
-	if (pdev->monitor_pdev->mvdev == vdev)
-		pdev->monitor_pdev->mvdev = NULL;
+	if (mon_mac->mvdev == vdev)
+		mon_mac->mvdev = NULL;
 
 	if (mon_ops->mon_lite_mon_vdev_delete)
 		mon_ops->mon_lite_mon_vdev_delete(pdev, vdev);
@@ -7345,9 +7372,11 @@ unlock_monitor:
 
 QDF_STATUS dp_rx_mon_config_fcs_cap(struct dp_pdev *pdev, uint8_t value)
 {
+	uint8_t mac_id = 0;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
-	if (!mon_pdev->mvdev)
+	if (!mon_mac->mvdev)
 		return QDF_STATUS_E_NOSUPPORT;
 
 	qdf_err("mon_fcs_cap: %d ", value);

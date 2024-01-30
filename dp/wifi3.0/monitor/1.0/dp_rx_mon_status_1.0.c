@@ -281,24 +281,31 @@ dp_rx_mon_handle_ppdu_undecoded_metadata(struct dp_soc *soc,
  * dp_rx_mon_update_scan_spcl_vap_stats() - Update special vap stats
  * @pdev: dp pdev context
  * @ppdu_info: ppdu info structure from ppdu ring
+ * @mac_id: MAC ID
  *
  * Return: none
  */
 static inline void
 dp_rx_mon_update_scan_spcl_vap_stats(struct dp_pdev *pdev,
-				     struct hal_rx_ppdu_info *ppdu_info)
+				     struct hal_rx_ppdu_info *ppdu_info,
+				     uint8_t mac_id)
 {
 	struct mon_rx_user_status *rx_user_status = NULL;
 	struct dp_mon_pdev *mon_pdev = NULL;
 	struct dp_mon_vdev *mon_vdev = NULL;
+	struct dp_mon_mac *mon_mac;
 	uint32_t num_users = 0;
 	uint32_t user = 0;
 
 	mon_pdev = pdev->monitor_pdev;
-	if (!mon_pdev || !mon_pdev->mvdev)
+	if (!mon_pdev)
 		return;
 
-	mon_vdev = mon_pdev->mvdev->monitor_vdev;
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
+	if (!mon_mac->mvdev)
+		return;
+
+	mon_vdev = mon_mac->mvdev->monitor_vdev;
 	if (!mon_vdev || !mon_vdev->scan_spcl_vap_stats)
 		return;
 
@@ -324,7 +331,8 @@ dp_rx_mon_update_scan_spcl_vap_stats(struct dp_pdev *pdev,
 #else
 static inline void
 dp_rx_mon_update_scan_spcl_vap_stats(struct dp_pdev *pdev,
-				     struct hal_rx_ppdu_info *ppdu_info)
+				     struct hal_rx_ppdu_info *ppdu_info,
+				     uint8_t mac_id)
 {
 }
 #endif
@@ -467,10 +475,10 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 		rx_tlv_start = rx_tlv;
 		nbuf_used = false;
 
-		if ((mon_pdev->mvdev) || (mon_pdev->enhanced_stats_en) ||
-		    (mon_pdev->mcopy_mode) || (dp_cfr_rcc_mode_status(pdev)) ||
-		    (mon_pdev->undecoded_metadata_capture) ||
-		    (rx_enh_capture_mode != CDP_RX_ENH_CAPTURE_DISABLED)) {
+		if (mon_mac->mvdev || mon_pdev->enhanced_stats_en ||
+		    mon_pdev->mcopy_mode || dp_cfr_rcc_mode_status(pdev) ||
+		    mon_pdev->undecoded_metadata_capture ||
+		    rx_enh_capture_mode != CDP_RX_ENH_CAPTURE_DISABLED) {
 			do {
 				tlv_status = hal_rx_status_get_tlv_info(rx_tlv,
 						ppdu_info, pdev->soc->hal_soc,
@@ -524,9 +532,10 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 		/* smart monitor vap and m_copy cannot co-exist */
 		if (qdf_unlikely(ppdu_info->rx_status.monitor_direct_used &&
 				 mon_pdev->neighbour_peers_added &&
-				 mon_pdev->mvdev)) {
+				 mon_mac->mvdev)) {
 			smart_mesh_status = dp_rx_handle_smart_mesh_mode(soc,
-						pdev, ppdu_info, status_nbuf);
+						pdev, ppdu_info, status_nbuf,
+						mac_id);
 			if (smart_mesh_status)
 				qdf_nbuf_free(status_nbuf);
 		} else if (qdf_unlikely(IS_LOCAL_PKT_CAPTURE_RUNNING(mon_pdev,
@@ -534,7 +543,8 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 			int ret;
 
 			ret = dp_rx_handle_local_pkt_capture(pdev, ppdu_info,
-							     status_nbuf);
+							     status_nbuf,
+							     mac_id);
 			if (ret)
 				qdf_nbuf_free(status_nbuf);
 		} else if (qdf_unlikely(mon_pdev->mcopy_mode)) {
@@ -577,7 +587,8 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 			/* Collect spcl vap stats if configured */
 			if (qdf_unlikely(mon_pdev->scan_spcl_vap_configured))
 				dp_rx_mon_update_scan_spcl_vap_stats(pdev,
-								     ppdu_info);
+								     ppdu_info,
+								     mac_id);
 
 			dp_rx_mon_update_user_ctrl_frame_stats(pdev, ppdu_info);
 
