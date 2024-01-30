@@ -5597,7 +5597,14 @@ dp_ppdu_stats_ind_handler(struct htt_soc *soc,
 void
 dp_mon_set_bsscolor(struct dp_pdev *pdev, uint8_t bsscolor)
 {
-	pdev->monitor_pdev->rx_mon_recv_status.bsscolor = bsscolor;
+	/*
+	 * mac_id value is required where per MAC mon_mac handle
+	 * is needed in single pdev multiple MAC case.
+	 */
+	uint8_t mac_id = 0;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
+
+	mon_mac->rx_mon_recv_status.bsscolor = bsscolor;
 }
 
 bool dp_pdev_get_filter_ucast_data(struct cdp_pdev *pdev_handle)

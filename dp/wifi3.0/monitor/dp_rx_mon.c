@@ -1957,7 +1957,7 @@ QDF_STATUS dp_rx_mon_deliver(struct dp_soc *soc, uint32_t mac_id,
 
 	mon_mac = dp_get_mon_mac(pdev, mac_id);
 	mon_pdev = pdev->monitor_pdev;
-	rs = &mon_pdev->rx_mon_recv_status;
+	rs = &mon_mac->rx_mon_recv_status;
 
 	if (!mon_mac && !mon_mac->mvdev && !mon_pdev->mcopy_mode &&
 	    !mon_pdev->rx_pktlog_cbf)

@@ -1123,8 +1123,6 @@ struct  dp_mon_pdev {
 	/* tx packet capture enhancement */
 	enum cdp_tx_enh_capture_mode tx_capture_enabled;
 
-	/* Monitor mode interface and status storage */
-	struct cdp_mon_status rx_mon_recv_status;
 	/* to track duplicate link descriptor indications by HW for a WAR */
 	uint64_t mon_last_linkdesc_paddr;
 	/* to track duplicate buffer indications by HW for a WAR */
@@ -1625,15 +1623,18 @@ static inline QDF_STATUS dp_monitor_check_com_info_ppdu_id(struct dp_pdev *pdev,
 	struct cdp_mon_status *rs;
 	struct dp_mon_pdev *mon_pdev;
 	uint32_t msdu_ppdu_id = 0;
+	struct dp_mon_mac *mon_mac;
+	uint8_t mac_id = 0;
 
 	if (qdf_unlikely(!pdev || !pdev->monitor_pdev))
 		return QDF_STATUS_E_FAILURE;
 
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
 	mon_pdev = pdev->monitor_pdev;
 	if (qdf_likely(1 != mon_pdev->ppdu_info.rx_status.rxpcu_filter_pass))
 		return QDF_STATUS_E_FAILURE;
 
-	rs = &pdev->monitor_pdev->rx_mon_recv_status;
+	rs = &mon_mac->rx_mon_recv_status;
 	if (!rs || rs->cdp_rs_rxdma_err)
 		return QDF_STATUS_E_FAILURE;
 
