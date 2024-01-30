@@ -1127,13 +1127,14 @@ static void dp_rx_mon_free_mpdu_queue(struct dp_pdev *pdev,
 /**
  * dp_rx_mon_get_ppdu_info() - Get PPDU info from freelist
  *
- * @mon_pdev: monitor pdev
+ * @pdev: dp pdev handle
  *
  * Return: ppdu_info
  */
 struct hal_rx_ppdu_info*
-dp_rx_mon_get_ppdu_info(struct dp_mon_pdev *mon_pdev)
+dp_rx_mon_get_ppdu_info(struct dp_pdev *pdev)
 {
+	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be =
 			dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
 	struct hal_rx_ppdu_info *ppdu_info, *temp_ppdu_info;
@@ -1841,7 +1842,7 @@ dp_rx_mon_flush_packet_tlv(struct dp_pdev *pdev, void *buf, uint16_t end_offset,
 	if (!buf)
 		return work_done;
 
-	ppdu_info = &mon_pdev->ppdu_info;
+	ppdu_info = &mon_mac->ppdu_info;
 	if (!ppdu_info) {
 		dp_mon_debug("ppdu_info malloc failed pdev: %pK", pdev);
 		return work_done;
@@ -2171,7 +2172,7 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 		return NULL;
 	}
 
-	ppdu_info = dp_rx_mon_get_ppdu_info(mon_pdev);
+	ppdu_info = dp_rx_mon_get_ppdu_info(pdev);
 
 	if (!ppdu_info) {
 		dp_mon_debug("ppdu_info malloc failed pdev: %pK", pdev);

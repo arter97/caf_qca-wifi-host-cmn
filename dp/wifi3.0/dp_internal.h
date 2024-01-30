@@ -819,7 +819,8 @@ dp_monitor_get_chan_freq(struct dp_pdev *vdev)
 
 static inline void dp_monitor_get_mpdu_status(struct dp_pdev *pdev,
 					      struct dp_soc *soc,
-					      uint8_t *rx_tlv_hdr)
+					      uint8_t *rx_tlv_hdr
+					      uint8_t mac_id)
 {
 }
 

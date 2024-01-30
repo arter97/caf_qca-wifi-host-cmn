@@ -56,8 +56,11 @@ void
 dp_handle_tx_capture(struct dp_soc *soc, struct dp_pdev *pdev,
 		     qdf_nbuf_t mon_mpdu)
 {
+	uint8_t mac_id = 0;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
-	struct hal_rx_ppdu_info *ppdu_info = &mon_pdev->ppdu_info;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
+	struct hal_rx_ppdu_info *ppdu_info = &mon_mac->ppdu_info;
+
 
 	if (mon_pdev->tx_capture_enabled
 	    == CDP_TX_ENH_CAPTURE_DISABLED)
@@ -74,11 +77,13 @@ dp_handle_tx_capture(struct dp_soc *soc, struct dp_pdev *pdev,
 static void
 dp_tx_capture_get_user_id(struct dp_pdev *dp_pdev, void *rx_desc_tlv)
 {
+	uint8_t mac_id = 0;
 	struct dp_mon_pdev *mon_pdev = dp_pdev->monitor_pdev;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(dp_pdev, mac_id);
 
 	if (mon_pdev->tx_capture_enabled
 	    != CDP_TX_ENH_CAPTURE_DISABLED)
-		mon_pdev->ppdu_info.rx_info.user_id =
+		mon_mac->ppdu_info.rx_info.user_id =
 			hal_rx_hw_desc_mpdu_user_id(dp_pdev->soc->hal_soc,
 						    rx_desc_tlv);
 }
@@ -378,7 +383,7 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 						      rx_desc_tlv))
 				hal_rx_mon_hw_desc_get_mpdu_status(soc->hal_soc,
 					rx_desc_tlv,
-					&mon_pdev->ppdu_info.rx_status);
+					&mon_mac->ppdu_info.rx_status);
 
 			dp_rx_mon_parse_desc_buffer(soc,
 						    &(msdu_list.msdu_info[i]),
@@ -467,7 +472,7 @@ next_msdu:
 	dp_rx_mon_init_tail_msdu(head_msdu, msdu, last, tail_msdu);
 	dp_rx_mon_remove_raw_frame_fcs_len(soc,
 					   mon_pdev,
-					   &mon_pdev->ppdu_info,
+					   &mon_mac->ppdu_info,
 					   head_msdu, tail_msdu);
 
 	return rx_bufs_used;
@@ -695,7 +700,7 @@ void dp_rx_mon_dest_process(struct dp_soc *soc, struct dp_intr *int_ctx,
 	}
 
 	pdev_id = pdev->pdev_id;
-	ppdu_id = mon_pdev->ppdu_info.com_info.ppdu_id;
+	ppdu_id = mon_mac->ppdu_info.com_info.ppdu_id;
 	rx_bufs_used = 0;
 	rx_mon_stats = &mon_mac->rx_mon_stats;
 
@@ -738,16 +743,16 @@ void dp_rx_mon_dest_process(struct dp_soc *soc, struct dp_intr *int_ctx,
 		    MON_DEST_RING_STUCK_MAX_CNT) {
 			dp_info("destination ring stuck");
 			dp_info("ppdu_id status=%d dest=%d",
-				mon_pdev->ppdu_info.com_info.ppdu_id, ppdu_id);
+				mon_mac->ppdu_info.com_info.ppdu_id, ppdu_id);
 			rx_mon_stats->mon_rx_dest_stuck++;
-			mon_pdev->ppdu_info.com_info.ppdu_id = ppdu_id;
+			mon_mac->ppdu_info.com_info.ppdu_id = ppdu_id;
 			continue;
 		}
 
-		if (ppdu_id != mon_pdev->ppdu_info.com_info.ppdu_id) {
+		if (ppdu_id != mon_mac->ppdu_info.com_info.ppdu_id) {
 			rx_mon_stats->stat_ring_ppdu_id_hist[
 				rx_mon_stats->ppdu_id_hist_idx] =
-				mon_pdev->ppdu_info.com_info.ppdu_id;
+				mon_mac->ppdu_info.com_info.ppdu_id;
 			rx_mon_stats->dest_ring_ppdu_id_hist[
 				rx_mon_stats->ppdu_id_hist_idx] = ppdu_id;
 			rx_mon_stats->ppdu_id_hist_idx =
@@ -755,7 +760,7 @@ void dp_rx_mon_dest_process(struct dp_soc *soc, struct dp_intr *int_ctx,
 					(MAX_PPDU_ID_HIST - 1);
 			dp_rx_mon_dest_debug("%pK: ppdu_id %x != ppdu_info.com_info.ppdu_id %x",
 					     soc, ppdu_id,
-					     mon_pdev->ppdu_info.com_info.ppdu_id);
+					     mon_mac->ppdu_info.com_info.ppdu_id);
 			break;
 		}
 
@@ -1733,6 +1738,7 @@ dp_rx_mon_restitch_mpdu_from_msdus(struct dp_soc *soc,
 	struct dp_mon_pdev *mon_pdev;
 	struct hal_rx_mon_dest_buf_info buf_info;
 	uint8_t l2_hdr_offset;
+	struct dp_mon_mac *mon_mac;
 
 	head_frag_list = NULL;
 	mpdu_buf = NULL;
@@ -1744,6 +1750,7 @@ dp_rx_mon_restitch_mpdu_from_msdus(struct dp_soc *soc,
 	}
 
 	mon_pdev = dp_pdev->monitor_pdev;
+	mon_mac = dp_get_mon_mac(dp_pdev, mac_id);
 
 	/* The nbuf has been pulled just beyond the status and points to the
 	 * payload
@@ -1769,7 +1776,7 @@ dp_rx_mon_restitch_mpdu_from_msdus(struct dp_soc *soc,
 
 	rx_status->cdp_rs_fcs_err = hal_rx_tlv_mpdu_fcs_err_get(soc->hal_soc,
 								rx_desc);
-	mon_pdev->ppdu_info.rx_status.rs_fcs_err = rx_status->cdp_rs_fcs_err;
+	mon_mac->ppdu_info.rx_status.rs_fcs_err = rx_status->cdp_rs_fcs_err;
 
 	/* Fill out the rx_status from the PPDU start and end fields */
 	/*   HAL_RX_GET_PPDU_STATUS(soc, mac_id, rx_status); */
@@ -2097,6 +2104,7 @@ dp_rx_mon_frag_restitch_mpdu_from_msdus(struct dp_soc *soc,
 	qdf_nbuf_t msdu_curr;
 	uint16_t rx_mon_tlv_size = soc->rx_mon_pkt_tlv_size;
 	struct dp_mon_pdev *mon_pdev;
+	struct dp_mon_mac *mon_mac;
 
 	if (qdf_unlikely(!dp_pdev)) {
 		dp_rx_mon_dest_debug("%pK: pdev is null for mac_id = %d",
@@ -2105,6 +2113,7 @@ dp_rx_mon_frag_restitch_mpdu_from_msdus(struct dp_soc *soc,
 	}
 
 	mon_pdev = dp_pdev->monitor_pdev;
+	mon_mac = dp_get_mon_mac(dp_pdev, mac_id);
 	qdf_mem_zero(&buf_info, sizeof(struct hal_rx_mon_dest_buf_info));
 
 	if (!head_msdu || !tail_msdu)
@@ -2125,7 +2134,7 @@ dp_rx_mon_frag_restitch_mpdu_from_msdus(struct dp_soc *soc,
 				rx_mon_tlv_size;
 	rx_status->cdp_rs_fcs_err = hal_rx_tlv_mpdu_fcs_err_get(soc->hal_soc,
 								rx_desc);
-	mon_pdev->ppdu_info.rx_status.rs_fcs_err = rx_status->cdp_rs_fcs_err;
+	mon_mac->ppdu_info.rx_status.rs_fcs_err = rx_status->cdp_rs_fcs_err;
 
 	rx_desc = qdf_nbuf_get_frag_addr(head_msdu, 0) - rx_mon_tlv_size;
 	hal_rx_priv_info_get_from_tlv(soc->hal_soc, rx_desc,
@@ -2136,7 +2145,7 @@ dp_rx_mon_frag_restitch_mpdu_from_msdus(struct dp_soc *soc,
 	 * packet in RAW mode.
 	 */
 	if (buf_info.is_decap_raw == 1) {
-		if (qdf_unlikely(mon_pdev->ppdu_info.rx_status.rs_fcs_err)) {
+		if (qdf_unlikely(mon_mac->ppdu_info.rx_status.rs_fcs_err)) {
 			hdr_desc = hal_rx_desc_get_80211_hdr(soc->hal_soc, rx_desc);
 			wh = (struct ieee80211_frame *)hdr_desc;
 			if ((wh->i_fc[0] & QDF_IEEE80211_FC0_VERSION_MASK) !=

@@ -1209,7 +1209,6 @@ struct  dp_mon_pdev {
 
 	/* Maintains first status buffer's paddr of a PPDU */
 	uint64_t status_buf_addr;
-	struct hal_rx_ppdu_info ppdu_info;
 
 	/* ppdu_id of last received HTT TX stats */
 	uint32_t last_ppdu_id;
@@ -1616,7 +1615,6 @@ static inline QDF_STATUS dp_monitor_check_com_info_ppdu_id(struct dp_pdev *pdev,
 							   void *rx_desc)
 {
 	struct cdp_mon_status *rs;
-	struct dp_mon_pdev *mon_pdev;
 	uint32_t msdu_ppdu_id = 0;
 	struct dp_mon_mac *mon_mac;
 	uint8_t mac_id = 0;
@@ -1625,8 +1623,7 @@ static inline QDF_STATUS dp_monitor_check_com_info_ppdu_id(struct dp_pdev *pdev,
 		return QDF_STATUS_E_FAILURE;
 
 	mon_mac = dp_get_mon_mac(pdev, mac_id);
-	mon_pdev = pdev->monitor_pdev;
-	if (qdf_likely(1 != mon_pdev->ppdu_info.rx_status.rxpcu_filter_pass))
+	if (qdf_likely(1 != mon_mac->ppdu_info.rx_status.rxpcu_filter_pass))
 		return QDF_STATUS_E_FAILURE;
 
 	rs = &mon_mac->rx_mon_recv_status;
@@ -1634,12 +1631,12 @@ static inline QDF_STATUS dp_monitor_check_com_info_ppdu_id(struct dp_pdev *pdev,
 		return QDF_STATUS_E_FAILURE;
 
 	msdu_ppdu_id = hal_rx_get_ppdu_id(pdev->soc->hal_soc, rx_desc);
-	if (msdu_ppdu_id != mon_pdev->ppdu_info.com_info.ppdu_id) {
+	if (msdu_ppdu_id != mon_mac->ppdu_info.com_info.ppdu_id) {
 		QDF_TRACE(QDF_MODULE_ID_DP,
 			  QDF_TRACE_LEVEL_ERROR,
 			  "msdu_ppdu_id=%x,com_info.ppdu_id=%x",
 			  msdu_ppdu_id,
-			  mon_pdev->ppdu_info.com_info.ppdu_id);
+			  mon_mac->ppdu_info.com_info.ppdu_id);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -1655,10 +1652,15 @@ static inline QDF_STATUS dp_monitor_check_com_info_ppdu_id(struct dp_pdev *pdev,
 static inline struct mon_rx_status*
 dp_monitor_get_rx_status(struct dp_pdev *pdev)
 {
+	struct dp_mon_mac *mon_mac;
+	uint8_t mac_id = 0;
+
 	if (qdf_unlikely(!pdev || !pdev->monitor_pdev))
 		return NULL;
 
-	return &pdev->monitor_pdev->ppdu_info.rx_status;
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
+
+	return &mon_mac->ppdu_info.rx_status;
 }
 
 /**
@@ -1842,20 +1844,22 @@ dp_monitor_set_chan_band(struct dp_vdev *vdev, enum reg_wifi_band chan_band)
  * @pdev: point to dp pdev
  * @soc: point to dp soc
  * @rx_tlv_hdr: point to rx tlv header
+ * @mac_id: mac id
  *
  */
 static inline void dp_monitor_get_mpdu_status(struct dp_pdev *pdev,
 					      struct dp_soc *soc,
-					      uint8_t *rx_tlv_hdr)
+					      uint8_t *rx_tlv_hdr,
+					      uint8_t mac_id)
 {
-	struct dp_mon_pdev *mon_pdev;
+	struct dp_mon_mac *mon_mac;
 
 	if (qdf_unlikely(!pdev || !pdev->monitor_pdev))
 		return;
 
-	mon_pdev = pdev->monitor_pdev;
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
 	hal_rx_mon_hw_desc_get_mpdu_status(soc->hal_soc, rx_tlv_hdr,
-					   &mon_pdev->ppdu_info.rx_status);
+					   &mon_mac->ppdu_info.rx_status);
 }
 
 #ifdef FEATURE_NAC_RSSI

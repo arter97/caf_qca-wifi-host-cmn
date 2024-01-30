@@ -2109,11 +2109,14 @@ QDF_STATUS dp_rx_populate_cbf_hdr(struct dp_soc *soc,
 	uint32_t data_size, hdr_size, ppdu_id, align4byte;
 	struct dp_pdev *pdev = dp_get_pdev_for_lmac_id(soc, mac_id);
 	uint32_t *msg_word;
+	struct dp_mon_mac *mon_mac;
 
 	if (!pdev)
 		return QDF_STATUS_E_INVAL;
 
-	ppdu_id = pdev->monitor_pdev->ppdu_info.com_info.ppdu_id;
+	mon_mac = dp_get_mon_mac(pdev, mac_id);
+
+	ppdu_id = mon_mac->ppdu_info.com_info.ppdu_id;
 
 	hdr_size = HTT_T2H_PPDU_STATS_IND_HDR_SIZE
 		+ qdf_offsetof(htt_ppdu_stats_rx_mgmtctrl_payload_tlv, payload);

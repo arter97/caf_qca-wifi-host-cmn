@@ -458,7 +458,7 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 
 	mon_mac = dp_get_mon_mac(pdev, mac_id);
 	mon_pdev = pdev->monitor_pdev;
-	ppdu_info = &mon_pdev->ppdu_info;
+	ppdu_info = &mon_mac->ppdu_info;
 	rx_mon_stats = &mon_mac->rx_mon_stats;
 
 	if (qdf_unlikely(mon_mac->mon_ppdu_status != DP_PPDU_STATUS_START))
@@ -601,15 +601,15 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 			* if chan_num is not fetched correctly from ppdu RX TLV,
 			 * get it from pdev saved.
 			 */
-			if (qdf_unlikely(mon_pdev->ppdu_info.rx_status.chan_num == 0))
-				mon_pdev->ppdu_info.rx_status.chan_num =
+			if (qdf_unlikely(mon_mac->ppdu_info.rx_status.chan_num == 0))
+				mon_mac->ppdu_info.rx_status.chan_num =
 							mon_mac->mon_chan_num;
 			/*
 			 * if chan_freq is not fetched correctly from ppdu RX TLV,
 			 * get it from pdev saved.
 			 */
-			if (qdf_unlikely(mon_pdev->ppdu_info.rx_status.chan_freq == 0)) {
-				mon_pdev->ppdu_info.rx_status.chan_freq =
+			if (qdf_unlikely(mon_mac->ppdu_info.rx_status.chan_freq == 0)) {
+				mon_mac->ppdu_info.rx_status.chan_freq =
 					mon_mac->mon_chan_freq;
 			}
 
@@ -955,17 +955,17 @@ dp_rx_pdev_mon_status_desc_pool_init(struct dp_pdev *pdev, uint32_t mac_id)
 
 	mon_mac->mon_ppdu_status = DP_PPDU_STATUS_START;
 
-	qdf_mem_zero(&mon_pdev->ppdu_info, sizeof(mon_pdev->ppdu_info));
+	qdf_mem_zero(&mon_mac->ppdu_info, sizeof(mon_mac->ppdu_info));
 
 	/*
 	 * Set last_ppdu_id to HAL_INVALID_PPDU_ID in order to avoid ppdu_id
 	 * match with '0' ppdu_id from monitor status ring
 	 */
-	mon_pdev->ppdu_info.com_info.last_ppdu_id = HAL_INVALID_PPDU_ID;
+	mon_mac->ppdu_info.com_info.last_ppdu_id = HAL_INVALID_PPDU_ID;
 
 	qdf_mem_zero(&mon_mac->rx_mon_stats, sizeof(mon_mac->rx_mon_stats));
 
-	dp_rx_mon_init_dbg_ppdu_stats(&mon_pdev->ppdu_info,
+	dp_rx_mon_init_dbg_ppdu_stats(&mon_mac->ppdu_info,
 				      &mon_mac->rx_mon_stats);
 
 	for (i = 0; i < MAX_MU_USERS; i++) {

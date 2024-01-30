@@ -60,7 +60,7 @@ QDF_STATUS dp_mon_pdev_ext_deinit_2_0(struct dp_pdev *pdev);
 QDF_STATUS dp_rx_mon_ppdu_info_cache_create(struct dp_pdev *pdev);
 void dp_rx_mon_ppdu_info_cache_destroy(struct dp_pdev *pdev);
 struct hal_rx_ppdu_info*
-dp_rx_mon_get_ppdu_info(struct dp_mon_pdev *mon_pdev);
+dp_rx_mon_get_ppdu_info(struct dp_pdev *pdev);
 void
 dp_rx_mon_free_ppdu_info(struct dp_pdev *pdev,
 			 struct hal_rx_ppdu_info *ppdu_info);
@@ -78,10 +78,14 @@ static inline void dp_rx_mon_ppdu_info_cache_destroy(struct dp_pdev *pdev)
 }
 
 static inline struct hal_rx_ppdu_info*
-dp_rx_mon_get_ppdu_info(struct dp_mon_pdev *mon_pdev)
+dp_rx_mon_get_ppdu_info(struct dp_pdev *pdev)
 {
-	qdf_mem_zero(&mon_pdev->ppdu_info, sizeof(struct hal_rx_ppdu_info));
-	return &mon_pdev->ppdu_info;
+	uint8_t mac_id = 0;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
+
+	qdf_mem_zero(&mon_mac->ppdu_info, sizeof(struct hal_rx_ppdu_info));
+	return &mon_mac->ppdu_info;
+
 }
 
 static inline void
@@ -302,7 +306,7 @@ static inline void dp_rx_mon_ppdu_info_cache_destroy(struct dp_pdev *pdev)
 }
 
 static inline struct hal_rx_ppdu_info*
-dp_rx_mon_get_ppdu_info(struct dp_mon_pdev *mon_pdev)
+dp_rx_mon_get_ppdu_info(struct dp_pdev *pdev)
 {
 	return NULL;
 }
