@@ -1123,11 +1123,6 @@ struct  dp_mon_pdev {
 	/* tx packet capture enhancement */
 	enum cdp_tx_enh_capture_mode tx_capture_enabled;
 
-	/* to track duplicate link descriptor indications by HW for a WAR */
-	uint64_t mon_last_linkdesc_paddr;
-	/* to track duplicate buffer indications by HW for a WAR */
-	uint32_t mon_last_buf_cookie;
-
 #ifdef QCA_SUPPORT_FULL_MON
 	/* List to maintain all MPDUs for a PPDU in monitor mode */
 	TAILQ_HEAD(, dp_mon_mpdu) mon_mpdu_q;

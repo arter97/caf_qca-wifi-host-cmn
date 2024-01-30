@@ -236,7 +236,7 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 		}
 
 		/* WAR for duplicate link descriptors received from HW */
-		if (qdf_unlikely(mon_pdev->mon_last_linkdesc_paddr ==
+		if (qdf_unlikely(mon_mac->mon_last_linkdesc_paddr ==
 		    buf_info.paddr)) {
 			mon_mac->rx_mon_stats.dup_mon_linkdesc_cnt++;
 			return rx_bufs_used;
@@ -265,7 +265,7 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 			buf_paddr = dp_rx_mon_get_paddr_from_desc(rx_desc);
 
 			/* WAR for duplicate buffers received from HW */
-			if (qdf_unlikely(mon_pdev->mon_last_buf_cookie ==
+			if (qdf_unlikely(mon_mac->mon_last_buf_cookie ==
 				msdu_list.sw_cookie[i] ||
 				DP_RX_MON_IS_BUFFER_ADDR_NULL(rx_desc) ||
 				msdu_list.paddr[i] != buf_paddr ||
@@ -275,7 +275,7 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 				 */
 				drop_mpdu = true;
 				mon_mac->rx_mon_stats.dup_mon_buf_cnt++;
-				mon_pdev->mon_last_linkdesc_paddr =
+				mon_mac->mon_last_linkdesc_paddr =
 					buf_info.paddr;
 				continue;
 			}
@@ -293,13 +293,13 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 						     rx_desc->pool_id)) {
 				drop_mpdu = true;
 				msdu = NULL;
-				mon_pdev->mon_last_linkdesc_paddr =
+				mon_mac->mon_last_linkdesc_paddr =
 					buf_info.paddr;
 				goto next_msdu;
 			}
 
 			if (drop_mpdu) {
-				mon_pdev->mon_last_linkdesc_paddr =
+				mon_mac->mon_last_linkdesc_paddr =
 					buf_info.paddr;
 				dp_rx_mon_buffer_free(rx_desc);
 				msdu = NULL;
@@ -319,7 +319,7 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 					drop_mpdu = true;
 					dp_rx_mon_buffer_free(rx_desc);
 					msdu = NULL;
-					mon_pdev->mon_last_linkdesc_paddr =
+					mon_mac->mon_last_linkdesc_paddr =
 						buf_info.paddr;
 					goto next_msdu;
 				}
@@ -359,7 +359,7 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 					mon_mac->rx_mon_stats.ppdu_id_mismatch
 						++;
 
-				mon_pdev->mon_last_linkdesc_paddr =
+				mon_mac->mon_last_linkdesc_paddr =
 					buf_info.paddr;
 
 				if (dp_rx_mon_alloc_parent_buffer(head_msdu)
@@ -439,7 +439,7 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 			}
 
 next_msdu:
-			mon_pdev->mon_last_buf_cookie = msdu_list.sw_cookie[i];
+			mon_mac->mon_last_buf_cookie = msdu_list.sw_cookie[i];
 			rx_bufs_used++;
 			dp_rx_add_to_free_desc_list(head,
 				tail, rx_desc);
@@ -841,7 +841,7 @@ dp_rx_pdev_mon_buf_desc_pool_init(struct dp_pdev *pdev, uint32_t mac_id)
 	struct rx_desc_pool *rx_desc_pool;
 	uint32_t rx_desc_pool_size;
 	struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx = soc->wlan_cfg_ctx;
-	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
 	mon_buf_ring = &soc->rxdma_mon_buf_ring[mac_id];
 
@@ -867,9 +867,9 @@ dp_rx_pdev_mon_buf_desc_pool_init(struct dp_pdev *pdev, uint32_t mac_id)
 
 	dp_rx_desc_pool_init(soc, mac_id, rx_desc_pool_size, rx_desc_pool);
 
-	mon_pdev->mon_last_linkdesc_paddr = 0;
+	mon_mac->mon_last_linkdesc_paddr = 0;
 
-	mon_pdev->mon_last_buf_cookie = DP_RX_DESC_COOKIE_MAX + 1;
+	mon_mac->mon_last_buf_cookie = DP_RX_DESC_COOKIE_MAX + 1;
 
 	/* Attach full monitor mode resources */
 	dp_full_mon_attach(pdev);
