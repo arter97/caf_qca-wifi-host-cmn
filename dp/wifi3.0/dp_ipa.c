@@ -887,6 +887,9 @@ static void dp_ipa_tx_alt_ring_resource_setup(struct dp_soc *soc)
 	/* IPA TCL_DATA Alternative Ring - HAL_SRNG_SW2TCL2 */
 	hal_srng = (struct hal_srng *)
 		soc->tcl_data_ring[IPA_TX_ALT_RING_IDX].hal_srng;
+	if (!hal_srng)
+		return;
+
 	hal_get_srng_params(hal_soc_to_hal_soc_handle(hal_soc),
 			    hal_srng_to_hal_ring_handle(hal_srng),
 			    &srng_params);
@@ -921,6 +924,9 @@ static void dp_ipa_tx_alt_ring_resource_setup(struct dp_soc *soc)
 	/* IPA TX Alternative COMP Ring - HAL_SRNG_WBM2SW4_RELEASE */
 	hal_srng = (struct hal_srng *)
 		soc->tx_comp_ring[IPA_TX_ALT_COMP_RING_IDX].hal_srng;
+	if (!hal_srng)
+		return;
+
 	hal_get_srng_params(hal_soc_to_hal_soc_handle(hal_soc),
 			    hal_srng_to_hal_ring_handle(hal_srng),
 			    &srng_params);
