@@ -106,6 +106,21 @@ defined(WLAN_PKT_CAPTURE_RX_2_0)
 #define HAL_RX_MPDU_END_FCS_ERR_MSB                                 19
 #define HAL_RX_MPDU_END_FCS_ERR_MASK                                0x00080000
 
+#define PHYRX_OTHER_RECEIVE_INFO_EVM_DETAILS_NUMBER_OF_DATA_SYM_OFFSET   0x00000000
+#define PHYRX_OTHER_RECEIVE_INFO_EVM_DETAILS_NUMBER_OF_DATA_SYM_LSB      0
+#define PHYRX_OTHER_RECEIVE_INFO_EVM_DETAILS_NUMBER_OF_DATA_SYM_MSB      15
+#define PHYRX_OTHER_RECEIVE_INFO_EVM_DETAILS_NUMBER_OF_DATA_SYM_MASK     0x0000ffff
+
+#define PHYRX_OTHER_RECEIVE_INFO_EVM_DETAILS_NUMBER_OF_STREAMS_OFFSET    0x00000000
+#define PHYRX_OTHER_RECEIVE_INFO_EVM_DETAILS_NUMBER_OF_STREAMS_LSB       16
+#define PHYRX_OTHER_RECEIVE_INFO_EVM_DETAILS_NUMBER_OF_STREAMS_MSB       23
+#define PHYRX_OTHER_RECEIVE_INFO_EVM_DETAILS_NUMBER_OF_STREAMS_MASK      0x00ff0000
+
+#define PHYRX_OTHER_RECEIVE_INFO_EVM_DETAILS_NUMBER_OF_PILOTS_OFFSET     0x00000000
+#define PHYRX_OTHER_RECEIVE_INFO_EVM_DETAILS_NUMBER_OF_PILOTS_LSB        24
+#define PHYRX_OTHER_RECEIVE_INFO_EVM_DETAILS_NUMBER_OF_PILOTS_MSB        31
+#define PHYRX_OTHER_RECEIVE_INFO_EVM_DETAILS_NUMBER_OF_PILOTS_MASK       0xff000000
+
 #if defined(WLAN_PKT_CAPTURE_TX_2_0) || \
 defined(WLAN_PKT_CAPTURE_RX_2_0) || \
 defined(QCA_SINGLE_WIFI_3_0)
@@ -2201,6 +2216,131 @@ hal_rx_ul_ofdma_ru_size_to_width(uint32_t ru_size,
 }
 #endif
 
+#if (defined(WLAN_SA_API_ENABLE))
+#define HAL_RX_EVM_DEMF_SEGMENT_SIZE 128
+#define HAL_RX_EVM_DEMF_MAX_STREAMS 2
+#define HAL_RX_SU_EVM_MEMBER_LEN 4
+
+static inline void
+hal_rx_update_su_evm_info(void *rx_tlv,
+			  void *ppdu_info_hdl)
+{
+	uint32_t nss_count, pilot_count;
+	uint16_t istream = 0, ipilot = 0;
+	uint8_t pilot_shift = 0;
+	uint8_t *pilot_ptr = NULL;
+	uint16_t segment = 0;
+
+	struct hal_rx_ppdu_info *ppdu_info =
+			(struct hal_rx_ppdu_info *)ppdu_info_hdl;
+	nss_count = ppdu_info->evm_info.nss_count;
+	pilot_count = ppdu_info->evm_info.pilot_count;
+
+	if (nss_count * pilot_count > HAL_RX_MAX_SU_EVM_COUNT)
+		return;
+
+	/* move rx_tlv by 4 to skip no_of_data_sym, nss_cnt and pilot_cnt */
+	rx_tlv = (uint8_t *)rx_tlv + HAL_RX_SU_EVM_MEMBER_LEN;
+
+	/* EVM values = number_of_streams * number_of_pilots
+	 * each EVM value is 8 bits, So, each variable acc_linear_evm_x_y
+	 * is (32 bits) will contain 4 EVM values.
+	 * For ex:
+	 * acc_linear_evm_0_0 : <Pilot0, stream0>, <Pilot0, stream1>,
+	 * <Pilot1, stream0>, <Pilot1, stream1>
+	 * .....
+	 * acc_linear_evm_1_15 : <Pilot62, stream0>, <Pilot62, stream1>,
+	 * <Pilot63, stream0>, <Pilot63, stream1> ...
+	 */
+
+	for (istream = 0; istream < nss_count; istream++) {
+		segment = HAL_RX_EVM_DEMF_SEGMENT_SIZE * (istream / HAL_RX_EVM_DEMF_MAX_STREAMS);
+		pilot_ptr = (uint8_t *)rx_tlv + segment;
+		for (ipilot = 0; ipilot < pilot_count; ipilot++) {
+			/* In case there is one stream in Demf segment,
+			 * pilots are one after the other
+			 */
+			if (nss_count == 1 ||
+			    ((nss_count == HAL_RX_EVM_DEMF_MAX_STREAMS + 1) &&
+			     (istream == HAL_RX_EVM_DEMF_MAX_STREAMS))) {
+				pilot_shift = ipilot;
+			/* In case there are more than one stream in DemF
+			 * segment, pilot 0 of all streams come one after the
+			 * other before pilot 1
+			 */
+			} else {
+				pilot_shift = (ipilot * HAL_RX_EVM_DEMF_MAX_STREAMS)
+				 + (istream % HAL_RX_EVM_DEMF_MAX_STREAMS);
+			}
+			ppdu_info->evm_info.pilot_evm[segment + pilot_shift] =
+					*(pilot_ptr + pilot_shift);
+		}
+	}
+}
+
+/**
+ * hal_rx_mon_phyrx_other_receive_info_tlv() - API to get tlv info
+ * @rx_tlv_hdr: RX TLV header
+ * @ppdu_info_hdl: Handle to PPDU info to update
+ *
+ * Return: None
+ */
+static inline void
+hal_rx_mon_phyrx_other_receive_info_tlv(void *rx_tlv_hdr, void *ppdu_info_hdl)
+{
+	uint32_t tlv_len, tlv_tag;
+	void *rx_tlv;
+	struct hal_rx_ppdu_info *ppdu_info  = ppdu_info_hdl;
+
+	tlv_len = HAL_RX_GET_USER_TLV32_LEN(rx_tlv_hdr);
+	rx_tlv = (uint8_t *)rx_tlv_hdr + HAL_RX_TLV64_HDR_SIZE;
+
+	if (!tlv_len)
+		return;
+
+	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(rx_tlv);
+	tlv_len = HAL_RX_GET_USER_TLV32_LEN(rx_tlv);
+
+	if (!tlv_len)
+		return;
+	switch (tlv_tag) {
+	case WIFIPHYRX_OTHER_RECEIVE_INFO_EVM_DETAILS_E:
+		/* Skip TLV length to get TLV content */
+		rx_tlv = (uint8_t *)rx_tlv + HAL_RX_TLV64_HDR_SIZE;
+		ppdu_info->evm_info.number_of_symbols = HAL_RX_GET(rx_tlv,
+			PHYRX_OTHER_RECEIVE_INFO,
+			EVM_DETAILS_NUMBER_OF_DATA_SYM);
+		ppdu_info->evm_info.pilot_count = HAL_RX_GET(rx_tlv,
+			PHYRX_OTHER_RECEIVE_INFO,
+			EVM_DETAILS_NUMBER_OF_PILOTS);
+		ppdu_info->evm_info.nss_count = HAL_RX_GET(rx_tlv,
+			PHYRX_OTHER_RECEIVE_INFO,
+			EVM_DETAILS_NUMBER_OF_STREAMS);
+		hal_rx_update_su_evm_info(rx_tlv, ppdu_info_hdl);
+		break;
+	default:
+		qdf_debug("%s unhandled TLV type: %d, TLV len:%d",
+			  __func__, tlv_tag, tlv_len);
+		break;
+	}
+}
+#else
+/**
+ * hal_rx_mon_phyrx_other_receive_info_tlv() - API to get tlv info
+ * @rx_tlv_hdr: RX TLV header
+ * @ppdu_info_hdl: Handle to PPDU info to update
+ *
+ * Return: None
+ */
+static inline
+void hal_rx_mon_phyrx_other_receive_info_tlv(void *rx_tlv_hdr,
+						   void *ppdu_info_hdl)
+{
+}
+#endif /* WLAN_SA_API_ENABLE */
+
+
+
 static inline enum ieee80211_eht_ru_size
 hal_rx_mon_hal_ru_size_to_ieee80211_ru_size(struct hal_soc *hal_soc,
 					    uint32_t hal_ru_size)
@@ -3544,7 +3684,7 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 		break;
 	}
 	case WIFIPHYRX_OTHER_RECEIVE_INFO_E:
-		hal_rx_proc_phyrx_other_receive_info_tlv(hal, rx_tlv_hdr,
+		hal_rx_mon_phyrx_other_receive_info_tlv(rx_tlv_hdr,
 							 ppdu_info);
 		break;
 	case WIFIPHYRX_GENERIC_U_SIG_E:
