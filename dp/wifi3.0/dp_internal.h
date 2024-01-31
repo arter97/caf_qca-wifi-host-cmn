@@ -453,7 +453,8 @@ static inline QDF_STATUS dp_monitor_config_debug_sniffer(struct dp_pdev *pdev,
 	return QDF_STATUS_E_FAILURE;
 }
 
-static inline void dp_monitor_flush_rings(struct dp_soc *soc)
+static inline void
+dp_monitor_flush_rings(struct dp_soc *soc, struct dp_vdev *vdev)
 {
 }
 

@@ -648,7 +648,7 @@ struct dp_mon_ops {
 					       enum cdp_peer_stats_type type,
 					       cdp_peer_stats_param_t *buf);
 	QDF_STATUS (*mon_config_debug_sniffer)(struct dp_pdev *pdev, int val);
-	void (*mon_flush_rings)(struct dp_soc *soc);
+	void (*mon_flush_rings)(struct dp_soc *soc, struct dp_vdev *vdev);
 #if !defined(DISABLE_MON_CONFIG)
 	mon_pdev_htt_srng_setup_fp mon_pdev_htt_srng_setup[2];
 	QDF_STATUS (*mon_soc_htt_srng_setup)(struct dp_soc *soc);
@@ -2441,10 +2441,12 @@ static inline QDF_STATUS dp_monitor_config_debug_sniffer(struct dp_pdev *pdev,
 /**
  * dp_monitor_flush_rings() - Flush monitor rings
  * @soc: point to soc
+ * @vdev: dp vdev handle
  *
  * Return: None
  */
-static inline void dp_monitor_flush_rings(struct dp_soc *soc)
+static inline void
+dp_monitor_flush_rings(struct dp_soc *soc, struct dp_vdev *vdev)
 {
 	struct dp_mon_ops *monitor_ops;
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
@@ -2460,7 +2462,7 @@ static inline void dp_monitor_flush_rings(struct dp_soc *soc)
 		return;
 	}
 
-	return monitor_ops->mon_flush_rings(soc);
+	return monitor_ops->mon_flush_rings(soc, vdev);
 }
 
 /**
@@ -3999,10 +4001,10 @@ static inline void dp_monitor_vdev_delete(struct dp_soc *soc,
 {
 	if (soc->intr_mode == DP_INTR_POLL) {
 		qdf_timer_sync_cancel(&soc->int_timer);
-		dp_monitor_flush_rings(soc);
+		dp_monitor_flush_rings(soc, vdev);
 	} else if (soc->intr_mode == DP_INTR_MSI) {
 		dp_monitor_vdev_timer_stop(soc);
-		dp_monitor_flush_rings(soc);
+		dp_monitor_flush_rings(soc, vdev);
 	}
 
 	dp_monitor_vdev_detach(vdev);

@@ -172,7 +172,36 @@ dp_soc_config_full_mon_mode(struct cdp_pdev *cdp_pdev,
 #endif
 
 #if !defined(DISABLE_MON_CONFIG)
-void dp_flush_monitor_rings(struct dp_soc *soc)
+#ifdef FEATURE_ML_MONITOR_MODE_SUPPORT
+/**
+ * dp_monitor_vdev_active() - Check if any monitor vdev is active
+ * @soc: dp soc handle
+ * @vdev: Current vdev
+ *
+ * Return: True if any other vdev than current is active, false otherwise
+ */
+static inline bool
+dp_monitor_vdev_active(struct dp_soc *soc, struct dp_vdev *vdev)
+{
+	struct dp_mon_pdev *mon_pdev = vdev->pdev->monitor_pdev;
+	uint8_t i;
+
+	for (i = 0; i < soc->wlan_cfg_ctx->num_rxdma_dst_rings_per_pdev; i++) {
+		if (mon_pdev->mon_mac[i].mvdev &&
+		    mon_pdev->mon_mac[i].mvdev != vdev)
+			return true;
+	}
+	return false;
+}
+#else
+static inline bool
+dp_monitor_vdev_active(struct dp_soc *soc, struct dp_vdev *vdev)
+{
+	return false;
+}
+#endif
+
+void dp_flush_monitor_rings(struct dp_soc *soc, struct dp_vdev *vdev)
 {
 	struct dp_pdev *pdev = soc->pdev_list[0];
 	hal_soc_handle_t hal_soc = soc->hal_soc;
@@ -187,15 +216,25 @@ void dp_flush_monitor_rings(struct dp_soc *soc)
 	if (qdf_unlikely(mon_soc->full_mon_mode))
 		return;
 
+	if (vdev->monitor_vdev)
+		mac_id = vdev->monitor_vdev->mac_id;
+
 	mon_mac = dp_get_mon_mac(pdev, mac_id);
+
+	if (dp_monitor_vdev_active(soc, vdev)) {
+		dp_info("Skip mon filter reset, vdev: %u",
+			vdev->vdev_id);
+		goto flush_rings;
+	}
+
 	/* Reset monitor filters before reaping the ring*/
-	mon_mac = dp_get_mon_mac(pdev, mac_id);
 	qdf_spin_lock_bh(&mon_mac->mon_lock);
 	dp_mon_filter_reset_mon_mode(pdev);
 	if (dp_mon_filter_update(pdev) != QDF_STATUS_SUCCESS)
 		dp_info("failed to reset monitor filters");
 	qdf_spin_unlock_bh(&mon_mac->mon_lock);
 
+flush_rings:
 	if (qdf_unlikely(mon_mac->mon_chan_band >= REG_BAND_UNKNOWN))
 		return;
 
@@ -209,12 +248,12 @@ void dp_flush_monitor_rings(struct dp_soc *soc)
 	budget = wlan_cfg_get_dma_mon_stat_ring_size(pdev->wlan_cfg_ctx);
 
 	hal_get_sw_hptp(hal_soc, mon_dst_srng, &tp, &hp);
-	dp_info("Before flush: Monitor DST ring HP %u TP %u", hp, tp);
+	dp_info("Before flush: Mon DST ring %u HP %u TP %u", lmac_id, hp, tp);
 
 	dp_mon_drop_packets_for_mac(pdev, lmac_id, budget, true);
 
 	hal_get_sw_hptp(hal_soc, mon_dst_srng, &tp, &hp);
-	dp_info("After flush: Monitor DST ring HP %u TP %u", hp, tp);
+	dp_info("After flush: Mon DST ring %u HP %u TP %u", lmac_id, hp, tp);
 }
 
 void dp_mon_rings_deinit_1_0(struct dp_pdev *pdev)
@@ -361,7 +400,7 @@ fail1:
 }
 #else
 inline
-void dp_flush_monitor_rings(struct dp_soc *soc)
+void dp_flush_monitor_rings(struct dp_soc *soc, struct dp_vdev *vdev)
 {
 }
 
