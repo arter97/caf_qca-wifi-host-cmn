@@ -1054,98 +1054,100 @@ dp_print_pdev_rx_mon_stats(struct dp_pdev *pdev)
 	struct dp_mon_mac *mon_mac;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 	uint8_t mac_id = 0;
+	uint8_t num_rxdma_dst_rings =
+		pdev->soc->wlan_cfg_ctx->num_rxdma_dst_rings_per_pdev;
 
-	mon_mac = dp_get_mon_mac(pdev, mac_id);
-	rx_mon_stats = &mon_mac->rx_mon_stats;
+	for (mac_id = 0; mac_id < num_rxdma_dst_rings; mac_id++) {
+		mon_mac = dp_get_mon_mac(pdev, mac_id);
+		rx_mon_stats = &mon_mac->rx_mon_stats;
 
-	DP_PRINT_STATS("PDEV Rx Monitor Stats:\n");
+		DP_PRINT_STATS("MAC %u PDEV Rx Monitor Stats:\n", mac_id);
+		DP_PRINT_STATS("status_ppdu_compl_cnt = %d",
+			       rx_mon_stats->status_ppdu_compl);
+		DP_PRINT_STATS("status_ppdu_start_cnt = %d",
+			       rx_mon_stats->status_ppdu_start);
+		DP_PRINT_STATS("status_ppdu_end_cnt = %d",
+			       rx_mon_stats->status_ppdu_end);
+		DP_PRINT_STATS("status_ppdu_start_mis_cnt = %d",
+			       rx_mon_stats->status_ppdu_start_mis);
+		DP_PRINT_STATS("status_ppdu_end_mis_cnt = %d",
+			       rx_mon_stats->status_ppdu_end_mis);
+		DP_PRINT_STATS("start_user_info_cnt = %d",
+			       rx_mon_stats->start_user_info_cnt);
+		DP_PRINT_STATS("end_user_stats_cnt = %d",
+			       rx_mon_stats->end_user_stats_cnt);
+		DP_PRINT_STATS("status_ppdu_done_cnt = %d",
+			       rx_mon_stats->status_ppdu_done);
+		DP_PRINT_STATS("dest_ppdu_done_cnt = %d",
+			       rx_mon_stats->dest_ppdu_done);
+		DP_PRINT_STATS("dest_mpdu_done_cnt = %d",
+			       rx_mon_stats->dest_mpdu_done);
+		DP_PRINT_STATS("tlv_tag_status_err_cnt = %u",
+			       rx_mon_stats->tlv_tag_status_err);
+		DP_PRINT_STATS("mon status DMA not done WAR count= %u",
+			       rx_mon_stats->status_buf_done_war);
+		DP_PRINT_STATS("dest_mpdu_drop_cnt = %d",
+			       rx_mon_stats->dest_mpdu_drop);
+		DP_PRINT_STATS("dup_mon_linkdesc_cnt = %d",
+			       rx_mon_stats->dup_mon_linkdesc_cnt);
+		DP_PRINT_STATS("dup_mon_buf_cnt = %d",
+			       rx_mon_stats->dup_mon_buf_cnt);
+		DP_PRINT_STATS("mon_rx_buf_reaped = %u",
+			       rx_mon_stats->mon_rx_bufs_reaped_dest);
+		DP_PRINT_STATS("mon_rx_buf_replenished = %u",
+			       rx_mon_stats->mon_rx_bufs_replenished_dest);
+		DP_PRINT_STATS("ppdu_id_mismatch = %u",
+			       rx_mon_stats->ppdu_id_mismatch);
+		DP_PRINT_STATS("mpdu_ppdu_id_match_cnt = %d",
+			       rx_mon_stats->ppdu_id_match);
+		DP_PRINT_STATS("ppdus dropped frm status ring = %d",
+			       rx_mon_stats->status_ppdu_drop);
+		DP_PRINT_STATS("ppdus dropped frm dest ring = %d",
+			       rx_mon_stats->dest_ppdu_drop);
+		DP_PRINT_STATS("mpdu_ppdu_id_mismatch_drop = %u",
+			       rx_mon_stats->mpdu_ppdu_id_mismatch_drop);
+		DP_PRINT_STATS("mpdu_decap_type_invalid = %u",
+			       rx_mon_stats->mpdu_decap_type_invalid);
+		DP_PRINT_STATS("pending_desc_count = %u",
+			       rx_mon_stats->pending_desc_count);
+		stat_ring_ppdu_ids =
+			(uint32_t *)qdf_mem_malloc(sizeof(uint32_t) *
+						   MAX_PPDU_ID_HIST);
+		dest_ring_ppdu_ids =
+			(uint32_t *)qdf_mem_malloc(sizeof(uint32_t) *
+						   MAX_PPDU_ID_HIST);
 
-	DP_PRINT_STATS("status_ppdu_compl_cnt = %d",
-		       rx_mon_stats->status_ppdu_compl);
-	DP_PRINT_STATS("status_ppdu_start_cnt = %d",
-		       rx_mon_stats->status_ppdu_start);
-	DP_PRINT_STATS("status_ppdu_end_cnt = %d",
-		       rx_mon_stats->status_ppdu_end);
-	DP_PRINT_STATS("status_ppdu_start_mis_cnt = %d",
-		       rx_mon_stats->status_ppdu_start_mis);
-	DP_PRINT_STATS("status_ppdu_end_mis_cnt = %d",
-		       rx_mon_stats->status_ppdu_end_mis);
+		if (!stat_ring_ppdu_ids || !dest_ring_ppdu_ids)
+			DP_PRINT_STATS("Unable to allocate ppdu id hist mem\n");
 
-	DP_PRINT_STATS("start_user_info_cnt = %d",
-		       rx_mon_stats->start_user_info_cnt);
-	DP_PRINT_STATS("end_user_stats_cnt = %d",
-		       rx_mon_stats->end_user_stats_cnt);
+		qdf_spin_lock_bh(&mon_mac->mon_lock);
+		idx = rx_mon_stats->ppdu_id_hist_idx;
+		qdf_mem_copy(stat_ring_ppdu_ids,
+			     rx_mon_stats->stat_ring_ppdu_id_hist,
+			     sizeof(uint32_t) * MAX_PPDU_ID_HIST);
+		qdf_mem_copy(dest_ring_ppdu_ids,
+			     rx_mon_stats->dest_ring_ppdu_id_hist,
+			     sizeof(uint32_t) * MAX_PPDU_ID_HIST);
+		qdf_spin_unlock_bh(&mon_mac->mon_lock);
 
-	DP_PRINT_STATS("status_ppdu_done_cnt = %d",
-		       rx_mon_stats->status_ppdu_done);
-	DP_PRINT_STATS("dest_ppdu_done_cnt = %d",
-		       rx_mon_stats->dest_ppdu_done);
-	DP_PRINT_STATS("dest_mpdu_done_cnt = %d",
-		       rx_mon_stats->dest_mpdu_done);
-	DP_PRINT_STATS("tlv_tag_status_err_cnt = %u",
-		       rx_mon_stats->tlv_tag_status_err);
-	DP_PRINT_STATS("mon status DMA not done WAR count= %u",
-		       rx_mon_stats->status_buf_done_war);
-	DP_PRINT_STATS("dest_mpdu_drop_cnt = %d",
-		       rx_mon_stats->dest_mpdu_drop);
-	DP_PRINT_STATS("dup_mon_linkdesc_cnt = %d",
-		       rx_mon_stats->dup_mon_linkdesc_cnt);
-	DP_PRINT_STATS("dup_mon_buf_cnt = %d",
-		       rx_mon_stats->dup_mon_buf_cnt);
-	DP_PRINT_STATS("mon_rx_buf_reaped = %u",
-		       rx_mon_stats->mon_rx_bufs_reaped_dest);
-	DP_PRINT_STATS("mon_rx_buf_replenished = %u",
-		       rx_mon_stats->mon_rx_bufs_replenished_dest);
-	DP_PRINT_STATS("ppdu_id_mismatch = %u",
-		       rx_mon_stats->ppdu_id_mismatch);
-	DP_PRINT_STATS("mpdu_ppdu_id_match_cnt = %d",
-		       rx_mon_stats->ppdu_id_match);
-	DP_PRINT_STATS("ppdus dropped frm status ring = %d",
-		       rx_mon_stats->status_ppdu_drop);
-	DP_PRINT_STATS("ppdus dropped frm dest ring = %d",
-		       rx_mon_stats->dest_ppdu_drop);
-	DP_PRINT_STATS("mpdu_ppdu_id_mismatch_drop = %u",
-		       rx_mon_stats->mpdu_ppdu_id_mismatch_drop);
-	DP_PRINT_STATS("mpdu_decap_type_invalid = %u",
-		       rx_mon_stats->mpdu_decap_type_invalid);
-	DP_PRINT_STATS("pending_desc_count = %u",
-		       rx_mon_stats->pending_desc_count);
-	stat_ring_ppdu_ids =
-		(uint32_t *)qdf_mem_malloc(sizeof(uint32_t) * MAX_PPDU_ID_HIST);
-	dest_ring_ppdu_ids =
-		(uint32_t *)qdf_mem_malloc(sizeof(uint32_t) * MAX_PPDU_ID_HIST);
+		DP_PRINT_STATS("PPDU Id history:");
+		DP_PRINT_STATS("stat_ring_ppdu_ids\t dest_ring_ppdu_ids");
+		for (i = 0; i < MAX_PPDU_ID_HIST; i++) {
+			idx = (idx + 1) & (MAX_PPDU_ID_HIST - 1);
+			DP_PRINT_STATS("%*u\t%*u", 16,
+				       rx_mon_stats->stat_ring_ppdu_id_hist[idx], 16,
+				       rx_mon_stats->dest_ring_ppdu_id_hist[idx]);
+		}
+		qdf_mem_free(stat_ring_ppdu_ids);
+		qdf_mem_free(dest_ring_ppdu_ids);
+		DP_PRINT_STATS("mon_rx_dest_stuck = %d",
+			       rx_mon_stats->mon_rx_dest_stuck);
 
-	if (!stat_ring_ppdu_ids || !dest_ring_ppdu_ids)
-		DP_PRINT_STATS("Unable to allocate ppdu id hist mem\n");
-
-	qdf_spin_lock_bh(&mon_mac->mon_lock);
-	idx = rx_mon_stats->ppdu_id_hist_idx;
-	qdf_mem_copy(stat_ring_ppdu_ids,
-		     rx_mon_stats->stat_ring_ppdu_id_hist,
-		     sizeof(uint32_t) * MAX_PPDU_ID_HIST);
-	qdf_mem_copy(dest_ring_ppdu_ids,
-		     rx_mon_stats->dest_ring_ppdu_id_hist,
-		     sizeof(uint32_t) * MAX_PPDU_ID_HIST);
-	qdf_spin_unlock_bh(&mon_mac->mon_lock);
-
-	DP_PRINT_STATS("PPDU Id history:");
-	DP_PRINT_STATS("stat_ring_ppdu_ids\t dest_ring_ppdu_ids");
-	for (i = 0; i < MAX_PPDU_ID_HIST; i++) {
-		idx = (idx + 1) & (MAX_PPDU_ID_HIST - 1);
-		DP_PRINT_STATS("%*u\t%*u", 16,
-			       rx_mon_stats->stat_ring_ppdu_id_hist[idx], 16,
-			       rx_mon_stats->dest_ring_ppdu_id_hist[idx]);
+		dp_pdev_get_undecoded_capture_stats(mon_pdev, rx_mon_stats);
+		dp_print_pdev_mpdu_stats(mon_mac);
+		dp_print_pdev_eht_ppdu_cnt(mon_mac);
 	}
-	qdf_mem_free(stat_ring_ppdu_ids);
-	qdf_mem_free(dest_ring_ppdu_ids);
-	DP_PRINT_STATS("mon_rx_dest_stuck = %d",
-		       rx_mon_stats->mon_rx_dest_stuck);
-
-	dp_pdev_get_undecoded_capture_stats(mon_pdev, rx_mon_stats);
 	dp_mon_rx_print_advanced_stats(pdev->soc, pdev);
-
-	dp_print_pdev_mpdu_stats(mon_mac);
-	dp_print_pdev_eht_ppdu_cnt(mon_mac);
 
 }
 
