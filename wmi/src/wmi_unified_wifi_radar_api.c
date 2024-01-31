@@ -29,3 +29,15 @@ wmi_extract_wifi_radar_cal_status_event_param(
 	return QDF_STATUS_E_FAILURE;
 }
 
+QDF_STATUS
+wmi_unified_send_wifi_radar_command(
+		wmi_unified_t wmi_handle,
+		struct wmi_wifi_radar_command_params *param)
+{
+	if (wmi_handle->ops->wifi_radar_send_command)
+		return wmi_handle->ops->wifi_radar_send_command
+				(wmi_handle, param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+

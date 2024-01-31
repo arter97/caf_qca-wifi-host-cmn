@@ -74,6 +74,10 @@
 #include <wmi_unified_cfr_param.h>
 #endif
 
+#ifdef WLAN_WIFI_RADAR_ENABLE
+#include <wmi_unified_wifi_radar_param.h>
+#endif
+
 #ifdef DCS_INTERFERENCE_DETECTION
 #include <wlan_dcs_public_structs.h>
 #endif
@@ -3160,6 +3164,11 @@ QDF_STATUS
 			(wmi_unified_t wmi_handle,
 			 void *evt_buf,
 			 struct wmi_wifi_radar_cal_status_param *param);
+
+QDF_STATUS
+(*wifi_radar_send_command)(wmi_unified_t wmi_handle,
+			   struct wmi_wifi_radar_command_params *param);
+
 #endif
 
 QDF_STATUS (*send_set_halphy_cal)(wmi_unified_t wmi_handle,
