@@ -39,7 +39,7 @@ static bool wifi_radar_dbr_event_handler(struct wlan_objmgr_pdev *pdev,
 	struct wlan_lmac_if_wifi_radar_rx_ops *wr_rx_ops = NULL;
 	struct pdev_wifi_radar *pwr;
 	struct wlan_objmgr_psoc *psoc;
-	uint32_t cookie = 0;
+	uint32_t cookie = 0, i, j;
 	struct wifi_radar_ucode_header uheader = {0};
 
 	if ((!pdev) || (!payload)) {
@@ -83,6 +83,7 @@ static bool wifi_radar_dbr_event_handler(struct wlan_objmgr_pdev *pdev,
 		wifi_radar_err("Invalid cookie offset");
 		return true;
 	}
+	qdf_spin_lock_bh(&pwr->header_lock);
 	pwr->header[cookie]->start_magic_num = 0xDEADBEAF;
 	pwr->header[cookie]->vendorid = 0x8cfdf0;
 	pwr->header[cookie]->pltform_type = WR_PLATFORM_TYPE_ARM;
@@ -111,18 +112,29 @@ static bool wifi_radar_dbr_event_handler(struct wlan_objmgr_pdev *pdev,
 		payload->wifi_radar_meta_data.num_skip_ltf_rx;
 	pwr->header[cookie]->num_ltf_accumulation =
 		payload->wifi_radar_meta_data.num_ltf_accumulation;
+	qdf_spin_lock_bh(&pwr->cal_status_lock);
 	pwr->header[cookie]->cal_num_ltf_tx = pwr->cal_num_ltf_tx;
 	pwr->header[cookie]->cal_num_skip_ltf_rx = pwr->cal_num_skip_ltf_rx;
 	pwr->header[cookie]->cal_num_ltf_accumulation =
 		pwr->cal_num_ltf_accumulation;
+	pwr->header[cookie]->cal_band_center_freq =
+		pwr->band_center_freq;
+	for (i = 0; i < HOST_MAX_CHAINS; i++) {
+		for (j = 0; j < HOST_MAX_CHAINS; j++) {
+			pwr->header[cookie]->per_chain_cal_status[i][j] =
+				!!pwr->per_chain_comb_cal_status[i][j];
+		}
+	}
+	qdf_spin_unlock_bh(&pwr->cal_status_lock);
 	if (wr_rx_ops->wifi_radar_info_send)
 		status = wr_rx_ops->wifi_radar_info_send(pdev,
-							 &pwr->header[cookie],
+							 pwr->header[cookie],
 							 sizeof(struct
 							 wifi_radar_header),
 							 data,
 							 data_len,
 							 &end_magic, 4);
+	qdf_spin_unlock_bh(&pwr->header_lock);
 	return true;
 }
 
@@ -344,6 +356,11 @@ QDF_STATUS wifi_radar_deinit_pdev(struct wlan_objmgr_psoc *psoc,
 		pwr->cal_status_lock_initialized = false;
 	}
 
+	if (pwr->header_lock_initialized) {
+		qdf_spinlock_destroy(&pwr->header_lock);
+		pwr->header_lock_initialized = false;
+	}
+
 	status = target_if_unregister_wifi_radar_to_dbr(pdev);
 	if (QDF_IS_STATUS_ERROR(status))
 		wifi_radar_err("Failed to unregister with dbr");
@@ -400,11 +417,13 @@ QDF_STATUS wifi_radar_init_pdev(struct wlan_objmgr_psoc *psoc,
 	pwr->num_subbufs = STREAMFS_WIFI_RADAR_NUM_SUBBUF;
 	qdf_spinlock_create(&pwr->cal_status_lock);
 	pwr->cal_status_lock_initialized = true;
+	qdf_spinlock_create(&pwr->header_lock);
+	pwr->header_lock_initialized = true;
 
 	return status;
 }
 
-QDF_STATUS
+static QDF_STATUS
 target_if_wifi_radar_init_pdev(struct wlan_objmgr_psoc *psoc,
 			       struct wlan_objmgr_pdev *pdev)
 {
@@ -434,7 +453,7 @@ target_if_wifi_radar_init_pdev(struct wlan_objmgr_psoc *psoc,
 	}
 }
 
-QDF_STATUS
+static QDF_STATUS
 target_if_wifi_radar_deinit_pdev(struct wlan_objmgr_psoc *psoc,
 				 struct wlan_objmgr_pdev *pdev)
 {
@@ -456,12 +475,56 @@ target_if_wifi_radar_deinit_pdev(struct wlan_objmgr_psoc *psoc,
 		return QDF_STATUS_E_NOSUPPORT;
 }
 
+static int
+target_if_wifi_radar_capture_and_cal_command
+		(struct wlan_objmgr_pdev *pdev,
+		 struct wifi_radar_command_params *params)
+{
+	struct wmi_wifi_radar_command_params wmi_param = {0};
+	struct wmi_unified *pdev_wmi_handle = NULL;
+	int retv = 0;
+
+	pdev_wmi_handle = lmac_get_pdev_wmi_handle(pdev);
+	if (!pdev_wmi_handle) {
+		wifi_radar_err("pdev wmi handle NULL");
+		return -EINVAL;
+	}
+
+	wmi_param.cmd_type = params->cmd_type;
+	wmi_param.pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
+
+	if ((wmi_param.cmd_type == wmi_wifi_radar_capture_enable) ||
+	    (wmi_param.cmd_type == wmi_wifi_radar_rx_cal)) {
+		wmi_param.tx_chainmask = params->tx_chainmask;
+		wmi_param.rx_chainmask = params->rx_chainmask;
+		wmi_param.num_ltf_tx = params->num_ltf_tx;
+		wmi_param.num_skip_ltf_rx = params->num_skip_ltf_rx;
+		wmi_param.num_ltf_accumulation = params->num_ltf_accumulation;
+	}
+
+	if (wmi_param.cmd_type == wmi_wifi_radar_capture_enable) {
+		wmi_param.bandwidth = params->bandwidth;
+		wmi_param.periodicity = params->periodicity;
+	}
+
+	retv = wmi_unified_send_wifi_radar_command(pdev_wmi_handle, &wmi_param);
+
+	if (QDF_IS_STATUS_ERROR(retv))
+		wifi_radar_err("fail to send wifi radar command");
+	else
+		wifi_radar_err("successfully sent wifir radar command");
+
+	return retv;
+}
+
 void target_if_wifi_radar_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
 {
 	tx_ops->wifi_radar_tx_ops.wifi_radar_init_pdev =
 		target_if_wifi_radar_init_pdev;
 	tx_ops->wifi_radar_tx_ops.wifi_radar_deinit_pdev =
 		target_if_wifi_radar_deinit_pdev;
+	tx_ops->wifi_radar_tx_ops.wifi_radar_capture_and_cal =
+		target_if_wifi_radar_capture_and_cal_command;
 }
 
 void target_if_wifi_radar_set_support(struct wlan_objmgr_psoc *psoc,
