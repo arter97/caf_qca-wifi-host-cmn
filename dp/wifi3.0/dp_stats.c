@@ -9915,6 +9915,17 @@ dp_get_peer_telemetry_stats(struct cdp_soc_t *soc_hdl, uint8_t *addr,
 	return QDF_STATUS_SUCCESS;
 }
 
+struct cdp_pdev_deter_stats *
+dp_get_pdev_stats_deter(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
+{
+	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
+	struct dp_pdev *pdev = dp_get_pdev_from_soc_pdev_id_wifi3(soc, pdev_id);
+
+	if (!pdev)
+		return NULL;
+	return &pdev->stats.deter_stats;
+}
+
 QDF_STATUS
 dp_get_pdev_deter_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 			struct cdp_pdev_deter_stats *stats)
@@ -9953,6 +9964,32 @@ dp_get_pdev_deter_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	stats->rx_su_cnt = pdev->stats.deter_stats.rx_su_cnt;
 
 	return QDF_STATUS_SUCCESS;
+}
+
+struct cdp_peer_deter_stats*
+dp_get_peer_stats_deter(struct cdp_soc_t *soc_hdl,
+			uint8_t vdev_id,
+			uint8_t *addr)
+{
+	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
+	struct dp_mon_peer_stats *mon_peer_stats = NULL;
+	struct cdp_peer_deter_stats *deter_stats = NULL;
+
+	struct dp_peer *peer = dp_peer_find_hash_find(soc, addr, 0, vdev_id,
+						      DP_MOD_ID_MISC);
+	if (!peer)
+		return NULL;
+
+	if (qdf_unlikely(!peer->monitor_peer)) {
+		dp_peer_unref_delete(peer, DP_MOD_ID_MISC);
+		return NULL;
+	}
+
+	mon_peer_stats = &peer->monitor_peer->stats;
+	deter_stats = &mon_peer_stats->deter_stats.deter[0];
+	dp_peer_unref_delete(peer, DP_MOD_ID_MISC);
+
+	return deter_stats;
 }
 
 QDF_STATUS

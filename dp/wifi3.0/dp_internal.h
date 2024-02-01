@@ -5338,6 +5338,29 @@ dp_get_peer_deter_stats(struct cdp_soc_t *soc_hdl,
 			struct cdp_peer_deter_stats *stats);
 
 /**
+ * dp_get_peer_stats_deter() - API to get peer deterministic stats
+ * @soc_hdl: soc handle
+ * @vdev_id: id of vdev handle
+ * @addr: peer mac
+ *
+ * Return: Pointer to cdp_peer_deter_stats
+ */
+struct cdp_peer_deter_stats*
+dp_get_peer_stats_deter(struct cdp_soc_t *soc_hdl,
+			uint8_t vdev_id,
+			uint8_t *addr);
+
+/**
+ * dp_get_pdev_stats_deter() - API to get pdev deterministic stats
+ * @soc_hdl: soc handle
+ * @pdev_id: id of pdev handle
+ *
+ * Return: Pointer to cdp_pdev_deter_stats.
+ */
+struct cdp_pdev_deter_stats*
+dp_get_pdev_stats_deter(struct cdp_soc_t *soc_hdl, uint8_t pdev_id);
+
+/**
  * dp_get_pdev_deter_stats() - API to get pdev deterministic stats
  * @soc_hdl: soc handle
  * @pdev_id: id of pdev handle

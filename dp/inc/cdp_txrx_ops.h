@@ -1211,7 +1211,9 @@ struct cdp_mon_ops {
  * @txrx_pdev_telemetry_stats:
  * @txrx_peer_telemetry_stats:
  * @txrx_pdev_deter_stats:
+ * @txrx_pdev_stats_deter:
  * @txrx_peer_deter_stats:
+ * @txrx_peer_stats_deter:
  * @txrx_update_pdev_chan_util_stats:
  * @txrx_get_peer_extd_rate_link_stats:
  * @get_pdev_obss_stats:
@@ -1404,12 +1406,21 @@ struct cdp_host_stats_ops {
 				struct cdp_soc_t *soc,
 				uint8_t pdev_id,
 				struct cdp_pdev_deter_stats *stats);
+	struct cdp_pdev_deter_stats *
+		(*txrx_pdev_stats_deter)(
+				struct cdp_soc_t *soc,
+				uint8_t pdev_id);
 	QDF_STATUS
 		(*txrx_peer_deter_stats)(
 				struct cdp_soc_t *soc,
 				uint8_t vdev_id,
 				uint8_t *addr,
 				struct cdp_peer_deter_stats *stats);
+	struct cdp_peer_deter_stats*
+		(*txrx_peer_stats_deter)(
+				struct cdp_soc_t *soc,
+				uint8_t vdev_id,
+				uint8_t *addr);
 	QDF_STATUS
 		(*txrx_update_pdev_chan_util_stats)(
 				struct cdp_soc_t *soc,

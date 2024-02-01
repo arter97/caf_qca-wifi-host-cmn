@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1112,6 +1112,30 @@ static inline QDF_STATUS cdp_get_peer_telemetry_stats(
 }
 
 /**
+ * cdp_get_pdev_stats_deter(): function to get pdev deterministic stats pointer
+ * @soc: soc handle
+ * @pdev_id: pdev id
+ *
+ * return: Pointer to pdev deter stats object
+ */
+static inline struct cdp_pdev_deter_stats *
+cdp_get_pdev_stats_deter(ol_txrx_soc_handle soc, uint8_t pdev_id)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance");
+		QDF_BUG(0);
+		return NULL;
+	}
+
+	if (!soc->ops->host_stats_ops ||
+	    !soc->ops->host_stats_ops->txrx_pdev_stats_deter)
+		return NULL;
+
+	return soc->ops->host_stats_ops->txrx_pdev_stats_deter(
+					soc, pdev_id);
+}
+
+/**
  * cdp_get_pdev_deter_stats(): function to get pdev deterministic stats
  * @soc: soc handle
  * @pdev_id: pdev id
@@ -1165,6 +1189,31 @@ static inline QDF_STATUS cdp_get_peer_deter_stats(
 
 	return soc->ops->host_stats_ops->txrx_peer_deter_stats(
 					soc, vdev_id, addr, stats);
+}
+
+/**
+ * cdp_get_peer_stats_deter(): function to get peer deterministic stats pointer
+ * @soc: soc handle
+ * @vdev_id: id of vdev handle
+ * @addr: peer address
+ *
+ * return: Pointer to peer deter stats object
+ */
+static inline struct cdp_peer_deter_stats *
+cdp_get_peer_stats_deter(ol_txrx_soc_handle soc, uint8_t vdev_id, uint8_t *addr)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance");
+		QDF_BUG(0);
+		return NULL;
+	}
+
+	if (!soc->ops->host_stats_ops ||
+	    !soc->ops->host_stats_ops->txrx_peer_stats_deter)
+		return NULL;
+
+	return soc->ops->host_stats_ops->txrx_peer_stats_deter(
+					soc, vdev_id, addr);
 }
 
 /**

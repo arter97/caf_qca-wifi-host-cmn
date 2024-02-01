@@ -12679,7 +12679,9 @@ static struct cdp_host_stats_ops dp_ops_host_stats = {
 	.txrx_pdev_telemetry_stats = dp_get_pdev_telemetry_stats,
 	.txrx_peer_telemetry_stats = dp_get_peer_telemetry_stats,
 	.txrx_pdev_deter_stats = dp_get_pdev_deter_stats,
+	.txrx_pdev_stats_deter = dp_get_pdev_stats_deter,
 	.txrx_peer_deter_stats = dp_get_peer_deter_stats,
+	.txrx_peer_stats_deter = dp_get_peer_stats_deter,
 	.txrx_update_pdev_chan_util_stats = dp_update_pdev_chan_util_stats,
 #endif
 	.txrx_get_peer_extd_rate_link_stats =
