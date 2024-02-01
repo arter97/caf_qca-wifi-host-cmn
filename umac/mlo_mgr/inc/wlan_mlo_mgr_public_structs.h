@@ -706,6 +706,7 @@ struct mlnawds_config {
  * @link_status_flags: Current status of link
  * @ap_link_addr: Associated link BSSID
  * @link_chan_info: Associated link channel info
+ * @is_link_active: link state
  */
 struct mlo_link_info {
 	struct qdf_mac_addr link_addr;
@@ -724,6 +725,7 @@ struct mlo_link_info {
 	struct qdf_mac_addr ap_link_addr;
 	struct wlan_channel *link_chan_info;
 #endif
+	bool is_link_active;
 };
 
 /**
