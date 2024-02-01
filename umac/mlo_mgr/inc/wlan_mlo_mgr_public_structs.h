@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -693,6 +693,7 @@ struct mlnawds_config {
  * @link_status_flags: Current status of link
  * @ap_link_addr: Associated link BSSID
  * @link_chan_info: Associated link channel info
+ * @is_link_active: link state
  */
 struct mlo_link_info {
 	struct qdf_mac_addr link_addr;
@@ -711,6 +712,7 @@ struct mlo_link_info {
 	struct qdf_mac_addr ap_link_addr;
 	struct wlan_channel *link_chan_info;
 #endif
+	bool is_link_active;
 };
 
 /**

@@ -1214,15 +1214,52 @@ QDF_STATUS mlo_mgr_link_switch_request_params(struct wlan_objmgr_psoc *psoc,
 	return status;
 }
 
+#define IS_LINK_SET(link_bitmap, link_id) ((link_bitmap) & (BIT(link_id)))
+
+static void mlo_mgr_update_link_state(struct wlan_mlo_dev_context *mld_ctx,
+				      uint32_t active_link_bitmap)
+{
+	struct mlo_link_info *link_info;
+	uint8_t link_iter;
+
+	for (link_iter = 0; link_iter < MAX_MLO_LINK_ID; link_iter++) {
+		if (IS_LINK_SET(active_link_bitmap, link_iter)) {
+			link_info = mlo_mgr_get_ap_link_by_link_id(mld_ctx,
+								   link_iter);
+			if (!link_info) {
+				mlo_err("link: %d info does not exist",
+					link_iter);
+				return;
+			}
+			link_info->is_link_active = true;
+		}
+	}
+}
+
 QDF_STATUS
 mlo_mgr_link_state_switch_info_handler(struct wlan_objmgr_psoc *psoc,
 				       struct mlo_link_switch_state_info *info)
 {
 	uint8_t i;
+	struct wlan_mlo_dev_context *mld_ctx = NULL;
 
-	for (i = 0; i < info->num_params; i++)
-		wlan_connectivity_mld_link_status_event(psoc,
-							&info->link_switch_param[i]);
+	wlan_mlo_get_mlpeer_by_peer_mladdr(
+			&info->link_switch_param[0].mld_addr, &mld_ctx);
+
+	if (!mld_ctx) {
+		mlo_err("mlo dev ctx for mld_mac: " QDF_MAC_ADDR_FMT " not found",
+			QDF_MAC_ADDR_REF(info->link_switch_param[0].mld_addr.bytes));
+		return QDF_STATUS_E_INVAL;
+	}
+
+	for (i = 0; i < info->num_params; i++) {
+		wlan_connectivity_mld_link_status_event(
+				psoc,
+				&info->link_switch_param[i]);
+		mlo_mgr_update_link_state(
+				mld_ctx,
+				info->link_switch_param[i].active_link_bitmap);
+	}
 
 	return QDF_STATUS_SUCCESS;
 }
