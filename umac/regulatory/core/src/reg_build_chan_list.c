@@ -1359,7 +1359,6 @@ static void reg_propagate_6g_mas_channel_list(
 		mas_chan_params->reg_6g_superid;
 	pdev_priv_obj->reg_6g_thresh_priority_freq =
 				mas_chan_params->reg_6g_thresh_priority_freq;
-	reg_set_ap_pwr_type(pdev_priv_obj);
 }
 
 #if defined(CONFIG_AFC_SUPPORT) && !defined(CONFIG_REG_CLIENT)
@@ -1923,8 +1922,7 @@ static void
 reg_append_mas_chan_list_for_6g(struct wlan_regulatory_pdev_priv_obj
 				*pdev_priv_obj)
 {
-	if (pdev_priv_obj->reg_cur_6g_ap_pwr_type >= REG_CURRENT_MAX_AP_TYPE ||
-	    pdev_priv_obj->reg_cur_6g_client_mobility_type >=
+	if (pdev_priv_obj->reg_cur_6g_client_mobility_type >=
 	    REG_MAX_CLIENT_TYPE) {
 		reg_debug("invalid 6G AP or client power type");
 		return;
