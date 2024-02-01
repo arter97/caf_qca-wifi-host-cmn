@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021,2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -46,6 +46,11 @@
 #else
 #define CFG_CFR_ALL
 #endif
+#ifdef WLAN_WIFI_RADAR_ENABLE
+#include "wifi_radar_cfg.h"
+#else
+#define CFG_WIFI_RADAR_ALL
+#endif
 #ifdef FEATURE_CM_UTF_ENABLE
 #include <wlan_cm_utf.h>
 #else
@@ -67,7 +72,8 @@
 		CFG_WLAN_CM_UTF_PARAM \
 		CFG_CMN_MLME_ALL \
 		CFG_MGMT_TXRX_ALL \
-		CFG_IPA
+		CFG_IPA \
+		CFG_WIFI_RADAR_ALL
 
 #endif /* __CFG_CONVERGED_H */
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021,2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -25,6 +25,36 @@
 #include <target_if.h>
 #include <target_if_direct_buf_rx_api.h>
 #include <wlan_osif_priv.h>
+#include <cfg_ucfg_api.h>
+#include <wifi_radar_cfg.h>
+
+/**
+ * wlan_wifi_radar_is_ini_enabled() - Check if wifi_radar ini is enabled
+ * @pdev: the physical device object
+ *
+ * Return: true if wifi_radar is enabled, else false
+ */
+static bool
+wlan_wifi_radar_is_ini_enabled(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_objmgr_psoc *psoc;
+	uint8_t wr_enable_bitmap;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		wifi_radar_err("psoc is null");
+		return false;
+	}
+
+	wr_enable_bitmap = cfg_get(psoc, CFG_WIFI_RADAR_ENABLE);
+
+	if (wr_enable_bitmap & (1 << wlan_objmgr_pdev_get_pdev_id(pdev)))
+		return true;
+
+	wifi_radar_info("wifi radar is disabled for pdev[%d]",
+			wlan_objmgr_pdev_get_pdev_id(pdev));
+	return false;
+}
 
 QDF_STATUS
 wlan_wifi_radar_psoc_obj_create_handler(
@@ -65,7 +95,7 @@ struct wlan_objmgr_psoc *psoc, void *arg)
 	return QDF_STATUS_SUCCESS;
 }
 
-#define MAX_ENTRIES 30
+#define MAX_ENTRIES 100
 
 static uint32_t
 wlan_wifi_radar_get_dbr_num_entries(struct wlan_objmgr_pdev *pdev)
@@ -118,6 +148,12 @@ struct wlan_objmgr_pdev *pdev, void *arg)
 	if (!pdev) {
 		wifi_radar_err("PDEV is NULL\n");
 		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!wlan_wifi_radar_is_ini_enabled(pdev)) {
+		wlan_pdev_nif_feat_ext_cap_clear
+			(pdev, WLAN_PDEV_FEXT_WIFI_RADAR_ENABLE);
+		return QDF_STATUS_E_NOSUPPORT;
 	}
 
 	wlan_pdev_nif_feat_ext_cap_set(pdev, WLAN_PDEV_FEXT_WIFI_RADAR_ENABLE);
