@@ -47,6 +47,10 @@
 #include "wlan_cfr_utils_api.h"
 #endif
 
+#ifdef WLAN_WIFI_RADAR_ENABLE
+#include <wlan_wifi_radar_utils_api.h>
+#endif
+
 #include <wlan_dfs_tgt_api.h>
 #include <wlan_dfs_ioctl.h>
 
@@ -799,12 +803,16 @@ struct wlan_lmac_if_sa_api_tx_ops {
  * struct wlan_lmac_if_wifi_radar_tx_ops - wifi_radar tx function pointers
  * @wifi_radar_init_pdev: Initialize wifi radar
  * @wifi_radar_deinit_pdev: De-initialize wifi_radar
+ * @wifi_radar_capture_and_cal: Send wifi radar capture/cal command to target
  */
 struct wlan_lmac_if_wifi_radar_tx_ops {
 	QDF_STATUS (*wifi_radar_init_pdev)(struct wlan_objmgr_psoc *psoc,
 					   struct wlan_objmgr_pdev *pdev);
 	QDF_STATUS (*wifi_radar_deinit_pdev)(struct wlan_objmgr_psoc *psoc,
 					     struct wlan_objmgr_pdev *pdev);
+	int (*wifi_radar_capture_and_cal)
+			(struct wlan_objmgr_pdev *pdev,
+			 struct wifi_radar_command_params *params);
 };
 #endif
 

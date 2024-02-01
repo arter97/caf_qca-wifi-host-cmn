@@ -40,6 +40,9 @@
 
 #define HOST_MAX_CHAINS 8
 
+#define MAX_WIFI_RADAR_PRD (10 * 60 * 1000)   /* 10 minutes */
+#define MIN_WIFI_RADAR_PRD 10 /* 10ms */
+
 enum wifi_radar_data_version {
 	WR_DATA_VERSION_NONE,
 	WR_DATA_VERSION_1,
@@ -82,6 +85,8 @@ enum wifi_radar_radio_type {
  * @cal_num_skip_ltf_rx: Number of LTF skipped during Rx of the calibration pkt
  * @cal_num_ltf_accumulation: Number of LTF accumulated during Rx of the
  *	calibration packet
+ * @cal_band_center_freq: center freq used in wifi radar calibration
+ * @per_chain_cal_status: per chain calibration status
  */
 struct wifi_radar_header {
 	u_int32_t start_magic_num;
@@ -105,7 +110,9 @@ struct wifi_radar_header {
 	u_int32_t cal_num_ltf_tx;
 	u_int32_t cal_num_skip_ltf_rx;
 	u_int32_t cal_num_ltf_accumulation;
-};
+	u_int16_t cal_band_center_freq;
+	uint8_t per_chain_cal_status[HOST_MAX_CHAINS][HOST_MAX_CHAINS];
+} __attribute__ ((__packed__));
 
 /**
  * struct psoc_wifi_radar - private psoc object for WiFi Radar
@@ -146,6 +153,8 @@ struct psoc_wifi_radar {
  * @max_num_ltf_tx: target specific max allowed num_ltf_tx
  * @max_num_skip_ltf_rx: target specific max allowed num_skip_ltf_rx
  * @max_num_ltf_accumulation: target specific max allowed num_ltf_accumulation.
+ * @header_lock: Lock to protect the access to headers
+ * @header_lock_initialized: Check header lock initialized or not
  */
 struct pdev_wifi_radar {
 	struct wlan_objmgr_pdev *pdev_obj;
@@ -170,6 +179,8 @@ struct pdev_wifi_radar {
 	uint32_t max_num_ltf_tx;
 	uint32_t max_num_skip_ltf_rx;
 	uint32_t max_num_ltf_accumulation;
+	qdf_spinlock_t header_lock;
+	bool header_lock_initialized;
 };
 
 /**
@@ -178,6 +189,28 @@ struct pdev_wifi_radar {
  */
 struct peer_wifi_radar {
 	struct wlan_objmgr_peer *peer_obj;
+};
+
+/**
+ * struct wifi_radar_command_params - params to be passed for capture/cal cmd
+ * @cmd_type: type of command indicating cal_type/capture
+ * @bandwidth: pkt bandwidth to be used for cal/capture
+ * @periodicity: capture interval in case of capture command
+ * @tx_chainmask: tx chain mask to be used for cal/capture
+ * @rx_chainmask: rx chain mask to be used for cal/capture
+ * @num_ltf_tx: num_ltf_tx config to be used for cal/capture
+ * @num_skip_ltf_rx: num_skip_ltf_rx config to be used for cal/capture
+ * @num_ltf_accumulation: num_ltf_accumulation config to be used foe cal/capture
+ */
+struct wifi_radar_command_params {
+	uint8_t cmd_type;
+	uint8_t bandwidth;
+	uint32_t periodicity;
+	uint32_t tx_chainmask;
+	uint32_t rx_chainmask;
+	uint32_t num_ltf_tx;
+	uint32_t num_skip_ltf_rx;
+	uint32_t num_ltf_accumulation;
 };
 
 /**

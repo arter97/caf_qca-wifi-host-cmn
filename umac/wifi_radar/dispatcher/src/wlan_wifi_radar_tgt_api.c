@@ -118,3 +118,85 @@ uint32_t tgt_wifi_radar_info_send(struct wlan_objmgr_pdev *pdev, void *head,
 
 	return status;
 }
+
+int tgt_wifi_radar_validate_period(struct wlan_objmgr_psoc *psoc,
+				   u_int32_t period)
+{
+	if ((period < MIN_WIFI_RADAR_PRD) ||
+	    (period > MAX_WIFI_RADAR_PRD)) {
+		wifi_radar_err("Invalid period value");
+		return 0;
+	}
+
+	return 1;
+}
+
+static int
+num_chains(u_int32_t chainmask)
+{
+	int count = 0;
+
+	while (chainmask) {
+		count += chainmask & 1;
+		chainmask = chainmask >> 1;
+	}
+
+	return count;
+}
+
+int tgt_wifi_radar_validate_chainmask(struct pdev_wifi_radar *pwr,
+				      u_int32_t tx_chainmask,
+				      u_int32_t rx_chainmask)
+{
+	uint8_t txchain_pos = 0, i = 0;
+
+	if (!tx_chainmask) {
+		wifi_radar_err("Invalid tx chain mask, 1 chain must be set");
+		return 0;
+	}
+
+	if (num_chains(tx_chainmask) > 1) {
+		wifi_radar_err("Only one tx chain allowed for capture");
+		return 0;
+	}
+
+	txchain_pos = qdf_find_first_bit((unsigned long *)&tx_chainmask,
+					 (sizeof(tx_chainmask) * 8));
+	if (txchain_pos >= HOST_MAX_CHAINS) {
+		wifi_radar_err(" invalid tx chain requested for wifi radar");
+		return 0;
+	}
+
+	if (num_chains(rx_chainmask) >= HOST_MAX_CHAINS) {
+		wifi_radar_err("no of rx chains exceeds %d", HOST_MAX_CHAINS);
+		return 0;
+	}
+
+	qdf_spin_lock_bh(&pwr->cal_status_lock);
+	for (i = 0; ((i < HOST_MAX_CHAINS) && ((rx_chainmask >> i) & 1)); i++) {
+		if (pwr->per_chain_comb_cal_status[txchain_pos][i]) {
+			continue;
+		} else {
+			wifi_radar_err("cal fail on txchain %d rx chain %d",
+				       txchain_pos, i);
+			qdf_spin_unlock_bh(&pwr->cal_status_lock);
+			return 0;
+		}
+	}
+	qdf_spin_unlock_bh(&pwr->cal_status_lock);
+
+	return 1;
+}
+
+int tgt_wifi_radar_command(struct wlan_objmgr_pdev *pdev,
+			   struct wifi_radar_command_params *params)
+{
+	struct wlan_lmac_if_wifi_radar_tx_ops *wr_tx_ops = NULL;
+	struct wlan_objmgr_psoc *psoc = wlan_pdev_get_psoc(pdev);
+
+	wr_tx_ops = wlan_psoc_get_wifi_radar_txops(psoc);
+	if (wr_tx_ops->wifi_radar_capture_and_cal)
+		return wr_tx_ops->wifi_radar_capture_and_cal(pdev, params);
+
+	return 0;
+}

@@ -21,6 +21,7 @@
 #include <wlan_objmgr_pdev_obj.h>
 #include <wlan_objmgr_cmn.h>
 #include <qdf_types.h>
+#include <wlan_wifi_radar_utils_api.h>
 
 /* tgt layer has APIs in application, to access functions in target
  * through tx_ops.
@@ -65,4 +66,35 @@ uint32_t tgt_wifi_radar_info_send(struct wlan_objmgr_pdev *pdev, void *head,
 				  size_t hlen, void *data, size_t dlen,
 				  void *tail, size_t tlen);
 
+/**
+ * tgt_wifi_radar_validate_period() - API to validate wifi radar periodicity
+ * @psoc: pointer to the psoc object
+ * @period: period value to validate
+ *
+ * Return: success/failure of periodicity validation
+ */
+int tgt_wifi_radar_validate_period(struct wlan_objmgr_psoc *psoc,
+				   u_int32_t period);
+
+/**
+ * tgt_wifi_radar_validate_chainmask() - API to validate chain mask
+ * @pwr: pointer to wifi radar pdev private object
+ * @tx_chainmask: tx chain mask input from user for capture command
+ * @rx_chainmask: rx chain mask input from user for capture command
+ *
+ * Return: success/failure of chainmask validation
+ */
+int tgt_wifi_radar_validate_chainmask(struct pdev_wifi_radar *pwr,
+				      u_int32_t tx_chainmask,
+				      u_int32_t rx_chainmask);
+
+/**
+ * tgt_wifi_radar_command() - API to send wifi radar commands to target
+ * @pdev: pointer to the pdev object
+ * @params: pointer to the configuration parameters
+ *
+ * Return: success/failure of command
+ */
+int tgt_wifi_radar_command(struct wlan_objmgr_pdev *pdev,
+			   struct wifi_radar_command_params *params);
 #endif /* _WLAN_WIFI_RADAR_TGT_API_H_ */
