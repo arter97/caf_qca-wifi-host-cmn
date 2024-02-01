@@ -7215,7 +7215,9 @@ typedef struct {
 	bool rf_path;
 	bool fw_ast_indication_disable;
 	bool is_full_bw_nol_supported;
+#ifdef FEATURE_SMEM_MAILBOX
 	bool is_smem_mailbox_supported;
+#endif
 	bool con_mode_monitor;
 } target_resource_config;
 

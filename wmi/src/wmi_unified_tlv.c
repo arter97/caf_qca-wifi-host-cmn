@@ -9938,6 +9938,24 @@ void wmi_copy_full_bw_nol_cfg(wmi_resource_config *resource_cfg,
 }
 #endif
 
+#ifdef FEATURE_SMEM_MAILBOX
+static inline
+void wmi_copy_smem_mailbox_support(wmi_resource_config *resource_cfg,
+				   target_resource_config *tgt_res_cfg)
+{
+	if (tgt_res_cfg->is_smem_mailbox_supported) {
+		WMI_RSRC_CFG_HOST_SERVICE_FLAG_QMS_DLKM_SUPPORT_SET(
+			resource_cfg->host_service_flags, 1);
+	}
+}
+#else
+static inline
+void wmi_copy_smem_mailbox_support(wmi_resource_config *resource_cfg,
+				   target_resource_config *tgt_res_cfg)
+{
+}
+#endif
+
 static
 void wmi_copy_resource_config(wmi_resource_config *resource_cfg,
 				target_resource_config *tgt_res_cfg)
@@ -10032,10 +10050,7 @@ void wmi_copy_resource_config(wmi_resource_config *resource_cfg,
 	resource_cfg->max_ndi_interfaces = tgt_res_cfg->max_ndi;
 	resource_cfg->num_max_active_vdevs = tgt_res_cfg->num_max_active_vdevs;
 
-	if (tgt_res_cfg->is_smem_mailbox_supported) {
-		WMI_RSRC_CFG_HOST_SERVICE_FLAG_QMS_DLKM_SUPPORT_SET(
-			resource_cfg->host_service_flags, 1);
-	}
+	wmi_copy_smem_mailbox_support(resource_cfg, tgt_res_cfg);
 
 	resource_cfg->num_max_mlo_link_per_ml_bss =
 				tgt_res_cfg->num_max_mlo_link_per_ml_bss;
