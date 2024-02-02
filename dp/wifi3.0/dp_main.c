@@ -8516,6 +8516,10 @@ static QDF_STATUS dp_set_pdev_param(struct cdp_soc_t *cdp_soc, uint8_t pdev_id,
 	case CDP_CONFIG_VOW:
 		pdev->vow_stats = val.cdp_pdev_param_cfg_vow;
 		break;
+	case CDP_CONFIG_MON_FCS_CAP:
+		dp_mon_config_mon_fcs_cap(pdev->soc, pdev,
+					  val.cdp_pdev_param_mon_fcs_cap);
+		break;
 	default:
 		return QDF_STATUS_E_INVAL;
 	}

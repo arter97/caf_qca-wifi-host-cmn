@@ -1368,6 +1368,7 @@ enum cdp_peer_param_type {
  * @CDP_CONFIG_UNDECODED_METADATA_CAPTURE_ENABLE: Undecoded metadata capture
  * @CDP_CONFIG_RXDMA_BUF_RING_SIZE: RXDMA buffer ring size configure
  * @CDP_CONFIG_DELAY_STATS: set/get delay stats
+ * @CDP_CONFIG_MON_FCS_CAP: Set FCS monitor capture
  */
 enum cdp_pdev_param_type {
 	CDP_CONFIG_DEBUG_SNIFFER,
@@ -1405,6 +1406,7 @@ enum cdp_pdev_param_type {
 	CDP_CONFIG_UNDECODED_METADATA_CAPTURE_ENABLE,
 	CDP_CONFIG_RXDMA_BUF_RING_SIZE,
 	CDP_CONFIG_DELAY_STATS,
+	CDP_CONFIG_MON_FCS_CAP,
 };
 
 /**
@@ -1505,6 +1507,7 @@ enum cdp_pdev_param_type {
  * @cdp_ast_indication_disable: AST indication disable
  * @cdp_psoc_param_mlo_oper_mode: mlo operation mode
  * @cdp_fw_support_ml_mon: FW support ML monitor mode
+ * @cdp_pdev_param_mon_fcs_cap: monitor fcs capture
  */
 typedef union cdp_config_param_t {
 	/* peer params */
@@ -1623,6 +1626,7 @@ typedef union cdp_config_param_t {
 	bool cdp_ast_indication_disable;
 	uint8_t cdp_psoc_param_mlo_oper_mode;
 	bool cdp_fw_support_ml_mon;
+	uint8_t cdp_pdev_param_mon_fcs_cap;
 } cdp_config_param_type;
 
 /**

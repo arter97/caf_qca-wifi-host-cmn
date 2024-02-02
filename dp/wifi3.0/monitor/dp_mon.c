@@ -6268,6 +6268,7 @@ QDF_STATUS dp_mon_vdev_detach(struct dp_vdev *vdev)
 
 	qdf_mem_free(mon_vdev);
 	vdev->monitor_vdev = NULL;
+	pdev->monitor_pdev->mon_fcs_cap = 0;
 	/* set mvdev to NULL only if detach is called for monitor/special vap
 	 */
 	if (pdev->monitor_pdev->mvdev == vdev)
@@ -7279,4 +7280,17 @@ dump_mon_destination_ring:
 unlock_monitor:
 	if (!war)
 		qdf_spin_unlock_bh(&mon_pdev->mon_lock);
+}
+
+QDF_STATUS dp_rx_mon_config_fcs_cap(struct dp_pdev *pdev, uint8_t value)
+{
+	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+
+	if (!mon_pdev->mvdev)
+		return QDF_STATUS_E_NOSUPPORT;
+
+	qdf_err("mon_fcs_cap: %d ", value);
+	mon_pdev->mon_fcs_cap = value;
+
+	return QDF_STATUS_SUCCESS;
 }

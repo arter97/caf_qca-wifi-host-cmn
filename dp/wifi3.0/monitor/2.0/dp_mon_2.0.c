@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -1370,6 +1370,7 @@ dp_mon_register_feature_ops_2_0(struct dp_soc *soc)
 	mon_ops->mon_rx_print_advanced_stats =
 		dp_mon_rx_print_advanced_stats_2_0;
 	mon_ops->mon_mac_filter_set = NULL;
+	mon_ops->mon_config_mon_fcs_cap = dp_rx_mon_config_fcs_cap;
 }
 
 struct dp_mon_ops monitor_ops_2_0 = {

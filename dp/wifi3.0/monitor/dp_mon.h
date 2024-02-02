@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -526,6 +526,15 @@ QDF_STATUS dp_vdev_set_monitor_mode_buf_rings(struct dp_pdev *pdev);
 QDF_STATUS dp_vdev_set_monitor_mode_rings(struct dp_pdev *pdev,
 					  uint8_t delayed_replenish);
 
+/**
+ * dp_rx_mon_config_fcs_cap() - configure FCS capture
+ * @pdev: DP pdev
+ * @value: value
+ *
+ * Return: status
+ */
+QDF_STATUS dp_rx_mon_config_fcs_cap(struct dp_pdev *pdev, uint8_t value);
+
 #else
 static inline QDF_STATUS
 dp_vdev_set_monitor_mode_buf_rings(struct dp_pdev *pdev)
@@ -536,6 +545,12 @@ dp_vdev_set_monitor_mode_buf_rings(struct dp_pdev *pdev)
 static inline QDF_STATUS
 dp_vdev_set_monitor_mode_rings(struct dp_pdev *pdev,
 			       uint8_t delayed_replenish)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+dp_rx_mon_config_fcs_cap(struct dp_pdev *pdev, uint8_t value)
 {
 	return QDF_STATUS_SUCCESS;
 }
@@ -882,6 +897,7 @@ struct dp_mon_ops {
 	QDF_STATUS (*stop_local_pkt_capture)(struct dp_pdev *pdev);
 	bool (*is_local_pkt_capture_running)(struct dp_pdev *pdev);
 #endif /* WLAN_FEATURE_LOCAL_PKT_CAPTURE */
+	QDF_STATUS (*mon_config_mon_fcs_cap)(struct dp_pdev *pdev, uint8_t val);
 };
 
 /**
@@ -1254,6 +1270,8 @@ struct  dp_mon_pdev {
 #ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
 	bool is_local_pkt_capture_running;
 #endif
+	/* Monitor FCS capture */
+	bool mon_fcs_cap;
 };
 
 struct  dp_mon_vdev {
@@ -4863,6 +4881,36 @@ dp_mon_rx_print_advanced_stats(struct dp_soc *soc,
 		return;
 	}
 	return monitor_ops->mon_rx_print_advanced_stats(soc, pdev);
+}
+
+/**
+ * dp_mon_config_mon_fcs_cap() - configure monitor FCS capture
+ * @soc: DP soc handle
+ * @pdev: DP pdev handle
+ * @value: value to configure
+ *
+ * Return: void
+ */
+static inline QDF_STATUS
+dp_mon_config_mon_fcs_cap(struct dp_soc *soc,
+			  struct dp_pdev *pdev,
+			  uint8_t value)
+{
+	struct dp_mon_soc *mon_soc = soc->monitor_soc;
+	struct dp_mon_ops *monitor_ops;
+
+	if (!mon_soc) {
+		dp_mon_debug("mon soc is NULL");
+		return QDF_STATUS_E_FAULT;
+	}
+
+	monitor_ops = mon_soc->mon_ops;
+	if (!monitor_ops ||
+	    !monitor_ops->mon_config_mon_fcs_cap) {
+		dp_mon_debug("callback not registered");
+		return QDF_STATUS_E_FAULT;
+	}
+	return monitor_ops->mon_config_mon_fcs_cap(pdev, value);
 }
 
 #ifdef WLAN_CONFIG_TELEMETRY_AGENT

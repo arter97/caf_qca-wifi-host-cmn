@@ -1456,6 +1456,7 @@ dp_mon_register_feature_ops_1_0(struct dp_soc *soc)
 #endif
 	mon_ops->mon_rx_print_advanced_stats = NULL;
 	mon_ops->mon_mac_filter_set = dp_mon_mac_filter_set;
+	mon_ops->mon_config_mon_fcs_cap = dp_rx_mon_config_fcs_cap;
 }
 
 struct dp_mon_ops monitor_ops_1_0 = {
