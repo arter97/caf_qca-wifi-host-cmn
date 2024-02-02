@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -28,6 +28,7 @@
 #include <target_if_mlo_mgr.h>
 #include <cdp_txrx_cmn.h>
 #include <wlan_cfg.h>
+#include "wlan_utility.h"
 
 void mlo_get_link_information(struct qdf_mac_addr *mld_addr,
 			      struct mlo_link_info *info)
@@ -975,5 +976,45 @@ QDF_STATUS ml_post_get_link_state_msg(struct wlan_objmgr_vdev *vdev)
 				QDF_MODULE_ID_OS_IF,
 				&msg);
 	return qdf_status;
+}
+
+bool
+wlan_mlo_is_csa_allow(struct wlan_objmgr_vdev *vdev, uint16_t csa_freq)
+{
+	struct wlan_channel *chan;
+	struct wlan_objmgr_vdev *ml_vdev_list[WLAN_UMAC_MLO_MAX_VDEVS] = {0};
+	uint16_t ml_vdev_cnt = 0;
+	struct wlan_objmgr_vdev *t_vdev;
+	int i;
+	bool is_allow = true;
+
+	if (!vdev) {
+		mlo_err("vdev is NULL");
+		return false;
+	}
+
+	if (!wlan_vdev_mlme_is_mlo_vdev(vdev))
+		return true;
+
+	mlo_get_ml_vdev_list(vdev, &ml_vdev_cnt, ml_vdev_list);
+	for (i = 0; i < ml_vdev_cnt; i++) {
+		t_vdev = ml_vdev_list[i];
+		if (t_vdev == vdev)
+			goto next;
+		chan = wlan_vdev_get_active_channel(t_vdev);
+		if (!chan)
+			goto next;
+
+		if (csa_freq == chan->ch_freq) {
+			mlo_err("vdev %d will SCC with vdev %d on freq %d",
+				wlan_vdev_get_id(vdev),
+				wlan_vdev_get_id(t_vdev), csa_freq);
+			is_allow = false;
+		}
+next:
+		mlo_release_vdev_ref(t_vdev);
+	}
+
+	return is_allow;
 }
 
