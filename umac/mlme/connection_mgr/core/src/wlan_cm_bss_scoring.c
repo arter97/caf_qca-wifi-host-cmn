@@ -96,7 +96,11 @@
 #define CM_MAX_INDEX_PER_INI 4
 #define CM_SLO_CONGESTION_MAX_SCORE 80
 #define CM_ASSOC_INK_BEST_BOOST 20
-
+#define CM_DBS_SBS_STANDBY_PERCENTAGE 10
+#define CM_EMLSR_STANDBY_PERCENTAGE 5
+#define CM_DBS_SBS_ACTIVE_PERCENTAGE 10
+#define CM_EMLSR_ACTIVE_PERCENTAGE 5
+#define CM_MAX_ACTIVE_LINK_CONSIDER_IN_MLO_SCORE 6
 /*
  * This macro give percentage value of security_weightage to be used as per
  * security Eg if AP security is WPA 10% will be given for AP.
@@ -1827,6 +1831,14 @@ static bool is_freq_dbs_or_sbs(struct wlan_objmgr_psoc *psoc,
 	return !policy_mgr_2_freq_always_on_same_mac(psoc, freq_1, freq_2);
 }
 
+static bool is_cm_emlsr_mode_enabled(struct wlan_objmgr_psoc *psoc)
+{
+	bool emlsr_enabled = false;
+
+	wlan_mlme_get_emlsr_mode_enabled(psoc, &emlsr_enabled);
+
+	return emlsr_enabled;
+}
 #else
 static inline
 uint8_t cm_get_sta_mlo_conn_max_num(struct wlan_objmgr_psoc *psoc)
@@ -1837,6 +1849,11 @@ uint8_t cm_get_sta_mlo_conn_max_num(struct wlan_objmgr_psoc *psoc)
 static inline bool is_freq_dbs_or_sbs(struct wlan_objmgr_psoc *psoc,
 				      qdf_freq_t freq_1,
 				      qdf_freq_t freq_2)
+{
+	return false;
+}
+
+static bool is_cm_emlsr_mode_enabled(struct wlan_objmgr_psoc *psoc)
 {
 	return false;
 }
@@ -2036,10 +2053,19 @@ static int cm_calculate_mlo_bss_score(struct wlan_objmgr_psoc *psoc,
 	uint32_t assoc_band_score;
 	uint32_t link_band_score[MLD_MAX_LINKS - 1] = {0};
 	uint32_t total_band_score[MLD_MAX_LINKS - 1] = {0};
+	enum reg_wifi_band standby_band[MLD_MAX_LINKS - 1] = {0};
+	uint8_t slp_percentage[MLD_MAX_LINKS - 1] = {0};
+	uint8_t mlo_vdev_num = WLAN_UMAC_MLO_MAX_VDEVS;
+	uint8_t num_partner_links = 0;
+	uint8_t mlo_link_num = cm_get_sta_mlo_conn_max_num(psoc);
 
 	wlan_psoc_mlme_get_11be_capab(psoc, &eht_capab);
 	if (!eht_capab)
 		return 0;
+
+	num_partner_links = QDF_MIN(MLD_MAX_LINKS - 1,
+				    entry->ml_info.num_links);
+	num_partner_links = QDF_MIN(num_partner_links, mlo_link_num - 1);
 
 	weight_config = &score_params->weight_config;
 	freq_entry = entry->channel.chan_freq;
@@ -2057,7 +2083,7 @@ static int cm_calculate_mlo_bss_score(struct wlan_objmgr_psoc *psoc,
 					     score_params);
 
 	link = &entry->ml_info.link_info[0];
-	for (i = 0; i < entry->ml_info.num_links; i++) {
+	for (i = 0; i < num_partner_links; i++) {
 		if (!link[i].is_valid_link)
 			continue;
 		entry_partner[i] = cm_get_entry(scan_list, &link[i].link_addr);
@@ -2137,7 +2163,7 @@ static int cm_calculate_mlo_bss_score(struct wlan_objmgr_psoc *psoc,
 	*rssi_prorated_pct = prorated_pct[best_partner_index];
 
 	/* reorder the link idx per score */
-	for (j = 0; j < entry->ml_info.num_links; j++) {
+	for (j = 0; j < num_partner_links; j++) {
 		tmp_total_score = total_score[j];
 		best_partner_index = j;
 		for (i = j + 1; i < entry->ml_info.num_links; i++) {
@@ -2158,7 +2184,7 @@ static int cm_calculate_mlo_bss_score(struct wlan_objmgr_psoc *psoc,
 		total_score[j] = 0;
 	}
 
-	for (i = 0; i < entry->ml_info.num_links; i++) {
+	for (i = 0; i < num_partner_links; i++) {
 		if (link_score[i] > assoc_score) {
 			is_assoc_link_best = false;
 			break;
@@ -2173,6 +2199,92 @@ static int cm_calculate_mlo_bss_score(struct wlan_objmgr_psoc *psoc,
 	best_total_score += weight_config->mlo_weightage *
 			    mlo_boost_pct[MLMR];
 	entry->ml_info.ml_bss_score = best_total_score;
+
+	/*
+	 * Select extra-active partner links if support >2 mlo active links,
+	 * calculate score of each left partner link and sort them by score.
+	 */
+	for (i = 1; i < mlo_vdev_num - 1; i++) {
+		standby_band[i] = wlan_reg_freq_to_band(entry->ml_info.link_info[i].freq);
+		if (is_freq_dbs_or_sbs(psoc, entry->ml_info.link_info[i].freq,
+				       entry->channel.chan_freq))
+			slp_percentage[i] += CM_DBS_SBS_ACTIVE_PERCENTAGE;
+		else if (standby_band[i] > REG_BAND_2G && is_cm_emlsr_mode_enabled(psoc))
+			slp_percentage[i] += CM_EMLSR_ACTIVE_PERCENTAGE;
+		if (is_freq_dbs_or_sbs(psoc, entry->ml_info.link_info[i].freq,
+				       entry->ml_info.link_info[0].freq))
+			slp_percentage[i] += CM_DBS_SBS_ACTIVE_PERCENTAGE;
+		else if (standby_band[i] > REG_BAND_2G && is_cm_emlsr_mode_enabled(psoc))
+			slp_percentage[i] += CM_EMLSR_ACTIVE_PERCENTAGE;
+		total_score[i] = slp_percentage[i] * link_score[i];
+	}
+
+	for (j = 1; j < mlo_vdev_num - 1; j++) {
+		tmp_total_score = total_score[j];
+		best_partner_index = j;
+		for (i = j + 1; i < entry->ml_info.num_links; i++) {
+			if (tmp_total_score < total_score[i]) {
+				tmp_total_score = total_score[i];
+				best_partner_index = i;
+			}
+		}
+
+		if (best_partner_index != j) {
+			tmp_link_info = entry->ml_info.link_info[j];
+			entry->ml_info.link_info[j] =
+				entry->ml_info.link_info[best_partner_index];
+			entry->ml_info.link_info[best_partner_index] =
+							tmp_link_info;
+			total_score[best_partner_index] = total_score[j];
+		}
+		total_score[j] = 0;
+	}
+
+	for (j = 1; j < mlo_vdev_num - 1 && j < CM_MAX_ACTIVE_LINK_CONSIDER_IN_MLO_SCORE - 1; j++)
+		best_total_score += total_score[i];
+
+	if (num_partner_links <= mlo_vdev_num)
+		return best_total_score;
+
+	/*
+	 * Select standby links if supported link num  > supported active link num,
+	 * calculate score of each left partner link and sort them by score
+	 */
+	for (i = mlo_vdev_num - 1; i < num_partner_links; i++) {
+		standby_band[i] = wlan_reg_freq_to_band(entry->ml_info.link_info[i].freq);
+		if (is_freq_dbs_or_sbs(psoc, entry->ml_info.link_info[i].freq,
+				       entry->channel.chan_freq))
+			slp_percentage[i] += CM_DBS_SBS_STANDBY_PERCENTAGE;
+		else if (standby_band[i] > REG_BAND_2G && is_cm_emlsr_mode_enabled(psoc))
+			slp_percentage[i] += CM_EMLSR_STANDBY_PERCENTAGE;
+		if (is_freq_dbs_or_sbs(psoc, entry->ml_info.link_info[i].freq,
+				       entry->ml_info.link_info[0].freq))
+			slp_percentage[i] += CM_DBS_SBS_STANDBY_PERCENTAGE;
+		else if (standby_band[i] > REG_BAND_2G && is_cm_emlsr_mode_enabled(psoc))
+			slp_percentage[i] += CM_EMLSR_STANDBY_PERCENTAGE;
+		total_score[i] = slp_percentage[i] * link_score[i];
+	}
+
+	for (j = mlo_vdev_num - 1; j < num_partner_links; j++) {
+		tmp_total_score = total_score[j];
+		best_partner_index = j;
+		for (i = j + 1; i < entry->ml_info.num_links; i++) {
+			if (tmp_total_score < total_score[i]) {
+				tmp_total_score = total_score[i];
+				best_partner_index = i;
+			}
+		}
+
+		if (best_partner_index != j) {
+			tmp_link_info = entry->ml_info.link_info[j];
+			entry->ml_info.link_info[j] =
+				entry->ml_info.link_info[best_partner_index];
+			entry->ml_info.link_info[best_partner_index] =
+							tmp_link_info;
+			total_score[best_partner_index] = total_score[j];
+		}
+		total_score[j] = 0;
+	}
 
 	return best_total_score;
 }
@@ -3353,11 +3465,10 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 		qdf_mem_free(force_connect_candidate);
 	}
 
-	if (score_config->vendor_roam_score_algorithm) {
+	if (score_config->vendor_roam_score_algorithm)
 		cm_eliminate_common_candidate(scan_list);
-		/* print all vendor candidates*/
-		cm_print_candidate_list(scan_list);
-	}
+
+	cm_print_candidate_list(scan_list);
 }
 
 #ifdef CONFIG_BAND_6GHZ
