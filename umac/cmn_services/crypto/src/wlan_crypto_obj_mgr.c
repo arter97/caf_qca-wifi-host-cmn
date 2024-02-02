@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -256,6 +256,11 @@ QDF_STATUS crypto_add_entry(struct crypto_psoc_priv_obj *psoc,
 		crypto_hash_add(psoc, crypto_entry, link_id);
 		qdf_atomic_inc(&psoc->crypto_key_cnt);
 		crypto_entry->is_active = 1;
+	}
+
+	if (!is_valid_keyix(key_index)) {
+		crypto_err("Invalid key index %d", key_index);
+		return QDF_STATUS_E_INVAL;
 	}
 
 	if (key_index < WLAN_CRYPTO_MAXKEYIDX) {

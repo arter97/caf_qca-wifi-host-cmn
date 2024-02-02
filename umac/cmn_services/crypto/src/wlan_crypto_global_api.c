@@ -4436,6 +4436,11 @@ wlan_crypto_save_key_at_psoc(struct wlan_objmgr_vdev *vdev, uint8_t key_index,
 		return QDF_STATUS_E_FAILURE;
 	}
 
+	if (!is_valid_keyix(key_index)) {
+		crypto_err("Invalid Key index %d", key_index);
+		return QDF_STATUS_E_FAILURE;
+	}
+
 	if (wlan_vdev_mlme_is_mlo_vdev(vdev))
 		link_id = wlan_vdev_get_link_id(vdev);
 
