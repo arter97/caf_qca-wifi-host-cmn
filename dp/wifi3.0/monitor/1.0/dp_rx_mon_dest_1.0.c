@@ -463,7 +463,10 @@ next_msdu:
 	} while (buf_info.paddr);
 
 	dp_rx_mon_init_tail_msdu(head_msdu, msdu, last, tail_msdu);
-	dp_rx_mon_remove_raw_frame_fcs_len(soc, head_msdu, tail_msdu);
+	dp_rx_mon_remove_raw_frame_fcs_len(soc,
+					   mon_pdev,
+					   &mon_pdev->ppdu_info,
+					   head_msdu, tail_msdu);
 
 	return rx_bufs_used;
 }

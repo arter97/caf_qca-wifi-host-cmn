@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -840,4 +840,15 @@ dp_rx_handle_local_pkt_capture(struct dp_pdev *pdev,
 	return 0;
 }
 #endif
+
+#ifdef QCA_SUPPORT_MON_FCS_CAP_DBG
+void dp_rx_mon_fcs_cap_debug(struct dp_mon_pdev *mon_pdev,
+			     qdf_nbuf_t mpdu);
+#else
+static inline void
+dp_rx_mon_fcs_cap_debug(struct dp_mon_pdev *mon_pdev,
+			qdf_nbuf_t mpdu)
+{
+}
+#endif /*QCA_SUPPORT_MON_FCS_CAP_DBG */
 #endif /* _DP_RX_MON_H_ */

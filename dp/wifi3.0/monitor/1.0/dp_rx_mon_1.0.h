@@ -645,11 +645,15 @@ void dp_rx_mon_init_tail_msdu(qdf_nbuf_t *head_msdu, qdf_nbuf_t msdu,
  * If feature is disabled, then removal happens in restitch logic.
  *
  * @soc: Datapath soc handle
+ * @mon_pdev: Monitor pdev
+ * @ppdu_info: PPDU info
  * @head_msdu: Head msdu
  * @tail_msdu: Tail msdu
  */
 static inline
 void dp_rx_mon_remove_raw_frame_fcs_len(struct dp_soc *soc,
+					struct dp_mon_pdev *mon_pdev,
+					struct hal_rx_ppdu_info *ppdu_info,
 					qdf_nbuf_t *head_msdu,
 					qdf_nbuf_t *tail_msdu)
 {
@@ -681,6 +685,14 @@ void dp_rx_mon_remove_raw_frame_fcs_len(struct dp_soc *soc,
 			}
 		}
 
+		/* if monitor FCS capture feature is enabled,
+		 * skip removing FCS header
+		 */
+		if (mon_pdev->mon_fcs_cap) {
+			dp_rx_mon_fcs_cap_debug(mon_pdev, *tail_msdu);
+			ppdu_info->rx_status.mon_fcs_cap = true;
+			return;
+		}
 		qdf_nbuf_trim_add_frag_size(*tail_msdu,
 					    qdf_nbuf_get_nr_frags(*tail_msdu) -
 					    1, -fcs_len_left, 0);
@@ -935,6 +947,8 @@ void dp_rx_mon_init_tail_msdu(qdf_nbuf_t *head_msdu, qdf_nbuf_t msdu,
 
 static inline
 void dp_rx_mon_remove_raw_frame_fcs_len(struct dp_soc *soc,
+					struct dp_mon_pdev *mon_pdev,
+					struct hal_rx_ppdu_info *ppdu_info,
 					qdf_nbuf_t *head_msdu,
 					qdf_nbuf_t *tail_msdu)
 {

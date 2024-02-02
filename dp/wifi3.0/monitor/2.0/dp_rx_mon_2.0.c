@@ -1468,6 +1468,7 @@ dp_rx_mon_handle_full_mon(struct dp_pdev *pdev,
 			  struct hal_rx_ppdu_info *ppdu_info,
 			  qdf_nbuf_t mpdu)
 {
+	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 	uint32_t wifi_hdr_len, sec_hdr_len, msdu_llc_len,
 		 mpdu_buf_len, decap_hdr_pull_bytes, dir,
 		 is_amsdu, amsdu_pad, frag_size, tot_msdu_len;
@@ -1524,6 +1525,15 @@ dp_rx_mon_handle_full_mon(struct dp_pdev *pdev,
 			}
 		}
 
+		if (mon_pdev->mon_fcs_cap) {
+			/* if monitor FCS capture feature is enabled,
+			 * skip removing FCS header
+			 */
+
+			dp_rx_mon_fcs_cap_debug(mon_pdev, mpdu);
+			ppdu_info->rx_status.mon_fcs_cap = true;
+			return QDF_STATUS_SUCCESS;
+		}
 		qdf_nbuf_trim_add_frag_size(mpdu,
 					    qdf_nbuf_get_nr_frags(mpdu) - 1,
 					    -fcs_len_left, 0);

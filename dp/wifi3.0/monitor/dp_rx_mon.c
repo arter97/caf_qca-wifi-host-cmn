@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -39,6 +39,25 @@
 
 #ifndef IEEE80211_FCO_SUBTYPE_ACTION_NO_ACK
 #define IEEE80211_FCO_SUBTYPE_ACTION_NO_ACK 0xe0
+#endif
+
+#ifdef QCA_SUPPORT_MON_FCS_CAP_DBG
+void dp_rx_mon_fcs_cap_debug(struct dp_mon_pdev *mon_pdev,
+			     qdf_nbuf_t mpdu)
+{
+	void *ptr;
+	uint32_t size;
+
+	ptr = qdf_nbuf_get_frag_addr(mpdu, qdf_nbuf_get_nr_frags(mpdu) - 1);
+	size = qdf_nbuf_get_frag_size_by_idx(mpdu,
+					     qdf_nbuf_get_nr_frags(mpdu) - 1);
+	print_hex_dump(KERN_ERR, "pkt: ", DUMP_PREFIX_NONE,
+		       32, 2, ptr, size, false);
+
+	ptr += (size - HAL_RX_FCS_LEN);
+	print_hex_dump(KERN_ERR, "FCS: ", DUMP_PREFIX_NONE,
+		       32, 2, ptr, HAL_RX_FCS_LEN, false);
+}
 #endif
 
 #if defined(WLAN_CFR_ENABLE) && defined(WLAN_ENH_CFR_ENABLE)
