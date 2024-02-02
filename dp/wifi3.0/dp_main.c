@@ -4807,7 +4807,7 @@ static QDF_STATUS dp_vdev_attach_wifi3(struct cdp_soc_t *cdp_soc,
 	} else if (dp_soc_get_con_mode(soc) == QDF_GLOBAL_MISSION_MODE &&
 		   soc->intr_mode == DP_INTR_MSI &&
 		   wlan_op_mode_monitor == vdev->opmode &&
-		   !wlan_cfg_get_local_pkt_capture(soc->wlan_cfg_ctx)) {
+		   !dp_mon_mode_local_pkt_capture(soc)) {
 		/* Timer to reap status ring in mission mode */
 		dp_monitor_vdev_timer_start(soc);
 	}
