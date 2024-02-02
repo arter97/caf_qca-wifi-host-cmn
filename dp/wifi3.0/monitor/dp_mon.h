@@ -4911,11 +4911,43 @@ void dp_mon_register_tx_pkt_enh_ops_1_0(struct dp_mon_ops *mon_ops);
  * Return: QDF_STATUS
  */
 QDF_STATUS dp_local_pkt_capture_tx_config(struct dp_pdev *pdev);
+
+/*
+ * dp_mon_mode_local_pkt_capture() - Check if in LPC mode
+ * @soc: DP SOC handle
+ *
+ * Return: True in case of LPC mode else false
+ *
+ */
+static inline bool
+dp_mon_mode_local_pkt_capture(struct dp_soc *soc)
+{
+	/* Currently there is no way to distinguish between
+	 * Local Packet Capture and STA+Mon mode as both mode
+	 * uses same monitor interface. So to distinguish between
+	 * two mode in local_packet_capture enable case use
+	 * mon_flags which can be passed during monitor interface
+	 * add time. If "flags otherbss" is passed during
+	 * monitor interface add driver will consider current mode
+	 * as STA+MON mode, LPC otherwise.
+	 */
+	if (wlan_cfg_get_local_pkt_capture(soc->wlan_cfg_ctx) &&
+	    !(soc->mon_flags & QDF_MONITOR_FLAG_OTHER_BSS))
+		return true;
+
+	return false;
+}
 #else
 static inline
 QDF_STATUS dp_local_pkt_capture_tx_config(struct dp_pdev *pdev)
 {
 	return QDF_STATUS_SUCCESS;
+}
+
+static inline bool
+dp_mon_mode_local_pkt_capture(struct dp_soc *soc)
+{
+	return false;
 }
 #endif
 
