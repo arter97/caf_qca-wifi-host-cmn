@@ -264,7 +264,7 @@ static inline bool dp_skip_msi_cfg(struct dp_soc *soc, int ring_type)
 		if (ring_type != RXDMA_MONITOR_STATUS)
 			return true;
 	} else if (ring_type == RXDMA_MONITOR_STATUS &&
-		   !wlan_cfg_get_local_pkt_capture(soc->wlan_cfg_ctx)) {
+		   !dp_mon_mode_local_pkt_capture(soc)) {
 		return true;
 	}
 
@@ -278,7 +278,7 @@ static inline bool dp_skip_msi_cfg(struct dp_soc *soc, int ring_type)
 		if (ring_type == REO_DST || ring_type == RXDMA_DST)
 			return true;
 	} else if (ring_type == RXDMA_MONITOR_STATUS &&
-		  !wlan_cfg_get_local_pkt_capture(soc->wlan_cfg_ctx)) {
+		  !dp_mon_mode_local_pkt_capture(soc)) {
 		return true;
 	}
 

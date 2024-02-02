@@ -286,18 +286,18 @@ void dp_mon_filter_h2t_setup(struct dp_soc *soc, struct dp_pdev *pdev,
 }
 
 /**
- * dp_mon_is_lpc_mode() - Check if it's local packets capturing mode
+ * dp_mon_skip_filter_config() - Check if filter config need to be skipped
  * @soc: DP soc context
  *
  * Return: true if yes, false if not
  */
 static inline
-bool dp_mon_is_lpc_mode(struct dp_soc *soc)
+bool dp_mon_skip_filter_config(struct dp_soc *soc)
 {
 	if (soc->cdp_soc.ol_ops->get_con_mode &&
 	    soc->cdp_soc.ol_ops->get_con_mode() ==
 	    QDF_GLOBAL_MISSION_MODE &&
-	    wlan_cfg_get_local_pkt_capture(soc->wlan_cfg_ctx))
+	    !(QDF_MONITOR_FLAG_OTHER_BSS & soc->mon_flags))
 		return true;
 	else
 		return false;
@@ -315,7 +315,7 @@ dp_mon_ht2_rx_ring_cfg(struct dp_soc *soc,
 	uint32_t target_type = hal_get_target_type(soc->hal_soc);
 
 	if (srng_type == DP_MON_FILTER_SRNG_TYPE_RXDMA_BUF &&
-	    dp_mon_is_lpc_mode(soc)) {
+	    dp_mon_skip_filter_config(soc)) {
 		dp_mon_filter_info("skip rxdma_buf filter cfg for lpc mode");
 		return QDF_STATUS_SUCCESS;
 	}
