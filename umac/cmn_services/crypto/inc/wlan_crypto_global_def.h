@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -310,6 +310,62 @@ enum fils_erp_cryptosuite {
 	HMAC_SHA256_128,
 	HMAC_SHA256_256,
 };
+
+/*
+ * enum wlan_crypto_oem_eht_mlo_config - ENUM for different OEM configurable
+ * crypto params to allow EHT/MLO in WPA2/WPA3 security.
+ *
+ * @WLAN_HOST_CRYPTO_WPA2_ALLOW_NON_MLO_EHT: Allows connecting to WPA2 with PMF
+ * capability set to false in EHT only mode. If the AP is MLO, the connection
+ * will still be in EHT without MLO.
+ *
+ * @WLAN_HOST_CRYPTO_WPA2_ALLOW_MLO: Allows connecting to WPA2 with PMF
+ * capability set to false in MLO mode.
+ *    -If set along with WLAN_HOST_CRYPTO_WPA2_ALLOW_NON_MLO_EHT,
+ *     this mode supersedes.
+ *
+ * @WLAN_HOST_CRYPTO_WPA2_ALLOW_NON_MLO_EHT_MFPC_SET: Allows connecting to WPA2
+ * with PMF capability set to true in EHT only mode. If the AP is MLO,
+ * the connection will still be in EHT without MLO.
+ *
+ * @WLAN_HOST_CRYPTO_WPA2_ALLOW_MLO_MFPC_SET: Allows connecting to WPA2 with PMF
+ * capability set to true in MLO mode.
+ *    -If set along with WLAN_HOST_CRYPTO_WPA2_ALLOW_NON_MLO_EHT_MFPC_SET,
+ *     this mode supersedes.
+ *
+ * @WLAN_HOST_CRYPTO_WPA3_SAE_ALLOW_NON_MLO_EHT_HnP: Connect to non-MLO/MLO
+ * WPA3-SAE without support for H2E (or no RSNXE IE in beacon) in non-MLO EHT.
+ * This bit results in connecting to both H2E and HnP APs in EHT only mode.
+ *
+ * @WLAN_HOST_CRYPTO_WPA3_SAE_ALLOW_MLO_HnP: Connect to MLO WPA3-SAE without
+ * support for H2E (or no RSNXE IE in beacon) in MLO.
+ * This bit result in connecting to both H2E and HnP APs in MLO mode.
+ *    -If set along with WLAN_HOST_CRYPTO_WPA3_SAE_ALLOW_NON_MLO_EHT_HnP,
+ *     this mode supersedes.
+ */
+enum wlan_crypto_oem_eht_mlo_config {
+	WLAN_HOST_CRYPTO_WPA2_ALLOW_NON_MLO_EHT           = BIT(0),
+	WLAN_HOST_CRYPTO_WPA2_ALLOW_MLO                   = BIT(1),
+	WLAN_HOST_CRYPTO_WPA2_ALLOW_NON_MLO_EHT_MFPC_SET  = BIT(2),
+	WLAN_HOST_CRYPTO_WPA2_ALLOW_MLO_MFPC_SET          = BIT(3),
+	/* Bits 4-15 are reserved for future WPA2 security configs */
+
+	WLAN_HOST_CRYPTO_WPA3_SAE_ALLOW_NON_MLO_EHT_HnP   = BIT(16),
+	WLAN_HOST_CRYPTO_WPA3_SAE_ALLOW_MLO_HnP           = BIT(17),
+	/* Bits 18-31 are reserved for future WPA3 security configs */
+};
+
+#define WLAN_CRYPTO_WPA2_OEM_EHT_CFG_NO_PMF_ALLOWED(_cfg) \
+	((_cfg) & WLAN_HOST_CRYPTO_WPA2_ALLOW_NON_MLO_EHT || \
+	 (_cfg) & WLAN_HOST_CRYPTO_WPA2_ALLOW_MLO)
+
+#define WLAN_CRYPTO_WPA2_OEM_EHT_CFG_PMF_ALLOWED(_cfg) \
+	 ((_cfg) & WLAN_HOST_CRYPTO_WPA2_ALLOW_NON_MLO_EHT_MFPC_SET || \
+	  (_cfg) & WLAN_HOST_CRYPTO_WPA2_ALLOW_MLO_MFPC_SET)
+
+#define WLAN_CRYPTO_WPA3_SAE_OEM_EHT_CFG_IS_STRICT_H2E(_cfg) \
+	(((_cfg) & WLAN_HOST_CRYPTO_WPA3_SAE_ALLOW_NON_MLO_EHT_HnP || \
+	  (_cfg) & WLAN_HOST_CRYPTO_WPA3_SAE_ALLOW_MLO_HnP) == 0)
 
 /**
  * struct mobility_domain_params - structure containing
@@ -668,6 +724,13 @@ struct wlan_lmac_if_crypto_rx_ops {
 	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FILS_SHA384) || \
 	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA256) || \
 	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA384) || \
+	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_PSK_SHA384) || \
+	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_PSK_SHA384))
+
+#define WLAN_CRYPTO_IS_WPA2(akm) \
+	(QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_PSK) || \
+	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_PSK) || \
+	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_PSK_SHA256) || \
 	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_PSK_SHA384) || \
 	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_PSK_SHA384))
 

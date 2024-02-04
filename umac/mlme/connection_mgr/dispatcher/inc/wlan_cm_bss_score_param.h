@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -345,25 +345,28 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
  * wlan_cm_is_eht_allowed_for_current_security() - checks the current security,
  * if eht allowed or not.
  * @psoc: psoc context
- * @scan_entry: pointer to scan cache entry
+ * @entry: pointer to scan cache entry
+ * @is_mlo_connect: Is for MLO connection, if false check for non-ML EHT only
  *
  * Return: true if eht allowed for current security
  **/
-bool wlan_cm_is_eht_allowed_for_current_security(
-			struct wlan_objmgr_psoc *psoc,
-			struct scan_cache_entry *scan_entry);
+bool wlan_cm_is_eht_allowed_for_current_security(struct wlan_objmgr_psoc *psoc,
+						 struct scan_cache_entry *entry,
+						 bool is_mlo_connect);
 #else
-static inline bool wlan_cm_is_eht_allowed_for_current_security(
-			struct wlan_objmgr_psoc *psoc,
-			struct scan_cache_entry *scan_entry)
+static inline bool
+wlan_cm_is_eht_allowed_for_current_security(struct wlan_objmgr_psoc *psoc,
+					    struct scan_cache_entry *entry,
+					    bool is_mlo_connect)
 {
 	return true;
 }
 #endif
 #else
-static inline bool wlan_cm_is_eht_allowed_for_current_security(
-			struct wlan_objmgr_psoc *psoc,
-			struct scan_cache_entry *scan_entry)
+static inline bool
+wlan_cm_is_eht_allowed_for_current_security(struct wlan_objmgr_psoc *psoc,
+					    struct scan_cache_entry *entry,
+					    bool is_mlo_connect)
 {
 	return false;
 }
@@ -573,4 +576,14 @@ void wlan_cm_set_check_assoc_disallowed(struct wlan_objmgr_psoc *psoc,
 void wlan_cm_get_check_assoc_disallowed(struct wlan_objmgr_psoc *psoc,
 					bool *value);
 #endif
+
+/**
+ * cm_get_entry() - Get bss scan entry by link mac address
+ * @scan_list: Scan entry list of bss candidates after filtering
+ * @link_addr: link mac address
+ *
+ * Return: Pointer to bss scan entry
+ */
+struct scan_cache_entry *cm_get_entry(qdf_list_t *scan_list,
+				      struct qdf_mac_addr *link_addr);
 #endif

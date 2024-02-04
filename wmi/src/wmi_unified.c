@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1182,7 +1182,7 @@ static int debug_wmi_log_size_show(struct seq_file *m, void *v)
 			((struct seq_file *)file->private_data)->private;\
 		struct wmi_log_buf_t *wmi_log = &wmi_handle->log_info.	\
 				wmi_##func_base##_buf_info;		\
-		char locbuf[50];					\
+		char locbuf[50] = {0x00};				\
 									\
 		if ((!buf) || (count > 50))				\
 			return -EFAULT;					\
@@ -1238,7 +1238,7 @@ static ssize_t debug_wmi_enable_write(struct file *file, const char __user *buf,
 	wmi_unified_t wmi_handle =
 		((struct seq_file *)file->private_data)->private;
 	int k, ret;
-	char locbuf[50];
+	char locbuf[50] = {0x00};
 
 	if ((!buf) || (count > 50))
 		return -EFAULT;

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -4099,6 +4099,9 @@ struct dp_vdev {
 	/* callback to classify critical packets */
 	ol_txrx_classify_critical_pkt_fp tx_classify_critical_pkt_cb;
 
+	/* delete notifier to DP component */
+	ol_txrx_vdev_delete_cb vdev_del_notify;
+
 	/* deferred vdev deletion state */
 	struct {
 		/* VDEV delete pending */
@@ -5066,14 +5069,15 @@ struct dp_peer {
 		sta_self_peer:1, /* Indicate STA self peer */
 		is_tdls_peer:1; /* Indicate TDLS peer */
 
+	/* MCL specific peer local id */
+	uint16_t local_id;
+	enum ol_txrx_peer_state state;
+
 #ifdef WLAN_FEATURE_11BE_MLO
 	uint8_t first_link:1, /* first link peer for MLO */
 		primary_link:1; /* primary link for MLO */
 #endif
 
-	/* MCL specific peer local id */
-	uint16_t local_id;
-	enum ol_txrx_peer_state state;
 	qdf_spinlock_t peer_info_lock;
 
 	/* Peer calibrated stats */

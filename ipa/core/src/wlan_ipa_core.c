@@ -436,7 +436,7 @@ static inline
 bool wlan_ipa_get_peer_state(struct cdp_soc_t *soc, uint8_t vdev_id,
 			     uint8_t *peer_mac)
 {
-	if (cdp_peer_state_get(soc, vdev_id, peer_mac) ==
+	if (cdp_peer_state_get(soc, vdev_id, peer_mac, false) ==
 	    OL_TXRX_PEER_STATE_AUTH)
 		return true;
 

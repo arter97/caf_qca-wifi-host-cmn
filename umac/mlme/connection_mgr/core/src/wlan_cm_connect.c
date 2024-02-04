@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015, 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -528,34 +528,33 @@ static QDF_STATUS cm_update_vdev_mlme_macaddr(struct cnx_mgr *cm_ctx,
 {
 	struct qdf_mac_addr *mac;
 	bool eht_capab;
-	uint8_t vdev_id = wlan_vdev_get_id(cm_ctx->vdev);
+	struct wlan_objmgr_vdev *vdev = cm_ctx->vdev;
+	uint8_t vdev_id = wlan_vdev_get_id(vdev);
 
-	if (wlan_vdev_mlme_get_opmode(cm_ctx->vdev) != QDF_STA_MODE)
+	if (wlan_vdev_mlme_get_opmode(vdev) != QDF_STA_MODE)
 		return QDF_STATUS_SUCCESS;
 
-	wlan_psoc_mlme_get_11be_capab(wlan_vdev_get_psoc(cm_ctx->vdev),
-				      &eht_capab);
+	wlan_psoc_mlme_get_11be_capab(wlan_vdev_get_psoc(vdev), &eht_capab);
 	if (!eht_capab)
 		return QDF_STATUS_SUCCESS;
 
-	mac = (struct qdf_mac_addr *)wlan_vdev_mlme_get_mldaddr(cm_ctx->vdev);
+	mac = (struct qdf_mac_addr *)wlan_vdev_mlme_get_mldaddr(vdev);
 
 	if (req->cur_candidate->entry->ie_list.multi_link_bv &&
 	    !qdf_is_macaddr_zero(mac) &&
-	    wlan_cm_is_eht_allowed_for_current_security(
-					wlan_vdev_get_psoc(cm_ctx->vdev),
-					req->cur_candidate->entry)) {
-		wlan_vdev_obj_lock(cm_ctx->vdev);
+	    wlan_cm_is_eht_allowed_for_current_security(wlan_vdev_get_psoc(vdev),
+							req->cur_candidate->entry,
+							true)) {
+		wlan_vdev_obj_lock(vdev);
 		/* Use link address for ML connection */
-		wlan_vdev_mlme_set_macaddr(cm_ctx->vdev,
-					   cm_ctx->vdev->vdev_mlme.linkaddr);
-		wlan_vdev_obj_unlock(cm_ctx->vdev);
-		wlan_vdev_mlme_set_mlo_vdev(cm_ctx->vdev);
+		wlan_vdev_mlme_set_macaddr(vdev, vdev->vdev_mlme.linkaddr);
+		wlan_vdev_obj_unlock(vdev);
+		wlan_vdev_mlme_set_mlo_vdev(vdev);
 		mlme_debug(CM_PREFIX_FMT "setting ML link address " QDF_MAC_ADDR_FMT,
 			   CM_PREFIX_REF(vdev_id, req->cm_id),
 			   QDF_MAC_ADDR_REF(mac->bytes));
 	} else {
-		if (wlan_vdev_mlme_is_mlo_link_vdev(cm_ctx->vdev)) {
+		if (wlan_vdev_mlme_is_mlo_link_vdev(vdev)) {
 			mlme_debug(CM_PREFIX_FMT "MLIE is not present for partner" QDF_MAC_ADDR_FMT,
 				   CM_PREFIX_REF(vdev_id, req->cm_id),
 				   QDF_MAC_ADDR_REF(mac->bytes));
@@ -564,14 +563,14 @@ static QDF_STATUS cm_update_vdev_mlme_macaddr(struct cnx_mgr *cm_ctx,
 
 		/* Use net_dev address for non-ML connection */
 		if (!qdf_is_macaddr_zero(mac)) {
-			wlan_vdev_obj_lock(cm_ctx->vdev);
-			wlan_vdev_mlme_set_macaddr(cm_ctx->vdev, mac->bytes);
-			wlan_vdev_obj_unlock(cm_ctx->vdev);
+			wlan_vdev_obj_lock(vdev);
+			wlan_vdev_mlme_set_macaddr(vdev, mac->bytes);
+			wlan_vdev_obj_unlock(vdev);
 			mlme_debug(CM_PREFIX_FMT "setting non-ML address " QDF_MAC_ADDR_FMT,
 				   CM_PREFIX_REF(vdev_id, req->cm_id),
 				   QDF_MAC_ADDR_REF(mac->bytes));
 		}
-		wlan_vdev_mlme_clear_mlo_vdev(cm_ctx->vdev);
+		wlan_vdev_mlme_clear_mlo_vdev(vdev);
 	}
 
 	return QDF_STATUS_SUCCESS;
@@ -668,22 +667,22 @@ static void cm_create_bss_peer(struct cnx_mgr *cm_ctx,
 	struct qdf_mac_addr *mld_mac = NULL;
 	bool is_assoc_link = false;
 	bool eht_capab;
+	struct wlan_objmgr_vdev *vdev;
 
 	if (!cm_ctx) {
 		mlme_err("invalid cm_ctx");
 		return;
 	}
 
-	if (mlo_is_sta_bridge_vdev(cm_ctx->vdev) && req) {
+	vdev = cm_ctx->vdev;
+	if (mlo_is_sta_bridge_vdev(vdev) && req) {
 		/* Acquire lock as required by wlan_vdev_mlme_get_mldaddr() */
-		wlan_vdev_obj_lock(cm_ctx->vdev);
-		bssid = (struct qdf_mac_addr *)wlan_vdev_mlme_get_mldaddr(cm_ctx->vdev);
-		wlan_vdev_obj_unlock(cm_ctx->vdev);
-		mld_mac = mlo_get_sta_ctx_bss_mld_addr(cm_ctx->vdev);
-		status = mlme_cm_bss_peer_create_req(cm_ctx->vdev,
-						     bssid,
-						     mld_mac,
-						     is_assoc_link);
+		wlan_vdev_obj_lock(vdev);
+		bssid = (struct qdf_mac_addr *)wlan_vdev_mlme_get_mldaddr(vdev);
+		wlan_vdev_obj_unlock(vdev);
+		mld_mac = mlo_get_sta_ctx_bss_mld_addr(vdev);
+		status = mlme_cm_bss_peer_create_req(vdev, bssid,
+						     mld_mac, is_assoc_link);
 		goto peer_create_fail;
 	}
 
@@ -692,26 +691,25 @@ static void cm_create_bss_peer(struct cnx_mgr *cm_ctx,
 		return;
 	}
 
-	wlan_psoc_mlme_get_11be_capab(wlan_vdev_get_psoc(cm_ctx->vdev),
-				      &eht_capab);
-	if (eht_capab && wlan_vdev_mlme_is_mlo_vdev(cm_ctx->vdev) &&
-	    wlan_cm_is_eht_allowed_for_current_security(
-					wlan_vdev_get_psoc(cm_ctx->vdev),
-					req->cur_candidate->entry)) {
+	wlan_psoc_mlme_get_11be_capab(wlan_vdev_get_psoc(vdev), &eht_capab);
+	if (eht_capab && wlan_vdev_mlme_is_mlo_vdev(vdev) &&
+	    wlan_cm_is_eht_allowed_for_current_security(wlan_vdev_get_psoc(vdev),
+							req->cur_candidate->entry,
+							true)) {
 		cm_set_vdev_link_id(cm_ctx, req);
-		wlan_mlo_init_cu_bpcc(cm_ctx->vdev);
+		wlan_mlo_init_cu_bpcc(vdev);
 		mld_mac = cm_get_bss_peer_mld_addr(req);
-		mlo_set_sta_ctx_bss_mld_addr(cm_ctx->vdev, mld_mac);
+		mlo_set_sta_ctx_bss_mld_addr(vdev, mld_mac);
 		is_assoc_link = cm_bss_peer_is_assoc_peer(req);
 	}
 
 	bssid = &req->cur_candidate->entry->bssid;
-	status = mlme_cm_bss_peer_create_req(cm_ctx->vdev, bssid,
+	status = mlme_cm_bss_peer_create_req(vdev, bssid,
 					     mld_mac, is_assoc_link);
 peer_create_fail:
 	if (QDF_IS_STATUS_ERROR(status)) {
 		struct wlan_cm_connect_resp *resp;
-		uint8_t vdev_id = wlan_vdev_get_id(cm_ctx->vdev);
+		uint8_t vdev_id = wlan_vdev_get_id(vdev);
 
 		/* In case of failure try with next candidate */
 		mlme_err(CM_PREFIX_FMT "peer create request failed %d",
@@ -1420,9 +1418,16 @@ static QDF_STATUS cm_update_mlo_filter(struct wlan_objmgr_pdev *pdev,
 	psoc = wlan_pdev_get_psoc(pdev);
 	filter->band_bitmap = wlan_mlme_get_sta_mlo_conn_band_bmp(psoc);
 	/* Apply assoc band filter only for assoc link */
-	if (cm_req->req.is_non_assoc_link)
+	if (cm_req->req.is_non_assoc_link) {
 		filter->band_bitmap =
 			filter->band_bitmap | CFG_MLO_ASSOC_LINK_BAND_MAX;
+		/* Only select entry which matches MLD address filter for
+		 * link VDEV connect, to avoid assoc/link VDEV selecting
+		 * candidates with different MLD address.
+		 */
+		filter->match_mld_addr = true;
+		qdf_copy_macaddr(&filter->mld_addr, &cm_req->req.mld_addr);
+	}
 
 	mlme_debug(CM_PREFIX_FMT "band bitmap: 0x%x",
 		   CM_PREFIX_REF(cm_req->req.vdev_id, cm_req->cm_id),
@@ -1967,9 +1972,7 @@ cm_connect_req_update_ml_partner_info(struct cnx_mgr *cm_ctx,
 				      &eht_capable);
 	if (!same_candidate_used && eht_capable &&
 	    cm_bss_peer_is_assoc_peer(conn_req)) {
-		cm_get_ml_partner_info(pdev,
-				       conn_req->cur_candidate->entry,
-				       &conn_req->req.ml_parnter_info);
+		cm_get_ml_partner_info(pdev, conn_req);
 		cm_modify_partner_info_based_on_dbs_or_sbs_mode(
 						cm_ctx->vdev, cm_req->cm_id,
 						conn_req->cur_candidate->entry,
@@ -1982,6 +1985,46 @@ cm_connect_req_update_ml_partner_info(struct cnx_mgr *cm_ctx,
 				      struct cm_req *cm_req,
 				      bool same_candidate_used)
 {}
+#endif
+
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_FEATURE_11BE_MLO_ADV_FEATURE)
+static void
+cm_override_partner_link_akm(struct cnx_mgr *cm_ctx, struct cm_req *cm_req)
+{
+	struct scan_cache_entry *cur_entry;
+	struct wlan_objmgr_vdev *assoc_vdev;
+
+	if (!cm_req->connect_req.cur_candidate)
+		return;
+
+	assoc_vdev = wlan_mlo_get_assoc_link_vdev(cm_ctx->vdev);
+	if (!assoc_vdev) {
+		mlme_err("Assoc vdev not found");
+		return;
+	}
+
+	/* Partner link might have common AKM with assoc link but that
+	 * AKM might not be the superior AKM of the available AKMs for
+	 * the partner link.
+	 * Override partner link AKM with assoc link chosen AKM so that
+	 * same AKM will be chosen for partner link as well.
+	 *
+	 * Example: Assoc link: WPA2-PSK
+	 *          Partner link: WPA3-SAE and WPA2-PSK
+	 *
+	 * Even WPA2-PSK is matching with assoc link, WPA3-SAE is more secure
+	 * AKM for partner link and in order to avoid selecting WPA3-SAE for
+	 * partner link, override that AKM with the common AKM from assoc link.
+	 */
+	cur_entry = cm_req->connect_req.cur_candidate->entry;
+	cur_entry->neg_sec_info.key_mgmt =
+		wlan_crypto_get_param(assoc_vdev, WLAN_CRYPTO_PARAM_KEY_MGMT);
+}
+#else
+static inline void
+cm_override_partner_link_akm(struct cnx_mgr *cm_ctx, struct cm_req *cm_req)
+{
+}
 #endif
 
 /**
@@ -2129,6 +2172,10 @@ try_same_candidate:
 
 	cm_connect_req_update_ml_partner_info(cm_ctx, cm_req,
 					      use_same_candidate);
+	if (!use_same_candidate &&
+	    wlan_vdev_mlme_is_mlo_link_vdev(cm_ctx->vdev)) {
+		cm_override_partner_link_akm(cm_ctx, cm_req);
+	}
 
 flush_single_pmk:
 	akm = wlan_crypto_get_param(cm_ctx->vdev, WLAN_CRYPTO_PARAM_KEY_MGMT);
@@ -2428,77 +2475,23 @@ static
 void cm_update_per_peer_key_mgmt_crypto_params(struct wlan_objmgr_vdev *vdev,
 					struct security_info *neg_sec_info)
 {
-	int32_t key_mgmt = 0;
-	int32_t neg_akm = neg_sec_info->key_mgmt;
+	wlan_crypto_key_mgmt akm;
+	uint32_t key_mgmt = 0x0;
 
 	/*
 	 * As there can be multiple AKM present select the most secured AKM
 	 * present
 	 */
-	if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA384))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA384);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA256))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA256);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_FILS_SHA384))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FILS_SHA384);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_FILS_SHA256))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FILS_SHA256);
-	else if (QDF_HAS_PARAM(neg_akm,
-			       WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X_SHA384))
-		QDF_SET_PARAM(key_mgmt,
-			      WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X_SHA384);
-	else if (QDF_HAS_PARAM(neg_akm,
-			       WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SUITE_B_192))
-		QDF_SET_PARAM(key_mgmt,
-			      WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SUITE_B_192);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SUITE_B))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SUITE_B);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_FT_SAE_EXT_KEY))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_SAE_EXT_KEY);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_FT_SAE))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_SAE);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_SAE))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_SAE);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_OWE))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_OWE);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_DPP))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_DPP);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SHA256))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SHA256);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_IEEE8021X))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_IEEE8021X);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_FT_PSK_SHA384))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_PSK_SHA384);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_PSK_SHA384))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_PSK_SHA384);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_PSK_SHA256))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_PSK_SHA256);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_FT_PSK))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_PSK);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_PSK))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_PSK);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_WAPI_PSK))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_WAPI_PSK);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_WAPI_CERT))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_WAPI_CERT);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_CCKM))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_CCKM);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_OSEN))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_OSEN);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_WPS))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_WPS);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_IEEE8021X_NO_WPA))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_IEEE8021X_NO_WPA);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_WPA_NONE))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_WPA_NONE);
-	else /* use original if no akm match */
-		key_mgmt = neg_akm;
+
+	akm = wlan_crypto_get_secure_akm_available(neg_sec_info->key_mgmt);
+	/* If not matches any AKM, set to same AKM */
+	if (akm == WLAN_CRYPTO_KEY_MGMT_MAX)
+		key_mgmt = neg_sec_info->key_mgmt;
+	else
+		QDF_SET_PARAM(key_mgmt, akm);
 
 	wlan_crypto_set_vdev_param(vdev, WLAN_CRYPTO_PARAM_KEY_MGMT, key_mgmt);
+
 	/*
 	 * Overwrite the key mgmt with single key_mgmt if multiple are present
 	 */
