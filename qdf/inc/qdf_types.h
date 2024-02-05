@@ -1645,6 +1645,7 @@ enum qdf_suspend_type {
  * @QDF_VDEV_ACTIVE_SER_LINK_SWITCH_TIMEOUT: Active link switch cmd in
  * serialization timed out.
  * @QDF_DIRECT_LINK_ADSP_NMI_CRASH: ADSP NMI crash in the context of direct link
+ * @QDF_ENABLE_IRQ_FAILURE: Failed to enable IRQs
  */
 enum qdf_hang_reason {
 	QDF_REASON_UNSPECIFIED,
@@ -1690,6 +1691,7 @@ enum qdf_hang_reason {
 	QDF_VDEV_ACTIVE_SER_REASSOC_TIMEOUT,
 	QDF_VDEV_ACTIVE_SER_LINK_SWITCH_TIMEOUT,
 	QDF_DIRECT_LINK_ADSP_NMI_CRASH,
+	QDF_ENABLE_IRQ_FAILURE,
 };
 
 /**
