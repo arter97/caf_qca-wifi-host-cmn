@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -2649,6 +2649,9 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 			break;
 		case HAL_RX_PKT_TYPE_11AX:
 			ppdu_info->rx_status.he_flags = 1;
+			break;
+		case HAL_RX_PKT_TYPE_11BE:
+			ppdu_info->rx_status.eht_flags = 1;
 			break;
 		default:
 			break;
