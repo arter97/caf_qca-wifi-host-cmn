@@ -589,6 +589,16 @@ QDF_STATUS dp_ipa_update_peer_rx_stats(struct cdp_soc_t *soc, uint8_t vdev_id,
  * Return: None
  */
 void dp_ipa_get_wdi_version(struct cdp_soc_t *soc_hdl, uint8_t *wdi_ver);
+
+/**
+ * dp_ipa_is_ring_ipa_tx() - Check if the TX ring is used by IPA
+ *
+ * @soc: DP SoC
+ * @ring_id: TX ring id
+ *
+ * Return: bool
+ */
+bool dp_ipa_is_ring_ipa_tx(struct dp_soc *soc, uint8_t ring_id);
 #else
 static inline int dp_ipa_uc_detach(struct dp_soc *soc, struct dp_pdev *pdev)
 {
@@ -691,6 +701,12 @@ static inline QDF_STATUS dp_ipa_ast_create(struct cdp_soc_t *soc_hdl,
 static inline void dp_ipa_get_wdi_version(struct cdp_soc_t *soc_hdl,
 					  uint8_t *wdi_ver)
 {
+}
+
+static inline bool
+dp_ipa_is_ring_ipa_tx(struct dp_soc *soc, uint8_t ring_id)
+{
+	return false;
 }
 #endif
 #endif /* _DP_IPA_H_ */
