@@ -963,7 +963,7 @@ wlan_ipa_rx_intrabss_fwd(struct wlan_ipa_priv *ipa_ctx,
 			 qdf_nbuf_t nbuf)
 {
 	uint8_t fw_desc = 0;
-	bool fwd_success;
+	bool fwd_success = true;
 	int ret;
 
 	/* legacy intra-bss forwarding for WDI 1.0 and 2.0 */
@@ -974,7 +974,7 @@ wlan_ipa_rx_intrabss_fwd(struct wlan_ipa_priv *ipa_ctx,
 	}
 
 	if (is_rx_dest_bridge_dev(iface_ctx, nbuf)) {
-		fwd_success = 0;
+		fwd_success = false;
 		ret = WLAN_IPA_FORWARD_PKT_LOCAL_STACK;
 		goto exit;
 	}
@@ -3899,7 +3899,7 @@ static inline void wlan_ipa_free_tx_desc_list(struct wlan_ipa_priv *ipa_ctx)
 	qdf_spin_unlock_bh(&ipa_ctx->q_lock);
 
 	qdf_list_destroy(&ipa_ctx->tx_desc_free_list);
-	qdf_mem_free(ipa_ctx->tx_desc_pool);
+	qdf_mem_common_free(ipa_ctx->tx_desc_pool);
 	ipa_ctx->tx_desc_pool = NULL;
 
 	ipa_ctx->stats.num_tx_desc_q_cnt = 0;
@@ -3920,7 +3920,7 @@ wlan_ipa_alloc_tx_desc_free_list(struct wlan_ipa_priv *ipa_ctx)
 
 	max_desc_cnt = ipa_ctx->config->txbuf_count;
 
-	ipa_ctx->tx_desc_pool = qdf_mem_malloc(sizeof(struct wlan_ipa_tx_desc) *
+	ipa_ctx->tx_desc_pool = qdf_mem_common_alloc(sizeof(struct wlan_ipa_tx_desc) *
 					       max_desc_cnt);
 	if (!ipa_ctx->tx_desc_pool)
 		return QDF_STATUS_E_NOMEM;

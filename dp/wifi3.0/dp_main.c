@@ -3563,8 +3563,7 @@ QDF_STATUS dp_pdev_attach_wifi3(struct cdp_soc_t *txrx_soc,
 	pdev_context_size =
 		soc->arch_ops.txrx_get_context_size(DP_CONTEXT_TYPE_PDEV);
 	if (pdev_context_size)
-		pdev = dp_context_alloc_mem(soc, DP_PDEV_TYPE,
-					    pdev_context_size);
+		pdev = qdf_mem_common_alloc(pdev_context_size);
 
 	if (!pdev) {
 		dp_init_err("%pK: DP PDEV memory allocation failed",
@@ -3663,7 +3662,7 @@ fail2:
 	wlan_cfg_pdev_detach(pdev->wlan_cfg_ctx);
 fail1:
 	soc->pdev_list[pdev_id] = NULL;
-	qdf_mem_free(pdev);
+	qdf_mem_common_free(pdev);
 fail0:
 	return QDF_STATUS_E_FAILURE;
 }
@@ -3916,7 +3915,7 @@ static void dp_pdev_detach(struct cdp_pdev *txrx_pdev, int force)
 	wlan_cfg_pdev_detach(pdev->wlan_cfg_ctx);
 	wlan_minidump_remove(pdev, sizeof(*pdev), soc->ctrl_psoc,
 			     WLAN_MD_DP_PDEV, "dp_pdev");
-	dp_context_free_mem(soc, DP_PDEV_TYPE, pdev);
+	qdf_mem_common_free(pdev);
 }
 
 /**
@@ -4943,6 +4942,7 @@ static QDF_STATUS dp_vdev_register_wifi3(struct cdp_soc_t *soc_hdl,
 #endif
 	vdev->me_convert = txrx_ops->me_convert;
 	vdev->get_tsf_time = txrx_ops->get_tsf_time;
+	vdev->vdev_del_notify = txrx_ops->vdev_del_notify;
 
 	dp_vdev_register_rx_eapol(vdev, txrx_ops);
 
@@ -6275,6 +6275,8 @@ void dp_vdev_unref_delete(struct dp_soc *soc, struct dp_vdev *vdev,
 {
 	ol_txrx_vdev_delete_cb vdev_delete_cb = NULL;
 	void *vdev_delete_context = NULL;
+	ol_txrx_vdev_delete_cb vdev_del_notify = NULL;
+	void *vdev_del_noitfy_ctx = NULL;
 	uint8_t vdev_id = vdev->vdev_id;
 	struct dp_pdev *pdev = vdev->pdev;
 	struct dp_vdev *tmp_vdev = NULL;
@@ -6297,8 +6299,12 @@ void dp_vdev_unref_delete(struct dp_soc *soc, struct dp_vdev *vdev,
 	vdev_delete_cb = vdev->delete.callback;
 	vdev_delete_context = vdev->delete.context;
 
-	dp_info("deleting vdev object %pK ("QDF_MAC_ADDR_FMT")- its last peer is done",
-		vdev, QDF_MAC_ADDR_REF(vdev->mac_addr.raw));
+	vdev_del_notify = vdev->vdev_del_notify;
+	vdev_del_noitfy_ctx = vdev->osif_vdev;
+
+	dp_info("deleting vdev object %pK (" QDF_MAC_ADDR_FMT ")%s",
+		vdev, QDF_MAC_ADDR_REF(vdev->mac_addr.raw),
+		vdev_del_notify ? " with del_notify" : "");
 
 	if (wlan_op_mode_monitor == vdev->opmode) {
 		dp_monitor_vdev_delete(soc, vdev);
@@ -6330,8 +6336,6 @@ free_vdev:
 
 	dp_cfg_event_record_vdev_evt(soc, DP_CFG_EVENT_VDEV_UNREF_DEL,
 				     vdev);
-	dp_info("deleting vdev object %pK ("QDF_MAC_ADDR_FMT")",
-		vdev, QDF_MAC_ADDR_REF(vdev->mac_addr.raw));
 	wlan_minidump_remove(vdev, sizeof(*vdev), soc->ctrl_psoc,
 			     WLAN_MD_DP_VDEV, "dp_vdev");
 	qdf_mem_free(vdev);
@@ -6339,6 +6343,9 @@ free_vdev:
 
 	if (vdev_delete_cb)
 		vdev_delete_cb(vdev_delete_context);
+
+	if (vdev_del_notify)
+		vdev_del_notify(vdev_del_noitfy_ctx);
 }
 
 qdf_export_symbol(dp_vdev_unref_delete);
