@@ -3500,9 +3500,7 @@ QDF_STATUS (*extract_oob_connect_response_event)(
 			uint8_t *event, uint32_t data_len,
 			struct wmi_oob_connect_response_event *response);
 
-#ifdef WLAN_FEATURE_LL_LT_SAP_CSA
 QDF_STATUS (*get_tsf_stats_for_csa)(wmi_unified_t wmi_handle, uint8_t vdev_id);
-#endif
 #endif /* WLAN_FEATURE_LL_LT_SAP */
 #endif /* QCA_TARGET_IF_MLME */
 
