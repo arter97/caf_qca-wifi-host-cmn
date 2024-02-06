@@ -55,6 +55,7 @@
 #define DP_TX_DESC_ID_OFFSET_OS    0
 #endif /* WLAN_SOFTUMAC_SUPPORT */
 
+#ifndef CONFIG_BERYLLIUM
 /*
  * Compilation assert on tx desc size
  *
@@ -70,6 +71,7 @@ QDF_COMPILE_TIME_ASSERT(dp_tx_desc_size,
 			((sizeof(struct dp_tx_desc_s)) >
 			 (DP_BLOCKMEM_SIZE >> (DP_TX_DESC_ID_PAGE_OS + 1)))
 		       );
+#endif /* CONFIG_BERYLLIUM */
 
 #ifdef QCA_LL_TX_FLOW_CONTROL_V2
 #define TX_DESC_LOCK_CREATE(lock)

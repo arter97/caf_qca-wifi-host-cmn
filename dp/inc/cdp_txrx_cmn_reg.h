@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -142,6 +142,7 @@ static inline int cdp_get_arch_type_from_devid(uint16_t devid)
 	case MANGO_DEVICE_ID:
 	case PEACH_DEVICE_ID:
 	case QCN6432_DEVICE_ID:
+	case WCN7750_DEVICE_ID:
 		return CDP_ARCH_TYPE_BE;
 	case RHINE_DP:
 		return CDP_ARCH_TYPE_RH;
@@ -193,6 +194,7 @@ ol_txrx_soc_handle cdp_soc_attach(u_int16_t devid,
 	case MANGO_DEVICE_ID:
 	case PEACH_DEVICE_ID:
 	case QCA5332_DEVICE_ID:
+	case WCN7750_DEVICE_ID:
 		return dp_soc_attach_wifi3(psoc, &params);
 	break;
 	default:
