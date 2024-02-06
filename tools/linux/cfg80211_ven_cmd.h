@@ -1513,6 +1513,7 @@ enum _ol_ath_param_t {
 	OL_ATH_PARAM_DP_DEBUG_LOG = 543,
 	OL_ATH_PARAM_RTT_SKIP_VDEV_RESTART = 544,
 	OL_ATH_PARAM_ACS_SEC20_WEIGHTAGE = 545,
+	OL_ATH_PARAM_DISPLAY_BAND_CHANS = 546,
 };
 
 #ifdef CONFIG_SUPPORT_VENCMDTABLE
@@ -3987,6 +3988,8 @@ struct vendor_commands radio_vendor_cmds[] = {
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_DISABLE_EML, GET_PARAM, 0},
 
 #endif
+	{"display_band_chans",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_DISPLAY_BAND_CHANS, GET_PARAM, 0},
 };
 #endif
 
