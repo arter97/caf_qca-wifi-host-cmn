@@ -997,7 +997,7 @@ cdp_ipa_tx_super_rule_setup(ol_txrx_soc_handle soc,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	if (soc->ops->ipa_ops->ipa_rx_super_rule_setup)
+	if (soc->ops->ipa_ops->ipa_tx_super_rule_setup)
 		return soc->ops->ipa_ops->ipa_tx_super_rule_setup(soc,
 								  flt_params);
 
