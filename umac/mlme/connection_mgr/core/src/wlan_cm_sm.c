@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015,2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -1313,39 +1313,11 @@ enum wlan_cm_sm_state cm_get_sub_state(struct cnx_mgr *cm_ctx)
 	return cm_ctx->sm.cm_substate;
 }
 
-static void cm_sm_print_state_event(struct cnx_mgr *cm_ctx,
-				    enum wlan_cm_sm_evt event)
-{
-	enum wlan_cm_sm_state state;
-	enum wlan_cm_sm_state substate;
-
-	state = cm_get_state(cm_ctx);
-	substate = cm_get_sub_state(cm_ctx);
-
-	mlme_nofl_debug("[%s]%s - %s, %s", cm_ctx->sm.sm_hdl->name,
-			cm_sm_info[state].name, cm_sm_info[substate].name,
-			cm_sm_event_names[event]);
-}
-
-static void cm_sm_print_state(struct cnx_mgr *cm_ctx)
-{
-	enum wlan_cm_sm_state state;
-	enum wlan_cm_sm_state substate;
-
-	state = cm_get_state(cm_ctx);
-	substate = cm_get_sub_state(cm_ctx);
-
-	mlme_nofl_debug("[%s]%s - %s", cm_ctx->sm.sm_hdl->name,
-			cm_sm_info[state].name, cm_sm_info[substate].name);
-}
-
 QDF_STATUS cm_sm_deliver_event(struct wlan_objmgr_vdev *vdev,
 			       enum wlan_cm_sm_evt event,
 			       uint16_t data_len, void *data)
 {
 	QDF_STATUS status;
-	enum wlan_cm_sm_state state_entry, state_exit;
-	enum wlan_cm_sm_state substate_entry, substate_exit;
 	enum QDF_OPMODE op_mode = wlan_vdev_mlme_get_opmode(vdev);
 	struct cnx_mgr *cm_ctx;
 
@@ -1360,19 +1332,7 @@ QDF_STATUS cm_sm_deliver_event(struct wlan_objmgr_vdev *vdev,
 		return QDF_STATUS_E_FAILURE;
 
 	cm_lock_acquire(cm_ctx);
-
-	/* store entry state and sub state for prints */
-	state_entry = cm_get_state(cm_ctx);
-	substate_entry = cm_get_sub_state(cm_ctx);
-	cm_sm_print_state_event(cm_ctx, event);
-
 	status = cm_sm_deliver_event_sync(cm_ctx, event, data_len, data);
-	/* Take exit state, exit substate for prints */
-	state_exit = cm_get_state(cm_ctx);
-	substate_exit = cm_get_sub_state(cm_ctx);
-	/* If no state and substate change, don't print */
-	if (!((state_entry == state_exit) && (substate_entry == substate_exit)))
-		cm_sm_print_state(cm_ctx);
 	cm_lock_release(cm_ctx);
 
 	return status;

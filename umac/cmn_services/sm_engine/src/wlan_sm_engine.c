@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2018-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -26,12 +27,38 @@
 #include <qdf_mem.h>
 #include <qdf_str.h>
 
+static void
+wlan_sm_get_state_substate_info(struct wlan_sm *sm, uint8_t state,
+				uint8_t *cur_state, uint8_t *cur_sub_state)
+{
+	struct wlan_sm_state_info *state_info;
+
+	if (!cur_state || !cur_sub_state)
+		return;
+
+	state_info = sm->state_info;
+	/*
+	 * To differentiate between state and substate, checks current state if
+	 * it has parent state.
+	 */
+	if (state_info[state].parent_state != WLAN_SM_ENGINE_STATE_NONE)
+		*cur_state = state_info[state].parent_state;
+	else
+		*cur_state = state;
+
+	if (state_info[state].parent_state != WLAN_SM_ENGINE_STATE_NONE)
+		*cur_sub_state = state;
+	else
+		*cur_sub_state = 0;
+}
+
 QDF_STATUS wlan_sm_dispatch(struct wlan_sm *sm, uint16_t event,
 			    uint16_t event_data_len, void *event_data)
 {
 	bool event_handled = false;
 	uint8_t state;
 	const char *event_name = NULL;
+	uint8_t cur_state, cur_sub_st;
 
 	if (!sm) {
 		sm_engine_err("SM is NULL");
@@ -39,6 +66,7 @@ QDF_STATUS wlan_sm_dispatch(struct wlan_sm *sm, uint16_t event,
 	}
 
 	state = sm->cur_state;
+	wlan_sm_get_state_substate_info(sm, state, &cur_state, &cur_sub_st);
 
 	if (event == WLAN_SM_ENGINE_EVENT_NONE) {
 		sm_engine_err("%s: invalid event %d", sm->name, event);
@@ -53,8 +81,10 @@ QDF_STATUS wlan_sm_dispatch(struct wlan_sm *sm, uint16_t event,
 		if (event < sm->num_event_names)
 			event_name = sm->event_names[event];
 
-		sm_engine_nofl_debug("%s: %s, %s", sm->name,
-				     sm->state_info[state].name,
+		sm_engine_nofl_debug("%s: %s-%s, %s", sm->name,
+				     sm->state_info[cur_state].name,
+				     cur_sub_st ?
+				     sm->state_info[cur_sub_st].name : "IDLE",
 				     event_name ? event_name : "UNKNOWN_EVENT");
 	} else {
 		sm_engine_nofl_debug("%s: %s ev [%d]", sm->name,
@@ -123,25 +153,8 @@ void wlan_sm_transition_to(struct wlan_sm *sm, uint8_t state)
 	 * state and substate, checks current state if it has parent state,
 	 * the parent state is printed along with the sub state
 	 */
-	if (state_info[cur_state].parent_state != WLAN_SM_ENGINE_STATE_NONE)
-		old_state = state_info[cur_state].parent_state;
-	else
-		old_state = cur_state;
-
-	if (state_info[state].parent_state != WLAN_SM_ENGINE_STATE_NONE)
-		new_state = state_info[state].parent_state;
-	else
-		new_state = state;
-
-	if (state_info[cur_state].parent_state != WLAN_SM_ENGINE_STATE_NONE)
-		ol_sub_st = cur_state;
-	else
-		ol_sub_st = 0;
-
-	if (state_info[state].parent_state != WLAN_SM_ENGINE_STATE_NONE)
-		new_sub_st = state;
-	else
-		new_sub_st = 0;
+	wlan_sm_get_state_substate_info(sm, cur_state, &old_state, &ol_sub_st);
+	wlan_sm_get_state_substate_info(sm, state, &new_state, &new_sub_st);
 
 	sm_engine_nofl_debug("%s: %s > %s, %s > %s", sm->name,
 			     state_info[old_state].name,

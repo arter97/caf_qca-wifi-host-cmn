@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -2232,38 +2232,6 @@ QDF_STATUS mlme_vdev_sm_deliver_event(struct vdev_mlme_obj *vdev_mlme,
 {
 	return wlan_sm_dispatch(vdev_mlme->sm_hdl, event,
 				event_data_len, event_data);
-}
-
-void mlme_vdev_sm_print_state_event(struct vdev_mlme_obj *vdev_mlme,
-				    enum wlan_vdev_sm_evt event)
-{
-	enum wlan_vdev_state state;
-	enum wlan_vdev_state substate;
-	struct wlan_objmgr_vdev *vdev;
-
-	vdev = vdev_mlme->vdev;
-
-	state = wlan_vdev_mlme_get_state(vdev);
-	substate = wlan_vdev_mlme_get_substate(vdev);
-
-	mlme_nofl_debug("[%s]%s - %s, %s", vdev_mlme->sm_hdl->name,
-			sm_info[state].name, sm_info[substate].name,
-			vdev_sm_event_names[event]);
-}
-
-void mlme_vdev_sm_print_state(struct vdev_mlme_obj *vdev_mlme)
-{
-	enum wlan_vdev_state state;
-	enum wlan_vdev_state substate;
-	struct wlan_objmgr_vdev *vdev;
-
-	vdev = vdev_mlme->vdev;
-
-	state = wlan_vdev_mlme_get_state(vdev);
-	substate = wlan_vdev_mlme_get_substate(vdev);
-
-	mlme_nofl_debug("[%s]%s - %s", vdev_mlme->sm_hdl->name,
-			sm_info[state].name, sm_info[substate].name);
 }
 
 #ifdef SM_ENG_HIST_ENABLE

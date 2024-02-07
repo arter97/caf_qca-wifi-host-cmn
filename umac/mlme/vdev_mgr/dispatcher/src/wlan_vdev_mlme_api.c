@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2019, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -86,8 +86,6 @@ QDF_STATUS wlan_vdev_mlme_sm_deliver_evt(struct wlan_objmgr_vdev *vdev,
 {
 	struct vdev_mlme_obj *vdev_mlme;
 	QDF_STATUS status;
-	enum wlan_vdev_state state_entry, state_exit;
-	enum wlan_vdev_state substate_entry, substate_exit;
 
 	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
 	if (!vdev_mlme) {
@@ -96,20 +94,8 @@ QDF_STATUS wlan_vdev_mlme_sm_deliver_evt(struct wlan_objmgr_vdev *vdev,
 	}
 
 	mlme_vdev_sm_spin_lock(vdev_mlme);
-
-	/* store entry state and sub state for prints */
-	state_entry = wlan_vdev_mlme_get_state(vdev);
-	substate_entry = wlan_vdev_mlme_get_substate(vdev);
-	mlme_vdev_sm_print_state_event(vdev_mlme, event);
-
 	status = mlme_vdev_sm_deliver_event(vdev_mlme, event, event_data_len,
 					    event_data);
-	/* Take exit state, exit substate for prints */
-	state_exit = wlan_vdev_mlme_get_state(vdev);
-	substate_exit = wlan_vdev_mlme_get_substate(vdev);
-	/* If no state and substate change, don't print */
-	if (!((state_entry == state_exit) && (substate_entry == substate_exit)))
-		mlme_vdev_sm_print_state(vdev_mlme);
 	mlme_vdev_sm_spin_unlock(vdev_mlme);
 
 	return status;
