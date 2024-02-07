@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -2379,6 +2379,14 @@ hif_softc_to_hif_opaque_softc(struct hif_softc *hif_handle)
 {
 	return (struct hif_opaque_softc *)hif_handle;
 }
+
+/**
+ * hif_try_complete_dp_tasks() - Try to complete all DP related tasks
+ * @hif_ctx: opaque softc handle
+ *
+ * Return: QDF_STATUS of operation
+ */
+QDF_STATUS hif_try_complete_dp_tasks(struct hif_opaque_softc *hif_ctx);
 
 #if defined(HIF_IPCI) && defined(FEATURE_HAL_DELAYED_REG_WRITE)
 QDF_STATUS hif_try_prevent_ep_vote_access(struct hif_opaque_softc *hif_ctx);

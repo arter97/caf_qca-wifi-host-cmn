@@ -2957,7 +2957,7 @@ QDF_STATUS dp_set_vdev_pcp_tid_map_wifi3(struct cdp_soc_t *soc_hdl,
 }
 
 #if defined(FEATURE_RUNTIME_PM) || defined(DP_POWER_SAVE)
-void dp_drain_txrx(struct cdp_soc_t *soc_handle, uint8_t rx_only)
+QDF_STATUS dp_drain_txrx(struct cdp_soc_t *soc_handle, uint8_t rx_only)
 {
 	struct dp_soc *soc = (struct dp_soc *)soc_handle;
 	uint32_t cur_tx_limit, cur_rx_limit;
@@ -2965,6 +2965,7 @@ void dp_drain_txrx(struct cdp_soc_t *soc_handle, uint8_t rx_only)
 	uint32_t val;
 	int i;
 	int cpu = dp_srng_get_cpu();
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
 
 	cur_tx_limit = soc->wlan_cfg_ctx->tx_comp_loop_pkt_limit;
 	cur_rx_limit = soc->wlan_cfg_ctx->rx_reap_loop_pkt_limit;
@@ -2985,11 +2986,19 @@ void dp_drain_txrx(struct cdp_soc_t *soc_handle, uint8_t rx_only)
 
 	dp_update_soft_irq_limits(soc, cur_tx_limit, cur_rx_limit);
 
+	status = hif_try_complete_dp_tasks(soc->hif_handle);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		dp_err("Failed to complete DP tasks");
+		return status;
+	}
+
 	/* Do a dummy read at offset 0; this will ensure all
 	 * pendings writes(HP/TP) are flushed before read returns.
 	 */
 	val = HAL_REG_READ((struct hal_soc *)soc->hal_soc, 0);
 	dp_debug("Register value at offset 0: %u", val);
+
+	return status;
 }
 #endif
 
