@@ -34,6 +34,7 @@
 #include "qdf_nbuf.h"
 #include "wlan_lmac_if_api.h"
 #include <wlan_mgmt_txrx_rx_reo_utils_api.h>
+#include "wlan_utility.h"
 
 /**
  * wlan_mgmt_txrx_psoc_obj_create_notification() - called from objmgr when psoc
@@ -249,6 +250,14 @@ static QDF_STATUS wlan_mgmt_txrx_pdev_obj_create_notification(
 		"Mgmt txrx creation successful, mgmt txrx ctx: %pK, pdev: %pK",
 		mgmt_txrx_pdev_ctx, pdev);
 
+	wlan_minidump_log(mgmt_txrx_pdev_ctx, sizeof(*mgmt_txrx_pdev_ctx),
+			  psoc, WLAN_MD_CP_MGMT_TXRX_PDEV_CTX,
+			  "mgmt_txrx_priv_pdev_context");
+
+	wlan_minidump_log(mgmt_txrx_stats, sizeof(*mgmt_txrx_stats),
+			  psoc, WLAN_MD_CP_MGMT_TXRX_STATS,
+			  "mgmt_txrx_stats_t");
+
 	return QDF_STATUS_SUCCESS;
 
 err_pdev_attach:
@@ -284,6 +293,7 @@ static QDF_STATUS wlan_mgmt_txrx_pdev_obj_destroy_notification(
 {
 	struct mgmt_txrx_priv_pdev_context *mgmt_txrx_pdev_ctx;
 	QDF_STATUS status;
+	struct wlan_objmgr_psoc *psoc;
 
 	if (!pdev) {
 		mgmt_txrx_err("pdev context passed is NULL");
@@ -314,6 +324,17 @@ static QDF_STATUS wlan_mgmt_txrx_pdev_obj_destroy_notification(
 		mgmt_txrx_err("Failed to detach mgmt txrx ctx in pdev ctx");
 		return QDF_STATUS_E_FAILURE;
 	}
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	wlan_minidump_remove(mgmt_txrx_pdev_ctx, sizeof(*mgmt_txrx_pdev_ctx),
+			     psoc, WLAN_MD_CP_MGMT_TXRX_PDEV_CTX,
+			     "mgmt_txrx_priv_pdev_context");
+
+	wlan_minidump_remove(mgmt_txrx_pdev_ctx->mgmt_txrx_stats,
+			     sizeof(*mgmt_txrx_pdev_ctx->mgmt_txrx_stats),
+			     wlan_pdev_get_psoc(pdev),
+			     WLAN_MD_CP_MGMT_TXRX_STATS,
+			     "mgmt_txrx_stats_t");
 
 	wlan_mgmt_txrx_desc_pool_deinit(mgmt_txrx_pdev_ctx);
 	qdf_mem_free(mgmt_txrx_pdev_ctx->mgmt_txrx_stats);

@@ -33,6 +33,7 @@
 #include "hal_api.h"
 #include "dp_types.h"
 #include <qdf_module.h>
+#include "wlan_utility.h"
 
 /*
  * The max allowed size for tx comp ring is 8191.
@@ -4117,6 +4118,8 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	if (!wlan_cfg_ctx)
 		return NULL;
 
+	wlan_minidump_log(wlan_cfg_ctx, sizeof(*wlan_cfg_ctx), psoc,
+			  WLAN_MD_DP_CFG_SOC_CTXT, "wlan_cfg_dp_soc_ctxt");
 	wlan_cfg_ctx->rxdma1_enable = WLAN_CFG_RXDMA1_ENABLE;
 	wlan_cfg_ctx->num_int_ctxts = WLAN_CFG_INT_NUM_CONTEXTS;
 	wlan_cfg_ctx->max_clients = cfg_get(psoc, CFG_DP_MAX_CLIENTS);
@@ -4317,6 +4320,8 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	if (!wlan_cfg_ctx)
 		return NULL;
 
+	wlan_minidump_log(wlan_cfg_ctx, sizeof(*wlan_cfg_ctx), psoc,
+			  WLAN_MD_DP_CFG_SOC_CTXT, "wlan_cfg_dp_soc_ctxt");
 	wlan_cfg_ctx->rxdma1_enable = WLAN_CFG_RXDMA1_ENABLE;
 	wlan_cfg_ctx->num_int_ctxts = WLAN_CFG_INT_NUM_CONTEXTS;
 	wlan_cfg_ctx->max_clients = cfg_get(psoc, CFG_DP_MAX_CLIENTS);
@@ -4584,6 +4589,9 @@ wlan_cfg_pdev_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 
 	if (!wlan_cfg_ctx)
 		return NULL;
+
+	wlan_minidump_log(wlan_cfg_ctx, sizeof(*wlan_cfg_ctx), psoc,
+			  WLAN_MD_DP_CFG_PDEV_CTXT, "wlan_cfg_dp_pdev_ctxt");
 
 	wlan_cfg_ctx->rx_dma_buf_ring_size = cfg_get(psoc,
 					CFG_DP_RXDMA_BUF_RING);

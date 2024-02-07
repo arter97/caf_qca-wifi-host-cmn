@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -31,6 +31,7 @@
 #include "wlan_serialization_main_i.h"
 #include "wlan_serialization_rules_i.h"
 #include "wlan_serialization_utils_i.h"
+#include "wlan_utility.h"
 
 QDF_STATUS wlan_serialization_psoc_disable(struct wlan_objmgr_psoc *psoc)
 {
@@ -79,6 +80,8 @@ QDF_STATUS wlan_serialization_psoc_enable(struct wlan_objmgr_psoc *psoc)
 	ser_soc_obj->max_active_cmds = WLAN_SER_MAX_ACTIVE_SCAN_CMDS +
 					(pdev_count * WLAN_SER_MAX_VDEVS);
 
+	wlan_minidump_log(ser_soc_obj, sizeof(*ser_soc_obj), psoc,
+			  WLAN_MD_OBJMGR_PSOC_SER, "wlan_ser_psoc_obj");
 	ser_debug("max_active_cmds %d", ser_soc_obj->max_active_cmds);
 
 	ser_soc_obj->timers =
@@ -227,6 +230,7 @@ static QDF_STATUS wlan_serialization_pdev_create_handler(
 {
 	struct wlan_ser_pdev_obj *ser_pdev_obj;
 	struct wlan_serialization_pdev_queue *pdev_queue;
+	struct wlan_objmgr_psoc *psoc;
 	QDF_STATUS status = QDF_STATUS_E_NOMEM;
 	uint8_t index;
 	uint8_t free_index;
@@ -287,6 +291,9 @@ static QDF_STATUS wlan_serialization_pdev_create_handler(
 		goto error_free;
 	}
 
+	psoc = wlan_pdev_get_psoc(pdev);
+	wlan_minidump_log(ser_pdev_obj, sizeof(*ser_pdev_obj), psoc,
+			  WLAN_MD_OBJMGR_PDEV_SER, "wlan_ser_pdev_obj");
 	return QDF_STATUS_SUCCESS;
 
 error_free:
@@ -333,6 +340,10 @@ wlan_serialization_psoc_destroy_handler(struct wlan_objmgr_psoc *psoc,
 
 	wlan_serialization_destroy_lock(&ser_soc_obj->timer_lock);
 	ser_debug("ser psoc obj deleted with status %d", status);
+
+	wlan_minidump_remove(ser_soc_obj, sizeof(*ser_soc_obj), psoc,
+			     WLAN_MD_OBJMGR_PSOC_SER, "wlan_ser_psoc_obj");
+
 	qdf_mem_free(ser_soc_obj);
 
 error:
@@ -358,6 +369,7 @@ static QDF_STATUS wlan_serialization_pdev_destroy_handler(
 	struct wlan_serialization_pdev_queue *pdev_queue;
 	struct wlan_ser_pdev_obj *ser_pdev_obj =
 		wlan_serialization_get_pdev_obj(pdev);
+	struct wlan_objmgr_psoc *psoc = NULL;
 	uint8_t index;
 
 	if (!ser_pdev_obj) {
@@ -375,6 +387,11 @@ static QDF_STATUS wlan_serialization_pdev_destroy_handler(
 
 		wlan_serialization_destroy_lock(&pdev_queue->pdev_queue_lock);
 	}
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	wlan_minidump_remove(ser_pdev_obj, sizeof(*ser_pdev_obj), psoc,
+			     WLAN_MD_OBJMGR_PDEV_SER, "wlan_ser_pdev_obj");
+
 	qdf_mem_free(ser_pdev_obj);
 
 	return status;
@@ -398,6 +415,7 @@ wlan_serialization_vdev_create_handler(struct wlan_objmgr_vdev *vdev,
 {
 	struct wlan_ser_vdev_obj *ser_vdev_obj;
 	struct wlan_serialization_vdev_queue *vdev_q;
+	struct wlan_objmgr_psoc *psoc;
 	QDF_STATUS status = QDF_STATUS_E_NOMEM;
 	uint8_t index;
 	uint8_t max_active_cmds;
@@ -446,6 +464,10 @@ wlan_serialization_vdev_create_handler(struct wlan_objmgr_vdev *vdev,
 		qdf_mem_free(ser_vdev_obj);
 		ser_err("serialization vdev obj attach failed");
 	}
+
+	psoc = wlan_vdev_get_psoc(vdev);
+	wlan_minidump_log(ser_vdev_obj, sizeof(*ser_vdev_obj), psoc,
+			  WLAN_MD_OBJMGR_VDEV_SER, "wlan_ser_vdev_obj");
 error:
 	return status;
 }
@@ -469,6 +491,7 @@ static QDF_STATUS wlan_serialization_vdev_destroy_handler(
 	struct wlan_serialization_vdev_queue *vdev_q;
 	struct wlan_ser_vdev_obj *ser_vdev_obj =
 		wlan_serialization_get_vdev_obj(vdev);
+	struct wlan_objmgr_psoc *psoc = NULL;
 	uint8_t index;
 
 	if (!ser_vdev_obj) {
@@ -487,6 +510,10 @@ static QDF_STATUS wlan_serialization_vdev_destroy_handler(
 		wlan_serialization_destroy_vdev_list(&vdev_q->pending_list);
 		wlan_serialization_destroy_vdev_list(&vdev_q->active_list);
 	}
+
+	psoc = wlan_vdev_get_psoc(vdev);
+	wlan_minidump_remove(ser_vdev_obj, sizeof(*ser_vdev_obj), psoc,
+			     WLAN_MD_OBJMGR_VDEV_SER, "wlan_ser_vdev_obj");
 
 	qdf_mem_free(ser_vdev_obj);
 

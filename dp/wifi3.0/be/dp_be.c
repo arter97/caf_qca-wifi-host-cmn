@@ -906,6 +906,8 @@ static void dp_soc_tx_cookie_detach_be(struct dp_soc *soc)
 			qdf_mem_free(dp_global->spcl_tx_cc_ctx[i]);
 		}
 	}
+	wlan_minidump_remove(dp_global, sizeof(*dp_global), soc->ctrl_psoc,
+			     WLAN_MD_DP_GLOBAL_CTX, "dp_global_context");
 }
 
 static QDF_STATUS dp_soc_tx_cookie_attach_be(struct dp_soc *soc)
@@ -958,6 +960,9 @@ static QDF_STATUS dp_soc_tx_cookie_attach_be(struct dp_soc *soc)
 		}
 	}
 	dp_global->spcl_tx_cookie_ctx_alloc_cnt++;
+	wlan_minidump_log(dp_global, sizeof(*dp_global), soc->ctrl_psoc,
+			  WLAN_MD_DP_GLOBAL_CTX, "dp_global_context");
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -3392,6 +3397,8 @@ QDF_STATUS dp_mlo_dev_ctxt_create(struct cdp_soc_t *soc_hdl,
 		return QDF_STATUS_E_NOMEM;
 	}
 
+	wlan_minidump_log(mlo_dev_ctxt, sizeof(*mlo_dev_ctxt), soc->ctrl_psoc,
+			  WLAN_MD_DP_MLO_DEV_CTX, "dp_mlo_dev_ctxt");
 	qdf_copy_macaddr((struct qdf_mac_addr *)&mlo_dev_ctxt->mld_mac_addr.raw[0],
 			 (struct qdf_mac_addr *)mld_mac_addr);
 
@@ -3452,6 +3459,9 @@ QDF_STATUS dp_mlo_dev_ctxt_destroy(struct cdp_soc_t *soc_hdl,
 	if (mlo_dev_ctxt->vdev_count)
 		dp_alert("deleting MLO dev ctxt with non zero vdev count");
 
+	wlan_minidump_remove(mlo_dev_ctxt, sizeof(*mlo_dev_ctxt),
+			     soc->ctrl_psoc, WLAN_MD_DP_MLO_DEV_CTX,
+			     "dp_mlo_dev_ctxt");
 	qdf_spin_lock_bh(&mlo_dev_obj->mlo_dev_list_lock);
 	TAILQ_REMOVE(&mlo_dev_obj->mlo_dev_list,
 		     mlo_dev_ctxt, ml_dev_list_elem);

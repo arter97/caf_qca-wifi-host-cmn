@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -26,6 +27,7 @@
 #include <include/wlan_psoc_mlme.h>
 #include <wlan_psoc_mlme_main.h>
 #include <wlan_psoc_mlme_api.h>
+#include "wlan_utility.h"
 
 struct psoc_mlme_obj *mlme_psoc_get_priv(struct wlan_objmgr_psoc *psoc)
 {
@@ -89,6 +91,9 @@ static QDF_STATUS mlme_psoc_obj_destroy_handler(struct wlan_objmgr_psoc *psoc,
 		mlme_err("PSOC MLME component object is NULL");
 		return QDF_STATUS_E_FAILURE;
 	}
+
+	wlan_minidump_remove(psoc_mlme, sizeof(*psoc_mlme), psoc,
+			     WLAN_MD_OBJMGR_PSOC_MLME, "psoc_mlme");
 
 	wlan_objmgr_psoc_component_obj_detach(psoc, WLAN_UMAC_COMP_MLME,
 					      psoc_mlme);

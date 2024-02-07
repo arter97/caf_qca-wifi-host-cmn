@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -288,6 +288,8 @@ static void dp_mlo_soc_setup(struct cdp_soc_t *soc_hdl,
 		return;
 
 	be_soc->ml_ctxt = mlo_ctxt;
+	wlan_minidump_log(mlo_ctxt, sizeof(*mlo_ctxt), soc->ctrl_psoc,
+			  WLAN_MD_DP_MLO_CTX, "dp_mlo_ctxt");
 
 	for (pdev_id = 0; pdev_id < MAX_PDEV_CNT; pdev_id++) {
 		if (soc->pdev_list[pdev_id])
@@ -309,6 +311,8 @@ static void dp_mlo_soc_teardown(struct cdp_soc_t *soc_hdl,
 	if (!cdp_ml_ctxt)
 		return;
 
+	wlan_minidump_remove(mlo_ctxt, sizeof(*mlo_ctxt), soc->ctrl_psoc,
+			     WLAN_MD_DP_MLO_CTX, "dp_mlo_ctxt");
 	/* During the teardown drain the Rx buffers if any exist in the ring */
 	dp_mlo_iter_ptnr_soc(be_soc,
 			     dp_mlo_soc_drain_rx_buf,

@@ -28,6 +28,7 @@
 #include <wlan_mlo_mgr_setup.h>
 #include <qdf_platform.h>
 #include <qdf_types.h>
+#include "wlan_utility.h"
 
 static struct mgmt_rx_reo_context *g_rx_reo_ctx[WLAN_MAX_MLO_GROUPS];
 
@@ -7822,6 +7823,7 @@ mgmt_rx_reo_pdev_obj_create_notification(
 {
 	QDF_STATUS status;
 	struct mgmt_rx_reo_pdev_info *mgmt_rx_reo_pdev_ctx = NULL;
+	struct wlan_objmgr_psoc *psoc;
 
 	if (!pdev) {
 		mgmt_rx_reo_err("pdev is null");
@@ -7856,6 +7858,11 @@ mgmt_rx_reo_pdev_obj_create_notification(
 		goto failure;
 	}
 
+	psoc = wlan_pdev_get_psoc(pdev);
+	wlan_minidump_log(mgmt_rx_reo_pdev_ctx, sizeof(*mgmt_rx_reo_pdev_ctx),
+			  psoc, WLAN_MD_CP_MGMT_RX_REO_PDEV,
+			  "mgmt_rx_reo_pdev_info");
+
 	return QDF_STATUS_SUCCESS;
 
 failure:
@@ -7873,6 +7880,7 @@ mgmt_rx_reo_pdev_obj_destroy_notification(
 	struct mgmt_txrx_priv_pdev_context *mgmt_txrx_pdev_ctx)
 {
 	QDF_STATUS status;
+	struct wlan_objmgr_psoc *psoc;
 
 	if (!wlan_mgmt_rx_reo_is_feature_enabled_at_pdev(pdev))
 		return QDF_STATUS_SUCCESS;
@@ -7883,6 +7891,11 @@ mgmt_rx_reo_pdev_obj_destroy_notification(
 		return status;
 	}
 
+	psoc = wlan_pdev_get_psoc(pdev);
+	wlan_minidump_remove(mgmt_txrx_pdev_ctx->mgmt_rx_reo_pdev_ctx,
+			     sizeof(*mgmt_txrx_pdev_ctx->mgmt_rx_reo_pdev_ctx),
+			     psoc, WLAN_MD_CP_MGMT_RX_REO_PDEV,
+			     "mgmt_rx_reo_pdev_info");
 	qdf_mem_free(mgmt_txrx_pdev_ctx->mgmt_rx_reo_pdev_ctx);
 	mgmt_txrx_pdev_ctx->mgmt_rx_reo_pdev_ctx = NULL;
 

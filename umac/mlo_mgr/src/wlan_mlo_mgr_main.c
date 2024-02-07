@@ -34,6 +34,7 @@
 #include <wlan_mlo_mgr_public_api.h>
 #include "cdp_txrx_cmn.h"
 #include "wlan_mlo_mgr_sta.h"
+#include <wlan_utility.h>
 
 #ifdef WLAN_WSI_STATS_SUPPORT
 /*
@@ -1170,6 +1171,8 @@ static QDF_STATUS mlo_dev_ctx_init(struct wlan_objmgr_vdev *vdev)
 			qdf_mem_free(ml_dev);
 			return QDF_STATUS_E_NOMEM;
 		}
+		wlan_minidump_log(ml_dev->sta_ctx, sizeof(*ml_dev->sta_ctx),
+				  psoc, WLAN_MD_CP_MLO_STA, "wlan_mlo_sta");
 		copied_conn_req_lock_create(ml_dev->sta_ctx);
 		mlo_sta_reset_requested_emlsr_mode(ml_dev);
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
@@ -1177,10 +1180,19 @@ static QDF_STATUS mlo_dev_ctx_init(struct wlan_objmgr_vdev *vdev)
 		if (!ml_dev->bridge_sta_ctx) {
 			tsf_recalculation_lock_destroy(ml_dev);
 			mlo_dev_lock_destroy(ml_dev);
+			wlan_minidump_remove(ml_dev->sta_ctx,
+					     sizeof(*ml_dev->sta_ctx), psoc,
+					     WLAN_MD_CP_MLO_STA,
+					     "wlan_mlo_sta");
 			qdf_mem_free(ml_dev->sta_ctx);
 			qdf_mem_free(ml_dev);
 			return QDF_STATUS_E_NOMEM;
 		}
+
+		wlan_minidump_log(ml_dev->bridge_sta_ctx,
+				  sizeof(*ml_dev->bridge_sta_ctx), psoc,
+				  WLAN_MD_CP_MLO_BRG_STA,
+				  "wlan_mlo_bridge_sta");
 #endif
 	} else if (wlan_vdev_mlme_get_opmode(vdev) == QDF_SAP_MODE) {
 		if (mlo_ap_ctx_init(ml_dev) != QDF_STATUS_SUCCESS) {
@@ -1190,6 +1202,9 @@ static QDF_STATUS mlo_dev_ctx_init(struct wlan_objmgr_vdev *vdev)
 			mlo_err("Failed to allocate memory for ap ctx");
 			return QDF_STATUS_E_NOMEM;
 		}
+
+		wlan_minidump_log(ml_dev->ap_ctx, sizeof(*ml_dev->ap_ctx),
+				  psoc, WLAN_MD_CP_MLO_AP, "wlan_mlo_ap");
 	}
 
 	/* Create DP MLO Device Context */
@@ -1198,11 +1213,22 @@ static QDF_STATUS mlo_dev_ctx_init(struct wlan_objmgr_vdev *vdev)
 				    QDF_STATUS_SUCCESS) {
 		tsf_recalculation_lock_destroy(ml_dev);
 		if (wlan_vdev_mlme_get_opmode(vdev) == QDF_STA_MODE) {
+			wlan_minidump_remove(ml_dev->sta_ctx,
+					     sizeof(*ml_dev->sta_ctx), psoc,
+					     WLAN_MD_CP_MLO_STA,
+					     "wlan_mlo_sta");
 			qdf_mem_free(ml_dev->sta_ctx);
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+			wlan_minidump_remove(ml_dev->bridge_sta_ctx,
+					     sizeof(*ml_dev->bridge_sta_ctx),
+					     psoc, WLAN_MD_CP_MLO_BRG_STA,
+					     "wlan_mlo_bridge_sta");
 			qdf_mem_free(ml_dev->bridge_sta_ctx);
 #endif
 		} else if (wlan_vdev_mlme_get_opmode(vdev) == QDF_SAP_MODE) {
+			wlan_minidump_remove(ml_dev->ap_ctx,
+					     sizeof(*ml_dev->ap_ctx), psoc,
+					     WLAN_MD_CP_MLO_AP, "wlan_mlo_ap");
 			mlo_ap_ctx_deinit(ml_dev);
 		}
 		mlo_dev_lock_destroy(ml_dev);
@@ -1210,6 +1236,11 @@ static QDF_STATUS mlo_dev_ctx_init(struct wlan_objmgr_vdev *vdev)
 		mlo_err("Failed to create DP MLO Dev ctxt");
 		return QDF_STATUS_E_NOMEM;
 	}
+
+	wlan_minidump_log(ml_dev, sizeof(*ml_dev), psoc,
+			  WLAN_MD_CP_MLO_DEV_CTX, "wlan_mlo_dev_context");
+	wlan_minidump_log(g_mlo_ctx, sizeof(*g_mlo_ctx), psoc,
+			  WLAN_MD_CP_MLO_MGR_CTX, "mlo_mgr_context");
 
 	ml_dev->mlo_max_recom_simult_links =
 		WLAN_UMAC_MLO_RECOM_MAX_SIMULT_LINKS_DEFAULT;
@@ -1321,6 +1352,11 @@ static QDF_STATUS mlo_dev_ctx_deinit(struct wlan_objmgr_vdev *vdev)
 	mlo_debug("deleting vdev from MLD device ctx "QDF_MAC_ADDR_FMT,
 		  QDF_MAC_ADDR_REF(mld_addr->bytes));
 
+	wlan_minidump_remove(ml_dev, sizeof(*ml_dev), psoc,
+			     WLAN_MD_CP_MLO_DEV_CTX, "wlan_mlo_dev_context");
+	wlan_minidump_remove(g_mlo_ctx, sizeof(*g_mlo_ctx), psoc,
+			     WLAN_MD_CP_MLO_MGR_CTX, "mlo_mgr_context");
+
 	mlo_dev_lock_acquire(ml_dev);
 	while (id < WLAN_UMAC_MLO_MAX_VDEVS) {
 		if (ml_dev->wlan_vdev_list[id] == vdev) {
@@ -1364,16 +1400,27 @@ static QDF_STATUS mlo_dev_ctx_deinit(struct wlan_objmgr_vdev *vdev)
 			ml_free_copied_reassoc_rsp(ml_dev->sta_ctx);
 
 			copied_conn_req_lock_destroy(ml_dev->sta_ctx);
-
+			wlan_minidump_remove(ml_dev->sta_ctx,
+					     sizeof(*ml_dev->sta_ctx), psoc,
+					     WLAN_MD_CP_MLO_STA,
+					     "wlan_mlo_sta");
 			qdf_mem_free(ml_dev->sta_ctx);
 			ml_dev->sta_ctx = NULL;
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+			wlan_minidump_remove(ml_dev->bridge_sta_ctx,
+					     sizeof(*ml_dev->bridge_sta_ctx),
+					     psoc, WLAN_MD_CP_MLO_BRG_STA,
+					     "wlan_mlo_bridge_sta");
 			qdf_mem_free(ml_dev->bridge_sta_ctx);
 #endif
 		}
-		else if (wlan_vdev_mlme_get_opmode(vdev) == QDF_SAP_MODE)
-			qdf_mem_free(ml_dev->ap_ctx);
 
+		else if (wlan_vdev_mlme_get_opmode(vdev) == QDF_SAP_MODE) {
+			wlan_minidump_remove(ml_dev->ap_ctx,
+					     sizeof(*ml_dev->ap_ctx), psoc,
+					     WLAN_MD_CP_MLO_AP, "wlan_mlo_ap");
+			qdf_mem_free(ml_dev->ap_ctx);
+		}
 		mlo_ptqm_migration_deinit(ml_dev);
 		mlo_mgr_link_switch_deinit(ml_dev);
 		mlo_t2lm_ctx_deinit(vdev, ml_dev);

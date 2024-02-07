@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -2254,6 +2254,23 @@ static bool wlan_minidump_log_enabled(struct wlan_objmgr_psoc *psoc,
 		if (cfg_get(psoc, CFG_OL_MD_CP_EXT_PEER))
 			setval = true;
 		break;
+	case WLAN_MD_CP_MLO_DEV_CTX:
+	case WLAN_MD_CP_MLO_AP:
+	case WLAN_MD_CP_MLO_STA:
+	case WLAN_MD_CP_MLO_BRG_STA:
+	case WLAN_MD_CP_MLO_MGR_CTX:
+		if (cfg_get(psoc, CFG_OL_MD_CP_MLO))
+			setval = true;
+		break;
+	case WLAN_MD_CP_MGMT_TXRX_PDEV_CTX:
+	case WLAN_MD_CP_MGMT_TXRX_STATS:
+		if (cfg_get(psoc, CFG_OL_MD_CP_MGMT_TXRX))
+			setval = true;
+		break;
+	case WLAN_MD_CP_MGMT_RX_REO_PDEV:
+		if (cfg_get(psoc, CFG_OL_MD_CP_MGMT_RX))
+			setval = true;
+		break;
 	case WLAN_MD_DP_SOC:
 		if (cfg_get(psoc, CFG_OL_MD_DP_SOC))
 			setval = true;
@@ -2262,8 +2279,18 @@ static bool wlan_minidump_log_enabled(struct wlan_objmgr_psoc *psoc,
 		if (cfg_get(psoc, CFG_OL_MD_DP_PDEV))
 			setval = true;
 		break;
+	case WLAN_MD_DP_CFG_PDEV_CTXT:
+	case WLAN_MD_DP_CFG_SOC_CTXT:
+		if (cfg_get(psoc, CFG_OL_MD_DP_CFG))
+			setval = true;
+		break;
 	case WLAN_MD_DP_PEER:
 		if (cfg_get(psoc, CFG_OL_MD_DP_PEER))
+			setval = true;
+		break;
+	case WLAN_MD_DP_MLO_DEV_CTX:
+	case WLAN_MD_DP_MLO_CTX:
+		if (cfg_get(psoc, CFG_OL_MD_DP_MLO))
 			setval = true;
 		break;
 	case WLAN_MD_DP_SRNG_REO_DEST:
@@ -2303,19 +2330,39 @@ static bool wlan_minidump_log_enabled(struct wlan_objmgr_psoc *psoc,
 		if (cfg_get(psoc, CFG_OL_MD_DP_HAL_SOC))
 			setval = true;
 		break;
+	case WLAN_MD_DP_MON_SOC:
+	case WLAN_MD_DP_MON_PDEV:
+	case WLAN_MD_DP_MON_VDEV:
+		if (cfg_get(psoc, CFG_OL_MD_DP_MON))
+			setval = true;
+		break;
+	case WLAN_MD_OBJMGR_GLOBAL:
+		if (cfg_get(psoc, CFG_OL_MD_OBJMGR_GLOBAL))
+			setval = true;
+		break;
+	case WLAN_MD_DP_GLOBAL_CTX:
+		if (cfg_get(psoc, CFG_OL_MD_DP_GLOBAL_CTX))
+			setval = true;
+		break;
 	case WLAN_MD_OBJMGR_PSOC:
 	case WLAN_MD_OBJMGR_PSOC_TGT_INFO:
+	case WLAN_MD_OBJMGR_PSOC_MLME:
+	case WLAN_MD_OBJMGR_PSOC_SER:
 		if (cfg_get(psoc, CFG_OL_MD_OBJMGR_PSOC))
 			setval = true;
 		break;
 	case WLAN_MD_OBJMGR_PDEV:
 	case WLAN_MD_OBJMGR_PDEV_MLME:
+	case WLAN_MD_OBJMGR_PDEV_AFC_REG:
+	case WLAN_MD_OBJMGR_PDEV_TGT_INFO:
+	case WLAN_MD_OBJMGR_PDEV_SER:
 		if (cfg_get(psoc, CFG_OL_MD_OBJMGR_PDEV))
 			setval = true;
 		break;
 	case WLAN_MD_OBJMGR_VDEV_MLME:
 	case WLAN_MD_OBJMGR_VDEV_SM:
 	case WLAN_MD_OBJMGR_VDEV:
+	case WLAN_MD_OBJMGR_VDEV_SER:
 		if (cfg_get(psoc, CFG_OL_MD_OBJMGR_VDEV))
 			setval = true;
 		break;

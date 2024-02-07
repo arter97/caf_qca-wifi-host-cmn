@@ -3723,6 +3723,10 @@ fail4:
 fail3:
 	dp_pdev_srng_free(pdev);
 fail2:
+	wlan_minidump_remove(pdev->wlan_cfg_ctx, sizeof(*pdev->wlan_cfg_ctx),
+			     soc->ctrl_psoc, WLAN_MD_DP_CFG_PDEV_CTXT,
+			     "wlan_cfg_dp_pdev_ctxt");
+
 	wlan_cfg_pdev_detach(pdev->wlan_cfg_ctx);
 fail1:
 	soc->pdev_list[pdev_id] = NULL;
@@ -4004,6 +4008,9 @@ static void dp_pdev_detach(struct cdp_pdev *txrx_pdev, int force)
 	soc->pdev_count--;
 	soc->pdev_list[pdev->pdev_id] = NULL;
 
+	wlan_minidump_remove(pdev->wlan_cfg_ctx, sizeof(*pdev->wlan_cfg_ctx),
+			     soc->ctrl_psoc, WLAN_MD_DP_CFG_PDEV_CTXT,
+			     "wlan_cfg_dp_pdev_ctxt");
 	wlan_cfg_pdev_detach(pdev->wlan_cfg_ctx);
 	wlan_minidump_remove(pdev, sizeof(*pdev), soc->ctrl_psoc,
 			     WLAN_MD_DP_PDEV, "dp_pdev");
@@ -4105,6 +4112,10 @@ static void dp_soc_detach(struct cdp_soc_t *txrx_soc)
 	qdf_ssr_driver_dump_unregister_region("dp_soc");
 	qdf_ssr_driver_dump_unregister_region("tcl_wbm_map_array");
 	qdf_nbuf_ssr_unregister_region();
+
+	wlan_minidump_remove(soc->wlan_cfg_ctx, sizeof(*soc->wlan_cfg_ctx),
+			     soc->ctrl_psoc, WLAN_MD_DP_CFG_SOC_CTXT,
+			     "wlan_cfg_dp_soc_ctxt");
 
 	dp_runtime_deinit();
 
@@ -13948,6 +13959,10 @@ fail5:
 fail4:
 	dp_hw_link_desc_pool_banks_free(soc, WLAN_INVALID_PDEV_ID);
 fail3:
+	wlan_minidump_remove(soc->wlan_cfg_ctx, sizeof(*soc->wlan_cfg_ctx),
+			     soc->ctrl_psoc, WLAN_MD_DP_CFG_SOC_CTXT,
+			     "wlan_cfg_dp_soc_ctxt");
+
 	wlan_cfg_soc_detach(soc->wlan_cfg_ctx);
 fail2:
 	dp_soc_msdu_done_fail_history_detach(soc);

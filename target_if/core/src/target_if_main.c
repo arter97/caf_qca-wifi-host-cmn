@@ -729,6 +729,7 @@ qdf_export_symbol(target_if_register_legacy_service_ready_cb);
 QDF_STATUS target_if_alloc_pdev_tgt_info(struct wlan_objmgr_pdev *pdev)
 {
 	struct target_pdev_info *tgt_pdev_info;
+	struct wlan_objmgr_psoc *psoc;
 
 	if (!pdev) {
 		target_if_err("pdev is null");
@@ -740,6 +741,11 @@ QDF_STATUS target_if_alloc_pdev_tgt_info(struct wlan_objmgr_pdev *pdev)
 	if (!tgt_pdev_info)
 		return QDF_STATUS_E_NOMEM;
 
+	psoc = wlan_pdev_get_psoc(pdev);
+	wlan_minidump_log(tgt_pdev_info, sizeof(*tgt_pdev_info),
+			  psoc, WLAN_MD_OBJMGR_PDEV_TGT_INFO,
+			  "target_pdev_info");
+
 	wlan_pdev_set_tgt_if_handle(pdev, tgt_pdev_info);
 
 	return QDF_STATUS_SUCCESS;
@@ -748,6 +754,7 @@ QDF_STATUS target_if_alloc_pdev_tgt_info(struct wlan_objmgr_pdev *pdev)
 QDF_STATUS target_if_free_pdev_tgt_info(struct wlan_objmgr_pdev *pdev)
 {
 	struct target_pdev_info *tgt_pdev_info;
+	struct wlan_objmgr_psoc *psoc;
 
 	if (!pdev) {
 		target_if_err("pdev is null");
@@ -757,6 +764,11 @@ QDF_STATUS target_if_free_pdev_tgt_info(struct wlan_objmgr_pdev *pdev)
 	tgt_pdev_info = wlan_pdev_get_tgt_if_handle(pdev);
 
 	wlan_pdev_set_tgt_if_handle(pdev, NULL);
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	wlan_minidump_remove(tgt_pdev_info, sizeof(*tgt_pdev_info),
+			     psoc, WLAN_MD_OBJMGR_PDEV_TGT_INFO,
+			     "target_pdev_info");
 
 	qdf_mem_free(tgt_pdev_info);
 

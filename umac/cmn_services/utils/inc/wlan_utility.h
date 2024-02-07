@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -940,10 +940,25 @@ uint16_t wlan_util_get_peer_count_for_mode(struct wlan_objmgr_pdev *pdev,
  * @WLAN_MD_CP_EXT_PSOC: ol_ath_soc_softc
  * @WLAN_MD_CP_EXT_VDEV: ieee80211vap
  * @WLAN_MD_CP_EXT_PEER: ieee80211_node
+ * @WLAN_MD_CP_MLO_DEV_CTX: wlan_mlo_dev_context
+ * @WLAN_MD_CP_MLO_AP: wlan_mlo_ap
+ * @WLAN_MD_CP_MLO_STA: wlan_mlo_sta
+ * @WLAN_MD_CP_MLO_BRG_STA: wlan_mlo_bridge_sta
+ * @WLAN_MD_CP_MLO_MGR_CTX: mlo_mgr_context
+ * @WLAN_MD_CP_MGMT_TXRX_PDEV_CTX: mgmt_txrx_priv_pdev_context
+ * @WLAN_MD_CP_MGMT_TXRX_STATS: mgmt_txrx_stats_t
+ * @WLAN_MD_CP_MGMT_RX_REO_PDEV: mgmt_rx_reo_pdev_info
+ * @WLAN_MD_DP_MON_SOC: dp_mon_soc
+ * @WLAN_MD_DP_MON_PDEV: dp_mon_pdev
+ * @WLAN_MD_DP_MON_VDEV: dp_mon_vdev
+ * @WLAN_MD_DP_MLO_DEV_CTX: dp_mlo_dev_ctxt
+ * @WLAN_MD_DP_MLO_CTX: dp_mlo_ctxt
  * @WLAN_MD_DP_SOC: dp_soc
  * @WLAN_MD_DP_PDEV: dp_pdev
  * @WLAN_MD_DP_VDEV: dp_vdev
  * @WLAN_MD_DP_PEER: dp_peer
+ * @WLAN_MD_DP_CFG_PDEV_CTXT: wlan_cfg_dp_pdev_ctxt
+ * @WLAN_MD_DP_CFG_SOC_CTXT: wlan_cfg_dp_soc_ctxt
  * @WLAN_MD_DP_SRNG_REO_DEST: dp_srng type for reo dest
  * @WLAN_MD_DP_SRNG_REO_EXCEPTION: dp_srng type for reo exception
  * @WLAN_MD_DP_SRNG_REO_CMD: dp_srng type for reo cmd
@@ -963,13 +978,21 @@ uint16_t wlan_util_get_peer_count_for_mode(struct wlan_objmgr_pdev *pdev,
  * @WLAN_MD_DP_SRNG_RXDMA_MON_DESC: dp_srng type for rxdma mon desc
  * @WLAN_MD_DP_SRNG_RXDMA_ERR_DST: dp_srng type for rxdma err dst
  * @WLAN_MD_DP_HAL_SOC: hal_soc
+ * @WLAN_MD_OBJMGR_GLOBAL: wlan_objmgr_global
+ * @WLAN_MD_DP_GLOBAL_CTX: dp_global_context
  * @WLAN_MD_OBJMGR_PSOC: wlan_objmgr_psoc
  * @WLAN_MD_OBJMGR_PSOC_TGT_INFO: wlan_objmgr_tgt_psoc_info
+ * @WLAN_MD_OBJMGR_PSOC_MLME: psoc_mlme_obj
+ * @WLAN_MD_OBJMGR_PSOC_SER: wlan_ser_psoc_obj
  * @WLAN_MD_OBJMGR_PDEV: wlan_objmgr_pdev
  * @WLAN_MD_OBJMGR_PDEV_MLME: pdev_mlme
+ * @WLAN_MD_OBJMGR_PDEV_AFC_REG: wlan_regulatory_pdev_priv_obj
+ * @WLAN_MD_OBJMGR_PDEV_TGT_INFO: target_pdev_info
+ * @WLAN_MD_OBJMGR_PDEV_SER: wlan_ser_pdev_obj
  * @WLAN_MD_OBJMGR_VDEV: wlan_objmgr_vdev
  * @WLAN_MD_OBJMGR_VDEV_MLME: vdev mlme
  * @WLAN_MD_OBJMGR_VDEV_SM: wlan_sm
+ * @WLAN_MD_OBJMGR_VDEV_SER: wlan_ser_vdev_obj
  * @WLAN_MD_DP_SRNG_REO2PPE: dp_srng type PPE rx ring
  * @WLAN_MD_DP_SRNG_PPE2TCL: dp_srng type for PPE tx ring
  * @WLAN_MD_DP_SRNG_PPE_RELEASE: dp_srng type for PPE tx com ring
@@ -982,10 +1005,25 @@ enum wlan_minidump_host_data {
 	WLAN_MD_CP_EXT_PSOC,
 	WLAN_MD_CP_EXT_VDEV,
 	WLAN_MD_CP_EXT_PEER,
+	WLAN_MD_CP_MLO_DEV_CTX,
+	WLAN_MD_CP_MLO_AP,
+	WLAN_MD_CP_MLO_STA,
+	WLAN_MD_CP_MLO_BRG_STA,
+	WLAN_MD_CP_MLO_MGR_CTX,
+	WLAN_MD_CP_MGMT_TXRX_PDEV_CTX,
+	WLAN_MD_CP_MGMT_TXRX_STATS,
+	WLAN_MD_CP_MGMT_RX_REO_PDEV,
+	WLAN_MD_DP_MON_SOC,
+	WLAN_MD_DP_MON_PDEV,
+	WLAN_MD_DP_MON_VDEV,
+	WLAN_MD_DP_MLO_DEV_CTX,
+	WLAN_MD_DP_MLO_CTX,
 	WLAN_MD_DP_SOC,
 	WLAN_MD_DP_PDEV,
 	WLAN_MD_DP_VDEV,
 	WLAN_MD_DP_PEER,
+	WLAN_MD_DP_CFG_PDEV_CTXT,
+	WLAN_MD_DP_CFG_SOC_CTXT,
 	WLAN_MD_DP_SRNG_REO_DEST,
 	WLAN_MD_DP_SRNG_REO_EXCEPTION,
 	WLAN_MD_DP_SRNG_REO_CMD,
@@ -1005,13 +1043,21 @@ enum wlan_minidump_host_data {
 	WLAN_MD_DP_SRNG_RXDMA_MON_DESC,
 	WLAN_MD_DP_SRNG_RXDMA_ERR_DST,
 	WLAN_MD_DP_HAL_SOC,
+	WLAN_MD_OBJMGR_GLOBAL,
+	WLAN_MD_DP_GLOBAL_CTX,
 	WLAN_MD_OBJMGR_PSOC,
 	WLAN_MD_OBJMGR_PSOC_TGT_INFO,
+	WLAN_MD_OBJMGR_PSOC_MLME,
+	WLAN_MD_OBJMGR_PSOC_SER,
 	WLAN_MD_OBJMGR_PDEV,
 	WLAN_MD_OBJMGR_PDEV_MLME,
+	WLAN_MD_OBJMGR_PDEV_AFC_REG,
+	WLAN_MD_OBJMGR_PDEV_TGT_INFO,
+	WLAN_MD_OBJMGR_PDEV_SER,
 	WLAN_MD_OBJMGR_VDEV,
 	WLAN_MD_OBJMGR_VDEV_MLME,
 	WLAN_MD_OBJMGR_VDEV_SM,
+	WLAN_MD_OBJMGR_VDEV_SER,
 	WLAN_MD_DP_SRNG_REO2PPE,
 	WLAN_MD_DP_SRNG_PPE2TCL,
 	WLAN_MD_DP_SRNG_PPE_RELEASE,

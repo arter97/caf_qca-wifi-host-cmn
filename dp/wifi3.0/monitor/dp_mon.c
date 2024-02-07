@@ -26,6 +26,7 @@
 #include <dp_internal.h>
 #include "htt_ppdu_stats.h"
 #include "dp_cal_client_api.h"
+#include "wlan_utility.h"
 #if defined(DP_CON_MON)
 #ifndef REMOVE_PKT_LOG
 #include <pktlog_ac_api.h>
@@ -5805,6 +5806,11 @@ QDF_STATUS dp_mon_pdev_attach(struct dp_pdev *pdev)
 		goto fail0;
 	}
 
+	wlan_minidump_log(mon_pdev, sizeof(*mon_pdev), soc->ctrl_psoc,
+			  WLAN_MD_DP_MON_PDEV, "dp_mon_pdev");
+	wlan_minidump_log(soc->monitor_soc, sizeof(*soc->monitor_soc),
+			  soc->ctrl_psoc, WLAN_MD_DP_MON_SOC, "dp_mon_soc");
+
 	pdev->monitor_pdev = mon_pdev;
 	mon_ops = dp_mon_ops_get(pdev->soc);
 	if (!mon_ops) {
@@ -5861,12 +5867,14 @@ QDF_STATUS dp_mon_pdev_detach(struct dp_pdev *pdev)
 {
 	struct dp_mon_pdev *mon_pdev;
 	struct dp_mon_ops *mon_ops = NULL;
+	struct dp_soc *soc;
 
 	if (!pdev) {
 		dp_mon_err("pdev is NULL");
 		return QDF_STATUS_E_FAILURE;
 	}
 
+	soc = pdev->soc;
 	mon_pdev = pdev->monitor_pdev;
 	if (!mon_pdev) {
 		dp_mon_err("Monitor pdev is NULL");
@@ -5878,6 +5886,11 @@ QDF_STATUS dp_mon_pdev_detach(struct dp_pdev *pdev)
 		dp_mon_err("Monitor ops is NULL");
 		return QDF_STATUS_E_FAILURE;
 	}
+
+	wlan_minidump_remove(mon_pdev, sizeof(*mon_pdev), pdev->soc->ctrl_psoc,
+			     WLAN_MD_DP_MON_PDEV, "dp_mon_pdev");
+	wlan_minidump_remove(soc->monitor_soc, sizeof(*soc->monitor_soc),
+			     soc->ctrl_psoc, WLAN_MD_DP_MON_SOC, "dp_mon_soc");
 
 	if (mon_ops->mon_rx_ppdu_info_cache_destroy)
 		mon_ops->mon_rx_ppdu_info_cache_destroy(pdev);
@@ -6250,6 +6263,9 @@ QDF_STATUS dp_mon_vdev_attach(struct dp_vdev *vdev)
 
 	vdev->monitor_vdev = mon_vdev;
 
+	wlan_minidump_log(mon_vdev, sizeof(*mon_vdev), pdev->soc->ctrl_psoc,
+			  WLAN_MD_DP_MON_VDEV, "dp_mon_vdev");
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -6268,6 +6284,8 @@ QDF_STATUS dp_mon_vdev_detach(struct dp_vdev *vdev)
 	if (pdev->monitor_pdev->scan_spcl_vap_configured)
 		dp_scan_spcl_vap_stats_detach(mon_vdev);
 
+	wlan_minidump_remove(mon_vdev, sizeof(*mon_vdev), pdev->soc->ctrl_psoc,
+			     WLAN_MD_DP_MON_VDEV, "dp_mon_vdev");
 	qdf_mem_free(mon_vdev);
 	vdev->monitor_vdev = NULL;
 	pdev->monitor_pdev->mon_fcs_cap = 0;
