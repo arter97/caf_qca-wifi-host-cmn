@@ -1366,7 +1366,7 @@ static QDF_STATUS mlo_dev_ctx_deinit(struct wlan_objmgr_vdev *vdev)
 			copied_conn_req_lock_destroy(ml_dev->sta_ctx);
 
 			qdf_mem_free(ml_dev->sta_ctx);
-			mlo_sta_reset_requested_emlsr_mode(ml_dev);
+			ml_dev->sta_ctx = NULL;
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 			qdf_mem_free(ml_dev->bridge_sta_ctx);
 #endif
