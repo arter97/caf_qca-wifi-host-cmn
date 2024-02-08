@@ -927,7 +927,7 @@ wlan_reg_is_sta_connect_allowed(struct wlan_objmgr_pdev *pdev,
 }
 #endif
 
-#if defined(WLAN_FEATURE_11BE) && defined(CONFIG_REG_CLIENT)
+#if defined(CONFIG_REG_CLIENT)
 /**
  * wlan_reg_get_bonded_channel_state_for_pwrmode() - Get bonded channel freq
  * state
