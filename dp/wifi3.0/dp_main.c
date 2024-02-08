@@ -2605,7 +2605,10 @@ void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id)
 	uint32_t num_scatter_bufs = 0;
 	uint8_t *scatter_buf_ptr;
 	void *desc;
+	qdf_dma_addr_t link_desc_paddr;
+	uint32_t link_desc_align_mask;
 
+	link_desc_align_mask = hal_get_link_desc_align(soc->hal_soc) - 1;
 	num_scatter_bufs = soc->num_scatter_bufs;
 
 	if (mac_id == WLAN_INVALID_PDEV_ID) {
@@ -2653,9 +2656,13 @@ void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id)
 			cookie = LINK_DESC_COOKIE(desc_id, page_idx,
 						  soc->link_desc_id_start);
 
+			link_desc_paddr = dma_pages[page_idx].page_p_addr +
+						(offset * link_desc_size);
+			qdf_assert_always(!(link_desc_paddr &
+					    link_desc_align_mask));
+
 			hal_set_link_desc_addr(soc->hal_soc, desc, cookie,
-					       dma_pages[page_idx].page_p_addr
-					       + (offset * link_desc_size),
+					       link_desc_paddr,
 					       soc->idle_link_bm_id);
 			count++;
 			desc_id++;
