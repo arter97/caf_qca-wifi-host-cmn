@@ -1532,6 +1532,35 @@ struct wlan_lmac_if_son_tx_ops {
 					    u_int32_t enable);
 };
 
+#ifdef SINGLE_WIPHY_SON
+/**
+ * struct wlan_lmac_if_son_rx_ops - son rx operations
+ * @deliver_event: deliver mlme and other mac events
+ * @process_mgmt_frame: process mgmt frames
+ * @config_set: route son config from cfg80211
+ * @config_get: route son config from cfg80211
+ * @config_ext_set_get: route extended configs from cfg80211
+ */
+struct wlan_lmac_if_son_rx_ops {
+	int (*deliver_event)(struct wlan_objmgr_vdev *vdev,
+			     struct wlan_objmgr_peer *peer,
+			     uint32_t event,
+			     void *event_data);
+	int (*process_mgmt_frame)(struct wlan_objmgr_vdev *vdev,
+				  struct wlan_objmgr_peer *peer,
+				  int subtype, u_int8_t *frame,
+				  u_int16_t frame_len,
+				  void *meta_data);
+	int (*config_set)(void *params, struct wiphy *wiphy,
+			  struct wireless_dev *wdev);
+	int (*config_get)(void *params, struct wiphy *wiphy,
+			  struct wireless_dev *wdev);
+	int (*config_ext_set_get)(void *params, void *wri,
+				  struct wiphy *wiphy,
+				  struct wireless_dev *wdev);
+};
+
+#else
 /**
  * struct wlan_lmac_if_son_rx_ops - son rx operations
  * @deliver_event: deliver mlme and other mac events
@@ -1558,6 +1587,7 @@ struct wlan_lmac_if_son_rx_ops {
 				  void *params,
 				  void *wri);
 };
+#endif
 
 #ifdef WLAN_FEATURE_11BE_MLO
 /**
