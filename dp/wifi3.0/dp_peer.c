@@ -3262,26 +3262,24 @@ static void dp_peer_rx_init_reorder_queue(struct dp_pdev *pdev,
 	rx_tid = &mld_peer->rx_tid[tid];
 	ba_window_size = rx_tid->ba_status == DP_RX_BA_ACTIVE ?
 					rx_tid->ba_win_size : 1;
-	status = dp_peer_rx_reorder_queue_setup(soc, peer, tid, ba_window_size);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		dp_info("peer %pK " QDF_MAC_ADDR_FMT " type %d failed to setup tid %d ba_win_size %d",
-			peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw),
-			peer->peer_type, tid, ba_window_size);
-		/* Do not return, continue for other tids. */
-	}
+	status = dp_peer_rx_reorder_queue_setup(soc, peer, BIT(tid), ba_window_size);
+	/* Do not return on failure, continue for other tids. */
+	dp_info("peer %pK " QDF_MAC_ADDR_FMT " type %d setup tid %d ba_win_size %d%s",
+		peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw),
+		peer->peer_type, tid, ba_window_size,
+		QDF_IS_STATUS_SUCCESS(status) ? " SUCCESS" : " FAILED");
 
 	for (tid = 0; tid < DP_MAX_TIDS - 1; tid++) {
 		rx_tid = &mld_peer->rx_tid[tid];
 		ba_window_size = rx_tid->ba_status == DP_RX_BA_ACTIVE ?
 						rx_tid->ba_win_size : 1;
-		status = dp_peer_rx_reorder_queue_setup(soc, peer,
-							tid, ba_window_size);
-		if (QDF_IS_STATUS_ERROR(status)) {
-			dp_info("peer %pK " QDF_MAC_ADDR_FMT " type %d failed to setup tid %d ba_win_size %d",
-				peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw),
-				peer->peer_type, tid, ba_window_size);
-			/* Do not return, continue for other tids. */
-		}
+		status = dp_peer_rx_reorder_queue_setup(soc, peer, BIT(tid),
+							ba_window_size);
+		/* Do not return on failure, continue for other tids. */
+		dp_info("peer %pK " QDF_MAC_ADDR_FMT " type %d setup tid %d ba_win_size %d%s",
+			peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw),
+			peer->peer_type, tid, ba_window_size,
+			QDF_IS_STATUS_SUCCESS(status) ? " SUCCESS" : " FAILED");
 	}
 }
 
