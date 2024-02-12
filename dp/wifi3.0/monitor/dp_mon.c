@@ -2150,8 +2150,10 @@ void dp_pdev_clear_link_airtime_stats(struct dp_pdev *pdev)
 {
 	uint8_t ac;
 
-	for (ac = 0; ac < WME_AC_MAX; ac++)
-		pdev->stats.telemetry_stats.link_airtime[ac] = 0;
+	for (ac = 0; ac < WME_AC_MAX; ac++) {
+		pdev->stats.telemetry_stats.tx_link_airtime[ac] = 0;
+		pdev->stats.telemetry_stats.rx_link_airtime[ac] = 0;
+	}
 }
 
 /**
@@ -2204,11 +2206,11 @@ void dp_peer_update_telemetry_stats(struct dp_soc *soc,
 			}
 			consump->avg_consumption_per_sec = usage_per_sec;
 			/* Store each peer airtime consumption in pdev
-			 * link_airtime to calculate pdev's total airtime
+			 * tx_link_airtime to calculate pdev's total tx airtime
 			 * consumption
 			 */
 			DP_STATS_INC(pdev,
-				     telemetry_stats.link_airtime[ac],
+				     telemetry_stats.tx_link_airtime[ac],
 				     consump->consumption);
 			consump->consumption = 0;
 
@@ -2227,11 +2229,11 @@ void dp_peer_update_telemetry_stats(struct dp_soc *soc,
 			}
 			consump->avg_consumption_per_sec = usage_per_sec;
 			/* Store each peer airtime consumption in pdev
-			 * link_airtime to calculate pdev's total airtime
+			 * rx_link_airtime to calculate pdev's total rx airtime
 			 * consumption
 			 */
 			DP_STATS_INC(pdev,
-				     telemetry_stats.link_airtime[ac],
+				     telemetry_stats.rx_link_airtime[ac],
 				     consump->consumption);
 			consump->consumption = 0;
 		}

@@ -9886,8 +9886,12 @@ dp_get_pdev_telemetry_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	 * then calculate %age per sec
 	 */
 	for (ac = 0; ac < WME_AC_MAX; ac++) {
+		stats->tx_link_airtime[ac] =
+			((pdev->stats.telemetry_stats.tx_link_airtime[ac] * 100) / 1000000);
+		stats->rx_link_airtime[ac] =
+			((pdev->stats.telemetry_stats.rx_link_airtime[ac] * 100) / 1000000);
 		stats->link_airtime[ac] =
-			((pdev->stats.telemetry_stats.link_airtime[ac] * 100) / 1000000);
+			(((pdev->stats.telemetry_stats.tx_link_airtime[ac] + pdev->stats.telemetry_stats.rx_link_airtime[ac]) * 100) / 1000000);
 		stats->tx_mpdu_failed[ac] = pdev->stats.telemetry_stats.tx_mpdu_failed[ac];
 		stats->tx_mpdu_total[ac] = pdev->stats.telemetry_stats.tx_mpdu_total[ac];
 	}
