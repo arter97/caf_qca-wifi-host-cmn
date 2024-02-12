@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -140,12 +140,14 @@ QDF_STATUS wlan_mlo_parse_t2lm_info(uint8_t *ie,
 }
 
 QDF_STATUS wlan_mlo_parse_bcn_prbresp_t2lm_ie(
-		struct wlan_t2lm_context *t2lm_ctx, uint8_t *ie)
+		struct wlan_t2lm_context *t2lm_ctx, uint8_t *ie,
+		uint32_t frame_len)
 {
 	struct wlan_t2lm_info t2lm = {0};
 	struct extn_ie_header *ext_ie_hdr;
 	QDF_STATUS retval;
 	int i = 0;
+	uint32_t ie_len_parsed = 0;
 
 	qdf_mem_zero(&t2lm_ctx->established_t2lm,
 		     sizeof(struct wlan_mlo_t2lm_ie));
@@ -155,9 +157,18 @@ QDF_STATUS wlan_mlo_parse_bcn_prbresp_t2lm_ie(
 	t2lm_ctx->upcoming_t2lm.t2lm.direction = WLAN_T2LM_INVALID_DIRECTION;
 
 	for (i = 0; i < WLAN_MAX_T2LM_IE; i++) {
-		if (!ie) {
-			t2lm_err("ie is null");
+		if (!ie || !frame_len) {
+			t2lm_debug("ie is null or len is 0");
 			return QDF_STATUS_E_NULL_VALUE;
+		}
+
+		if (frame_len == ie_len_parsed)
+			return QDF_STATUS_SUCCESS;
+
+		if (frame_len < (ie_len_parsed +
+				 sizeof(struct extn_ie_header))) {
+			t2lm_debug("Frame length is lesser than parsed T2LM IE header length");
+			continue;
 		}
 
 		ext_ie_hdr = (struct extn_ie_header *)ie;
@@ -165,6 +176,12 @@ QDF_STATUS wlan_mlo_parse_bcn_prbresp_t2lm_ie(
 		if (!(ext_ie_hdr->ie_id == WLAN_ELEMID_EXTN_ELEM &&
 		      ext_ie_hdr->ie_extn_id == WLAN_EXTN_ELEMID_T2LM))
 			continue;
+
+		ie_len_parsed += ext_ie_hdr->ie_len + sizeof(struct ie_header);
+		if (frame_len < ie_len_parsed) {
+			t2lm_debug("Frame length is lesser than parsed T2LM IE length");
+			continue;
+		}
 
 		t2lm.direction = WLAN_T2LM_INVALID_DIRECTION;
 		retval = wlan_mlo_parse_t2lm_info(ie, &t2lm);
