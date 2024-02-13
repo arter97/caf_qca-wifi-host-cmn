@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -312,6 +312,23 @@ enum qcn_attribute_id {
 #define WLAN_RNR_TBTT_OFFSET_INVALID             255
 #define WLAN_TPE_IE_MIN_LEN                      2
 #define WLAN_MAX_NUM_TPE_IE                      8
+
+/* BSS Parameters subield of RNR IE */
+
+/* Bit-0 of BSS Parameters subfield */
+#define WLAN_RNR_BSS_PARAM_OCT_RECOMMENDED                   0x01
+/* Bit-1 of BSS Parameters subfield */
+#define WLAN_RNR_BSS_PARAM_SAME_SSID                         0x02
+/* Bit-2 of BSS Parameters subfield */
+#define WLAN_RNR_BSS_PARAM_MBSSID                            0x04
+/* Bit-3 of BSS Parameters subfield */
+#define WLAN_RNR_BSS_PARAM_TRANSMITTED_BSSID                 0x08
+/* Bit-4 of BSS Parameters subfield */
+#define WLAN_RNR_BSS_PARAM_ESS_WITH_COLOCATED_AP_IN_24_OR_5  0x10
+/* Bit-5 of BSS Parameters subfield */
+#define WLAN_RNR_BSS_PARAM_UNSOLICITED_PROBE_RESPONSE        0x20
+/* Bit-6 of BSS Parameters subfield */
+#define WLAN_RNR_BSS_PARAM_COLOCATED_AP                      0x40
 
 /* Wide band channel switch IE length */
 #define WLAN_WIDE_BW_CHAN_SWITCH_IE_LEN          3
