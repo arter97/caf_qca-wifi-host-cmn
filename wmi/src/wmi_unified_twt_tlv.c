@@ -126,9 +126,10 @@ static QDF_STATUS send_twt_disable_cmd_tlv(wmi_unified_t wmi_handle,
 			(wmi_twt_disable_cmd_fixed_param));
 
 	cmd->pdev_id =
-		wmi_handle->ops->convert_pdev_id_host_to_target(
+		wmi_handle->ops->convert_host_pdev_id_to_target(
 						wmi_handle,
 						params->pdev_id);
+
 	if (params->ext_conf_present) {
 		TWT_EN_DIS_FLAGS_SET_SPLIT_CONFIG(cmd->flags, 1);
 		TWT_EN_DIS_FLAGS_SET_REQ_RESP(cmd->flags, params->twt_role);
@@ -137,6 +138,9 @@ static QDF_STATUS send_twt_disable_cmd_tlv(wmi_unified_t wmi_handle,
 
 	cmd->reason_code = wmi_convert_dis_reason_code(
 					params->dis_reason_code);
+
+	wmi_debug("pdev id %d, flags %d reason code %d", cmd->pdev_id, cmd->flags,
+		cmd->reason_code);
 	status = wmi_unified_cmd_send(wmi_handle, buf, sizeof(*cmd),
 				      WMI_TWT_DISABLE_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
