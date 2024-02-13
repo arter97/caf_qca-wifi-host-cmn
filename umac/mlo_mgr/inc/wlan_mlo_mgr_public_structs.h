@@ -1131,6 +1131,22 @@ struct wlan_mlo_mld_cap {
 		 reserved:3;
 };
 
+#ifdef WLAN_FEATURE_11BE_MLO_TTLM
+/**
+ * struct ttlm_state_sm - TTLM state machine
+ * @ttlm_sm_lock: SM lock
+ * @sm_hdl: SM handlers
+ * @ttlm_state: Current state
+ * @ttlm_substate: Current substate
+ */
+struct ttlm_state_sm {
+	qdf_mutex_t ttlm_sm_lock;
+	struct wlan_sm *sm_hdl;
+	enum wlan_ttlm_sm_state ttlm_state;
+	enum wlan_ttlm_sm_state ttlm_substate;
+};
+#endif
+
 /**
  * struct wlan_mlo_peer_context - MLO peer context
  *
@@ -1165,6 +1181,7 @@ struct wlan_mlo_mld_cap {
  * migration
  * @primary_umac_migration_in_progress: flag to indicate primary umac migration
  * in progress
+ * @ttlm_sm: TTLM state machine
  */
 struct wlan_mlo_peer_context {
 	qdf_list_node_t peer_node;
@@ -1208,6 +1225,9 @@ struct wlan_mlo_peer_context {
 	struct mlo_nstr_info mlpeer_nstrinfo[WLAN_UMAC_MLO_MAX_VDEVS];
 	uint8_t migrate_primary_umac_psoc_id;
 	bool primary_umac_migration_in_progress;
+#ifdef WLAN_FEATURE_11BE_MLO_TTLM
+	struct ttlm_state_sm ttlm_sm;
+#endif
 };
 
 /**

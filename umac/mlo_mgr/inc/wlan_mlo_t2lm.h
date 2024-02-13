@@ -492,6 +492,9 @@ struct wlan_t2lm_context {
 #define t2lm_rl_debug(format, args...) \
 	QDF_TRACE_DEBUG_RL(QDF_MODULE_ID_T2LM, format, ## args)
 
+#define t2lm_nofl_debug(format, args...) \
+	QDF_TRACE_WARN_NO_FL(QDF_MODULE_ID_T2LM, format, ## args)
+
 #define WLAN_T2LM_MAX_NUM_LINKS 16
 
 #ifdef WLAN_MLO_USE_SPINLOCK
