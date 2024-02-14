@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -839,14 +839,7 @@ void wlan_scan_update_low_latency_profile_chnlist(
 		return;
 	}
 
-/*
- * Get ll_sap freq api will be cleaned up once macro is enabled
- */
-#ifndef WLAN_FEATURE_LL_LT_SAP
-	ll_sap_freq = policy_mgr_get_ll_sap_freq(psoc);
-#else
 	ll_sap_freq = policy_mgr_get_ll_ht_sap_freq(psoc);
-#endif
 
 	if (!ll_sap_freq)
 		return;
