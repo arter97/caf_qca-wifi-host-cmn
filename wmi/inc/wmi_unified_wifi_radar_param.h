@@ -18,25 +18,25 @@
 #define _WMI_UNIFIED_WIFI_RADAR_PARAM_H_
 
 /**
- * enum wmi_wifi_radar_cmd - wifi radar command type
- * @wmi_wifi_radar_capture_disable: disable wifi radar capture
- * @wmi_wifi_radar_capture_enable: enable wifi radar capture
- * @wmi_wifi_radar_rx_cal: trigger wifi radar rx cal
- * @wmi_wifi_radar_tx_cal: trigger wifi radar tx gain cal
- * @wmi_wifi_radar_cmd_max: max cmd id
+ * enum wmi_host_wifi_radar_cmd - wifi radar command type
+ * @wmi_host_wifi_radar_capture_disable: disable wifi radar capture
+ * @wmi_host_wifi_radar_capture_enable: enable wifi radar capture
+ * @wmi_host_wifi_radar_rx_cal: trigger wifi radar rx cal
+ * @wmi_host_wifi_radar_tx_cal: trigger wifi radar tx gain cal
+ * @wmi_host_wifi_radar_cmd_max: max cmd id
  */
-enum wmi_wifi_radar_cmd {
-	wmi_wifi_radar_capture_disable,
-	wmi_wifi_radar_capture_enable,
-	wmi_wifi_radar_rx_cal,
-	wmi_wifi_radar_tx_cal,
-	wmi_wifi_radar_cmd_max = 0xff,
+enum wmi_host_wifi_radar_cmd {
+	wmi_host_wifi_radar_capture_disable,
+	wmi_host_wifi_radar_capture_enable,
+	wmi_host_wifi_radar_rx_cal,
+	wmi_host_wifi_radar_tx_cal,
+	wmi_host_wifi_radar_cmd_max = 0xff,
 };
 
 /**
  * struct wmi_wifi_radar_command_params - wifi radar command parameters
  * @pdev_id: pdev id of the pdev object
- * @cmd_type: type of command <enum wmi_wifi_radar_cmd>
+ * @cmd_type: type of command <enum wmi_host_wifi_radar_cmd>
  * @bandwidth: bandwidth in which capture/calibration to start
  * @periodicity: period or interval in ms to use for capture command
  * @tx_chainmask: txchain on which wifi radar capture/cal to take place

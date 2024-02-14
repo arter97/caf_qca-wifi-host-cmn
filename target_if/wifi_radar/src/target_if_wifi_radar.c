@@ -493,8 +493,8 @@ target_if_wifi_radar_capture_and_cal_command
 	wmi_param.cmd_type = params->cmd_type;
 	wmi_param.pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
 
-	if ((wmi_param.cmd_type == wmi_wifi_radar_capture_enable) ||
-	    (wmi_param.cmd_type == wmi_wifi_radar_rx_cal)) {
+	if ((wmi_param.cmd_type == wmi_host_wifi_radar_capture_enable) ||
+	    (wmi_param.cmd_type == wmi_host_wifi_radar_rx_cal)) {
 		wmi_param.tx_chainmask = params->tx_chainmask;
 		wmi_param.rx_chainmask = params->rx_chainmask;
 		wmi_param.num_ltf_tx = params->num_ltf_tx;
@@ -502,7 +502,7 @@ target_if_wifi_radar_capture_and_cal_command
 		wmi_param.num_ltf_accumulation = params->num_ltf_accumulation;
 	}
 
-	if (wmi_param.cmd_type == wmi_wifi_radar_capture_enable) {
+	if (wmi_param.cmd_type == wmi_host_wifi_radar_capture_enable) {
 		wmi_param.bandwidth = params->bandwidth;
 		wmi_param.periodicity = params->periodicity;
 	}
