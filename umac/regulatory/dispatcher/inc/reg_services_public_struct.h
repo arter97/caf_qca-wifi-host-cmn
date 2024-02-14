@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -570,6 +570,7 @@ enum channel_state {
  * standard.
  * @REG_MAX_AP_TYPE: Maximum value possible for (3 bits) regulatory info
  * sub-field in the 6G HE Operation IE
+ * @REG_INDOOR_SP_AP: Composite AP (Supports LPI and SP)
  */
 enum reg_6g_ap_type {
 	REG_INDOOR_AP = 0,
@@ -577,7 +578,8 @@ enum reg_6g_ap_type {
 	REG_VERY_LOW_POWER_AP = 2,
 	REG_CURRENT_MAX_AP_TYPE,
 	REG_MAX_SUPP_AP_TYPE = REG_VERY_LOW_POWER_AP,
-	REG_MAX_AP_TYPE = 7,
+	REG_INDOOR_SP_AP = 8,
+	REG_MAX_AP_TYPE = 9
 };
 
 /**
