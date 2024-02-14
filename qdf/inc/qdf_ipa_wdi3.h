@@ -602,12 +602,6 @@ static inline int qdf_ipa_wdi_register_flt_cb(
 					     flt_add_cb, flt_rem_cb);
 }
 
-static inline int qdf_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
-				ipa_wdi_hdl_t hdl, u32 fltr_hdl)
-{
-	return 0;
-}
-
 #endif
 
 /**
@@ -653,5 +647,13 @@ static inline int qdf_ipa_wdi_opt_dpath_notify_flt_rlsd_per_inst(
 	return 0;
 }
 #endif /* IPA_OPT_WIFI_DP  */
+
+#ifndef IPA_OPT_WIFI_DP_CTRL
+static inline int qdf_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
+				ipa_wdi_hdl_t hdl, u32 fltr_hdl)
+{
+	return 0;
+}
+#endif
 #endif /* IPA_OFFLOAD */
 #endif /* QDF_IPA_WDI3_H */
