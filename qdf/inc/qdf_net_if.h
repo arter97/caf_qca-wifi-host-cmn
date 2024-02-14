@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -75,6 +75,15 @@ qdf_net_if_release_dev(struct qdf_net_if *nif);
  */
 QDF_STATUS
 qdf_net_if_hold_dev(struct qdf_net_if *nif);
+
+/**
+ * qdf_net_if_is_vlan_dev() - Abstraction of is_vlan_dev API
+ * @nif: network device
+ *
+ * Return: true if network device is vlan else false
+ */
+bool
+qdf_net_if_is_vlan_dev(struct qdf_net_if *nif);
 
 /**
  * qdf_napi_enable() - Enable the napi schedule
@@ -153,6 +162,12 @@ static inline QDF_STATUS
 qdf_net_if_hold_dev(struct qdf_net_if *nif)
 {
 	return __qdf_net_if_hold_dev(nif);
+}
+
+static inline bool
+qdf_net_if_is_vlan_dev(struct qdf_net_if *nif)
+{
+	return __qdf_net_if_is_vlan_dev(nif);
 }
 
 /**
