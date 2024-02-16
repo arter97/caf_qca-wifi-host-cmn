@@ -38,6 +38,9 @@
 #define __qdf_ht_for_each_in_bucket(table, cursor, entry_field, key) \
 	hash_for_each_possible(table, cursor, entry_field, key)
 
+#define __qdf_ht_for_each_in_bucket_safe(table, cursor, tmp, entry_field, key) \
+	 hash_for_each_possible_safe(table, cursor, tmp, entry_field, key)
+
 #define __qdf_ht_for_each_match(table, cursor, entry_field, key, key_field) \
 	hash_for_each_possible(table, (cursor), entry_field, (key)) \
 		if ((cursor)->key_field == (key))
