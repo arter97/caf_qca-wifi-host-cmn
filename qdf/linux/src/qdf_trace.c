@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1724,6 +1724,7 @@ uint8_t qdf_eapol_get_key_type(uint8_t *data, enum qdf_proto_subtype subtype)
 
 /**
  * qdf_skip_wlan_connectivity_log() - Check if connectivity log need to skip
+ * @nbuf: skb pointer
  * @type: Protocol type
  * @subtype: Protocol subtype
  * @dir: Rx or Tx
@@ -1732,7 +1733,8 @@ uint8_t qdf_eapol_get_key_type(uint8_t *data, enum qdf_proto_subtype subtype)
  * Return: true or false
  */
 static inline
-bool qdf_skip_wlan_connectivity_log(enum qdf_proto_type type,
+bool qdf_skip_wlan_connectivity_log(qdf_nbuf_t nbuf,
+				    enum qdf_proto_type type,
 				    enum qdf_proto_subtype subtype,
 				    enum qdf_proto_dir dir,
 				    enum QDF_OPMODE op_mode)
@@ -1742,7 +1744,7 @@ bool qdf_skip_wlan_connectivity_log(enum qdf_proto_type type,
 
 	if (dir == QDF_RX && type == QDF_PROTO_TYPE_DHCP &&
 	    (subtype == QDF_PROTO_DHCP_DISCOVER ||
-	     subtype == QDF_PROTO_DHCP_REQUEST))
+	     subtype == QDF_PROTO_DHCP_REQUEST || qdf_nbuf_is_bcast_pkt(nbuf)))
 		return true;
 	return false;
 }
@@ -1756,7 +1758,7 @@ bool qdf_skip_wlan_connectivity_log(enum qdf_proto_type type,
  * @qdf_tx_status: Tx completion status
  * @op_mode: Vdev Operation mode
  * @vdev_id: DP vdev ID
- * @data: skb data pointer
+ * @nbuf: skb pointer
  * @band: band
  *
  * Return: None
@@ -1767,14 +1769,15 @@ void qdf_fill_wlan_connectivity_log(enum qdf_proto_type type,
 				    enum qdf_proto_dir dir,
 				    enum qdf_dp_tx_rx_status qdf_tx_status,
 				    enum QDF_OPMODE op_mode,
-				    uint8_t vdev_id, uint8_t *data,
+				    uint8_t vdev_id, qdf_nbuf_t nbuf,
 				    uint8_t band)
 {
 	uint8_t pkt_type;
+	uint8_t *data;
 
 	WLAN_HOST_DIAG_EVENT_DEF(wlan_diag_event, struct wlan_diag_packet_info);
 
-	if (qdf_skip_wlan_connectivity_log(type, subtype, dir, op_mode))
+	if (qdf_skip_wlan_connectivity_log(nbuf, type, subtype, dir, op_mode))
 		return;
 
 	qdf_mem_zero(&wlan_diag_event, sizeof(wlan_diag_event));
@@ -1790,6 +1793,7 @@ void qdf_fill_wlan_connectivity_log(enum qdf_proto_type type,
 		wlan_diag_event.subtype =
 					qdf_subtype_to_wlan_main_tag(subtype);
 	} else if (type == QDF_PROTO_TYPE_EAPOL) {
+		data = nbuf->data;
 		pkt_type = *(data + EAPOL_PACKET_TYPE_OFFSET);
 		if (pkt_type == EAPOL_PACKET_TYPE_EAP) {
 			wlan_diag_event.subtype =
@@ -1832,7 +1836,7 @@ void qdf_fill_wlan_connectivity_log(enum qdf_proto_type type,
 				    enum qdf_proto_dir dir,
 				    enum qdf_dp_tx_rx_status qdf_tx_status,
 				    enum QDF_OPMODE op_mode,
-				    uint8_t vdev_id, uint8_t *data,
+				    uint8_t vdev_id, qdf_nbuf_t nbuf,
 				    uint8_t band)
 {
 }
@@ -1879,7 +1883,7 @@ static bool qdf_log_eapol_pkt(uint8_t vdev_id, struct sk_buff *skb,
 					  QDF_TX_RX_STATUS_INVALID);
 		qdf_fill_wlan_connectivity_log(QDF_PROTO_TYPE_EAPOL, subtype,
 					       QDF_RX, 0, op_mode,
-					       vdev_id, skb->data,
+					       vdev_id, skb,
 					       qdf_nbuf_rx_get_band(skb));
 	}
 
@@ -1964,7 +1968,7 @@ static bool qdf_log_dhcp_pkt(uint8_t vdev_id, struct sk_buff *skb,
 					  QDF_TRACE_DEFAULT_MSDU_ID,
 					  QDF_TX_RX_STATUS_INVALID);
 		qdf_fill_wlan_connectivity_log(QDF_PROTO_TYPE_DHCP, subtype,
-					       QDF_RX, 0, op_mode, vdev_id, 0,
+					       QDF_RX, 0, op_mode, vdev_id, skb,
 					       qdf_nbuf_rx_get_band(skb));
 	}
 
@@ -2492,7 +2496,7 @@ void qdf_dp_trace_ptr(qdf_nbuf_t nbuf, enum QDF_DP_TRACE_ID code,
 		qdf_fill_wlan_connectivity_log(pkt_type, subtype,
 					       QDF_TX, qdf_tx_status, op_mode,
 					       QDF_NBUF_CB_TX_VDEV_CTX(nbuf),
-					       nbuf->data,
+					       nbuf,
 					       qdf_nbuf_tx_get_band(nbuf));
 	}
 
