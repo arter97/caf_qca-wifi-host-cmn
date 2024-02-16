@@ -1215,6 +1215,7 @@ struct cdp_mon_ops {
  * @txrx_peer_deter_stats:
  * @txrx_peer_stats_deter:
  * @txrx_update_pdev_chan_util_stats:
+ * @txrx_pdev_erp_stats: fetch erp stats for all links in pdevs
  * @txrx_get_peer_extd_rate_link_stats:
  * @get_pdev_obss_stats:
  * @clear_pdev_obss_pd_stats:
@@ -1426,6 +1427,11 @@ struct cdp_host_stats_ops {
 				struct cdp_soc_t *soc,
 				uint8_t pdev_id,
 				struct cdp_pdev_chan_util_stats *ch_util);
+	QDF_STATUS
+		(*txrx_pdev_erp_stats)(
+				struct cdp_soc_t *soc,
+				uint8_t pdev_id,
+				struct cdp_pdev_erp_stats *stats);
 #endif
 	QDF_STATUS
 		(*txrx_get_peer_extd_rate_link_stats)

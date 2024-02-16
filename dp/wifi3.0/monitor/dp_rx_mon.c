@@ -895,6 +895,22 @@ void dp_rx_mon_update_pdev_deter_stats(struct dp_pdev *pdev,
 		     deter_stats.rx_su_cnt,
 		     1);
 }
+
+/**
+ * dp_rx_mon_update_pdev_erp_stats() - Update pdev erp rx stats
+ * @pdev: Datapath pdev handle
+ * @user: Per user RX stats
+ *
+ * Return: None
+ */
+static inline
+void dp_rx_mon_update_pdev_erp_stats(struct dp_pdev *pdev,
+				     struct cdp_rx_stats_ppdu_user *user)
+{
+	DP_STATS_INC(pdev,
+		     erp_stats.rx_data_mpdu_cnt,
+		     (user->mpdu_cnt_fcs_ok + user->mpdu_cnt_fcs_err));
+}
 #else
 static inline void
 dp_ppdu_desc_user_rx_time_update(struct dp_pdev *pdev,
@@ -914,6 +930,12 @@ static inline
 void dp_rx_mon_update_pdev_deter_stats(struct dp_pdev *pdev,
 				       struct cdp_rx_indication_ppdu *ppdu)
 { }
+
+static inline
+void dp_rx_mon_update_pdev_erp_stats(struct dp_pdev *pdev,
+				     struct cdp_rx_stats_ppdu_user *user)
+{
+}
 #endif
 
 static void dp_rx_stats_update(struct dp_pdev *pdev,
@@ -1097,8 +1119,10 @@ static void dp_rx_stats_update(struct dp_pdev *pdev,
 
 		dp_peer_qos_stats_notify(pdev, ppdu_user);
 
-		if (dp_is_subtype_data(ppdu->frame_ctrl))
+		if (dp_is_subtype_data(ppdu->frame_ctrl)) {
 			dp_rx_rate_stats_update(peer, ppdu, i);
+			dp_rx_mon_update_pdev_erp_stats(pdev, ppdu_user);
+		}
 
 		dp_send_stats_event(pdev, peer, ppdu_user->peer_id);
 

@@ -3208,6 +3208,22 @@ dp_ppdu_desc_user_deter_stats_update(struct dp_pdev *pdev,
 		}
 	}
 }
+
+/**
+ * dp_pdev_update_erp_tx_stats - Update pdev erp tx stats
+ * @pdev: Datapath pdev handle
+ * @ppdu: PPDU descriptor
+ *
+ * Return: None
+ */
+static inline void
+dp_pdev_update_erp_tx_stats(
+		struct dp_pdev *pdev,
+		struct cdp_tx_completion_ppdu_user *ppdu)
+{
+	DP_STATS_INC(pdev, erp_stats.tx_data_mpdu_cnt,
+		     (ppdu->mpdu_tried_ucast + ppdu->mpdu_tried_mcast));
+}
 #else
 static inline
 void dp_ppdu_desc_get_txmode(struct cdp_tx_completion_ppdu *ppdu)
@@ -3236,6 +3252,12 @@ dp_pdev_telemetry_stats_update(
 static inline void
 dp_pdev_update_deter_stats(struct dp_pdev *pdev,
 			   struct cdp_tx_completion_ppdu *ppdu)
+{ }
+
+static inline void
+dp_pdev_update_erp_tx_stats(
+		struct dp_pdev *pdev,
+		struct cdp_tx_completion_ppdu_user *ppdu)
 { }
 #endif
 
@@ -3300,6 +3322,7 @@ dp_tx_stats_update(struct dp_pdev *pdev, struct dp_peer *peer,
 		 */
 		DP_STATS_INC(mon_peer, tx.retries, mpdu_failed);
 		dp_pdev_telemetry_stats_update(pdev, ppdu);
+		dp_pdev_update_erp_tx_stats(pdev, ppdu);
 		return;
 	}
 
@@ -3410,6 +3433,8 @@ dp_tx_stats_update(struct dp_pdev *pdev, struct dp_peer *peer,
 		dp_tx_rate_stats_update(peer, ppdu);
 
 	dp_pdev_telemetry_stats_update(pdev, ppdu);
+
+	dp_pdev_update_erp_tx_stats(pdev, ppdu);
 
 	dp_peer_stats_notify(pdev, peer);
 

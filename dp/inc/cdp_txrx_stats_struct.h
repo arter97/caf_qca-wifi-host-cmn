@@ -3143,6 +3143,20 @@ struct cdp_pdev_deter_stats {
 	struct cdp_pdev_chan_util_stats ch_util;
 	struct cdp_pdev_ul_trigger_status ts[TX_MODE_UL_MAX];
 };
+
+/**
+ * struct cdp_pdev_erp_stats - Structure to hold pdve erp stats
+ * @tx_data_mpdu_cnt: total tx mpdu data count
+ * @rx_data_mpdu_cnt: total rx mpdu data count
+ * @tx_max_avg_data_rate: Max avg tx data rate among all peer of pdev
+ * @rx_max_avg_data_rate: Max avg rx data rate among all peer of pdev
+ */
+struct cdp_pdev_erp_stats {
+	uint64_t tx_data_mpdu_cnt;
+	uint64_t rx_data_mpdu_cnt;
+	uint32_t tx_max_avg_data_rate;
+	uint32_t rx_max_avg_data_rate;
+};
 #endif
 
 /**
@@ -3220,6 +3234,7 @@ struct cdp_pdev_deter_stats {
  * @peer_unauth_rx_pkt_drop: stats counter for drops due to unauthorized peer
  * @telemetry_stats: pdev telemetry stats
  * @deter_stats:
+ * @erp_stats: ERP stats for the pdev
  * @invalid_msdu_cnt: Invalid MSDU count received counter
  */
 struct cdp_pdev_stats {
@@ -3318,6 +3333,7 @@ struct cdp_pdev_stats {
 #ifdef WLAN_CONFIG_TELEMETRY_AGENT
 	struct cdp_pdev_telemetry_stats telemetry_stats;
 	struct cdp_pdev_deter_stats deter_stats;
+	struct cdp_pdev_erp_stats erp_stats;
 #endif
 	uint32_t invalid_msdu_cnt;
 };
