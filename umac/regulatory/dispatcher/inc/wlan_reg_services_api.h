@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -605,6 +605,15 @@ bool wlan_reg_is_regdb_offloaded(struct wlan_objmgr_psoc *psoc);
  *	   else return false.
  */
 bool wlan_reg_get_fcc_constraint(struct wlan_objmgr_pdev *pdev, uint32_t freq);
+
+/**
+ * wlan_reg_get_country_max_allowed_bw() - get max allowed channel width as per
+ * all reg rules of client
+ * @pdev: physical dev to get
+ *
+ * Return: max allowed channel width for current country code
+ */
+uint32_t wlan_reg_get_country_max_allowed_bw(struct wlan_objmgr_pdev *pdev);
 
 /**
  * wlan_reg_is_6ghz_band_set - Check if 6 GHz band set

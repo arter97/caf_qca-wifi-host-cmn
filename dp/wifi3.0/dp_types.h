@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -45,6 +45,7 @@
 #include <hal_api.h>
 #include <hal_api_mon.h>
 #include "hal_rx.h"
+#include <qdf_hrtimer.h>
 
 #define dp_init_alert(params...) QDF_TRACE_FATAL(QDF_MODULE_ID_DP_INIT, params)
 #define dp_init_err(params...) QDF_TRACE_ERROR(QDF_MODULE_ID_DP_INIT, params)
@@ -1542,7 +1543,7 @@ struct rx_refill_buff_pool {
 	uint16_t tail;
 	struct dp_pdev *dp_pdev;
 	uint16_t max_bufq_len;
-	qdf_nbuf_t buf_elem[2048];
+	qdf_nbuf_t *buf_elem;
 };
 
 #ifdef DP_TX_HW_DESC_HISTORY
@@ -2155,6 +2156,30 @@ struct ipa_dp_rx_rsc {
 #endif
 
 struct dp_tx_msdu_info_s;
+
+#ifdef WLAN_SUPPORT_LAPB
+struct wlan_lapb_ops {
+	void (*wlan_dp_lapb_handle_frame)(struct dp_soc *soc, qdf_nbuf_t  nbuf,
+					  int *coalesce,
+					  struct dp_tx_msdu_info_s *msdu_info);
+};
+
+struct wlan_lapb_stats {
+	uint32_t pkt_recvd;
+	uint32_t timer_expired;
+	uint32_t app_spcl_ind_recvd;
+};
+
+struct wlan_lapb {
+	bool is_init;
+	uint8_t ring_id;
+	struct wlan_lapb_ops *ops;
+	struct dp_soc *soc;
+	qdf_hrtimer_data_t lapb_flow_timer;
+	struct wlan_lapb_stats stats;
+};
+#endif
+
 /**
  * enum dp_context_type- DP Context Type
  * @DP_CONTEXT_TYPE_SOC: Context type DP SOC
@@ -3117,6 +3142,10 @@ struct dp_soc {
 
 #ifdef WLAN_DP_FEATURE_SW_LATENCY_MGR
 	struct dp_swlm swlm;
+#endif
+
+#ifdef WLAN_SUPPORT_LAPB
+	struct wlan_lapb lapb;
 #endif
 
 #ifdef FEATURE_RUNTIME_PM
@@ -4099,6 +4128,9 @@ struct dp_vdev {
 	/* callback to classify critical packets */
 	ol_txrx_classify_critical_pkt_fp tx_classify_critical_pkt_cb;
 
+	/* delete notifier to DP component */
+	ol_txrx_vdev_delete_cb vdev_del_notify;
+
 	/* deferred vdev deletion state */
 	struct {
 		/* VDEV delete pending */
@@ -5066,14 +5098,15 @@ struct dp_peer {
 		sta_self_peer:1, /* Indicate STA self peer */
 		is_tdls_peer:1; /* Indicate TDLS peer */
 
+	/* MCL specific peer local id */
+	uint16_t local_id;
+	enum ol_txrx_peer_state state;
+
 #ifdef WLAN_FEATURE_11BE_MLO
 	uint8_t first_link:1, /* first link peer for MLO */
 		primary_link:1; /* primary link for MLO */
 #endif
 
-	/* MCL specific peer local id */
-	uint16_t local_id;
-	enum ol_txrx_peer_state state;
 	qdf_spinlock_t peer_info_lock;
 
 	/* Peer calibrated stats */

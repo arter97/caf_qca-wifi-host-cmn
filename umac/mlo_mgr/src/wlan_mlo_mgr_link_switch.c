@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -280,12 +280,14 @@ struct mlo_link_info
 	return NULL;
 }
 
-bool mlo_mgr_update_csa_link_info(struct wlan_mlo_dev_context *mlo_dev_ctx,
+bool mlo_mgr_update_csa_link_info(struct wlan_objmgr_pdev *pdev,
+				  struct wlan_mlo_dev_context *mlo_dev_ctx,
 				  struct csa_offload_params *csa_param,
 				  uint8_t link_id)
 {
 	struct mlo_link_info *link_info;
 	uint16_t bw_val;
+	uint32_t ch_cfreq1, ch_cfreq2;
 
 	if (!mlo_dev_ctx) {
 		mlo_err("invalid mlo dev ctx");
@@ -300,17 +302,31 @@ bool mlo_mgr_update_csa_link_info(struct wlan_mlo_dev_context *mlo_dev_ctx,
 		goto done;
 	}
 
-	link_info->link_chan_info->ch_freq =
-				csa_param->csa_chan_freq;
-	link_info->link_chan_info->ch_cfreq1 =
-				csa_param->new_ch_freq_seg1;
-	link_info->link_chan_info->ch_cfreq2 =
-				csa_param->new_ch_freq_seg2;
+	link_info->link_chan_info->ch_freq = csa_param->csa_chan_freq;
 
-	link_info->link_chan_info->ch_phymode =
-			wlan_eht_chan_phy_mode(
-				csa_param->csa_chan_freq,
-				bw_val, csa_param->new_ch_width);
+	if (wlan_reg_is_6ghz_chan_freq(csa_param->csa_chan_freq)) {
+		ch_cfreq1 = wlan_reg_compute_6g_center_freq_from_cfi(
+					csa_param->new_ch_freq_seg1);
+		ch_cfreq2 = wlan_reg_compute_6g_center_freq_from_cfi(
+					csa_param->new_ch_freq_seg2);
+	} else {
+		ch_cfreq1 = wlan_reg_legacy_chan_to_freq(pdev,
+					csa_param->new_ch_freq_seg1);
+		ch_cfreq2 = wlan_reg_legacy_chan_to_freq(pdev,
+					csa_param->new_ch_freq_seg2);
+	}
+
+	link_info->link_chan_info->ch_cfreq1 = ch_cfreq1;
+	link_info->link_chan_info->ch_cfreq2 = ch_cfreq2;
+
+	link_info->link_chan_info->ch_phymode = wlan_eht_chan_phy_mode(
+					csa_param->csa_chan_freq,
+					bw_val, csa_param->new_ch_width);
+
+	mlo_debug("CSA: freq: %d, cfreq1: %d, cfreq2: %d, bw: %d, phymode:%d",
+		  link_info->link_chan_info->ch_freq, ch_cfreq1, ch_cfreq2,
+		  bw_val, link_info->link_chan_info->ch_phymode);
+
 	return true;
 done:
 	return false;
@@ -449,10 +465,23 @@ mlo_mgr_reset_roam_state_for_link_vdev(struct wlan_objmgr_vdev *vdev,
 		mlo_err("vdev:%d failed to change RSO state to deinit",
 			wlan_vdev_get_id(assoc_vdev));
 }
+
+static void
+mlo_mgr_restore_rso_upon_link_switch_failure(struct wlan_objmgr_vdev *vdev)
+{
+	wlan_cm_roam_state_change(wlan_vdev_get_pdev(vdev),
+				  wlan_vdev_get_id(vdev),
+				  WLAN_ROAM_RSO_ENABLED,
+				  REASON_CONNECT);
+}
 #else
 static inline void
 mlo_mgr_reset_roam_state_for_link_vdev(struct wlan_objmgr_vdev *vdev,
 				       struct wlan_objmgr_vdev *assoc_vdev)
+{}
+
+static inline void
+mlo_mgr_restore_rso_upon_link_switch_failure(struct wlan_objmgr_vdev *vdev)
 {}
 #endif
 
@@ -723,14 +752,17 @@ QDF_STATUS mlo_mgr_link_switch_start_connect(struct wlan_objmgr_vdev *vdev)
 	struct mlo_link_info *mlo_link_info;
 	uint8_t *vdev_mac;
 	struct wlan_mlo_sta *sta_ctx;
-	struct wlan_mlo_link_switch_req *req =
-					&vdev->mlo_dev_ctx->link_ctx->last_req;
+	struct wlan_mlo_dev_context *mlo_dev_ctx = vdev->mlo_dev_ctx;
+	struct wlan_mlo_link_switch_req *req = &mlo_dev_ctx->link_ctx->last_req;
+	struct wlan_objmgr_vdev *assoc_vdev = wlan_mlo_get_assoc_link_vdev(vdev);
 
-	sta_ctx = vdev->mlo_dev_ctx->sta_ctx;
+	if (!assoc_vdev) {
+		mlo_err("Assoc VDEV not found");
+		goto out;
+	}
 
-	mlo_link_info =
-		mlo_mgr_get_ap_link_by_link_id(vdev->mlo_dev_ctx,
-					       req->new_ieee_link_id);
+	mlo_link_info = mlo_mgr_get_ap_link_by_link_id(mlo_dev_ctx,
+						       req->new_ieee_link_id);
 
 	if (!mlo_link_info) {
 		mlo_err("New link ID not found");
@@ -746,7 +778,7 @@ QDF_STATUS mlo_mgr_link_switch_start_connect(struct wlan_objmgr_vdev *vdev)
 		goto out;
 	}
 
-	wlan_vdev_set_link_id(vdev, req->new_ieee_link_id);
+	sta_ctx = mlo_dev_ctx->sta_ctx;
 	copied_conn_req_lock_acquire(sta_ctx);
 	if (sta_ctx->copied_conn_req) {
 		qdf_mem_copy(&conn_req, sta_ctx->copied_conn_req,
@@ -759,10 +791,21 @@ QDF_STATUS mlo_mgr_link_switch_start_connect(struct wlan_objmgr_vdev *vdev)
 
 	conn_req.vdev_id = wlan_vdev_get_id(vdev);
 	conn_req.source = CM_MLO_LINK_SWITCH_CONNECT;
+	wlan_vdev_set_link_id(vdev, req->new_ieee_link_id);
+
 	qdf_copy_macaddr(&conn_req.bssid, &mlo_link_info->ap_link_addr);
-	mlo_allocate_and_copy_ies(&conn_req, sta_ctx->copied_conn_req);
+	wlan_vdev_mlme_get_ssid(assoc_vdev, conn_req.ssid.ssid,
+				&conn_req.ssid.length);
+	status = wlan_vdev_get_bss_peer_mld_mac(assoc_vdev, &conn_req.mld_addr);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mlo_debug("Get MLD addr failed");
+		goto out;
+	}
+
 	conn_req.crypto.auth_type = 0;
 	conn_req.ml_parnter_info = sta_ctx->ml_partner_info;
+	mlo_allocate_and_copy_ies(&conn_req, sta_ctx->copied_conn_req);
+
 	status = wlan_cm_start_connect(vdev, &conn_req);
 	if (QDF_IS_STATUS_SUCCESS(status))
 		mlo_update_connected_links(vdev, 1);
@@ -808,14 +851,27 @@ void mlo_mgr_link_switch_connect_done(struct wlan_objmgr_vdev *vdev,
 				      QDF_STATUS status)
 {
 	struct wlan_mlo_link_switch_req *req;
+	struct wlan_objmgr_vdev *assoc_vdev;
 
 	req = &vdev->mlo_dev_ctx->link_ctx->last_req;
-	if (QDF_IS_STATUS_SUCCESS(status))
+	if (QDF_IS_STATUS_SUCCESS(status)) {
 		mlo_mgr_link_switch_connect_success_trans_state(vdev);
-	else
+	} else {
+		mlo_update_connected_links(vdev, 0);
 		mlo_err("VDEV %d link switch connect failed", req->vdev_id);
+	}
 
 	mlo_mgr_remove_link_switch_cmd(vdev);
+
+	if (QDF_IS_STATUS_ERROR(status)) {
+		assoc_vdev = wlan_mlo_get_assoc_link_vdev(vdev);
+		if (!assoc_vdev) {
+			mlo_err("VDEV(%d) assoc vdev not found", req->vdev_id);
+			return;
+		}
+
+		mlo_mgr_restore_rso_upon_link_switch_failure(assoc_vdev);
+	}
 }
 
 static enum wlan_mlo_link_switch_notify_reason

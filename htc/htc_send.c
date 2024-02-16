@@ -2667,8 +2667,7 @@ QDF_STATUS htc_tx_completion_handler(void *Context,
 	do {
 		pPacket = htc_lookup_tx_packet(target, pEndpoint, netbuf);
 		if (!pPacket) {
-			AR_DEBUG_PRINTF(ATH_DEBUG_ERR,
-					("HTC TX lookup failed!\n"));
+			qdf_rl_err("HTC TX lookup failed!");
 			/* may have already been flushed and freed */
 			netbuf = NULL;
 			break;

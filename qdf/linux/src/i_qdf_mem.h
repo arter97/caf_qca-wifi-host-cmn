@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -60,7 +60,8 @@
 #define QDF_RET_IP NULL
 #endif /* __KERNEL__ */
 #include <qdf_status.h>
-#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0)) && \
+#if (defined(__ANDROID_COMMON_KERNEL__) && \
+		(LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0)) && \
 		(defined(MSM_PLATFORM) || defined(QCA_IPA_LL_TX_FLOW_CONTROL)))
 #include <linux/qcom-iommu-util.h>
 #endif

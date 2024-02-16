@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -436,7 +436,7 @@ static inline
 bool wlan_ipa_get_peer_state(struct cdp_soc_t *soc, uint8_t vdev_id,
 			     uint8_t *peer_mac)
 {
-	if (cdp_peer_state_get(soc, vdev_id, peer_mac) ==
+	if (cdp_peer_state_get(soc, vdev_id, peer_mac, false) ==
 	    OL_TXRX_PEER_STATE_AUTH)
 		return true;
 
@@ -655,14 +655,26 @@ static inline void wlan_ipa_wdi_init_metering(struct wlan_ipa_priv *ipa_ctxt,
  * @ipa_ctxt: IPA context
  * @out: IPA WDI out param
  *
- * Return: void
+ * Return: QDF_STATUS
  */
-static inline void wlan_ipa_wdi_init_set_opt_wifi_dp(
+static inline QDF_STATUS wlan_ipa_wdi_init_set_opt_wifi_dp(
 					     struct wlan_ipa_priv *ipa_ctxt,
 					     qdf_ipa_wdi_init_out_params_t *out)
 {
+	uint32_t val;
+		val = cfg_get(ipa_ctxt->pdev->pdev_objmgr.wlan_psoc,
+			      CFG_DP_IPA_OFFLOAD_CONFIG);
+
 	ipa_ctxt->opt_wifi_datapath =
 				QDF_IPA_WDI_INIT_OUT_PARAMS_OPT_WIFI_DP(out);
+	if (!ipa_ctxt->opt_wifi_datapath &&
+	    !(val & WLAN_IPA_ENABLE_MASK) &&
+	    (ipa_ctxt->config->ipa_config == INTRL_MODE_ENABLE)) {
+		ipa_err(" opt_wifi_datapath not support by IPA");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	return QDF_STATUS_SUCCESS;
 }
 
 /**
@@ -675,10 +687,11 @@ static inline bool wlan_ipa_opt_wifi_dp_enabled(void)
 	return true;
 }
 #else
-static inline void wlan_ipa_wdi_init_set_opt_wifi_dp(
+static inline QDF_STATUS wlan_ipa_wdi_init_set_opt_wifi_dp(
 					     struct wlan_ipa_priv *ipa_ctxt,
 					     qdf_ipa_wdi_init_out_params_t *out)
 {
+	return QDF_STATUS_SUCCESS;
 }
 
 static inline bool wlan_ipa_opt_wifi_dp_enabled(void)
@@ -739,6 +752,7 @@ static inline QDF_STATUS wlan_ipa_wdi_init(struct wlan_ipa_priv *ipa_ctx)
 {
 	qdf_ipa_wdi_init_in_params_t in;
 	qdf_ipa_wdi_init_out_params_t out;
+	QDF_STATUS status;
 	int ret;
 
 	ipa_ctx->uc_loaded = false;
@@ -763,12 +777,9 @@ static inline QDF_STATUS wlan_ipa_wdi_init(struct wlan_ipa_priv *ipa_ctx)
 	ipa_ctx->is_smmu_enabled =
 		QDF_IPA_WDI_INIT_OUT_PARAMS_IS_SMMU_ENABLED(&out);
 	ipa_ctx->hdl = QDF_IPA_WDI_INIT_OUT_PARAMS_HANDLE(&out);
-	wlan_ipa_wdi_init_set_opt_wifi_dp(ipa_ctx, &out);
 
 	ipa_info("ipa_over_gsi: %d, is_smmu_enabled: %d, handle: %d",
 		 ipa_ctx->over_gsi, ipa_ctx->is_smmu_enabled, ipa_ctx->hdl);
-	ipa_debug("opt_dp: enabled from IPA : %d",
-		  ipa_ctx->opt_wifi_datapath);
 
 	if (QDF_IPA_WDI_INIT_OUT_PARAMS_IS_UC_READY(&out)) {
 		ipa_debug("IPA uC READY");
@@ -777,6 +788,17 @@ static inline QDF_STATUS wlan_ipa_wdi_init(struct wlan_ipa_priv *ipa_ctx)
 		ipa_info("IPA uc not ready");
 		return QDF_STATUS_E_BUSY;
 	}
+
+	status = wlan_ipa_wdi_init_set_opt_wifi_dp(ipa_ctx, &out);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		ret = qdf_ipa_wdi_cleanup(ipa_ctx->hdl);
+		if (ret)
+			ipa_info("ipa_wdi_cleanup failed ret=%d", ret);
+		ipa_set_cap_offload(false);
+		return status;
+	}
+	ipa_debug("opt_dp: enabled from IPA : %d",
+		  ipa_ctx->opt_wifi_datapath);
 
 	return QDF_STATUS_SUCCESS;
 }

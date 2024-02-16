@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1864,6 +1864,74 @@ bool __qdf_nbuf_data_is_ipv4_pkt(uint8_t *data)
 		return false;
 }
 qdf_export_symbol(__qdf_nbuf_data_is_ipv4_pkt);
+
+/**
+ * __qdf_nbuf_sock_is_ipv4_pkt() - check if it is a ipv4 sock
+ * @skb: Pointer to network buffer
+ *
+ * User needs to take care for NULL sk pointer.
+ *
+ * Return: true if it is ipv4 sock
+ *	   false otherwise or in case of NULL sk
+ */
+bool __qdf_nbuf_sock_is_ipv4_pkt(struct sk_buff *skb)
+{
+	if (skb->sk && skb->sk->sk_family == AF_INET)
+		return true;
+	else
+		return false;
+}
+qdf_export_symbol(__qdf_nbuf_sock_is_ipv4_pkt);
+
+/**
+ * __qdf_nbuf_sock_is_ipv6_pkt() - check if it is a ipv6 sock
+ * @skb: Pointer to network buffer
+ *
+ * User needs to take care for NULL sk pointer.
+ *
+ * Return: true if it is a ipv6 sock
+ *	   false otherwise or in case of NULL sk
+ */
+bool __qdf_nbuf_sock_is_ipv6_pkt(struct sk_buff *skb)
+{
+	if (skb->sk && skb->sk->sk_family == AF_INET6)
+		return true;
+	else
+		return false;
+}
+qdf_export_symbol(__qdf_nbuf_sock_is_ipv6_pkt);
+
+/**
+ * __qdf_nbuf_sock_is_udp_pkt() - check if it is a udp sock
+ * @skb: Pointer to network buffer
+ *
+ * Return: true if it is a udp sock
+ *	   false otherwise
+ */
+bool __qdf_nbuf_sock_is_udp_pkt(struct sk_buff *skb)
+{
+	if (skb->sk->sk_protocol == QDF_NBUF_TRAC_UDP_TYPE)
+		return true;
+	else
+		return false;
+}
+qdf_export_symbol(__qdf_nbuf_sock_is_udp_pkt);
+
+/**
+ * __qdf_nbuf_sock_is_tcp_pkt() - check if it is a tcp sock
+ * @skb: Pointer to network buffer
+ *
+ * Return: true if it is a tcp sock
+ *	   false otherwise
+ */
+bool __qdf_nbuf_sock_is_tcp_pkt(struct sk_buff *skb)
+{
+	if (skb->sk->sk_protocol == QDF_NBUF_TRAC_TCP_TYPE)
+		return true;
+	else
+		return false;
+}
+qdf_export_symbol(__qdf_nbuf_sock_is_tcp_pkt);
 
 bool __qdf_nbuf_data_is_ipv4_dhcp_pkt(uint8_t *data)
 {
@@ -5941,24 +6009,6 @@ void __qdf_nbuf_add_rx_frag(__qdf_frag_t buf, __qdf_nbuf_t nbuf,
 
 qdf_export_symbol(__qdf_nbuf_add_rx_frag);
 
-void __qdf_nbuf_ref_frag(__qdf_frag_t buf)
-{
-	struct page *page;
-	skb_frag_t frag = {0};
-
-	page = virt_to_head_page(buf);
-	__skb_frag_set_page(&frag, page);
-
-	/*
-	 * since __skb_frag_ref() just use page to increase ref
-	 * we just decode page alone
-	 */
-	qdf_frag_count_inc(QDF_NBUF_FRAG_DEBUG_COUNT_ONE);
-	__skb_frag_ref(&frag);
-}
-
-qdf_export_symbol(__qdf_nbuf_ref_frag);
-
 #ifdef NBUF_FRAG_MEMORY_DEBUG
 
 QDF_STATUS qdf_nbuf_move_frag_page_offset_debug(qdf_nbuf_t nbuf, uint8_t idx,
@@ -6017,19 +6067,6 @@ void qdf_nbuf_add_rx_frag_debug(qdf_frag_t buf, qdf_nbuf_t nbuf,
 }
 
 qdf_export_symbol(qdf_nbuf_add_rx_frag_debug);
-
-void qdf_nbuf_ref_frag_debug(qdf_frag_t buf, const char *func, uint32_t line)
-{
-	__qdf_nbuf_ref_frag(buf);
-
-	if (qdf_likely(is_initial_mem_debug_disabled))
-		return;
-
-	/* Update frag refcount in frag debug tracking table */
-	qdf_frag_debug_refcount_inc(buf, func, line);
-}
-
-qdf_export_symbol(qdf_nbuf_ref_frag_debug);
 
 void qdf_net_buf_debug_acquire_frag(qdf_nbuf_t buf, const char *func,
 				    uint32_t line)

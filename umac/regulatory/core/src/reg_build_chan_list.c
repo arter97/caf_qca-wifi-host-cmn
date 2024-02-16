@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -333,16 +333,21 @@ static void reg_populate_band_channels(enum channel_enum start_chan,
  * @num_reg_rules: Number of regulatory rules.
  * @reg_rule_start: Pointer to regulatory rules.
  * @max_bw: Maximum bandwidth
+ * @country_max_allowed_bw: max allowed bw for all reg rules of client
  */
 static void reg_update_max_bw_per_rule(uint32_t num_reg_rules,
 				       struct cur_reg_rule *reg_rule_start,
-				       uint16_t max_bw)
+				       uint16_t max_bw,
+				       uint32_t *country_max_allowed_bw)
 {
 	uint32_t count;
 
-	for (count = 0; count < num_reg_rules; count++)
+	for (count = 0; count < num_reg_rules; count++) {
 		reg_rule_start[count].max_bw =
 			min(reg_rule_start[count].max_bw, max_bw);
+		if (reg_rule_start[count].max_bw > *country_max_allowed_bw)
+			*country_max_allowed_bw = reg_rule_start[count].max_bw;
+	}
 }
 
 /**
@@ -4274,7 +4279,7 @@ reg_fill_master_channels(struct cur_regulatory_info *regulat_info,
 		[REG_CURRENT_MAX_AP_TYPE][REG_MAX_CLIENT_TYPE],
 	struct wlan_regulatory_psoc_priv_obj *soc_reg)
 {
-	uint32_t i, j, k, curr_reg_rule_location;
+	uint32_t i, j, k, curr_reg_rule_location, country_max_allowed_bw = 0;
 	uint32_t num_2g_reg_rules, num_5g_reg_rules;
 	uint32_t num_6g_reg_rules_ap[REG_CURRENT_MAX_AP_TYPE];
 	uint32_t *num_6g_reg_rules_client[REG_CURRENT_MAX_AP_TYPE];
@@ -4291,13 +4296,15 @@ reg_fill_master_channels(struct cur_regulatory_info *regulat_info,
 	max_bw_2g = regulat_info->max_bw_2g;
 	reg_rule_2g = regulat_info->reg_rules_2g_ptr;
 	num_2g_reg_rules = regulat_info->num_2g_reg_rules;
-	reg_update_max_bw_per_rule(num_2g_reg_rules, reg_rule_2g, max_bw_2g);
+	reg_update_max_bw_per_rule(num_2g_reg_rules, reg_rule_2g, max_bw_2g,
+				   &country_max_allowed_bw);
 
 	min_bw_5g = regulat_info->min_bw_5g;
 	max_bw_5g = regulat_info->max_bw_5g;
 	reg_rule_5g = regulat_info->reg_rules_5g_ptr;
 	num_5g_reg_rules = regulat_info->num_5g_reg_rules;
-	reg_update_max_bw_per_rule(num_5g_reg_rules, reg_rule_5g, max_bw_5g);
+	reg_update_max_bw_per_rule(num_5g_reg_rules, reg_rule_5g, max_bw_5g,
+				   &country_max_allowed_bw);
 
 	for (i = 0; i < REG_CURRENT_MAX_AP_TYPE; i++) {
 		min_bw_6g_ap[i] = regulat_info->min_bw_6g_ap[i];
@@ -4305,7 +4312,8 @@ reg_fill_master_channels(struct cur_regulatory_info *regulat_info,
 		reg_rule_6g_ap[i] = regulat_info->reg_rules_6g_ap_ptr[i];
 		num_6g_reg_rules_ap[i] = regulat_info->num_6g_reg_rules_ap[i];
 		reg_update_max_bw_per_rule(num_6g_reg_rules_ap[i],
-					   reg_rule_6g_ap[i], max_bw_6g_ap[i]);
+					   reg_rule_6g_ap[i], max_bw_6g_ap[i],
+					   &country_max_allowed_bw);
 	}
 
 	for (j = 0; j < REG_CURRENT_MAX_AP_TYPE; j++) {
@@ -4319,9 +4327,14 @@ reg_fill_master_channels(struct cur_regulatory_info *regulat_info,
 			reg_update_max_bw_per_rule(
 						num_6g_reg_rules_client[j][k],
 						reg_rule_6g_client[j][k],
-						max_bw_6g_client[j][k]);
+						max_bw_6g_client[j][k],
+						&country_max_allowed_bw);
 		}
 	}
+
+	soc_reg->country_max_allowed_bw = country_max_allowed_bw;
+	reg_debug("max_allowed_bw as per current reg rules: %d",
+		  country_max_allowed_bw);
 
 	reg_reset_reg_rules(reg_rules);
 
@@ -5808,7 +5821,7 @@ static QDF_STATUS
 __reg_process_master_chan_list(struct cur_regulatory_info *regulat_info)
 {
 	struct wlan_regulatory_psoc_priv_obj *soc_reg;
-	uint32_t num_2g_reg_rules, num_5g_reg_rules;
+	uint32_t num_2g_reg_rules, num_5g_reg_rules, country_max_allowed_bw = 0;
 	struct cur_reg_rule *reg_rule_2g, *reg_rule_5g;
 	uint16_t min_bw_2g, max_bw_2g, min_bw_5g, max_bw_5g;
 	struct regulatory_channel *mas_chan_list;
@@ -5891,14 +5904,18 @@ __reg_process_master_chan_list(struct cur_regulatory_info *regulat_info)
 	reg_rule_2g = regulat_info->reg_rules_2g_ptr;
 	num_2g_reg_rules = regulat_info->num_2g_reg_rules;
 	reg_update_max_bw_per_rule(num_2g_reg_rules,
-				   reg_rule_2g, max_bw_2g);
+				   reg_rule_2g, max_bw_2g,
+				   &country_max_allowed_bw);
 
 	min_bw_5g = regulat_info->min_bw_5g;
 	max_bw_5g = regulat_info->max_bw_5g;
 	reg_rule_5g = regulat_info->reg_rules_5g_ptr;
 	num_5g_reg_rules = regulat_info->num_5g_reg_rules;
 	reg_update_max_bw_per_rule(num_5g_reg_rules,
-				   reg_rule_5g, max_bw_5g);
+				   reg_rule_5g, max_bw_5g,
+				   &country_max_allowed_bw);
+
+	soc_reg->country_max_allowed_bw = country_max_allowed_bw;
 	soc_reg->mas_chan_params[phy_id].max_bw_5g = regulat_info->max_bw_5g;
 	reg_rules = &soc_reg->mas_chan_params[phy_id].reg_rules;
 	reg_reset_reg_rules(reg_rules);

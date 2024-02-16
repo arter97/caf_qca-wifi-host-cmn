@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -2852,13 +2852,14 @@ uint8_t *dp_peer_get_peer_mac_addr(void *peer);
  * @soc: datapath soc handle
  * @vdev_id: vdev id
  * @peer_mac: peer mac addr
+ * @slowpath: call from slowpath or not
  *
  * Get local peer state
  *
  * Return: peer status
  */
 int dp_get_peer_state(struct cdp_soc_t *soc, uint8_t vdev_id,
-		      uint8_t *peer_mac);
+		      uint8_t *peer_mac, bool slowpath);
 
 /**
  * dp_local_peer_id_pool_init() - local peer id pool alloc for physical device
@@ -5852,6 +5853,60 @@ dp_tx_latency_stats_update_cca(struct dp_soc *soc, uint16_t peer_id,
  */
 void dp_tx_latency_stats_report(struct dp_soc *soc, struct dp_pdev *pdev);
 #endif
+
+#ifndef WLAN_SUPPORT_FLOW_PRIORTIZATION
+static inline bool wlan_dp_fpm_is_tid_override(qdf_nbuf_t nbuf, uint8_t *tid)
+{
+	return false;
+}
+#endif
+
+#ifndef WLAN_SUPPORT_LAPB
+/**
+ * wlan_dp_lapb_flow_attach() - Attach LAPB flow
+ * @soc: Datapath global soc handle
+ *
+ * Returns: QDF_STATUS
+ */
+static inline QDF_STATUS wlan_dp_lapb_flow_attach(struct dp_soc *soc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * wlan_dp_lapb_flow_detach() - Detach LAPB flow
+ * @soc: Datapath global soc handle
+ *
+ * Returns: QDF_STATUS
+ */
+static inline QDF_STATUS wlan_dp_lapb_flow_detach(struct dp_soc *soc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * wlan_dp_lapb_display_stats() - Get LAPB flow stats
+ * @soc: Datapath global soc handle
+ *
+ * Returns: QDF_STATUS
+ */
+static inline QDF_STATUS wlan_dp_lapb_display_stats(struct dp_soc *soc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * wlan_dp_lapb_clear_stats() - Clear LAPB flow stats
+ * @soc: Datapath global soc handle
+ *
+ * Returns: QDF_STATUS
+ */
+static inline void wlan_dp_lapb_clear_stats(struct dp_soc *soc)
+{
+}
+
+#endif
+
 #ifdef WLAN_FEATURE_SSR_DRIVER_DUMP
 /**
  * dp_ssr_dump_srng_register() - Register DP ring with SSR dump.
