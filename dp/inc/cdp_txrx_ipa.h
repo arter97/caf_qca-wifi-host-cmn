@@ -989,6 +989,7 @@ cdp_ipa_rx_cce_super_rule_setup(ol_txrx_soc_handle soc,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef IPA_OPT_WIFI_DP_CTRL
 static inline QDF_STATUS
 cdp_ipa_tx_super_rule_setup(ol_txrx_soc_handle soc,
 			    void *flt_params)
@@ -1022,6 +1023,7 @@ cdp_ipa_tx_opt_dp_ctrl_pkt(ol_txrx_soc_handle soc,
 								 nbuf);
 	return QDF_STATUS_SUCCESS;
 }
+#endif
 
 static inline QDF_STATUS
 cdp_ipa_opt_dp_enable_disable_low_power_mode(struct wlan_objmgr_pdev *pdev,
@@ -1084,6 +1086,14 @@ cdp_ipa_opt_dp_enable_disable_low_power_mode(struct wlan_objmgr_pdev *pdev,
 	return status;
 }
 #endif /* IPA_OPT_WIFI_DP */
+#ifndef IPA_OPT_WIFI_DP_CTRL
+static inline QDF_STATUS
+cdp_ipa_tx_opt_dp_ctrl_pkt(ol_txrx_soc_handle soc,
+			   uint8_t vdev_id, qdf_nbuf_t nbuf)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 
 /**
  * cdp_ipa_get_wdi_version - Get WDI version
