@@ -173,6 +173,33 @@ cdp_get_peer_sawf_tx_stats(ol_txrx_soc_handle soc, uint32_t svc_id,
 }
 
 /**
+ * cdp_get_peer_sawf_msduq_svc_params() - Call to get Peer MSDUQ SVC Info
+ * @soc: soc handle
+ * @mac: peer mac address
+ * @data: opaque pointer
+ *
+ * return: status Success/Failure
+ */
+static inline QDF_STATUS
+cdp_get_peer_sawf_msduq_svc_params(ol_txrx_soc_handle soc, uint8_t *mac,
+				   void *data)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance");
+		QDF_BUG(0);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!soc->ops->sawf_ops ||
+	    !soc->ops->sawf_ops->txrx_get_peer_sawf_msduq_svc_params)
+		return QDF_STATUS_E_FAILURE;
+
+	return soc->ops->sawf_ops->txrx_get_peer_sawf_msduq_svc_params(soc,
+								       mac,
+								       data);
+}
+
+/**
  * cdp_sawf_mpdu_stats_req() - Call to subscribe to MPDU stats TLV
  * @soc: soc handle
  * @enable: 1: enable 0: disable

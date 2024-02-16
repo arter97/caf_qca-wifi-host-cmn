@@ -2521,6 +2521,9 @@ struct cdp_sawf_ops {
 				       uint32_t svc_id, uint8_t *mac,
 				       void *data);
 	QDF_STATUS
+	(*txrx_get_peer_sawf_msduq_svc_params)(struct cdp_soc_t *soc,
+					       uint8_t *mac, void *data);
+	QDF_STATUS
 	(*sawf_mpdu_stats_req)(struct cdp_soc_t *soc, uint8_t enable);
 	QDF_STATUS
 	(*sawf_mpdu_details_stats_req)(struct cdp_soc_t *soc, uint8_t enable);
