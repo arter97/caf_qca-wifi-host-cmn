@@ -224,8 +224,16 @@ QDF_STATUS wlan_mlo_parse_t2lm_ie(
 			return QDF_STATUS_E_NULL_VALUE;
 		}
 
-		if (frame_len < (ie_len_parsed + sizeof(struct ie_header))) {
-			t2lm_err("Frame length is lesser than parsed T2LM IE header length");
+		if (frame_len == ie_len_parsed) {
+			t2lm_debug("Received T2LM IEs are parsed successfully");
+			return QDF_STATUS_SUCCESS;
+		}
+
+		if (frame_len < (ie_len_parsed +
+				 sizeof(struct extn_ie_header))) {
+			t2lm_err("Frame length %d is lesser than parsed T2LM IE header length %zu",
+				 frame_len,
+				 ie_len_parsed + sizeof(struct extn_ie_header));
 			return QDF_STATUS_E_PROTO;
 		}
 
