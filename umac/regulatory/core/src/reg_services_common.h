@@ -151,6 +151,8 @@
 /* The eirp power values are in 0.01dBm units */
 #define EIRP_PWR_SCALE 100
 
+#define SP_AP_AND_CLIENT_POWER_DIFF_IN_DBM 6
+
 extern const struct chan_map *channel_map;
 extern const struct chan_map channel_map_us[];
 extern const struct chan_map channel_map_eu[];
