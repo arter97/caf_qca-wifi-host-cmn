@@ -1475,9 +1475,7 @@ static inline bool __qdf_nbuf_flow_dissect_flow_keys(const struct sk_buff *skb,
  */
 static inline unsigned int __qdf_flow_is_frag(struct flow_keys *flow)
 {
-	unsigned int flags = FLOW_DIS_IS_FRAGMENT | FLOW_DIS_IS_FRAGMENT;
-
-	if ((flow->control.flags & flags) == FLOW_DIS_IS_FRAGMENT)
+	if (flow->control.flags & FLOW_DIS_IS_FRAGMENT)
 		return true;
 	else
 		return false;
@@ -1491,10 +1489,9 @@ static inline unsigned int __qdf_flow_is_frag(struct flow_keys *flow)
  */
 static inline unsigned int __qdf_flow_is_first_frag(struct flow_keys *flow)
 {
-	unsigned int flags = FLOW_DIS_IS_FRAGMENT | FLOW_DIS_IS_FRAGMENT;
+	unsigned int flags = FLOW_DIS_FIRST_FRAG | FLOW_DIS_IS_FRAGMENT;
 
-	if ((flow->control.flags & flags) == (FLOW_DIS_IS_FRAGMENT |
-					      FLOW_DIS_FIRST_FRAG))
+	if ((flow->control.flags & flags) == flags)
 		return true;
 	else
 		return false;
