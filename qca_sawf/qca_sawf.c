@@ -224,12 +224,14 @@ void qca_sawf_peer_config_ul(struct net_device *netdev, uint8_t *mac_addr,
 	soc_txrx_handle = wlan_psoc_get_dp_handle(psoc);
 
 	osdev = ath_netdev_priv(netdev);
+#ifdef QCA_SUPPORT_WDS_EXTENDED
 	if (osdev->dev_type == OSIF_NETDEV_TYPE_WDS_EXT) {
 		osif_peer_dev *osifp = NULL;
 
 		osifp = ath_netdev_priv(netdev);
 		peer_id = osifp->peer_id;
 	}
+#endif
 
 	cdp_sawf_peer_config_ul(soc_txrx_handle,
 				mac_addr, tid,
