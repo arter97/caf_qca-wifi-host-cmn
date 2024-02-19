@@ -2917,6 +2917,10 @@ dp_rx_wbm_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
 					dp_rx_nbuf_free(nbuf);
 					break;
 				case HAL_RXDMA_AMSDU_ADDR_MISMATCH:
+					if (!txrx_peer) {
+						dp_rx_nbuf_free(nbuf);
+						break;
+					}
 					/* WAR for ME6 - IPQ9574-QCN9224 */
 					pool_id = wbm_err.info_bit.pool_id;
 					tlv_hdr = rx_tlv_hdr;
