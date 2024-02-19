@@ -4040,7 +4040,7 @@ void dp_set_peer_as_tdls_peer(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
 }
 
-#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_FEATURE_MLO_SAP)
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_FEATURE_MULTI_LINK_SAP)
 void dp_get_info_by_peer_mac(struct cdp_soc_t *soc_hdl,
 			     uint8_t *peer_mac,
 			     uint8_t vdev_id,
