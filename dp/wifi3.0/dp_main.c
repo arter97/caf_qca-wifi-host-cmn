@@ -3847,7 +3847,7 @@ void dp_ipa_rx_desc_list_deinit(struct dp_pdev *pdev)
 
 	free_list = &soc->ipa_rx_desc_freelist;
 	qdf_spin_lock_bh(&free_list->lock);
-	dp_info("deinit desc list allocated for opt_dp_ctrl");
+	dp_info("opt_dp_ctrl: deinit desc list allocated for opt_dp_ctrl");
 	free_list->head = NULL;
 	free_list->tail = NULL;
 	free_list->list_size = 0;
@@ -14640,7 +14640,7 @@ uint16_t dp_ipa_rx_desc_list_init(struct dp_pdev *pdev)
 	rx_desc_pool = &soc->rx_desc_buf[mac_id];
 	free_list = &soc->ipa_rx_desc_freelist;
 	num_desc = MAX_IPA_RX_FREE_DESC - free_list->list_size;
-	dp_info("num of desc required: %u", num_desc);
+	dp_info("opt_dp_ctrl: num of desc required: %u", num_desc);
 	count = dp_rx_get_free_desc_list(soc, mac_id, rx_desc_pool,
 					 num_desc, &desc_list,
 					 &tail);
@@ -14653,7 +14653,7 @@ uint16_t dp_ipa_rx_desc_list_init(struct dp_pdev *pdev)
 		free_list->list_size++;
 		desc_list = next;
 	}
-	dp_info("num of desc allocated: %u", count);
+	dp_info("opt_dp_ctrl: num of desc allocated: %u", count);
 	qdf_spin_unlock_bh(&free_list->lock);
 	return count;
 }
