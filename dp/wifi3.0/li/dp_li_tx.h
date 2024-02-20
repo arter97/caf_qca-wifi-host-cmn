@@ -142,9 +142,13 @@ void dp_tx_desc_pool_free_li(struct dp_soc *soc, uint8_t pool_id);
  * Return: true if pool already remap and not need create,
  *         otherwise return false.
  */
+static inline
 bool dp_mlo_tx_pool_map_li(struct dp_soc *soc,
 			   uint8_t vdev_id,
-			   enum dp_mod_id mod_id);
+			   enum dp_mod_id mod_id)
+{
+	return false;
+}
 
 /**
  * dp_mlo_tx_pool_unmap_li() - Check whether need to unmap tx desc pool
@@ -157,9 +161,13 @@ bool dp_mlo_tx_pool_map_li(struct dp_soc *soc,
  *
  * Return: true if pool not need unmap, otherwise return false.
  */
+static inline
 bool dp_mlo_tx_pool_unmap_li(struct dp_soc *soc, uint8_t vdev_id,
 			     uint8_t *new_id,
-			     enum dp_mod_id mod_id);
+			     enum dp_mod_id mod_id)
+{
+	return false;
+}
 
 /**
  * dp_tx_override_flow_pool_id_li() - Override the pool id of the tx desc pool
@@ -168,7 +176,9 @@ bool dp_mlo_tx_pool_unmap_li(struct dp_soc *soc, uint8_t vdev_id,
  *
  * Return: None
  */
-void
+static inline void
 dp_tx_override_flow_pool_id_li(struct dp_vdev *vdev,
-			       struct dp_tx_queue *queue);
+			       struct dp_tx_queue *queue)
+{
+}
 #endif

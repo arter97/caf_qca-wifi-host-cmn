@@ -652,23 +652,3 @@ void dp_tx_desc_pool_free_li(struct dp_soc *soc, uint8_t pool_id)
 {
 }
 
-bool dp_mlo_tx_pool_map_li(struct dp_soc *soc,
-			   uint8_t vdev_id,
-			   enum dp_mod_id mod_id)
-{
-	return false;
-}
-
-bool dp_mlo_tx_pool_unmap_li(struct dp_soc *soc,
-			     uint8_t vdev_id,
-			     uint8_t *new_id,
-			     enum dp_mod_id mod_id)
-{
-	return false;
-}
-
-void
-dp_tx_override_flow_pool_id_li(struct dp_vdev *vdev,
-			       struct dp_tx_queue *queue)
-{
-}
