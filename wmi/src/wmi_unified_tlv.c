@@ -19032,6 +19032,12 @@ extract_pasn_peer_create_req_event_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 		dst->peer_info[i].force_self_mac_usage =
 			WMI_RTT_PASN_PEER_CREATE_FORCE_SELF_MAC_USE_GET(
 							buf->control_flag);
+		wmi_debug("Peer[%d]: self_mac:" QDF_MAC_ADDR_FMT " peer_mac:" QDF_MAC_ADDR_FMT "security_mode:0x%x force_self_mac:%d",
+			  i, QDF_MAC_ADDR_REF(dst->peer_info[i].self_mac.bytes),
+			  QDF_MAC_ADDR_REF(dst->peer_info[i].peer_mac.bytes),
+			  security_mode,
+			  dst->peer_info[i].force_self_mac_usage);
+
 		dst->num_peers++;
 		buf++;
 	}
