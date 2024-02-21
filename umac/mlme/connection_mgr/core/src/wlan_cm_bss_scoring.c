@@ -3107,7 +3107,7 @@ static void cm_validate_partner_links(struct wlan_objmgr_psoc *psoc,
 						   WLAN_MLME_CM_ID);
 		if (peer) {
 			mlme_debug(QDF_MAC_ADDR_FMT "link (%d) dup peer existed",
-				   QDF_MAC_ADDR_REF(partner_entry->bssid.bytes),
+				   QDF_MAC_ADDR_REF(partner_info->link_addr.bytes),
 				   partner_info->freq);
 			partner_info->is_valid_link = false;
 			wlan_objmgr_peer_release_ref(peer, WLAN_MLME_CM_ID);
