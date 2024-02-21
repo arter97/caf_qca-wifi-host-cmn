@@ -1990,3 +1990,11 @@ wlan_reg_get_opclass_from_map(const struct reg_dmn_op_class_map_t **map,
 {
 	return reg_get_opclass_from_map(map, is_global_op_table_needed);
 }
+
+#ifdef WLAN_FEATURE_11BE
+uint16_t
+wlan_reg_find_non_punctured_bw(uint16_t bw,  uint16_t in_punc_pattern)
+{
+	return reg_find_non_punctured_bw(bw, in_punc_pattern);
+}
+#endif

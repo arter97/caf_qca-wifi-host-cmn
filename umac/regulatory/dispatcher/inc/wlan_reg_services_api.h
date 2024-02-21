@@ -2933,4 +2933,23 @@ wlan_reg_get_endchan_cen_from_bandstart(qdf_freq_t band_start,
 QDF_STATUS
 wlan_reg_get_opclass_from_map(const struct reg_dmn_op_class_map_t **map,
 			      bool is_global_op_table_needed);
+
+/**
+ * wlan_reg_find_non_punctured_bw() - Given the input puncture pattern and the
+ * total BW of the channel, find the non-punctured bandwidth.
+ * @bw: Total bandwidth of the channel
+ * @in_punc_pattern: Input puncture pattern
+ *
+ * Return: non-punctured bw in MHz
+ */
+#ifdef WLAN_FEATURE_11BE
+uint16_t
+wlan_reg_find_non_punctured_bw(uint16_t bw,  uint16_t in_punc_pattern);
+#else
+static inline uint16_t
+wlan_reg_find_non_punctured_bw(uint16_t bw,  uint16_t in_punc_pattern)
+{
+	return 0;
+}
+#endif
 #endif

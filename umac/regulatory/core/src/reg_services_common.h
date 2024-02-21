@@ -3122,4 +3122,23 @@ reg_get_pdev_from_phy_id(struct wlan_objmgr_psoc *psoc, uint8_t phy_id,
 			 struct wlan_lmac_if_reg_tx_ops *reg_tx_ops,
 			 bool is_reg_offload,
 			 wlan_objmgr_ref_dbgid *dbg_id);
+
+/**
+ * reg_find_non_punctured_bw() - Given the input puncture pattern and the
+ * total BW of the channel, find the non-punctured bandwidth.
+ * @bw: Total bandwidth of the channel
+ * @in_punc_pattern: Input puncture pattern
+ *
+ * Return: non-punctured bw in MHz
+ */
+#ifdef WLAN_FEATURE_11BE
+uint16_t
+reg_find_non_punctured_bw(uint16_t bw,  uint16_t in_punc_pattern);
+#else
+static inline uint16_t
+reg_find_non_punctured_bw(uint16_t bw,  uint16_t in_punc_pattern)
+{
+	return 0;
+}
+#endif
 #endif
