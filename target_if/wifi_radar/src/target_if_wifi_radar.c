@@ -500,10 +500,10 @@ target_if_wifi_radar_capture_and_cal_command
 		wmi_param.num_ltf_tx = params->num_ltf_tx;
 		wmi_param.num_skip_ltf_rx = params->num_skip_ltf_rx;
 		wmi_param.num_ltf_accumulation = params->num_ltf_accumulation;
+		wmi_param.bandwidth = params->bandwidth;
 	}
 
 	if (wmi_param.cmd_type == wmi_host_wifi_radar_capture_enable) {
-		wmi_param.bandwidth = params->bandwidth;
 		wmi_param.periodicity = params->periodicity;
 	}
 
@@ -511,8 +511,6 @@ target_if_wifi_radar_capture_and_cal_command
 
 	if (QDF_IS_STATUS_ERROR(retv))
 		wifi_radar_err("fail to send wifi radar command");
-	else
-		wifi_radar_err("successfully sent wifir radar command");
 
 	return retv;
 }
