@@ -9166,6 +9166,10 @@ dp_set_psoc_param(struct cdp_soc_t *cdp_soc,
 	case CDP_CONFIG_DP_DEBUG_LOG:
 		soc->dp_debug_log_en = val.cdp_psoc_param_dp_debug_log;
 		break;
+	case CDP_MONITOR_FLAG:
+		soc->mon_flags = val.cdp_monitor_flag;
+		dp_info("monior interface flags: 0x%x", soc->mon_flags);
+		break;
 	default:
 		break;
 	}

@@ -3290,6 +3290,8 @@ struct dp_soc {
 #ifdef DP_RX_PEEK_MSDU_DONE_WAR
 	struct dp_rx_msdu_done_fail_desc_list msdu_done_fail_desc_list;
 #endif
+	/* monitor interface flags */
+	uint32_t mon_flags;
 };
 
 #ifdef IPA_OFFLOAD
