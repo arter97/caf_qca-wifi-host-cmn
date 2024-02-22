@@ -1504,6 +1504,7 @@ enum cdp_pdev_param_type {
  * @cdp_psoc_param_mlo_oper_mode: mlo operation mode
  * @cdp_fw_support_ml_mon: FW support ML monitor mode
  * @cdp_pdev_param_mon_fcs_cap: monitor fcs capture
+ * @cdp_monitor_flag: monitor interface flags
  */
 typedef union cdp_config_param_t {
 	/* peer params */
@@ -1623,6 +1624,7 @@ typedef union cdp_config_param_t {
 	uint8_t cdp_psoc_param_mlo_oper_mode;
 	bool cdp_fw_support_ml_mon;
 	uint8_t cdp_pdev_param_mon_fcs_cap;
+	uint8_t cdp_monitor_flag;
 } cdp_config_param_type;
 
 /**
@@ -1801,6 +1803,7 @@ enum cdp_vdev_param_type {
  * @CDP_CFG_PEER_JITTER_STATS: Peer Jitter Stats
  * @CDP_CONFIG_DP_DEBUG_LOG: set/get dp debug logging
  * @CDP_FW_SUPPORT_ML_MON: FW support ML monitor
+ * @CDP_MONITOR_FLAG: Monitor interface configuration
  */
 enum cdp_psoc_param_type {
 	CDP_ENABLE_RATE_STATS,
@@ -1832,6 +1835,7 @@ enum cdp_psoc_param_type {
 	CDP_CFG_PEER_JITTER_STATS,
 	CDP_CONFIG_DP_DEBUG_LOG,
 	CDP_FW_SUPPORT_ML_MON,
+	CDP_MONITOR_FLAG,
 };
 
 #ifdef CONFIG_AP_PLATFORM

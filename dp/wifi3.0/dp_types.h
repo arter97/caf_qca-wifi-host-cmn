@@ -3485,6 +3485,8 @@ struct dp_soc {
 #ifdef FEATURE_DIRECT_LINK
 	qdf_atomic_t direct_link_active;
 #endif
+	/* monitor interface flags */
+	uint32_t mon_flags;
 };
 
 #define MAX_RX_MAC_RINGS 2

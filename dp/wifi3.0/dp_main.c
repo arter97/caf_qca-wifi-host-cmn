@@ -9381,6 +9381,10 @@ dp_set_psoc_param(struct cdp_soc_t *cdp_soc,
 		soc->features.fw_support_ml_monitor =
 				val.cdp_fw_support_ml_mon;
 		break;
+	case CDP_MONITOR_FLAG:
+		soc->mon_flags = val.cdp_monitor_flag;
+		dp_info("monior interface flags: 0x%x", soc->mon_flags);
+		break;
 	default:
 		break;
 	}
