@@ -1824,14 +1824,7 @@ static bool is_freq_dbs_or_sbs(struct wlan_objmgr_psoc *psoc,
 			       qdf_freq_t freq_1,
 			       qdf_freq_t freq_2)
 {
-	if ((policy_mgr_is_hw_sbs_capable(psoc) &&
-	     policy_mgr_are_sbs_chan(psoc, freq_1, freq_2)) ||
-	    (policy_mgr_is_hw_dbs_capable(psoc) &&
-	     !wlan_reg_is_same_band_freqs(freq_1, freq_2))) {
-		return true;
-	}
-
-	return false;
+	return !policy_mgr_2_freq_always_on_same_mac(psoc, freq_1, freq_2);
 }
 
 #else
@@ -1879,7 +1872,6 @@ enum MLO_TYPE cm_bss_mlo_type(struct wlan_objmgr_psoc *psoc,
 	for (i = 0; i < entry->ml_info.num_links; i++) {
 		if (!entry->ml_info.link_info[i].is_valid_link)
 			continue;
-		multi_link = true;
 		freq_entry = entry->channel.chan_freq;
 		freq[i] = entry->ml_info.link_info[i].freq;
 		entry_partner[i] =
@@ -1887,8 +1879,17 @@ enum MLO_TYPE cm_bss_mlo_type(struct wlan_objmgr_psoc *psoc,
 				     &entry->ml_info.link_info[i].link_addr);
 		if (entry_partner[i])
 			freq[i] = entry_partner[i]->channel.chan_freq;
-		if (is_freq_dbs_or_sbs(psoc, freq[i], freq_entry))
+		if (is_freq_dbs_or_sbs(psoc, freq[i], freq_entry)) {
 			return MLMR;
+		} else if (freq[i] == freq_entry) {
+			mlme_debug("Partner " QDF_MAC_ADDR_FMT
+				   " freq %d same as assoc freq, invalid it",
+				   QDF_MAC_ADDR_REF(entry->ml_info.link_info[i].link_addr.bytes),
+				   freq[i]);
+			entry->ml_info.link_info[i].is_valid_link = false;
+		} else {
+			multi_link = true;
+		}
 	}
 
 	if (multi_link)
@@ -3084,13 +3085,14 @@ static void cm_eliminate_common_candidate(qdf_list_t *candidate_list)
 	}
 }
 
-static void cm_validate_partner_links_rsn_cap(struct wlan_objmgr_psoc *psoc,
-					      struct scan_cache_entry *entry,
-					      qdf_list_t *scan_list)
+static void cm_validate_partner_links(struct wlan_objmgr_psoc *psoc,
+				      struct scan_cache_entry *entry,
+				      qdf_list_t *scan_list)
 {
 	uint8_t idx;
 	struct scan_cache_entry *partner_entry;
 	struct partner_link_info *partner_info;
+	struct wlan_objmgr_peer *peer;
 
 	if (!entry->ie_list.multi_link_bv || !entry->ml_info.num_links)
 		return;
@@ -3099,6 +3101,18 @@ static void cm_validate_partner_links_rsn_cap(struct wlan_objmgr_psoc *psoc,
 		partner_info = &entry->ml_info.link_info[idx];
 		if (!partner_info->is_valid_link)
 			continue;
+
+		peer = wlan_objmgr_get_peer_by_mac(psoc,
+						   partner_info->link_addr.bytes,
+						   WLAN_MLME_CM_ID);
+		if (peer) {
+			mlme_debug(QDF_MAC_ADDR_FMT "link (%d) dup peer existed",
+				   QDF_MAC_ADDR_REF(partner_entry->bssid.bytes),
+				   partner_info->freq);
+			partner_info->is_valid_link = false;
+			wlan_objmgr_peer_release_ref(peer, WLAN_MLME_CM_ID);
+			continue;
+		}
 
 		/*
 		 * If partner link is not found in the current candidate list
@@ -3134,9 +3148,9 @@ static void cm_eliminate_common_candidate(qdf_list_t *candidate_list)
 }
 
 static inline void
-cm_validate_partner_links_rsn_cap(struct wlan_objmgr_psoc *psoc,
-				  struct scan_cache_entry *entry,
-				  qdf_list_t *scan_list)
+cm_validate_partner_links(struct wlan_objmgr_psoc *psoc,
+			  struct scan_cache_entry *entry,
+			  qdf_list_t *scan_list)
 {
 }
 #endif
@@ -3230,8 +3244,7 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 		}
 
 		/* Check if the partner links RSN caps are matching. */
-		cm_validate_partner_links_rsn_cap(psoc,
-						  scan_entry->entry, scan_list);
+		cm_validate_partner_links(psoc, scan_entry->entry, scan_list);
 		if (denylist_action == CM_DLM_NO_ACTION ||
 		    (are_all_candidate_denylisted && denylist_action ==
 		     CM_DLM_REMOVE)) {

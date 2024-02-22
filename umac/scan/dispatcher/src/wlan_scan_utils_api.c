@@ -1740,7 +1740,8 @@ static void util_scan_update_esp_data(struct wlan_esp_ie *esp_information,
 	esp_ie = (struct wlan_esp_ie *)
 		util_scan_entry_esp_info(scan_entry);
 
-	total_elements  = esp_ie->esp_len;
+	// Ignore ESP_ID_EXTN element
+	total_elements  = esp_ie->esp_len - 1;
 	data = (uint8_t *)esp_ie + 3;
 	do_div(total_elements, ESP_INFORMATION_LIST_LENGTH);
 
@@ -1750,7 +1751,7 @@ static void util_scan_update_esp_data(struct wlan_esp_ie *esp_information,
 	}
 
 	for (i = 0; i < total_elements &&
-	     data < ((uint8_t *)esp_ie + esp_ie->esp_len + 3); i++) {
+	     data < ((uint8_t *)esp_ie + esp_ie->esp_len); i++) {
 		esp_info = (struct wlan_esp_info *)data;
 		if (esp_info->access_category == ESP_AC_BK) {
 			qdf_mem_copy(&esp_information->esp_info_AC_BK,
@@ -2834,14 +2835,6 @@ static void util_parse_noninheritance_list(uint8_t *extn_elem,
 }
 
 #ifdef WLAN_FEATURE_11BE_MLO
-static bool util_is_ml_ie(uint8_t *pos)
-{
-	if (pos[PAYLOAD_START_POS] == WLAN_EXTN_ELEMID_MULTI_LINK)
-		return true;
-
-	return false;
-}
-
 /**
  * util_handle_rnr_ie_for_mbssid() - parse and modify RNR IE for MBSSID feature
  * @rnr: The pointer to RNR IE
@@ -2987,11 +2980,6 @@ static int util_handle_rnr_ie_for_mbssid(const uint8_t *rnr,
 	return rnr_len;
 }
 #else
-static bool util_is_ml_ie(uint8_t *pos)
-{
-	return false;
-}
-
 static int util_handle_rnr_ie_for_mbssid(const uint8_t *rnr,
 					 uint8_t bssid_index, uint8_t *pos)
 {
@@ -3162,13 +3150,8 @@ static uint32_t util_gen_new_ie(struct wlan_objmgr_pdev *pdev,
 				 */
 			} else if (tmp_old[0] == WLAN_ELEMID_EXTN_ELEM) {
 				if (tmp_old[PAYLOAD_START_POS] ==
-				    tmp[PAYLOAD_START_POS] &&
-				    !util_is_ml_ie(tmp)) {
-					/* same ie, copy from subelement
-					 * but multi link IE is exception,
-					 * it needs to copy from main frame
-					 * for full info.
-					 */
+				    tmp[PAYLOAD_START_POS]) {
+					/* same ie, copy from subelement */
 					if ((pos + tmp[1] + MIN_IE_LEN) <=
 					    (new_ie + ielen)) {
 						qdf_mem_copy(pos, tmp,

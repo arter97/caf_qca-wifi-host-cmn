@@ -1542,7 +1542,7 @@ struct rx_refill_buff_pool {
 	uint16_t tail;
 	struct dp_pdev *dp_pdev;
 	uint16_t max_bufq_len;
-	qdf_nbuf_t buf_elem[2048];
+	qdf_nbuf_t *buf_elem;
 };
 
 #ifdef DP_TX_HW_DESC_HISTORY
