@@ -5026,4 +5026,18 @@ dp_mon_rx_ppdu_status_reset(struct dp_mon_pdev *mon_pdev)
 }
 #endif
 
+static inline void
+dp_mon_pdev_filter_init(struct dp_mon_pdev *mon_pdev)
+{
+	if (!mon_pdev)
+		return;
+
+	mon_pdev->mon_filter_mode = MON_FILTER_ALL;
+	mon_pdev->fp_mgmt_filter = FILTER_MGMT_ALL;
+	mon_pdev->fp_ctrl_filter = FILTER_CTRL_ALL;
+	mon_pdev->fp_data_filter = FILTER_DATA_ALL;
+	mon_pdev->mo_mgmt_filter = FILTER_MGMT_ALL;
+	mon_pdev->mo_ctrl_filter = FILTER_CTRL_ALL;
+	mon_pdev->mo_data_filter = FILTER_DATA_ALL;
+}
 #endif /* _DP_MON_H_ */

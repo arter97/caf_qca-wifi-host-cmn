@@ -1000,6 +1000,7 @@ static void dp_mon_reset_local_pkt_capture_rx_filter(struct dp_pdev *pdev)
 
 	filter.valid = true;
 	mon_pdev->filter[mode][srng_type] = filter;
+	dp_mon_pdev_filter_init(mon_pdev);
 }
 
 QDF_STATUS dp_mon_start_local_pkt_capture(struct cdp_soc_t *cdp_soc,

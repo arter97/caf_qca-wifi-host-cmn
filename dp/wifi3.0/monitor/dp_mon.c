@@ -5930,20 +5930,6 @@ QDF_STATUS dp_mon_pdev_detach(struct dp_pdev *pdev)
 	return QDF_STATUS_SUCCESS;
 }
 
-static void dp_mon_pdev_filter_init(struct dp_mon_pdev *mon_pdev)
-{
-	if (!mon_pdev)
-		return;
-
-	mon_pdev->mon_filter_mode = MON_FILTER_ALL;
-	mon_pdev->fp_mgmt_filter = FILTER_MGMT_ALL;
-	mon_pdev->fp_ctrl_filter = FILTER_CTRL_ALL;
-	mon_pdev->fp_data_filter = FILTER_DATA_ALL;
-	mon_pdev->mo_mgmt_filter = FILTER_MGMT_ALL;
-	mon_pdev->mo_ctrl_filter = FILTER_CTRL_ALL;
-	mon_pdev->mo_data_filter = FILTER_DATA_ALL;
-}
-
 #ifdef WLAN_TX_PKT_CAPTURE_ENH
 void dp_mon_register_tx_pkt_enh_ops_1_0(struct dp_mon_ops *mon_ops)
 {
