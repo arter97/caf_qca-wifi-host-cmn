@@ -159,6 +159,57 @@ struct wlan_preferred_links {
 #endif
 
 /**
+ * enum wlan_ttlm_sm_state - TTLM states
+ * @WLAN_TTLM_S_INIT: Default state, IDLE state
+ * @WLAN_TTLM_S_INPROGRESS: State when TTLM is in progress
+ * @WLAN_TTLM_S_NEGOTIATED: State when TTLM negotiate
+ * @WLAN_TTLM_S_MAX: Max state
+ * @WLAN_TTLM_SS_STA_INPROGRESS: STA side TTLM is in progress
+ * @WLAN_TTLM_SS_AP_ACTION_INPROGRESS: AP side Action req is in progress
+ * @WLAN_TTLM_SS_AP_BEACON_INPROGRESS: AP side Beacon is in progress
+ * @WLAN_TTLM_SS_AP_BTM_INPROGRESS: AP side BTM is in progress
+ * @WLAN_TTLM_SS_TEARDOWN_INPROGRESS: Teardown is in progress
+ * @WLAN_TTLM_SS_MAX: Max substate
+ */
+enum wlan_ttlm_sm_state {
+	WLAN_TTLM_S_INIT = 0,
+	WLAN_TTLM_S_INPROGRESS = 1,
+	WLAN_TTLM_S_NEGOTIATED = 2,
+	WLAN_TTLM_S_MAX = 3,
+	WLAN_TTLM_SS_STA_INPROGRESS = 4,
+	WLAN_TTLM_SS_AP_ACTION_INPROGRESS = 5,
+	WLAN_TTLM_SS_AP_BEACON_INPROGRESS = 6,
+	WLAN_TTLM_SS_AP_BTM_INPROGRESS = 7,
+	WLAN_TTLM_SS_TEARDOWN_INPROGRESS = 8,
+	WLAN_TTLM_SS_MAX,
+};
+
+/**
+ * enum wlan_ttlm_sm_evt - TTLM related events
+ * Note: make sure to update ttlm_sm_event_names on updating this enum
+ * @WLAN_TTLM_SM_EV_TX_ACTION_REQ: TTLM Action request from STA
+ * @WLAN_TTLM_SM_EV_TX_ACTION_RSP: TTLM Action response from STA
+ * @WLAN_TTLM_SM_EV_RX_ACTION_REQ: TTLM Action request from AP
+ * @WLAN_TTLM_SM_EV_RX_ACTION_RSP: TTLM Action response from AP
+ * @WLAN_TTLM_SM_EV_BEACON: TTLM  Beacon
+ * @WLAN_TTLM_SM_EV_BTM_LINK_DISABLE: BTM req from AP
+ * @WLAN_TTLM_SM_EV_TX_TEARDOWN: TTLM Teardown from STA
+ * @WLAN_TTLM_SM_EV_RX_TEARDOWN: TTLM Teardown from AP
+ * @WLAN_TTLM_SM_EV_MAX: Max event
+ */
+enum wlan_ttlm_sm_evt {
+	WLAN_TTLM_SM_EV_TX_ACTION_REQ = 0,
+	WLAN_TTLM_SM_EV_TX_ACTION_RSP = 1,
+	WLAN_TTLM_SM_EV_RX_ACTION_REQ = 2,
+	WLAN_TTLM_SM_EV_RX_ACTION_RSP = 3,
+	WLAN_TTLM_SM_EV_BEACON = 4,
+	WLAN_TTLM_SM_EV_BTM_LINK_DISABLE = 5,
+	WLAN_TTLM_SM_EV_TX_TEARDOWN = 6,
+	WLAN_TTLM_SM_EV_RX_TEARDOWN = 7,
+	WLAN_TTLM_SM_EV_MAX,
+};
+
+/**
  * struct wlan_t2lm_info - TID-to-Link mapping information for the frames
  * transmitted on the uplink, downlink and bidirectional.
  *

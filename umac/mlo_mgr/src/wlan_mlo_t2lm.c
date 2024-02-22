@@ -31,6 +31,122 @@
 #endif
 #include <wlan_mlo_mgr_sta.h>
 
+#ifdef WLAN_FEATURE_11BE_MLO_TTLM
+struct wlan_sm_state_info ttlm_sm_info[] = {
+	{
+		(uint8_t)WLAN_TTLM_S_INIT,
+		(uint8_t)WLAN_SM_ENGINE_STATE_NONE,
+		(uint8_t)WLAN_SM_ENGINE_STATE_NONE,
+		false,
+		"TTLM_INIT",
+		ttlm_state_init_entry,
+		ttlm_state_init_exit,
+		ttlm_state_init_event
+	},
+	{
+		(uint8_t)WLAN_TTLM_S_INPROGRESS,
+		(uint8_t)WLAN_SM_ENGINE_STATE_NONE,
+		(uint8_t)WLAN_SM_ENGINE_STATE_NONE,
+		true,
+		"TTLM_INPROGRESS",
+		ttlm_state_inprogress_entry,
+		ttlm_state_inprogress_exit,
+		ttlm_state_inprogress_event
+	},
+	{
+		(uint8_t)WLAN_TTLM_S_NEGOTIATED,
+		(uint8_t)WLAN_SM_ENGINE_STATE_NONE,
+		(uint8_t)WLAN_SM_ENGINE_STATE_NONE,
+		false,
+		"TTLM_NEGOTIATED",
+		ttlm_state_negotiated_entry,
+		ttlm_state_negotiated_exit,
+		ttlm_state_negotiated_event
+	},
+	{
+		(uint8_t)WLAN_TTLM_S_MAX,
+		(uint8_t)WLAN_SM_ENGINE_STATE_NONE,
+		(uint8_t)WLAN_SM_ENGINE_STATE_NONE,
+		false,
+		"INVALID",
+		NULL,
+		NULL,
+		NULL
+	},
+	{
+		(uint8_t)WLAN_TTLM_SS_STA_INPROGRESS,
+		(uint8_t)WLAN_TTLM_S_INPROGRESS,
+		(uint8_t)WLAN_SM_ENGINE_STATE_NONE,
+		false,
+		"ST-STA_INPROGRESS",
+		ttlm_subst_sta_inprogress_entry,
+		ttlm_subst_sta_inprogress_exit,
+		ttlm_subst_sta_inprogress_event
+	},
+	{
+		(uint8_t)WLAN_TTLM_SS_AP_ACTION_INPROGRESS,
+		(uint8_t)WLAN_TTLM_S_INPROGRESS,
+		(uint8_t)WLAN_SM_ENGINE_STATE_NONE,
+		false,
+		"ST-AP_ACTION_INPROGRESS",
+		ttlm_subst_ap_action_inprogress_entry,
+		ttlm_subst_ap_action_inprogress_exit,
+		ttlm_subst_ap_action_inprogress_event
+	},
+	{
+		(uint8_t)WLAN_TTLM_SS_AP_BEACON_INPROGRESS,
+		(uint8_t)WLAN_TTLM_S_INPROGRESS,
+		(uint8_t)WLAN_SM_ENGINE_STATE_NONE,
+		false,
+		"ST-AP_BEACON_INPROGRESS",
+		ttlm_subst_ap_beacon_inprogress_entry,
+		ttlm_subst_ap_beacon_inprogress_exit,
+		ttlm_subst_ap_beacon_inprogress_event
+	},
+	{
+		(uint8_t)WLAN_TTLM_SS_AP_BTM_INPROGRESS,
+		(uint8_t)WLAN_TTLM_S_INPROGRESS,
+		(uint8_t)WLAN_SM_ENGINE_STATE_NONE,
+		false,
+		"ST-AP_BTM_INPROGRESS",
+		ttlm_subst_ap_btm_inprogress_entry,
+		ttlm_subst_ap_btm_inprogress_exit,
+		ttlm_subst_ap_btm_inprogress_event
+	},
+	{
+		(uint8_t)WLAN_TTLM_SS_TEARDOWN_INPROGRESS,
+		(uint8_t)WLAN_TTLM_S_INPROGRESS,
+		(uint8_t)WLAN_SM_ENGINE_STATE_NONE,
+		false,
+		"ST-TEARDOWN_INPROGRESS",
+		ttlm_subst_teardown_inprogress_entry,
+		ttlm_subst_teardown_inprogress_exit,
+		ttlm_subst_teardown_inprogress_event
+	},
+	{
+		(uint8_t)WLAN_TTLM_SS_MAX,
+		(uint8_t)WLAN_SM_ENGINE_STATE_NONE,
+		(uint8_t)WLAN_SM_ENGINE_STATE_NONE,
+		false,
+		"INVALID",
+		NULL,
+		NULL,
+		NULL
+	},
+};
+
+static const char *ttlm_sm_event_names[] = {
+	"EV_TX_ACTION_REQ",
+	"EV_TX_ACTION_RSP",
+	"EV_RX_ACTION_REQ",
+	"EV_RX_ACTION_RSP",
+	"EV_BEACON",
+	"EV_BTM_LINK_DISABLE",
+	"EV_TX_TEARDOWN",
+	"EV_RX_TEARDOWN",
+};
+#endif
+
 QDF_STATUS wlan_mlo_parse_t2lm_info(uint8_t *ie,
 				    struct wlan_t2lm_info *t2lm)
 {
