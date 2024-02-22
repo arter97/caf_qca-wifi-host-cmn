@@ -775,6 +775,7 @@ struct wlan_ipa_priv {
 	bool is_smmu_enabled;	/* IPA caps returned from ipa_wdi_init */
 	/* Flag to notify whether optional wifi dp feature is enabled or not */
 	bool opt_wifi_datapath;
+	bool opt_wifi_datapath_ctrl;
 	qdf_atomic_t stats_quota;
 	uint8_t curr_bw_level;
 	qdf_atomic_t deinit_in_prog;

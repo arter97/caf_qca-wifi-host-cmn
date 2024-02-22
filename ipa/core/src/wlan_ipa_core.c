@@ -4468,6 +4468,9 @@ static inline QDF_STATUS __wlan_ipa_reg_flt_cbs(
 						ctrl_flt_add_cb,
 						ctrl_flt_rem_cb,
 						clk_cb);
+	if (status == QDF_STATUS_SUCCESS)
+		ipa_ctx->opt_wifi_datapath_ctrl = true;
+
 	return status;
 }
 #else
@@ -4584,7 +4587,8 @@ void wlan_ipa_opt_dp_deinit(struct wlan_ipa_priv *ipa_ctx)
 		qdf_event_destroy(&ipa_ctx->ipa_opt_dp_ctrl_clk_evt);
 	}
 
-	if (cdp_ipa_get_smmu_mapped(ipa_ctx->dp_soc)) {
+	if (cdp_ipa_get_smmu_mapped(ipa_ctx->dp_soc) ||
+	    ipa_ctx->opt_wifi_datapath_ctrl) {
 		cdp_ipa_set_smmu_mapped(ipa_ctx->dp_soc, 0);
 		cdp_ipa_rx_buf_smmu_pool_mapping(ipa_ctx->dp_soc,
 						 ipa_ctx->dp_pdev_id,
