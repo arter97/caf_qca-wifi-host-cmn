@@ -3963,6 +3963,7 @@ dp_ipa_rx_buf_alloc_opt_dp_ctrl(struct dp_soc *soc, qdf_nbuf_t nbuf,
 
 	dst_addr = qdf_nbuf_data(rx_desc->nbuf) + soc->curr_rx_pkt_tlv_size;
 	qdf_mem_copy(dst_addr, qdf_nbuf_data(nbuf), qdf_nbuf_len(nbuf));
+	qdf_nbuf_set_pktlen(rx_desc->nbuf, qdf_nbuf_len(nbuf));
 	rx_desc->in_use = 1;
 	return QDF_STATUS_SUCCESS;
 }
@@ -4012,7 +4013,7 @@ QDF_STATUS dp_ipa_tx_opt_dp_ctrl_pkt(struct cdp_soc_t *soc_hdl,
 	struct rx_desc_pool *rx_desc_pool;
 	uint32_t paddr_lo, paddr_hi;
 
-	vdev = dp_vdev_get_ref_by_id(soc, vdev_id, DP_MOD_ID_HTT_COMP);
+	vdev = dp_vdev_get_ref_by_id(soc, vdev_id, DP_MOD_ID_IPA);
 	if (!vdev)
 		goto tx_nbuf_free;
 
@@ -4053,12 +4054,14 @@ QDF_STATUS dp_ipa_tx_opt_dp_ctrl_pkt(struct cdp_soc_t *soc_hdl,
 	dp_tx_get_queue(vdev, nbuf, &msdu_info.tx_queue);
 	msdu_info.xmit_type = qdf_nbuf_get_vdev_xmit_type(nbuf);
 	msdu_info.is_opt_dp_ctrl = true;
+	msdu_info.exception_fw = true;
 
 	nbuf = dp_tx_send_msdu_single(vdev, nbuf, &msdu_info,
 				      HTT_INVALID_PEER, NULL);
 	if (nbuf)
 		goto smmu_unmap_rx_nbuf;
 
+	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_IPA);
 	return QDF_STATUS_SUCCESS;
 
 smmu_unmap_rx_nbuf:
@@ -4082,7 +4085,7 @@ release_rx_desc:
 	}
 
 vdev_ref_release:
-	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_HTT_COMP);
+	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_IPA);
 
 tx_nbuf_free:
 	qdf_nbuf_free(nbuf);
