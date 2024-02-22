@@ -145,6 +145,47 @@ static const char *ttlm_sm_event_names[] = {
 	"EV_TX_TEARDOWN",
 	"EV_RX_TEARDOWN",
 };
+
+enum wlan_ttlm_sm_state ttlm_get_state(struct wlan_mlo_peer_context *ml_peer)
+{
+	if (!ml_peer)
+		return WLAN_TTLM_S_MAX;
+
+	return ml_peer->ttlm_sm.ttlm_state;
+}
+
+enum wlan_ttlm_sm_state ttlm_get_sub_state(
+			struct wlan_mlo_peer_context *ml_peer)
+{
+	if (!ml_peer)
+		return WLAN_TTLM_SS_MAX;
+
+	return ml_peer->ttlm_sm.ttlm_substate;
+}
+
+static void ttlm_sm_print_state_event(struct wlan_mlo_peer_context *ml_peer,
+				      enum wlan_ttlm_sm_evt event)
+{
+	enum wlan_ttlm_sm_state state, substate;
+
+	state = ttlm_get_state(ml_peer);
+	substate = ttlm_get_sub_state(ml_peer);
+
+	ttlm_nofl_debug("[%s]%s - %s, %s", ml_peer->ttlm_sm.sm_hdl->name,
+			ttlm_sm_info[state].name, ttlm_sm_info[substate].name,
+			ttlm_sm_event_names[event]);
+}
+
+static void ttlm_sm_print_state(struct wlan_mlo_peer_context *ml_peer)
+{
+	enum wlan_ttlm_sm_state state, substate;
+
+	state = ttlm_get_state(ml_peer);
+	substate = ttlm_get_sub_state(ml_peer);
+
+	ttlm_nofl_debug("[%s]%s - %s", ml_peer->ttlm_sm.sm_hdl->name,
+			ttlm_sm_info[state].name, ttlm_sm_info[substate].name);
+}
 #endif
 
 QDF_STATUS wlan_mlo_parse_t2lm_info(uint8_t *ie,

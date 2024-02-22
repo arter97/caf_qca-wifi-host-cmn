@@ -52,6 +52,8 @@ struct wlan_mlo_dev_context;
  */
 #define WLAN_T2LM_MAPPING_SWITCH_TIME_DELAY 98
 
+struct wlan_mlo_peer_context;
+
 /**
  * enum wlan_t2lm_direction - Indicates the direction for which TID-to-link
  * mapping is available.
@@ -208,6 +210,43 @@ enum wlan_ttlm_sm_evt {
 	WLAN_TTLM_SM_EV_RX_TEARDOWN = 7,
 	WLAN_TTLM_SM_EV_MAX,
 };
+
+#ifdef WLAN_FEATURE_11BE_MLO_TTLM
+/**
+ * ttlm_get_state() - get TTLM state
+ * @ml_peer: MLO Peer context
+ *
+ * API to get TTLM state
+ *
+ * Return: State of TTLM
+ */
+enum wlan_ttlm_sm_state ttlm_get_state(struct wlan_mlo_peer_context *ml_peer);
+
+/**
+ * ttlm_get_sub_state() - get TTLM substate
+ * @ml_peer: MLO peer context
+ *
+ * API to get TTLM substate
+ *
+ * Return: Substate of TTLM
+ */
+enum wlan_ttlm_sm_state ttlm_get_sub_state(
+			struct wlan_mlo_peer_context *ml_peer);
+
+#else
+static inline
+enum wlan_ttlm_sm_state ttlm_get_state(struct wlan_mlo_peer_context *ml_peer)
+{
+	return WLAN_TTLM_S_MAX;
+}
+
+static inline
+enum wlan_ttlm_sm_state ttlm_get_sub_state(
+				struct wlan_mlo_peer_context *ml_peer)
+{
+	return WLAN_TTLM_SS_MAX;
+}
+#endif
 
 /**
  * struct wlan_t2lm_info - TID-to-Link mapping information for the frames
