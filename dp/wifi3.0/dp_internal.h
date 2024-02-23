@@ -1475,6 +1475,7 @@ void DP_PRINT_STATS(const char *fmt, ...);
 #define FRAME_MASK_IPV6_DHCP  0x8
 #define FRAME_MASK_DNS_QUERY  0x10
 #define FRAME_MASK_DNS_RESP   0x20
+#define FRAME_MASK_IPV4_WAPI  0x40
 
 static inline int dp_log2_ceil(unsigned int value)
 {

@@ -278,7 +278,9 @@ bool dp_rx_is_special_frame(qdf_nbuf_t nbuf, uint32_t frame_mask)
 	    ((frame_mask & FRAME_MASK_DNS_QUERY) &&
 	     qdf_nbuf_data_is_dns_query(nbuf)) ||
 	    ((frame_mask & FRAME_MASK_DNS_RESP) &&
-	     qdf_nbuf_data_is_dns_response(nbuf)))
+	     qdf_nbuf_data_is_dns_response(nbuf)) ||
+	    ((frame_mask & FRAME_MASK_IPV4_WAPI) &&
+	     qdf_nbuf_is_ipv4_wapi_pkt(nbuf)))
 		return true;
 
 	return false;
