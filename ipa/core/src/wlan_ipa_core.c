@@ -4589,6 +4589,33 @@ void wlan_ipa_destroy_opt_wifi_flt_cb_event(struct wlan_ipa_priv *ipa_ctx)
 }
 
 /**
+ * wlan_ipa_ctrl_flt_db_deinit - clean db on wlan SSR event in
+ *	opt_dp_ctrl feature
+ * @ipa_obj: IPA context
+ *
+ * Return: void
+ */
+static inline
+void wlan_ipa_ctrl_flt_db_deinit(struct wlan_ipa_priv *ipa_obj)
+{
+	struct wifi_dp_tx_flt_setup *dp_flt_params = NULL;
+	int i;
+
+	dp_flt_params = &ipa_obj->dp_tx_super_rule_flt_param;
+	ipa_debug("opt_dp_ctrl: clean filter DB on SSR event");
+	for (i = 0; i < TX_SUPER_RULE_SETUP_NUM; i++) {
+		if (dp_flt_params->flt_addr_params[i].ipa_flt_in_use) {
+			ipa_debug("opt_dp_ctrl: handle deleted on SSR event - %d",
+				  dp_flt_params->flt_addr_params[i].flt_hdl);
+			dp_flt_params->flt_addr_params[i].ipa_flt_in_use = 0;
+			qdf_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
+				ipa_obj->hdl,
+				dp_flt_params->flt_addr_params[i].flt_hdl);
+		}
+	}
+}
+
+/**
  * wlan_ipa_opt_dp_deinit() - Perform opt_wifi_dp deinit steps
  * @ipa_ctx: IPA context
  *
@@ -4604,6 +4631,9 @@ void wlan_ipa_opt_dp_deinit(struct wlan_ipa_priv *ipa_ctx)
 		qdf_wake_lock_destroy(&ipa_ctx->opt_dp_wake_lock);
 		qdf_event_destroy(&ipa_ctx->ipa_opt_dp_ctrl_clk_evt);
 	}
+
+	if (ipa_ctx->opt_wifi_datapath_ctrl)
+		wlan_ipa_ctrl_flt_db_deinit(ipa_ctx);
 
 	if (cdp_ipa_get_smmu_mapped(ipa_ctx->dp_soc) ||
 	    ipa_ctx->opt_wifi_datapath_ctrl) {
