@@ -1011,29 +1011,6 @@ void mlo_sta_link_disconn_notify(struct wlan_objmgr_vdev *vdev,
 				 struct wlan_cm_discon_rsp *resp)
 { }
 
-#ifdef ENABLE_CFG80211_BACKPORTS_MLO
-static inline struct mlo_link_info
-*mlo_mgr_get_ap_link_by_link_id(struct wlan_mlo_dev_context *mlo_dev_ctx,
-				int link_id)
-{
-	struct mlo_link_info *link_info;
-	uint8_t link_info_iter;
-
-	if (!mlo_dev_ctx || link_id < 0 || link_id >= MAX_MLO_LINK_ID)
-		return NULL;
-
-	link_info = &mlo_dev_ctx->link_ctx->links_info[0];
-	for (link_info_iter = 0; link_info_iter < WLAN_MAX_ML_BSS_LINKS;
-			link_info_iter++) {
-		if (link_info->link_id == link_id)
-			return link_info;
-		link_info++;
-	}
-
-	return NULL;
-}
-#endif
-
 #ifndef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 static inline
 bool ucfg_mlo_is_mld_connected(struct wlan_objmgr_vdev *vdev)

@@ -703,6 +703,10 @@ QDF_STATUS osif_update_mlo_partner_info(
 		return QDF_STATUS_SUCCESS;
 	}
 
+	if (!req->ap_mld_addr) {
+		/* For MLD fallback case */
+		return QDF_STATUS_SUCCESS;
+	}
 	wlan_vdev_set_link_id(vdev, req->link_id);
 	wlan_vdev_mlme_set_mlo_vdev(vdev);
 	partner_info.num_partner_links = 0;
