@@ -6807,30 +6807,74 @@ static void dp_print_nss(char *nss, uint32_t *pnss, uint32_t ss_count)
 static void dp_print_jitter_stats(struct dp_peer *peer, struct dp_pdev *pdev)
 {
 	uint8_t tid = 0;
+	struct dp_txrx_peer *txrx_peer = NULL;
+	struct cdp_peer_tid_stats *rx_tid = NULL;
+	struct cdp_peer_tid_stats *jitter_stats = NULL;
+	uint32_t tx_avg_jitter, tx_avg_delay;
+	uint64_t tx_avg_err, tx_total_success, tx_drop;
+	uint8_t ring_id;
 
-	if (!pdev || !wlan_cfg_get_dp_pdev_nss_enabled(pdev->wlan_cfg_ctx))
+	if (!pdev)
 		return;
 
-	if (!peer->txrx_peer || !peer->txrx_peer->jitter_stats)
+	if (!wlan_cfg_is_peer_jitter_stats_enabled(pdev->soc->wlan_cfg_ctx))
+		return;
+
+	txrx_peer = dp_get_txrx_peer(peer);
+	if (!txrx_peer || !txrx_peer->jitter_stats)
 		return;
 
 	DP_PRINT_STATS("Per TID Tx HW Enqueue-Comp Jitter Stats:\n");
-	for (tid = 0; tid < qdf_min(CDP_DATA_TID_MAX, DP_MAX_TIDS); tid++) {
-		struct cdp_peer_tid_stats *rx_tid =
-					&peer->txrx_peer->jitter_stats[tid];
+	if (wlan_cfg_get_dp_pdev_nss_enabled(pdev->wlan_cfg_ctx)) {
+		for (tid = 0; tid < qdf_min(CDP_DATA_TID_MAX, DP_MAX_TIDS); tid++) {
+			rx_tid =
+				&txrx_peer->jitter_stats[tid];
+			DP_PRINT_STATS("Node tid = %d\n"
+				       "Average Jiiter            : %u (us)\n"
+				       "Average Delay             : %u (us)\n"
+				       "Total Average error count : %llu\n"
+				       "Total Success Count       : %llu\n"
+				       "Total Drop                : %llu\n",
+				       tid,
+				       rx_tid->tx_avg_jitter,
+				       rx_tid->tx_avg_delay,
+				       rx_tid->tx_avg_err,
+				       rx_tid->tx_total_success,
+				       rx_tid->tx_drop);
+		}
 
-		DP_PRINT_STATS("Node tid = %d\n"
-				"Average Jiiter            : %u (us)\n"
-				"Average Delay             : %u (us)\n"
-				"Total Average error count : %llu\n"
-				"Total Success Count       : %llu\n"
-				"Total Drop                : %llu\n",
-				tid,
-				rx_tid->tx_avg_jitter,
-				rx_tid->tx_avg_delay,
-				rx_tid->tx_avg_err,
-				rx_tid->tx_total_success,
-				rx_tid->tx_drop);
+	} else {
+		jitter_stats = txrx_peer->jitter_stats;
+		for (tid = 0; tid < qdf_min(CDP_DATA_TID_MAX, DP_MAX_TIDS); tid++) {
+			tx_avg_jitter = 0, tx_avg_delay = 0;
+			tx_avg_err = 0, tx_total_success = 0, tx_drop = 0;
+			for (ring_id = 0; ring_id < CDP_MAX_TXRX_CTX; ring_id++) {
+				rx_tid = &jitter_stats[tid *
+						CDP_MAX_TXRX_CTX + ring_id];
+				tx_avg_jitter = (rx_tid->tx_avg_jitter +
+						tx_avg_jitter) >> 1;
+				tx_avg_delay = (rx_tid->tx_avg_delay +
+						tx_avg_delay) >> 1;
+				tx_avg_err = (rx_tid->tx_avg_err +
+						tx_avg_err) >> 1;
+				tx_total_success += rx_tid->tx_total_success;
+				tx_drop += rx_tid->tx_drop;
+			}
+
+			DP_PRINT_STATS("Node tid = %d\n"
+				       "Average Jiiter            : %u (us)\n"
+				       "Average Delay             : %u (us)\n"
+				       "Total Average error count : %llu\n"
+				       "Total Success Count       : %llu\n"
+				       "Total Drop                : %llu\n",
+				       tid,
+				       tx_avg_jitter,
+				       tx_avg_delay,
+				       tx_avg_err,
+				       tx_total_success,
+				       tx_drop);
+		}
+
 	}
 }
 #else
