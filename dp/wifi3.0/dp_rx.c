@@ -2335,8 +2335,9 @@ dp_rx_validate_rx_callbacks(struct dp_soc *soc,
 		} else {
 			num_nbuf = dp_rx_drop_nbuf_list(vdev->pdev,
 							nbuf_head);
-			DP_PEER_TO_STACK_DECC(txrx_peer, num_nbuf,
-					      vdev->pdev->enhanced_stats_en);
+			if (txrx_peer)
+				DP_PEER_TO_STACK_DECC(txrx_peer, num_nbuf,
+						      vdev->pdev->enhanced_stats_en);
 		}
 		return QDF_STATUS_E_FAILURE;
 	}
