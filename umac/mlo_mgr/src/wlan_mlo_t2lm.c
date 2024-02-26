@@ -30,8 +30,644 @@
 #include <wlan_t2lm_api.h>
 #endif
 #include <wlan_mlo_mgr_sta.h>
+#include <wlan_sm_engine.h>
 
 #ifdef WLAN_FEATURE_11BE_MLO_TTLM
+void ttlm_set_state(struct wlan_mlo_peer_context *ml_peer,
+		    enum wlan_ttlm_sm_state state)
+{
+	if (state < WLAN_TTLM_S_MAX)
+		ml_peer->ttlm_sm.ttlm_state = state;
+	else
+		t2lm_err("ML peer %d state (%d) is invalid",
+			 ml_peer->mlo_peer_id, state);
+}
+
+void ttlm_set_substate(struct wlan_mlo_peer_context *ml_peer,
+		       enum wlan_ttlm_sm_state substate)
+{
+	if (substate > WLAN_TTLM_S_MAX && substate < WLAN_TTLM_SS_MAX)
+		ml_peer->ttlm_sm.ttlm_substate = substate;
+	else
+		t2lm_err("ML peer %d sub state (%d) is invalid",
+			 ml_peer->mlo_peer_id, substate);
+}
+
+void ttlm_sm_state_update(struct wlan_mlo_peer_context *ml_peer,
+			  enum wlan_ttlm_sm_state state,
+			  enum wlan_ttlm_sm_state substate)
+{
+	if (!ml_peer)
+		return;
+
+	ttlm_set_state(ml_peer, state);
+	ttlm_set_substate(ml_peer, substate);
+}
+
+void ttlm_lock_create(struct wlan_mlo_peer_context *ml_peer)
+{
+	qdf_mutex_create(&ml_peer->ttlm_sm.ttlm_sm_lock);
+}
+
+void ttlm_lock_destroy(struct wlan_mlo_peer_context *ml_peer)
+{
+	qdf_mutex_destroy(&ml_peer->ttlm_sm.ttlm_sm_lock);
+}
+
+void ttlm_lock_acquire(struct wlan_mlo_peer_context *ml_peer)
+{
+	qdf_mutex_acquire(&ml_peer->ttlm_sm.ttlm_sm_lock);
+}
+
+void ttlm_lock_release(struct wlan_mlo_peer_context *ml_peer)
+{
+	qdf_mutex_release(&ml_peer->ttlm_sm.ttlm_sm_lock);
+}
+
+void ttlm_sm_transition_to(struct wlan_mlo_peer_context *ml_peer,
+			   enum wlan_ttlm_sm_state state)
+{
+	wlan_sm_transition_to(ml_peer->ttlm_sm.sm_hdl, state);
+}
+
+QDF_STATUS ttlm_sm_deliver_event_sync(struct wlan_mlo_peer_context *ml_peer,
+				      enum wlan_ttlm_sm_evt event,
+				      uint16_t data_len, void *data)
+{
+	return wlan_sm_dispatch(ml_peer->ttlm_sm.sm_hdl, event, data_len, data);
+}
+
+/**
+ * ttlm_state_init_entry() - Entry API for init state for TTLM
+ * @ctx: MLO peer ctx
+ *
+ * API to perform operations on moving to init state
+ *
+ * Return: void
+ */
+static void ttlm_state_init_entry(void *ctx)
+{
+	struct wlan_mlo_peer_context *ml_peer = ctx;
+
+	ttlm_set_state(ml_peer, WLAN_TTLM_S_INIT);
+}
+
+/**
+ * ttlm_state_init_exit() - Exit API for init state for TTLM
+ * @ctx: MLO peer ctx
+ *
+ * API to perform operations on exiting from init state
+ *
+ * Return: void
+ */
+static void ttlm_state_init_exit(void *ctx)
+{
+}
+
+/**
+ * ttlm_state_init_event() - Init State event handler for TTLM
+ * @ctx: MLO peer context
+ * @event: event
+ * @data_len: length of @data
+ * @data: event data
+ *
+ * API to handle events in INIT state
+ *
+ * Return: bool
+ */
+static bool ttlm_state_init_event(void *ctx, uint16_t event, uint16_t data_len,
+				  void *data)
+{
+	bool event_handler = true;
+
+	switch (event) {
+	case WLAN_TTLM_SM_EV_TX_ACTION_REQ:
+		break;
+	case WLAN_TTLM_SM_EV_RX_ACTION_REQ:
+		break;
+	case WLAN_TTLM_SM_EV_BEACON:
+		break;
+	case WLAN_TTLM_SM_EV_BTM_LINK_DISABLE:
+		break;
+	default:
+		event_handler = false;
+		break;
+	}
+
+	return event_handler;
+}
+
+/**
+ * ttlm_state_inprogress_entry() - Entry API for INPROGRESS state for TTLM
+ * @ctx: MLO peer ctx
+ *
+ * API to perform operations on moving to inprogress state
+ *
+ * Return: void
+ */
+static void ttlm_state_inprogress_entry(void *ctx)
+{
+	struct wlan_mlo_peer_context *ml_peer = ctx;
+
+	ttlm_set_state(ml_peer, WLAN_TTLM_S_INPROGRESS);
+}
+
+/**
+ * ttlm_state_inprogress_exit() - Exit API for INPROGRESS state for TTLM
+ * @ctx: MLO peer ctx
+ *
+ * API to perform operations on exiting from inprogress state
+ *
+ * Return: void
+ */
+static void ttlm_state_inprogress_exit(void *ctx)
+{
+}
+
+/**
+ * ttlm_state_inprogress_event() - INPROGRESS state event handler for TTLM
+ * @ctx: MLO peer ctx
+ * @event: event
+ * @data_len: length of @data
+ * @data: event data
+ *
+ * API to handle events in INPROGRESS state
+ *
+ * Return: bool
+ */
+static bool ttlm_state_inprogress_event(void *ctx, uint16_t event,
+					uint16_t data_len, void *data)
+{
+	bool event_handler = true;
+
+	switch (event) {
+	default:
+		event_handler = false;
+		break;
+	}
+
+	return event_handler;
+}
+
+/**
+ * ttlm_state_negotiated_entry() - Entry API for NEGOTIATED state for TTLM
+ * @ctx: MLO peer ctx
+ *
+ * API to perform operations on moving to negotiated state
+ *
+ * Return: void
+ */
+static void ttlm_state_negotiated_entry(void *ctx)
+{
+	struct wlan_mlo_peer_context *ml_peer = ctx;
+
+	ttlm_set_state(ml_peer, WLAN_TTLM_S_NEGOTIATED);
+}
+
+/**
+ * ttlm_state_negotiated_exit() - Exit API for NEGOTIATED state for TTLM
+ * @ctx: MLO peer ctx
+ *
+ * API to perform operations on exiting from negotiated state
+ *
+ * Return: void
+ */
+static void ttlm_state_negotiated_exit(void *ctx)
+{
+}
+
+/**
+ * ttlm_state_negotiated_event() - NEGOTIATED state event handler for TTLM
+ * @ctx: MLO peer ctx
+ * @event: event
+ * @data_len: length of @data
+ * @data: event data
+ *
+ * API to handle events in NEGOTIATED state
+ *
+ * Return: true if event handle is SUCCESSFUL else false
+ */
+static bool ttlm_state_negotiated_event(void *ctx, uint16_t event,
+					uint16_t data_len, void *data)
+{
+	bool event_handler = true;
+
+	switch (event) {
+	default:
+		event_handler = false;
+		break;
+	}
+
+	return event_handler;
+}
+
+/**
+ * ttlm_subst_sta_inprogress_entry() - Entry API for STA INPROGRESS sub-state
+ * for TTLM
+ * @ctx: MLO peer ctx
+ *
+ * API to perform operations on moving to STA INPROGRESS sub-state
+ *
+ * Return: void
+ */
+static void ttlm_subst_sta_inprogress_entry(void *ctx)
+{
+	struct wlan_mlo_peer_context *ml_peer = ctx;
+
+	if (ttlm_get_state(ml_peer) != WLAN_TTLM_S_INPROGRESS)
+		QDF_BUG(0);
+
+	ttlm_set_substate(ml_peer, WLAN_TTLM_SS_STA_INPROGRESS);
+}
+
+/**
+ * ttlm_subst_sta_inprogress_exit() - Exit API for STA INPROGRESS sub-state for
+ * TTLM
+ * @ctx: MLO peer ctx
+ *
+ * API to perform operations on exiting from STA INPROGRESS sub-state
+ *
+ * Return: void
+ */
+static void ttlm_subst_sta_inprogress_exit(void *ctx)
+{
+}
+
+/**
+ * ttlm_subst_sta_inprogress_event() - STA INPROGRESS sub-state event handler
+ * for TTLM
+ * @ctx: MLO peer ctx
+ * @event: event
+ * @data_len: length of @data
+ * @data: event data
+ *
+ * API to handle events in STA INPROGRESS sub-state
+ *
+ * Return: bool
+ */
+static bool ttlm_subst_sta_inprogress_event(void *ctx, uint16_t event,
+					    uint16_t data_len, void *data)
+{
+	bool event_handler = true;
+
+	switch (event) {
+	default:
+		event_handler = false;
+		break;
+	}
+
+	return event_handler;
+}
+
+/**
+ * ttlm_subst_ap_action_inprogress_entry() - Entry API for AP ACTION INPROGRESS
+ * sub-state for TTLM
+ * @ctx: MLO peer ctx
+ *
+ * API to perform operations on moving to AP ACTION INPROGRESS sub-state
+ *
+ * Return: void
+ */
+static void ttlm_subst_ap_action_inprogress_entry(void *ctx)
+{
+	struct wlan_mlo_peer_context *ml_peer = ctx;
+
+	if (ttlm_get_state(ml_peer) != WLAN_TTLM_S_INPROGRESS)
+		QDF_BUG(0);
+
+	ttlm_set_substate(ml_peer, WLAN_TTLM_SS_AP_ACTION_INPROGRESS);
+}
+
+/**
+ * ttlm_subst_ap_action_inprogress_exit() - Exit API for AP ACTION INPROGRESS
+ * sub-state for TTLM
+ * @ctx: MLO peer ctx
+ *
+ * API to perform operations on exiting from AP ACTION INPROGRESS sub-state
+ *
+ * Return: void
+ */
+static void ttlm_subst_ap_action_inprogress_exit(void *ctx)
+{
+}
+
+/**
+ * ttlm_subst_ap_action_inprogress_event() - AP ACTION INPROGRESS sub-state
+ * event handler for TTLM
+ * @ctx: MLO peer ctx
+ * @event: event
+ * @data_len: length of @data
+ * @data: event data
+ *
+ * API to handle events in AP ACTION INPROGRESS sub-state
+ *
+ * Return: true if event handle is successful else false
+ */
+static bool ttlm_subst_ap_action_inprogress_event(void *ctx, uint16_t event,
+						  uint16_t data_len, void *data)
+{
+	bool event_handler = true;
+
+	switch (event) {
+	default:
+		event_handler = false;
+		break;
+	}
+
+	return event_handler;
+}
+
+/**
+ * ttlm_subst_ap_beacon_inprogress_entry() - Entry API for AP BEACON INPROGRESS
+ * sub-state for TTLM
+ * @ctx: MLO peer ctx
+ *
+ * API to perform operations on moving to AP BEACON INPROGRESS sub-state
+ *
+ * Return: void
+ */
+static void ttlm_subst_ap_beacon_inprogress_entry(void *ctx)
+{
+	struct wlan_mlo_peer_context *ml_peer = ctx;
+
+	if (ttlm_get_state(ml_peer) != WLAN_TTLM_S_INPROGRESS)
+		QDF_BUG(0);
+
+	ttlm_set_substate(ml_peer, WLAN_TTLM_SS_AP_BEACON_INPROGRESS);
+}
+
+/**
+ * ttlm_subst_ap_beacon_inprogress_exit() - Exit API for AP BEACON INPROGRESS
+ * sub-state for TTLM
+ * @ctx: MLO peer ctx
+ *
+ * API to perform operations on exiting from AP BEACON INPROGRESS  sub-state
+ *
+ * Return: void
+ */
+static void ttlm_subst_ap_beacon_inprogress_exit(void *ctx)
+{
+}
+
+/**
+ * ttlm_subst_ap_beacon_inprogress_event() - AP BEACON INPROGRESS sub-state
+ *event handler for TTLM
+ * @ctx: MLO peer ctx
+ * @event: event
+ * @data_len: length of @data
+ * @data: event data
+ *
+ * API to handle events in AP BEACON INPROGRESS sub-state
+ *
+ * Return: true if event handle is successful else false
+ */
+static bool ttlm_subst_ap_beacon_inprogress_event(void *ctx, uint16_t event,
+						  uint16_t data_len, void *data)
+{
+	bool event_handler = true;
+
+	switch (event) {
+	default:
+		event_handler = false;
+		break;
+	}
+
+	return event_handler;
+}
+
+/**
+ * ttlm_subst_ap_btm_inprogress_entry() - Entry API for AP BTM INPROGRESS
+ * sub-state for TTLM
+ * @ctx: MLO peer ctx
+ *
+ * API to perform operations on moving to AP BTM INPROGRESS sub-state
+ *
+ * Return: void
+ */
+static void ttlm_subst_ap_btm_inprogress_entry(void *ctx)
+{
+	struct wlan_mlo_peer_context *ml_peer = ctx;
+
+	if (ttlm_get_state(ml_peer) != WLAN_TTLM_S_INPROGRESS)
+		QDF_BUG(0);
+
+	ttlm_set_substate(ml_peer, WLAN_TTLM_SS_AP_BTM_INPROGRESS);
+}
+
+/**
+ * ttlm_subst_ap_btm_inprogress_exit() - Exit API for AP BTM INPROGRESS
+ * sub-state for TTLM
+ * @ctx: MLO peer ctx
+ *
+ * API to perform operations on exiting from AP BTM INPROGRESS sub-state
+ *
+ * Return: void
+ */
+static void ttlm_subst_ap_btm_inprogress_exit(void *ctx)
+{
+}
+
+/**
+ * ttlm_subst_ap_btm_inprogress_event() - AP BTM INPROGRESS sub-state event
+ * handler for TTLM
+ * @ctx: MLO peer ctx
+ * @event: event
+ * @data_len: length of @data
+ * @data: event data
+ *
+ * API to handle events in AP BTM INPROGRESS sub-state
+ *
+ * Return: bool
+ */
+static bool ttlm_subst_ap_btm_inprogress_event(void *ctx, uint16_t event,
+					       uint16_t data_len, void *data)
+{
+	bool event_handler = true;
+
+	switch (event) {
+	default:
+		event_handler = false;
+		break;
+	}
+
+	return event_handler;
+}
+
+/**
+ * ttlm_subst_teardown_inprogress_entry() - Entry API for TEARDOWN INPROGRESS
+ * sub-state for TTLM
+ * @ctx: MLO peer ctx
+ *
+ * API to perform operations on moving to TEARDOWN INPROGRESS sub-state
+ *
+ * Return: void
+ */
+static void ttlm_subst_teardown_inprogress_entry(void *ctx)
+{
+	struct wlan_mlo_peer_context *ml_peer = ctx;
+
+	if (ttlm_get_state(ml_peer) != WLAN_TTLM_S_INPROGRESS)
+		QDF_BUG(0);
+
+	ttlm_set_substate(ml_peer, WLAN_TTLM_SS_TEARDOWN_INPROGRESS);
+}
+
+/**
+ * ttlm_subst_teardown_inprogress_exit() - Exit API for TEARDOWN INPROGRESS
+ * sub-state for TTLM
+ * @ctx: MLO peer ctx
+ *
+ * API to perform operations on exiting from TEARDOWN INPROGRESS sub-state
+ *
+ * Return: void
+ */
+static void ttlm_subst_teardown_inprogress_exit(void *ctx)
+{
+}
+
+/**
+ * ttlm_subst_teardown_inprogress_event() - TEARDOWN INPROGRESS sub-state event
+ * handler for TTLM
+ * @ctx: MLO peer ctx
+ * @event: event
+ * @data_len: length of @data
+ * @data: event data
+ *
+ * API to handle events in TEARDOWN INPROGRESS sub-state
+ *
+ * Return: bool
+ */
+static bool ttlm_subst_teardown_inprogress_event(void *ctx, uint16_t event,
+						 uint16_t data_len, void *data)
+{
+	bool event_handler = true;
+
+	switch (event) {
+	default:
+		event_handler = false;
+		break;
+	}
+
+	return event_handler;
+}
+#else
+static inline void ttlm_state_init_entry(void *ctx)
+{
+}
+
+static inline void ttlm_state_init_exit(void *ctx)
+{
+}
+
+static inline bool ttlm_state_init_event(void *ctx, uint16_t event,
+					 uint16_t data_len, void *data)
+{
+return true;
+}
+
+static inline void ttlm_state_inprogress_entry(void *ctx)
+{
+}
+
+static inline void ttlm_state_inprogress_exit(void *ctx)
+{
+}
+
+static inline bool ttlm_state_inprogress_event(void *ctx, uint16_t event,
+					       uint16_t data_len, void *data)
+{
+return true;
+}
+
+static inline void ttlm_state_negotiated_entry(void *ctx)
+{
+}
+
+static inline void ttlm_state_negotiated_exit(void *ctx)
+{
+}
+
+static inline bool ttlm_state_negotiated_event(void *ctx, uint16_t event,
+					       uint16_t data_len, void *data)
+{
+return true;
+}
+
+static inline void ttlm_subst_sta_inprogress_entry(void *ctx)
+{
+}
+
+static inline void ttlm_subst_sta_inprogress_exit(void *ctx)
+{
+}
+
+static inline ttlm_subst_sta_inprogress_event(void *ctx, uint16_t event,
+					      uint16_t data_len, void *data)
+{
+return true;
+}
+
+static inline void ttlm_subst_ap_action_inprogress_entry(void *ctx)
+{
+}
+
+static inline void ttlm_subst_ap_action_inprogress_exit(void *ctx)
+{
+}
+
+static inline
+bool ttlm_subst_ap_action_inprogress_event(void *ctx, uint16_t event,
+					   uint16_t data_len, void *data)
+{
+return true;
+}
+
+static inline void ttlm_subst_ap_beacon_inprogress_entry(void *ctx)
+{
+}
+
+static inline void ttlm_subst_ap_beacon_inprogress_exit(void *ctx)
+{
+}
+
+static inline
+bool ttlm_subst_ap_beacon_inprogress_event(void *ctx, uint16_t event,
+					   uint16_t data_len, void *data)
+{
+	return true;
+}
+
+static inline void ttlm_subst_ap_btm_inprogress_entry(void *ctx)
+{
+}
+
+static inline void ttlm_subst_ap_btm_inprogress_exit(void *ctx)
+{
+}
+
+static inline
+bool ttlm_subst_ap_btm_inprogress_event(void *ctx, uint16_t event,
+					uint16_t data_len, void *data)
+{
+	return true;
+}
+
+static inline void ttlm_subst_teardown_inprogress_entry(void *ctx)
+{
+}
+
+static inline void ttlm_subst_teardown_inprogress_exit(void *ctx)
+{
+}
+
+static inline
+bool ttlm_subst_teardown_inprogress_event(void *ctx, uint16_t event,
+					  uint16_t data_len, void *data)
+{
+	return true;
+}
+#endif
+
 struct wlan_sm_state_info ttlm_sm_info[] = {
 	{
 		(uint8_t)WLAN_TTLM_S_INIT,
@@ -146,6 +782,7 @@ static const char *ttlm_sm_event_names[] = {
 	"EV_RX_TEARDOWN",
 };
 
+#ifdef WLAN_FEATURE_11BE_MLO_TTLM
 enum wlan_ttlm_sm_state ttlm_get_state(struct wlan_mlo_peer_context *ml_peer)
 {
 	if (!ml_peer)
@@ -171,7 +808,7 @@ static void ttlm_sm_print_state_event(struct wlan_mlo_peer_context *ml_peer,
 	state = ttlm_get_state(ml_peer);
 	substate = ttlm_get_sub_state(ml_peer);
 
-	ttlm_nofl_debug("[%s]%s - %s, %s", ml_peer->ttlm_sm.sm_hdl->name,
+	t2lm_nofl_debug("[%s]%s - %s, %s", ml_peer->ttlm_sm.sm_hdl->name,
 			ttlm_sm_info[state].name, ttlm_sm_info[substate].name,
 			ttlm_sm_event_names[event]);
 }
@@ -183,8 +820,66 @@ static void ttlm_sm_print_state(struct wlan_mlo_peer_context *ml_peer)
 	state = ttlm_get_state(ml_peer);
 	substate = ttlm_get_sub_state(ml_peer);
 
-	ttlm_nofl_debug("[%s]%s - %s", ml_peer->ttlm_sm.sm_hdl->name,
+	t2lm_nofl_debug("[%s]%s - %s", ml_peer->ttlm_sm.sm_hdl->name,
 			ttlm_sm_info[state].name, ttlm_sm_info[substate].name);
+}
+
+QDF_STATUS ttlm_sm_deliver_event(struct wlan_mlo_peer_context *ml_peer,
+				 enum wlan_ttlm_sm_evt event,
+				 uint16_t data_len, void *data)
+{
+	QDF_STATUS status;
+	enum wlan_ttlm_sm_state state_entry, state_exit;
+	enum wlan_ttlm_sm_state substate_entry, substate_exit;
+
+	ttlm_lock_acquire(ml_peer);
+
+	/* store entry state and sub state for prints */
+	state_entry = ttlm_get_state(ml_peer);
+	substate_entry = ttlm_get_sub_state(ml_peer);
+	ttlm_sm_print_state_event(ml_peer, event);
+
+	status = ttlm_sm_deliver_event_sync(ml_peer, event, data_len, data);
+	/* Take exit state, exit substate for prints */
+	state_exit = ttlm_get_state(ml_peer);
+	substate_exit = ttlm_get_sub_state(ml_peer);
+	/* If no state and substate change, don't print */
+	if (!(state_entry == state_exit && substate_entry == substate_exit))
+		ttlm_sm_print_state(ml_peer);
+
+	ttlm_lock_release(ml_peer);
+
+	return status;
+}
+
+QDF_STATUS ttlm_sm_create(struct wlan_mlo_peer_context *ml_peer)
+{
+	struct wlan_sm *sm;
+	uint8_t name[WLAN_SM_ENGINE_MAX_NAME];
+
+	qdf_scnprintf(name, sizeof(name), "TTLM-Peer MLD:" QDF_MAC_ADDR_FMT,
+		      QDF_MAC_ADDR_REF(ml_peer->peer_mld_addr.bytes));
+	sm = wlan_sm_create(name, ml_peer, WLAN_TTLM_S_INIT, ttlm_sm_info,
+			    QDF_ARRAY_SIZE(ttlm_sm_info), ttlm_sm_event_names,
+			    QDF_ARRAY_SIZE(ttlm_sm_event_names));
+	if (!sm) {
+		t2lm_err("TTLM state machine creation failed");
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	ml_peer->ttlm_sm.sm_hdl = sm;
+
+	ttlm_lock_create(ml_peer);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS ttlm_sm_destroy(struct wlan_mlo_peer_context *ml_peer)
+{
+	ttlm_lock_destroy(ml_peer);
+	wlan_sm_delete(ml_peer->ttlm_sm.sm_hdl);
+
+	return QDF_STATUS_SUCCESS;
 }
 #endif
 

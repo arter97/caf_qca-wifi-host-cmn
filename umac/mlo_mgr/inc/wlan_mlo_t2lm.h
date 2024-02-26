@@ -28,7 +28,7 @@
 #endif
 
 struct mlo_vdev_host_tid_to_link_map_resp;
-struct wlan_mlo_dev_context;
+struct wlan_mlo_peer_context;
 
 /* Max T2LM TIDS count */
 #define T2LM_MAX_NUM_TIDS 8
@@ -51,8 +51,6 @@ struct wlan_mlo_dev_context;
  * advance timer expiry in STA by 100ms (= 98 * 1024 / 1000 = 100).
  */
 #define WLAN_T2LM_MAPPING_SWITCH_TIME_DELAY 98
-
-struct wlan_mlo_peer_context;
 
 /**
  * enum wlan_t2lm_direction - Indicates the direction for which TID-to-link
@@ -233,6 +231,147 @@ enum wlan_ttlm_sm_state ttlm_get_state(struct wlan_mlo_peer_context *ml_peer);
 enum wlan_ttlm_sm_state ttlm_get_sub_state(
 			struct wlan_mlo_peer_context *ml_peer);
 
+/**
+ * ttlm_set_state() - set TTLM state
+ * @ml_peer: ML peer context
+ * @state: TTLM state
+ *
+ * API to set TTLM state
+ *
+ * Return: void
+ */
+void ttlm_set_state(struct wlan_mlo_peer_context *ml_peer,
+		    enum wlan_ttlm_sm_state state);
+
+/**
+ * ttlm_set_substate() - set TTLM sub state
+ * @ml_peer: ML peer context
+ * @substate: TTLM sub state
+ *
+ * API to set TTLM sub state
+ *
+ * Return: void
+ */
+void ttlm_set_substate(struct wlan_mlo_peer_context *ml_peer,
+		       enum wlan_ttlm_sm_state substate);
+
+/**
+ * ttlm_sm_state_update() - set TTLM state and sub state
+ * @ml_peer: ML peer context
+ * @state: TTLM state
+ * @substate: TTLM sub state
+ *
+ * API to invoke util APIs to set TTLM state and sub state
+ *
+ * Return: void
+ */
+void ttlm_sm_state_update(struct wlan_mlo_peer_context *ml_peer,
+			  enum wlan_ttlm_sm_state state,
+			  enum wlan_ttlm_sm_state substate);
+
+/**
+ * ttlm_lock_create() - Create ttlm sm lock
+ * @ml_peer: ML peer context
+ *
+ * Return: void
+ */
+void ttlm_lock_create(struct wlan_mlo_peer_context *ml_peer);
+
+/**
+ * ttlm_lock_destroy() - Destroy the TTLM sm lock
+ * @ml_peer: ML peer context
+ *
+ * Return: void
+ */
+void ttlm_lock_destroy(struct wlan_mlo_peer_context *ml_peer);
+
+/**
+ * ttlm_lock_acquire() - Acquire the TTLM SM lock
+ * @ml_peer: MLO Peer context
+ *
+ * Return: void
+ */
+void ttlm_lock_acquire(struct wlan_mlo_peer_context *ml_peer);
+
+/**
+ * ttlm_lock_release() - Release the TTLM SM lock
+ * @ml_peer: MLO peer context
+ *
+ * Return: void
+ */
+void ttlm_lock_release(struct wlan_mlo_peer_context *ml_peer);
+
+/**
+ * ttlm_sm_transition_to() - Invoke state transition
+ * @ml_peer: MLO peer context
+ * @state: new TTLM state
+ *
+ * API to invoke SM API to move to new state
+ *
+ * Return: void
+ */
+void ttlm_sm_transition_to(struct wlan_mlo_peer_context *ml_peer,
+			   enum wlan_ttlm_sm_state state);
+
+/**
+ * ttlm_sm_deliver_event_sync() - Delivers event to TTLM SM while holding lock
+ * @ml_peer: MLO peer context
+ * @event: TTLM event
+ * @data_len: data size
+ * @data: event data
+ *
+ * API to dispatch event to TTLM SM without lock, in case lock is already held.
+ *
+ * Context: Can be called from any context, This should be called in case
+ * SM lock is already taken. If lock is not taken use ttlm_sm_deliver_event API
+ * instead.
+ *
+ * Return: SUCCESS: on handling event
+ *         FAILURE: If event not handled
+ */
+QDF_STATUS ttlm_sm_deliver_event_sync(struct wlan_mlo_peer_context *ml_peer,
+				      enum wlan_ttlm_sm_evt event,
+				      uint16_t data_len, void *data);
+
+/**
+ * ttlm_sm_deliver_event() - Delivers event to TTLM SM
+ * @ml_peer: MLO Peer context
+ * @event: TTLM event
+ * @data_len: data size
+ * @data: event data
+ *
+ * API to dispatch event to TTLM SM with lock. To be used while posting
+ * events from API called from public API. i.e. indication/response/request
+ * from any other module or NB/SB req/resp.
+ *
+ * Context: Can be called from any context, This should be called in case
+ * SM lock is not taken, the API will take the lock before posting to SM.
+ * If lock is already taken use ttlm_sm_deliver_event_sync API instead.
+ *
+ * Return: SUCCESS: on handling event
+ *         FAILURE: If event not handled
+ */
+QDF_STATUS ttlm_sm_deliver_event(struct wlan_mlo_peer_context *ml_peer,
+				 enum wlan_ttlm_sm_evt event,
+				 uint16_t data_len, void *data);
+
+/**
+ * ttlm_sm_create() - Invoke SM creation for TTLM
+ * @ml_peer:  MLO peer context
+ *
+ * Return: SUCCESS on successful creation
+ *         FAILURE, if creation fails
+ */
+QDF_STATUS ttlm_sm_create(struct wlan_mlo_peer_context *ml_peer);
+
+/**
+ * ttlm_sm_destroy() - Invoke SM deletion for TTLM
+ * @ml_peer: MLO peer context
+ *
+ * Return: SUCCESS on successful deletion
+ *	   FAILURE, if deletion fails
+ */
+QDF_STATUS ttlm_sm_destroy(struct wlan_mlo_peer_context *ml_peer);
 #else
 static inline
 enum wlan_ttlm_sm_state ttlm_get_state(struct wlan_mlo_peer_context *ml_peer)
@@ -245,6 +384,45 @@ enum wlan_ttlm_sm_state ttlm_get_sub_state(
 				struct wlan_mlo_peer_context *ml_peer)
 {
 	return WLAN_TTLM_SS_MAX;
+}
+
+static inline
+void ttlm_set_state(struct wlan_mlo_peer_context *ml_peer,
+		    enum wlan_ttlm_sm_state state)
+{
+}
+
+static inline
+void ttlm_set_substate(struct wlan_mlo_peer_context *ml_peer,
+		       enum wlan_ttlm_sm_state substate)
+{
+}
+
+static inline
+void ttlm_sm_state_update(struct wlan_mlo_peer_context *ml_peer,
+			  enum wlan_ttlm_sm_state state,
+			  enum wlan_ttlm_sm_state substate)
+{
+}
+
+static inline
+QDF_STATUS ttlm_sm_deliver_event(struct wlan_mlo_peer_context *ml_peer,
+				 enum wlan_ttlm_sm_evt event,
+				 uint16_t data_len, void *data)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS ttlm_sm_create(struct wlan_mlo_peer_context *ml_peer)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS ttlm_sm_destroy(struct wlan_mlo_peer_context *ml_peer)
+{
+	return QDF_STATUS_SUCCESS;
 }
 #endif
 
