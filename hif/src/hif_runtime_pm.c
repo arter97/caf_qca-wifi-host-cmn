@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -992,18 +992,20 @@ void hif_rtpm_request_resume(void)
 	hif_info_high("request RTPM resume %s", (char *)_RET_IP_);
 }
 
-void hif_rtpm_check_and_request_resume(void)
+void hif_rtpm_check_and_request_resume(bool suspend_in_progress)
 {
+	enum hif_rtpm_state state;
+
 	hif_rtpm_suspend_lock();
-	if (qdf_atomic_read(&gp_hif_rtpm_ctx->pm_state) ==
-			HIF_RTPM_STATE_SUSPENDED) {
-		hif_rtpm_suspend_unlock();
+	state = qdf_atomic_read(&gp_hif_rtpm_ctx->pm_state);
+	hif_rtpm_suspend_unlock();
+
+	if ((state == HIF_RTPM_STATE_SUSPENDED) ||
+	    (suspend_in_progress && (state == HIF_RTPM_STATE_SUSPENDING))) {
 		__hif_rtpm_request_resume(gp_hif_rtpm_ctx->dev);
 		gp_hif_rtpm_ctx->stats.request_resume_ts =
 						qdf_get_log_timestamp();
 		gp_hif_rtpm_ctx->stats.request_resume_id = HIF_RTPM_ID_RESERVED;
-	} else {
-		hif_rtpm_suspend_unlock();
 	}
 }
 
