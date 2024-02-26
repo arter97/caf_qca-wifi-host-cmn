@@ -2449,13 +2449,15 @@ done:
 			dp_rxdma_srng = &soc->rx_refill_buf_ring[mac_id];
 			rx_desc_pool = &soc->rx_desc_buf[mac_id];
 
-			dp_rx_buffers_replenish(soc, mac_id, dp_rxdma_srng,
-						rx_desc_pool,
-						rx_bufs_reaped[mac_id],
-						&dp_pdev->free_list_head,
-						&dp_pdev->free_list_tail,
-						false);
-			rx_bufs_used += rx_bufs_reaped[mac_id];
+			if (dp_pdev) {
+				dp_rx_buffers_replenish(soc, mac_id, dp_rxdma_srng,
+							rx_desc_pool,
+							rx_bufs_reaped[mac_id],
+							&dp_pdev->free_list_head,
+							&dp_pdev->free_list_tail,
+							false);
+				rx_bufs_used += rx_bufs_reaped[mac_id];
+			}
 		}
 		rx_bufs_reaped[mac_id] = 0;
 	}
