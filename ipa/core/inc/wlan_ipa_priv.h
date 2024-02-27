@@ -122,6 +122,8 @@
  * @WLAN_IPA_SMMU_UNMAP: IPA SMMU unmap call
  * @WLAN_IPA_CTRL_TX_REINJECT: REINJECT TO TX
  * @WLAN_IPA_CTRL_FILTER_DEL_NOTIFY: OPT WIFI DP CTRL filter delete notification
+ * @WLAN_IPA_CTRL_FILTER_HIGH_TPUT_NOTIFY: OPT WIFI DP CTRL filter
+ * delete notification in high TPUT
  * @WLAN_IPA_UC_OPCODE_MAX: IPA UC max operation code
  */
 enum wlan_ipa_uc_op_code {
@@ -142,6 +144,7 @@ enum wlan_ipa_uc_op_code {
 	WLAN_IPA_SMMU_UNMAP = 12,
 	WLAN_IPA_CTRL_TX_REINJECT = 13,
 	WLAN_IPA_CTRL_FILTER_DEL_NOTIFY = 14,
+	WLAN_IPA_CTRL_FILTER_HIGH_TPUT_NOTIFY = 15,
 	/* keep this last */
 	WLAN_IPA_UC_OPCODE_MAX
 };
@@ -463,6 +466,7 @@ struct ipa_uc_stas_map {
  * @rsvd_snd: Reserved
  * @vdev_id: vdev id
  * @nbuf: tx nbuf
+ * @flt_del_hdl: flt handle deleted in opt_dp_ctrl
  */
 struct op_msg_type {
 	uint8_t msg_t;
@@ -472,6 +476,7 @@ struct op_msg_type {
 	uint16_t rsvd_snd;
 	uint8_t vdev_id;
 	qdf_nbuf_t nbuf;
+	uint32_t flt_del_hdl[TX_SUPER_RULE_SETUP_NUM];
 };
 
 /**
