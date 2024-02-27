@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1477,4 +1477,28 @@ QDF_STATUS cdp_txrx_fisa_config(struct cdp_soc_t *soc, uint8_t pdev_id,
 						    cfg);
 }
 #endif
+
+/**
+ * cdp_get_pdev_mlo_timestamp_offset() - get MLO timestamp offset for the pdev
+ * @soc: pointer to the soc
+ * @pdev_id: id of physical device object
+ *
+ * Return: the MLO timestamp offset for the pdev
+ */
+static inline uint64_t
+cdp_get_pdev_mlo_timestamp_offset(ol_txrx_soc_handle soc, uint8_t pdev_id)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance:");
+		QDF_BUG(0);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!soc->ops->ctrl_ops ||
+	    !soc->ops->ctrl_ops->txrx_get_pdev_mlo_timestamp_offset)
+		return QDF_STATUS_E_FAILURE;
+
+	return soc->ops->ctrl_ops->txrx_get_pdev_mlo_timestamp_offset
+			(soc, pdev_id);
+}
 #endif /* _CDP_TXRX_CTRL_H_ */

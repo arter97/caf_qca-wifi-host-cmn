@@ -8487,6 +8487,36 @@ dp_set_peer_param_wrapper(struct cdp_soc_t *cdp_soc,  uint8_t vdev_id,
 
 	return status;
 }
+
+/**
+ * dp_get_pdev_mlo_timestamp_offset() - function to get mlo timestamp offset
+ * @cdp_soc: DP soc handle
+ * @pdev_id: id of pdev handle
+ *
+ * Return: status
+ */
+static uint64_t
+dp_get_pdev_mlo_timestamp_offset(struct cdp_soc_t *cdp_soc, uint8_t pdev_id)
+{
+	uint32_t mlo_offset_hi_us;
+	uint32_t mlo_offset_lo_us;
+	struct cdp_pdev *pdev = (struct cdp_pdev *)
+		dp_get_pdev_from_soc_pdev_id_wifi3((struct dp_soc *)cdp_soc,
+						   pdev_id);
+	if (!pdev)
+		return QDF_STATUS_E_FAILURE;
+
+	do {
+		mlo_offset_hi_us =
+			((struct dp_pdev *)pdev)->timestamp.mlo_offset_hi_us;
+		mlo_offset_lo_us =
+			((struct dp_pdev *)pdev)->timestamp.mlo_offset_lo_us;
+	} while (mlo_offset_hi_us !=
+		 ((struct dp_pdev *)pdev)->timestamp.mlo_offset_hi_us);
+
+	return ((uint64_t)mlo_offset_lo_us +
+		((uint64_t)mlo_offset_hi_us << 32));
+}
 #endif
 
 /**
@@ -12743,6 +12773,9 @@ static struct cdp_ctrl_ops dp_ops_ctrl = {
 #endif
 #ifdef WLAN_SUPPORT_RX_FISA
 	.txrx_fisa_config = dp_fisa_config,
+#endif
+#ifdef WLAN_FEATURE_11BE_MLO
+	.txrx_get_pdev_mlo_timestamp_offset = dp_get_pdev_mlo_timestamp_offset,
 #endif
 };
 

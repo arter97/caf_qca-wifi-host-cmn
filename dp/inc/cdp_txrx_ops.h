@@ -1000,6 +1000,8 @@ struct cdp_ctrl_ops {
 	enum cdp_umac_reset_state (*get_umac_reset_in_progress_state)(
 				   struct cdp_soc_t *psoc);
 #endif
+	uint64_t (*txrx_get_pdev_mlo_timestamp_offset)(struct cdp_soc_t *soc,
+						       uint8_t pdev_id);
 };
 
 struct cdp_me_ops {
