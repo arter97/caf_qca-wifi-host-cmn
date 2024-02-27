@@ -5625,7 +5625,8 @@ dp_cfg_event_record_vdev_evt(struct dp_soc *soc, enum dp_cfg_event_type event,
 
 	if (qdf_unlikely(event != DP_CFG_EVENT_VDEV_ATTACH &&
 			 event != DP_CFG_EVENT_VDEV_UNREF_DEL &&
-			 event != DP_CFG_EVENT_VDEV_DETACH)) {
+			 event != DP_CFG_EVENT_VDEV_DETACH &&
+			 event != DP_CFG_EVENT_VDEV_REGISTER)) {
 		qdf_assert_always(0);
 		return;
 	}
@@ -5634,6 +5635,7 @@ dp_cfg_event_record_vdev_evt(struct dp_soc *soc, enum dp_cfg_event_type event,
 	vdev_evt->vdev_id = vdev->vdev_id;
 	vdev_evt->ref_count = qdf_atomic_read(&vdev->ref_cnt);
 	vdev_evt->mac_addr = vdev->mac_addr;
+	vdev_evt->osif_vdev = vdev->osif_vdev;
 
 	dp_cfg_event_record(soc, event, &cfg_evt_desc);
 }

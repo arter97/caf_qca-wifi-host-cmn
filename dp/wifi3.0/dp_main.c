@@ -5065,6 +5065,7 @@ static QDF_STATUS dp_vdev_register_wifi3(struct cdp_soc_t *soc_hdl,
 
 	dp_init_info("%pK: DP Vdev Register success", soc);
 
+	dp_cfg_event_record_vdev_evt(soc, DP_CFG_EVENT_VDEV_REGISTER, vdev);
 	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
 	return QDF_STATUS_SUCCESS;
 }

@@ -1809,6 +1809,7 @@ struct dp_rx_refill_history {
  * @DP_CFG_EVENT_PEER_UNMAP: peer unmap
  * @DP_CFG_EVENT_MLO_PEER_MAP: MLD peer map
  * @DP_CFG_EVENT_MLO_PEER_UNMAP: MLD peer unmap
+ * @DP_CFG_EVENT_VDEV_REGISTER: vdev register
  */
 enum dp_cfg_event_type {
 	DP_CFG_EVENT_VDEV_ATTACH,
@@ -1826,6 +1827,7 @@ enum dp_cfg_event_type {
 	DP_CFG_EVENT_PEER_UNMAP,
 	DP_CFG_EVENT_MLO_PEER_MAP,
 	DP_CFG_EVENT_MLO_PEER_UNMAP,
+	DP_CFG_EVENT_VDEV_REGISTER,
 };
 
 #ifdef WLAN_FEATURE_DP_CFG_EVENT_HISTORY
@@ -1841,12 +1843,14 @@ enum dp_cfg_event_type {
  * @mac_addr: vdev mac address
  * @vdev_id: vdev id
  * @ref_count: vdev ref count
+ * @osif_vdev: OSIF vdev handle
  */
 struct dp_vdev_attach_detach_desc {
 	struct dp_vdev *vdev;
 	union dp_align_mac_addr mac_addr;
 	uint8_t vdev_id;
 	int32_t ref_count;
+	ol_osif_vdev_handle osif_vdev;
 };
 
 /**
