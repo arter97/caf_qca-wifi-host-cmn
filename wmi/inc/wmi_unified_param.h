@@ -6698,6 +6698,7 @@ typedef enum {
 	wmi_service_dcs_obss_int_support,
 	wmi_service_vdev_dcs_stats_support,
 	wmi_service_smem_mailbox_dlkm_support,
+	wmi_service_mlo_mode2_recovery_supported,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
