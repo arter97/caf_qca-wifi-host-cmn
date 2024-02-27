@@ -2499,6 +2499,7 @@ dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 	if (is_wds) {
 		if (!dp_peer_ast_free_entry_by_mac(soc, peer, vdev_id,
 						   mac_addr)) {
+			dp_rx_peer_unmap_event(soc, peer_id, vdev_id, mac_addr);
 			dp_peer_unref_delete(peer, DP_MOD_ID_HTT);
 			return;
 		}
