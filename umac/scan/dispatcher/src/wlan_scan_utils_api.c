@@ -728,13 +728,13 @@ util_scan_get_phymode_6g(struct wlan_objmgr_pdev *pdev,
 #endif
 
 static inline
-uint32_t util_scan_sec_chan_freq_from_htinfo(struct wlan_ie_htinfo_cmn *htinfo,
-					     uint32_t primary_chan_freq)
+uint32_t util_scan_ccfs0_from_htinfo(struct wlan_ie_htinfo_cmn *htinfo,
+				     uint32_t primary_chan_freq)
 {
 	if (htinfo->hi_extchoff == WLAN_HTINFO_EXTOFFSET_ABOVE)
-		return primary_chan_freq + WLAN_CHAN_SPACING_20MHZ;
+		return primary_chan_freq + WLAN_CHAN_SPACING_20MHZ / 2;
 	else if (htinfo->hi_extchoff == WLAN_HTINFO_EXTOFFSET_BELOW)
-		return primary_chan_freq - WLAN_CHAN_SPACING_20MHZ;
+		return primary_chan_freq - WLAN_CHAN_SPACING_20MHZ / 2;
 
 	return 0;
 }
@@ -771,8 +771,8 @@ util_scan_get_phymode_5g(struct wlan_objmgr_pdev *pdev,
 		phymode = WLAN_PHYMODE_11NA_HT20;
 
 	scan_params->channel.cfreq0 =
-		util_scan_sec_chan_freq_from_htinfo(htinfo,
-						scan_params->channel.chan_freq);
+		util_scan_ccfs0_from_htinfo(htinfo,
+					    scan_params->channel.chan_freq);
 
 	if (util_scan_entry_vhtcap(scan_params) && vhtop) {
 		switch (vhtop->vht_op_chwidth) {
@@ -923,8 +923,8 @@ util_scan_get_phymode_2g(struct scan_cache_entry *scan_params)
 		return phymode;
 
 	scan_params->channel.cfreq0 =
-		util_scan_sec_chan_freq_from_htinfo(htinfo,
-						scan_params->channel.chan_freq);
+		util_scan_ccfs0_from_htinfo(htinfo,
+					    scan_params->channel.chan_freq);
 
 	if (util_scan_entry_vhtcap(scan_params) && vhtop) {
 		switch (vhtop->vht_op_chwidth) {
