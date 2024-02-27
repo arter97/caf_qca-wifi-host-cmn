@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -349,7 +349,7 @@ QDF_STATUS hif_sdio_probe(struct hif_softc *ol_sc,
 		pld_hif_sdio_get_virt_ramdump_mem(&func->dev,
 						  &scn->ramdump_size);
 	if (!scn->ramdump_base || !scn->ramdump_size) {
-		hf_err("Failed ramdump res alloc - base:%s, len:%lu",
+		hif_err("Failed ramdump res alloc - base:%s, len:%lu",
 			scn->ramdump_base ? "ok" : "null",
 			scn->ramdump_size);
 	} else {
