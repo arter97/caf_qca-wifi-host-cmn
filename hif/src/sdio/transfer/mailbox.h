@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2014, 2016-2019 The Linux Foundation. All rights reserved.
- *
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -20,7 +20,7 @@
 
 
 #ifndef _MAILBOX_H_
-#define _MAILBOX_H__
+#define _MAILBOX_H_
 
 #include "a_debug.h"
 #include "hif_sdio_dev.h"
