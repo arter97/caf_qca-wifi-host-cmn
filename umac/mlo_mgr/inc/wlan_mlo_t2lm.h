@@ -23,6 +23,7 @@
 
 #include <wlan_cmn_ieee80211.h>
 #include <wlan_mlo_mgr_public_structs.h>
+#include <wlan_mlo_t2lm.h>
 #ifdef WMI_AP_SUPPORT
 #include <wlan_cmn.h>
 #endif
@@ -159,6 +160,58 @@ struct wlan_preferred_links {
 #endif
 
 /**
+ * struct wlan_t2lm_info - TID-to-Link mapping information for the frames
+ * transmitted on the uplink, downlink and bidirectional.
+ *
+ * @direction:  0 - Downlink, 1 - uplink 2 - Both uplink and downlink
+ * @default_link_mapping: value 1 indicates the default T2LM, where all the TIDs
+ *                        are mapped to all the links.
+ *                        value 0 indicates the preferred T2LM mapping
+ * @mapping_switch_time_present: Indicates if mapping switch time field present
+ *                               in the T2LM IE
+ * @expected_duration_present: Indicates if expected duration present in the
+ *                             T2LM IE
+ * @mapping_switch_time: Mapping switch time of this T2LM IE
+ * @expected_duration: Expected duration of this T2LM IE
+ * @ieee_link_map_tid: Indicates ieee link id mapping of all the TIDS
+ * @hw_link_map_tid: Indicates hw link id mapping of all the TIDS
+ * @timer_started: flag to check if T2LM timer is started for this T2LM IE
+ * @link_mapping_size: value 1 indicates the length of Link Mapping Of TIDn
+ *                     field is 1 octet, value 0 indicates the length of the
+ *                     Link Mapping of TIDn field is 2 octets
+ */
+struct wlan_t2lm_info {
+	enum wlan_t2lm_direction direction;
+	bool default_link_mapping;
+	bool mapping_switch_time_present;
+	bool expected_duration_present;
+	uint16_t mapping_switch_time;
+	uint32_t expected_duration;
+	uint16_t ieee_link_map_tid[T2LM_MAX_NUM_TIDS];
+	uint16_t hw_link_map_tid[T2LM_MAX_NUM_TIDS];
+	bool timer_started;
+	bool link_mapping_size;
+};
+
+/**
+ * struct ttlm_comp_priv - TTLM completion private info
+ * @status: TTLM command status
+ */
+struct ttlm_comp_priv {
+	QDF_STATUS status;
+};
+
+/**
+ * struct ttlm_req_params - TTLM req params
+ * @ml_peer: MLO Peer context
+ * @t2lm_info: Provides the TID to LINK mapping information
+ */
+struct ttlm_req_params {
+	struct wlan_mlo_peer_context *ml_peer;
+	struct wlan_t2lm_info t2lm_info[WLAN_T2LM_MAX_DIRECTION];
+};
+
+/**
  * enum wlan_ttlm_sm_state - TTLM states
  * @WLAN_TTLM_S_INIT: Default state, IDLE state
  * @WLAN_TTLM_S_INPROGRESS: State when TTLM is in progress
@@ -188,6 +241,8 @@ enum wlan_ttlm_sm_state {
  * enum wlan_ttlm_sm_evt - TTLM related events
  * Note: make sure to update ttlm_sm_event_names on updating this enum
  * @WLAN_TTLM_SM_EV_TX_ACTION_REQ: TTLM Action request from STA
+ * @WLAN_TTLM_SM_EV_TX_ACTION_REQ_START: TTLM Action request initiated
+ * @WLAN_TTLM_SM_EV_TX_ACTION_REQ_ACTIVE: TTLM Action req from STA is active
  * @WLAN_TTLM_SM_EV_TX_ACTION_RSP: TTLM Action response from STA
  * @WLAN_TTLM_SM_EV_RX_ACTION_REQ: TTLM Action request from AP
  * @WLAN_TTLM_SM_EV_RX_ACTION_RSP: TTLM Action response from AP
@@ -199,13 +254,15 @@ enum wlan_ttlm_sm_state {
  */
 enum wlan_ttlm_sm_evt {
 	WLAN_TTLM_SM_EV_TX_ACTION_REQ = 0,
-	WLAN_TTLM_SM_EV_TX_ACTION_RSP = 1,
-	WLAN_TTLM_SM_EV_RX_ACTION_REQ = 2,
-	WLAN_TTLM_SM_EV_RX_ACTION_RSP = 3,
-	WLAN_TTLM_SM_EV_BEACON = 4,
-	WLAN_TTLM_SM_EV_BTM_LINK_DISABLE = 5,
-	WLAN_TTLM_SM_EV_TX_TEARDOWN = 6,
-	WLAN_TTLM_SM_EV_RX_TEARDOWN = 7,
+	WLAN_TTLM_SM_EV_TX_ACTION_REQ_START = 1,
+	WLAN_TTLM_SM_EV_TX_ACTION_REQ_ACTIVE = 2,
+	WLAN_TTLM_SM_EV_TX_ACTION_RSP = 3,
+	WLAN_TTLM_SM_EV_RX_ACTION_REQ = 4,
+	WLAN_TTLM_SM_EV_RX_ACTION_RSP = 5,
+	WLAN_TTLM_SM_EV_BEACON = 6,
+	WLAN_TTLM_SM_EV_BTM_LINK_DISABLE = 7,
+	WLAN_TTLM_SM_EV_TX_TEARDOWN = 8,
+	WLAN_TTLM_SM_EV_RX_TEARDOWN = 9,
 	WLAN_TTLM_SM_EV_MAX,
 };
 
@@ -425,40 +482,6 @@ QDF_STATUS ttlm_sm_destroy(struct wlan_mlo_peer_context *ml_peer)
 	return QDF_STATUS_SUCCESS;
 }
 #endif
-
-/**
- * struct wlan_t2lm_info - TID-to-Link mapping information for the frames
- * transmitted on the uplink, downlink and bidirectional.
- *
- * @direction:  0 - Downlink, 1 - uplink 2 - Both uplink and downlink
- * @default_link_mapping: value 1 indicates the default T2LM, where all the TIDs
- *                        are mapped to all the links.
- *                        value 0 indicates the preferred T2LM mapping
- * @mapping_switch_time_present: Indicates if mapping switch time field present
- *                               in the T2LM IE
- * @expected_duration_present: Indicates if expected duration present in the
- *                             T2LM IE
- * @mapping_switch_time: Mapping switch time of this T2LM IE
- * @expected_duration: Expected duration of this T2LM IE
- * @ieee_link_map_tid: Indicates ieee link id mapping of all the TIDS
- * @hw_link_map_tid: Indicates hw link id mapping of all the TIDS
- * @timer_started: flag to check if T2LM timer is started for this T2LM IE
- * @link_mapping_size: value 1 indicates the length of Link Mapping Of TIDn
- *                     field is 1 octet, value 0 indicates the length of the
- *                     Link Mapping of TIDn field is 2 octets
- */
-struct wlan_t2lm_info {
-	enum wlan_t2lm_direction direction;
-	bool default_link_mapping;
-	bool mapping_switch_time_present;
-	bool expected_duration_present;
-	uint16_t mapping_switch_time;
-	uint32_t expected_duration;
-	uint16_t ieee_link_map_tid[T2LM_MAX_NUM_TIDS];
-	uint16_t hw_link_map_tid[T2LM_MAX_NUM_TIDS];
-	bool timer_started;
-	bool link_mapping_size;
-};
 
 /**
  * enum wlan_t2lm_category - T2LM category

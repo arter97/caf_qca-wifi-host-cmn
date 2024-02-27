@@ -245,6 +245,38 @@ void mlo_ap_get_vdev_list_no_flag(struct wlan_objmgr_vdev *vdev,
 }
 #endif
 
+struct wlan_objmgr_vdev *mlo_get_first_vdev_by_ml_peer(
+				struct wlan_mlo_peer_context *mlo_peer_ctx)
+{
+	struct wlan_mlo_link_peer_entry *peer_entry;
+	struct wlan_objmgr_peer *link_peer;
+	int i;
+	struct wlan_objmgr_vdev *vdev = NULL;
+	QDF_STATUS status;
+
+	mlo_peer_lock_acquire(mlo_peer_ctx);
+	for (i = 0; i < MAX_MLO_LINK_PEERS; i++) {
+		peer_entry = &mlo_peer_ctx->peer_list[i];
+		link_peer = peer_entry->link_peer;
+		if (!link_peer)
+			continue;
+
+		status = wlan_objmgr_vdev_try_get_ref(
+					wlan_peer_get_vdev(link_peer),
+					WLAN_MLO_MGR_ID);
+		if (QDF_IS_STATUS_ERROR(status))
+			continue;
+
+		vdev = wlan_peer_get_vdev(link_peer);
+		goto release;
+	}
+
+release:
+	mlo_peer_lock_release(mlo_peer_ctx);
+
+	return vdev;
+}
+
 void mlo_peer_get_vdev_list(struct wlan_objmgr_peer *peer,
 			    uint16_t *vdev_count,
 			    struct wlan_objmgr_vdev **wlan_vdev_list)

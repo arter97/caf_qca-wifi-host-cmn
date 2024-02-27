@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -135,6 +135,14 @@ void mlo_ap_get_vdev_list(struct wlan_objmgr_vdev *vdev,
 			  uint16_t *vdev_count,
 			  struct wlan_objmgr_vdev **wlan_vdev_list);
 
+/**
+ * mlo_get_first_vdev_by_ml_peer() - get first vdev from MLO peer context
+ * @mlo_peer_ctx: MLO peer ctx
+ *
+ * Return: first vdev pointer or NULL
+ */
+struct wlan_objmgr_vdev *mlo_get_first_vdev_by_ml_peer(
+				struct wlan_mlo_peer_context *mlo_peer_ctx);
 /**
  * mlo_peer_get_vdev_list() - get mlo peer vdev list
  * @peer: peer pointer

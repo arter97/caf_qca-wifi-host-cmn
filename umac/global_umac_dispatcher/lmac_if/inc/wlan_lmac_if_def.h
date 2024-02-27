@@ -1648,7 +1648,6 @@ struct wlan_lmac_if_mlo_tx_ops {
 	QDF_STATUS (*send_link_set_bss_params_cmd)(
 			struct wlan_objmgr_psoc *psoc,
 			struct mlo_link_bss_params *param);
-
 #ifdef WLAN_MLO_GLOBAL_SHMEM_SUPPORT
 	struct wlan_lmac_if_global_shmem_local_ops shmem_local_ops;
 #endif
