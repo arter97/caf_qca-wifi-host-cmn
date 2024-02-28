@@ -4831,7 +4831,8 @@ int dp_ipa_txrx_get_vdev_stats(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 
 QDF_STATUS dp_ipa_txrx_get_peer_stats(struct cdp_soc_t *soc, uint8_t vdev_id,
 				      uint8_t *peer_mac,
-				      struct cdp_peer_stats *peer_stats)
+				      struct cdp_peer_stats *peer_stats,
+				      enum cdp_peer_type peer_type)
 {
 	struct dp_peer *peer = NULL;
 	struct cdp_peer_info peer_info = { 0 };

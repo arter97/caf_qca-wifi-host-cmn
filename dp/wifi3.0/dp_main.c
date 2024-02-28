@@ -12809,6 +12809,8 @@ static struct cdp_host_stats_ops dp_ops_host_stats = {
 	.txrx_get_peer_stats = dp_ipa_txrx_get_peer_stats,
 	.txrx_get_vdev_stats  = dp_ipa_txrx_get_vdev_stats,
 	.txrx_get_pdev_stats = dp_ipa_txrx_get_pdev_stats,
+	.txrx_get_peer_stats_based_on_peer_type =
+			dp_ipa_txrx_get_peer_stats,
 #endif
 	.txrx_get_ratekbps = dp_txrx_get_ratekbps,
 	.txrx_update_vdev_stats = dp_txrx_update_vdev_host_stats,
