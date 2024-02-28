@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -217,6 +217,17 @@ QDF_STATUS wmi_extract_vdev_tdls_ev_param(wmi_unified_t wmi_handle,
 					  void *evt_buf,
 					  struct tdls_event_info *param);
 #endif /* FEATURE_WLAN_TDLS */
+
+/**
+ * wmi_unified_send_tx_power_per_mcs_cmd() - send tx power per mcs cmd to fw
+ * @wmi_handle: wmi handle
+ * @params: adjust txpower per mcs command params
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_send_tx_power_per_mcs_cmd(
+					wmi_unified_t wmi_handle,
+					struct tx_power_per_mcs_rate *params);
 
 /**
  * wmi_unified_send_sar_limit_cmd() - send sar limit cmd to fw
