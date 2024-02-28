@@ -519,6 +519,32 @@ struct ml_link_state_cmd_info {
 	void *ml_link_state_req_context;
 };
 #endif
+
+#ifdef WLAN_FEATURE_11BE_MLO_TTLM
+/**
+ * struct ttlm_comp_priv - TTLM completion private info
+ * @ml_peer: ML Peer objmgr
+ * @dialog_token: TTLM Dialog token
+ * @status: TTLM command status
+ */
+struct ttlm_comp_priv {
+	struct wlan_mlo_peer_context *ml_peer;
+	uint8_t dialog_token;
+	QDF_STATUS status;
+};
+
+/**
+ * struct ttlm_send_cmd_info - TTLM send command info
+ * @cookie: request cookie
+ * @ttlm_send_cmd_resp_cb: Callback function to handle response
+ * @context: request cookie
+ */
+struct ttlm_send_cmd_info {
+	void *cookie;
+	void (*ttlm_send_cmd_resp_cb)(struct ttlm_comp_priv *ev, void *cookie);
+	void *context;
+};
+#endif
 /**
  * struct mlo_sta_csa_params - CSA request parameters in mlo mgr
  * @csa_param: csa parameters
@@ -866,6 +892,7 @@ struct wlan_mlo_sta_assoc_pending_list {
  * @emlsr_mode_req: store requested emlsr mode
  * @ml_link_control_mode: link control mode configured via user space
  * @ml_chan_switch_in_progress: Flag to track CSA at MLD level
+ * @ttlm_send_info: TTLM send command into
  */
 struct wlan_mlo_sta {
 	qdf_bitmap(wlan_connect_req_links, WLAN_UMAC_MLO_MAX_VDEVS);
@@ -898,6 +925,9 @@ struct wlan_mlo_sta {
 #endif
 	uint8_t ml_link_control_mode;
 	bool ml_chan_switch_in_progress;
+#ifdef WLAN_FEATURE_11BE_MLO_TTLM
+	struct ttlm_send_cmd_info ttlm_send_info;
+#endif
 };
 
 /**

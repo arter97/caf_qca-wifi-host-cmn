@@ -667,6 +667,15 @@ mlo_get_link_state_register_resp_cb(struct wlan_objmgr_vdev *vdev,
 QDF_STATUS ml_post_get_link_state_msg(struct wlan_objmgr_vdev *vdev);
 
 #endif
+#ifdef WLAN_FEATURE_11BE_MLO_TTLM
+/**
+ * mlo_ttlm_send_cmd_register_resp_cb() - Register TTLM send command callback
+ * @vdev: vdev handler
+ * @req: pointer to request parameter of structure
+ */
+QDF_STATUS mlo_ttlm_send_cmd_register_resp_cb(struct wlan_objmgr_vdev *vdev,
+					      struct ttlm_send_cmd_info *req);
+#endif
 #ifdef WLAN_FEATURE_11BE
 /**
  * util_add_bw_ind() - Adding bandwidth indiacation element

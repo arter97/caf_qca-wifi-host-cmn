@@ -1155,6 +1155,13 @@ void wlan_mlo_send_vdev_pause(struct wlan_objmgr_psoc *psoc,
 {}
 #endif
 
+#ifdef WLAN_FEATURE_11BE_MLO_TTLM
+QDF_STATUS
+ttlm_get_ttlm_send_cmd_context(struct wlan_objmgr_psoc *psoc,
+			       get_ttlm_send_ind_cb *resp_cb, void **context,
+			       uint8_t vdev_id);
+#endif
+
 #if defined(WLAN_FEATURE_11BE_MLO_ADV_FEATURE) && defined(WLAN_FEATURE_11BE_MLO)
 /**
  * mlo_defer_set_keys: Defer MLO set keys for link

@@ -1064,3 +1064,35 @@ next:
 	return is_allow;
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO_TTLM
+QDF_STATUS
+mlo_ttlm_send_cmd_register_resp_cb(struct wlan_objmgr_vdev *vdev,
+				   struct ttlm_send_cmd_info *req)
+{
+	struct wlan_mlo_dev_context *mlo_ctx;
+	struct wlan_mlo_sta *sta_ctx = NULL;
+
+	if (!vdev || !wlan_vdev_mlme_is_mlo_vdev(vdev))
+		return QDF_STATUS_E_NULL_VALUE;
+	mlo_ctx = vdev->mlo_dev_ctx;
+
+	if (!mlo_ctx) {
+		mlo_err("null mlo_dev_ctx");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	sta_ctx = mlo_ctx->sta_ctx;
+
+	if (!sta_ctx)
+		return QDF_STATUS_E_INVAL;
+
+	mlo_dev_lock_acquire(mlo_ctx);
+
+	sta_ctx->ttlm_send_info.ttlm_send_cmd_resp_cb =
+		req->ttlm_send_cmd_resp_cb;
+	sta_ctx->ttlm_send_info.context = req->cookie;
+	mlo_dev_lock_release(mlo_ctx);
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif

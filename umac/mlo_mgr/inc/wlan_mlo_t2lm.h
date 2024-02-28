@@ -194,14 +194,6 @@ struct wlan_t2lm_info {
 };
 
 /**
- * struct ttlm_comp_priv - TTLM completion private info
- * @status: TTLM command status
- */
-struct ttlm_comp_priv {
-	QDF_STATUS status;
-};
-
-/**
  * struct ttlm_req_params - TTLM req params
  * @ml_peer: MLO Peer context
  * @t2lm_info: Provides the TID to LINK mapping information
@@ -250,6 +242,7 @@ enum wlan_ttlm_sm_state {
  * @WLAN_TTLM_SM_EV_BTM_LINK_DISABLE: BTM req from AP
  * @WLAN_TTLM_SM_EV_TX_TEARDOWN: TTLM Teardown from STA
  * @WLAN_TTLM_SM_EV_RX_TEARDOWN: TTLM Teardown from AP
+ * @WLAN_TTLM_SM_EV_TIMEOUT: TTLM Timeout happen
  * @WLAN_TTLM_SM_EV_MAX: Max event
  */
 enum wlan_ttlm_sm_evt {
@@ -263,10 +256,12 @@ enum wlan_ttlm_sm_evt {
 	WLAN_TTLM_SM_EV_BTM_LINK_DISABLE = 7,
 	WLAN_TTLM_SM_EV_TX_TEARDOWN = 8,
 	WLAN_TTLM_SM_EV_RX_TEARDOWN = 9,
+	WLAN_TTLM_SM_EV_TIMEOUT = 10,
 	WLAN_TTLM_SM_EV_MAX,
 };
 
 #ifdef WLAN_FEATURE_11BE_MLO_TTLM
+struct ttlm_comp_priv;
 /**
  * ttlm_get_state() - get TTLM state
  * @ml_peer: MLO Peer context
@@ -429,6 +424,13 @@ QDF_STATUS ttlm_sm_create(struct wlan_mlo_peer_context *ml_peer);
  *	   FAILURE, if deletion fails
  */
 QDF_STATUS ttlm_sm_destroy(struct wlan_mlo_peer_context *ml_peer);
+
+/**
+ * get_ttlm_send_ind_cb() - API to handle the TTLM send indication callback
+ * @priv: pointer to priv ttlm stricture
+ * @cookies: cookie fr request context
+ */
+typedef void (*get_ttlm_send_ind_cb)(struct ttlm_comp_priv *priv, void *cookie);
 #else
 static inline
 enum wlan_ttlm_sm_state ttlm_get_state(struct wlan_mlo_peer_context *ml_peer)
