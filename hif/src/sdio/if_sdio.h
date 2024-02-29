@@ -67,7 +67,7 @@ static inline void athdiag_procfs_remove(void)
 }
 #endif
 
-#define DMA_MAPPING_ERROR(dev, addr) dma_mapping_error((dev), (addr))
+//#define DMA_MAPPING_ERROR(dev, addr) dma_mapping_error((dev), (addr))
 
 int ath_sdio_probe(void *context, void *hif_handle);
 void ath_sdio_remove(void *context, void *hif_handle);

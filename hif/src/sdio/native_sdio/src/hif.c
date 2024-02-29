@@ -348,7 +348,7 @@ QDF_STATUS hif_sdio_probe(struct hif_softc *ol_sc,
 		pld_hif_sdio_get_virt_ramdump_mem(&func->dev,
 						  &scn->ramdump_size);
 	if (!scn->ramdump_base || !scn->ramdump_size) {
-		hf_err("Failed ramdump res alloc - base:%s, len:%lu",
+		hif_err("Failed ramdump res alloc - base:%s, len:%lu",
 			scn->ramdump_base ? "ok" : "null",
 			scn->ramdump_size);
 	} else {
@@ -893,9 +893,8 @@ static A_STATUS hif_sdio_remove(void *context, void *hif_handle)
 
 	athdiag_procfs_remove();
 
-#ifndef TARGET_DUMP_FOR_NON_QC_PLATFORM
-	iounmap(scn->ramdump_base);
-#endif
+	if (scn->ramdump_base)
+		pld_hif_sdio_release_ramdump_mem(scn->ramdump_base);
 
 	HIF_EXIT();
 

@@ -246,8 +246,6 @@ QDF_STATUS hif_dev_alloc_and_prepare_rx_packets(struct hif_sdio_device *pdev,
 			 */
 			num_messages++;
 
-			hif_info("%s: HTC header : %u messages in bundle",
-				 __func__, num_messages);
 		}
 
 		full_length = DEV_CALC_RECV_PADDED_LEN(pdev,

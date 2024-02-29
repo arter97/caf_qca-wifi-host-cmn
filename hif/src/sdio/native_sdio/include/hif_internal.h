@@ -419,8 +419,8 @@ void hif_sdio_quirk_write_cccr(struct hif_softc *ol_sc, struct sdio_func *func);
 int hif_sdio_quirk_mod_strength(struct hif_softc *ol_sc,
 				struct sdio_func *func);
 int hif_sdio_quirk_async_intr(struct hif_softc *ol_sc, struct sdio_func *func);
-int hif_sdio_set_bus_speed(struct hif_softc *ol_sc, struct sdio_func *func);
-int hif_sdio_set_bus_width(struct hif_softc *ol_sc, struct sdio_func *func);
+QDF_STATUS hif_sdio_set_bus_speed(struct hif_softc *ol_sc, struct sdio_func *func);
+QDF_STATUS hif_sdio_set_bus_width(struct hif_softc *ol_sc, struct sdio_func *func);
 QDF_STATUS hif_sdio_func_disable(struct hif_sdio_dev *device,
 				 struct sdio_func *func,
 				 bool reset);
