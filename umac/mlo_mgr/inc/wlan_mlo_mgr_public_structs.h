@@ -534,6 +534,16 @@ struct ttlm_comp_priv {
 };
 
 /**
+ * ttlm_rsp_info - TTLM response frame info
+ * @t2lm_info: TTLM mapping
+ * @t2lm_resp_type: TTLM status corresponds to TTL response frame
+ */
+struct ttlm_rsp_info {
+	struct wlan_t2lm_info *t2lm_info;
+	enum wlan_t2lm_resp_frm_type t2lm_resp_type;
+};
+
+/**
  * struct ttlm_send_cmd_info - TTLM send command info
  * @cookie: request cookie
  * @ttlm_send_cmd_resp_cb: Callback function to handle response

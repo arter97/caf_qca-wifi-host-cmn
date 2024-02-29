@@ -488,6 +488,56 @@ static void ttlm_handle_status_ind(struct wlan_mlo_peer_context *ml_peer,
 		resp_cb(&priv, context);
 }
 
+static QDF_STATUS
+ttlm_handle_rx_action_rsp_in_sta_in_progress_state(
+			struct wlan_mlo_peer_context *ml_peer,
+			struct ttlm_rsp_info *t2lm_rsp_info)
+{
+	struct wlan_objmgr_vdev *vdev;
+	struct wlan_objmgr_peer *peer;
+	struct wlan_t2lm_info *t2lm_nego = NULL;
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+
+	vdev = mlo_get_first_vdev_by_ml_peer(ml_peer);
+	if (!vdev) {
+		t2lm_err("VDEV is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	peer = wlan_objmgr_vdev_try_get_bsspeer(vdev, WLAN_MLO_MGR_ID);
+	if (!peer) {
+		t2lm_err("Peer is NULL");
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_MLO_MGR_ID);
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (t2lm_rsp_info->t2lm_resp_type == WLAN_T2LM_RESP_TYPE_SUCCESS) {
+		wlan_t2lm_clear_peer_negotiation(peer);
+		/* Apply T2LM config to peer T2LM ctx */
+		t2lm_nego = &ml_peer->t2lm_policy.t2lm_negotiated_info.t2lm_info[WLAN_T2LM_BIDI_DIRECTION];
+		qdf_mem_copy(t2lm_nego, t2lm_rsp_info->t2lm_info,
+			     sizeof(struct wlan_t2lm_info));
+		status = wlan_send_tid_to_link_mapping(vdev, t2lm_rsp_info->t2lm_info);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			t2lm_err("sending t2lm wmi failed");
+			goto release;
+		}
+
+		wlan_mlo_dev_t2lm_notify_link_update(vdev, t2lm_rsp_info->t2lm_info);
+	} else {
+		t2lm_debug("T2LM rsp status: %d, clear ongoing tid mapping",
+			   t2lm_rsp_info->t2lm_resp_type);
+
+		wlan_t2lm_clear_ongoing_negotiation(peer);
+	}
+
+release:
+	wlan_objmgr_peer_release_ref(peer, WLAN_MLO_MGR_ID);
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLO_MGR_ID);
+
+	return status;
+}
+
 /**
  * ttlm_subst_sta_inprogress_event() - STA INPROGRESS sub-state event handler
  * for TTLM
@@ -526,6 +576,12 @@ static bool ttlm_subst_sta_inprogress_event(void *ctx, uint16_t event,
 		ttlm_handle_status_ind(ml_peer, dialog_token, status);
 		break;
 	case WLAN_TTLM_SM_EV_TIMEOUT:
+		ttlm_sm_transition_to(ml_peer, WLAN_TTLM_S_NEGOTIATED);
+		break;
+	case WLAN_TTLM_SM_EV_RX_ACTION_RSP:
+		status = ttlm_handle_rx_action_rsp_in_sta_in_progress_state(ml_peer, data);
+		if (QDF_IS_STATUS_ERROR(status))
+			event_handled = false;
 		ttlm_sm_transition_to(ml_peer, WLAN_TTLM_S_NEGOTIATED);
 		break;
 	default:
