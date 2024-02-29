@@ -249,6 +249,25 @@ struct wlan_ipa_priv *wlan_ipa_get_obj_context(void)
 }
 
 /**
+ * wlan_ipa_skb_free() - Caller to linux skb free
+ * function __dev_kfree_skb_any()
+ * @skb: data buffer pointer
+ *
+ * Return: None
+ */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+static void wlan_ipa_skb_free(qdf_nbuf_t skb)
+{
+	dev_consume_skb_any(skb);
+}
+#else
+static void wlan_ipa_skb_free(qdf_nbuf_t skb)
+{
+	dev_kfree_skb_any(skb);
+}
+#endif
+
+/**
  * wlan_ipa_send_pkt_to_tl() - Send an IPA packet to TL
  * @iface_context: interface-specific IPA context
  * @ipa_tx_desc: packet data descriptor
@@ -421,7 +440,7 @@ static void wlan_ipa_forward(struct wlan_ipa_priv *ipa_ctx,
 				ipa_ctx->stats.num_tx_fwd_ok++;
 			}
 		} else {
-			dev_kfree_skb_any(skb);
+			wlan_ipa_skb_free(skb);
 		}
 	}
 }
@@ -510,7 +529,7 @@ static enum wlan_ipa_forward_type wlan_ipa_intrabss_forward(
 	return ret;
 
 drop_pkt:
-	dev_kfree_skb_any(skb);
+	wlan_ipa_skb_free(skb);
 	ret = WLAN_IPA_FORWARD_PKT_DISCARD;
 	return ret;
 }
@@ -859,7 +878,7 @@ static void wlan_ipa_pm_flush(void *data)
 						pm_tx_cb->iface_context->dev);
 				ipa_ctx->stats.num_tx_fwd_ok++;
 			} else {
-				dev_kfree_skb_any(skb);
+				wlan_ipa_skb_free(skb);
 			}
 		} else if (pm_tx_cb->send_to_nw) {
 			ndev = pm_tx_cb->iface_context->dev;
@@ -868,7 +887,7 @@ static void wlan_ipa_pm_flush(void *data)
 				ipa_ctx->send_to_nw(skb, ndev);
 				ipa_ctx->ipa_rx_net_send_count++;
 			} else {
-				dev_kfree_skb_any(skb);
+				wlan_ipa_skb_free(skb);
 			}
 		} else {
 			wlan_ipa_send_pkt_to_tl(pm_tx_cb->iface_context,
@@ -1124,7 +1143,7 @@ static void wlan_ipa_pm_flush(void *data)
 						pm_tx_cb->iface_context->dev);
 				ipa_ctx->stats.num_tx_fwd_ok++;
 			} else {
-				dev_kfree_skb_any(skb);
+				wlan_ipa_skb_free(skb);
 			}
 		} else {
 			wlan_ipa_send_pkt_to_tl(pm_tx_cb->iface_context,
@@ -1344,7 +1363,7 @@ wlan_ipa_send_skb_to_network(qdf_nbuf_t skb, uint8_t peer_id,
 	if (!iface_ctx->dev) {
 		ipa_debug_rl("Invalid interface");
 		ipa_ctx->ipa_rx_internal_drop_count++;
-		dev_kfree_skb_any(skb);
+		wlan_ipa_skb_free(skb);
 		return;
 	}
 
@@ -1383,7 +1402,7 @@ wlan_ipa_send_skb_to_network(qdf_nbuf_t skb, uint8_t peer_id,
 	if (!iface_ctx->dev) {
 		ipa_debug_rl("Invalid interface");
 		ipa_ctx->ipa_rx_internal_drop_count++;
-		dev_kfree_skb_any(skb);
+		wlan_ipa_skb_free(skb);
 		return;
 	}
 
@@ -1621,7 +1640,7 @@ static void __wlan_ipa_w2i_cb(void *priv, qdf_ipa_dp_evt_type_t evt,
 	if (!ipa_ctx) {
 		if (evt == IPA_RECEIVE) {
 			skb = (qdf_nbuf_t)data;
-			dev_kfree_skb_any(skb);
+			wlan_ipa_skb_free(skb);
 		}
 		return;
 	}
@@ -1652,7 +1671,7 @@ static void __wlan_ipa_w2i_cb(void *priv, qdf_ipa_dp_evt_type_t evt,
 			}
 			ipa_err_rl("Pkt Dropped!");
 			ipa_ctx->ipa_rx_internal_drop_count++;
-			dev_kfree_skb_any(skb);
+			wlan_ipa_skb_free(skb);
 			return;
 		}
 
@@ -1661,7 +1680,7 @@ static void __wlan_ipa_w2i_cb(void *priv, qdf_ipa_dp_evt_type_t evt,
 			ipa_err_rl("session_id of iface_id %u is invalid:%d",
 				   iface_id, iface_context->session_id);
 			ipa_ctx->ipa_rx_internal_drop_count++;
-			dev_kfree_skb_any(skb);
+			wlan_ipa_skb_free(skb);
 			return;
 		}
 		iface_context->stats.num_rx_ipa_excep++;
@@ -1687,7 +1706,7 @@ static void __wlan_ipa_w2i_cb(void *priv, qdf_ipa_dp_evt_type_t evt,
 					   QDF_MAC_ADDR_REF(qdf_nbuf_data(skb) +
 					   QDF_NBUF_DEST_MAC_OFFSET));
 				ipa_ctx->ipa_rx_internal_drop_count++;
-				dev_kfree_skb_any(skb);
+				wlan_ipa_skb_free(skb);
 				return;
 			}
 		} else if (qdf_nbuf_is_ipv4_wapi_pkt(skb)) {
@@ -1706,7 +1725,7 @@ static void __wlan_ipa_w2i_cb(void *priv, qdf_ipa_dp_evt_type_t evt,
 			ipa_err_rl("Non EAPOL/WAPI packet received when peer " QDF_MAC_ADDR_FMT " is unauthorized",
 				   QDF_MAC_ADDR_REF(peer_mac_addr.bytes));
 			ipa_ctx->ipa_rx_internal_drop_count++;
-			dev_kfree_skb_any(skb);
+			wlan_ipa_skb_free(skb);
 			return;
 		}
 
@@ -1765,7 +1784,7 @@ static void wlan_ipa_w2i_cb(void *priv, qdf_ipa_dp_evt_type_t evt,
 			qdf_nbuf_t skb = (qdf_nbuf_t)data;
 
 			ipa_ctx->ipa_rx_internal_drop_count++;
-			dev_kfree_skb_any(skb);
+			wlan_ipa_skb_free(skb);
 		}
 
 		return;
@@ -2279,7 +2298,7 @@ static void wlan_ipa_nbuf_cb(qdf_nbuf_t skb)
 	qdf_device_t osdev;
 
 	if (!qdf_nbuf_ipa_owned_get(skb)) {
-		dev_kfree_skb_any(skb);
+		wlan_ipa_skb_free(skb);
 		return;
 	}
 
@@ -2334,9 +2353,8 @@ static void wlan_ipa_nbuf_cb(qdf_nbuf_t skb)
  */
 static void wlan_ipa_nbuf_cb(qdf_nbuf_t skb)
 {
-	dev_kfree_skb_any(skb);
+	wlan_ipa_skb_free(skb);
 }
-
 #endif /* QCA_LL_TX_FLOW_CONTROL_V2 */
 
 /**
@@ -4776,7 +4794,7 @@ void wlan_ipa_flush(struct wlan_ipa_priv *ipa_ctx)
 		pm_tx_cb = (struct wlan_ipa_pm_tx_cb *)skb->cb;
 
 		if (pm_tx_cb->exception || pm_tx_cb->send_to_nw) {
-			dev_kfree_skb_any(skb);
+			wlan_ipa_skb_free(skb);
 		} else {
 			if (pm_tx_cb->ipa_tx_desc)
 				ipa_free_skb(pm_tx_cb->ipa_tx_desc);
