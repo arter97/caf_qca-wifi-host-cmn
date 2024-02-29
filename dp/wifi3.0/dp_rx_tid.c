@@ -391,7 +391,7 @@ dp_rx_tid_update_wifi3(struct dp_peer *peer, int tid, uint32_t ba_window_size,
 
 	if (!bar_update)
 		dp_peer_rx_reorder_queue_setup(soc, peer,
-					       tid, ba_window_size);
+					       BIT(tid), ba_window_size);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -577,8 +577,37 @@ static inline int dp_reo_desc_addr_chk(qdf_dma_addr_t dma_addr)
 }
 #endif
 
-QDF_STATUS dp_rx_tid_setup_wifi3(struct dp_peer *peer, int tid,
-				 uint32_t ba_window_size, uint32_t start_seq)
+static inline void
+dp_rx_tid_setup_error_process(uint32_t tid_bitmap, struct dp_peer *peer)
+{
+	struct dp_rx_tid *rx_tid;
+	int tid;
+	struct dp_soc *soc = peer->vdev->pdev->soc;
+
+	for (tid = 0; tid < DP_MAX_TIDS; tid++) {
+		if (!(BIT(tid) & tid_bitmap))
+			continue;
+
+		rx_tid = &peer->rx_tid[tid];
+		if (!rx_tid->hw_qdesc_vaddr_unaligned)
+			continue;
+
+		if (dp_reo_desc_addr_chk(rx_tid->hw_qdesc_paddr) ==
+		    QDF_STATUS_SUCCESS)
+			qdf_mem_unmap_nbytes_single(
+				soc->osdev,
+				rx_tid->hw_qdesc_paddr,
+				QDF_DMA_BIDIRECTIONAL,
+				rx_tid->hw_qdesc_alloc_size);
+		qdf_mem_free(rx_tid->hw_qdesc_vaddr_unaligned);
+		rx_tid->hw_qdesc_vaddr_unaligned = NULL;
+		rx_tid->hw_qdesc_paddr = 0;
+	}
+}
+
+static QDF_STATUS
+dp_single_rx_tid_setup(struct dp_peer *peer, int tid,
+		       uint32_t ba_window_size, uint32_t start_seq)
 {
 	struct dp_rx_tid *rx_tid = &peer->rx_tid[tid];
 	struct dp_vdev *vdev = peer->vdev;
@@ -587,23 +616,10 @@ QDF_STATUS dp_rx_tid_setup_wifi3(struct dp_peer *peer, int tid,
 	uint32_t hw_qdesc_align;
 	int hal_pn_type;
 	void *hw_qdesc_vaddr;
-	uint32_t alloc_tries = 0;
+	uint32_t alloc_tries = 0, ret;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	struct dp_txrx_peer *txrx_peer;
 
-	if (!qdf_atomic_read(&peer->is_default_route_set))
-		return QDF_STATUS_E_FAILURE;
-
-	if (!dp_rx_tid_setup_allow(peer)) {
-		dp_peer_info("skip rx tid setup for peer" QDF_MAC_ADDR_FMT,
-			     QDF_MAC_ADDR_REF(peer->mac_addr.raw));
-		goto send_wmi_reo_cmd;
-	}
-
-	rx_tid->ba_win_size = ba_window_size;
-	if (rx_tid->hw_qdesc_vaddr_unaligned)
-		return dp_rx_tid_update_wifi3(peer, tid, ba_window_size,
-			start_seq, false);
 	rx_tid->delba_tx_status = 0;
 	rx_tid->ppdu_id_2k = 0;
 	rx_tid->num_of_addba_req = 0;
@@ -700,24 +716,105 @@ try_desc_alloc:
 		hw_qdesc_vaddr, rx_tid->hw_qdesc_paddr, hal_pn_type,
 		vdev->vdev_stats_id);
 
-	qdf_mem_map_nbytes_single(soc->osdev, hw_qdesc_vaddr,
-		QDF_DMA_BIDIRECTIONAL, rx_tid->hw_qdesc_alloc_size,
-		&(rx_tid->hw_qdesc_paddr));
+	ret = qdf_mem_map_nbytes_single(soc->osdev, hw_qdesc_vaddr,
+					QDF_DMA_BIDIRECTIONAL,
+					rx_tid->hw_qdesc_alloc_size,
+					&rx_tid->hw_qdesc_paddr);
 
-	add_entry_alloc_list(soc, rx_tid, peer, hw_qdesc_vaddr);
+	if (!ret)
+		add_entry_alloc_list(soc, rx_tid, peer, hw_qdesc_vaddr);
 
 	if (dp_reo_desc_addr_chk(rx_tid->hw_qdesc_paddr) !=
-			QDF_STATUS_SUCCESS) {
+			QDF_STATUS_SUCCESS || ret) {
 		if (alloc_tries++ < 10) {
 			qdf_mem_free(rx_tid->hw_qdesc_vaddr_unaligned);
 			rx_tid->hw_qdesc_vaddr_unaligned = NULL;
 			goto try_desc_alloc;
 		} else {
-			dp_peer_err("%pK: Rx tid HW desc alloc failed (lowmem): tid %d",
+			dp_peer_err("%pK: Rx tid %d desc alloc fail (lowmem)",
 				    soc, tid);
 			status = QDF_STATUS_E_NOMEM;
 			goto error;
 		}
+	}
+
+	return QDF_STATUS_SUCCESS;
+
+error:
+	dp_rx_tid_setup_error_process(1 << tid, peer);
+
+	return status;
+}
+
+QDF_STATUS dp_rx_tid_setup_wifi3(struct dp_peer *peer,
+				 uint32_t tid_bitmap,
+				 uint32_t ba_window_size,
+				 uint32_t start_seq)
+{
+	QDF_STATUS status;
+	int tid;
+	struct dp_rx_tid *rx_tid;
+	struct dp_vdev *vdev = peer->vdev;
+	struct dp_soc *soc = vdev->pdev->soc;
+	uint8_t setup_fail_cnt = 0;
+
+	if (!qdf_atomic_read(&peer->is_default_route_set))
+		return QDF_STATUS_E_FAILURE;
+
+	if (!dp_rx_tid_setup_allow(peer)) {
+		dp_peer_info("skip rx tid setup for peer" QDF_MAC_ADDR_FMT,
+			     QDF_MAC_ADDR_REF(peer->mac_addr.raw));
+		goto send_wmi_reo_cmd;
+	}
+
+	dp_peer_info("tid_bitmap 0x%x, ba_window_size %d, start_seq %d",
+		     tid_bitmap, ba_window_size, start_seq);
+
+	for (tid = 0; tid < DP_MAX_TIDS; tid++) {
+		if (!(BIT(tid) & tid_bitmap))
+			continue;
+
+		rx_tid = &peer->rx_tid[tid];
+		rx_tid->ba_win_size = ba_window_size;
+		if (rx_tid->hw_qdesc_vaddr_unaligned) {
+			status = dp_rx_tid_update_wifi3(peer, tid,
+					ba_window_size, start_seq, false);
+			if (QDF_IS_STATUS_ERROR(status)) {
+				/* Not continue to update other tid(s) and
+				 * return even if they have not been set up.
+				 */
+				dp_peer_err("Update tid %d fail", tid);
+				return status;
+			}
+
+			dp_peer_info("Update tid %d", tid);
+			tid_bitmap &= ~BIT(tid);
+			continue;
+		}
+
+		status = dp_single_rx_tid_setup(peer, tid,
+						ba_window_size, start_seq);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			dp_peer_err("Set up tid %d fail, status=%d",
+				    tid, status);
+			tid_bitmap &= ~BIT(tid);
+			setup_fail_cnt++;
+			continue;
+		}
+	}
+
+	/* tid_bitmap == 0 means there is no tid(s) for further setup */
+	if (!tid_bitmap) {
+		dp_peer_info("tid_bitmap=0, no tid setup, setup_fail_cnt %d",
+			     setup_fail_cnt);
+
+		/*  If setup_fail_cnt==0, all tid(s) has been
+		 * successfully updated, so we return success.
+		 */
+		if (!setup_fail_cnt)
+			return QDF_STATUS_SUCCESS;
+		else
+			return QDF_STATUS_E_FAILURE;
 	}
 
 send_wmi_reo_cmd:
@@ -726,24 +823,20 @@ send_wmi_reo_cmd:
 		goto error;
 	}
 
+	dp_peer_info("peer %pK, tids 0x%x, multi_reo %d, s_seq %d, w_size %d",
+		      peer, tid_bitmap,
+		      soc->features.multi_rx_reorder_q_setup_support,
+		      start_seq, ba_window_size);
+
 	status = dp_peer_rx_reorder_queue_setup(soc, peer,
-						tid, ba_window_size);
+						tid_bitmap,
+						ba_window_size);
 	if (QDF_IS_STATUS_SUCCESS(status))
 		return status;
 
 error:
-	if (rx_tid->hw_qdesc_vaddr_unaligned) {
-		if (dp_reo_desc_addr_chk(rx_tid->hw_qdesc_paddr) ==
-		    QDF_STATUS_SUCCESS)
-			qdf_mem_unmap_nbytes_single(
-				soc->osdev,
-				rx_tid->hw_qdesc_paddr,
-				QDF_DMA_BIDIRECTIONAL,
-				rx_tid->hw_qdesc_alloc_size);
-		qdf_mem_free(rx_tid->hw_qdesc_vaddr_unaligned);
-		rx_tid->hw_qdesc_vaddr_unaligned = NULL;
-		rx_tid->hw_qdesc_paddr = 0;
-	}
+	dp_rx_tid_setup_error_process(tid_bitmap, peer);
+
 	return status;
 }
 
@@ -1071,13 +1164,16 @@ static int dp_rx_tid_delete_wifi3(struct dp_peer *peer, int tid)
 static void dp_peer_setup_remaining_tids(struct dp_peer *peer)
 {
 	int tid;
+	uint32_t tid_bitmap = 0;
 
-	for (tid = 1; tid < DP_MAX_TIDS-1; tid++) {
-		dp_rx_tid_setup_wifi3(peer, tid, 1, 0);
-		dp_peer_debug("Setting up TID %d for peer %pK peer->local_id %d",
-			      tid, peer, peer->local_id);
-	}
+	for (tid = 1; tid < DP_MAX_TIDS-1; tid++)
+		tid_bitmap |= BIT(tid);
+
+	dp_peer_info("Sett up tid_bitmap 0x%x for peer %pK peer->local_id %d",
+		     tid_bitmap, peer, peer->local_id);
+	dp_rx_tid_setup_wifi3(peer, tid_bitmap, 1, 0);
 }
+
 #else
 static void dp_peer_setup_remaining_tids(struct dp_peer *peer) {};
 #endif
@@ -1159,7 +1255,7 @@ void dp_peer_rx_tid_setup(struct dp_peer *peer)
 	dp_peer_rx_tids_init(peer);
 
 	/* Setup default (non-qos) rx tid queue */
-	dp_rx_tid_setup_wifi3(peer, DP_NON_QOS_TID, 1, 0);
+	dp_rx_tid_setup_wifi3(peer, BIT(DP_NON_QOS_TID), 1, 0);
 
 	/* Setup rx tid queue for TID 0.
 	 * Other queues will be setup on receiving first packet, which will cause
@@ -1171,11 +1267,11 @@ void dp_peer_rx_tid_setup(struct dp_peer *peer)
 	if (qdf_unlikely(vdev->mesh_vdev) ||
 	    qdf_unlikely(txrx_peer->nawds_enabled))
 		dp_rx_tid_setup_wifi3(
-				peer, 0,
+				peer, BIT(0),
 				hal_get_rx_max_ba_window(soc->hal_soc, 0),
 				0);
 	else
-		dp_rx_tid_setup_wifi3(peer, 0, 1, 0);
+		dp_rx_tid_setup_wifi3(peer, BIT(0), 1, 0);
 
 	/*
 	 * Setup the rest of TID's to handle LFR
@@ -1562,7 +1658,7 @@ int dp_addba_requestprocess_wifi3(struct cdp_soc_t *cdp_soc,
 
 	dp_check_ba_buffersize(peer, tid, buffersize);
 
-	if (dp_rx_tid_setup_wifi3(peer, tid,
+	if (dp_rx_tid_setup_wifi3(peer, BIT(tid),
 	    rx_tid->ba_win_size, startseqnum)) {
 		rx_tid->ba_status = DP_RX_BA_INACTIVE;
 		qdf_spin_unlock_bh(&rx_tid->tid_lock);

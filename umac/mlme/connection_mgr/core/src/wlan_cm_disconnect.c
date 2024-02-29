@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015,2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -158,6 +158,8 @@ cm_ser_disconnect_cb(struct wlan_serialization_command *cmd,
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	struct wlan_objmgr_vdev *vdev;
 	struct cnx_mgr *cm_ctx;
+	enum qdf_hang_reason hang_reason =
+				QDF_VDEV_ACTIVE_SER_DISCONNECT_TIMEOUT;
 
 	if (!cmd) {
 		mlme_err("cmd is NULL, reason: %d", reason);
@@ -192,7 +194,7 @@ cm_ser_disconnect_cb(struct wlan_serialization_command *cmd,
 	case WLAN_SER_CB_ACTIVE_CMD_TIMEOUT:
 		mlme_err(CM_PREFIX_FMT "Active command timeout",
 			 CM_PREFIX_REF(wlan_vdev_get_id(vdev), cmd->cmd_id));
-		cm_trigger_panic_on_cmd_timeout(cm_ctx->vdev);
+		cm_trigger_panic_on_cmd_timeout(cm_ctx->vdev, hang_reason);
 		cm_send_disconnect_resp(cm_ctx, cmd->cmd_id);
 		break;
 	case WLAN_SER_CB_RELEASE_MEM_CMD:

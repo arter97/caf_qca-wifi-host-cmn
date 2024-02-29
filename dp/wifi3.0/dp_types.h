@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -2469,7 +2469,7 @@ struct dp_arch_ops {
 				      enum peer_stats_type stats_type);
 	QDF_STATUS (*dp_peer_rx_reorder_queue_setup)(struct dp_soc *soc,
 						     struct dp_peer *peer,
-						     int tid,
+						     uint32_t tid_bitmap,
 						     uint32_t ba_window_size);
 	void (*dp_bank_reconfig)(struct dp_soc *soc, struct dp_vdev *vdev);
 
@@ -2572,6 +2572,7 @@ struct dp_arch_ops {
  * @rssi_dbm_conv_support: Rssi dbm conversion support param.
  * @umac_hw_reset_support: UMAC HW reset support
  * @wds_ext_ast_override_enable:
+ * @multi_rx_reorder_q_setup_support: multi rx reorder q setup at a time support
  */
 struct dp_soc_features {
 	uint8_t pn_in_reo_dest:1,
@@ -2579,6 +2580,7 @@ struct dp_soc_features {
 	bool rssi_dbm_conv_support;
 	bool umac_hw_reset_support;
 	bool wds_ext_ast_override_enable;
+	bool multi_rx_reorder_q_setup_support;
 };
 
 enum sysfs_printing_mode {
@@ -4097,6 +4099,9 @@ struct dp_vdev {
 	/* callback to classify critical packets */
 	ol_txrx_classify_critical_pkt_fp tx_classify_critical_pkt_cb;
 
+	/* delete notifier to DP component */
+	ol_txrx_vdev_delete_cb vdev_del_notify;
+
 	/* deferred vdev deletion state */
 	struct {
 		/* VDEV delete pending */
@@ -5064,14 +5069,15 @@ struct dp_peer {
 		sta_self_peer:1, /* Indicate STA self peer */
 		is_tdls_peer:1; /* Indicate TDLS peer */
 
+	/* MCL specific peer local id */
+	uint16_t local_id;
+	enum ol_txrx_peer_state state;
+
 #ifdef WLAN_FEATURE_11BE_MLO
 	uint8_t first_link:1, /* first link peer for MLO */
 		primary_link:1; /* primary link for MLO */
 #endif
 
-	/* MCL specific peer local id */
-	uint16_t local_id;
-	enum ol_txrx_peer_state state;
 	qdf_spinlock_t peer_info_lock;
 
 	/* Peer calibrated stats */

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015, 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -265,6 +265,12 @@ bool wlan_cm_is_link_switch_connect_resp(struct wlan_cm_connect_resp *resp)
 	return cm_is_link_switch_connect_resp(resp);
 }
 
+void wlan_cm_trigger_panic_on_cmd_timeout(struct wlan_objmgr_vdev *vdev,
+					  enum qdf_hang_reason reason)
+{
+	cm_trigger_panic_on_cmd_timeout(vdev, reason);
+}
+
 #ifdef WLAN_FEATURE_HOST_ROAM
 bool wlan_cm_get_active_reassoc_req(struct wlan_objmgr_vdev *vdev,
 				    struct wlan_cm_vdev_reassoc_req *req)
@@ -422,6 +428,13 @@ QDF_STATUS wlan_cm_get_rnr(struct wlan_objmgr_vdev *vdev, wlan_cm_id cm_id,
 	}
 
 	return cm_get_rnr(vdev, cm_id, rnr);
+}
+
+struct scan_cache_entry *
+wlan_cm_get_curr_candidate_entry(struct wlan_objmgr_vdev *vdev,
+				 wlan_cm_id cm_id)
+{
+	return cm_get_curr_candidate_entry(vdev, cm_id);
 }
 
 void

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1803,6 +1803,29 @@ util_scan_entry_rsnxe(struct scan_cache_entry *scan_entry)
 {
 	return scan_entry->ie_list.rsnxe;
 }
+
+/**
+ * util_is_rsnxe_h2e_capable() - API to check whether the RSNXE has
+ * H2E capable or not.
+ * @rsnxe: Pointer to RSNXE IE.
+ *
+ * Returns true if RSNXE caps has H2E capable bit set or else false.
+ *
+ * Return: bool
+ */
+bool util_is_rsnxe_h2e_capable(const uint8_t *rsnxe);
+
+/**
+ * util_scan_entry_sae_h2e_capable() - API to check whether the
+ * current scan entry is SAE-H2E capable
+ * @scan_entry: Scan cache entry
+ *
+ * Returns true if the current scan entry has RSNXE IE with H2E bit
+ * set.
+ *
+ * Return: bool
+ */
+bool util_scan_entry_sae_h2e_capable(struct scan_cache_entry *scan_entry);
 
 /**
  * util_scan_scm_freq_to_band() - API to get band from frequency

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -130,8 +130,8 @@ struct mgmt_txrx_desc_elem_t *wlan_mgmt_txrx_desc_get(
 			!= QDF_STATUS_SUCCESS) {
 		qdf_spin_unlock_bh(
 			&mgmt_txrx_pdev_ctx->mgmt_desc_pool.desc_pool_lock);
-		mgmt_txrx_err("Descriptor freelist empty for mgmt_txrx_ctx %pK",
-				mgmt_txrx_pdev_ctx);
+		mgmt_txrx_err_rl("Descriptor freelist empty for mgmt_txrx_ctx %pK",
+				 mgmt_txrx_pdev_ctx);
 		return NULL;
 	}
 

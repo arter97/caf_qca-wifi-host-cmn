@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1596,7 +1596,7 @@ static void ce_update_msi_batch_intr_flags(struct CE_state *ce_state)
 
 static inline void ce_update_wrt_idx_offset(struct hif_softc *scn,
 					    struct CE_state *ce_state,
-					    uint8_t ring_type)
+					    struct CE_attr *attr)
 {
 }
 #else
@@ -1636,12 +1636,16 @@ static void ce_update_msi_batch_intr_flags(struct CE_state *ce_state)
 
 static inline void ce_update_wrt_idx_offset(struct hif_softc *scn,
 					    struct CE_state *ce_state,
-					    uint8_t ring_type)
+					    struct CE_attr *attr)
 {
-	if (ring_type == CE_RING_SRC)
+	/* Do not setup CE write index offset for FW only CE rings */
+	if (!attr->src_nentries && !attr->dest_nentries)
+		return;
+
+	if (attr->src_nentries)
 		ce_state->ce_wrt_idx_offset =
 			CE_SRC_WR_IDX_OFFSET_GET(scn, ce_state->ctrl_addr);
-	else if (ring_type == CE_RING_DEST)
+	else if (attr->dest_nentries)
 		ce_state->ce_wrt_idx_offset =
 			CE_DST_WR_IDX_OFFSET_GET(scn, ce_state->ctrl_addr);
 	else
@@ -2181,6 +2185,8 @@ static void ce_oom_recovery(void *context)
 		&ce_softc->pipe_info[ce_state->id];
 
 	hif_post_recv_buffers_for_pipe(pipe_info);
+
+	qdf_atomic_dec(&scn->active_oom_work_cnt);
 }
 
 #ifdef HIF_CE_DEBUG_DATA_BUF
@@ -2845,9 +2851,7 @@ struct CE_handle *ce_init(struct hif_softc *scn,
 		goto error_target_access;
 
 	ce_update_msi_batch_intr_flags(CE_state);
-	ce_update_wrt_idx_offset(scn, CE_state,
-				 attr->src_nentries ?
-				 CE_RING_SRC : CE_RING_DEST);
+	ce_update_wrt_idx_offset(scn, CE_state, attr);
 
 	return (struct CE_handle *)CE_state;
 
@@ -3378,7 +3382,7 @@ hif_send_head(struct hif_opaque_softc *hif_ctx,
 
 	if (qdf_unlikely(!ce_hdl)) {
 		hif_err("CE handle is null");
-		return A_ERROR;
+		return QDF_STATUS_E_INVAL;
 	}
 
 	QDF_NBUF_UPDATE_TX_PKT_COUNT(nbuf, QDF_NBUF_TX_PKT_HIF);
@@ -3854,13 +3858,12 @@ static void hif_post_recv_buffers_failure(struct HIF_CE_pipe_info *pipe_info,
 	 */
 	if (bufs_needed_tmp == CE_state->dest_ring->nentries - 1 ||
 	    (ce_srng_based(scn) &&
-	     bufs_needed_tmp == CE_state->dest_ring->nentries - 2))
+	     bufs_needed_tmp == CE_state->dest_ring->nentries - 2)) {
+		qdf_atomic_inc(&scn->active_oom_work_cnt);
 		qdf_sched_work(scn->qdf_dev, &CE_state->oom_allocation_work);
+	}
 
 }
-
-
-
 
 QDF_STATUS hif_post_recv_buffers_for_pipe(struct HIF_CE_pipe_info *pipe_info)
 {
@@ -4278,6 +4281,7 @@ static void hif_destroy_oom_work(struct hif_softc *scn)
 			qdf_destroy_work(scn->qdf_dev,
 					 &ce_state->oom_allocation_work);
 	}
+	qdf_atomic_set(&scn->active_oom_work_cnt, 0);
 }
 
 void hif_ce_stop(struct hif_softc *scn)

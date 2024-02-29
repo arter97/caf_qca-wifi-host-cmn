@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -142,7 +142,8 @@ int hif_rtpm_log_debug_stats(void *s, enum hif_rtpm_fill_type type)
 	hif_rtpm_print(type, &index, s, "%30s: %llu\n", "Last resume request timestamp",
 		       gp_hif_rtpm_ctx->stats.request_resume_ts);
 
-	hif_rtpm_print(type, &index, s, "%30s: %d\n", "Last resume request by",
+	hif_rtpm_print(type, &index, s, "%30s: %llu\n",
+		       "Last resume request by",
 		       gp_hif_rtpm_ctx->stats.request_resume_id);
 
 	hif_rtpm_print(type, &index, s, "%30s: %ps\n", "Last Busy Marker",

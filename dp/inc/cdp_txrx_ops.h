@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -717,7 +717,7 @@ struct cdp_cmn_ops {
 	QDF_STATUS (*set_wds_ext_peer_bit)(ol_txrx_soc_handle soc,
 					   uint8_t *mac);
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
-	void (*txrx_drain)(ol_txrx_soc_handle soc);
+	QDF_STATUS (*txrx_drain)(ol_txrx_soc_handle soc, uint8_t rx_only);
 	int (*get_free_desc_poolsize)(struct cdp_soc_t *soc);
 #ifdef WLAN_SYSFS_DP_STATS
 	QDF_STATUS (*txrx_sysfs_fill_stats)(ol_txrx_soc_handle soc,
@@ -1525,6 +1525,10 @@ struct ol_if_ops {
 				       uint8_t ba_window_size_valid,
 				       uint16_t ba_window_size);
 	QDF_STATUS
+	(*peer_multi_rx_reorder_queue_setup)(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
+					     uint8_t pdev_id,
+					     struct multi_rx_reorder_queue_setup_params *tid_params);
+	QDF_STATUS
 	(*peer_rx_reorder_queue_remove)(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 					uint8_t pdev_id,
 					uint8_t vdev_id, uint8_t *peer_macaddr,
@@ -1916,7 +1920,7 @@ struct cdp_misc_ops {
 	QDF_STATUS (*set_swlm_enable)(struct cdp_soc_t *soc_hdl,
 				      uint8_t val);
 	uint8_t (*is_swlm_enabled)(struct cdp_soc_t *soc_hdl);
-	void (*display_txrx_hw_info)(struct cdp_soc_t *soc_hdl);
+	bool (*display_txrx_hw_info)(struct cdp_soc_t *soc_hdl);
 	uint32_t (*get_tx_rings_grp_bitmap)(struct cdp_soc_t *soc_hdl);
 #ifdef WLAN_FEATURE_PEER_TXQ_FLUSH_CONF
 	int (*set_peer_txq_flush_config)(struct cdp_soc_t *soc_hdl,
@@ -1998,7 +2002,7 @@ struct cdp_peer_ops {
 	QDF_STATUS (*register_ocb_peer)(uint8_t *mac_addr);
 	uint8_t * (*peer_get_peer_mac_addr)(void *peer);
 	int (*get_peer_state)(struct cdp_soc_t *soc, uint8_t vdev_id,
-			      uint8_t *peer_mac);
+			      uint8_t *peer_mac, bool slowpath);
 	struct cdp_vdev * (*get_vdev_for_peer)(void *peer);
 	int16_t (*update_ibss_add_peer_num_of_vdev)(struct cdp_soc_t *soc,
 						    uint8_t vdev_id,

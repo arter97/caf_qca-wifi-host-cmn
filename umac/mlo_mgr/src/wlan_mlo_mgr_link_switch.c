@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -449,10 +449,23 @@ mlo_mgr_reset_roam_state_for_link_vdev(struct wlan_objmgr_vdev *vdev,
 		mlo_err("vdev:%d failed to change RSO state to deinit",
 			wlan_vdev_get_id(assoc_vdev));
 }
+
+static void
+mlo_mgr_restore_rso_upon_link_switch_failure(struct wlan_objmgr_vdev *vdev)
+{
+	wlan_cm_roam_state_change(wlan_vdev_get_pdev(vdev),
+				  wlan_vdev_get_id(vdev),
+				  WLAN_ROAM_RSO_ENABLED,
+				  REASON_CONNECT);
+}
 #else
 static inline void
 mlo_mgr_reset_roam_state_for_link_vdev(struct wlan_objmgr_vdev *vdev,
 				       struct wlan_objmgr_vdev *assoc_vdev)
+{}
+
+static inline void
+mlo_mgr_restore_rso_upon_link_switch_failure(struct wlan_objmgr_vdev *vdev)
 {}
 #endif
 
@@ -723,14 +736,18 @@ QDF_STATUS mlo_mgr_link_switch_start_connect(struct wlan_objmgr_vdev *vdev)
 	struct mlo_link_info *mlo_link_info;
 	uint8_t *vdev_mac;
 	struct wlan_mlo_sta *sta_ctx;
-	struct wlan_mlo_link_switch_req *req =
-					&vdev->mlo_dev_ctx->link_ctx->last_req;
+	struct qdf_mac_addr mld_addr;
+	struct wlan_mlo_dev_context *mlo_dev_ctx = vdev->mlo_dev_ctx;
+	struct wlan_mlo_link_switch_req *req = &mlo_dev_ctx->link_ctx->last_req;
+	struct wlan_objmgr_vdev *assoc_vdev = wlan_mlo_get_assoc_link_vdev(vdev);
 
-	sta_ctx = vdev->mlo_dev_ctx->sta_ctx;
+	if (!assoc_vdev) {
+		mlo_err("Assoc VDEV not found");
+		goto out;
+	}
 
-	mlo_link_info =
-		mlo_mgr_get_ap_link_by_link_id(vdev->mlo_dev_ctx,
-					       req->new_ieee_link_id);
+	mlo_link_info = mlo_mgr_get_ap_link_by_link_id(mlo_dev_ctx,
+						       req->new_ieee_link_id);
 
 	if (!mlo_link_info) {
 		mlo_err("New link ID not found");
@@ -746,7 +763,7 @@ QDF_STATUS mlo_mgr_link_switch_start_connect(struct wlan_objmgr_vdev *vdev)
 		goto out;
 	}
 
-	wlan_vdev_set_link_id(vdev, req->new_ieee_link_id);
+	sta_ctx = mlo_dev_ctx->sta_ctx;
 	copied_conn_req_lock_acquire(sta_ctx);
 	if (sta_ctx->copied_conn_req) {
 		qdf_mem_copy(&conn_req, sta_ctx->copied_conn_req,
@@ -757,12 +774,25 @@ QDF_STATUS mlo_mgr_link_switch_start_connect(struct wlan_objmgr_vdev *vdev)
 	}
 	copied_conn_req_lock_release(sta_ctx);
 
+	status = wlan_vdev_get_bss_peer_mld_mac(assoc_vdev, &mld_addr);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mlo_debug("Get MLD addr failed");
+		goto out;
+	}
+
 	conn_req.vdev_id = wlan_vdev_get_id(vdev);
 	conn_req.source = CM_MLO_LINK_SWITCH_CONNECT;
+	wlan_vdev_set_link_id(vdev, req->new_ieee_link_id);
+
 	qdf_copy_macaddr(&conn_req.bssid, &mlo_link_info->ap_link_addr);
-	mlo_allocate_and_copy_ies(&conn_req, sta_ctx->copied_conn_req);
+	qdf_copy_macaddr(&conn_req.mld_addr, &mld_addr);
+	wlan_vdev_mlme_get_ssid(assoc_vdev, conn_req.ssid.ssid,
+				&conn_req.ssid.length);
+
 	conn_req.crypto.auth_type = 0;
 	conn_req.ml_parnter_info = sta_ctx->ml_partner_info;
+	mlo_allocate_and_copy_ies(&conn_req, sta_ctx->copied_conn_req);
+
 	status = wlan_cm_start_connect(vdev, &conn_req);
 	if (QDF_IS_STATUS_SUCCESS(status))
 		mlo_update_connected_links(vdev, 1);
@@ -779,18 +809,49 @@ out:
 	return status;
 }
 
+static void
+mlo_mgr_link_switch_connect_success_trans_state(struct wlan_objmgr_vdev *vdev)
+{
+	enum mlo_link_switch_req_state curr_state;
+
+	/*
+	 * If connection is success, then sending link switch failure to FW
+	 * might result in not updating VDEV to link mapping in FW and FW may
+	 * immediately send next link switch with params corresponding to
+	 * pre-link switch which may vary post-link switch in host and might
+	 * not be valid and results in Host-FW out-of-sync.
+	 *
+	 * Force the result of link switch in align with link switch connect
+	 * so that Host and FW are not out of sync.
+	 */
+	mlo_dev_lock_acquire(vdev->mlo_dev_ctx);
+	curr_state = vdev->mlo_dev_ctx->link_ctx->last_req.state;
+	vdev->mlo_dev_ctx->link_ctx->last_req.state =
+					MLO_LINK_SWITCH_STATE_COMPLETE_SUCCESS;
+	mlo_dev_lock_release(vdev->mlo_dev_ctx);
+
+	if (curr_state != MLO_LINK_SWITCH_STATE_CONNECT_NEW_LINK)
+		mlo_debug("Current link switch state %d changed", curr_state);
+}
+
 void mlo_mgr_link_switch_connect_done(struct wlan_objmgr_vdev *vdev,
 				      QDF_STATUS status)
 {
 	struct wlan_mlo_link_switch_req *req;
 
 	req = &vdev->mlo_dev_ctx->link_ctx->last_req;
-	if (QDF_IS_STATUS_SUCCESS(status))
-		mlo_mgr_link_switch_trans_next_state(vdev->mlo_dev_ctx);
-	else
+	if (QDF_IS_STATUS_SUCCESS(status)) {
+		mlo_mgr_link_switch_connect_success_trans_state(vdev);
+	} else {
+		mlo_update_connected_links(vdev, 0);
 		mlo_err("VDEV %d link switch connect failed", req->vdev_id);
+	}
 
 	mlo_mgr_remove_link_switch_cmd(vdev);
+
+	if (QDF_IS_STATUS_ERROR(status))
+		mlo_mgr_restore_rso_upon_link_switch_failure(
+				wlan_mlo_get_assoc_link_vdev(vdev));
 }
 
 static enum wlan_mlo_link_switch_notify_reason
@@ -867,38 +928,17 @@ mlo_mgr_start_link_switch(struct wlan_objmgr_vdev *vdev,
 	return status;
 }
 
-/**
- * mlo_mgr_trigger_recovery_on_link_switch_timeout() - trigger panic on link
- * switch timeout
- * @vdev: vdev pointer
- *
- * Return: void
- */
-static void
-mlo_mgr_trigger_recovery_on_link_switch_timeout(struct wlan_objmgr_vdev *vdev)
-{
-	struct wlan_objmgr_psoc *psoc;
-
-	psoc = wlan_vdev_get_psoc(vdev);
-	if (!psoc)
-		return;
-
-	if (qdf_is_recovering() || qdf_is_fw_down())
-		return;
-
-	qdf_trigger_self_recovery(psoc, QDF_ACTIVE_LIST_TIMEOUT);
-}
-
 static QDF_STATUS
 mlo_mgr_ser_link_switch_cb(struct wlan_serialization_command *cmd,
-			   enum wlan_serialization_cb_reason reason)
+			   enum wlan_serialization_cb_reason cb_reason)
 {
 	struct wlan_objmgr_vdev *vdev;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	struct wlan_mlo_link_switch_req *req;
+	enum qdf_hang_reason reason = QDF_VDEV_ACTIVE_SER_LINK_SWITCH_TIMEOUT;
 
 	if (!cmd) {
-		mlo_err("cmd is NULL, reason: %d", reason);
+		mlo_err("cmd is NULL, reason: %d", cb_reason);
 		QDF_ASSERT(0);
 		return QDF_STATUS_E_NULL_VALUE;
 	}
@@ -906,7 +946,7 @@ mlo_mgr_ser_link_switch_cb(struct wlan_serialization_command *cmd,
 	vdev = cmd->vdev;
 	req = &vdev->mlo_dev_ctx->link_ctx->last_req;
 
-	switch (reason) {
+	switch (cb_reason) {
 	case WLAN_SER_CB_ACTIVATE_CMD:
 		status = mlo_mgr_start_link_switch(vdev, cmd);
 		if (QDF_IS_STATUS_ERROR(status)) {
@@ -922,7 +962,7 @@ mlo_mgr_ser_link_switch_cb(struct wlan_serialization_command *cmd,
 		break;
 	case WLAN_SER_CB_ACTIVE_CMD_TIMEOUT:
 		mlo_err("Link switch active cmd timeout");
-		mlo_mgr_trigger_recovery_on_link_switch_timeout(vdev);
+		wlan_cm_trigger_panic_on_cmd_timeout(vdev, reason);
 		break;
 	default:
 		QDF_ASSERT(0);
@@ -948,8 +988,7 @@ void mlo_mgr_remove_link_switch_cmd(struct wlan_objmgr_vdev *vdev)
 	mlo_mgr_link_switch_notify(vdev, req);
 
 	/* Handle any pending disconnect */
-	if (cur_state == MLO_LINK_SWITCH_STATE_ABORT_TRANS)
-		mlo_handle_pending_disconnect(vdev);
+	mlo_handle_pending_disconnect(vdev);
 
 	if (req->reason == MLO_LINK_SWITCH_REASON_HOST_FORCE) {
 		mlo_debug("Link switch not serialized");

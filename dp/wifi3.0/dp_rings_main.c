@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -2864,13 +2864,14 @@ void dp_update_soft_irq_limits(struct dp_soc *soc, uint32_t tx_limit,
  * READ NOC error when UMAC is in low power state. MCC does not have
  * device force wake working yet.
  *
- * Return: none
+ * Return: rings are empty
  */
-void dp_display_srng_info(struct cdp_soc_t *soc_hdl)
+bool dp_display_srng_info(struct cdp_soc_t *soc_hdl)
 {
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
 	hal_soc_handle_t hal_soc = soc->hal_soc;
 	uint32_t hp, tp, i;
+	bool ret = true;
 
 	dp_info("SRNG HP-TP data:");
 	for (i = 0; i < soc->num_tcl_data_rings; i++) {
@@ -2890,6 +2891,9 @@ void dp_display_srng_info(struct cdp_soc_t *soc_hdl)
 	for (i = 0; i < soc->num_reo_dest_rings; i++) {
 		hal_get_sw_hptp(hal_soc, soc->reo_dest_ring[i].hal_srng,
 				&tp, &hp);
+		if (hp != tp)
+			ret = false;
+
 		dp_info("REO DST ring[%d]: hp=0x%x, tp=0x%x", i, hp, tp);
 	}
 
@@ -2901,6 +2905,8 @@ void dp_display_srng_info(struct cdp_soc_t *soc_hdl)
 
 	hal_get_sw_hptp(hal_soc, soc->wbm_desc_rel_ring.hal_srng, &tp, &hp);
 	dp_info("WBM desc release ring: hp=0x%x, tp=0x%x", hp, tp);
+
+	return ret;
 }
 
 /**
@@ -2951,7 +2957,7 @@ QDF_STATUS dp_set_vdev_pcp_tid_map_wifi3(struct cdp_soc_t *soc_hdl,
 }
 
 #if defined(FEATURE_RUNTIME_PM) || defined(DP_POWER_SAVE)
-void dp_drain_txrx(struct cdp_soc_t *soc_handle)
+QDF_STATUS dp_drain_txrx(struct cdp_soc_t *soc_handle, uint8_t rx_only)
 {
 	struct dp_soc *soc = (struct dp_soc *)soc_handle;
 	uint32_t cur_tx_limit, cur_rx_limit;
@@ -2959,6 +2965,7 @@ void dp_drain_txrx(struct cdp_soc_t *soc_handle)
 	uint32_t val;
 	int i;
 	int cpu = dp_srng_get_cpu();
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
 
 	cur_tx_limit = soc->wlan_cfg_ctx->tx_comp_loop_pkt_limit;
 	cur_rx_limit = soc->wlan_cfg_ctx->rx_reap_loop_pkt_limit;
@@ -2971,16 +2978,27 @@ void dp_drain_txrx(struct cdp_soc_t *soc_handle)
 	 */
 	dp_update_soft_irq_limits(soc, budget, budget);
 
-	for (i = 0; i < wlan_cfg_get_num_contexts(soc->wlan_cfg_ctx); i++)
+	for (i = 0; i < wlan_cfg_get_num_contexts(soc->wlan_cfg_ctx); i++) {
+		if (rx_only && !soc->intr_ctx[i].rx_ring_mask)
+			continue;
 		soc->arch_ops.dp_service_srngs(&soc->intr_ctx[i], budget, cpu);
+	}
 
 	dp_update_soft_irq_limits(soc, cur_tx_limit, cur_rx_limit);
+
+	status = hif_try_complete_dp_tasks(soc->hif_handle);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		dp_err("Failed to complete DP tasks");
+		return status;
+	}
 
 	/* Do a dummy read at offset 0; this will ensure all
 	 * pendings writes(HP/TP) are flushed before read returns.
 	 */
 	val = HAL_REG_READ((struct hal_soc *)soc->hal_soc, 0);
 	dp_debug("Register value at offset 0: %u", val);
+
+	return status;
 }
 #endif
 

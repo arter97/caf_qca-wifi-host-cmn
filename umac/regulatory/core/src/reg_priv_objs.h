@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -225,6 +225,7 @@ struct indoor_concurrency_list {
  * @fcc_rules_ptr: Value of fcc channel frequency and tx_power list received
  * from firmware
  * @set_fcc_channel: Flag to set fcc channels
+ * @country_max_allowed_bw: max allowed bw for all reg rules of client
  */
 struct wlan_regulatory_psoc_priv_obj {
 	struct mas_chan_params mas_chan_params[PSOC_MAX_PHY_REG_CAP];
@@ -307,6 +308,7 @@ struct wlan_regulatory_psoc_priv_obj {
 	struct cur_fcc_rule fcc_rules_ptr[MAX_NUM_FCC_RULES];
 #endif
 	bool set_fcc_channel;
+	uint32_t country_max_allowed_bw;
 };
 
 /**

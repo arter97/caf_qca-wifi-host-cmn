@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -256,6 +256,16 @@ bool wlan_cm_is_link_switch_disconnect_resp(struct wlan_cm_discon_rsp *resp);
  */
 bool wlan_cm_is_link_switch_connect_resp(struct wlan_cm_connect_resp *resp);
 
+/**
+ * wlan_cm_trigger_panic_on_cmd_timeout() - Trigger recovery on CM command
+ * timeout.
+ * @vdev: VDEV object manager
+ * @reason: Hang reason code
+ *
+ * Return: void
+ */
+void wlan_cm_trigger_panic_on_cmd_timeout(struct wlan_objmgr_vdev *vdev,
+					  enum qdf_hang_reason reason);
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 /**
  * wlan_cm_is_vdev_roam_started() - check if vdev is in roaming state and
@@ -579,6 +589,19 @@ void wlan_cm_set_candidate_custom_sort_cb(
  */
 QDF_STATUS wlan_cm_get_rnr(struct wlan_objmgr_vdev *vdev, wlan_cm_id cm_id,
 			   struct reduced_neighbor_report *rnr);
+
+/**
+ * wlan_cm_get_curr_candidate_entry() - Get current candidate from cnx mgr
+ * @vdev: VDEV object manager
+ * @cm_id: cnx mgr ID
+ *
+ * Get the current candidate for connection from cnx mgr.
+ *
+ * Return: Scan entry
+ */
+struct scan_cache_entry *
+wlan_cm_get_curr_candidate_entry(struct wlan_objmgr_vdev *vdev,
+				 wlan_cm_id cm_id);
 
 /**
  * wlan_cm_disc_cont_after_rso_stop() - Continue disconnect after RSO stop

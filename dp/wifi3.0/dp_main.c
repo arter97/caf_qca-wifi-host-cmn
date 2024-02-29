@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -2697,8 +2697,11 @@ void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id)
 			} else {
 				rem_entries = num_entries_per_buf;
 				scatter_buf_num++;
-				if (scatter_buf_num >= num_scatter_bufs)
+				if (scatter_buf_num >= num_scatter_bufs) {
+					scatter_buf_num--;
 					break;
+				}
+
 				scatter_buf_ptr = (uint8_t *)
 					(soc->wbm_idle_scatter_buf_base_vaddr[
 					 scatter_buf_num]);
@@ -2713,7 +2716,7 @@ void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id)
 			num_scatter_bufs, soc->wbm_idle_scatter_buf_size,
 			(uint32_t)(scatter_buf_ptr -
 			(uint8_t *)(soc->wbm_idle_scatter_buf_base_vaddr[
-			scatter_buf_num-1])), total_link_descs);
+			scatter_buf_num])), total_link_descs);
 	}
 }
 
@@ -4981,6 +4984,7 @@ static QDF_STATUS dp_vdev_register_wifi3(struct cdp_soc_t *soc_hdl,
 #endif
 	vdev->me_convert = txrx_ops->me_convert;
 	vdev->get_tsf_time = txrx_ops->get_tsf_time;
+	vdev->vdev_del_notify = txrx_ops->vdev_del_notify;
 
 	dp_vdev_register_rx_eapol(vdev, txrx_ops);
 
@@ -6336,6 +6340,8 @@ void dp_vdev_unref_delete(struct dp_soc *soc, struct dp_vdev *vdev,
 {
 	ol_txrx_vdev_delete_cb vdev_delete_cb = NULL;
 	void *vdev_delete_context = NULL;
+	ol_txrx_vdev_delete_cb vdev_del_notify = NULL;
+	void *vdev_del_noitfy_ctx = NULL;
 	uint8_t vdev_id = vdev->vdev_id;
 	struct dp_pdev *pdev = vdev->pdev;
 	struct dp_vdev *tmp_vdev = NULL;
@@ -6358,8 +6364,12 @@ void dp_vdev_unref_delete(struct dp_soc *soc, struct dp_vdev *vdev,
 	vdev_delete_cb = vdev->delete.callback;
 	vdev_delete_context = vdev->delete.context;
 
-	dp_info("deleting vdev object %pK ("QDF_MAC_ADDR_FMT")- its last peer is done",
-		vdev, QDF_MAC_ADDR_REF(vdev->mac_addr.raw));
+	vdev_del_notify = vdev->vdev_del_notify;
+	vdev_del_noitfy_ctx = vdev->osif_vdev;
+
+	dp_info("deleting vdev object %pK (" QDF_MAC_ADDR_FMT ")%s",
+		vdev, QDF_MAC_ADDR_REF(vdev->mac_addr.raw),
+		vdev_del_notify ? " with del_notify" : "");
 
 	if (wlan_op_mode_monitor == vdev->opmode) {
 		dp_monitor_vdev_delete(soc, vdev);
@@ -6391,8 +6401,6 @@ free_vdev:
 
 	dp_cfg_event_record_vdev_evt(soc, DP_CFG_EVENT_VDEV_UNREF_DEL,
 				     vdev);
-	dp_info("deleting vdev object %pK ("QDF_MAC_ADDR_FMT")",
-		vdev, QDF_MAC_ADDR_REF(vdev->mac_addr.raw));
 	wlan_minidump_remove(vdev, sizeof(*vdev), soc->ctrl_psoc,
 			     WLAN_MD_DP_VDEV, "dp_vdev");
 	qdf_mem_free(vdev);
@@ -6400,6 +6408,9 @@ free_vdev:
 
 	if (vdev_delete_cb)
 		vdev_delete_cb(vdev_delete_context);
+
+	if (vdev_del_notify)
+		vdev_del_notify(vdev_del_noitfy_ctx);
 }
 
 qdf_export_symbol(dp_vdev_unref_delete);
@@ -9549,10 +9560,9 @@ QDF_STATUS dp_get_per_link_peer_stats(struct dp_peer *peer,
 				      enum cdp_peer_type peer_type,
 				      uint8_t num_link)
 {
-	uint8_t i, index = 0;
+	uint8_t i, min_num_links;
 	struct dp_peer *link_peer;
 	struct dp_mld_link_peers link_peers_info;
-	struct cdp_peer_stats *stats;
 	struct dp_soc *soc = peer->vdev->pdev->soc;
 
 	dp_get_peer_calibr_stats(peer, peer_stats);
@@ -9563,19 +9573,18 @@ QDF_STATUS dp_get_per_link_peer_stats(struct dp_peer *peer,
 		dp_get_link_peers_ref_from_mld_peer(soc, peer,
 						    &link_peers_info,
 						    DP_MOD_ID_GENERIC_STATS);
-		for (i = 0; i < link_peers_info.num_links; i++) {
+		if (link_peers_info.num_links > num_link)
+			dp_info("Req stats of %d link. less than total link %d",
+				num_link, link_peers_info.num_links);
+
+		min_num_links = num_link < link_peers_info.num_links ?
+				num_link : link_peers_info.num_links;
+		for (i = 0; i < min_num_links; i++) {
 			link_peer = link_peers_info.link_peers[i];
 			if (qdf_unlikely(!link_peer))
 				continue;
-			if (index > num_link) {
-				dp_err("Request stats for %d link(s) is less than total link(s) %d",
-				       num_link, link_peers_info.num_links);
-				break;
-			}
-			stats = &peer_stats[index];
-			dp_get_peer_per_pkt_stats(link_peer, stats);
-			dp_get_peer_extd_stats(link_peer, stats);
-			index++;
+			dp_get_peer_per_pkt_stats(link_peer, peer_stats);
+			dp_get_peer_extd_stats(link_peer, peer_stats);
 		}
 		dp_release_link_peers_ref(&link_peers_info,
 					  DP_MOD_ID_GENERIC_STATS);
@@ -11218,6 +11227,11 @@ static QDF_STATUS dp_soc_set_param(struct cdp_soc_t  *soc_hdl,
 		soc->features.umac_hw_reset_support = value;
 		dp_info("UMAC HW reset support :%u",
 			soc->features.umac_hw_reset_support);
+		break;
+	case DP_SOC_PARAM_MULTI_RX_REORDER_SETUP_SUPPORT:
+		soc->features.multi_rx_reorder_q_setup_support = value;
+		dp_info("Multi rx reorder queue setup support: %u",
+			soc->features.multi_rx_reorder_q_setup_support);
 		break;
 	default:
 		dp_info("not handled param %d ", param);
