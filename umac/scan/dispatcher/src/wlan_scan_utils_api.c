@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -2168,7 +2168,7 @@ util_get_ml_bv_partner_link_info(struct wlan_objmgr_pdev *pdev,
 	uint8_t rnr_idx = 0;
 	struct rnr_bss_info *rnr = NULL;
 	uint16_t freq;
-	struct scan_cache_entry tmp_entry = {0};
+	struct scan_cache_entry *tmp_entry;
 	struct qdf_mac_addr bcast_addr = QDF_MAC_ADDR_BCAST_INIT;
 	struct scan_mbssid_info *mbssid;
 	qdf_size_t ml_ie_len = ml_ie[TAG_LEN_POS] + sizeof(struct ie_header);
@@ -2187,13 +2187,14 @@ util_get_ml_bv_partner_link_info(struct wlan_objmgr_pdev *pdev,
 
 			if ((!scan_entry->mbssid_info.profile_count) &&
 			    !(rnr->bss_params & TBTT_BSS_PARAM_TRANS_BSSID_BIT)) {
+				tmp_entry =
 				       scm_scan_get_scan_entry_by_mac_freq(pdev,
-							     &rnr->bssid, freq,
-							     &tmp_entry);
-				if (tmp_entry.frm_subtype) {
+							     &rnr->bssid, freq);
+				if (tmp_entry) {
 					qdf_mem_copy(mbssid,
-						     &tmp_entry.mbssid_info,
+						     &tmp_entry->mbssid_info,
 						     sizeof(*mbssid));
+					util_scan_free_cache_entry(tmp_entry);
 				} else {
 					qdf_mem_copy(mbssid->non_trans_bssid,
 						     rnr->bssid.bytes,
@@ -3104,7 +3105,7 @@ static uint32_t util_gen_new_ie(uint8_t *ie, uint32_t ielen,
 	tmp_new = sub_copy;
 	while ((subie_len > 0) &&
 	       (((tmp_new + tmp_new[1] + MIN_IE_LEN) - sub_copy) <=
-		(subie_len - 1))) {
+		subie_len)) {
 		if (!(tmp_new[0] == WLAN_ELEMID_NONTX_BSSID_CAP ||
 		      tmp_new[0] == WLAN_ELEMID_SSID ||
 		      tmp_new[0] == WLAN_ELEMID_MULTI_BSSID_IDX ||
@@ -3870,7 +3871,8 @@ util_scan_parse_beacon_frame(struct wlan_objmgr_pdev *pdev,
 		mbssid_ie = util_scan_find_ie(WLAN_ELEMID_MULTIPLE_BSSID,
 					      (uint8_t *)&bcn->ie, ie_len);
 		if (mbssid_ie) {
-			if (mbssid_ie[TAG_LEN_POS] < VALID_ELEM_LEAST_LEN) {
+			/* some APs announce the MBSSID ie_len as 1 */
+			if (mbssid_ie[TAG_LEN_POS] < 1) {
 				scm_debug("MBSSID IE length is wrong %d",
 					  mbssid_ie[TAG_LEN_POS]);
 				return status;
