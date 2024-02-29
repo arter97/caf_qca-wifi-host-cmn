@@ -6476,6 +6476,7 @@ dp_peer_get_authorize(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
 	bool authorize = false;
 	struct dp_peer *peer;
+	struct dp_peer *mld_peer;
 	struct cdp_peer_info peer_info = {0};
 
 	DP_PEER_INFO_PARAMS_INIT(&peer_info, vdev_id, peer_mac, false,
@@ -6488,7 +6489,16 @@ dp_peer_get_authorize(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 		return authorize;
 	}
 
-	authorize = peer->authorize;
+	if (IS_MLO_DP_LINK_PEER(peer)) {
+		mld_peer = DP_GET_MLD_PEER_FROM_PEER(peer);
+		if(mld_peer)
+			authorize = mld_peer->authorize;
+		else
+			authorize = peer->authorize;
+	} else {
+		authorize = peer->authorize;
+	}
+
 	dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
 
 	return authorize;
