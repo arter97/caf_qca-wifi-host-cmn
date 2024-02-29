@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -60,7 +60,7 @@ struct hif_ipci_stats {
 #define PCIE_SOC_PCIE_REG_PCIE_SCRATCH_0_SOC_PCIE_REG (0x01E04000 + 0x40)
 
 /* Timeout duration to validate UMAC wake status */
-#define FORCE_WAKE_DELAY_TIMEOUT_MS 500
+#define FORCE_WAKE_DELAY_TIMEOUT_MS 1000
 
 /* Validate UMAC status every 5ms */
 #define FORCE_WAKE_DELAY_MS 5
