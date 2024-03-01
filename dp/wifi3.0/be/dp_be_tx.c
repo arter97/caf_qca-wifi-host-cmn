@@ -30,6 +30,7 @@
 #ifdef FEATURE_WDS
 #include "dp_txrx_wds.h"
 #endif
+#include "wlan_ipa_obj_mgmt_api.h"
 
 #if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
 #define DP_TX_BANK_LOCK_CREATE(lock) qdf_mutex_create(lock)
@@ -387,6 +388,14 @@ void dp_tx_process_htt_completion_be(struct dp_soc *soc,
 	switch (tx_status) {
 	case HTT_TX_FW2WBM_TX_STATUS_OK:
 	case HTT_TX_FW2WBM_TX_STATUS_DROP:
+	{
+		if (tx_desc->flags & DP_TX_DESC_FLAG_OPT_DP_CTRL) {
+			dp_info("opt_dp_ctrl: pkt dropped in fw, unvote clk");
+			ipa_opt_dpath_disable_clk_req(soc);
+		}
+
+		break;
+	}
 	case HTT_TX_FW2WBM_TX_STATUS_TTL:
 	{
 		uint8_t tid;

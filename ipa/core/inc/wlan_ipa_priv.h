@@ -715,6 +715,30 @@ struct wlan_ipa_evt_wq {
 };
 #endif
 
+/**
+ * struct opt_dp_ctrl_stats - stats for opt_dp_ctrl
+ * @flt_add_req_cnt: cnt of filter add requested by ipa
+ * @flt_rm_req_cnt: cnt of filters rm requested by ipa
+ * @active_filter: total active filters
+ * @add_fail_cnt: cnt of filter add failed
+ * @rm_fail_cnt: cnt of filter rm failed
+ * @clk_resp_cnt: cnt of clock vote response received
+ * @clk_vote_cnt: cnt of clock vote
+ * @clk_unvote_req_cnt: cnt of clock unvote
+ * @tput_del_cnt: cnt of filters deleted due to high tput
+ */
+struct opt_dp_ctrl_stats {
+	int flt_add_req_cnt;
+	int flt_rm_req_cnt;
+	int active_filter;
+	int add_fail_cnt;
+	int rm_fail_cnt;
+	int clk_resp_cnt;
+	int clk_vote_cnt;
+	int clk_unvote_req_cnt;
+	int tput_del_cnt;
+};
+
 /* IPA private context structure definition */
 struct wlan_ipa_priv {
 	struct wlan_objmgr_psoc *psoc;
@@ -845,6 +869,7 @@ struct wlan_ipa_priv {
 	qdf_event_t ipa_flt_evnt;
 	qdf_event_t ipa_opt_dp_ctrl_clk_evt;
 	qdf_wake_lock_t opt_dp_wake_lock;
+	struct opt_dp_ctrl_stats ctrl_stats;
 #endif
 #if defined(QCA_IPA_LL_TX_FLOW_CONTROL)
 	struct wlan_ipa_evt_wq *ipa_evt_wq;

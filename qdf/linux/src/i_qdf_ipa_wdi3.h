@@ -498,14 +498,17 @@ static inline int __qdf_ipa_wdi_register_flt_cb_v2(
  * with filter delete response for optional wifi ctrl datapath
  * @hdl: ipa hdl
  * @fltr_hdl : filter hdl
+ * @is_success: filter delete status
  *
  * Return: 0 on success, negative on failure
  */
 static inline int __qdf_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
-			ipa_wdi_hdl_t hdl, u32 fltr_hdl)
+			ipa_wdi_hdl_t hdl, u32 fltr_hdl,
+			bool is_success)
 {
 	return ipa_wdi_opt_dpath_notify_ctrl_flt_rem_per_inst(hdl,
-							      fltr_hdl);
+							      fltr_hdl,
+							      is_success);
 }
 
 /**
@@ -517,7 +520,19 @@ static inline int __qdf_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
 static inline int __qdf_ipa_wdi_opt_dpath_enable_clk_req(
 			ipa_wdi_hdl_t hdl)
 {
-	return ipa_wdi_opt_dpath_enable_clk_req(hdl);
+	return ipa_wdi_opt_dpath_enable_clk_per_inst(hdl);
+}
+
+/**
+ * __ qdf_ipa_wdi_opt_dpath_disable_clk_req - request IPA to enable clock
+ * @hdl: ipa hdl
+ *
+ * Return: 0 on success, negative on failure
+ */
+static inline int __qdf_ipa_wdi_opt_dpath_disable_clk_req(
+			ipa_wdi_hdl_t hdl)
+{
+	return ipa_wdi_opt_dpath_disable_clk_per_inst(hdl);
 }
 #else
 

@@ -349,6 +349,30 @@ QDF_STATUS ipa_opt_dpath_enable_clk_req(void *soc)
 {
 	struct wlan_objmgr_psoc *psoc = (struct wlan_objmgr_psoc *)soc;
 	struct wlan_ipa_priv *ipa_obj;
+	QDF_STATUS status, clk_status;
+
+	ipa_obj = ipa_psoc_get_priv_obj(psoc);
+	if (!ipa_obj) {
+		ipa_err("IPA object is NULL for psoc_id[%d]",
+			psoc->soc_objmgr.psoc_id);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	clk_status = wlan_ipa_wdi_opt_dpath_enable_clk_req(ipa_obj);
+	if (clk_status == QDF_STATUS_SUCCESS) {
+		ipa_obj->ctrl_stats.clk_resp_cnt++;
+		return clk_status;
+	}
+
+	status = qdf_wait_for_event_completion(&ipa_obj->ipa_opt_dp_ctrl_clk_evt,
+					       IPA_CLK_ENABLE_WAIT_TIME_MS);
+	return status;
+}
+
+QDF_STATUS ipa_opt_dpath_disable_clk_req(void *soc)
+{
+	struct wlan_objmgr_psoc *psoc = (struct wlan_objmgr_psoc *)soc;
+	struct wlan_ipa_priv *ipa_obj;
 	QDF_STATUS status;
 
 	ipa_obj = ipa_psoc_get_priv_obj(psoc);
@@ -358,9 +382,7 @@ QDF_STATUS ipa_opt_dpath_enable_clk_req(void *soc)
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	wlan_ipa_wdi_opt_dpath_enable_clk_req(ipa_obj);
-	status = qdf_wait_for_event_completion(&ipa_obj->ipa_opt_dp_ctrl_clk_evt,
-					       IPA_CLK_ENABLE_WAIT_TIME_MS);
+	status = wlan_ipa_wdi_opt_dpath_disable_clk_req(ipa_obj);
 	return status;
 }
 #endif

@@ -483,11 +483,22 @@ static void dp_tx_opt_dp_wifi_ctrl_process(struct dp_tx_msdu_info_s *msdu_info,
 	if (msdu_info->is_opt_dp_ctrl)
 		HTT_TX_TCL_METADATA_OPT_DP_CTRL_SET(*htt_tcl_metadata, 1);
 }
+
+static bool is_msdu_opt_dp_ctrl(struct dp_tx_msdu_info_s *msdu_info)
+{
+	return msdu_info->is_opt_dp_ctrl;
+}
 #else
 static void dp_tx_opt_dp_wifi_ctrl_process(struct dp_tx_msdu_info_s *msdu_info,
 					   uint16_t *htt_tcl_metadata)
 {
 }
+
+static bool is_msdu_opt_dp_ctrl(struct dp_tx_msdu_info_s *msdu_info)
+{
+	return false;
+}
+
 #endif
 
 /**
@@ -1358,6 +1369,9 @@ struct dp_tx_desc_s *dp_tx_prepare_desc_single(struct dp_vdev *vdev,
 		is_exception = 1;
 		tx_desc->length -= tx_desc->pkt_offset;
 	}
+
+	if (qdf_unlikely(is_msdu_opt_dp_ctrl(msdu_info)))
+		tx_desc->flags |= DP_TX_DESC_FLAG_OPT_DP_CTRL;
 
 #if !TQM_BYPASS_WAR
 	if (is_exception || tx_exc_metadata)

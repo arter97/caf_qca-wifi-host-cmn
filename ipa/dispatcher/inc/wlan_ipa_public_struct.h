@@ -117,9 +117,9 @@ enum wlan_ipa_cce_super_rule_flt_hdl {
  * @WLAN_HDL_MAX_TX_FILTER : Max value for LCE filter handle
  */
 enum wlan_ipa_tx_super_rule_flt_hdl {
-	WLAN_HDL_TX_FILTER1,
-	WLAN_HDL_TX_FILTER2,
-	WLAN_HDL_TX_FILTER3,
+	WLAN_HDL_TX_FILTER1 = 0x10,
+	WLAN_HDL_TX_FILTER2 = 0x11,
+	WLAN_HDL_TX_FILTER3 = 0x12,
 	WLAN_HDL_MAX_TX_FILTER
 };
 

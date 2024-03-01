@@ -1011,12 +1011,20 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
 int wlan_ipa_wdi_opt_dpath_clk_status_cb(void *ipa_ctx, bool status);
 
 /**
- * wlan_ipa_wdi_opt_dpath_enable_clk_req() - send clock enable request
- *			to ipa
+ * wlan_ipa_wdi_opt_dpath_enable_clk_req() - send clock enable request to ipa
  * @ipa_ctx: IPA context
  *
+ * Return: 0 on success, negative on failure
  */
-void wlan_ipa_wdi_opt_dpath_enable_clk_req(void *ipa_ctx);
+int wlan_ipa_wdi_opt_dpath_enable_clk_req(void *ipa_ctx);
+
+/**
+ * wlan_ipa_wdi_opt_dpath_disable_clk_req() - send clock enable request to ipa
+ * @ipa_ctx: IPA context
+ *
+ * Return: 0 on success, negative on failure
+ */
+int wlan_ipa_wdi_opt_dpath_disable_clk_req(void *ipa_ctx);
 
 /**
  * wlan_ipa_tx_pkt_opt_dp_ctrl() - handle opt_dp_ctrl tx pkt

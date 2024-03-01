@@ -4034,7 +4034,8 @@ dp_ipa_rx_buf_alloc_opt_dp_ctrl(struct dp_soc *soc, qdf_nbuf_t nbuf,
 		}
 	}
 
-	dst_addr = qdf_nbuf_data(rx_desc->nbuf) + soc->curr_rx_pkt_tlv_size;
+	dst_addr = qdf_nbuf_data(rx_desc->nbuf) + soc->curr_rx_pkt_tlv_size +
+						L3_HEADER_PADDING;
 	qdf_mem_copy(dst_addr, qdf_nbuf_data(nbuf), qdf_nbuf_len(nbuf));
 	qdf_nbuf_set_pktlen(rx_desc->nbuf, qdf_nbuf_len(nbuf));
 	rx_desc->in_use = 1;
@@ -4104,7 +4105,7 @@ QDF_STATUS dp_ipa_tx_opt_dp_ctrl_pkt(struct cdp_soc_t *soc_hdl,
 	dp_info("opt_dp_ctrl: get rx free desc");
 	rx_desc = dp_ipa_rx_get_free_desc(soc);
 	if (!rx_desc)
-		goto vdev_ref_release;
+		goto clk_unvote;
 
 	dp_info("opt_dp_ctrl: alloc, map and attach buffer to rx desc");
 	ret = dp_ipa_rx_buf_alloc_opt_dp_ctrl(soc, nbuf, rx_desc,
@@ -4163,6 +4164,9 @@ release_rx_desc:
 		dp_rx_add_to_free_desc_list(&pdev->free_list_head,
 					    &pdev->free_list_tail, rx_desc);
 	}
+
+clk_unvote:
+	ipa_opt_dpath_disable_clk_req(soc->ctrl_psoc);
 
 vdev_ref_release:
 	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_IPA);
