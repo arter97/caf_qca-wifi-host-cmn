@@ -3223,6 +3223,8 @@ dp_pdev_update_erp_tx_stats(
 {
 	DP_STATS_INC(pdev, erp_stats.tx_data_mpdu_cnt,
 		     (ppdu->mpdu_tried_ucast + ppdu->mpdu_tried_mcast));
+	DP_STATS_INC(pdev, erp_stats.total_tx_data_bytes,
+		     ppdu->success_bytes);
 }
 #else
 static inline
@@ -3322,7 +3324,6 @@ dp_tx_stats_update(struct dp_pdev *pdev, struct dp_peer *peer,
 		 */
 		DP_STATS_INC(mon_peer, tx.retries, mpdu_failed);
 		dp_pdev_telemetry_stats_update(pdev, ppdu);
-		dp_pdev_update_erp_tx_stats(pdev, ppdu);
 		return;
 	}
 

@@ -3148,14 +3148,14 @@ struct cdp_pdev_deter_stats {
  * struct cdp_pdev_erp_stats - Structure to hold pdve erp stats
  * @tx_data_mpdu_cnt: total tx mpdu data count
  * @rx_data_mpdu_cnt: total rx mpdu data count
- * @tx_max_avg_data_rate: Max avg tx data rate among all peer of pdev
- * @rx_max_avg_data_rate: Max avg rx data rate among all peer of pdev
+ * @total_tx_data_bytes: total bytes sent for tx mpdu data count
+ * @total_rx_data_bytes: total bytes sent for rx mpdu data count
  */
 struct cdp_pdev_erp_stats {
 	uint64_t tx_data_mpdu_cnt;
 	uint64_t rx_data_mpdu_cnt;
-	uint32_t tx_max_avg_data_rate;
-	uint32_t rx_max_avg_data_rate;
+	uint64_t total_tx_data_bytes;
+	uint64_t total_rx_data_bytes;
 };
 #endif
 

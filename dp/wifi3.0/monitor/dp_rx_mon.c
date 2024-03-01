@@ -909,7 +909,10 @@ void dp_rx_mon_update_pdev_erp_stats(struct dp_pdev *pdev,
 {
 	DP_STATS_INC(pdev,
 		     erp_stats.rx_data_mpdu_cnt,
-		     (user->mpdu_cnt_fcs_ok + user->mpdu_cnt_fcs_err));
+		     user->mpdu_cnt_fcs_ok);
+	DP_STATS_INC(pdev,
+		     erp_stats.total_rx_data_bytes,
+		     user->mpdu_ok_byte_count);
 }
 #else
 static inline void

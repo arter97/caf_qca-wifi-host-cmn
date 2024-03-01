@@ -10164,31 +10164,6 @@ dp_update_pdev_chan_util_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	return QDF_STATUS_SUCCESS;
 }
 
-void dp_update_pdev_erp_stats(struct dp_soc *soc, struct dp_peer *srcobj,
-			      void *arg)
-{
-	struct dp_pdev *pdev = srcobj->vdev->pdev;
-	struct dp_mon_peer *mon_peer = srcobj->monitor_peer;
-
-	if (srcobj->bss_peer) {
-		/* Excluding self peer for stats calculation*/
-		return;
-	}
-
-	if (qdf_unlikely(!mon_peer))
-		return;
-
-	if (mon_peer->stats.tx.rnd_avg_tx_rate >
-		pdev->stats.erp_stats.tx_max_avg_data_rate)
-		pdev->stats.erp_stats.tx_max_avg_data_rate =
-				mon_peer->stats.tx.rnd_avg_tx_rate;
-
-	if (mon_peer->stats.rx.rnd_avg_rx_rate >
-		pdev->stats.erp_stats.rx_max_avg_data_rate)
-		pdev->stats.erp_stats.rx_max_avg_data_rate =
-				mon_peer->stats.rx.rnd_avg_rx_rate;
-}
-
 QDF_STATUS
 dp_get_pdev_erp_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 		      struct cdp_pdev_erp_stats *stats)
@@ -10199,21 +10174,16 @@ dp_get_pdev_erp_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	if (!pdev)
 		return QDF_STATUS_E_FAILURE;
 
-	dp_pdev_iterate_peer(pdev, dp_update_pdev_erp_stats,
-			     NULL, DP_MOD_ID_MISC);
-
 	stats->tx_data_mpdu_cnt = pdev->stats.erp_stats.tx_data_mpdu_cnt;
 	stats->rx_data_mpdu_cnt = pdev->stats.erp_stats.rx_data_mpdu_cnt;
-	stats->tx_max_avg_data_rate =
-			pdev->stats.erp_stats.tx_max_avg_data_rate;
-	stats->rx_max_avg_data_rate =
-			pdev->stats.erp_stats.rx_max_avg_data_rate;
+	stats->total_tx_data_bytes = pdev->stats.erp_stats.total_tx_data_bytes;
+	stats->total_rx_data_bytes = pdev->stats.erp_stats.total_rx_data_bytes;
 
 	/* reset for next iteration */
 	pdev->stats.erp_stats.tx_data_mpdu_cnt = 0;
 	pdev->stats.erp_stats.rx_data_mpdu_cnt = 0;
-	pdev->stats.erp_stats.tx_max_avg_data_rate = 0;
-	pdev->stats.erp_stats.rx_max_avg_data_rate = 0;
+	pdev->stats.erp_stats.total_tx_data_bytes = 0;
+	pdev->stats.erp_stats.total_rx_data_bytes = 0;
 
 	return QDF_STATUS_SUCCESS;
 }
