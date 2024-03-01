@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -510,7 +510,7 @@ __qdf_minidump_remove(void *addr, size_t size, const char *name)
 }
 
 #elif defined(WLAN_QCOM_MINIDUMP)
-#define MAX_WLAN_MINIDUMP_ENTRIES 5
+#define MAX_WLAN_MINIDUMP_ENTRIES 6
 
 enum minidump_log_type {
 	MD_HTC_CREDIT = 0,
@@ -518,6 +518,7 @@ enum minidump_log_type {
 	MD_WMI_TX_CMP,
 	MD_HAL_SOC,
 	MD_GWLAN_LOGS,
+	MD_PSOC_REG_LOGS,
 };
 
 static const char *minidump_table[MAX_WLAN_MINIDUMP_ENTRIES];
@@ -530,7 +531,8 @@ static int qdf_get_name_idx(const char *name)
 		[MD_WLAN_LOGS] = "wlan_logs",
 		[MD_WMI_TX_CMP] = "wmi_tx_cmp",
 		[MD_HAL_SOC] = "hal_soc",
-		[MD_GWLAN_LOGS] = "gwlan_logging"
+		[MD_GWLAN_LOGS] = "gwlan_logging",
+		[MD_PSOC_REG_LOGS] = "psoc_regulatory"
 	};
 
 	for (i = 0; i < ARRAY_SIZE(wlan_str); i++) {
