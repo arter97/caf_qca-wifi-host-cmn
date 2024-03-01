@@ -3324,7 +3324,7 @@ reg_disable_enable_opclass_channels(struct wlan_regulatory_pdev_priv_obj *pdev_p
 }
 #endif
 
-#ifdef CONFIG_REG_CLIENT
+#if defined(CONFIG_REG_CLIENT) && defined(CONFIG_BAND_6GHZ)
 /*
  * reg_modify_sp_channels() - Mark 6 GHz channels NO_IR and set state DFS
  * if power type is SP
