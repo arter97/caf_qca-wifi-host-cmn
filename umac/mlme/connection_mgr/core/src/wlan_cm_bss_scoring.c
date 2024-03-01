@@ -2248,7 +2248,7 @@ static int cm_calculate_mlo_bss_score(struct wlan_objmgr_psoc *psoc,
 	}
 
 	for (j = 1; j < mlo_vdev_num - 1 && j < CM_MAX_ACTIVE_LINK_CONSIDER_IN_MLO_SCORE - 1; j++)
-		best_total_score += total_score[i];
+		best_total_score += total_score[j];
 
 	if (num_partner_links <= mlo_vdev_num)
 		return best_total_score;
@@ -3075,11 +3075,11 @@ next:
 }
 
 /**
- * cm_update_candidate_list_for_vendor() - update candidate list
+ * cm_mlo_generate_candidate_list() - generate candidate list
  * @candidate_list: candidate list
  *
  * For any candidate list this api generates all possible unique
- * candidates
+ * candidates from mlo candidates
  * Input candidate list
  * c1 6 GHz + 2 GHz + 5 GHz
  * c2 2 GHz + 5 GHz + 6 GHz
@@ -3101,7 +3101,7 @@ next:
  *
  * Return none
  */
-static void cm_update_candidate_list_for_vendor(qdf_list_t *candidate_list)
+static void cm_mlo_generate_candidate_list(qdf_list_t *candidate_list)
 {
 	struct scan_cache_entry *tmp_scan_entry = NULL;
 	struct scan_cache_node *scan_entry = NULL, *scan_node = NULL;
@@ -3143,9 +3143,9 @@ static void cm_update_candidate_list_for_vendor(qdf_list_t *candidate_list)
 			link = scan_node->entry->ml_info.link_info;
 			for (j = i; j < num_link; j++)
 				link[j].is_valid_link = false;
-			qdf_list_insert_before(candidate_list,
-					       &scan_node->node,
-					       &scan_entry->node);
+			qdf_list_insert_after(candidate_list,
+					      &scan_node->node,
+					      &scan_entry->node);
 
 			if (i == 1) {
 				tmp_scan_entry = util_scan_copy_cache_entry(
@@ -3171,9 +3171,9 @@ static void cm_update_candidate_list_for_vendor(qdf_list_t *candidate_list)
 				link[0] = tmp;
 				for (j = i; j < num_link; j++)
 					link[j].is_valid_link = false;
-				qdf_list_insert_before(candidate_list,
-						       &scan_node->node,
-						       &scan_entry->node);
+				qdf_list_insert_after(candidate_list,
+						      &scan_node->node,
+						      &scan_entry->node);
 			}
 		}
 next:
@@ -3269,7 +3269,7 @@ static void cm_validate_partner_links(struct wlan_objmgr_psoc *psoc,
 }
 #else
 
-static void cm_update_candidate_list_for_vendor(qdf_list_t *candidate_list)
+static void cm_mlo_generate_candidate_list(qdf_list_t *candidate_list)
 {
 }
 
@@ -3329,8 +3329,7 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 			config->bw_above_20_5ghz, config->vdev_nss_24g,
 			config->vdev_nss_5g);
 
-	if (score_config->vendor_roam_score_algorithm)
-		cm_update_candidate_list_for_vendor(scan_list);
+	cm_mlo_generate_candidate_list(scan_list);
 
 	/* calculate score for each AP */
 	if (qdf_list_peek_front(scan_list, &cur_node) != QDF_STATUS_SUCCESS) {
@@ -3472,8 +3471,7 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 		qdf_mem_free(force_connect_candidate);
 	}
 
-	if (score_config->vendor_roam_score_algorithm)
-		cm_eliminate_common_candidate(scan_list);
+	cm_eliminate_common_candidate(scan_list);
 
 	cm_print_candidate_list(scan_list);
 }
