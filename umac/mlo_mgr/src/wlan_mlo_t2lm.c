@@ -769,12 +769,14 @@ QDF_STATUS wlan_mlo_vdev_tid_to_link_map_event(
 
 	if (!vdev->mlo_dev_ctx) {
 		t2lm_err("null mlo_dev_ctx");
+		mlo_release_vdev_ref(vdev);
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
 	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
 	if (!vdev_mlme) {
 		t2lm_err("null vdev_mlme");
+		mlo_release_vdev_ref(vdev);
 		return QDF_STATUS_E_FAILURE;
 	}
 
