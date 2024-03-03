@@ -8195,7 +8195,10 @@ reg_get_6g_chan_psd_eirp_power(qdf_freq_t freq,
 
 	for (i = 0; i < NUM_6GHZ_CHANNELS; i++) {
 		if (freq == mas_chan_list[i].center_freq) {
-			*eirp_psd_power = mas_chan_list[i].psd_eirp;
+			/* FW should have sign extended and sent it to HOST.
+			 * Cast it to get the actual negative value.
+			 */
+			*eirp_psd_power = (int8_t)mas_chan_list[i].psd_eirp;
 			return QDF_STATUS_SUCCESS;
 		}
 	}
@@ -9537,12 +9540,44 @@ reg_get_mas_chan_list_for_lookup(struct wlan_objmgr_pdev *pdev,
 }
 
 /**
+ * reg_is_chan_punc() - Validates the input puncture pattern.
+ * @in_punc_pattern: Input puncture pattern
+ * @bw: Channel bandwidth in MHz
+ *
+ * If the in_punc_pattern has none of the subchans punctured, channel
+ * is not considered as punctured. Also, if the input puncture bitmap
+ * is invalid, do not consider the channel as punctured.
+ *
+ * Return: true if channel is punctured, false otherwise.
+ */
+#if defined(WLAN_FEATURE_11BE) && defined(CONFIG_AFC_SUPPORT)
+static bool
+reg_is_chan_punc(uint16_t in_punc_pattern, uint16_t bw)
+{
+	enum phy_ch_width ch_width = reg_find_chwidth_from_bw(bw);
+
+	if (in_punc_pattern == NO_SCHANS_PUNC ||
+	    !reg_is_punc_bitmap_valid(ch_width, in_punc_pattern))
+		return false;
+
+	return true;
+}
+#else
+static inline bool
+reg_is_chan_punc(uint16_t in_punc_pattern, uint16_t bw)
+{
+	return false;
+}
+#endif
+
+/**
  * reg_get_eirp_from_mas_chan_list() -  For the given power mode, using the bandwidth
  * and psd(from master channel entry), calculate an EIRP value. The minimum
  * of calculated EIRP and regulatory max EIRP is returned.
  * @pdev: Pointer to pdev
  * @freq: Frequency in mhz
  * @bw: Bandwidth in mhz
+ * @in_punc_pattern: Puncture pattern
  * @ap_pwr_type: AP Power type
  * @is_client_list_lookup_needed: Boolean to indicate if client list lookup is
  * needed
@@ -9552,13 +9587,15 @@ reg_get_mas_chan_list_for_lookup(struct wlan_objmgr_pdev *pdev,
  */
 static int16_t
 reg_get_eirp_from_mas_chan_list(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
-				uint16_t bw, enum reg_6g_ap_type ap_pwr_type,
+				uint16_t bw, uint16_t in_punc_pattern,
+				enum reg_6g_ap_type ap_pwr_type,
 				bool is_client_list_lookup_needed,
 				enum reg_6g_client_type client_type)
 {
 	bool is_psd;
 	struct regulatory_channel *master_chan_list = NULL;
 	int16_t txpower = 0;
+	uint16_t non_punc_bw = bw;
 
 	reg_get_mas_chan_list_for_lookup(pdev, &master_chan_list, ap_pwr_type,
 					 is_client_list_lookup_needed,
@@ -9570,11 +9607,13 @@ reg_get_eirp_from_mas_chan_list(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
 
 	is_psd = reg_is_6g_psd_power(pdev);
 	reg_find_txpower_from_6g_list(freq, master_chan_list, &txpower);
+	if (reg_is_chan_punc(in_punc_pattern, bw))
+		non_punc_bw = reg_find_non_punctured_bw(bw, in_punc_pattern);
 
 	if (is_psd)
 		reg_get_eirp_from_psd_and_reg_max_eirp(pdev,
 						       master_chan_list,
-						       freq, bw,
+						       freq, non_punc_bw,
 						       &txpower);
 
 	return txpower;
@@ -9689,37 +9728,6 @@ static int8_t reg_find_eirp_in_afc_chan_obj(struct wlan_objmgr_pdev *pdev,
 }
 
 /**
- * reg_is_chan_punc() - Validates the input puncture pattern.
- * @in_punc_pattern: Input puncture pattern
- * @bw: Channel bandwidth in MHz
- *
- * If the in_punc_pattern has none of the subchans punctured, channel
- * is not considered as punctured. Also, if the input puncture bitmap
- * is invalid, do not consider the channel as punctured.
- *
- * Return: true if channel is punctured, false otherwise.
- */
-#ifdef WLAN_FEATURE_11BE
-static bool
-reg_is_chan_punc(uint16_t in_punc_pattern, uint16_t bw)
-{
-	enum phy_ch_width ch_width = reg_find_chwidth_from_bw(bw);
-
-	if (in_punc_pattern == NO_SCHANS_PUNC ||
-	    !reg_is_punc_bitmap_valid(ch_width, in_punc_pattern))
-		return false;
-
-	return true;
-}
-#else
-static inline bool
-reg_is_chan_punc(uint16_t in_punc_pattern, uint16_t bw)
-{
-	return false;
-}
-#endif
-
-/**
  * reg_get_sp_eirp_for_punc_chans() - Find the standard EIRP power for
  * punctured channels.
  * @pdev: Pointer to struct wlan_objmgr_pdev
@@ -9825,6 +9833,7 @@ reg_get_sp_eirp_before_afc_resp_rx(struct wlan_objmgr_pdev *pdev,
 	if (reg_afc_dev_type == AFC_DEPLOYMENT_OUTDOOR && num_ap_sp_rules &&
 	    !num_ap_vlp_rules)
 		return reg_get_eirp_from_mas_chan_list(pdev, freq, bw,
+						       NO_SCHANS_PUNC,
 						       REG_STANDARD_POWER_AP,
 						       is_client_list_lookup_needed,
 						       client_type);
@@ -9946,7 +9955,8 @@ static int8_t reg_get_sp_eirp(struct wlan_objmgr_pdev *pdev,
 			      bool is_client_list_lookup_needed,
 			      enum reg_6g_client_type client_type)
 {
-	return reg_get_eirp_from_mas_chan_list(pdev, freq, bw, REG_STANDARD_POWER_AP,
+	return reg_get_eirp_from_mas_chan_list(pdev, freq, bw, in_punc_pattern,
+					       REG_STANDARD_POWER_AP,
 					       is_client_list_lookup_needed,
 					       client_type);
 }
@@ -9997,7 +10007,8 @@ int16_t reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
 				       is_client_list_lookup_needed,
 				       client_type);
 
-	return reg_get_eirp_from_mas_chan_list(pdev, freq, bw, ap_pwr_type,
+	return reg_get_eirp_from_mas_chan_list(pdev, freq, bw, in_punc_pattern,
+					       ap_pwr_type,
 					       is_client_list_lookup_needed,
 					       client_type);
 }

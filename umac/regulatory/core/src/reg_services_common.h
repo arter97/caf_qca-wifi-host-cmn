@@ -3210,7 +3210,7 @@ reg_find_non_punctured_bw(uint16_t bw,  uint16_t in_punc_pattern);
 static inline uint16_t
 reg_find_non_punctured_bw(uint16_t bw,  uint16_t in_punc_pattern)
 {
-	return 0;
+	return bw;
 }
 #endif
 #endif
