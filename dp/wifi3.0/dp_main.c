@@ -5632,6 +5632,10 @@ static QDF_STATUS dp_txrx_peer_detach(struct dp_soc *soc, struct dp_peer *peer)
 		dp_peer_jitter_stats_ctx_dealloc(pdev, txrx_peer);
 		dp_peer_sawf_stats_ctx_free(soc, txrx_peer);
 
+		wlan_minidump_remove(txrx_peer, sizeof(*txrx_peer),
+				     soc->ctrl_psoc, WLAN_MD_DP_TXRX_PEER,
+				     "dp_txrx_peer");
+
 		qdf_mem_free(txrx_peer);
 	}
 
@@ -5719,6 +5723,9 @@ static QDF_STATUS dp_txrx_peer_attach(struct dp_soc *soc, struct dp_peer *peer)
 	dp_wdi_event_handler(WDI_EVENT_TXRX_PEER_CREATE, soc,
 			     (void *)&params, peer->peer_id,
 			     WDI_NO_VAL, params.pdev_id);
+
+	wlan_minidump_log(txrx_peer, sizeof(*txrx_peer), soc->ctrl_psoc,
+			  WLAN_MD_DP_TXRX_PEER, "dp_txrx_peer");
 
 	return QDF_STATUS_SUCCESS;
 }

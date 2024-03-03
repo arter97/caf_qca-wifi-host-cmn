@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -32,7 +32,7 @@
 #include "wlan_objmgr_psoc_obj_i.h"
 #include "wlan_objmgr_pdev_obj_i.h"
 #include "wlan_objmgr_vdev_obj_i.h"
-
+#include "wlan_utility.h"
 
 /*
  * APIs to Create/Delete Peer object APIs
@@ -281,6 +281,8 @@ struct wlan_objmgr_peer *wlan_objmgr_peer_obj_create(
 	obj_mgr_debug("Created peer " QDF_MAC_ADDR_FMT " type %d",
 		      QDF_MAC_ADDR_REF(macaddr), type);
 
+	wlan_minidump_log(peer, sizeof(*peer), psoc, WLAN_MD_OBJMGR_PEER,
+			  "wlan_objmgr_peer");
 	return peer;
 }
 
@@ -534,6 +536,7 @@ QDF_STATUS wlan_objmgr_peer_obj_delete(struct wlan_objmgr_peer *peer)
 {
 	uint8_t print_idx;
 	uint8_t *macaddr;
+	struct wlan_objmgr_psoc *psoc;
 
 	if (!peer) {
 		obj_mgr_err("PEER is NULL");
@@ -547,6 +550,9 @@ QDF_STATUS wlan_objmgr_peer_obj_delete(struct wlan_objmgr_peer *peer)
 	obj_mgr_debug("Logically deleting peer " QDF_MAC_ADDR_FMT,
 		      QDF_MAC_ADDR_REF(macaddr));
 
+	psoc = wlan_peer_get_psoc(peer);
+	wlan_minidump_remove(peer, sizeof(*peer), psoc, WLAN_MD_OBJMGR_PEER,
+			     "wlan_objmgr_peer");
 	print_idx = qdf_get_pidx();
 	wlan_objmgr_print_peer_ref_ids(peer, QDF_TRACE_LEVEL_DEBUG);
 	/*

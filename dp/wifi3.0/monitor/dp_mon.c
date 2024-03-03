@@ -6424,6 +6424,7 @@ QDF_STATUS dp_mon_peer_attach(struct dp_peer *peer)
 {
 	struct dp_mon_peer *mon_peer;
 	struct dp_pdev *pdev;
+	struct dp_soc *soc;
 
 	mon_peer = (struct dp_mon_peer *)qdf_mem_malloc(sizeof(*mon_peer));
 	if (!mon_peer) {
@@ -6433,6 +6434,9 @@ QDF_STATUS dp_mon_peer_attach(struct dp_peer *peer)
 
 	peer->monitor_peer = mon_peer;
 	pdev = peer->vdev->pdev;
+	soc = pdev->soc;
+	wlan_minidump_log(mon_peer, sizeof(*mon_peer), soc->ctrl_psoc,
+			  WLAN_MD_DP_MON_PEER, "dp_mon_peer");
 	/*
 	 * In tx_monitor mode, filter may be set for unassociated peer
 	 * when unassociated peer get associated peer need to
@@ -6452,12 +6456,15 @@ QDF_STATUS dp_mon_peer_attach(struct dp_peer *peer)
 QDF_STATUS dp_mon_peer_detach(struct dp_peer *peer)
 {
 	struct dp_mon_peer *mon_peer = peer->monitor_peer;
+	struct dp_pdev *pdev;
 
 	if (!mon_peer)
 		return QDF_STATUS_SUCCESS;
 
+	pdev = peer->vdev->pdev;
 	dp_mon_peer_detach_notify(peer);
-
+	wlan_minidump_remove(mon_peer, sizeof(*mon_peer), pdev->soc->ctrl_psoc,
+			     WLAN_MD_DP_MON_PEER, "dp_mon_peer");
 	qdf_mem_free(mon_peer);
 	peer->monitor_peer = NULL;
 

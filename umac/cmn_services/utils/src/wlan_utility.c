@@ -2262,6 +2262,10 @@ static bool wlan_minidump_log_enabled(struct wlan_objmgr_psoc *psoc,
 		if (cfg_get(psoc, CFG_OL_MD_CP_MLO))
 			setval = true;
 		break;
+	case WLAN_MD_CP_MLO_PEER_CTX:
+		if (cfg_get(psoc, CFG_OL_MD_CP_MLO_PEER))
+			setval = true;
+		break;
 	case WLAN_MD_CP_MGMT_TXRX_PDEV_CTX:
 	case WLAN_MD_CP_MGMT_TXRX_STATS:
 		if (cfg_get(psoc, CFG_OL_MD_CP_MGMT_TXRX))
@@ -2336,6 +2340,14 @@ static bool wlan_minidump_log_enabled(struct wlan_objmgr_psoc *psoc,
 		if (cfg_get(psoc, CFG_OL_MD_DP_MON))
 			setval = true;
 		break;
+	case WLAN_MD_DP_MON_PEER:
+		if (cfg_get(psoc, CFG_OL_MD_DP_MON_PEER))
+			setval = true;
+		break;
+	case WLAN_MD_DP_TXRX_PEER:
+		if (cfg_get(psoc, CFG_OL_MD_DP_TXRX_PEER))
+			setval = true;
+		break;
 	case WLAN_MD_OBJMGR_GLOBAL:
 		if (cfg_get(psoc, CFG_OL_MD_OBJMGR_GLOBAL))
 			setval = true;
@@ -2364,6 +2376,10 @@ static bool wlan_minidump_log_enabled(struct wlan_objmgr_psoc *psoc,
 	case WLAN_MD_OBJMGR_VDEV:
 	case WLAN_MD_OBJMGR_VDEV_SER:
 		if (cfg_get(psoc, CFG_OL_MD_OBJMGR_VDEV))
+			setval = true;
+		break;
+	case WLAN_MD_OBJMGR_PEER:
+		if (cfg_get(psoc, CFG_OL_MD_OBJMGR_PEER))
 			setval = true;
 		break;
 	default:

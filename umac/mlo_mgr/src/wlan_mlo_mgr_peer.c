@@ -1526,6 +1526,7 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 	struct wlan_objmgr_peer *assoc_peer = NULL;
 	uint8_t bridge_peer_psoc_id = WLAN_OBJMGR_MAX_DEVICES;
 	bool is_ml_peer_attached = false;
+	struct wlan_objmgr_psoc *psoc;
 
 	/* get ML VDEV from VDEV */
 	ml_dev = vdev->mlo_dev_ctx;
@@ -1851,6 +1852,9 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 	if (wlan_vdev_mlme_get_opmode(vdev) == QDF_STA_MODE)
 		wlan_clear_peer_level_tid_to_link_mapping(vdev);
 
+	psoc = wlan_peer_get_psoc(link_peer);
+	wlan_minidump_log(ml_peer, sizeof(*ml_peer), psoc,
+			  WLAN_MD_CP_MLO_PEER_CTX, "wlan_mlo_peer_context");
 	wlan_mlo_peer_release_ref(ml_peer);
 
 	return QDF_STATUS_SUCCESS;
@@ -1941,6 +1945,7 @@ QDF_STATUS wlan_mlo_link_asresp_attach(struct wlan_mlo_peer_context *ml_peer,
 QDF_STATUS wlan_mlo_link_peer_delete(struct wlan_objmgr_peer *peer)
 {
 	struct wlan_mlo_peer_context *ml_peer;
+	struct wlan_objmgr_psoc *psoc;
 
 	ml_peer = peer->mlo_peer_ctx;
 
@@ -1950,6 +1955,9 @@ QDF_STATUS wlan_mlo_link_peer_delete(struct wlan_objmgr_peer *peer)
 	if (ml_peer->mlpeer_state != ML_PEER_DISCONN_INITIATED)
 		wlan_mlo_peer_wsi_link_delete(ml_peer);
 
+	psoc = wlan_peer_get_psoc(peer);
+	wlan_minidump_remove(ml_peer, sizeof(*ml_peer), psoc,
+			     WLAN_MD_CP_MLO_PEER_CTX, "wlan_mlo_peer_context");
 	mlo_reset_link_peer(ml_peer, peer);
 	mlo_peer_detach_link_peer(ml_peer, peer);
 

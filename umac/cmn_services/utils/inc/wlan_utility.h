@@ -945,12 +945,15 @@ uint16_t wlan_util_get_peer_count_for_mode(struct wlan_objmgr_pdev *pdev,
  * @WLAN_MD_CP_MLO_STA: wlan_mlo_sta
  * @WLAN_MD_CP_MLO_BRG_STA: wlan_mlo_bridge_sta
  * @WLAN_MD_CP_MLO_MGR_CTX: mlo_mgr_context
+ * @WLAN_MD_CP_MLO_PEER_CTX: wlan_mlo_peer_context
  * @WLAN_MD_CP_MGMT_TXRX_PDEV_CTX: mgmt_txrx_priv_pdev_context
  * @WLAN_MD_CP_MGMT_TXRX_STATS: mgmt_txrx_stats_t
  * @WLAN_MD_CP_MGMT_RX_REO_PDEV: mgmt_rx_reo_pdev_info
  * @WLAN_MD_DP_MON_SOC: dp_mon_soc
  * @WLAN_MD_DP_MON_PDEV: dp_mon_pdev
  * @WLAN_MD_DP_MON_VDEV: dp_mon_vdev
+ * @WLAN_MD_DP_MON_PEER: dp_mon_peer
+ * @WLAN_MD_DP_TXRX_PEER: dp_txrx_peer
  * @WLAN_MD_DP_MLO_DEV_CTX: dp_mlo_dev_ctxt
  * @WLAN_MD_DP_MLO_CTX: dp_mlo_ctxt
  * @WLAN_MD_DP_SOC: dp_soc
@@ -993,6 +996,7 @@ uint16_t wlan_util_get_peer_count_for_mode(struct wlan_objmgr_pdev *pdev,
  * @WLAN_MD_OBJMGR_VDEV_MLME: vdev mlme
  * @WLAN_MD_OBJMGR_VDEV_SM: wlan_sm
  * @WLAN_MD_OBJMGR_VDEV_SER: wlan_ser_vdev_obj
+ * @WLAN_MD_OBJMGR_PEER: wlan_objmgr_peer
  * @WLAN_MD_DP_SRNG_REO2PPE: dp_srng type PPE rx ring
  * @WLAN_MD_DP_SRNG_PPE2TCL: dp_srng type for PPE tx ring
  * @WLAN_MD_DP_SRNG_PPE_RELEASE: dp_srng type for PPE tx com ring
@@ -1010,12 +1014,15 @@ enum wlan_minidump_host_data {
 	WLAN_MD_CP_MLO_STA,
 	WLAN_MD_CP_MLO_BRG_STA,
 	WLAN_MD_CP_MLO_MGR_CTX,
+	WLAN_MD_CP_MLO_PEER_CTX,
 	WLAN_MD_CP_MGMT_TXRX_PDEV_CTX,
 	WLAN_MD_CP_MGMT_TXRX_STATS,
 	WLAN_MD_CP_MGMT_RX_REO_PDEV,
 	WLAN_MD_DP_MON_SOC,
 	WLAN_MD_DP_MON_PDEV,
 	WLAN_MD_DP_MON_VDEV,
+	WLAN_MD_DP_MON_PEER,
+	WLAN_MD_DP_TXRX_PEER,
 	WLAN_MD_DP_MLO_DEV_CTX,
 	WLAN_MD_DP_MLO_CTX,
 	WLAN_MD_DP_SOC,
@@ -1058,6 +1065,7 @@ enum wlan_minidump_host_data {
 	WLAN_MD_OBJMGR_VDEV_MLME,
 	WLAN_MD_OBJMGR_VDEV_SM,
 	WLAN_MD_OBJMGR_VDEV_SER,
+	WLAN_MD_OBJMGR_PEER,
 	WLAN_MD_DP_SRNG_REO2PPE,
 	WLAN_MD_DP_SRNG_PPE2TCL,
 	WLAN_MD_DP_SRNG_PPE_RELEASE,
