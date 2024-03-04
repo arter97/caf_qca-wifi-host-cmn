@@ -1473,6 +1473,8 @@ struct mlo_link_num_param {
  * handled
  * @post_re_evaluate_loops: current re-evaluate count if this set link is
  * from set link event respone handler
+ * @dont_reschedule_workqueue: don't reschedule force scc workqueue
+ * after set link response
  */
 struct mlo_control_flags {
 	bool overwrite_force_active_bitmap;
@@ -1480,6 +1482,7 @@ struct mlo_control_flags {
 	bool dynamic_force_link_num;
 	bool post_re_evaluate;
 	uint8_t post_re_evaluate_loops;
+	bool dont_reschedule_workqueue;
 };
 
 /* struct ml_link_force_cmd - force command for links
