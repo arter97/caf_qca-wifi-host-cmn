@@ -1222,12 +1222,13 @@ struct wlan_lmac_if_son_tx_ops {
 };
 
 /**
- * wlan_lmac_if_son_rx_ops: son rx operations
- * deliver_event: deliver mlme and other mac events
- * process_mgmt_frame: process mgmt frames
- * config_set: route son config from cfg80211
- * config_get: route son config from cfg80211
- * config_ext_set_get: route extended configs from cfg80211
+ * struct wlan_lmac_if_son_rx_ops - son rx operations
+ * @deliver_event: deliver mlme and other mac events
+ * @process_mgmt_frame: process mgmt frames
+ * @config_set: route son config from cfg80211
+ * @config_get: route son config from cfg80211
+ * @config_ext_set_get: route extended configs from cfg80211
+ * @get_son_config: get son config
  */
 struct wiphy;
 struct wireless_dev;
@@ -1250,6 +1251,8 @@ struct wlan_lmac_if_son_rx_ops {
 	int (*config_ext_set_get)(struct net_device *dev,
 				  void *req,
 				  void *wri);
+	int (*get_son_config)(struct wlan_objmgr_vdev *vdev,
+			      uint32_t data);
 };
 
 /**
