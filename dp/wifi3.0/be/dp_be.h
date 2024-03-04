@@ -444,10 +444,11 @@ struct dp_vdev_be {
 	uint8_t vdev_id_check_en;
 #ifdef WLAN_MLO_MULTI_CHIP
 	struct cdp_vdev_stats mlo_stats;
-#ifdef WLAN_FEATURE_11BE_MLO
-#ifdef WLAN_MCAST_MLO
-	bool mcast_primary;
 #endif
+#ifdef WLAN_FEATURE_11BE_MLO
+#if (defined(WLAN_MLO_MULTI_CHIP) && defined(WLAN_MCAST_MLO)) || \
+	defined(WLAN_MCAST_MLO_SAP)
+	bool mcast_primary;
 #endif
 #endif
 #ifdef WLAN_FEATURE_11BE_MLO
@@ -606,32 +607,7 @@ void dp_mlo_partner_chips_unmap(struct dp_soc *soc,
  */
 void dp_soc_initialize_cdp_cmn_mlo_ops(struct dp_soc *soc);
 
-#ifdef WLAN_MLO_MULTI_CHIP
-typedef void dp_ptnr_vdev_iter_func(struct dp_vdev_be *be_vdev,
-				    struct dp_vdev *ptnr_vdev,
-				    void *arg);
-
-/**
- * dp_mlo_iter_ptnr_vdev() - API to iterate through ptnr vdev list
- * @be_soc: dp_soc_be pointer
- * @be_vdev: dp_vdev_be pointer
- * @func: function to be called for each peer
- * @arg: argument need to be passed to func
- * @mod_id: module id
- * @type: iterate type
- * @include_self_vdev: flag to include/exclude self vdev in iteration
- *
- * Return: None
- */
-void dp_mlo_iter_ptnr_vdev(struct dp_soc_be *be_soc,
-			   struct dp_vdev_be *be_vdev,
-			   dp_ptnr_vdev_iter_func func, void *arg,
-			   enum dp_mod_id mod_id,
-			   uint8_t type,
-			   bool include_self_vdev);
-#endif
-
-#ifdef WLAN_MCAST_MLO
+#if defined(WLAN_MCAST_MLO)
 /**
  * dp_mlo_get_mcast_primary_vdev() - get ref to mcast primary vdev
  * @be_soc: dp_soc_be pointer
@@ -661,6 +637,32 @@ dp_get_mlo_dev_list_obj(struct dp_soc_be *be_soc)
 {
 	return be_soc;
 }
+#endif
+
+#if defined(WLAN_FEATURE_11BE_MLO) && (defined(WLAN_MLO_MULTI_CHIP) || \
+	defined(WLAN_MCAST_MLO_SAP) && defined(WLAN_DP_MLO_DEV_CTX))
+typedef void dp_ptnr_vdev_iter_func(struct dp_vdev_be *be_vdev,
+				    struct dp_vdev *ptnr_vdev,
+				    void *arg);
+
+/**
+ * dp_mlo_iter_ptnr_vdev() - API to iterate through ptnr vdev list
+ * @be_soc: dp_soc_be pointer
+ * @be_vdev: dp_vdev_be pointer
+ * @func: function to be called for each peer
+ * @arg: argument need to be passed to func
+ * @mod_id: module id
+ * @type: iterate type
+ * @include_self_vdev: flag to include/exclude self vdev in iteration
+ *
+ * Return: None
+ */
+void dp_mlo_iter_ptnr_vdev(struct dp_soc_be *be_soc,
+			   struct dp_vdev_be *be_vdev,
+			   dp_ptnr_vdev_iter_func func, void *arg,
+			   enum dp_mod_id mod_id,
+			   uint8_t type,
+			   bool include_self_vdev);
 #endif
 
 #ifdef QCA_SUPPORT_DP_GLOBAL_CTX

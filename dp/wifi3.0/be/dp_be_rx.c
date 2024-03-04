@@ -1845,7 +1845,59 @@ void dp_rx_word_mask_subscribe_be(struct dp_soc *soc,
 
 #if defined(WLAN_MCAST_MLO) || defined(WLAN_MCAST_MLO_SAP)
 
-#if defined(WLAN_MCAST_MLO)
+#if defined(WLAN_MCAST_MLO_SAP) && defined(WLAN_DP_MLO_DEV_CTX)
+/**
+ * dp_mlo_get_mcast_primary_vdev() - get ref to mcast primary vdev
+ * @be_soc: dp_soc_be pointer
+ * @be_vdev: dp_vdev_be pointer
+ * @mod_id: module id
+ *
+ * Return: mcast primary DP VDEV handle on success, NULL on failure
+ */
+static
+struct dp_vdev *dp_mlo_get_mcast_primary_vdev(struct dp_soc_be *be_soc,
+					      struct dp_vdev_be *be_vdev,
+					      enum dp_mod_id mod_id)
+{
+	int i = 0;
+	int j = 0;
+	struct dp_vdev *vdev = (struct dp_vdev *)be_vdev;
+	struct dp_soc *soc = vdev->pdev->soc;
+
+	if (!be_vdev->mlo_dev_ctxt)
+		return NULL;
+
+	if (!soc)
+		return NULL;
+
+	if (be_vdev->mcast_primary) {
+		if (dp_vdev_get_ref((struct dp_soc *)be_soc, vdev, mod_id) !=
+				    QDF_STATUS_SUCCESS)
+			return NULL;
+		return vdev;
+	}
+	/* i always is zero */
+	/* for (i = 0; i < WLAN_MAX_MLO_CHIPS ; i++) */
+	for (j = 0 ; j < WLAN_MAX_MLO_LINKS_PER_SOC ; j++) {
+		struct dp_vdev *ptnr_vdev = NULL;
+		struct dp_vdev_be *be_ptnr_vdev = NULL;
+
+		ptnr_vdev = dp_vdev_get_ref_by_id(soc,
+						  be_vdev->mlo_dev_ctxt->vdev_list[i][j],
+						  mod_id);
+		if (!ptnr_vdev)
+			continue;
+		be_ptnr_vdev = dp_get_be_vdev_from_dp_vdev(ptnr_vdev);
+
+		if (be_ptnr_vdev->mcast_primary)
+			return ptnr_vdev;
+		dp_vdev_unref_delete(be_ptnr_vdev->vdev.pdev->soc,
+				     &be_ptnr_vdev->vdev,
+				     mod_id);
+	}
+	return NULL;
+}
+#endif
 
 /**
  * dp_get_mlo_intrabss_vdev() - Function to get vdev for intrabss
@@ -1877,20 +1929,6 @@ dp_release_mlo_intrabss_vdev(struct dp_vdev *intrabss_vdev)
 	dp_vdev_unref_delete(intrabss_vdev->pdev->soc,
 			     intrabss_vdev, DP_MOD_ID_RX);
 }
-
-#else
-static
-struct dp_vdev *dp_get_mlo_intrabss_vdev(struct dp_soc_be *be_soc,
-					 struct dp_vdev_be *be_vdev)
-{
-	return &be_vdev->vdev;
-}
-
-static void
-dp_release_mlo_intrabss_vdev(struct dp_vdev *intrabss_vdev)
-{
-}
-#endif
 
 static inline
 bool dp_rx_intrabss_mlo_mcbc_fwd(struct dp_soc *soc, struct dp_vdev *vdev,

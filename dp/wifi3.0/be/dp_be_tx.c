@@ -897,10 +897,6 @@ dp_tx_vdev_id_set_hal_tx_desc(uint32_t *hal_tx_desc_cached,
 }
 
 #if defined(WLAN_MCAST_MLO_SAP) && defined(WLAN_DP_MLO_DEV_CTX)
-typedef void dp_ptnr_vdev_iter_func(struct dp_vdev_be *be_vdev,
-					 struct dp_vdev *ptnr_vdev,
-					 void *arg);
-
 /**
  * dp_mlo_iter_ptnr_vdev() - API to iterate through ptnr vdev list
  * @be_soc: dp_soc_be pointer
@@ -913,7 +909,7 @@ typedef void dp_ptnr_vdev_iter_func(struct dp_vdev_be *be_vdev,
  *
  * Return: None
  */
-static void
+void
 dp_mlo_iter_ptnr_vdev(struct dp_soc_be *be_soc,
 		      struct dp_vdev_be *be_vdev,
 		      dp_ptnr_vdev_iter_func func,
@@ -994,14 +990,6 @@ void dp_tx_mlo_mcast_handler_be(struct dp_soc *soc,
 		qdf_atomic_inc(&be_vdev->mlo_dev_ctxt->seq_num);
 }
 
-#if defined(WLAN_MCAST_MLO_SAP)
-bool dp_tx_mlo_is_mcast_primary_be(struct dp_soc *soc,
-				   struct dp_vdev *vdev)
-{
-	return true;
-}
-
-#else
 bool dp_tx_mlo_is_mcast_primary_be(struct dp_soc *soc,
 				   struct dp_vdev *vdev)
 {
@@ -1012,7 +1000,6 @@ bool dp_tx_mlo_is_mcast_primary_be(struct dp_soc *soc,
 
 	return false;
 }
-#endif
 
 #if defined(CONFIG_MLO_SINGLE_DEV) || defined(WLAN_MCAST_MLO_SAP)
 #if defined(CONFIG_MLO_SINGLE_DEV)

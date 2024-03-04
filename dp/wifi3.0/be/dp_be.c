@@ -2968,8 +2968,8 @@ static void dp_bank_reconfig_be(struct dp_soc *soc, struct dp_vdev *vdev)
 
 #endif
 
-#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP) && \
-	defined(WLAN_MCAST_MLO)
+#if defined(WLAN_FEATURE_11BE_MLO) && ((defined(WLAN_MLO_MULTI_CHIP) && \
+	defined(WLAN_MCAST_MLO)) || defined(WLAN_MCAST_MLO_SAP))
 static void dp_mlo_mcast_reset_pri_mcast(struct dp_vdev_be *be_vdev,
 					 struct dp_vdev *ptnr_vdev,
 					 void *arg)
@@ -2979,6 +2979,10 @@ static void dp_mlo_mcast_reset_pri_mcast(struct dp_vdev_be *be_vdev,
 
 	be_ptnr_vdev->mcast_primary = false;
 }
+#endif
+
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP) && \
+	defined(WLAN_MCAST_MLO)
 
 #if defined(CONFIG_MLO_SINGLE_DEV)
 static void dp_txrx_set_mlo_mcast_primary_vdev_param_be(
@@ -3132,11 +3136,43 @@ QDF_STATUS dp_txrx_get_vdev_mcast_param_be(struct dp_soc *soc,
 	return QDF_STATUS_SUCCESS;
 }
 #else
+
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MCAST_MLO_SAP)
+static void
+dp_txrx_set_mlo_mcast_primary_vdev_param_be(struct dp_vdev *vdev,
+					    cdp_config_param_type val)
+{
+	struct dp_vdev_be *be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
+	struct dp_soc_be *be_soc = NULL;
+
+	be_soc = dp_get_be_soc_from_dp_soc(be_vdev->vdev.pdev->soc);
+
+	be_vdev->mcast_primary = val.cdp_vdev_param_mcast_vdev;
+	if (be_vdev->mcast_primary) {
+		struct cdp_txrx_peer_params_update params = {0};
+
+		dp_mlo_iter_ptnr_vdev(be_soc, be_vdev,
+				      dp_mlo_mcast_reset_pri_mcast,
+				      (void *)&be_vdev->mcast_primary,
+				      DP_MOD_ID_TX_MCAST,
+				      DP_LINK_VDEV_ITER,
+				      DP_VDEV_ITERATE_SKIP_SELF);
+
+		params.pdev_id = vdev->pdev->pdev_id;
+		params.vdev_id = vdev->vdev_id;
+		dp_wdi_event_handler(WDI_EVENT_MCAST_PRIMARY_UPDATE,
+				     vdev->pdev->soc,
+				     (void *)&params, CDP_INVALID_PEER,
+				     WDI_NO_VAL, params.pdev_id);
+	}
+}
+#else
 static void dp_txrx_set_mlo_mcast_primary_vdev_param_be(
 					struct dp_vdev *vdev,
 					cdp_config_param_type val)
 {
 }
+#endif
 
 static void dp_txrx_reset_mlo_mcast_primary_vdev_param_be(
 					struct dp_vdev *vdev,
