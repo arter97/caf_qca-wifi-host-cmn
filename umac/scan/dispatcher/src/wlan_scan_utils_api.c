@@ -121,6 +121,25 @@ util_get_last_scan_time(struct wlan_objmgr_vdev *vdev)
 		return 0;
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO
+uint32_t util_scan_entry_t2lm_len(struct scan_cache_entry *scan_entry)
+{
+	int i = 0;
+	uint32_t len = 0;
+
+	if (!scan_entry || !scan_entry->ie_list.t2lm[0])
+		return 0;
+
+	for (i = 0; i < WLAN_MAX_T2LM_IE; i++) {
+		if (scan_entry->ie_list.t2lm[i])
+			len += scan_entry->ie_list.t2lm[i][TAG_LEN_POS] +
+				sizeof(struct ie_header);
+	}
+
+	return len;
+	}
+#endif
+
 enum wlan_band util_scan_scm_freq_to_band(uint16_t freq)
 {
 	if (WLAN_REG_IS_24GHZ_CH_FREQ(freq))
@@ -2168,7 +2187,7 @@ util_get_ml_bv_partner_link_info(struct wlan_objmgr_pdev *pdev,
 	uint8_t rnr_idx = 0;
 	struct rnr_bss_info *rnr = NULL;
 	uint16_t freq;
-	struct scan_cache_entry tmp_entry = {0};
+	struct scan_cache_entry *tmp_entry;
 	struct qdf_mac_addr bcast_addr = QDF_MAC_ADDR_BCAST_INIT;
 	struct scan_mbssid_info *mbssid;
 	qdf_size_t ml_ie_len = ml_ie[TAG_LEN_POS] + sizeof(struct ie_header);
@@ -2187,13 +2206,14 @@ util_get_ml_bv_partner_link_info(struct wlan_objmgr_pdev *pdev,
 
 			if ((!scan_entry->mbssid_info.profile_count) &&
 			    !(rnr->bss_params & TBTT_BSS_PARAM_TRANS_BSSID_BIT)) {
+				tmp_entry =
 				       scm_scan_get_scan_entry_by_mac_freq(pdev,
-							     &rnr->bssid, freq,
-							     &tmp_entry);
-				if (tmp_entry.frm_subtype) {
+							     &rnr->bssid, freq);
+				if (tmp_entry) {
 					qdf_mem_copy(mbssid,
-						     &tmp_entry.mbssid_info,
+						     &tmp_entry->mbssid_info,
 						     sizeof(*mbssid));
+					util_scan_free_cache_entry(tmp_entry);
 				} else {
 					qdf_mem_copy(mbssid->non_trans_bssid,
 						     rnr->bssid.bytes,
@@ -3868,7 +3888,8 @@ util_scan_parse_beacon_frame(struct wlan_objmgr_pdev *pdev,
 		mbssid_ie = util_scan_find_ie(WLAN_ELEMID_MULTIPLE_BSSID,
 					      (uint8_t *)&bcn->ie, ie_len);
 		if (mbssid_ie) {
-			if (mbssid_ie[TAG_LEN_POS] < VALID_ELEM_LEAST_LEN) {
+			/* some APs announce the MBSSID ie_len as 1 */
+			if (mbssid_ie[TAG_LEN_POS] < 1) {
 				scm_debug("MBSSID IE length is wrong %d",
 					  mbssid_ie[TAG_LEN_POS]);
 				return status;
