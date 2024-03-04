@@ -683,7 +683,6 @@ static int send_filled_buffers_to_user(void)
 	static int nlmsg_seq;
 	unsigned long flags;
 	static int rate_limit;
-	void *out;
 
 	while (!list_empty(&gwlan_logging.filled_list)
 	       && !gwlan_logging.exit) {
@@ -730,12 +729,9 @@ static int send_filled_buffers_to_user(void)
 
 		wnl = (tAniNlHdr *) nlh;
 		wnl->radio = plog_msg->radio;
-		/* kernel FORTIFY_SOURCE may warn when multiple struct
-		 * are copied using memcpy. So, to avoid, assign a
-		 * void pointer to the struct and copy using memcpy
-		 */
-		out = &wnl->wmsg;
-		memcpy(out, plog_msg->logbuf,
+
+		/* Offset of data buffer from nlmsg_hdr + sizeof(int) radio */
+		memcpy(nlmsg_data(nlh) + sizeof(wnl->radio), plog_msg->logbuf,
 		       plog_msg->filled_length + sizeof(tAniHdr));
 
 		spin_lock_irqsave(&gwlan_logging.spin_lock, flags);
