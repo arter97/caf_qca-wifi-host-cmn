@@ -1227,7 +1227,7 @@ dp_rx_pdev_mon_dest_desc_pool_init(struct dp_pdev *pdev, uint32_t mac_for_pdev)
 		return;
 
 	dp_rx_pdev_mon_buf_desc_pool_init(pdev, mac_for_pdev);
-	dp_link_desc_ring_replenish(soc, mac_for_pdev);
+	dp_link_desc_ring_replenish(soc, mac_for_pdev, true);
 }
 
 static void
@@ -1433,7 +1433,7 @@ dp_mon_hw_link_desc_bank_alloc(struct dp_soc *soc, uint32_t mac_id)
 static void
 dp_mon_link_desc_ring_replenish(struct dp_soc *soc, int mac_id)
 {
-	dp_link_desc_ring_replenish(soc, mac_id);
+	dp_link_desc_ring_replenish(soc, mac_id, true);
 }
 #else
 static QDF_STATUS

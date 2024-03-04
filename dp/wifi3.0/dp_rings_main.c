@@ -3683,7 +3683,7 @@ void *dp_soc_init(struct dp_soc *soc, HTC_HANDLE htc_handle,
 		goto fail3;
 	}
 
-	dp_link_desc_ring_replenish(soc, WLAN_INVALID_PDEV_ID);
+	dp_link_desc_ring_replenish(soc, WLAN_INVALID_PDEV_ID, true);
 
 	if (dp_soc_srng_init(soc)) {
 		dp_init_err("%pK: dp_soc_srng_init failed", soc);

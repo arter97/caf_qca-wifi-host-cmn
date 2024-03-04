@@ -514,7 +514,7 @@ QDF_STATUS dp_vdev_set_monitor_mode_rings(struct dp_pdev *pdev,
 			       __func__);
 			goto fail0;
 		}
-		dp_link_desc_ring_replenish(soc, mac_for_pdev);
+		dp_link_desc_ring_replenish(soc, mac_for_pdev, true);
 
 		htt_srng_setup(soc->htt_handle, pdev->pdev_id,
 			       soc->rxdma_mon_desc_ring[mac_for_pdev].hal_srng,

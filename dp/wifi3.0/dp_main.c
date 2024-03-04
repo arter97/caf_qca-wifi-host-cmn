@@ -2604,7 +2604,8 @@ static QDF_STATUS dp_soc_interrupt_attach_wrapper(struct cdp_soc_t *txrx_soc)
 #endif
 #endif
 
-void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id)
+void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id,
+				 bool pool_clean)
 {
 	uint32_t cookie = 0;
 	uint32_t page_idx = 0;
@@ -2651,11 +2652,14 @@ void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id)
 	}
 
 	dma_pages = pages->dma_pages;
-	do {
-		qdf_mem_zero(dma_pages[page_idx].page_v_addr_start,
-			     pages->page_size);
-		page_idx++;
-	} while (page_idx < pages->num_pages);
+
+	if (pool_clean) {
+		do {
+			qdf_mem_zero(dma_pages[page_idx].page_v_addr_start,
+				     pages->page_size);
+			page_idx++;
+		} while (page_idx < pages->num_pages);
+	}
 
 	if (desc_srng) {
 		hal_srng_access_start_unlocked(soc->hal_soc, desc_srng);
@@ -12115,7 +12119,7 @@ static void dp_reinit_rings(struct dp_soc *soc)
 		;
 
 	dp_hw_link_desc_ring_init(soc);
-	dp_link_desc_ring_replenish(soc, WLAN_INVALID_PDEV_ID);
+	dp_link_desc_ring_replenish(soc, WLAN_INVALID_PDEV_ID, false);
 	dp_soc_srng_init(soc);
 }
 
@@ -12235,11 +12239,30 @@ static inline void dp_umac_reset_ppeds_start(struct dp_soc *soc)
  */
 static QDF_STATUS dp_umac_reset_handle_pre_reset(struct dp_soc *soc)
 {
+	uint32_t page_idx = 0;
+	struct qdf_mem_multi_page_t *pages;
+	struct qdf_mem_dma_page_t *dma_pages;
+
 	dp_reset_interrupt_ring_masks(soc);
 
 	dp_pause_tx_hardstart(soc);
 	dp_pause_reo_send_cmd(soc);
 	dp_umac_reset_service_handle_n_notify_done(soc);
+
+	/*
+	 * Memset the wbm link desc pool to 0 at this point, so that by the time
+	 * FW responds with post_reset_start, we would have finished the memset.
+	 * This will save a few milliseconds.
+	 */
+	pages = &soc->link_desc_pages;
+	dma_pages = pages->dma_pages;
+
+	do {
+		qdf_mem_zero(dma_pages[page_idx].page_v_addr_start,
+			     pages->page_size);
+		page_idx++;
+	} while (page_idx < pages->num_pages);
+
 	return QDF_STATUS_SUCCESS;
 }
 

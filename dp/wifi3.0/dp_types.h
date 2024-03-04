@@ -5487,10 +5487,12 @@ static inline QDF_STATUS dp_hw_link_desc_pool_banks_alloc(struct dp_soc *soc,
  * dp_link_desc_ring_replenish() - Replenish hw link desc rings
  * @soc: DP SOC handle
  * @mac_id: mac id
+ * @pool_clean: Is desc pool memset required
  *
  * Return: None
  */
-void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id);
+void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id,
+				 bool pool_clean);
 
 #ifdef WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL
 void dp_rx_refill_buff_pool_enqueue(struct dp_soc *soc);
