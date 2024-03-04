@@ -1,7 +1,7 @@
 
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -49,12 +49,14 @@ struct wmi_mlo_ready_params {
  * @WMI_HOST_MLO_TEARDOWN_REASON_SSR: Wifi Recovery
  * @WMI_HOST_MLO_TEARDOWN_REASON_MODE1_SSR: Recovery Mode1 SSR teardown
  * @WMI_HOST_MLO_TEARDOWN_REASON_STANDBY: Network Standby mode teardown
+ * @WMI_HOST_MLO_TEARDOWN_REASON_DYNAMIC_WSI_REMAP: Dynamic WSI remap
  */
 enum wmi_mlo_teardown_reason {
 	WMI_HOST_MLO_TEARDOWN_REASON_DOWN,
 	WMI_HOST_MLO_TEARDOWN_REASON_SSR,
 	WMI_HOST_MLO_TEARDOWN_REASON_MODE1_SSR,
 	WMI_HOST_MLO_TEARDOWN_REASON_STANDBY,
+	WMI_HOST_MLO_TEARDOWN_REASON_DYNAMIC_WSI_REMAP,
 };
 
 /** struct wmi_mlo_teardown_params - MLO teardown command params

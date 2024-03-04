@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -418,6 +418,9 @@ struct wlan_soc_timer {
  * @dp_handle:             DP module handle
  * @psoc_lock:             psoc lock
  * @skip_mlo_pumac:        skip this psoc as MLO primary umac
+ * @wsi_remap_add:    WSI remap add is performed
+ * @wsi_remap_remove: WSI remap remove is performed
+ * @wsi_remap_fw_up_in_progress: Remap FW UP in progress
  */
 struct wlan_objmgr_psoc {
 	struct wlan_objmgr_psoc_regulatory soc_reg;
@@ -433,6 +436,9 @@ struct wlan_objmgr_psoc {
 	void *dp_handle;
 	qdf_spinlock_t psoc_lock;
 	bool skip_mlo_pumac;
+	bool wsi_remap_add;
+	bool wsi_remap_remove;
+	bool wsi_remap_fw_up_in_progress;
 };
 
 /**

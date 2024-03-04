@@ -1,4 +1,4 @@
-/* Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+/* Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -641,7 +641,6 @@ void mlo_setup_update_soc_ready(struct wlan_objmgr_psoc *psoc, uint8_t grp_id)
 	setup_info->curr_soc_list[chip_idx] = psoc;
 	mlo_set_soc_list(grp_id, psoc);
 	setup_info->num_soc++;
-
 	mlo_debug("SoC updated to mld grp %d , chip idx %d num soc %d",
 		  grp_id, chip_idx, setup_info->num_soc);
 
@@ -798,12 +797,18 @@ void mlo_link_setup_complete(struct wlan_objmgr_pdev *pdev, uint8_t grp_id)
 
 		psoc = wlan_pdev_get_psoc(pdev);
 		tx_ops = wlan_psoc_get_lmac_if_txops(psoc);
+
 		mlo_debug("Trigger MLO ready");
 		if (tx_ops && tx_ops->mops.target_if_mlo_ready) {
 			tx_ops->mops.target_if_mlo_ready(
 					setup_info->pdev_list,
 					setup_info->num_links);
 		}
+		if (setup_info->wsi_remap_in_progress) {
+			setup_info->wsi_remap_in_progress = false;
+			mlo_debug("Dynamic WSI remap MLO SETUP done!");
+		}
+
 	}
 }
 
@@ -908,7 +913,8 @@ void mlo_setup_update_soc_down(struct wlan_objmgr_psoc *psoc, uint8_t grp_id)
 		return;
 	}
 
-	if (setup_info->curr_soc_list[chip_idx]) {
+	if (setup_info->curr_soc_list[chip_idx] &&
+	    !setup_info->wsi_remap_in_progress) {
 		soc = setup_info->curr_soc_list[chip_idx];
 		cdp_soc_mlo_soc_teardown(wlan_psoc_get_dp_handle(soc),
 					 setup_info->dp_handle, false);
@@ -918,6 +924,14 @@ void mlo_setup_update_soc_down(struct wlan_objmgr_psoc *psoc, uint8_t grp_id)
 
 		if (!setup_info->num_soc)
 			mlo_dp_ctxt_detach(soc, grp_id, setup_info->dp_handle);
+	} else {
+		soc = setup_info->curr_soc_list[chip_idx];
+		if (soc->wsi_remap_remove) {
+			cdp_soc_mlo_soc_teardown(wlan_psoc_get_dp_handle(soc),
+						 setup_info->dp_handle, false);
+		}
+		setup_info->curr_soc_list[chip_idx] = NULL;
+		setup_info->num_soc--;
 	}
 
 	mlo_debug("Soc down, mlo group %d num soc %d num links %d",
@@ -1002,6 +1016,7 @@ static void mlo_send_teardown_req(struct wlan_objmgr_psoc *psoc,
 	struct wlan_lmac_if_tx_ops *tx_ops;
 	struct wlan_objmgr_pdev *temp_pdev;
 	struct mlo_setup_info *setup_info;
+	struct wlan_objmgr_psoc *temp_psoc;
 	uint8_t link_idx;
 	uint8_t tot_links;
 	bool umac_reset = 0;
@@ -1026,7 +1041,8 @@ static void mlo_send_teardown_req(struct wlan_objmgr_psoc *psoc,
 	tot_links = setup_info->tot_links;
 
 	if (reason == WMI_HOST_MLO_TEARDOWN_REASON_MODE1_SSR ||
-	    reason == WMI_HOST_MLO_TEARDOWN_REASON_STANDBY) {
+	    reason == WMI_HOST_MLO_TEARDOWN_REASON_STANDBY ||
+	    reason == WMI_HOST_MLO_TEARDOWN_REASON_DYNAMIC_WSI_REMAP) {
 		for (link_idx = 0; link_idx < tot_links; link_idx++) {
 			umac_reset = 0;
 			temp_pdev = setup_info->pdev_list[link_idx];
@@ -1047,6 +1063,12 @@ static void mlo_send_teardown_req(struct wlan_objmgr_psoc *psoc,
 				wlan_psoc_get_id(wlan_pdev_get_psoc(temp_pdev)),
 				link_idx, umac_reset,
 				temp_pdev->standby_active);
+				temp_psoc = wlan_pdev_get_psoc(temp_pdev);
+				mlo_info(
+				"Dynamic WSI Remap: Remap add %d : Remap Remove %d: Remap in progress %d ",
+				temp_psoc->wsi_remap_add,
+				temp_psoc->wsi_remap_remove,
+				setup_info->wsi_remap_in_progress);
 				tx_ops->mops.target_if_mlo_teardown_req(
 						setup_info->pdev_list[link_idx],
 						reason, umac_reset,

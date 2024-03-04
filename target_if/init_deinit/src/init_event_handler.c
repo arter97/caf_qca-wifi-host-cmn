@@ -864,7 +864,7 @@ static bool init_deinit_mlo_get_group_id(struct wlan_objmgr_psoc *psoc,
 	return false;
 }
 
-static void init_deinit_mlo_update_soc_ready(struct wlan_objmgr_psoc *psoc)
+void init_deinit_mlo_update_soc_ready(struct wlan_objmgr_psoc *psoc)
 {
 	uint8_t grp_id = 0;
 
@@ -873,9 +873,17 @@ static void init_deinit_mlo_update_soc_ready(struct wlan_objmgr_psoc *psoc)
 			target_if_err("Invalid MLD group id");
 			return;
 		}
+		/* Skip the mlo setup here during fw up phase
+		 * of wsi remap as it will be done later during
+		 * wsi_remap_mlo_setup
+		 */
+		if (psoc->wsi_remap_fw_up_in_progress)
+			return;
 		mlo_setup_update_soc_ready(psoc, grp_id);
 	}
 }
+
+qdf_export_symbol(init_deinit_mlo_update_soc_ready);
 
 static void init_deinit_send_ml_link_ready(struct wlan_objmgr_psoc *psoc,
 					   void *object, void *arg)
@@ -895,16 +903,25 @@ static void init_deinit_send_ml_link_ready(struct wlan_objmgr_psoc *psoc,
 	mlo_setup_link_ready(pdev, grp_id);
 }
 
-static void init_deinit_mlo_update_pdev_ready(struct wlan_objmgr_psoc *psoc,
-					      uint8_t num_radios)
+void init_deinit_mlo_update_pdev_ready(struct wlan_objmgr_psoc *psoc,
+				       uint8_t num_radios)
 {
 	if (!init_deinit_mlo_capable(psoc))
+		return;
+
+	/* Skip the update pdev ready during fw up phase
+	 * of wsi remap, it will be done later during
+	 * wsi_remap_mlo_setup
+	 */
+	if (psoc->wsi_remap_fw_up_in_progress)
 		return;
 
 	wlan_objmgr_iterate_obj_list(psoc, WLAN_PDEV_OP,
 				     init_deinit_send_ml_link_ready,
 				     NULL, 0, WLAN_INIT_DEINIT_ID);
 }
+
+qdf_export_symbol(init_deinit_mlo_update_pdev_ready);
 
 static void
 init_deinit_pdev_wsi_stats_info_support(struct wmi_unified *wmi_handle,
