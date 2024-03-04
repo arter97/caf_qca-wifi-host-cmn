@@ -887,7 +887,7 @@ void reg_save_reg_rules_to_pdev(
 	pdev_reg_rules->num_of_reg_rules = psoc_reg_rules->num_of_reg_rules;
 	if (!pdev_reg_rules->num_of_reg_rules) {
 		qdf_spin_unlock_bh(&pdev_priv_obj->reg_rules_lock);
-		reg_err("no reg rules in psoc");
+		reg_debug("no reg rules in psoc");
 		return;
 	}
 
