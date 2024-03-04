@@ -70,8 +70,41 @@ static int
 wifi_radar_validate_common_params(struct pdev_wifi_radar *pwr,
 				  struct wifi_radar_command_params *params)
 {
+	uint32_t pow2_ltf = 0;
+
 	if (params->bandwidth >= WIFI_RADAR_PKT_WIDTH_MAX) {
 		wifi_radar_err("Invalid bandwidth for wifi radar operation");
+		return 0;
+	}
+
+	if (params->num_ltf_tx > pwr->max_num_ltf_tx) {
+		wifi_radar_err("Invalid num_ltf_tx, max value %d",
+			       pwr->max_num_ltf_tx);
+		return 0;
+	}
+
+	if (params->num_skip_ltf_rx > pwr->max_num_skip_ltf_rx) {
+		wifi_radar_err("Invalid num_skip_ltf_rx, max value %d",
+			       pwr->max_num_skip_ltf_rx);
+		return 0;
+	}
+
+	if (params->num_ltf_accumulation > pwr->max_num_ltf_accumulation) {
+		wifi_radar_err("Invalid num_ltf_accumulation, max value %d",
+			       pwr->max_num_ltf_accumulation);
+		return 0;
+	}
+
+	if (!QDF_IS_STATUS_SUCCESS
+			(qdf_get_power2_of_n(params->num_ltf_accumulation,
+					     &pow2_ltf))) {
+		wifi_radar_err("Failed to get power2 of %d",
+			       params->num_ltf_accumulation);
+		return 0;
+	}
+
+	if (pow2_ltf > (params->num_ltf_tx + params->num_skip_ltf_rx)) {
+		wifi_radar_err("2^ltf_accumulation exceeds skip_ltf + ltf_rx");
 		return 0;
 	}
 

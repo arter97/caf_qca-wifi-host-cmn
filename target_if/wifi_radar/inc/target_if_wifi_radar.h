@@ -27,6 +27,10 @@
 #define STREAMFS_WIFI_RADAR_MAX_SUBBUF 61464
 #define STREAMFS_WIFI_RADAR_NUM_SUBBUF 127
 
+#define MAX_NUM_LTF_TX 255
+#define MAX_NUM_SKIP_LTF_RX 21
+#define MAX_NUM_LTF_ACCUMULATION 7
+
 struct wifi_radar_ucode_header {
 	uint32_t  ucode_header_tag :8,
 		  ucode_header_len_32bit_dwords :8,

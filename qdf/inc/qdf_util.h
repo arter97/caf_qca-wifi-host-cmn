@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -698,6 +698,23 @@ static inline int qdf_get_pwr2(int value)
 		log2++;
 	}
 	return 1 << log2;
+}
+
+/**
+ * qdf_get_power2_of_n() - get power 2 value of input n.
+ * @n: value of n in 2^n. Max value allowed is 31.
+ * @power: pointer to store the computed value
+ *
+ * Return: status of calculating 2^n
+ */
+static inline QDF_STATUS qdf_get_power2_of_n(uint8_t n, uint32_t *power)
+{
+	if ((n > 31) || !power)
+		return QDF_STATUS_E_INVAL;
+
+	*power = 1 << n;
+
+	return QDF_STATUS_SUCCESS;
 }
 
 static inline

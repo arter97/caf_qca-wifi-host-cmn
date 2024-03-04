@@ -167,13 +167,21 @@ int tgt_wifi_radar_validate_chainmask(struct pdev_wifi_radar *pwr,
 		return 0;
 	}
 
+	if (!num_chains(rx_chainmask)) {
+		wifi_radar_err("zero rx chainmask invalid");
+		return 0;
+	}
+
 	if (num_chains(rx_chainmask) >= HOST_MAX_CHAINS) {
 		wifi_radar_err("no of rx chains exceeds %d", HOST_MAX_CHAINS);
 		return 0;
 	}
 
 	qdf_spin_lock_bh(&pwr->cal_status_lock);
-	for (i = 0; ((i < HOST_MAX_CHAINS) && ((rx_chainmask >> i) & 1)); i++) {
+	for (i = 0; i < HOST_MAX_CHAINS; i++) {
+		if (!((rx_chainmask >> i) & 1))
+			continue;
+
 		if (pwr->per_chain_comb_cal_status[txchain_pos][i]) {
 			continue;
 		} else {

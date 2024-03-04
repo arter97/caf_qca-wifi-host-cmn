@@ -415,6 +415,9 @@ QDF_STATUS wifi_radar_init_pdev(struct wlan_objmgr_psoc *psoc,
 	pwr->is_wifi_radar_capable = 1;
 	pwr->subbuf_size = STREAMFS_WIFI_RADAR_MAX_SUBBUF;
 	pwr->num_subbufs = STREAMFS_WIFI_RADAR_NUM_SUBBUF;
+	pwr->max_num_ltf_tx = MAX_NUM_LTF_TX;
+	pwr->max_num_skip_ltf_rx = MAX_NUM_SKIP_LTF_RX;
+	pwr->max_num_ltf_accumulation = MAX_NUM_LTF_ACCUMULATION;
 	qdf_spinlock_create(&pwr->cal_status_lock);
 	pwr->cal_status_lock_initialized = true;
 	qdf_spinlock_create(&pwr->header_lock);
