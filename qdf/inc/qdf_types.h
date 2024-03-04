@@ -117,6 +117,21 @@ typedef struct qdf_sglist {
  */
 #define qdf_toupper __qdf_toupper
 
+/* set if the flags were changed */
+#define QDF_MONITOR_FLAG_CHANGED __QDF_MONITOR_FLAG_CHANGED
+/* Pass frames with bad FCS */
+#define QDF_MONITOR_FLAG_FCSFAIL __QDF_MONITOR_FLAG_FCSFAIL
+/* Pass frames with bad PLCP */
+#define QDF_MONITOR_FLAG_PLCPFAIL __QDF_MONITOR_FLAG_PLCPFAIL
+/* Pass control frames */
+#define QDF_MONITOR_FLAG_CONTROL __QDF_MONITOR_FLAG_CONTROL
+/* Disable BSSID filtering */
+#define QDF_MONITOR_FLAG_OTHER_BSS __QDF_MONITOR_FLAG_OTHER_BSS
+/* Report frames after processing */
+#define QDF_MONITOR_FLAG_COOK_FRAMES __QDF_MONITOR_FLAG_COOK_FRAMES
+/* Use the configured MAC address and ACK incoming unicast packets */
+#define QDF_MONITOR_FLAG_ACTIVE __QDF_MONITOR_FLAG_ACTIVE
+
 /**
  * enum qdf_buff_type_tx_rx: check buffer type
  *
