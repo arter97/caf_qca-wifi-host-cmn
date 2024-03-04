@@ -1222,7 +1222,7 @@ void mlo_update_tsf_sync_support(struct wlan_objmgr_psoc *psoc,
 	struct mlo_setup_info *mlo_setup;
 
 	ml_grp_id = wlan_mlo_get_psoc_group_id(psoc);
-	if (ml_grp_id < 0) {
+	if (ml_grp_id >= WLAN_MAX_MLO_GROUPS) {
 		mlo_err("Invalid ML Grp ID %d", ml_grp_id);
 		return;
 	}
@@ -1232,6 +1232,28 @@ void mlo_update_tsf_sync_support(struct wlan_objmgr_psoc *psoc,
 }
 
 qdf_export_symbol(mlo_update_tsf_sync_support);
+
+void mlo_update_wsi_remap_support(struct wlan_objmgr_psoc *psoc,
+				  bool wsi_remap_support)
+{
+	uint8_t ml_grp_id;
+	struct mlo_mgr_context *mlo_ctx = wlan_objmgr_get_mlo_ctx();
+	struct mlo_setup_info *mlo_setup;
+
+	ml_grp_id = wlan_mlo_get_psoc_group_id(psoc);
+	if (ml_grp_id >= WLAN_MAX_MLO_GROUPS) {
+		mlo_err("Invalid ML Grp ID %d", ml_grp_id);
+		return;
+	}
+
+	mlo_setup = &mlo_ctx->setup_info[ml_grp_id];
+	if (mlo_setup->wsi_remap_support == 0xFF)
+		mlo_setup->wsi_remap_support = wsi_remap_support;
+	else
+		mlo_setup->wsi_remap_support &= wsi_remap_support;
+}
+
+qdf_export_symbol(mlo_update_wsi_remap_support);
 
 bool mlo_pdev_derive_bridge_link_pdevs(struct wlan_objmgr_pdev *pdev,
 				       struct wlan_objmgr_pdev **pdev_list)

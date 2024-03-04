@@ -1,4 +1,4 @@
-/* Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+/* Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -273,6 +273,16 @@ void mlo_update_tsf_sync_support(struct wlan_objmgr_psoc *psoc,
 				 bool tsf_sync_enab);
 
 /**
+ * mlo_update_wsi_remap_support() - API to get WSI remap info support
+ *
+ * @psoc: Pointer to psoc object
+ * @wsi_remap_support: Indicates WSI remap support to be enabled or not
+ *
+ * Return: None
+ */
+void mlo_update_wsi_remap_support(struct wlan_objmgr_psoc *psoc,
+				  bool wsi_remap_support);
+/**
  * mlo_pdev_derive_bridge_link_pdevs() - API to get the list of pdevs
  *					 for creating bridge vdevs.
  *
@@ -360,6 +370,11 @@ void init_deinit_pdev_wsi_stats_info_support(struct wlan_objmgr_psoc *psoc,
 static inline
 void mlo_update_tsf_sync_support(struct wlan_objmgr_psoc *psoc,
 				 bool tsf_sync_enab)
+{
+}
+
+void mlo_update_wsi_remap_support(struct wlan_objmgr_psoc *psoc,
+				  bool wsi_remap_support)
 {
 }
 #endif /* WLAN_MLO_MULTI_CHIP */

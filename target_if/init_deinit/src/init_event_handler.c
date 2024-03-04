@@ -235,6 +235,9 @@ init_deinit_pdev_wsi_stats_info_support(struct wmi_unified *wmi_handle,
 static void init_deinit_mlo_tsf_sync_support(struct wmi_unified *wmi_handle,
 					     struct wlan_objmgr_psoc *psoc);
 
+static void init_deinit_pdev_wsi_remap_support(struct wmi_unified *wmi_handle,
+					       struct wlan_objmgr_psoc *psoc);
+
 static int init_deinit_service_ready_event_handler(ol_scn_t scn_handle,
 							uint8_t *event,
 							uint32_t data_len)
@@ -483,6 +486,8 @@ static int init_deinit_service_ready_event_handler(ol_scn_t scn_handle,
 			wmi_service_multiple_reorder_queue_setup_support))
 		cdp_soc_set_param(wlan_psoc_get_dp_handle(psoc),
 			DP_SOC_PARAM_MULTI_RX_REORDER_SETUP_SUPPORT, 1);
+
+	init_deinit_pdev_wsi_remap_support(wmi_handle, psoc);
 
 exit:
 	return err_code;
@@ -952,6 +957,22 @@ static void init_deinit_mlo_tsf_sync_support(struct wmi_unified *wmi_handle,
 
 	mlo_update_tsf_sync_support(psoc, mlo_tsf_sync_enab);
 }
+
+static void
+init_deinit_pdev_wsi_remap_support(struct wmi_unified *wmi_handle,
+				   struct wlan_objmgr_psoc *psoc)
+{
+	bool wsi_remap_support = false;
+
+	if (!init_deinit_mlo_capable(psoc))
+		return;
+
+	if (wmi_service_enabled(wmi_handle,
+				wmi_service_dynamic_wsi_remap_support))
+		wsi_remap_support = true;
+
+	mlo_update_wsi_remap_support(psoc, wsi_remap_support);
+}
 #elif defined(WLAN_FEATURE_11BE_MLO) && !defined(WLAN_MLO_MULTI_CHIP)
 static void init_deinit_mlo_update_soc_ready(struct wlan_objmgr_psoc *psoc)
 {}
@@ -974,6 +995,10 @@ static void init_deinit_mlo_tsf_sync_support(struct wmi_unified *wmi_handle,
 	mlo_update_tsf_sync_support(psoc, mlo_tsf_sync_enab);
 }
 
+static void
+init_deinit_pdev_wsi_remap_support(struct wmi_unified *wmi_handle,
+				   struct wlan_objmgr_psoc *psoc)
+{}
 #else
 static void init_deinit_mlo_update_soc_ready(struct wlan_objmgr_psoc *psoc)
 {}
@@ -986,6 +1011,10 @@ init_deinit_pdev_wsi_stats_info_support(struct wmi_unified *wmi_handle,
 {}
 static void init_deinit_mlo_tsf_sync_support(struct wmi_unified *wmi_handle,
 					     struct wlan_objmgr_psoc *psoc)
+{}
+static void
+init_deinit_pdev_wsi_remap_support(struct wmi_unified *wmi_handle,
+				   struct wlan_objmgr_psoc *psoc)
 {}
 #endif /*WLAN_FEATURE_11BE_MLO && WLAN_MLO_MULTI_CHIP*/
 

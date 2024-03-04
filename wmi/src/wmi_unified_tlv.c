@@ -23837,6 +23837,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 			WMI_SERVICE_SMEM_MAILBOX_SUPPORT;
 	wmi_service[wmi_service_mlo_mode2_recovery_supported] =
 			WMI_SERVICE_MLO_MODE2_RECOVERY_SUPPORTED;
+	wmi_service[wmi_service_dynamic_wsi_remap_support] =
+			WMI_SERVICE_DYNAMIC_WSI_REMAP_SUPPORT;
 }
 
 /**

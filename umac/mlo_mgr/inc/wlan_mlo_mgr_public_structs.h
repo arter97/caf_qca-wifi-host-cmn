@@ -194,6 +194,7 @@ struct mlo_chip_info {
  * @tsf_sync_enabled: MLO TSF sync is enabled at FW or not
  * @wsi_stats_info_support: WSI stats support at FW or not
  * @wsi_remap_in_progress: Dynamic WSI remap in progress
+ * @wsi_remap_support: WSI remap support at FW or not
  */
 struct mlo_setup_info {
 	uint8_t ml_grp_id;
@@ -216,6 +217,7 @@ struct mlo_setup_info {
 	bool tsf_sync_enabled;
 	uint8_t wsi_stats_info_support;
 	bool wsi_remap_in_progress;
+	uint8_t wsi_remap_support;
 };
 
 /**
