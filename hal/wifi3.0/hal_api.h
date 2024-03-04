@@ -877,6 +877,27 @@ static inline int hal_get_reg_write_pending_work(void *hal_soc)
 }
 #endif
 
+#if defined(FEATURE_HAL_DELAYED_REG_WRITE) && defined(QCA_WIFI_QCA6750)
+/**
+ * hal_srng_check_and_update_hptp() - Check and force update HP/TP
+ *		to the hardware
+ * @hal_soc: HAL soc handle
+ * @srng: SRNG handle
+ * @update: Whether or not update is needed
+ *
+ * Returns: void
+ */
+void hal_srng_check_and_update_hptp(struct hal_soc *hal_soc,
+				    struct hal_srng *srng,
+				    bool update);
+#else
+static inline void
+hal_srng_check_and_update_hptp(struct hal_soc *hal_soc, struct hal_srng *srng,
+			       bool update)
+{
+}
+#endif
+
 /**
  * hal_read_address_32_mb() - Read 32-bit value from the register
  * @soc: soc handle
