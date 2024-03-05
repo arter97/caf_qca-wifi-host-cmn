@@ -2863,6 +2863,23 @@ wlan_reg_get_num_afc_freq_obj(struct wlan_objmgr_pdev *pdev,
 			      uint8_t *num_freq_obj);
 
 /**
+ * wlan_reg_validate_freq_in_afc_chan_obj() - Check if the AFC power info
+ * channel object has the input frequency's bw opclass.
+ *
+ * @pdev: Pointer to pdev
+ * @primary_freq: Input primary frequency
+ * @center_320: Center frequency of 320 MHz BW
+ * @bw: Bandwidth
+ *
+ * Return: True, if the frequency center is found in AFC response.
+ */
+bool
+wlan_reg_validate_freq_in_afc_chan_obj(struct wlan_objmgr_pdev *pdev,
+				       qdf_freq_t primary_freq,
+				       qdf_freq_t center_320,
+				       uint16_t bw);
+
+/**
  * wlan_reg_set_afc_power_event_received() - Set power event received flag with
  * given val.
  * @pdev: pdev pointer.

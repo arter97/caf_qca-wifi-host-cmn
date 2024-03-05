@@ -10222,6 +10222,78 @@ reg_get_num_afc_freq_obj(struct wlan_objmgr_pdev *pdev, uint8_t *num_freq_obj)
 
 	return QDF_STATUS_SUCCESS;
 }
+
+bool
+reg_validate_freq_in_afc_chan_obj(struct wlan_objmgr_pdev *pdev,
+				  qdf_freq_t primary_freq,
+				  qdf_freq_t center_320,
+				  uint16_t bw)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	struct reg_fw_afc_power_event *power_info;
+	uint8_t i, j, op_class = 0, chan_num;
+	const struct bonded_channel_freq *bonded_chan_ptr = NULL;
+	enum phy_ch_width chwidth = reg_find_chwidth_from_bw(bw);
+	qdf_freq_t center_freq;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev priv obj is NULL");
+		return false;
+	}
+
+	if (!reg_is_afc_power_event_received(pdev)) {
+		reg_err("afc power event is not received\n");
+		return false;
+	}
+
+	power_info = pdev_priv_obj->power_info;
+	if (!power_info) {
+		reg_err("power_info is NULL");
+		return false;
+	}
+
+	reg_freq_width_to_chan_op_class(pdev,
+					primary_freq,
+					bw,
+					true,
+					BIT(BEHAV_NONE),
+					&op_class,
+					&chan_num);
+
+	if (bw == BW_20_MHZ) {
+		center_freq = primary_freq;
+	} else {
+		bonded_chan_ptr = reg_get_bonded_chan_entry(primary_freq,
+							    chwidth,
+							    center_320);
+		if (bonded_chan_ptr)
+			center_freq = (bonded_chan_ptr->start_freq +
+					bonded_chan_ptr->end_freq) / 2;
+		else
+			return false;
+	}
+
+	for (i = 0; i < power_info->num_chan_objs; i++) {
+		struct afc_chan_obj *chan_obj = &power_info->afc_chan_info[i];
+
+		if (chan_obj->global_opclass != op_class)
+			continue;
+
+		for (j = 0; j < chan_obj->num_chans; j++) {
+			qdf_freq_t cfi_freq;
+			struct chan_eirp_obj *eirp_obj =
+						&chan_obj->chan_eirp_info[j];
+
+			cfi_freq =
+			    reg_compute_6g_center_freq_from_cfi(eirp_obj->cfi);
+			if (cfi_freq == center_freq)
+				return true;
+		}
+	}
+
+	return false;
+}
 #endif
 
 #endif
