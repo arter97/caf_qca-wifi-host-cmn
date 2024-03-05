@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -102,6 +102,8 @@
 #define WLAN_PEER_QCN_NODE                          0x00000010
 /* Peer is 4 Address node */
 #define WLAN_PEER_MESH_NODE                         0x00000020
+/* Partner Peer ASSOC rejected */
+#define WLAN_PEER_FEXT_ASSOC_REJ                    0x00000040
 
 /**
  * enum wlan_peer_state  - peer state

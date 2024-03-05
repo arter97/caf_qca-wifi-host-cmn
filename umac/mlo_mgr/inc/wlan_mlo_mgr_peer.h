@@ -736,6 +736,46 @@ static inline void wlan_peer_clear_mlo(struct wlan_objmgr_peer *peer)
 	return wlan_peer_mlme_flag_ext_clear(peer, WLAN_PEER_FEXT_MLO);
 }
 
+/**
+ * wlan_peer_is_assoc_rejected() - check whether peer is assoc rejected
+ * @peer: link peer object
+ *
+ * API to check partner link peer is association rejected
+ *
+ * Return: true if it assoc rejected peer
+ *         false, if it is not assoc rejected
+ */
+static inline uint8_t wlan_peer_is_assoc_rejected(struct wlan_objmgr_peer *peer)
+{
+	return wlan_peer_mlme_flag_ext_get(peer, WLAN_PEER_FEXT_ASSOC_REJ);
+}
+
+/**
+ * wlan_peer_set_assoc_rejected() - Set peer as assoc rejected peer
+ * @peer: link peer object
+ *
+ * API to set assoc rejected flag in partner link peer
+ *
+ * Return: void
+ */
+static inline void wlan_peer_set_assoc_rejected(struct wlan_objmgr_peer *peer)
+{
+	return wlan_peer_mlme_flag_ext_set(peer, WLAN_PEER_FEXT_ASSOC_REJ);
+}
+
+/**
+ * wlan_peer_clear_assoc_rejected() - clear peer as assoc rejected peer
+ * @peer: link peer object
+ *
+ * API to clear partner peer assoc rejected flag in link peer
+ *
+ * Return: void
+ */
+static inline void wlan_peer_clear_assoc_rejected(struct wlan_objmgr_peer *peer)
+{
+	return wlan_peer_mlme_flag_ext_clear(peer, WLAN_PEER_FEXT_ASSOC_REJ);
+}
+
 #if defined(MESH_MODE_SUPPORT) && defined(WLAN_FEATURE_11BE_MLO)
 /**
  * wlan_mlo_peer_is_mesh() - Check if ml_peer is configured to operate as MESH

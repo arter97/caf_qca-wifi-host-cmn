@@ -498,6 +498,9 @@ void wlan_mlo_partner_peer_assoc_post(struct wlan_objmgr_peer *assoc_peer)
 
 		link_peer = peer_entry->link_peer;
 
+		if (wlan_peer_is_assoc_rejected(link_peer))
+			continue;
+
 		if (wlan_objmgr_peer_try_get_ref(link_peer, WLAN_MLO_MGR_ID) !=
 						 QDF_STATUS_SUCCESS)
 			continue;
@@ -1551,7 +1554,6 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 				ml_dev->mld_id,
 				QDF_MAC_ADDR_REF(link_peer->mldaddr),
 				WLAN_UMAC_MLO_ASSOC_MAX_SUPPORTED_LINKS);
-			return QDF_STATUS_E_RESOURCES;
 		}
 
 		status = mlo_dev_get_link_vdevs(vdev, ml_dev,
@@ -2026,6 +2028,10 @@ void wlan_mlo_peer_get_links_info(struct wlan_objmgr_peer *peer,
 		idx++;
 		if (link_peer == peer)
 			continue;
+
+		if (wlan_peer_is_assoc_rejected(link_peer))
+			continue;
+
 		link_vdev = wlan_peer_get_vdev(link_peer);
 		if (!link_vdev)
 			continue;
