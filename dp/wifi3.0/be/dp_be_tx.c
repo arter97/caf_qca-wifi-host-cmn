@@ -1168,12 +1168,63 @@ uint8_t dp_sawf_config_be(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 	return tid;
 }
 
+#define SAWF_SERVICE_CLASS_SHIFT 0x10
+#define SAWF_SERVICE_CLASS_MASK 0xff
+#define SAWF_MSDUQ_MASK 0x3f
+
+uint8_t dp_sawf_config_fast_send_be(struct dp_soc *soc,
+				    uint32_t *hal_tx_desc_cached,
+				    qdf_nbuf_t nbuf)
+{
+	uint32_t mark = nbuf->mark;
+	uint16_t fw_metadata = 0;
+	uint8_t q_id;
+	uint8_t tid;
+	uint8_t service_id;
+
+	q_id = mark & SAWF_MSDUQ_MASK;
+
+	if (q_id == SAWF_MSDUQ_MASK)
+		return HTT_TX_EXT_TID_INVALID;
+
+	tid = (q_id & (CDP_DATA_TID_MAX - 1));
+
+	if ((q_id >= DP_SAWF_DEFAULT_QUEUE_MIN) &&
+	    (q_id < DP_SAWF_DEFAULT_QUEUE_MAX))
+		return tid;
+
+	service_id = (mark >> SAWF_SERVICE_CLASS_SHIFT) &
+				SAWF_SERVICE_CLASS_MASK;
+
+	HTT_TX_TCL_METADATA_TYPE_V2_SET
+		(fw_metadata, HTT_TCL_METADATA_V2_TYPE_SVC_ID_BASED);
+	HTT_TX_FLOW_METADATA_TID_OVERRIDE_SET(fw_metadata, 1);
+	HTT_TX_TCL_METADATA_SVC_CLASS_ID_SET(fw_metadata, service_id - 1);
+
+	hal_tx_desc_cached[3] = fw_metadata << TCL_DATA_CMD_TCL_CMD_NUMBER_LSB;
+
+	hal_tx_desc_cached[5] |= 1 << TCL_DATA_CMD_FLOW_OVERRIDE_ENABLE_LSB;
+	hal_tx_desc_cached[5] |= DP_TX_FLOW_OVERRIDE_GET(q_id) <<
+		TCL_DATA_CMD_FLOW_OVERRIDE_LSB;
+	hal_tx_desc_cached[5] |= DP_TX_WHO_CLFY_INF_SEL_GET(q_id) <<
+		TCL_DATA_CMD_WHO_CLASSIFY_INFO_SEL_LSB;
+
+	return tid;
+}
 #else
 
 static inline
 uint8_t dp_sawf_config_be(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 			  uint16_t *fw_metadata, qdf_nbuf_t nbuf,
 			  struct dp_tx_msdu_info_s *msdu_info)
+{
+	return HTT_TX_EXT_TID_INVALID;
+}
+
+static inline
+uint8_t dp_sawf_config_fast_send_be(struct dp_soc *soc,
+				    uint32_t *hal_tx_desc_cached,
+				    qdf_nbuf_t nbuf)
 {
 	return HTT_TX_EXT_TID_INVALID;
 }
@@ -2154,8 +2205,8 @@ qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	hal_tx_desc_cached[5] |= vdev->vdev_id << TCL_DATA_CMD_VDEV_ID_LSB;
 
 	if (qdf_unlikely(dp_sawf_tag_valid_get(nbuf))) {
-		sawf_tid = dp_sawf_config_be(soc, hal_tx_desc_cached,
-					     NULL, nbuf, NULL);
+		sawf_tid = dp_sawf_config_fast_send_be(soc, hal_tx_desc_cached,
+						       nbuf);
 		if (sawf_tid != HTT_TX_EXT_TID_INVALID)
 			tid = sawf_tid;
 	}
