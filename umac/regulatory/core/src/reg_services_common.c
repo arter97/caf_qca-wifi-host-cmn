@@ -2761,7 +2761,7 @@ qdf_freq_t reg_chan_band_to_freq(struct wlan_objmgr_pdev *pdev,
 	uint16_t freq;
 
 	if (chan_num == 0) {
-		reg_err_rl("Invalid channel %d", chan_num);
+		reg_debug("Invalid channel %d", chan_num);
 		return 0;
 	}
 
@@ -3184,7 +3184,7 @@ enum channel_enum reg_get_chan_enum_for_freq(qdf_freq_t freq)
 		if (channel_map[count].center_freq == freq)
 			return count;
 
-	reg_err("invalid channel center frequency %d", freq);
+	reg_debug("invalid channel center frequency %d", freq);
 
 	return INVALID_CHANNEL;
 }

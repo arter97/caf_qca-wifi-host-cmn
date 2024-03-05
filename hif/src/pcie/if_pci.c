@@ -516,7 +516,7 @@ static void hif_pci_device_reset(struct hif_pci_softc *sc)
 	if (!mem)
 		return;
 
-	hif_err("Reset Device");
+	hif_debug("Reset Device");
 
 	/*
 	 * NB: If we try to write SOC_GLOBAL_RESET_ADDRESS without first
@@ -2031,7 +2031,7 @@ static int hif_pci_configure_legacy_irq(struct hif_pci_softc *sc)
 				PCIE_SOC_WAKE_ADDRESS, PCIE_SOC_WAKE_V_MASK);
 	}
 end:
-	QDF_TRACE(QDF_MODULE_ID_HIF, QDF_TRACE_LEVEL_ERROR,
+	QDF_TRACE(QDF_MODULE_ID_HIF, QDF_TRACE_LEVEL_DEBUG,
 			  "%s: X, ret = %d", __func__, ret);
 	return ret;
 }

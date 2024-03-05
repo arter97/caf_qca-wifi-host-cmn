@@ -1892,7 +1892,7 @@ void *__qdf_mem_malloc(size_t size, const char *func, uint32_t line)
 	void *ptr;
 
 	if (!size || size > QDF_MEM_MAX_MALLOC) {
-		qdf_nofl_err("Cannot malloc %zu bytes @ %s:%d", size, func,
+		qdf_nofl_debug("Cannot malloc %zu bytes @ %s:%d", size, func,
 			     line);
 		return NULL;
 	}
@@ -2367,7 +2367,7 @@ void *__qdf_mem_alloc_consistent(qdf_device_t osdev, void *dev,
 	void *vaddr;
 
 	if (!size || size > QDF_MEM_MAX_MALLOC) {
-		qdf_nofl_err("Cannot malloc %zu bytes @ %s:%d",
+		qdf_nofl_debug("Cannot malloc %zu bytes @ %s:%d",
 			     size, func, line);
 		return NULL;
 	}

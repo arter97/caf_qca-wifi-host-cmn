@@ -273,7 +273,7 @@ QDF_STATUS reg_send_scheduler_msg_nb(struct wlan_objmgr_psoc *psoc,
 	}
 
 	if (!pdev_priv_obj->chan_list_recvd) {
-		reg_err("Empty channel list");
+		reg_debug("Empty channel list");
 		return QDF_STATUS_E_FAILURE;
 	}
 
