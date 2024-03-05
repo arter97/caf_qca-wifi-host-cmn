@@ -40,6 +40,104 @@
 #endif
 
 /**
+ * DOC: Tx/Rx NSS and Chain interactions
+ * This document describes all of the possible interdependencies between
+ * Tx/Rx NSS and number of Chains attributes used in the vendor command
+ * QCA_NL80211_VENDOR_SUBCMD_SET_WIFI_CONFIGURATION
+ *
+ * NSS Configuration:
+ * 1. For all bands - The following attributes are used to dynamically configure
+ * the number of spatial streams in both 2 GHz and 5/6 GHz bands. When
+ * configured in disconnected state, the updated configuration will be
+ * considered for the immediately following connection attempt. If the NSS is
+ * updated after the connection, the updated NSS value is notified to the peer
+ * using Operating Mode Notification/Spatial Multiplexing Power Save frame.
+ * The updated NSS value after the connection shall not be greater than the
+ * one negotiated during the connection. Driver rejects any such higher value
+ * configuration with a failure.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_CONFIG_NSS: Only Symmetric NSS configuration
+ * (such as 2X2 or 1X1) can be done using this attribute.
+ * @QCA_WLAN_VENDOR_ATTR_CONFIG_TX_NSS: Configure NSS for Transmitting the data
+ * @QCA_WLAN_VENDOR_ATTR_CONFIG_RX_NSS: Configure NSS for Receiving the data
+ *
+ * If both TX_NSS and RX_NSS attributes are not defined, the driver rejects
+ * the command with a failure. Both attributes can be used to configure either
+ * Symmetric NSS configuration (such as 2X2 or 1X1) or Asymmetric
+ * configuration (such as 1X2).
+ *
+ * 2. For individual bands - The following attributes are used to dynamically
+ * configure the number of spatial streams in 2 GHz or 5/6 GHz band. All these
+ * attributes must be defined together to configure Symmetric NSS configuration
+ * (such as 1X1 or 2X2) or Asymmetric NSS configuration (such as 1X2). If any of
+ * the attributes is missing driver will reject the command. This configuration
+ * is allowed only when in connected state and will be effective until
+ * disconnected. The NSS value configured after the connection shall not be
+ * greater than the value negotiated during the connection. Any such higher
+ * value configuration shall be treated as invalid configuration by the driver.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_CONFIG_TX_NSS_2GHZ: Configure TX_NSS in 2 GHz band
+ * @QCA_WLAN_VENDOR_ATTR_CONFIG_RX_NSS_2GHZ: Configure RX_NSS in 2 GHz band
+ * @QCA_WLAN_VENDOR_ATTR_CONFIG_TX_NSS_5GHZ: Configure TX_NSS in 5 or 6 GHz band
+ * @QCA_WLAN_VENDOR_ATTR_CONFIG_RX_NSS_5GHZ: Configure RX_NSS in 5 or 6 GHz band
+ *
+ * Chain Configuration: The following attributes are used to dynamically
+ * configure the number of chains to be used for transmitting or receiving
+ * data. This configuration is allowed only when in connected state and will
+ * be effective until disconnected. The driver rejects this configuration if
+ * the number of spatial streams being used in the current connection cannot
+ * be supported by this configuration.
+ *
+ * 1. For all bands - The attributes NUM_TX_CHAINS and  NUM_RX_CHAINS must be
+ * defined together or the driver will reject the command.
+ * @QCA_WLAN_VENDOR_ATTR_CONFIG_NUM_TX_CHAINS: Number of Chains to be used
+ * for transmitting the data in both 2 GHz and 5/6 GHz bands.
+ * @QCA_WLAN_VENDOR_ATTR_CONFIG_NUM_RX_CHAINS: Number of Chains to be used
+ * for receiving the data in both 2 GHz and 5/6 GHz bands.
+ *
+ * 2. For individual bands - The following band specific attributes must be
+ * defined together or the driver will reject the command.
+ * @QCA_WLAN_VENDOR_ATTR_CONFIG_NUM_TX_CHAINS_2GHZ: Number of chains to be
+ * used for transmitting the data in 2 GHz band.
+ * @QCA_WLAN_VENDOR_ATTR_CONFIG_NUM_RX_CHAINS_2GHZ: Number of chains to be
+ * used for receiving the data in 2 GHz band.
+ * @QCA_WLAN_VENDOR_ATTR_CONFIG_NUM_TX_CHAINS_5GHZ: Number of chains to be
+ * used for transmitting the data in 5/6 GHz band.
+ * @QCA_WLAN_VENDOR_ATTR_CONFIG_NUM_RX_CHAINS_5GHZ: Number of chains to be
+ * used for receiving the data in 5/6 GHz band.
+ *
+ * The following scenarios capture how driver configures when different Tx/RX
+ * NSS and Number of Chains attributes are used in the command.
+ *
+ * Case 1: CONFIG_NSS + CONFIG_TX_NSS/RX_NSS - Only CONFIG_NSS is accepted since
+ * only one of the TX_NSS or RX_NSS attribute is present.
+ *
+ * Case 2: CONFIG_NSS + CONFIG_TX_NSS + CONFIG_RX_NSS - Same TX,RX NSS values
+ * are used to configure both 2 GHz and 5/6 GHz bands.
+ *
+ * Case 3: Case 2 + NUM_TX_CHAINS + NUM_RX_CHAINS - Same TX,RX NSS and number
+ * of chains is configured for both 2 GHz and 5/6 GHz bands.
+ *
+ * Case 4: TX_NSS_2GHZ/TX_NSS_5GHZ + RX_NSS_2GHZ/RX_NSS_5GHZ - Since per band
+ * TX/RX NSS attribute is missing, driver rejects the command.
+ *
+ * Case 5: TX_NSS_2GHZ + TX_NSS_5GHZ + RX_NSS_2GHZ + RX_NSS_5GHZ - The 2 GHz
+ * band is configured with TX_NSS_2GHZ, RX_NSS_2GHZ values. The 5/6 GHz band
+ * is configured with TX_NSS_5GHZ, RX_NSS_5GHZ values.
+ *
+ * Case 6: TX_CHAINS_2GHZ/TX_CHAINS_5GHZ + RX_CHAINS_5GHZ/RX_CHAINS_5GHZ - Since
+ * per band TX/RX Chains attribute is missing, driver rejects the command.
+ *
+ * Case 7: TX_CHAINS_2GHZ + TX_CHAINS_5GHZ + RX_CHAINS_5GHZ + RX_CHAINS_5GHZ -
+ * The 2 GHz band is configured with TX_CHAINS_2GHZ, RX_CHAINS_2GHZ values. The
+ * 5/6 GHz band is configured with TX_CHAINS_5GHZ, RX_CHAINS_5GHZ values.
+ *
+ * Case 8: Case 5 + Case 7 - Per band TX,RX NSS and chains are configured.
+ *
+ * Case 9: Case 2 + Case 8 - Per band TX,RX NSS and chains are configured.
+ */
+
+/**
  * enum qca_nl80211_vendor_subcmds: NL 80211 vendor sub command
  *
  * @QCA_NL80211_VENDOR_SUBCMD_UNSPEC: Unspecified
@@ -6119,6 +6217,30 @@ enum qca_wlan_vendor_attr_config {
 	 * association.
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_KEEP_ALIVE_INTERVAL = 108,
+
+	/* 8-bit unsigned value. Refer to Tx/Rx NSS and Chain interactions */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_TX_NSS_2GHZ = 109,
+
+	/* 8-bit unsigned value. Refer to Tx/Rx NSS and Chain interactions */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_RX_NSS_2GHZ = 110,
+
+	/* 8-bit unsigned value. Refer to Tx/Rx NSS and Chain interactions */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_TX_NSS_5GHZ = 111,
+
+	/* 8-bit unsigned value. Refer to Tx/Rx NSS and Chain interactions */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_RX_NSS_5GHZ = 112,
+
+	/* 8-bit unsigned value. Refer to Tx/Rx NSS and Chain interactions */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_NUM_TX_CHAINS_2GHZ = 113,
+
+	/* 8-bit unsigned value. Refer to Tx/Rx NSS and Chain interactions */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_NUM_RX_CHAINS_2GHZ = 114,
+
+	/* 8-bit unsigned value. Refer to Tx/Rx NSS and Chain interactions */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_NUM_TX_CHAINS_5GHZ = 115,
+
+	/* 8-bit unsigned value. Refer to Tx/Rx NSS and Chain interactions */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_NUM_RX_CHAINS_5GHZ = 116,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_AFTER_LAST,
