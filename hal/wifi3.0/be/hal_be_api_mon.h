@@ -3901,6 +3901,10 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 				ppdu_info->nac_info.frame_control;
 		}
 
+		ppdu_info->fc_info.fc_valid =
+			rx_mpdu_start->rx_mpdu_info_details.mpdu_frame_control_valid;
+		ppdu_info->fc_info.frame_control =
+			rx_mpdu_start->rx_mpdu_info_details.mpdu_frame_control_field;
 		hal_get_mac_addr1(rx_mpdu_start,
 				  ppdu_info);
 

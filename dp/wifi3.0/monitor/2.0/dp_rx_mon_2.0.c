@@ -708,6 +708,7 @@ dp_rx_mon_handle_mpdu_start(struct hal_rx_ppdu_info *ppdu_info)
 	qdf_nbuf_t nbuf;
 	uint8_t user_id = ppdu_info->user_id;
 	uint8_t mpdu_idx = ppdu_info->mpdu_count[user_id];
+	uint8_t type;
 
 	if (qdf_unlikely(!ppdu_info->rx_hdr_rcvd[user_id])) {
 		dp_mon_debug(" <%d> nbuf is NULL, return user: %d mpdu_idx: %d", __LINE__, user_id, mpdu_idx);
@@ -722,6 +723,15 @@ dp_rx_mon_handle_mpdu_start(struct hal_rx_ppdu_info *ppdu_info)
 	mpdu_info = &ppdu_info->mpdu_info[user_id];
 	mpdu_meta->decap_type = mpdu_info->decap_type;
 	ppdu_info->mpdu_info[ppdu_info->user_id].mpdu_start_received = true;
+
+	/* Handle decap type for mgmt, ctrl and null data packets
+	 * of connected station */
+	type = ppdu_info->fc_info.frame_control & IEEE80211_FC0_TYPE_MASK;
+	if ((type == IEEE80211_FC0_TYPE_MGT || type == IEEE80211_FC0_TYPE_CTL ||
+	    ppdu_info->sw_frame_group_id == HAL_MPDU_SW_FRAME_GROUP_NULL_DATA) &&
+	    mpdu_meta->decap_type && ppdu_info->fc_info.fc_valid) {
+		mpdu_meta->decap_type = mpdu_info->decap_type = HAL_HW_RX_DECAP_FORMAT_RAW;
+	}
 }
 
 /**

@@ -1271,6 +1271,7 @@ struct hal_rx_ppdu_info {
 	struct hal_rx_msdu_payload_info msdu_info;
 	struct hal_rx_msdu_payload_info fcs_ok_msdu_info;
 	struct hal_rx_nac_info nac_info;
+	struct hal_rx_nac_info fc_info;
 	/* status ring PPDU start and end state */
 	uint8_t rx_state;
 	/* MU user id for status ring TLV */
