@@ -671,6 +671,8 @@ struct freq_range {
  * @center_freq_seg1: channel number segment 1
  * @mhz_freq_seg0: Center frequency for segment 0
  * @mhz_freq_seg1: Center frequency for segment 1
+ * @get_max_non_eht_params: Get chan params corresponding to the puncturing
+ *                          bitmap in @input_punc_bitmap.
  * @reg_punc_bitmap: Output puncturing bitmap
  * @is_create_punc_bitmap: Whether puncturing bitmap is to be created or not
  *                         Parameter 'reg_punc_bitmap' is valid only if
@@ -687,6 +689,7 @@ struct ch_params {
 	qdf_freq_t mhz_freq_seg0;
 	qdf_freq_t mhz_freq_seg1;
 #ifdef WLAN_FEATURE_11BE
+	bool get_max_non_eht_params;
 	uint16_t reg_punc_bitmap;
 	bool is_create_punc_bitmap;
 	uint16_t input_punc_bitmap;

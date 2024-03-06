@@ -41,6 +41,10 @@
 #define NUM_20_MHZ_CHAN_IN_160_MHZ_CHAN    8
 #define NUM_20_MHZ_CHAN_IN_320_MHZ_CHAN    16
 
+#define WLAN_REG_PUNCT_MASK_320 0xFFFF
+#define WLAN_REG_PUNCT_MASK_160 0xFF
+#define WLAN_REG_PUNCT_MASK_80 0xF
+
 #define REG_MAX_5GHZ_CH_NUM reg_max_5ghz_ch_num()
 
 #define REG_MIN_24GHZ_CH_FREQ channel_map[MIN_24GHZ_CHANNEL].center_freq
@@ -1255,6 +1259,34 @@ void reg_set_create_punc_bitmap(struct ch_params *ch_params,
 				bool is_create_punc_bitmap);
 
 #ifdef CONFIG_REG_CLIENT
+static inline uint16_t reg_get_reg_punc_bitmap(struct ch_params *ch_params)
+{
+	return ch_params ? ch_params->reg_punc_bitmap : NO_SCHANS_PUNC;
+}
+
+static inline uint16_t reg_get_input_punc_bitmap(struct ch_params *ch_params)
+{
+	return ch_params ? ch_params->input_punc_bitmap : NO_SCHANS_PUNC;
+}
+
+static inline void reg_set_input_punc_bitmap(struct ch_params *ch_params,
+					     uint16_t punct_bitmap)
+{
+	if (!ch_params)
+		return;
+
+	ch_params->input_punc_bitmap = punct_bitmap;
+}
+
+static inline void
+reg_set_non_eht_ch_params(struct ch_params *ch_params, bool val)
+{
+	if (!ch_params)
+		return;
+
+	ch_params->get_max_non_eht_params = val;
+}
+
 /**
  * reg_apply_puncture() - apply puncture to regulatory
  * @pdev: pdev
@@ -1303,6 +1335,26 @@ QDF_STATUS reg_extract_puncture_by_bw(enum phy_ch_width ori_bw,
 
 static inline void reg_set_create_punc_bitmap(struct ch_params *ch_params,
 					      bool is_create_punc_bitmap)
+{
+}
+
+static inline uint16_t reg_get_reg_punc_bitmap(struct ch_params *ch_params)
+{
+	return NO_SCHANS_PUNC;
+}
+
+static inline uint16_t reg_get_input_punc_bitmap(struct ch_params *ch_params)
+{
+	return NO_SCHANS_PUNC;
+}
+
+static inline void reg_set_input_punc_bitmap(struct ch_params *ch_params,
+					     uint16_t punct_bitmap)
+{
+}
+
+static inline void
+reg_set_non_eht_ch_params(struct ch_params *ch_params, bool val)
 {
 }
 #endif
