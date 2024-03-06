@@ -518,6 +518,7 @@ struct reduced_neighbor_report {
 
 #ifdef WLAN_FEATURE_11BE_MLO
 #define MLD_MAX_LINKS 4
+#define UNKNOWN_MLD_ID 0xFF
 
 /**
  * struct partner_link_info: Partner link information of an ML

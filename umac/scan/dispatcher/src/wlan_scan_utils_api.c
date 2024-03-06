@@ -2221,29 +2221,95 @@ static uint8_t util_get_link_info_offset(uint8_t *ml_ie, bool *is_ml_ie_valid)
 	return 0;
 }
 
+#ifdef QCA_SUPPORT_MBSSIDX_MLDID
 static void
-util_get_ml_bv_partner_link_info(struct wlan_objmgr_pdev *pdev,
-				 struct scan_cache_entry *scan_entry)
+util_update_partner_info_from_rnr(struct wlan_objmgr_pdev *pdev,
+				  struct scan_cache_entry *scan_entry)
 {
-	uint8_t *ml_ie = scan_entry->ie_list.multi_link_bv;
-	uint8_t *end_ptr = NULL;
-	bool is_ml_ie_valid;
-	uint8_t offset = util_get_link_info_offset(ml_ie, &is_ml_ie_valid);
-	uint16_t sta_ctrl;
-	uint8_t *stactrl_offset = NULL, *ielist_offset;
-	uint8_t perstaprof_len = 0, perstaprof_stainfo_len = 0, ielist_len = 0;
-	struct partner_link_info *link_info = NULL;
-	uint8_t eid = 0;
+	uint16_t freq;
 	uint8_t link_idx = 0;
 	uint8_t rnr_idx = 0;
-	struct rnr_bss_info *rnr = NULL;
-	qdf_size_t ml_ie_len = ml_ie[TAG_LEN_POS] + sizeof(struct ie_header);
-	uint16_t freq;
 	struct scan_cache_entry *tmp_entry;
-	struct qdf_mac_addr bcast_addr = QDF_MAC_ADDR_BCAST_INIT;
 	struct scan_mbssid_info *mbssid;
+	struct qdf_mac_addr bcast_addr = QDF_MAC_ADDR_BCAST_INIT;
+	struct rnr_bss_info *rnr = NULL;
+	struct partner_link_info *link_info = NULL;
 
-	/* Update partner info  from RNR IE */
+	while ((rnr_idx < MAX_RNR_BSS) && (rnr_idx < scan_entry->rnr.count)) {
+		if (link_idx >= (MLD_MAX_LINKS - 1))
+			break;
+		rnr = &scan_entry->rnr.bss_info[rnr_idx];
+		if (rnr->mld_info_valid &&
+		    (rnr->mld_info.mld_id != UNKNOWN_MLD_ID)) {
+			mbssid = &scan_entry->mbssid_info;
+			freq =
+			     wlan_reg_chan_opclass_to_freq(rnr->channel_number,
+							   rnr->operating_class,
+							   true);
+
+			if ((!scan_entry->mbssid_info.profile_count) &&
+			    !(rnr->bss_params & TBTT_BSS_PARAM_TRANS_BSSID_BIT)) {
+				tmp_entry =
+				       scm_scan_get_scan_entry_by_mac_freq(pdev,
+							     &rnr->bssid, freq);
+				if (tmp_entry) {
+					qdf_mem_copy(mbssid,
+						     &tmp_entry->mbssid_info,
+						     sizeof(*mbssid));
+					util_scan_free_cache_entry(tmp_entry);
+				} else {
+					qdf_mem_copy(mbssid->non_trans_bssid,
+						     rnr->bssid.bytes,
+						     QDF_MAC_ADDR_SIZE);
+					qdf_mem_copy(mbssid->trans_bssid,
+						     bcast_addr.bytes,
+						     QDF_MAC_ADDR_SIZE);
+				}
+			}
+
+			/**
+			 * Copy link info only if MBSSID index matches with
+			 * RNR MLD ID. For a nontransmitted BSSID beacon,
+			 * MLD ID of its partners will be the MBSSID index.
+			 */
+			if (rnr->mld_info.mld_id != mbssid->profile_num) {
+				rnr_idx++;
+				continue;
+			}
+
+			link_info = &scan_entry->ml_info.link_info[link_idx];
+			qdf_mem_copy(&link_info->link_addr,
+				     &rnr->bssid, QDF_MAC_ADDR_SIZE);
+
+			link_info->link_id = rnr->mld_info.link_id;
+			link_info->freq = freq;
+
+			if (!link_info->freq)
+				scm_debug("freq 0 rnr channel %u op_class %u",
+					  rnr->channel_number,
+					  rnr->operating_class);
+			link_info->op_class = rnr->operating_class;
+			link_idx++;
+		}
+		rnr_idx++;
+	}
+
+	scan_entry->ml_info.num_links = link_idx;
+}
+#else /* QCA_SUPPORT_MBSSIDX_MLDID */
+static void
+util_update_partner_info_from_rnr(struct wlan_objmgr_pdev *pdev,
+				  struct scan_cache_entry *scan_entry)
+{
+	uint16_t freq;
+	uint8_t link_idx = 0;
+	uint8_t rnr_idx = 0;
+	struct scan_cache_entry *tmp_entry;
+	struct scan_mbssid_info *mbssid;
+	struct qdf_mac_addr bcast_addr = QDF_MAC_ADDR_BCAST_INIT;
+	struct rnr_bss_info *rnr = NULL;
+	struct partner_link_info *link_info = NULL;
+
 	while ((rnr_idx < MAX_RNR_BSS) && (rnr_idx < scan_entry->rnr.count)) {
 		if (link_idx >= (MLD_MAX_LINKS - 1))
 			break;
@@ -2294,6 +2360,28 @@ util_get_ml_bv_partner_link_info(struct wlan_objmgr_pdev *pdev,
 	}
 
 	scan_entry->ml_info.num_links = link_idx;
+}
+#endif /* QCA_SUPPORT_MBSSIDX_MLDID */
+
+static void
+util_get_ml_bv_partner_link_info(struct wlan_objmgr_pdev *pdev,
+				 struct scan_cache_entry *scan_entry)
+{
+	uint8_t *ml_ie = scan_entry->ie_list.multi_link_bv;
+	uint8_t *end_ptr = NULL;
+	bool is_ml_ie_valid;
+	uint8_t offset = util_get_link_info_offset(ml_ie, &is_ml_ie_valid);
+	uint16_t sta_ctrl;
+	uint8_t *stactrl_offset = NULL, *ielist_offset;
+	uint8_t perstaprof_len = 0, perstaprof_stainfo_len = 0, ielist_len = 0;
+	struct partner_link_info *link_info = NULL;
+	uint8_t eid = 0;
+	uint8_t link_idx = 0;
+	qdf_size_t ml_ie_len = ml_ie[TAG_LEN_POS] + sizeof(struct ie_header);
+
+	/* Update partner info from RNR IE */
+	util_update_partner_info_from_rnr(pdev, scan_entry);
+
 	if (!offset ||
 	    (offset + sizeof(struct wlan_ml_bv_linfo_perstaprof) >= ml_ie_len)) {
 		scm_debug_rl("incorrect offset value %d", offset);
@@ -2865,6 +2953,7 @@ static void util_parse_noninheritance_list(uint8_t *extn_elem,
 }
 
 #ifdef WLAN_FEATURE_11BE_MLO
+#ifndef QCA_SUPPORT_MBSSIDX_MLDID
 /**
  * util_handle_rnr_ie_for_mbssid() - parse and modify RNR IE for MBSSID feature
  * @rnr: The pointer to RNR IE
@@ -3009,11 +3098,40 @@ static int util_handle_rnr_ie_for_mbssid(const uint8_t *rnr,
 
 	return rnr_len;
 }
-#else
+#else /* QCA_SUPPORT_MBSSIDX_MLDID */
+static int util_handle_rnr_ie_for_mbssid(const uint8_t *rnr,
+					 uint8_t bssid_index, uint8_t *pos)
+{
+	int rnr_len = 0;
+
+	/* Copy RNR IE to Nontransmitted BSSID beacon */
+	if (rnr[TAG_LEN_POS] > 1) {
+		qdf_mem_copy(pos, rnr, rnr[TAG_LEN_POS] + MIN_IE_LEN);
+		rnr_len = rnr[TAG_LEN_POS] + MIN_IE_LEN;
+	}
+
+	return rnr_len;
+}
+#endif /* QCA_SUPPORT_MBSSIDX_MLDID */
+#else /* WLAN_FEATURE_11BE_MLO */
 static int util_handle_rnr_ie_for_mbssid(const uint8_t *rnr,
 					 uint8_t bssid_index, uint8_t *pos)
 {
 	return 0;
+}
+#endif /* WLAN_FEATURE_11BE_MLO */
+
+#ifdef QCA_SUPPORT_MBSSIDX_MLDID
+static bool util_can_skip_mbssid_idx_ie(const uint8_t *ie)
+{
+	return false;
+}
+#else
+static bool util_can_skip_mbssid_idx_ie(const uint8_t *ie)
+{
+	if (ie[0] == WLAN_ELEMID_MULTI_BSSID_IDX)
+		return true;
+	return false;
 }
 #endif
 
@@ -3228,7 +3346,7 @@ static uint32_t util_gen_new_ie(struct wlan_objmgr_pdev *pdev,
 		subie_len)) {
 		if (!(tmp_new[0] == WLAN_ELEMID_NONTX_BSSID_CAP ||
 		      tmp_new[0] == WLAN_ELEMID_SSID ||
-		      tmp_new[0] == WLAN_ELEMID_MULTI_BSSID_IDX ||
+		      util_can_skip_mbssid_idx_ie(tmp_new) ||
 		      ((tmp_new[0] == WLAN_ELEMID_EXTN_ELEM) &&
 		       (tmp_new[2] == WLAN_EXTN_ELEMID_NONINHERITANCE)))) {
 			if ((pos + tmp_new[1] + MIN_IE_LEN) <=
