@@ -1495,16 +1495,23 @@ dp_tx_hw_enqueue_be(struct dp_soc *soc, struct dp_vdev *vdev,
 	}
 
 	if (qdf_unlikely(tx_exc_metadata)) {
-		qdf_assert_always((tx_exc_metadata->tx_encap_type ==
-				   CDP_INVALID_TX_ENCAP_TYPE) ||
-				   (tx_exc_metadata->tx_encap_type ==
-				    vdev->tx_encap_type));
+		if (dp_assert_always_internal_stat(
+			(tx_exc_metadata->tx_encap_type ==
+				CDP_INVALID_TX_ENCAP_TYPE) ||
+				(tx_exc_metadata->tx_encap_type ==
+					vdev->tx_encap_type), soc,
+						tx.invld_encap_type))
+			return QDF_STATUS_E_INVAL;
 
 		if (tx_exc_metadata->tx_encap_type == htt_cmn_pkt_type_raw)
-			qdf_assert_always((tx_exc_metadata->sec_type ==
-					   CDP_INVALID_SEC_TYPE) ||
-					   tx_exc_metadata->sec_type ==
-					   vdev->sec_type);
+			if (dp_assert_always_internal_stat(
+				((tx_exc_metadata->sec_type ==
+					CDP_INVALID_SEC_TYPE) ||
+					tx_exc_metadata->sec_type ==
+						vdev->sec_type), soc,
+							tx.invld_sec_type))
+			return QDF_STATUS_E_INVAL;
+
 		dp_get_peer_from_tx_exc_meta(soc, (void *)cached_desc,
 					     tx_exc_metadata,
 					     &ast_idx, &ast_hash);

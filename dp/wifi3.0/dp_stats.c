@@ -6250,6 +6250,20 @@ dp_print_rx_err_stats(struct dp_soc *soc, struct dp_pdev *pdev)
 	}
 }
 
+#ifdef GLOBAL_ASSERT_AVOIDANCE
+static void dp_print_assert_war_tx_stats(struct dp_soc *soc)
+{
+	DP_PRINT_STATS("Tx WAR stats: [%d] [%d] [%d]",
+		       soc->stats.tx.invld_encap_type,
+		       soc->stats.tx.invld_sec_type,
+		       soc->stats.tx.invld_tso_params);
+}
+#else
+static void dp_print_assert_war_tx_stats(struct dp_soc *soc)
+{
+}
+#endif
+
 void dp_print_soc_tx_stats(struct dp_soc *soc)
 {
 	uint8_t desc_pool_id;
@@ -6299,6 +6313,7 @@ void dp_print_soc_tx_stats(struct dp_soc *soc)
 	DP_PRINT_STATS("Tx comp HP out of sync2 = %d",
 		       soc->stats.tx.hp_oos2);
 	dp_print_tx_ppeds_stats(soc);
+	dp_print_assert_war_tx_stats(soc);
 }
 
 #define DP_INT_CTX_STATS_STRING_LEN 512
@@ -8530,16 +8545,21 @@ void dp_dump_srng_high_wm_stats(struct dp_soc *soc, uint64_t srng_mask)
 #endif
 
 #ifdef GLOBAL_ASSERT_AVOIDANCE
-static void dp_print_assert_war_stats(struct dp_soc *soc)
+static void dp_print_assert_war_rx_stats(struct dp_soc *soc)
 {
-	DP_PRINT_STATS("Rx WAR stats: [%d] [%d] [%d] [%d]",
+	DP_PRINT_STATS("Rx WAR stats: [%d] [%d] [%d] [%d] [%d] [%d] [%d] [%d] [%d]",
 		       soc->stats.rx.err.rx_desc_null,
 		       soc->stats.rx.err.wbm_err_buf_rel_type,
 		       soc->stats.rx.err.reo_err_rx_desc_null,
-		       soc->stats.rx.err.intra_bss_bad_chipid);
+		       soc->stats.rx.err.intra_bss_bad_chipid,
+		       soc->stats.rx.err.invalid_fse_flow_id,
+		       soc->stats.rx.err.hw_fst_del_failed,
+		       soc->stats.rx.err.rx_desc_in_use,
+		       soc->stats.rx.err.cache_invl_fail_no_fst,
+		       soc->stats.rx.err.mec_drop_sa_invld);
 }
 #else
-static void dp_print_assert_war_stats(struct dp_soc *soc)
+static void dp_print_assert_war_rx_stats(struct dp_soc *soc)
 {
 }
 #endif
@@ -8684,7 +8704,7 @@ dp_print_soc_rx_stats(struct dp_soc *soc)
 		       soc->stats.rx.err.defrag_ad1_invalid);
 	DP_PRINT_STATS("Rx decrypt error frame for valid peer:%d",
 		       soc->stats.rx.err.decrypt_err_drop);
-	dp_print_assert_war_stats(soc);
+	dp_print_assert_war_rx_stats(soc);
 }
 
 #ifdef FEATURE_TSO_STATS

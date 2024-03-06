@@ -3009,6 +3009,16 @@ dp_get_srng_ring_state_from_hal(struct dp_soc *soc,
 }
 
 #ifdef QCA_MONITOR_PKT_SUPPORT
+static inline int dp_validate_ring_num(int ring_num) {
+	if (dp_assert_always_internal(ring_num < DP_MAX_SRNGS)) {
+		dp_err("Ring number %d crossed max rings %d",
+						ring_num, DP_MAX_SRNGS);
+		return true;
+	}
+
+	return false;
+}
+
 static void
 dp_queue_mon_ring_stats(struct dp_pdev *pdev,
 			int lmac_id, uint32_t *num_srng,
@@ -3025,7 +3035,8 @@ dp_queue_mon_ring_stats(struct dp_pdev *pdev,
 
 		if (status == QDF_STATUS_SUCCESS) {
 			++(*num_srng);
-			qdf_assert_always(*num_srng < DP_MAX_SRNGS);
+			if (dp_validate_ring_num(*num_srng))
+				return;
 		}
 
 		status = dp_get_srng_ring_state_from_hal
@@ -3036,7 +3047,8 @@ dp_queue_mon_ring_stats(struct dp_pdev *pdev,
 
 		if (status == QDF_STATUS_SUCCESS) {
 			++(*num_srng);
-			qdf_assert_always(*num_srng < DP_MAX_SRNGS);
+			if (dp_validate_ring_num(*num_srng))
+				return;
 		}
 
 		status = dp_get_srng_ring_state_from_hal
@@ -3048,6 +3060,8 @@ dp_queue_mon_ring_stats(struct dp_pdev *pdev,
 		if (status == QDF_STATUS_SUCCESS) {
 			++(*num_srng);
 			qdf_assert_always(*num_srng < DP_MAX_SRNGS);
+			if (dp_validate_ring_num(*num_srng))
+				return;
 		}
 	}
 }
@@ -3128,7 +3142,8 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 
 	if (status == QDF_STATUS_SUCCESS) {
 		j++;
-		qdf_assert_always(j < DP_MAX_SRNGS);
+		if (dp_validate_ring_num(j))
+			return;
 	}
 
 	status = dp_get_srng_ring_state_from_hal
@@ -3139,7 +3154,8 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 
 	if (status == QDF_STATUS_SUCCESS) {
 		j++;
-		qdf_assert_always(j < DP_MAX_SRNGS);
+		if (dp_validate_ring_num(j))
+			return;
 	}
 
 	status = dp_get_srng_ring_state_from_hal
@@ -3150,7 +3166,8 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 
 	if (status == QDF_STATUS_SUCCESS) {
 		j++;
-		qdf_assert_always(j < DP_MAX_SRNGS);
+		if (dp_validate_ring_num(j))
+			return;
 	}
 
 	status = dp_get_srng_ring_state_from_hal
@@ -3161,7 +3178,8 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 
 	if (status == QDF_STATUS_SUCCESS) {
 		j++;
-		qdf_assert_always(j < DP_MAX_SRNGS);
+		if (dp_validate_ring_num(j))
+			return;
 	}
 
 	status = dp_get_srng_ring_state_from_hal
@@ -3172,21 +3190,24 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 
 	if (status == QDF_STATUS_SUCCESS) {
 		j++;
-		qdf_assert_always(j < DP_MAX_SRNGS);
+		if (dp_validate_ring_num(j))
+			return;
 	}
 
 	status = dp_get_tcl_cmd_cred_ring_state_from_hal
 				(pdev, &soc_srngs_state->ring_state[j]);
 	if (status == QDF_STATUS_SUCCESS) {
 		j++;
-		qdf_assert_always(j < DP_MAX_SRNGS);
+		if (dp_validate_ring_num(j))
+			return;
 	}
 
 	status = dp_get_tcl_status_ring_state_from_hal
 				(pdev, &soc_srngs_state->ring_state[j]);
 	if (status == QDF_STATUS_SUCCESS) {
 		j++;
-		qdf_assert_always(j < DP_MAX_SRNGS);
+		if (dp_validate_ring_num(j))
+			return;
 	}
 
 	status = dp_get_srng_ring_state_from_hal
@@ -3197,7 +3218,8 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 
 	if (status == QDF_STATUS_SUCCESS) {
 		j++;
-		qdf_assert_always(j < DP_MAX_SRNGS);
+		if (dp_validate_ring_num(j))
+			return;
 	}
 
 	for (i = 0; i < MAX_REO_DEST_RINGS; i++) {
@@ -3209,7 +3231,8 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 
 		if (status == QDF_STATUS_SUCCESS) {
 			j++;
-			qdf_assert_always(j < DP_MAX_SRNGS);
+			if (dp_validate_ring_num(j))
+				break;
 		}
 	}
 
@@ -3222,7 +3245,8 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 
 		if (status == QDF_STATUS_SUCCESS) {
 			j++;
-			qdf_assert_always(j < DP_MAX_SRNGS);
+			if (dp_validate_ring_num(j))
+				break;
 		}
 	}
 
@@ -3235,7 +3259,8 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 
 		if (status == QDF_STATUS_SUCCESS) {
 			j++;
-			qdf_assert_always(j < DP_MAX_SRNGS);
+			if (dp_validate_ring_num(j))
+				break;
 		}
 	}
 
@@ -3249,7 +3274,8 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 
 	if (status == QDF_STATUS_SUCCESS) {
 		j++;
-		qdf_assert_always(j < DP_MAX_SRNGS);
+		if (dp_validate_ring_num(j))
+			return;
 	}
 
 	status = dp_get_srng_ring_state_from_hal
@@ -3260,7 +3286,8 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 
 	if (status == QDF_STATUS_SUCCESS) {
 		j++;
-		qdf_assert_always(j < DP_MAX_SRNGS);
+		if (dp_validate_ring_num(j))
+			return;
 	}
 
 
@@ -3273,7 +3300,8 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 
 		if (status == QDF_STATUS_SUCCESS) {
 			j++;
-			qdf_assert_always(j < DP_MAX_SRNGS);
+			if (dp_validate_ring_num(j))
+				break;
 		}
 	}
 
@@ -3294,7 +3322,8 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 
 		if (status == QDF_STATUS_SUCCESS) {
 			j++;
-			qdf_assert_always(j < DP_MAX_SRNGS);
+			if (dp_validate_ring_num(j))
+				break;
 		}
 	}
 
@@ -3311,7 +3340,8 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 
 		if (status == QDF_STATUS_SUCCESS) {
 			j++;
-			qdf_assert_always(j < DP_MAX_SRNGS);
+			if (dp_validate_ring_num(j))
+				break;
 		}
 	}
 	soc_srngs_state->max_ring_id = j;
@@ -3322,11 +3352,12 @@ static void dp_queue_ring_stats(struct dp_pdev *pdev)
 
 	if (pdev->bkp_stats.queue_depth >= HTT_BKP_STATS_MAX_QUEUE_DEPTH) {
 		drop_srngs_state = TAILQ_FIRST(&pdev->bkp_stats.list);
-		qdf_assert_always(drop_srngs_state);
-		TAILQ_REMOVE(&pdev->bkp_stats.list, drop_srngs_state,
-			     list_elem);
-		qdf_mem_free(drop_srngs_state);
-		pdev->bkp_stats.queue_depth--;
+		if (!dp_assert_always_internal(drop_srngs_state)) {
+			TAILQ_REMOVE(&pdev->bkp_stats.list, drop_srngs_state,
+					list_elem);
+			qdf_mem_free(drop_srngs_state);
+			pdev->bkp_stats.queue_depth--;
+		}
 	}
 
 	pdev->bkp_stats.queue_depth++;

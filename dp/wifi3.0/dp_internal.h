@@ -217,7 +217,7 @@ static inline bool __dp_assert_always_internal(bool expr)
 {
 	qdf_assert_always(expr);
 
-	return false;
+	return !expr;
 }
 
 #define dp_assert_always_internal(_expr) __dp_assert_always_internal(_expr)
@@ -6149,13 +6149,15 @@ void dp_ssr_dump_pdev_unregister(uint8_t pdev_id)
 #ifdef WLAN_SUPPORT_RX_FLOW_TAG
 /**
  * dp_rx_flow_find_entry_by_flowid() - Find DP FSE matching a given flow index
+ * @soc: soc handle
  * @fst: Rx FST Handle
  * @flow_id: Flow index of the requested flow
  *
  * Return: Pointer to the DP FSE entry
  */
 struct dp_rx_fse *
-dp_rx_flow_find_entry_by_flowid(struct dp_rx_fst *fst, uint32_t flow_id);
+dp_rx_flow_find_entry_by_flowid(struct dp_soc *soc, struct dp_rx_fst *fst,
+				uint32_t flow_id);
 
 /**
  * dp_rx_flow_write_entry_metadata() - Update fse metadata

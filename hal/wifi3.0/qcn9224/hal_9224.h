@@ -1256,9 +1256,8 @@ static inline qdf_iomem_t hal_get_window_address_9224(struct hal_soc *hal_soc,
 		new_offset = (hal_soc->dev_base_addr + (2 * WINDOW_START) +
 			  (offset & WINDOW_RANGE_MASK));
 	} else {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
 			  "%s: ERROR: Accessing Wrong register\n", __func__);
-		qdf_assert_always(0);
 		return 0;
 	}
 	return new_offset;

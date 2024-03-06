@@ -450,6 +450,15 @@ __dp_rx_buffers_no_map_lt_replenish(struct dp_soc *soc, uint32_t mac_id,
 	for (count = 0; count < num_alloc_desc; count++) {
 		next = desc_list->next;
 		qdf_prefetch(next);
+
+		/* rx_desc.in_use should be zero at this time*/
+		if (dp_assert_always_internal_stat(
+			(!desc_list->rx_desc.in_use), soc,
+					rx.err.rx_desc_in_use)) {
+			desc_list = next;
+			continue;
+		}
+
 		nbuf = dp_rx_nbuf_alloc(soc, rx_desc_pool);
 		if (qdf_unlikely(!nbuf)) {
 			DP_STATS_INC(dp_pdev, replenish.nbuf_alloc_fail, 1);
@@ -461,16 +470,17 @@ __dp_rx_buffers_no_map_lt_replenish(struct dp_soc *soc, uint32_t mac_id,
 
 		rxdma_ring_entry = hal_srng_src_get_next(soc->hal_soc,
 							 rxdma_srng);
-		qdf_assert_always(rxdma_ring_entry);
+
+		if (dp_assert_always_internal(rxdma_ring_entry)) {
+			qdf_nbuf_free(nbuf);
+			break;
+		}
 
 		desc_list->rx_desc.nbuf = nbuf;
 		dp_rx_set_reuse_nbuf(&desc_list->rx_desc, nbuf);
 		desc_list->rx_desc.rx_buf_start = nbuf->data;
 		desc_list->rx_desc.paddr_buf_start = paddr;
 		desc_list->rx_desc.unmapped = 0;
-
-		/* rx_desc.in_use should be zero at this time*/
-		qdf_assert_always(desc_list->rx_desc.in_use == 0);
 
 		desc_list->rx_desc.in_use = 1;
 		desc_list->rx_desc.in_err_state = 0;
@@ -561,6 +571,14 @@ __dp_rx_buffers_no_map_replenish(struct dp_soc *soc, uint32_t mac_id,
 		nbuf_next = nbuf->next;
 		qdf_prefetch(next);
 
+		/* rx_desc.in_use should be zero at this time*/
+		if (dp_assert_always_internal_stat(
+			(!(*desc_list)->rx_desc.in_use), soc,
+					rx.err.rx_desc_in_use)) {
+			*desc_list = next;
+			continue;
+		}
+
 		rxdma_ring_entry = (struct dp_buffer_addr_info *)
 			hal_srng_src_get_next(soc->hal_soc, rxdma_srng);
 
@@ -572,10 +590,6 @@ __dp_rx_buffers_no_map_replenish(struct dp_soc *soc, uint32_t mac_id,
 		(*desc_list)->rx_desc.rx_buf_start = nbuf->data;
 		(*desc_list)->rx_desc.paddr_buf_start = QDF_NBUF_CB_PADDR(nbuf);
 		(*desc_list)->rx_desc.unmapped = 0;
-
-		/* rx_desc.in_use should be zero at this time*/
-		qdf_assert_always((*desc_list)->rx_desc.in_use == 0);
-
 		(*desc_list)->rx_desc.in_use = 1;
 		(*desc_list)->rx_desc.in_err_state = 0;
 
@@ -752,6 +766,15 @@ QDF_STATUS __dp_pdev_rx_buffers_no_map_attach(struct dp_soc *soc,
 	for (count = 0; count < nr_descs; count++) {
 		next = desc_list->next;
 		qdf_prefetch(next);
+
+		/* rx_desc.in_use should be zero at this time*/
+		if (dp_assert_always_internal_stat(
+			(!desc_list->rx_desc.in_use), soc,
+					rx.err.rx_desc_in_use)) {
+			desc_list = next;
+			continue;
+		}
+
 		nbuf = dp_rx_nbuf_alloc(soc, rx_desc_pool);
 		if (qdf_unlikely(!nbuf)) {
 			DP_STATS_INC(dp_pdev, replenish.nbuf_alloc_fail, 1);
@@ -772,10 +795,6 @@ QDF_STATUS __dp_pdev_rx_buffers_no_map_attach(struct dp_soc *soc,
 		desc_list->rx_desc.rx_buf_start = nbuf->data;
 		desc_list->rx_desc.paddr_buf_start = paddr;
 		desc_list->rx_desc.unmapped = 0;
-
-		/* rx_desc.in_use should be zero at this time*/
-		qdf_assert_always(desc_list->rx_desc.in_use == 0);
-
 		desc_list->rx_desc.in_use = 1;
 		desc_list->rx_desc.in_err_state = 0;
 
@@ -1040,6 +1059,15 @@ QDF_STATUS __dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 
 	dp_rx_buf_smmu_mapping_lock(dp_soc);
 	while (count < num_req_buffers) {
+		/* rx_desc.in_use should be zero at this time*/
+		if (dp_assert_always_internal_stat(
+			(!(*desc_list)->rx_desc.in_use), dp_soc,
+					rx.err.rx_desc_in_use)) {
+			count++;
+			*desc_list = (*desc_list)->next;
+			continue;
+		}
+
 		/* Flag is set while pdev rx_desc_pool initialization */
 		if (qdf_unlikely(rx_desc_pool->rx_mon_dest_frag_enable))
 			ret = dp_pdev_frag_alloc_and_map(dp_soc,
@@ -1073,9 +1101,6 @@ QDF_STATUS __dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 		else
 			dp_rx_desc_prep(&((*desc_list)->rx_desc),
 					&nbuf_frag_info);
-
-		/* rx_desc.in_use should be zero at this time*/
-		qdf_assert_always((*desc_list)->rx_desc.in_use == 0);
 
 		(*desc_list)->rx_desc.in_use = 1;
 		(*desc_list)->rx_desc.in_err_state = 0;

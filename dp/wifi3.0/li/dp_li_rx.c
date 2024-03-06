@@ -249,9 +249,12 @@ uint32_t dp_rx_process_li(struct dp_intr *int_ctx,
 
 	DP_HIST_INIT();
 
-	qdf_assert_always(soc && hal_ring_hdl);
+	if (!soc || !hal_ring_hdl)
+		return 0;
+
 	hal_soc = soc->hal_soc;
-	qdf_assert_always(hal_soc);
+	if (!hal_soc)
+		return 0;
 
 	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 

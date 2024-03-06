@@ -565,14 +565,16 @@ static uint8_t dp_tx_prepare_htt_metadata(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 
 /**
  * dp_tx_prepare_tso_ext_desc() - Prepare MSDU extension descriptor for TSO
+ * @soc: soc handle
  * @tso_seg: TSO segment to process
  * @ext_desc: Pointer to MSDU extension descriptor
  *
  * Return: void
  */
 #if defined(FEATURE_TSO)
-static void dp_tx_prepare_tso_ext_desc(struct qdf_tso_seg_t *tso_seg,
-		void *ext_desc)
+static void dp_tx_prepare_tso_ext_desc(struct dp_soc *soc,
+				       struct qdf_tso_seg_t *tso_seg,
+				       void *ext_desc)
 {
 	uint8_t num_frag;
 	uint32_t tso_flags;
@@ -598,8 +600,11 @@ static void dp_tx_prepare_tso_ext_desc(struct qdf_tso_seg_t *tso_seg,
 		uint32_t lo = 0;
 		uint32_t hi = 0;
 
-		qdf_assert_always((tso_seg->tso_frags[num_frag].paddr) &&
-				  (tso_seg->tso_frags[num_frag].length));
+		if (dp_assert_always_internal_stat(
+			((tso_seg->tso_frags[num_frag].paddr) &&
+				(tso_seg->tso_frags[num_frag].length)),
+				soc, tx.invld_tso_params))
+			break;
 
 		qdf_dmaaddr_to_32s(
 			tso_seg->tso_frags[num_frag].paddr, &lo, &hi);
@@ -610,8 +615,9 @@ static void dp_tx_prepare_tso_ext_desc(struct qdf_tso_seg_t *tso_seg,
 	return;
 }
 #else
-static void dp_tx_prepare_tso_ext_desc(struct qdf_tso_seg_t *tso_seg,
-		void *ext_desc)
+static void dp_tx_prepare_tso_ext_desc(struct dp_soc *soc,
+				       struct qdf_tso_seg_t *tso_seg,
+				       void *ext_desc)
 {
 	return;
 }
@@ -902,8 +908,9 @@ struct dp_tx_ext_desc_elem_s *dp_tx_prepare_ext_desc(struct dp_vdev *vdev,
 		break;
 
 	case dp_tx_frm_tso:
-		dp_tx_prepare_tso_ext_desc(&msdu_info->u.tso_info.curr_seg->seg,
-				&cached_ext_desc[0]);
+		dp_tx_prepare_tso_ext_desc(soc,
+					   &msdu_info->u.tso_info.curr_seg->seg,
+					   &cached_ext_desc[0]);
 		break;
 
 

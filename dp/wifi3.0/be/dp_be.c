@@ -3426,8 +3426,10 @@ QDF_STATUS dp_mlo_dev_ctxt_create(struct cdp_soc_t *soc_hdl,
 							  DP_MOD_ID_MLO_DEV);
 	if (mlo_dev_ctxt) {
 		dp_mlo_dev_ctxt_unref_delete(mlo_dev_ctxt, DP_MOD_ID_MLO_DEV);
-		/* assert if we get two create request for same MLD MAC */
-		qdf_assert_always(0);
+		dp_err("mlo dev ctxt already exists for " QDF_MAC_ADDR_FMT "",
+				QDF_MAC_ADDR_REF(mld_mac_addr));
+
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	/* Allocate MLO dev ctx */

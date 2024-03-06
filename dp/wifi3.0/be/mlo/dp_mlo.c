@@ -1519,7 +1519,6 @@ dp_umac_reset_handle_action_cb(struct dp_soc *soc,
 
 		if (!hif_sc) {
 			hif_err("scn is null");
-			qdf_assert_always(0);
 			return QDF_STATUS_E_FAILURE;
 		}
 

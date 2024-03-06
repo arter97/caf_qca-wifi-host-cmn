@@ -1086,57 +1086,6 @@ static inline struct dp_tx_desc_s *dp_tx_spcl_desc_alloc(struct dp_soc *soc,
 }
 
 /**
- * dp_tx_desc_alloc_multiple() - Allocate batch of software Tx Descriptors
- *                            from given pool
- * @soc: Handle to DP SoC structure
- * @desc_pool_id: pool id should pick up
- * @num_requested: number of required descriptor
- *
- * allocate multiple tx descriptor and make a link
- *
- * Return: first descriptor pointer or NULL
- */
-static inline struct dp_tx_desc_s *dp_tx_desc_alloc_multiple(
-		struct dp_soc *soc, uint8_t desc_pool_id, uint8_t num_requested)
-{
-	struct dp_tx_desc_s *c_desc = NULL, *h_desc = NULL;
-	uint8_t count;
-	struct dp_tx_desc_pool_s *pool = NULL;
-
-	pool = dp_get_tx_desc_pool(soc, desc_pool_id);
-
-	TX_DESC_LOCK_LOCK(&pool->lock);
-
-	if ((num_requested == 0) ||
-			(pool->num_free < num_requested)) {
-		TX_DESC_LOCK_UNLOCK(&pool->lock);
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			"%s, No Free Desc: Available(%d) num_requested(%d)",
-			__func__, pool->num_free,
-			num_requested);
-		return NULL;
-	}
-
-	h_desc = pool->freelist;
-
-	/* h_desc should never be NULL since num_free > requested */
-	qdf_assert_always(h_desc);
-
-	c_desc = h_desc;
-	for (count = 0; count < (num_requested - 1); count++) {
-		c_desc->flags = DP_TX_DESC_FLAG_ALLOCATED;
-		c_desc = c_desc->next;
-	}
-	pool->num_free -= count;
-	pool->num_allocated += count;
-	pool->freelist = c_desc->next;
-	c_desc->next = NULL;
-
-	TX_DESC_LOCK_UNLOCK(&pool->lock);
-	return h_desc;
-}
-
-/**
  * dp_tx_desc_free() - Free a tx descriptor and attach it to free list
  * @soc: Handle to DP SoC structure
  * @tx_desc: descriptor to free

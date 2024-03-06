@@ -1319,6 +1319,14 @@ struct dp_soc_stats {
 		uint32_t near_full;
 		/* Tx drops with buffer src as HAL_TX_COMP_RELEASE_SOURCE_FW */
 		uint32_t fw2wbm_tx_drop;
+#ifdef GLOBAL_ASSERT_AVOIDANCE
+		/* invalid encap type */
+		uint32_t invld_encap_type;
+		/* invalid security type */
+		uint32_t invld_sec_type;
+		/* invalid tso segment parameters */
+		uint32_t invld_tso_params;
+#endif
 	} tx;
 
 	/* SOC level RX stats */
@@ -1482,7 +1490,18 @@ struct dp_soc_stats {
 			/* Reo entry rx desc null */
 			uint32_t reo_err_rx_desc_null;
 			/* Invalid chip id received in intrabss path */
-			uint64_t intra_bss_bad_chipid;
+			uint32_t intra_bss_bad_chipid;
+			/* Invalid fse flow id*/
+			uint32_t invalid_fse_flow_id;
+			/* HW fst deletion failed */
+			uint32_t hw_fst_del_failed;
+			/* cache invalidate for fst failed */
+			uint32_t cache_invl_fail_no_fst;
+			/* MEC packet drop due to invalid sa idx */
+			uint32_t mec_drop_sa_invld;
+			/* rx desc in use */
+			uint32_t rx_desc_in_use;
+			
 #endif
 			/* HP Out of sync at the end of dp_rx_err_process */
 			uint32_t hp_oos2;

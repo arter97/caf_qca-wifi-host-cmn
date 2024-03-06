@@ -74,7 +74,8 @@ dp_rx_update_flow_info(struct dp_pdev *pdev, qdf_nbuf_t nbuf,
 
 		if (DP_RX_FSE_FLOW_EXTRACT_EVT_REQ(fse_metadata) &&
 		    tid != meta_tid) {
-			fse = dp_rx_flow_find_entry_by_flowid(pdev->rx_fst,
+			fse = dp_rx_flow_find_entry_by_flowid(pdev->soc,
+							      pdev->rx_fst,
 							      flow_index);
 			if (!fse || !fse->is_valid || fse->mismatch)
 				return;
@@ -405,9 +406,12 @@ uint32_t dp_rx_process_be(struct dp_intr *int_ctx,
 
 	DP_HIST_INIT();
 
-	qdf_assert_always(soc && hal_ring_hdl);
+	if (!soc || !hal_ring_hdl)
+		return 0;
+
 	hal_soc = soc->hal_soc;
-	qdf_assert_always(hal_soc);
+	if (!hal_soc)
+		return 0;
 
 	scn = soc->hif_handle;
 	intr_id = int_ctx->dp_intr_id;

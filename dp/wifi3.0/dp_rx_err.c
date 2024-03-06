@@ -111,7 +111,9 @@ bool dp_rx_mcast_echo_check(struct dp_soc *soc,
 		    (sa_idx >= wlan_cfg_get_max_ast_idx(soc->wlan_cfg_ctx))) {
 			QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
 				  "invalid sa_idx: %d", sa_idx);
-			qdf_assert_always(0);
+			if (dp_assert_always_internal_stat(0, soc,
+						rx.err.mec_drop_sa_invld))
+				goto drop;
 		}
 
 		qdf_spin_lock_bh(&soc->ast_lock);
