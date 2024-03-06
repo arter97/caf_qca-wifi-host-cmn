@@ -248,7 +248,7 @@ int dfs_init_radar_filters(struct wlan_dfs *dfs,
 	 * rest of the radar configuration as suspect.
 	 */
 	if (!radar_info || radar_info->dfsdomain == 0) {
-		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS,  "Unknown dfs domain %d",
+		dfs_debug(dfs, WLAN_DEBUG_DFS_ALWAYS,  "Unknown dfs domain %d",
 				 dfs->dfsdomain);
 		/* Disable radar detection since we don't have a radar domain.*/
 		dfs->dfs_proc_phyerr &= ~DFS_RADAR_EN;
