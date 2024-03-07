@@ -89,6 +89,17 @@ QDF_STATUS wlan_cm_bss_peer_create_rsp(struct wlan_objmgr_vdev *vdev,
 		return cm_bss_peer_create_rsp(vdev, status, peer_mac);
 }
 
+void wlan_cm_update_scan_mlme_info(struct wlan_objmgr_vdev *vdev,
+				   struct wlan_cm_connect_resp *resp)
+{
+	struct cnx_mgr *cm_ctx = cm_get_cm_ctx(vdev);
+
+	if (!cm_ctx)
+		return;
+
+	return cm_update_scan_mlme_info(cm_ctx, resp);
+}
+
 QDF_STATUS wlan_cm_connect_rsp(struct wlan_objmgr_vdev *vdev,
 			       struct wlan_cm_connect_resp *resp)
 {
