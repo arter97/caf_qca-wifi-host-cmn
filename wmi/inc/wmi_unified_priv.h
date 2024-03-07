@@ -1562,6 +1562,11 @@ QDF_STATUS (*set_rx_pkt_type_routing_tag_cmd)(
 	wmi_unified_t wmi_hdl, struct wmi_rx_pkt_protocol_routing_info *param);
 #endif /* WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG */
 
+#ifdef WLAN_SUPPORT_TX_PKT_CAP_CUSTOM_CLASSIFY
+QDF_STATUS (*set_tx_pkt_cap_custom_classify)(
+	wmi_unified_t wmi_hdl, struct wmi_tx_pkt_cap_custom_classify_info *param);
+#endif /* WLAN_SUPPORT_TX_PKT_CAP_CUSTOM_CLASSIFY */
+
 #ifdef WLAN_SUPPORT_FILS
 QDF_STATUS (*extract_swfda_vdev_id)(wmi_unified_t wmi_handle, void *evt_buf,
 				    uint32_t *vdev_id);
