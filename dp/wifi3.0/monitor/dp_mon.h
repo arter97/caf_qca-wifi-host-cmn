@@ -4966,6 +4966,7 @@ static inline void
 dp_mon_rx_ppdu_status_reset(struct dp_mon_pdev *mon_pdev)
 {
 	mon_pdev->mon_ppdu_status = DP_PPDU_STATUS_START;
+	mon_pdev->ppdu_info.com_info.num_users = 0;
 	qdf_mem_zero(&mon_pdev->ppdu_info.rx_status,
 		     sizeof(mon_pdev->ppdu_info.rx_status));
 }
