@@ -1165,6 +1165,9 @@ send_vdev_nss_chain_params_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->num_tx_chains_a = user_cfg->num_tx_chains_11a;
 	cmd->num_tx_chains_b = user_cfg->num_tx_chains_11b;
 	cmd->num_tx_chains_g = user_cfg->num_tx_chains_11g;
+	cmd->fast_chain_selection = user_cfg->fast_chain_selection;
+	cmd->better_chain_rssi_threshold =
+				user_cfg->better_chain_rssi_threshold;
 
 	wmi_mtrace(WMI_VDEV_CHAINMASK_CONFIG_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf,
