@@ -93,6 +93,17 @@ QDF_STATUS wlan_cm_bss_peer_create_rsp(struct wlan_objmgr_vdev *vdev,
 				       struct qdf_mac_addr *peer_mac);
 
 /**
+ * wlan_cm_update_scan_mlme_info() - Called after connect/roam complete
+ * to update the scan cache with assoc state
+ * @vdev: vdev object pointer
+ * @resp: Connect response
+ *
+ * Return: QDF_STATUS
+ */
+void wlan_cm_update_scan_mlme_info(struct wlan_objmgr_vdev *vdev,
+				   struct wlan_cm_connect_resp *resp);
+
+/**
  * wlan_cm_connect_rsp() - Connection manager connect response
  * @vdev: vdev pointer
  * @resp: Connect response

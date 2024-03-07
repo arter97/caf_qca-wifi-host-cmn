@@ -3052,12 +3052,13 @@ cm_get_ch_width_from_phymode(enum wlan_phymode phy_mode)
 	return ch_width;
 }
 
-static void cm_update_link_channel_info(struct wlan_objmgr_vdev *vdev,
-					struct qdf_mac_addr *mac_addr,
-					qdf_freq_t freq)
+static
+void cm_update_link_channel_info(struct wlan_objmgr_vdev *vdev,
+				 struct qdf_mac_addr *mac_addr,
+				 qdf_freq_t freq)
 {
-	uint8_t link_id;
 	struct wlan_objmgr_pdev *pdev;
+	uint8_t link_id;
 	struct scan_cache_entry *cache_entry;
 	struct wlan_channel channel = {0};
 
@@ -3069,7 +3070,8 @@ static void cm_update_link_channel_info(struct wlan_objmgr_vdev *vdev,
 		return;
 	}
 
-	link_id = wlan_vdev_get_link_id(vdev);
+	link_id = cache_entry->ml_info.self_link_id;
+
 	channel.ch_freq = cache_entry->channel.chan_freq;
 	channel.ch_ieee = wlan_reg_freq_to_chan(pdev, channel.ch_freq);
 	channel.ch_phymode = cache_entry->phy_mode;
@@ -3096,12 +3098,44 @@ static void cm_update_link_channel_info(struct wlan_objmgr_vdev *vdev,
 }
 #endif
 
+void cm_update_scan_mlme_info(struct cnx_mgr *cm_ctx,
+			      struct wlan_cm_connect_resp *resp)
+{
+	struct mlme_info mlme_info = {0};
+	struct bss_info bss_info = {0};
+
+	/* Update scan entry in case connect is success or fails with bssid */
+	if (qdf_is_macaddr_zero(&resp->bssid))
+		goto update_standby;
+
+	if (QDF_IS_STATUS_SUCCESS(resp->connect_status))
+		mlme_info.assoc_state = SCAN_ENTRY_CON_STATE_ASSOC;
+	else
+		mlme_info.assoc_state = SCAN_ENTRY_CON_STATE_NONE;
+
+	qdf_copy_macaddr(&bss_info.bssid, &resp->bssid);
+	bss_info.freq = resp->freq;
+
+	bss_info.ssid.length = resp->ssid.length;
+	qdf_mem_copy(&bss_info.ssid.ssid, resp->ssid.ssid,
+		     bss_info.ssid.length);
+
+	wlan_scan_update_mlme_by_bssinfo(
+				wlan_vdev_get_pdev(cm_ctx->vdev),
+				&bss_info, &mlme_info);
+	cm_update_link_channel_info(cm_ctx->vdev, &resp->bssid,
+				    resp->freq);
+
+update_standby:
+	cm_standby_link_update_mlme_by_bssid(cm_ctx->vdev,
+					     mlme_info.assoc_state,
+					     resp->ssid);
+}
+
 QDF_STATUS cm_connect_complete(struct cnx_mgr *cm_ctx,
 			       struct wlan_cm_connect_resp *resp)
 {
 	enum wlan_cm_sm_state sm_state;
-	struct bss_info bss_info;
-	struct mlme_info mlme_info = {0};
 	bool send_ind = true;
 
 	/*
@@ -3127,27 +3161,8 @@ QDF_STATUS cm_connect_complete(struct cnx_mgr *cm_ctx,
 	if (send_ind)
 		cm_notify_connect_complete(cm_ctx, resp, 1);
 
-	/* Update scan entry in case connect is success or fails with bssid */
-	if (!qdf_is_macaddr_zero(&resp->bssid)) {
-		if (QDF_IS_STATUS_SUCCESS(resp->connect_status))
-			mlme_info.assoc_state = SCAN_ENTRY_CON_STATE_ASSOC;
-		else
-			mlme_info.assoc_state = SCAN_ENTRY_CON_STATE_NONE;
-		qdf_copy_macaddr(&bss_info.bssid, &resp->bssid);
-		bss_info.freq = resp->freq;
-		bss_info.ssid.length = resp->ssid.length;
-		qdf_mem_copy(&bss_info.ssid.ssid, resp->ssid.ssid,
-			     bss_info.ssid.length);
-		wlan_scan_update_mlme_by_bssinfo(
-					wlan_vdev_get_pdev(cm_ctx->vdev),
-					&bss_info, &mlme_info);
-		cm_update_link_channel_info(cm_ctx->vdev, &resp->bssid,
-					    resp->freq);
-	}
 
-	cm_standby_link_update_mlme_by_bssid(cm_ctx->vdev,
-					     mlme_info.assoc_state,
-					     resp->ssid);
+	cm_update_scan_mlme_info(cm_ctx, resp);
 
 	mlme_debug(CM_PREFIX_FMT,
 		   CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev),
