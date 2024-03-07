@@ -2510,6 +2510,7 @@ QDF_STATUS dp_rx_eapol_deliver_to_stack(struct dp_soc *soc,
 #define dp_rx_msdu_stats_update_prot_cnts(vdev_hdl, nbuf, txrx_peer)
 #endif
 
+#ifndef QCA_ENHANCED_STATS_SUPPORT
 #ifdef FEATURE_RX_LINKSPEED_ROAM_TRIGGER
 /**
  * dp_rx_rates_stats_update() - update rate stats
@@ -2587,7 +2588,6 @@ dp_rx_rates_stats_update(struct dp_soc *soc, qdf_nbuf_t nbuf,
 }
 #endif /* FEATURE_RX_LINKSPEED_ROAM_TRIGGER */
 
-#ifndef QCA_ENHANCED_STATS_SUPPORT
 /**
  * dp_rx_msdu_extd_stats_update(): Update Rx extended path stats for peer
  *
