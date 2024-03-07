@@ -249,6 +249,17 @@ static QDF_STATUS cm_ser_connect_req(struct wlan_objmgr_pdev *pdev,
 	QDF_STATUS status;
 	uint8_t vdev_id = wlan_vdev_get_id(cm_ctx->vdev);
 
+	if (cm_is_link_switch_connect_req(cm_req)) {
+		/*
+		 * For link switch, connect serialization is not required as
+		 * link switch is already serialized.
+		 */
+		return cm_sm_deliver_event_sync(cm_ctx,
+						WLAN_CM_SM_EV_CONNECT_ACTIVE,
+						sizeof(wlan_cm_id),
+						&cm_req->cm_id);
+	}
+
 	status = wlan_objmgr_vdev_try_get_ref(cm_ctx->vdev, WLAN_MLME_CM_ID);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		mlme_err(CM_PREFIX_FMT "unable to get reference",
@@ -1866,17 +1877,7 @@ QDF_STATUS cm_connect_start(struct cnx_mgr *cm_ctx,
 		return QDF_STATUS_SUCCESS;
 	}
 
-	if (cm_is_link_switch_connect_req(cm_req)) {
-		/* The error handling has to be different here.not corresponds
-		 * to connect req serialization now.
-		 */
-		status = cm_sm_deliver_event_sync(cm_ctx,
-						  WLAN_CM_SM_EV_CONNECT_ACTIVE,
-						  sizeof(wlan_cm_id),
-						  &cm_req->cm_id);
-	} else {
-		status = cm_ser_connect_req(pdev, cm_ctx, cm_req);
-	}
+	status = cm_ser_connect_req(pdev, cm_ctx, cm_req);
 
 	if (QDF_IS_STATUS_ERROR(status)) {
 		reason = CM_SER_FAILURE;
