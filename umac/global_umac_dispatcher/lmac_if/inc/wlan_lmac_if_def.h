@@ -890,7 +890,8 @@ struct spectral_tgt_ops;
  * @sptrlto_register_spectral_wmi_ops: Register Spectral WMI operations
  * @sptrlto_register_spectral_tgt_ops: Register Spectral target operations
  * @sptrlto_register_buffer_cb: Register Spectral buffer callbacks
- * @sptrlto_use_nl_bcast: Get whether to use Netlink broadcast/unicast
+ * @sptrlto_use_broadcast: Set whether to use broadcast/unicast while
+ *                         sending messages to the application layer
  * @sptrlto_deregister_buffer_cb: De-register Spectral buffer callbacks
  * @sptrlto_process_spectral_report: Process spectral report
  * @sptrlto_set_dma_debug: Set DMA debug for Spectral
@@ -948,7 +949,8 @@ struct wlan_lmac_if_sptrl_tx_ops {
 	void (*sptrlto_register_buffer_cb)(
 		struct wlan_objmgr_pdev *pdev,
 		struct spectral_buffer_cb *spectral_buf_cb);
-	bool (*sptrlto_use_nl_bcast)(struct wlan_objmgr_pdev *pdev);
+	QDF_STATUS (*sptrlto_use_broadcast)(struct wlan_objmgr_pdev *pdev,
+					    bool use_bcast);
 	void (*sptrlto_deregister_buffer_cb)(struct wlan_objmgr_pdev *pdev);
 	int (*sptrlto_process_spectral_report)(
 		struct wlan_objmgr_pdev *pdev,

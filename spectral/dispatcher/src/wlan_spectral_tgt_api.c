@@ -416,8 +416,8 @@ tgt_spectral_register_buffer_cb(
 	return psptrl_tx_ops->sptrlto_register_buffer_cb(pdev, spectral_buf_cb);
 }
 
-bool
-tgt_spectral_use_nl_bcast(struct wlan_objmgr_pdev *pdev)
+QDF_STATUS
+tgt_spectral_use_broadcast(struct wlan_objmgr_pdev *pdev, bool use_bcast)
 {
 	struct wlan_objmgr_psoc *psoc = NULL;
 	struct wlan_lmac_if_sptrl_tx_ops *psptrl_tx_ops = NULL;
@@ -432,7 +432,7 @@ tgt_spectral_use_nl_bcast(struct wlan_objmgr_pdev *pdev)
 
 	psptrl_tx_ops = &tx_ops->sptrl_tx_ops;
 
-	return psptrl_tx_ops->sptrlto_use_nl_bcast(pdev);
+	return psptrl_tx_ops->sptrlto_use_broadcast(pdev, use_bcast);
 }
 
 void tgt_spectral_deregister_buffer_cb(struct wlan_objmgr_pdev *pdev)

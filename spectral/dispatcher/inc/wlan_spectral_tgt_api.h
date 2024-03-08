@@ -262,13 +262,15 @@ tgt_spectral_register_buffer_cb(struct wlan_objmgr_pdev *pdev,
 				struct spectral_buffer_cb *spectral_buf_cb);
 
 /**
- * tgt_spectral_use_nl_bcast() - Get whether to use broadcast/unicast while
- * sending Netlink messages to the application layer
+ * tgt_spectral_use_broadcast() - Set whether to use broadcast/unicast while
+ * sending messages to the application layer
  * @pdev: Pointer to pdev object
+ * @use_bcast: true for broadcast, false for unicast
  *
- * Return: true for broadcast, false for unicast
+ * Return: QDF_STATUS
  */
-bool tgt_spectral_use_nl_bcast(struct wlan_objmgr_pdev *pdev);
+QDF_STATUS tgt_spectral_use_broadcast(struct wlan_objmgr_pdev *pdev,
+				      bool use_bcast);
 
 /**
  * tgt_spectral_deregister_buffer_cb() - De-register buffer callbacks

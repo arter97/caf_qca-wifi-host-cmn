@@ -63,7 +63,7 @@ spectral_ctx_init_ol(struct spectral_context *sc)
 	sc->sptrlc_register_spectral_wmi_ops = tgt_register_spectral_wmi_ops;
 	sc->sptrlc_register_spectral_tgt_ops = tgt_register_spectral_tgt_ops;
 	sc->sptrlc_register_buffer_cb = tgt_spectral_register_buffer_cb;
-	sc->sptrlc_use_nl_bcast = tgt_spectral_use_nl_bcast;
+	sc->sptrlc_use_broadcast = tgt_spectral_use_broadcast;
 	sc->sptrlc_deregister_buffer_cb = tgt_spectral_deregister_buffer_cb;
 	sc->sptrlc_process_spectral_report = tgt_spectral_process_report;
 	spectral_ctx_init_ol_dma_debug(sc);

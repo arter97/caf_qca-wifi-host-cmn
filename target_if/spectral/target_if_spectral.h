@@ -1275,7 +1275,8 @@ int get_supported_sscan_bw_pos(enum phy_ch_width sscan_bw);
  * @tlvhdr_size: Expected PHYERR TLV header size, for the given hardware
  * generation
  * @spectral_buf_cb: Spectral buffer callbacks
- * @use_nl_bcast: Whether to use Netlink broadcast/unicast
+ * @use_bcast: Inidication to use broadcast/unicast while
+ *             sending messages to the application layer
  * @send_phy_data: Send data to the application layer for a particular msg type
  * @len_adj_swar: Spectral fft bin length adjustment SWAR related info
  * @timestamp_war: Spectral time stamp WAR related info
@@ -1403,7 +1404,7 @@ struct target_if_spectral {
 	uint8_t                                tag_sscan_fft_exp;
 	uint8_t                                tlvhdr_size;
 	struct spectral_buffer_cb spectral_buf_cb;
-	bool use_nl_bcast;
+	bool use_bcast;
 	int (*send_phy_data)(struct wlan_objmgr_pdev *pdev,
 			     enum spectral_msg_type smsg_type);
 	struct spectral_fft_bin_len_adj_swar len_adj_swar;

@@ -3825,7 +3825,7 @@ target_if_pdev_spectral_init(struct wlan_objmgr_pdev *pdev)
 		    target_type == TARGET_TYPE_QCA9888)
 			spectral->is_sec80_rssi_war_required = true;
 
-		spectral->use_nl_bcast = SPECTRAL_USE_NL_BCAST;
+		spectral->use_bcast = SPECTRAL_USE_NL_BCAST;
 
 		if (spectral->spectral_gen == SPECTRAL_GEN3)
 			init_160mhz_delivery_state_machine(spectral);
@@ -6819,7 +6819,7 @@ target_if_register_buffer_cb(
 	qdf_mem_copy(&spectral->spectral_buf_cb, spectral_buf_cb,
 		     sizeof(struct spectral_buffer_cb));
 
-	if (spectral->use_nl_bcast) {
+	if (spectral->use_bcast) {
 		spectral->send_phy_data =
 			spectral->spectral_buf_cb.send_bcast;
 	} else {
@@ -6829,14 +6829,15 @@ target_if_register_buffer_cb(
 }
 
 /**
- * target_if_use_nl_bcast() - Get whether to use broadcast/unicast while sending
- * Netlink messages to the application layer
+ * target_if_use_broadcast() - Set whether to use broadcast/unicast while
+ * sending messages to the application layer
  * @pdev: Pointer to pdev object
+ * @use_bcast: true for broadcast, false for unicast
  *
- * Return: true for broadcast, false for unicast
+ * Return: QDF_STATUS
  */
-static bool
-target_if_use_nl_bcast(struct wlan_objmgr_pdev *pdev)
+static QDF_STATUS
+target_if_use_broadcast(struct wlan_objmgr_pdev *pdev, bool use_bcast)
 {
 	struct target_if_spectral *spectral = NULL;
 
@@ -6844,10 +6845,11 @@ target_if_use_nl_bcast(struct wlan_objmgr_pdev *pdev)
 
 	if (!spectral) {
 		spectral_err("SPECTRAL : Module doesn't exist");
-		return false;
+		return QDF_STATUS_E_NULL_VALUE;
 	}
 
-	return spectral->use_nl_bcast;
+	spectral->use_bcast = use_bcast;
+	return QDF_STATUS_SUCCESS;
 }
 
 /**
@@ -8071,8 +8073,8 @@ target_if_sptrl_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 	    target_if_register_spectral_tgt_ops;
 	tx_ops->sptrl_tx_ops.sptrlto_register_buffer_cb =
 	    target_if_register_buffer_cb;
-	tx_ops->sptrl_tx_ops.sptrlto_use_nl_bcast =
-	    target_if_use_nl_bcast;
+	tx_ops->sptrl_tx_ops.sptrlto_use_broadcast =
+	    target_if_use_broadcast;
 	tx_ops->sptrl_tx_ops.sptrlto_deregister_buffer_cb =
 	    target_if_deregister_buffer_cb;
 	tx_ops->sptrl_tx_ops.sptrlto_process_spectral_report =

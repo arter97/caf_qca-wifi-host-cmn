@@ -123,7 +123,8 @@ struct spectral_tgt_ops;
  * @sptrlc_register_spectral_wmi_ops: Register Spectral WMI operations
  * @sptrlc_register_spectral_tgt_ops: Register Spectral target operations
  * @sptrlc_register_buffer_cb: Register Spectral buffer callbacks
- * @sptrlc_use_nl_bcast: Check whether to use Netlink broadcast/unicast
+ * @sptrlc_use_broadcast: Set whether to use broadcast/unicast while
+ *                        sending messages to the application layer
  * @sptrlc_deregister_buffer_cb: De-register Spectral buffer callbacks
  * @sptrlc_process_spectral_report: Process spectral report
  * @sptrlc_set_dma_debug: Set DMA debug
@@ -180,7 +181,8 @@ struct spectral_context {
 	void (*sptrlc_register_buffer_cb)(
 			struct wlan_objmgr_pdev *pdev,
 			struct spectral_buffer_cb *spectral_buf_cb);
-	bool (*sptrlc_use_nl_bcast)(struct wlan_objmgr_pdev *pdev);
+	QDF_STATUS (*sptrlc_use_broadcast)(struct wlan_objmgr_pdev *pdev,
+					   bool use_bcast);
 	void (*sptrlc_deregister_buffer_cb)(struct wlan_objmgr_pdev *pdev);
 	int (*sptrlc_process_spectral_report)(
 			struct wlan_objmgr_pdev *pdev,
