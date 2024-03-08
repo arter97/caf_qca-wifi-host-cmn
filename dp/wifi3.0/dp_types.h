@@ -1416,6 +1416,10 @@ struct dp_soc_stats {
 			/* Invalid chip id received in intrabss path */
 			uint64_t intra_bss_bad_chipid;
 #endif
+			/* HP Out of sync at the end of dp_rx_err_process */
+			uint32_t hp_oos2;
+			/* Rx exception ring near full */
+			uint32_t near_full;
 		} err;
 
 		/* packet count per core - per ring */
