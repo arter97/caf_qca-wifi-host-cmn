@@ -17,6 +17,7 @@
 #ifndef _CDP_TXRX_PPE_H_
 #define _CDP_TXRX_PPE_H_
 
+#define CDP_PPEDS_INVALID_NODE_ID 0xff
 /**
  * cdp_ppesds_vp_setup_fw_recovery() - Setup DS VP on FW recovery.
  * @soc: data path soc handle
@@ -42,6 +43,27 @@ QDF_STATUS cdp_ppesds_vp_setup_fw_recovery(struct cdp_soc_t *soc,
 								    profile_idx);
 
 	return QDF_STATUS_E_INVAL;
+}
+
+/*
+ * cdp_ppesds_update_dev_stats() - get the ppe vp node id.
+ * @soc: data path soc handle
+ *
+ * return: node id on success MAX value on failure
+ */
+static inline
+uint32_t cdp_ppesds_get_node_id(struct cdp_soc_t *soc)
+{
+	if (!soc || !soc->ops || !soc->ops->ppeds_ops) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
+			  "%s invalid instance", __func__);
+		return CDP_PPEDS_INVALID_NODE_ID;
+	}
+
+	if (soc->ops->ppeds_ops->ppeds_get_node_id)
+		return soc->ops->ppeds_ops->ppeds_get_node_id(soc);
+
+	return CDP_PPEDS_INVALID_NODE_ID;
 }
 
 /*

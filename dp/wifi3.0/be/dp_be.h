@@ -370,6 +370,7 @@ struct dp_soc_be {
 	uint8_t num_ppe_vp_entries;
 	uint8_t num_ppe_vp_search_idx_entries;
 	uint8_t num_ppe_vp_profiles;
+	uint32_t dp_ppeds_node_id;
 	char irq_name[DP_PPE_INTR_MAX][DP_PPE_INTR_STRNG_LEN];
 	struct {
 		struct {

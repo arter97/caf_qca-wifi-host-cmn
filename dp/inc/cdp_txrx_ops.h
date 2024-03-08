@@ -2616,6 +2616,7 @@ struct cdp_ppeds_txrx_ops {
 			    uint16_t vdev_id,
 			    struct cdp_ds_vp_params *vp_params,
 			    void *stats);
+	uint32_t (*ppeds_get_node_id)(struct cdp_soc_t *soc);
 };
 #endif /* WLAN_SUPPORT_PPEDS */
 
