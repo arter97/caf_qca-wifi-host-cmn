@@ -8340,7 +8340,8 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 		       pdev->stats.tx.rekey_tx_comp_failures[HTT_TX_FW2WBM_TX_STATUS_VDEVID_MISMATCH]);
 }
 
-#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MCAST_MLO)
+#if defined(WLAN_FEATURE_11BE_MLO) && (defined(WLAN_MCAST_MLO) || \
+	defined(WLAN_MCAST_MLO_SAP))
 void dp_print_vdev_mlo_mcast_tx_stats(struct dp_vdev *vdev)
 {
 	uint8_t idx;

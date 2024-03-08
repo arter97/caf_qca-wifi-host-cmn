@@ -3567,7 +3567,8 @@ void dp_print_peer_stats(struct dp_peer *peer,
 void
 dp_print_pdev_tx_stats(struct dp_pdev *pdev);
 
-#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MCAST_MLO)
+#if defined(WLAN_FEATURE_11BE_MLO) && (defined(WLAN_MCAST_MLO) || \
+	defined(WLAN_MCAST_MLO_SAP))
 /**
  * dp_print_vdev_mlo_mcast_tx_stats(): Print vdev level mlo mcast tx stats
  * @vdev: DP_VDEV Handle
