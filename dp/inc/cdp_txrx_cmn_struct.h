@@ -3008,7 +3008,9 @@ struct cdp_txrx_stats_req {
  * @mo_mgmt: set Monitor Other MGMT Configuration
  * @mo_ctrl: set Monitor Other CTRL Configuration
  * @mo_data: set Monitor other DATA Configuration
- *
+ * @fpmo_mgmt : set Filter Pass and Monitor Other MGMT Configuration
+ * @fpmo_ctrl : set Filter Pass and Monitor Other CTRL Configuration
+ * @fpmo_data : set Filter Pass and Monitor Other DATA Configuration
  */
 struct cdp_monitor_filter {
 	uint16_t mode;
@@ -3018,6 +3020,9 @@ struct cdp_monitor_filter {
 	uint16_t mo_mgmt;
 	uint16_t mo_ctrl;
 	uint16_t mo_data;
+	uint16_t fpmo_mgmt;
+	uint16_t fpmo_ctrl;
+	uint16_t fpmo_data;
 };
 
 /**
