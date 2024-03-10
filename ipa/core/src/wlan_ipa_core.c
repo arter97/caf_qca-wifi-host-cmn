@@ -1458,7 +1458,7 @@ wlan_ipa_set_sap_client_auth(struct wlan_ipa_priv *ipa_ctx,
 			     const uint8_t *peer_mac,
 			     uint8_t is_authenticated)
 {
-	uint8_t idx;
+	uint16_t idx;
 	struct ipa_uc_stas_map *sta_map;
 
 	for (idx = 0; idx < WLAN_IPA_MAX_STA_COUNT; idx++) {
@@ -1475,7 +1475,7 @@ wlan_ipa_set_sap_client_auth(struct wlan_ipa_priv *ipa_ctx,
 static inline uint8_t
 wlan_ipa_get_sap_client_auth(struct wlan_ipa_priv *ipa_ctx, uint8_t *peer_mac)
 {
-	uint8_t idx;
+	uint16_t idx;
 	struct ipa_uc_stas_map *sta_map;
 
 	for (idx = 0; idx < WLAN_IPA_MAX_STA_COUNT; idx++) {
