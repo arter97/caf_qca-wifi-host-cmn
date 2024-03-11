@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -179,6 +179,7 @@ struct direct_buf_rx_module_debug {
  * @dbr_buf_pool: Pointer to direct buf rx buffer pool struct
  * @dbr_rsp_handler: Pointer to direct buf rx response handler for the module
  * @srng_initialized: Whether the DBR ring is successfully initialized for this
+ * @target_support: Whether target advertised caps for the corresponding mod_id
  */
 struct direct_buf_rx_module_param {
 	enum DBR_MODULE mod_id;
@@ -191,11 +192,12 @@ struct direct_buf_rx_module_param {
 	bool (*dbr_rsp_handler)(struct wlan_objmgr_pdev *pdev,
 				struct direct_buf_rx_data *dbr_data);
 	bool srng_initialized;
+	bool target_support;
 };
 
 /**
  * struct direct_buf_rx_pdev_obj - Direct Buf RX pdev object struct
- * @num_modules: Number of modules registered to DBR for the pdev
+ * @num_modules: Number of modules can be registered for DBR support
  * @dbr_mod_param: Pointer to direct buf rx module param struct
  * @dbr_mod_debug: Pointer to the array of DBR module debug structures
  * @debugfs_entry: DBR debugfs entry of this radio
