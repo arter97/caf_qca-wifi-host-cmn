@@ -1439,10 +1439,77 @@ static QDF_STATUS cm_update_mlo_filter(struct wlan_objmgr_pdev *pdev,
 
 	return QDF_STATUS_SUCCESS;
 }
+
+static QDF_STATUS cm_remove_mbssid_links_without_scan_entry(
+						qdf_list_t *candidate_list)
+{
+	struct scan_cache_node *scan_node = NULL;
+	struct scan_cache_entry *partner_entry = NULL, *scan_entry = NULL;
+	qdf_list_node_t *cur_node = NULL, *next_node = NULL;
+	struct partner_link_info *partner_info;
+	struct qdf_mac_addr *mld_addr;
+	uint8_t i = 0;
+
+	if (qdf_list_peek_front(candidate_list,
+				&cur_node) != QDF_STATUS_SUCCESS) {
+		mlme_err("Failed to dequeue");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	while (cur_node) {
+		qdf_list_peek_next(candidate_list, cur_node, &next_node);
+		scan_node = qdf_container_of(cur_node, struct scan_cache_node,
+					     node);
+		scan_entry = scan_node->entry;
+		mld_addr = util_scan_entry_mldaddr(scan_entry);
+
+		if (!scan_entry->mbssid_info.profile_num || !mld_addr)
+			goto next_entry;
+
+		/*
+		 *  Mark the links of an MBSSID partner as invalid if there
+		 *  is no scan entry for the link at the time of the candidate
+		 *  selection.
+		 *
+		 *  For MBSSID candidates, ML-probe request would not be sent,
+		 *  during join phase, therefore the scan entry would not be
+		 *  created anytime before the association.
+		 *
+		 */
+		for (i = 0; i < scan_entry->ml_info.num_links; i++) {
+			if (!scan_entry->ml_info.link_info[i].is_valid_link)
+				continue;
+
+			partner_info = &scan_entry->ml_info.link_info[i];
+			partner_entry = cm_get_entry(candidate_list,
+						     &partner_info->link_addr);
+
+			if (!partner_entry ||
+			    !qdf_is_macaddr_equal(mld_addr,
+						  &partner_entry->ml_info.mld_mac_addr)) {
+				scan_entry->ml_info.link_info[i].is_valid_link = false;
+				mlme_debug("Scan entry is not present for link idx %d, drop the link",
+					   scan_entry->ml_info.link_info[i].link_id);
+			}
+		}
+next_entry:
+		cur_node = next_node;
+		next_node = NULL;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
 #else
 static QDF_STATUS cm_update_mlo_filter(struct wlan_objmgr_pdev *pdev,
 				       struct cm_connect_req *cm_req,
 				       struct scan_filter *filter)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS cm_remove_mbssid_links_without_scan_entry(
+						qdf_list_t *candidate_list)
 {
 	return QDF_STATUS_SUCCESS;
 }
@@ -1500,6 +1567,10 @@ cm_connect_fetch_candidates(struct wlan_objmgr_pdev *pdev,
 			   CM_PREFIX_REF(vdev_id, cm_req->cm_id), num_bss);
 	}
 	*num_bss_found = num_bss;
+
+	if (num_bss && !wlan_vdev_mlme_is_mlo_link_vdev(cm_ctx->vdev))
+		cm_remove_mbssid_links_without_scan_entry(candidate_list);
+
 	op_mode = wlan_vdev_mlme_get_opmode(cm_ctx->vdev);
 	if (num_bss && op_mode == QDF_STA_MODE &&
 	    !cm_req->req.is_non_assoc_link)
