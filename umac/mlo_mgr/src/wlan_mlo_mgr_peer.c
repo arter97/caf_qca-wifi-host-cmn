@@ -846,6 +846,7 @@ static void mlo_peer_free(struct wlan_mlo_peer_context *ml_peer)
 
 	mlo_debug("ML Peer " QDF_MAC_ADDR_FMT " is freed",
 		  QDF_MAC_ADDR_REF(ml_peer->peer_mld_addr.bytes));
+	ttlm_sm_destroy(ml_peer);
 	mlo_peer_lock_destroy(ml_peer);
 	epcs_dev_peer_lock_destroy(&ml_peer->epcs_info);
 	mlo_ap_ml_ptqm_peerid_free(ml_dev, ml_peer->mlo_peer_id);
@@ -1655,6 +1656,14 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 		qdf_copy_macaddr((struct qdf_mac_addr *)&ml_peer->peer_mld_addr,
 				 (struct qdf_mac_addr *)&link_peer->mldaddr[0]);
 		wlan_mlo_peer_set_t2lm_enable_val(ml_peer, ml_info);
+		status = ttlm_sm_create(ml_peer);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			mlo_err("TTLM state machine create failed");
+			mlo_peer_free(ml_peer);
+			mlo_dev_release_link_vdevs(link_vdevs);
+			return QDF_STATUS_E_INVAL;
+		}
+
 		epcs_dev_peer_lock_create(&ml_peer->epcs_info);
 		wlan_mlo_peer_initialize_epcs_info(ml_peer);
 
