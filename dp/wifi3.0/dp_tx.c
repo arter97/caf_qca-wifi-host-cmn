@@ -4801,11 +4801,12 @@ void dp_tx_reinject_handler(struct dp_soc *soc,
 			 ((is_mcast && txrx_peer->wds_ecm.wds_tx_mcast_4addr) ||
 			 (is_ucast &&
 			 txrx_peer->wds_ecm.wds_tx_ucast_4addr))))) {
+				peer_id = txrx_peer->peer_id;
 #else
 			(txrx_peer->bss_peer &&
 			 (dp_tx_proxy_arp(vdev, nbuf) == QDF_STATUS_SUCCESS))) {
-#endif
 				peer_id = DP_INVALID_PEER;
+#endif
 
 				nbuf_copy = qdf_nbuf_copy(nbuf);
 
