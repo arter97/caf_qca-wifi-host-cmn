@@ -74,6 +74,8 @@ static QDF_STATUS mlme_psoc_obj_create_handler(struct wlan_objmgr_psoc *psoc,
 		goto init_failed;
 	}
 
+	wlan_mlme_psoc_init_peer_trans_history(psoc_mlme);
+
 	return QDF_STATUS_SUCCESS;
 init_failed:
 	qdf_mem_free(psoc_mlme);
@@ -91,6 +93,8 @@ static QDF_STATUS mlme_psoc_obj_destroy_handler(struct wlan_objmgr_psoc *psoc,
 		mlme_err("PSOC MLME component object is NULL");
 		return QDF_STATUS_E_FAILURE;
 	}
+
+	wlan_mlme_psoc_flush_peer_trans_history(psoc);
 
 	wlan_minidump_remove(psoc_mlme, sizeof(*psoc_mlme), psoc,
 			     WLAN_MD_OBJMGR_PSOC_MLME, "psoc_mlme");
