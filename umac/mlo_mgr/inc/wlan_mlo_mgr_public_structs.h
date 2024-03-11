@@ -904,6 +904,7 @@ struct wlan_mlo_sta {
  * @mlo_vdev_quiet_bmap: Bitmap of vdevs for which quiet ie needs to enabled
  * @mlo_vdev_up_bmap: Bitmap of vdevs for which sync complete can be dispatched
  * @assoc_list: MLO sta assoc pending list entry (for FT-over-DS)
+ * @mlo_link_reject: Flag to indicate if MLO link rejection is enabled
  */
 struct wlan_mlo_ap {
 	uint8_t num_ml_vdevs;
@@ -916,6 +917,7 @@ struct wlan_mlo_ap {
 	qdf_bitmap(mlo_vdev_quiet_bmap, WLAN_UMAC_MLO_MAX_VDEVS);
 	qdf_bitmap(mlo_vdev_up_bmap, WLAN_UMAC_MLO_MAX_VDEVS);
 	struct wlan_mlo_sta_assoc_pending_list assoc_list;
+	bool mlo_link_reject;
 };
 
 /**
