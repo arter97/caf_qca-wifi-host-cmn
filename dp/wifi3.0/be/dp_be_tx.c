@@ -983,7 +983,7 @@ void dp_tx_mlo_mcast_handler_be(struct dp_soc *soc,
 	/* send frame on mcast primary vdev */
 	dp_tx_mlo_mcast_pkt_send(be_vdev, vdev, nbuf);
 
-	if (qdf_unlikely(qdf_atomic_read(&be_vdev->mlo_dev_ctxt->seq_num) >
+	if (qdf_unlikely(qdf_atomic_read(&be_vdev->mlo_dev_ctxt->seq_num) >=
 			 MAX_GSN_NUM))
 		qdf_atomic_set(&be_vdev->mlo_dev_ctxt->seq_num, 0);
 	else
