@@ -5524,7 +5524,8 @@ dp_tx_update_peer_stats(struct dp_tx_desc_s *tx_desc,
 	tid_stats = &pdev->stats.tid_stats.tid_tx_stats[ring_id][tid];
 
 	if (ts->release_src != HAL_TX_COMP_RELEASE_SOURCE_TQM) {
-		dp_err_rl("Release source:%d is not from TQM", ts->release_src);
+		dp_debug_rl("Release source:%d is not from TQM",
+			    ts->release_src);
 		DP_PEER_PER_PKT_STATS_INC(txrx_peer, tx.release_src_not_tqm, 1,
 					  link_id);
 		return;
