@@ -833,7 +833,9 @@ uint32_t get_ipa_config(struct wlan_objmgr_psoc *psoc)
 	} else {
 		if (val == IPA_OFFLOAD_CFG)
 			ipa_err("Invalid IPA Config 0x%x", val);
-		val = INTRL_MODE_ENABLE;
+
+		if (val != INTRL_MODE_RTP_STREAM_FILTER)
+			val = INTRL_MODE_ENABLE;
 	}
 	return val;
 }

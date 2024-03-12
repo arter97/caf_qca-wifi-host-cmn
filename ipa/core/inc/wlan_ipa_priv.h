@@ -89,7 +89,9 @@
 /* With CONFIG_IPA_WDI3_TX_TWO_PIPES=y, this bitmask is added to support
  * runtime IPA two tx pipes feature enablement.
  */
-#define WLAN_IPA_TWO_TX_PIPES_ENABLE_MASK   BIT(10)
+#define WLAN_IPA_TWO_TX_PIPES_ENABLE_MASK    BIT(10)
+#define WLAN_IPA_SET_PORT_IN_CCE_CONFIG_MASK BIT(11)
+#define WLAN_IPA_LOW_POWER_MODE_ENABLE_MASK  BIT(12)
 
 #ifdef QCA_IPA_LL_TX_FLOW_CONTROL
 #define WLAN_IPA_MAX_BANDWIDTH              4800
