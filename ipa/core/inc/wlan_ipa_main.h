@@ -39,6 +39,7 @@ extern uint8_t g_instances_added;
 
 #define INTRL_MODE_DISABLE 0xEEEEEEEE
 #define INTRL_MODE_ENABLE 0x27D
+#define INTRL_MODE_RTP_STREAM_FILTER 0x1A7D
 
 #define ipa_fatal(params...) \
 	QDF_TRACE_FATAL(QDF_MODULE_ID_IPA, params)
