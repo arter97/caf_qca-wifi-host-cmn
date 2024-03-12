@@ -2891,6 +2891,24 @@ static inline bool BAND_6G_PRESENT(uint8_t band_mask)
 #endif /* CONFIG_BAND_6GHZ */
 
 /**
+ * IS_5GHZ_CHAN_ENABLED() - Check if the 5GHz channel is enabled or disabled.
+ *
+ * @chan: Pointer to the regulatory channel to check.
+ * @treat_nol_as_enabled: Flag to determine whether to treat NOL channels as
+ * disabled or enabled.
+ *
+ * Return: True if the channel is enabled. Else false
+ */
+static inline bool
+IS_5GHZ_CHAN_ENABLED(struct regulatory_channel *chan, bool treat_nol_as_enabled)
+{
+	if (treat_nol_as_enabled)
+		return !reg_is_chan_disabled_and_not_nol(chan);
+
+	return !reg_is_chan_disabled(chan->chan_flags, chan->state);
+}
+
+/**
  * reg_get_band_from_cur_chan_list() - Get channel list and number of channels
  * @pdev: pdev ptr
  * @band_mask: Input bitmap with band set
@@ -2898,6 +2916,8 @@ static inline bool BAND_6G_PRESENT(uint8_t band_mask)
  * @cur_chan_list: Pointer to primary current channel list for non-beaconing
  * entities (STA, p2p client) and secondary channel list for beaconing entities
  * (SAP, p2p GO)
+ * @treat_nol_as_enabled: Flag to determine whether to treat NOL channels as
+ * disabled or enabled.
  *
  * Get the given channel list and number of channels from the current channel
  * list based on input band bitmap.
@@ -2908,15 +2928,15 @@ static uint16_t
 reg_get_band_from_cur_chan_list(struct wlan_objmgr_pdev *pdev,
 				uint8_t band_mask,
 				struct regulatory_channel *channel_list,
-				struct regulatory_channel *cur_chan_list)
+				struct regulatory_channel *cur_chan_list,
+				bool treat_nol_as_enabled)
 {
 	uint16_t i, num_channels = 0;
 
 	if (BAND_2G_PRESENT(band_mask)) {
 		for (i = MIN_24GHZ_CHANNEL; i <= MAX_24GHZ_CHANNEL; i++) {
-			if ((cur_chan_list[i].state != CHANNEL_STATE_DISABLE) &&
-			    !(cur_chan_list[i].chan_flags &
-			      REGULATORY_CHAN_DISABLED)) {
+			if (!reg_is_chan_disabled(cur_chan_list[i].chan_flags,
+						  cur_chan_list[i].state)) {
 				channel_list[num_channels] = cur_chan_list[i];
 				num_channels++;
 			}
@@ -2924,9 +2944,8 @@ reg_get_band_from_cur_chan_list(struct wlan_objmgr_pdev *pdev,
 	}
 	if (BAND_5G_PRESENT(band_mask)) {
 		for (i = BAND_5GHZ_START_CHANNEL; i <= MAX_5GHZ_CHANNEL; i++) {
-			if ((cur_chan_list[i].state != CHANNEL_STATE_DISABLE) &&
-			    !(cur_chan_list[i].chan_flags &
-			      REGULATORY_CHAN_DISABLED)) {
+			if (IS_5GHZ_CHAN_ENABLED(&cur_chan_list[i],
+						 treat_nol_as_enabled)) {
 				channel_list[num_channels] = cur_chan_list[i];
 				num_channels++;
 			}
@@ -2934,9 +2953,8 @@ reg_get_band_from_cur_chan_list(struct wlan_objmgr_pdev *pdev,
 	}
 	if (BAND_6G_PRESENT(band_mask)) {
 		for (i = MIN_6GHZ_CHANNEL; i <= MAX_6GHZ_CHANNEL; i++) {
-			if ((cur_chan_list[i].state != CHANNEL_STATE_DISABLE) &&
-			    !(cur_chan_list[i].chan_flags &
-			      REGULATORY_CHAN_DISABLED)) {
+			if (!reg_is_chan_disabled(cur_chan_list[i].chan_flags,
+						  cur_chan_list[i].state)) {
 				channel_list[num_channels] = cur_chan_list[i];
 				num_channels++;
 			}
@@ -2965,7 +2983,8 @@ reg_get_band_channel_list(struct wlan_objmgr_pdev *pdev,
 	}
 
 	return reg_get_band_from_cur_chan_list(pdev, band_mask, channel_list,
-					       pdev_priv_obj->cur_chan_list);
+					       pdev_priv_obj->cur_chan_list,
+					       false);
 }
 
 #ifdef CONFIG_REG_6G_PWRMODE
@@ -2974,7 +2993,8 @@ reg_get_band_channel_list_for_pwrmode(struct wlan_objmgr_pdev *pdev,
 				      uint8_t band_mask,
 				      struct regulatory_channel *channel_list,
 				      enum supported_6g_pwr_types
-				      in_6g_pwr_mode)
+				      in_6g_pwr_mode,
+				      bool treat_nol_as_enabled)
 {
 	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
 	struct regulatory_channel *reg_chan_list;
@@ -2996,8 +3016,11 @@ reg_get_band_channel_list_for_pwrmode(struct wlan_objmgr_pdev *pdev,
 		goto err;
 	}
 
-	nchan = reg_get_band_from_cur_chan_list(pdev, band_mask, channel_list,
-						reg_chan_list);
+	nchan = reg_get_band_from_cur_chan_list(pdev,
+						band_mask,
+						channel_list,
+						reg_chan_list,
+						treat_nol_as_enabled);
 err:
 	qdf_mem_free(reg_chan_list);
 	return nchan;
@@ -3020,7 +3043,7 @@ reg_get_secondary_band_channel_list(struct wlan_objmgr_pdev *pdev,
 
 	return reg_get_band_from_cur_chan_list(
 				pdev, band_mask, channel_list,
-				pdev_priv_obj->secondary_cur_chan_list);
+				pdev_priv_obj->secondary_cur_chan_list, false);
 }
 #endif
 

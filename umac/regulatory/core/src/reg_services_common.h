@@ -821,8 +821,10 @@ uint16_t reg_get_band_channel_list(struct wlan_objmgr_pdev *pdev,
  * @band_mask: Input bitmap with band set
  * @channel_list: Pointer to Channel List
  * @in_6g_pwr_type: 6g power type which decides 6G channel list lookup.
+ * @treat_nol_as_enabled: Flag to determine whether to treat NOL channels as
+ * disabled or enabled.
  *
- * Caller function to reg_get_band_from_cur_chan_listto get the primary channel
+ * Caller function to reg_get_band_from_cur_chan_list to get the primary channel
  * list and number of channels (for non-beaconing entities).
  *
  * Return: Number of channels, else 0 to indicate error
@@ -832,7 +834,8 @@ uint16_t reg_get_band_channel_list_for_pwrmode(struct wlan_objmgr_pdev *pdev,
 					       struct regulatory_channel
 					       *channel_list,
 					       enum supported_6g_pwr_types
-					       in_6g_pwr_type);
+					       in_6g_pwr_type,
+					       bool treat_nol_as_enabled);
 #endif
 
 #ifdef CONFIG_REG_CLIENT
