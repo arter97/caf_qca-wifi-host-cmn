@@ -116,8 +116,8 @@ wifi_radar_validate_common_params(struct pdev_wifi_radar *pwr,
 		return 0;
 	}
 
-	if (pow2_ltf > (params->num_ltf_tx + params->num_skip_ltf_rx)) {
-		wifi_radar_err("2^ltf_accumulation exceeds skip_ltf + ltf_rx");
+	if ((pow2_ltf + params->num_skip_ltf_rx) >= params->num_ltf_tx) {
+		wifi_radar_err("2^ltf_accum + skip_ltf_rx exceeds ltf_tx");
 		return 0;
 	}
 
