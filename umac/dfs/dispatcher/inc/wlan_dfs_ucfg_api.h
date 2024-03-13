@@ -316,13 +316,13 @@ QDF_STATUS ucfg_dfs_override_precac_timeout(struct wlan_objmgr_pdev *pdev,
 /**
  * ucfg_dfs_set_precac_enable() - Set precac enable flag.
  * @pdev: Pointer to DFS pdev object.
- * @value: input value for dfs_legacy_precac_ucfg flag.
+ * @precac_en: input value for dfs_legacy_precac_ucfg flag.
  *
  * Wrapper function for dfs_set_precac_enable().
  * This function called from outside of dfs component.
  */
 QDF_STATUS ucfg_dfs_set_precac_enable(struct wlan_objmgr_pdev *pdev,
-				      uint32_t value);
+				      bool precac_en);
 
 /**
  * ucfg_dfs_get_agile_precac_enable() - Get agile precac enable flag.

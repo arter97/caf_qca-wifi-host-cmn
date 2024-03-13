@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022,2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -124,7 +124,7 @@ QDF_STATUS ucfg_dfs_override_precac_timeout(struct wlan_objmgr_pdev *pdev,
 qdf_export_symbol(ucfg_dfs_override_precac_timeout);
 
 QDF_STATUS ucfg_dfs_set_precac_enable(struct wlan_objmgr_pdev *pdev,
-		uint32_t value)
+				      bool precac_en)
 {
 	struct wlan_dfs *dfs;
 
@@ -134,7 +134,7 @@ QDF_STATUS ucfg_dfs_set_precac_enable(struct wlan_objmgr_pdev *pdev,
 		return  QDF_STATUS_E_FAILURE;
 	}
 
-	dfs_set_precac_enable(dfs, value);
+	dfs_set_precac_enable(dfs, precac_en);
 
 	return QDF_STATUS_SUCCESS;
 }

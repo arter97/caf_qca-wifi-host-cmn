@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * Copyright (c) 2007-2008 Sam Leffler, Errno Consulting
  * All rights reserved.
  *
@@ -620,15 +620,15 @@ static inline void dfs_agile_soc_obj_init(struct wlan_dfs *dfs,
 /**
  * dfs_set_precac_enable() - Set precac enable flag.
  * @dfs: Pointer to wlan_dfs structure.
- * @value: input value for dfs_legacy_precac_ucfg flag.
+ * @precac_en: input value for dfs_legacy_precac_ucfg flag.
  */
 #if !defined(MOBILE_DFS_SUPPORT) && (defined(ATH_SUPPORT_ZERO_CAC_DFS) || \
 				     defined(QCA_SUPPORT_AGILE_DFS))
 void dfs_set_precac_enable(struct wlan_dfs *dfs,
-		uint32_t value);
+			   bool precac_en);
 #else
 static inline void dfs_set_precac_enable(struct wlan_dfs *dfs,
-		uint32_t value)
+					 bool precac_en)
 {
 }
 #endif
