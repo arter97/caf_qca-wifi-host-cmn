@@ -981,6 +981,49 @@ void hal_compute_reo_remap_ix2_ix3_6432(uint32_t *ring, uint32_t num_rings,
 }
 
 /**
+ * hal_rx_flow_write_fse_metadata_6432() - Update fse metadata in HW FST
+ * @rx_fst: Pointer to the Rx Flow Search Table
+ * @table_offset: offset into the table where the flow is to be setup
+ * @rx_flow: Flow Parameters
+ *
+ * Return: Success/Failure
+ */
+static void *
+hal_rx_flow_write_fse_metadata_6432(uint8_t *rx_fst, uint32_t table_offset,
+				    uint8_t *rx_flow)
+{
+	struct hal_rx_fst *fst = (struct hal_rx_fst *)rx_fst;
+	struct hal_rx_flow *flow = (struct hal_rx_flow *)rx_flow;
+	uint8_t *fse;
+	bool fse_valid;
+
+	if (table_offset >= fst->max_entries) {
+		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
+			  "HAL FSE table offset %u exceeds max entries %u",
+			  table_offset, fst->max_entries);
+		return NULL;
+	}
+
+	fse = (uint8_t *)fst->base_vaddr +
+			(table_offset * HAL_RX_FST_ENTRY_SIZE);
+
+	fse_valid = HAL_GET_FLD(fse, RX_FLOW_SEARCH_ENTRY, VALID);
+
+	if (!fse_valid) {
+		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
+			  "HAL FSE %pK not valid", fse);
+		return NULL;
+	}
+
+	HAL_CLR_FLD(fse, RX_FLOW_SEARCH_ENTRY, METADATA);
+	HAL_SET_FLD(fse, RX_FLOW_SEARCH_ENTRY, METADATA) =
+		HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY, METADATA,
+			       flow->fse_metadata);
+
+	return fse;
+}
+
+/**
  * hal_rx_flow_setup_fse_6432() - Setup a flow search entry in HW FST
  * @rx_fst: Pointer to the Rx Flow Search Table
  * @table_offset: offset into the table where the flow is to be setup
@@ -1699,6 +1742,8 @@ static void hal_hw_txrx_ops_attach_qcn6432(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_get_to_ds_flag = hal_rx_get_to_ds_flag_be;
 	hal_soc->ops->hal_rx_get_mac_addr2_valid =
 		hal_rx_get_mac_addr2_valid_be;
+	hal_soc->ops->hal_rx_flow_write_fse_metadata =
+					hal_rx_flow_write_fse_metadata_6432;
 	hal_soc->ops->hal_reo_config = hal_reo_config_6432;
 	hal_soc->ops->hal_rx_msdu_flow_idx_get = hal_rx_msdu_flow_idx_get_be;
 	hal_soc->ops->hal_rx_msdu_flow_idx_invalid =

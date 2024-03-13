@@ -106,6 +106,8 @@ dp_rx_update_flow_info(struct dp_pdev *pdev, qdf_nbuf_t nbuf,
 				 */
 				fse->tid = tid;
 				fse->mismatch = 1;
+				fse_metadata = DP_RX_FSE_FLOW_UPDATE_TID(
+							fse_metadata, tid);
 
 				dp_rx_flow_write_entry_metadata(pdev,
 								fse_metadata,
