@@ -575,7 +575,7 @@ void hif_ipci_irq_set_affinity_hint(struct hif_exec_context *hif_ext_group,
 			}
 		}
 	}
-	for (i = 0; i < hif_ext_group->numirq; i++) {
+	for (i = 0; i < hif_ext_group->numirq && i < HIF_MAX_GRP_IRQ; i++) {
 		if (mask_set) {
 			ret = hif_affinity_mgr_set_qrg_irq_affinity((struct hif_softc *)hif_ext_group->hif,
 								    hif_ext_group->os_irq[i],
