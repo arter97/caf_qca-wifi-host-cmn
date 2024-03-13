@@ -674,6 +674,48 @@ static QDF_STATUS target_if_vdev_mgr_down_send(
 	return status;
 }
 
+#ifdef TUFELLO_DUAL_FW_SUPPORT
+static QDF_STATUS target_if_vdev_mgr_up_send(
+					struct wlan_objmgr_vdev *vdev,
+					struct vdev_up_params *param)
+{
+	QDF_STATUS status;
+	struct wmi_unified *wmi_handle;
+	uint8_t bssid[QDF_MAC_ADDR_SIZE];
+	struct wlan_objmgr_psoc *psoc;
+	struct vdev_set_params roam_param = {0};
+
+	if (!vdev || !param) {
+		mlme_err("Invalid input");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	wmi_handle = target_if_vdev_mgr_wmi_handle_get(vdev);
+	if (!wmi_handle) {
+		mlme_err("Failed to get WMI handle!");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	psoc = wlan_vdev_get_psoc(vdev);
+	if (!psoc) {
+		mlme_err("Failed to get PSOC Object");
+		return QDF_STATUS_E_INVAL;
+	}
+	ucfg_wlan_vdev_mgr_get_param_bssid(vdev, bssid);
+
+	roam_param.vdev_id = param->vdev_id;
+	roam_param.param_id = WMI_VDEV_PARAM_ROAM_FW_OFFLOAD;
+	roam_param.param_value = WMI_ROAM_FW_OFFLOAD_ENABLE_FLAG |
+				 WMI_ROAM_BMISS_FINAL_SCAN_ENABLE_FLAG;
+
+	wmi_unified_vdev_set_param_send(wmi_handle, &roam_param);
+
+	status = wmi_unified_vdev_up_send(wmi_handle, bssid, param);
+	target_if_wake_lock_timeout_release(psoc, START_WAKELOCK);
+
+	return status;
+}
+#else
 static QDF_STATUS target_if_vdev_mgr_up_send(
 					struct wlan_objmgr_vdev *vdev,
 					struct vdev_up_params *param)
@@ -706,6 +748,7 @@ static QDF_STATUS target_if_vdev_mgr_up_send(
 
 	return status;
 }
+#endif
 
 static QDF_STATUS target_if_vdev_mgr_beacon_tmpl_send(
 					struct wlan_objmgr_vdev *vdev,
