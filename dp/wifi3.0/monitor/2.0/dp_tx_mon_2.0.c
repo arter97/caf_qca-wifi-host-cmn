@@ -686,6 +686,7 @@ dp_config_enh_tx_monitor_2_0(struct dp_pdev *pdev, uint8_t val)
 		dp_lite_mon_free_tx_peers(pdev);
 		break;
 	}
+	case TX_MON_BE_PKT_CAP_CUSTOM:
 	case TX_MON_BE_FULL_CAPTURE:
 	{
 		num_of_buffers = wlan_cfg_get_dp_soc_tx_mon_buf_ring_size(soc_cfg_ctx);
@@ -721,6 +722,11 @@ dp_config_enh_tx_monitor_2_0(struct dp_pdev *pdev, uint8_t val)
 	{
 		return QDF_STATUS_E_INVAL;
 	}
+	}
+
+	if (val == TX_MON_BE_PKT_CAP_CUSTOM) {
+		tx_mon_be->mode = TX_MON_BE_PKT_CAP_CUSTOM;
+		mon_pdev_be->tx_mon_mode = 3;
 	}
 
 	dp_mon_info("Tx monitor mode:%d mon_mode_flag:%d config_length:%d",

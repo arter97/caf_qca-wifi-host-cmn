@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -479,11 +479,13 @@ struct dp_tx_monitor_drop_stats {
  * @TX_MON_BE_DISABLE: tx monitor disable
  * @TX_MON_BE_FULL_CAPTURE: tx monitor mode to capture full packet
  * @TX_MON_BE_PEER_FILTER: tx monitor mode to capture peer filter
+ * @TX_MON_BE_PKT_CAP_CUSTOM: tx monitor mode to capture special packets
  */
 enum dp_tx_monitor_mode {
 	TX_MON_BE_DISABLE,
 	TX_MON_BE_FULL_CAPTURE,
 	TX_MON_BE_PEER_FILTER,
+	TX_MON_BE_PKT_CAP_CUSTOM,
 };
 
 /**
