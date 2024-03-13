@@ -4095,7 +4095,7 @@ QDF_STATUS dp_ipa_tx_opt_dp_ctrl_pkt(struct cdp_soc_t *soc_hdl,
 	rx_desc_pool = &soc->rx_desc_buf[mac_id];
 
 	dp_info("opt_dp_ctrl: vote for clock and wait resp from ipa");
-	status = ipa_opt_dpath_enable_clk_req(soc->ctrl_psoc, pdev->pdev_id);
+	status = ipa_opt_dpath_enable_clk_req(soc->ctrl_psoc);
 	if (status != QDF_STATUS_SUCCESS) {
 		ipa_err("clock enable timed out");
 		goto vdev_ref_release;

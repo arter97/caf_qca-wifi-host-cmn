@@ -6059,8 +6059,8 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_add_cb(
 	bool indices[IPA_WDI_MAX_TX_FILTER] = {false};
 	QDF_STATUS status;
 
-	pdev = ipa_obj->pdev;
-	psoc = wlan_pdev_get_psoc(pdev);
+	psoc = ipa_obj->psoc;
+	pdev = psoc->soc_objmgr.wlan_pdev_list[IPA_DEF_PDEV_ID];
 	num_flts = ipa_flt->num_tuples;
 	htc_handle = lmac_get_htc_hdl(psoc);
 	if (!htc_handle) {
@@ -6203,7 +6203,7 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_add_cb(
 	}
 
 	dp_flt_param->op = HTT_TX_LCE_SUPER_RULE_INSTALL;
-	dp_flt_param->pdev_id = ipa_obj->dp_pdev_id;
+	dp_flt_param->pdev_id = IPA_DEF_PDEV_ID;
 	dp_flt_param->num_filters = num_flts;
 	qdf_event_reset(&ipa_obj->ipa_flt_evnt);
 
@@ -6250,8 +6250,8 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
 	QDF_STATUS status;
 	bool delete_all = false;
 
-	pdev = ipa_obj->pdev;
-	psoc = wlan_pdev_get_psoc(pdev);
+	psoc = ipa_obj->psoc;
+	pdev = psoc->soc_objmgr.wlan_pdev_list[IPA_DEF_PDEV_ID];
 	if (!rem_flt) {
 		delete_all = true;
 		num_flts = IPA_WDI_MAX_TX_FILTER;
@@ -6288,7 +6288,7 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
 	}
 
 	dp_flt_params->op = HTT_TX_LCE_SUPER_RULE_RELEASE;
-	dp_flt_params->pdev_id = ipa_obj->dp_pdev_id;
+	dp_flt_params->pdev_id = IPA_DEF_PDEV_ID;
 	dp_flt_params->num_filters = num_flts;
 	qdf_event_reset(&ipa_obj->ipa_flt_evnt);
 

@@ -345,30 +345,22 @@ void ipa_tx_pkt_opt_dp_ctrl(uint8_t vdev_id,
 	wlan_ipa_tx_pkt_opt_dp_ctrl(vdev_id, nbuf);
 }
 
-QDF_STATUS ipa_opt_dpath_enable_clk_req(void *soc, uint8_t pdev_id)
+QDF_STATUS ipa_opt_dpath_enable_clk_req(void *soc)
 {
 	struct wlan_objmgr_psoc *psoc = (struct wlan_objmgr_psoc *)soc;
-	struct wlan_objmgr_pdev *pdev;
 	struct wlan_ipa_priv *ipa_obj;
 	QDF_STATUS status;
 
-	pdev = wlan_objmgr_get_pdev_by_id(psoc, pdev_id, WLAN_IPA_ID);
-	if (!pdev) {
-		ipa_err("Failed to get pdev handle");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	ipa_obj = ipa_pdev_get_priv_obj(pdev);
+	ipa_obj = ipa_psoc_get_priv_obj(psoc);
 	if (!ipa_obj) {
-		ipa_err("IPA object is NULL for pdev_id[%d]", pdev_id);
-		wlan_objmgr_pdev_release_ref(pdev, WLAN_IPA_ID);
+		ipa_err("IPA object is NULL for psoc_id[%d]",
+			psoc->soc_objmgr.psoc_id);
 		return QDF_STATUS_E_FAILURE;
 	}
 
 	wlan_ipa_wdi_opt_dpath_enable_clk_req(ipa_obj);
 	status = qdf_wait_for_event_completion(&ipa_obj->ipa_opt_dp_ctrl_clk_evt,
 					       IPA_CLK_ENABLE_WAIT_TIME_MS);
-	wlan_objmgr_pdev_release_ref(pdev, WLAN_IPA_ID);
 	return status;
 }
 #endif
