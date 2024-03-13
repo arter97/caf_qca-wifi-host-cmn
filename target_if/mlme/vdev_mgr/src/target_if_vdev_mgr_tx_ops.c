@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -711,7 +711,7 @@ static QDF_STATUS target_if_vdev_mgr_stop_send(
 	target_if_wake_lock_timeout_release(psoc, START_WAKELOCK);
 	target_if_wake_lock_timeout_acquire(psoc, STOP_WAKELOCK);
 
-	status = wmi_unified_vdev_stop_send(wmi_handle, param->vdev_id);
+	status = wmi_unified_vdev_stop_send(wmi_handle, param);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		vdev_rsp->expire_time = 0;
 		vdev_rsp->timer_status = QDF_STATUS_E_CANCELED;

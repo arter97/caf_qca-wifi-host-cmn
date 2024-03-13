@@ -126,6 +126,25 @@ util_get_last_scan_time(struct wlan_objmgr_vdev *vdev)
 		return 0;
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO
+uint32_t util_scan_entry_t2lm_len(struct scan_cache_entry *scan_entry)
+{
+	int i = 0;
+	uint32_t len = 0;
+
+	if (!scan_entry || !scan_entry->ie_list.t2lm[0])
+		return 0;
+
+	for (i = 0; i < WLAN_MAX_T2LM_IE; i++) {
+		if (scan_entry->ie_list.t2lm[i])
+			len += scan_entry->ie_list.t2lm[i][TAG_LEN_POS] +
+				sizeof(struct ie_header);
+	}
+
+	return len;
+}
+#endif
+
 bool util_is_rsnxe_h2e_capable(const uint8_t *rsnxe)
 {
 	const uint8_t *rsnxe_caps;
