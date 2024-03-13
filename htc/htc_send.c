@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -809,6 +809,12 @@ static QDF_STATUS htc_issue_packets(HTC_TARGET *target,
 						("%s Invalid pHtcHdr\n",
 						 __func__));
 				AR_DEBUG_ASSERT(pHtcHdr);
+				/* Do not put the packet back into the callers
+				 * queue. The used credits should be given back.
+				 */
+				pEndpoint->TxCredits +=
+					pPacket->PktInfo.AsTx.CreditsUsed;
+
 				status = QDF_STATUS_E_FAILURE;
 				break;
 			}
@@ -954,12 +960,6 @@ static QDF_STATUS htc_issue_packets(HTC_TARGET *target,
 			htc_packet_set_magic_cookie(pPacket, 0);
 			/* put it back into the callers queue */
 			HTC_PACKET_ENQUEUE_TO_HEAD(pPktQueue, pPacket);
-			/* reclaim credits */
-			HTC_PACKET_QUEUE_ITERATE_ALLOW_REMOVE(pPktQueue,
-							      pPacket) {
-			    pEndpoint->TxCredits +=
-				pPacket->PktInfo.AsTx.CreditsUsed;
-			} HTC_PACKET_QUEUE_ITERATE_END;
 			if (!pEndpoint->async_update) {
 				UNLOCK_HTC_TX(target);
 			}
@@ -972,6 +972,13 @@ static QDF_STATUS htc_issue_packets(HTC_TARGET *target,
 	}
 
 	if (qdf_unlikely(QDF_IS_STATUS_ERROR(status))) {
+		/* reclaim credits */
+		HTC_PACKET_QUEUE_ITERATE_ALLOW_REMOVE(pPktQueue,
+						      pPacket) {
+		    pEndpoint->TxCredits +=
+			pPacket->PktInfo.AsTx.CreditsUsed;
+		} HTC_PACKET_QUEUE_ITERATE_END;
+
 		if (((status == QDF_STATUS_E_RESOURCES) &&
 		     (pEndpoint->num_requeues_warn > MAX_REQUEUE_WARN)) ||
 		     (status != QDF_STATUS_E_RESOURCES)) {
