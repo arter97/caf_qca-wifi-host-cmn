@@ -10204,14 +10204,14 @@ dp_get_pdev_erp_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	if (!pdev)
 		return QDF_STATUS_E_FAILURE;
 
-	stats->tx_data_mpdu_cnt = pdev->stats.erp_stats.tx_data_mpdu_cnt;
-	stats->rx_data_mpdu_cnt = pdev->stats.erp_stats.rx_data_mpdu_cnt;
+	stats->tx_data_msdu_cnt = pdev->stats.erp_stats.tx_data_msdu_cnt;
+	stats->rx_data_msdu_cnt = pdev->stats.erp_stats.rx_data_msdu_cnt;
 	stats->total_tx_data_bytes = pdev->stats.erp_stats.total_tx_data_bytes;
 	stats->total_rx_data_bytes = pdev->stats.erp_stats.total_rx_data_bytes;
 
 	/* reset for next iteration */
-	pdev->stats.erp_stats.tx_data_mpdu_cnt = 0;
-	pdev->stats.erp_stats.rx_data_mpdu_cnt = 0;
+	pdev->stats.erp_stats.tx_data_msdu_cnt = 0;
+	pdev->stats.erp_stats.rx_data_msdu_cnt = 0;
 	pdev->stats.erp_stats.total_tx_data_bytes = 0;
 	pdev->stats.erp_stats.total_rx_data_bytes = 0;
 

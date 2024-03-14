@@ -908,8 +908,8 @@ void dp_rx_mon_update_pdev_erp_stats(struct dp_pdev *pdev,
 				     struct cdp_rx_stats_ppdu_user *user)
 {
 	DP_STATS_INC(pdev,
-		     erp_stats.rx_data_mpdu_cnt,
-		     user->mpdu_cnt_fcs_ok);
+		     erp_stats.rx_data_msdu_cnt,
+		     user->num_msdu);
 	DP_STATS_INC(pdev,
 		     erp_stats.total_rx_data_bytes,
 		     user->mpdu_ok_byte_count);

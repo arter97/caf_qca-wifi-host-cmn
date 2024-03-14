@@ -3251,8 +3251,8 @@ dp_pdev_update_erp_tx_stats(
 		struct dp_pdev *pdev,
 		struct cdp_tx_completion_ppdu_user *ppdu)
 {
-	DP_STATS_INC(pdev, erp_stats.tx_data_mpdu_cnt,
-		     (ppdu->mpdu_tried_ucast + ppdu->mpdu_tried_mcast));
+	DP_STATS_INC(pdev, erp_stats.tx_data_msdu_cnt,
+		     ppdu->success_msdus);
 	DP_STATS_INC(pdev, erp_stats.total_tx_data_bytes,
 		     ppdu->success_bytes);
 }
