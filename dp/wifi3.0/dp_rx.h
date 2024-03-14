@@ -3773,4 +3773,9 @@ dp_rx_get_stats_arr_idx_from_link_id(qdf_nbuf_t nbuf,
 }
 #endif /* CONFIG_NBUF_AP_PLATFORM */
 
+#ifdef WLAN_DP_LOAD_BALANCE_SUPPORT
+void dp_rx_calculate_per_ring_pkt_avg(struct cdp_soc_t *cdp_soc);
+void dp_rx_get_per_ring_pkt_avg(struct cdp_soc_t *cdp_soc,
+				uint32_t *pkt_avg, uint32_t *total_avg_pkts);
+#endif /* WLAN_DP_LOAD_BALANCE_SUPPORT */
 #endif /* _DP_RX_H */

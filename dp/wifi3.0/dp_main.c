@@ -12704,6 +12704,10 @@ static struct cdp_cmn_ops dp_ops_cmn = {
 	.cfgmgr_get_vdev_create_evt_info = dp_cfgmgr_get_vdev_create_evt_info,
 	.cfgmgr_get_peer_create_evt_info = dp_cfgmgr_get_peer_create_evt_info,
 #endif
+#ifdef WLAN_DP_LOAD_BALANCE_SUPPORT
+	.calculate_per_ring_pkt_avg = dp_rx_calculate_per_ring_pkt_avg,
+	.get_per_ring_pkt_avg = dp_rx_get_per_ring_pkt_avg,
+#endif
 };
 
 static struct cdp_ctrl_ops dp_ops_ctrl = {

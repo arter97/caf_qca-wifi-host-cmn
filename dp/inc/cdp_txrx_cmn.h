@@ -3530,4 +3530,52 @@ int cdp_cfgmgr_get_peer_create_evt_info(struct cdp_soc_t *soc, uint16_t peer_id,
 						soc, peer_id, ev_buf);
 }
 #endif
+
+#ifdef WLAN_DP_LOAD_BALANCE_SUPPORT
+/**
+ * cdp_calculate_per_ring_pkt_avg() - calculate rx rings pkt average
+ * @soc: Datapath soc handle
+ *
+ * Return: none.
+ */
+static inline void
+cdp_calculate_per_ring_pkt_avg(ol_txrx_soc_handle soc)
+{
+	if (!soc) {
+		dp_cdp_debug("Invalid Instance");
+		return;
+	}
+
+	if (!soc->ops->cmn_drv_ops ||
+	    !soc->ops->cmn_drv_ops->calculate_per_ring_pkt_avg)
+		return;
+
+	soc->ops->cmn_drv_ops->calculate_per_ring_pkt_avg(soc);
+}
+
+/**
+ * cdp_get_per_ring_pkt_avg() - get per rx ring pkt average
+ * @soc: Datapath soc handle
+ * @pkt_avg_cnt: Array of counters to update Rx rings pkt average
+ * @total_avg_pkt_cnt: total average packet count of all rx rings
+ *
+ * Return: None.
+ */
+static inline void
+cdp_get_per_ring_pkt_avg(ol_txrx_soc_handle soc,
+			 uint32_t *pkt_avg_cnt, uint32_t *total_avg_pkt_cnt)
+{
+	if (!soc) {
+		dp_cdp_debug("Invalid Instance");
+		return;
+	}
+
+	if (!soc->ops->cmn_drv_ops ||
+	    !soc->ops->cmn_drv_ops->get_per_ring_pkt_avg)
+		return;
+
+	soc->ops->cmn_drv_ops->get_per_ring_pkt_avg(soc, pkt_avg_cnt,
+						    total_avg_pkt_cnt);
+}
+#endif
 #endif /* _CDP_TXRX_CMN_H_ */

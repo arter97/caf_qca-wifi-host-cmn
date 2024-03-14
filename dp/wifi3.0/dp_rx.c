@@ -3673,3 +3673,78 @@ QDF_STATUS dp_rx_handle_buf_pool_audio_smmu_mapping(struct dp_soc *soc,
 	return QDF_STATUS_SUCCESS;
 }
 #endif
+
+#ifdef WLAN_DP_LOAD_BALANCE_SUPPORT
+/**
+ * dp_rx_calculate_per_ring_pkt_avg() - calculate per ring packet average
+ * @cdp_soc: cdp soc handle
+ *
+ * Return: none
+ */
+void dp_rx_calculate_per_ring_pkt_avg(struct cdp_soc_t *cdp_soc)
+{
+	struct dp_soc *soc = (struct dp_soc *)cdp_soc;
+	struct dp_rx_pkt_cnt_stats *rx_ring_stats;
+	uint64_t tstamp = qdf_get_log_timestamp();
+	uint64_t time, usecs;
+	uint64_t rx_pkt_cnt;
+	uint64_t delta, pkts_per_sec;
+	int i;
+	int cpu;
+
+	for (i = 0; i < MAX_REO_DEST_RINGS; i++) {
+		rx_pkt_cnt = 0;
+		for (cpu = 0; cpu < num_possible_cpus(); cpu++)
+			rx_pkt_cnt += soc->stats.rx.ring_packets[cpu][i];
+
+		rx_ring_stats = &soc->stats.rx.rx_pkt_cnt[i];
+		rx_ring_stats->pkt_cnt = rx_pkt_cnt;
+
+		if (!rx_ring_stats->pkt_cnt_prev) {
+			rx_ring_stats->pkt_cnt_prev =
+				rx_ring_stats->pkt_cnt;
+			rx_ring_stats->last_avg_cal_ts = tstamp;
+		} else {
+			delta = rx_ring_stats->pkt_cnt -
+				rx_ring_stats->pkt_cnt_prev;
+			rx_ring_stats->pkt_cnt_prev = rx_ring_stats->pkt_cnt;
+			time = tstamp - rx_ring_stats->last_avg_cal_ts;
+			usecs = qdf_log_timestamp_to_usecs(time);
+
+			pkts_per_sec = (delta * 1000000) / usecs;
+
+			if (!rx_ring_stats->avg_pkt_cnt)
+				rx_ring_stats->avg_pkt_cnt = pkts_per_sec;
+			else
+				rx_ring_stats->avg_pkt_cnt =
+				(rx_ring_stats->avg_pkt_cnt * 25) / 100 +
+				(pkts_per_sec * 75) / 100;
+
+			rx_ring_stats->last_avg_cal_ts = tstamp;
+		}
+	}
+}
+
+/**
+ * dp_rx_get_per_ring_pkt_avg() - get per ring packet average count
+ * @cdp_soc: cdp soc handle
+ * @avg_pkt_cnt: Array of MAX_REO_DEST_RINGS to get the per ring packet
+ *		 average count
+ * @total_avg_pkts: total average packets count of all rings
+ *
+ * Return: none
+ */
+void dp_rx_get_per_ring_pkt_avg(struct cdp_soc_t *cdp_soc,
+				uint32_t *avg_pkt_cnt, uint32_t *total_avg_pkts)
+{
+	struct dp_soc *soc = (struct dp_soc *)cdp_soc;
+	struct dp_rx_pkt_cnt_stats *rx_ring_stats;
+	int i;
+
+	for (i = 0; i < MAX_REO_DEST_RINGS; i++) {
+		rx_ring_stats = &soc->stats.rx.rx_pkt_cnt[i];
+		avg_pkt_cnt[i] = rx_ring_stats->avg_pkt_cnt;
+		*total_avg_pkts += rx_ring_stats->avg_pkt_cnt;
+	}
+}
+#endif

@@ -1266,6 +1266,22 @@ struct htt_t2h_msg_stats {
 	uint32_t ml_peer_unmap;
 };
 
+#ifdef WLAN_DP_LOAD_BALANCE_SUPPORT
+/**
+ * struct dp_rx_pkt_cnt_stats - per ring rx packet count statistics
+ * @pkt_cnt: packet count received on this ring
+ * @pkt_cnt_prev: previous packet count
+ * @avg_pkt_cnt: average packet count per second
+ * @last_avg_cal_ts: timestamp at which last packet average is computed
+ */
+struct dp_rx_pkt_cnt_stats {
+	uint64_t pkt_cnt;
+	uint64_t pkt_cnt_prev;
+	uint64_t avg_pkt_cnt;
+	uint64_t last_avg_cal_ts;
+};
+#endif
+
 /* SoC level data path statistics */
 struct dp_soc_stats {
 	struct {
@@ -1511,6 +1527,10 @@ struct dp_soc_stats {
 
 		/* packet count per core - per ring */
 		uint64_t ring_packets[NR_CPUS][MAX_REO_DEST_RINGS];
+#ifdef WLAN_DP_LOAD_BALANCE_SUPPORT
+		/* packet count per ring */
+		struct dp_rx_pkt_cnt_stats rx_pkt_cnt[MAX_REO_DEST_RINGS];
+#endif
 	} rx;
 
 #ifdef WLAN_FEATURE_DP_EVENT_HISTORY

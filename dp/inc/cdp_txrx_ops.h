@@ -765,6 +765,12 @@ struct cdp_cmn_ops {
 				struct cdp_soc_t *soc_hdl, uint16_t peer_id,
 				struct dpdk_wlan_peer_create_info *ev_buf);
 #endif
+#ifdef WLAN_DP_LOAD_BALANCE_SUPPORT
+	void (*calculate_per_ring_pkt_avg)(struct cdp_soc_t *soc_hdl);
+	void (*get_per_ring_pkt_avg)(struct cdp_soc_t *soc_hdl,
+				     uint32_t *pkt_avg,
+				     uint32_t *total_avg_pkt_cnt);
+#endif
 };
 
 struct cdp_ctrl_ops {
