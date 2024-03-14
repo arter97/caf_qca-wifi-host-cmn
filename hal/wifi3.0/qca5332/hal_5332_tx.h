@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -294,7 +294,12 @@ struct tx_peer_entry_compact_5332 {
 	/* DWORD - 2 */
 	uint32_t mac_addr_b_47_16		: 32;
 	/* DWORD - 3 */
-	uint32_t reserved_3			: 32;
+	uint32_t use_ad_b			:  1,
+		 strip_insert_vlan_inner	:  1,
+		 strip_insert_vlan_outer	:  1,
+		 vlan_llc_mode			:  1,
+		 key_type			:  4,
+		 reserved_3			: 25;
 	/* DWORD - 16 */
 	uint32_t reserved_16			: 32;
 	/* DWORD - 17 */

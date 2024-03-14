@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1699,6 +1699,9 @@ hal_rx_status_get_tlv_info_generic_li(void *rx_tlv_hdr, void *ppduinfo,
 
 		ppdu_info->rx_user_status[user_id].sw_peer_id =
 			HAL_RX_GET_SW_PEER_ID(rx_mpdu_start);
+
+		ppdu_info->rx_user_status[user_id].enc_type =
+			HAL_RX_GET_ENCRYPT_TYPE(rx_mpdu_start);
 
 		hal_update_rx_ctrl_frame_stats(ppdu_info, user_id);
 

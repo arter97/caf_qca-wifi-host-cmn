@@ -100,6 +100,20 @@ struct ieee80211_ctlframe_addr2 {
 	uint8_t i_addr2[QDF_NET_MAC_ADDR_MAX_LEN];
 } __packed;
 
+static const uint8_t encrypt_map[11] = {
+	cdp_sec_type_wep40,
+	cdp_sec_type_wep104,
+	cdp_sec_type_tkip_nomic,
+	cdp_sec_type_wep128,
+	cdp_sec_type_tkip,
+	cdp_sec_type_wapi,
+	cdp_sec_type_aes_ccmp,
+	cdp_sec_type_none,
+	cdp_sec_type_aes_ccmp_256,
+	cdp_sec_type_aes_gcmp,
+	cdp_sec_type_aes_gcmp_256
+};
+
 #ifndef WLAN_TX_PKT_CAPTURE_ENH
 static inline void
 dp_process_ppdu_stats_update_failed_bitmap(struct dp_pdev *pdev,
@@ -5173,5 +5187,27 @@ dp_mon_pdev_filter_init(struct dp_mon_pdev *mon_pdev)
 	mon_pdev->mo_mgmt_filter = FILTER_MGMT_ALL;
 	mon_pdev->mo_ctrl_filter = FILTER_CTRL_ALL;
 	mon_pdev->mo_data_filter = FILTER_DATA_ALL;
+}
+
+/*
+ * dp_convert_enc_to_cdp_enc() - convert encryption type to cdp format
+ *
+ *@ppdu_info: ppdu information
+ *
+ * This API is used to update the encryption type to cdp format
+ *
+ * Return: void
+ */
+static inline void
+dp_convert_enc_to_cdp_enc(struct hal_rx_ppdu_info *ppdu_info)
+{
+	uint8_t idx;
+
+	if (!ppdu_info)
+		return;
+
+	idx = ppdu_info->rx_user_status[ppdu_info->user_id].enc_type;
+	ppdu_info->rx_user_status[ppdu_info->user_id].enc_type =
+							encrypt_map[idx];
 }
 #endif /* _DP_MON_H_ */

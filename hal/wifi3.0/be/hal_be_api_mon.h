@@ -197,7 +197,7 @@ defined(QCA_SINGLE_WIFI_3_0)
 	PHYRX_RSSI_LEGACY_PREAMBLE_RSSI_INFO_DETAILS_RSSI_PRI20_CHAIN0_OFFSET
 
 
-#define RX_MON_MPDU_START_WMASK               0x07F0
+#define RX_MON_MPDU_START_WMASK               0x07F8
 #define RX_MON_MPDU_END_WMASK                 0x7
 #define RX_MON_MPDU_START_WMASK_V2            0x007F0
 #define RX_MON_MPDU_END_WMASK_V2              0xFF
@@ -209,6 +209,16 @@ defined(QCA_SINGLE_WIFI_3_0)
 #ifdef CONFIG_MON_WORD_BASED_TLV
 #ifndef BIG_ENDIAN_HOST
 struct rx_mpdu_start_mon_data {
+	uint32_t pn_127_96                         : 32;
+	uint32_t epd_en                            : 1,
+		 all_frames_shall_be_encrypted     : 1,
+		 encrypt_type                      : 4,
+		 wep_key_width_for_variable_key    : 2,
+		 mesh_sta                          : 2,
+		 bssid_hit                         : 1,
+		 bssid_number                      : 4,
+		 tid                               : 4,
+		 reserved_7a                       : 13;
 	uint32_t peer_meta_data                    : 32;
 	uint32_t rxpcu_mpdu_filter_in_category     : 2,
 		 sw_frame_group_id                 : 7,
@@ -428,6 +438,16 @@ struct rx_ppdu_end_user_mon_data {
 };
 #else
 struct rx_mpdu_start_mon_data {
+	uint32_t pn_127_96                         : 32;
+	uint32_t reserved_7a                       : 13,
+		 tid                               : 4,
+		 bssid_number                      : 4,
+		 bssid_hit                         : 1,
+		 mesh_sta                          : 2,
+		 wep_key_width_for_variable_key    : 2,
+		 encrypt_type                      : 4,
+		 all_frames_shall_be_encrypted     : 1,
+		 epd_en                            : 1;
 	uint32_t peer_meta_data                    : 32;
 	uint32_t phy_ppdu_id                       : 16,
 		 reserved_0a                       : 2,
@@ -3954,6 +3974,8 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 			rx_mpdu_start->rx_mpdu_info_details.mcast_bcast;
 		ppdu_info->mpdu_info[user_id].decap_type =
 			rx_mpdu_start->rx_mpdu_info_details.decap_type;
+		ppdu_info->rx_user_status[user_id].enc_type =
+			rx_mpdu_start->rx_mpdu_info_details.encrypt_type;
 
 		hal_rx_record_tlv_info(ppdu_info, tlv_tag);
 		return HAL_TLV_STATUS_MPDU_START;
