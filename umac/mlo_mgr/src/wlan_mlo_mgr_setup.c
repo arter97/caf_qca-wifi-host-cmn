@@ -681,6 +681,7 @@ void mlo_setup_link_ready(struct wlan_objmgr_pdev *pdev, uint8_t grp_id)
 	struct mlo_setup_info *setup_info;
 	uint8_t link_idx;
 	uint16_t link_id;
+	QDF_STATUS status = QDF_STATUS_E_INVAL;
 
 	if (!mlo_ctx)
 		return;
@@ -720,6 +721,16 @@ void mlo_setup_link_ready(struct wlan_objmgr_pdev *pdev, uint8_t grp_id)
 	setup_info->state[link_idx] = MLO_LINK_SETUP_INIT;
 	setup_info->num_links++;
 
+	if (wlan_mlo_is_wsi_remap_in_progress(grp_id)) {
+		status = mgmt_rx_reo_init_context(grp_id);
+		if (status != QDF_STATUS_SUCCESS) {
+			mgmt_txrx_err("Failed to initialize mgmt Rx reo module");
+			return;
+		}
+		status = wlan_mgmt_rx_reo_pdev_attach(pdev);
+		qdf_assert_always(QDF_IS_STATUS_SUCCESS(status));
+	}
+
 	link_id = wlan_mlo_get_pdev_hw_link_id(pdev);
 	if (link_id == INVALID_HW_LINK_ID) {
 		mlo_err("Invalid HW link id for the pdev");
@@ -737,15 +748,17 @@ void mlo_setup_link_ready(struct wlan_objmgr_pdev *pdev, uint8_t grp_id)
 	    setup_info->num_soc == setup_info->tot_socs) {
 		struct wlan_objmgr_psoc *psoc;
 		struct wlan_lmac_if_tx_ops *tx_ops;
-		QDF_STATUS status;
 
 		psoc = wlan_pdev_get_psoc(pdev);
 		tx_ops = wlan_psoc_get_lmac_if_txops(psoc);
 
-		status = wlan_mgmt_rx_reo_validate_mlo_link_info(psoc);
-		if (QDF_IS_STATUS_ERROR(status)) {
-			mlo_err("Failed to validate MLO HW link info");
-			qdf_assert_always(0);
+		/* For dynamic WSI remap validated REO post MLO SETUP */
+		if (!wlan_mlo_is_wsi_remap_in_progress(grp_id)) {
+			status = wlan_mgmt_rx_reo_validate_mlo_link_info(psoc);
+			if (QDF_IS_STATUS_ERROR(status)) {
+				mlo_err("Failed to validate MLO HW link info");
+				qdf_assert_always(0);
+			}
 		}
 
 		qdf_info("Trigger MLO Setup request");
@@ -809,7 +822,8 @@ void mlo_link_setup_complete(struct wlan_objmgr_pdev *pdev, uint8_t grp_id)
 					setup_info->pdev_list,
 					setup_info->num_links);
 		}
-		if (setup_info->wsi_remap_in_progress) {
+
+		if (wlan_mlo_is_wsi_remap_in_progress(grp_id)) {
 			setup_info->wsi_remap_in_progress = false;
 			mlo_debug("Dynamic WSI remap MLO SETUP done!");
 		}
@@ -1051,8 +1065,20 @@ static void mlo_send_teardown_req(struct wlan_objmgr_psoc *psoc,
 		for (link_idx = 0; link_idx < tot_links; link_idx++) {
 			umac_reset = 0;
 			temp_pdev = setup_info->pdev_list[link_idx];
+
 			if (!temp_pdev)
 				continue;
+
+			if (reason == WMI_HOST_MLO_TEARDOWN_REASON_DYNAMIC_WSI_REMAP) {
+				if (wlan_mlo_is_wsi_remap_in_progress(grp_id)) {
+					if (QDF_IS_STATUS_ERROR(mgmt_rx_reo_deinit_context(grp_id))) {
+						mgmt_txrx_err("Failed to de-initialize mgmt Rx reo module");
+						return;
+					}
+				}
+
+				wlan_mgmt_rx_reo_pdev_detach(temp_pdev);
+			}
 
 			if (!setup_info->trigger_umac_reset) {
 				if (psoc == wlan_pdev_get_psoc(temp_pdev)) {

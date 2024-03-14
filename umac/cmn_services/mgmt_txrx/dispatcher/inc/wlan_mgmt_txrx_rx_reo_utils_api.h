@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -243,6 +243,30 @@ wlan_mgmt_rx_reo_init(void);
  */
 QDF_STATUS
 wlan_mgmt_rx_reo_deinit(void);
+
+/**
+ * mgmt_rx_reo_init_context() - Initialize the management rx-reorder context
+ * @ml_grp_id: MLO Group ID to be initialized
+ *
+ * API to initialize each global management rx-reorder context object per group
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+mgmt_rx_reo_init_context(uint8_t ml_grp_id);
+
+/**
+ * mgmt_rx_reo_deinit_context() - De initialize the management rx-reorder
+ * context
+ * @ml_grp_id: MLO Group ID to be deinitialized
+ *
+ * API to de initialize each global management rx-reorder context object per
+ * group
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+mgmt_rx_reo_deinit_context(uint8_t ml_grp_id);
 
 /**
  * wlan_mgmt_rx_reo_validate_mlo_link_info() - Validate the MLO HW link
@@ -680,6 +704,36 @@ wlan_mgmt_rx_reo_init(void)
  */
 static inline QDF_STATUS
 wlan_mgmt_rx_reo_deinit(void)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * mgmt_rx_reo_init_context() - Initialize the management rx-reorder context
+ * @ml_grp_id: MLO Group ID to be initialized
+ *
+ * API to initialize each global management rx-reorder context object per group
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS
+mgmt_rx_reo_init_context(uint8_t ml_grp_id)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * mgmt_rx_reo_deinit_context() - De initialize the management rx-reorder
+ * context
+ * @ml_grp_id: MLO Group ID to be deinitialized
+ *
+ * API to de initialize each global management rx-reorder context object per
+ * group
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS
+mgmt_rx_reo_deinit_context(uint8_t ml_grp_id)
 {
 	return QDF_STATUS_SUCCESS;
 }

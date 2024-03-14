@@ -418,6 +418,14 @@ int8_t wlan_mlo_get_num_active_links(uint8_t grp_id);
 uint16_t wlan_mlo_get_valid_link_bitmap(uint8_t grp_id);
 
 /**
+ * wlan_mlo_is_wsi_remap_in_progress() - Check if WSI remap is in progress
+ * @grp_id: Id of the required MLO Group
+ *
+ * Return: True if WSI remap in progress
+ */
+bool wlan_mlo_is_wsi_remap_in_progress(uint8_t grp_id);
+
+/**
  * wlan_mlo_get_pdev_hw_link_id() - Get hw_link_id of pdev
  * @pdev: pdev object
  *
@@ -496,6 +504,12 @@ static inline uint16_t
 wlan_mlo_get_valid_link_bitmap(uint8_t grp_id)
 {
 	return 0;
+}
+
+static inline
+bool wlan_mlo_is_wsi_remap_in_progress(uint8_t grp_id)
+{
+	return false;
 }
 
 static inline struct wlan_objmgr_pdev *

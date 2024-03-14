@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -47,6 +47,12 @@ wlan_mgmt_rx_reo_deinit(void)
 					ml_grp);
 			return status;
 		}
+		status = mgmt_rx_reo_destroy_context(ml_grp);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			mgmt_rx_reo_err("Reo context destroy failed for grp %u",
+					ml_grp);
+			return status;
+		}
 	}
 
 	return QDF_STATUS_SUCCESS;
@@ -64,6 +70,12 @@ wlan_mgmt_rx_reo_init(void)
 	for (ml_grp = 0; ml_grp < total_mlo_grps; ml_grp++) {
 		QDF_STATUS status;
 
+		status = mgmt_rx_reo_create_context(ml_grp);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			mgmt_rx_reo_err("Reo context create failed for grp %u",
+					ml_grp);
+			return status;
+		}
 		status = mgmt_rx_reo_init_context(ml_grp);
 		if (QDF_IS_STATUS_ERROR(status)) {
 			mgmt_rx_reo_err("Reo context init failed for grp %u",
