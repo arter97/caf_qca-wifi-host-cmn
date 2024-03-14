@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -410,6 +410,29 @@ qdf_export_symbol(hif_print_napi_stats);
 #endif /* WLAN_FEATURE_RX_SOFTIRQ_TIME_LIMIT */
 #endif /* QCA_WIFI_WCN6450 */
 
+#if defined(WLAN_FEATURE_RX_SOFTIRQ_TIME_LIMIT) || \
+	defined(WLAN_DP_LOAD_BALANCE_SUPPORT)
+/**
+ * hif_exec_update_service_start_time() - Update NAPI poll start time
+ * @hif_ext_group: hif_ext_group of type NAPI
+ *
+ * The function is called at the beginning of a NAPI poll to record the poll
+ * start time.
+ *
+ * Return: None
+ */
+static inline void
+hif_exec_update_service_start_time(struct hif_exec_context *hif_ext_group)
+{
+	hif_ext_group->poll_start_time = qdf_time_sched_clock();
+}
+#else
+static inline void
+hif_exec_update_service_start_time(struct hif_exec_context *hif_ext_group)
+{
+}
+#endif
+
 #ifdef WLAN_FEATURE_RX_SOFTIRQ_TIME_LIMIT
 /**
  * hif_exec_fill_poll_time_histogram() - fills poll time histogram for a NAPI
@@ -487,28 +510,7 @@ bool hif_exec_should_yield(struct hif_opaque_softc *hif_ctx, uint grp_id)
 
 	return ret_val;
 }
-
-/**
- * hif_exec_update_service_start_time() - Update NAPI poll start time
- * @hif_ext_group: hif_ext_group of type NAPI
- *
- * The function is called at the beginning of a NAPI poll to record the poll
- * start time.
- *
- * Return: None
- */
-static inline
-void hif_exec_update_service_start_time(struct hif_exec_context *hif_ext_group)
-{
-	hif_ext_group->poll_start_time = qdf_time_sched_clock();
-}
-
 #else
-static inline
-void hif_exec_update_service_start_time(struct hif_exec_context *hif_ext_group)
-{
-}
-
 static inline
 void hif_exec_fill_poll_time_histogram(struct hif_exec_context *hif_ext_group)
 {
@@ -652,6 +654,101 @@ hif_irq_disabled_time_limit_reached(struct hif_exec_context *hif_ext_group)
 	return false;
 }
 
+#ifdef WLAN_DP_LOAD_BALANCE_SUPPORT
+/**
+ * hif_exec_update_soft_irq_time() - update the time spent in softirq processing
+ * @hif_ext_group: hif exec context
+ *
+ * Return: none
+ */
+static inline void
+hif_exec_update_soft_irq_time(struct hif_exec_context *hif_ext_group)
+{
+	int cpu = qdf_get_cpu();
+	uint64_t time;
+
+	time = qdf_time_sched_clock() - hif_ext_group->poll_start_time;
+	if (qdf_get_current() != qdf_this_cpu_ksoftirqd())
+		hif_ext_group->total_irq_time[cpu] += time;
+	else
+		hif_ext_group->ksoftirqd_time[cpu] += time;
+}
+
+/**
+ * hif_update_irq_handler_start_time() - log the time at which irq
+ * handling started
+ * @hif_ext_group: hif exec context
+ *
+ * Return: none
+ */
+static inline void
+hif_update_irq_handler_start_time(struct hif_exec_context *hif_ext_group)
+{
+	hif_ext_group->irq_start_time = qdf_time_sched_clock();
+}
+
+/**
+ * hif_update_irq_handle_time() - update the time spent in irq processing
+ * @hif_ext_group: hif exec context
+ *
+ * Return: none
+ */
+static inline void
+hif_update_irq_handle_time(struct hif_exec_context *hif_ext_group)
+{
+	uint64_t cur_time = qdf_time_sched_clock();
+	int cpu = qdf_get_cpu();
+
+	hif_ext_group->total_irq_time[cpu] += cur_time -
+					hif_ext_group->irq_start_time;
+}
+
+/**
+ * hif_get_wlan_rx_time_stats - function to return wlan rx time statistics
+ * @hif_ctx: hif handle
+ * @wlan_irq_time: Array of NR_CPUS to get the wlan rx napi execution time
+ * @wlan_ksoftirqd_time: Array of NR_CPUS to get the wlan ksoftirqd execution
+ * time
+ *
+ * Return: none
+ */
+void hif_get_wlan_rx_time_stats(struct hif_opaque_softc *hif_ctx,
+				uint64_t *wlan_irq_time,
+				uint64_t *wlan_ksoftirqd_time)
+{
+	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(hif_ctx);
+	struct hif_exec_context *hif_ext_group;
+	int i, grp;
+
+	for (i = 0; i < num_possible_cpus(); i++) {
+		for (grp = 0; grp < hif_state->hif_num_extgroup; grp++) {
+			hif_ext_group = hif_state->hif_ext_group[grp];
+			if (hif_ext_group) {
+				wlan_irq_time[i] +=
+					hif_ext_group->total_irq_time[i];
+				wlan_ksoftirqd_time[i] +=
+					hif_ext_group->ksoftirqd_time[i];
+			}
+		}
+	}
+}
+#else
+static inline void
+hif_exec_update_soft_irq_time(struct hif_exec_context *hif_ext_group)
+{
+}
+
+static inline void
+hif_update_irq_handler_start_time(struct hif_exec_context *hif_ext_group)
+{
+}
+
+static inline void
+hif_update_irq_handle_time(struct hif_exec_context *hif_ext_group)
+{
+}
+#endif /* WLAN_DP_LOAD_BALANCE_SUPPORT */
+
 /**
  * hif_exec_poll() - napi poll
  * @napi: napi struct
@@ -720,6 +817,7 @@ static int hif_exec_poll(struct napi_struct *napi, int budget)
 		work_done = INTERNAL_BUDGET_TO_NAPI_BUDGET(work_done, shift);
 
 	hif_exec_fill_poll_time_histogram(hif_ext_group);
+	hif_exec_update_soft_irq_time(hif_ext_group);
 
 	return work_done;
 }
@@ -975,6 +1073,7 @@ irqreturn_t hif_ext_group_interrupt_handler(int irq, void *context)
 	struct hif_softc *scn = HIF_GET_SOFTC(hif_ext_group->hif);
 
 	if (hif_ext_group->irq_requested) {
+		hif_update_irq_handler_start_time(hif_ext_group);
 		hif_latency_profile_start(hif_ext_group);
 
 		hif_record_event(hif_ext_group->hif, hif_ext_group->grp_id,
@@ -1004,6 +1103,7 @@ irqreturn_t hif_ext_group_interrupt_handler(int irq, void *context)
 		qdf_atomic_inc(&scn->active_grp_tasklet_cnt);
 
 		hif_ext_group->sched_ops->schedule(hif_ext_group);
+		hif_update_irq_handle_time(hif_ext_group);
 	}
 
 	return IRQ_HANDLED;

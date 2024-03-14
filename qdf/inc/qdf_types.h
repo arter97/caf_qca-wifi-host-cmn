@@ -60,6 +60,9 @@
 #define CPU_CLUSTER_TYPE_PERF2 2
 #endif
 
+#define qdf_get_current() __qdf_get_current()
+#define qdf_this_cpu_ksoftirqd() __qdf_this_cpu_ksoftirqd()
+
 /**
  * struct qdf_sglist - scatter-gather list
  * @nsegs: total number of segments

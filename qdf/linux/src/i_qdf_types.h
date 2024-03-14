@@ -73,6 +73,9 @@
 
 typedef struct sg_table __sgtable_t;
 
+#define __qdf_get_current() get_current()
+#define __qdf_this_cpu_ksoftirqd() this_cpu_ksoftirqd()
+
 /*
  * The IDs of the various system clocks
  */

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -77,6 +77,10 @@ struct hif_execution_ops {
  * @new_cpu_mask: Stores the affinity hint mask for each WLAN IRQ
  * @force_napi_complete: do a force napi_complete when this flag is set to -1
  * @irq_disabled_start_time: irq disabled start time for single MSI
+ * @irq_start_time: time in nanoseconds at which irq processing is started
+ * @total_irq_time: total time this group spent in irq/softirq processing
+ *			in nanoseconds
+ * @ksoftirqd_time: total time this group spent in ksoftirqd processing in ns
  */
 struct hif_exec_context {
 	struct hif_execution_ops *sched_ops;
@@ -116,6 +120,11 @@ struct hif_exec_context {
 	qdf_atomic_t force_napi_complete;
 #endif
 	unsigned long long irq_disabled_start_time;
+#ifdef WLAN_DP_LOAD_BALANCE_SUPPORT
+	uint64_t irq_start_time;
+	uint64_t total_irq_time[NR_CPUS];
+	uint64_t ksoftirqd_time[NR_CPUS];
+#endif
 };
 
 /**
