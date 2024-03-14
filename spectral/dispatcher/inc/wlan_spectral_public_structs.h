@@ -350,6 +350,7 @@ struct wlan_objmgr_pdev;
  * @free_sbuff: Free the socket buffer for a particular message type
  * @convert_to_nl_ch_width:
  * @convert_to_phy_ch_width:
+ * @reset_transport_channel: Reset transport specific buffer before scan starts
  */
 struct spectral_buffer_cb {
 	void *(*get_sbuff)(struct wlan_objmgr_pdev *pdev,
@@ -363,6 +364,7 @@ struct spectral_buffer_cb {
 			   enum spectral_msg_type smsg_type);
 	int (*convert_to_nl_ch_width)(uint8_t phy_chwidth);
 	uint8_t (*convert_to_phy_ch_width)(uint8_t nl_chwidth);
+	QDF_STATUS (*reset_transport_channel)(struct wlan_objmgr_pdev *pdev);
 };
 
 /**

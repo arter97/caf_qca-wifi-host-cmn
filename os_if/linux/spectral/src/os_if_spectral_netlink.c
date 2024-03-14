@@ -572,6 +572,19 @@ os_if_spectral_free_skb(struct wlan_objmgr_pdev *pdev,
 	ps->skb[smsg_type] = NULL;
 }
 
+/**
+ * os_if_spectral_nl_reset_tbuff() - Reset netlink transport buffer
+ * @pdev : Pointer to pdev
+ *
+ * Return: QDF_STATUS
+ */
+
+static QDF_STATUS
+os_if_spectral_nl_reset_tbuff(struct wlan_objmgr_pdev *pdev)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
 void
 os_if_spectral_netlink_init(struct wlan_objmgr_pdev *pdev)
 {
@@ -606,6 +619,8 @@ os_if_spectral_netlink_init(struct wlan_objmgr_pdev *pdev)
 		wlan_spectral_get_phy_ch_width;
 	spectral_buf_cb.convert_to_nl_ch_width =
 		wlan_spectral_get_nl80211_chwidth;
+	spectral_buf_cb.reset_transport_channel =
+		os_if_spectral_nl_reset_tbuff;
 
 	if (sptrl_ctx->sptrlc_register_buffer_cb)
 		sptrl_ctx->sptrlc_register_buffer_cb(pdev, &spectral_buf_cb);

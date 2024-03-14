@@ -5445,6 +5445,15 @@ target_if_spectral_scan_enable_params(struct target_if_spectral *spectral,
 	spectral->num_spectral_data = 0;
 
 	if (!p_sops->is_spectral_active(spectral, smode)) {
+		status =
+		    spectral->spectral_buf_cb.reset_transport_channel(pdev);
+
+		if (QDF_IS_STATUS_ERROR(status)) {
+			spectral_err
+				("Failed to reset transport specific buffer.");
+			return 1;
+		}
+
 		p_sops->configure_spectral(spectral, spectral_params, smode);
 		spectral->rparams.marker[smode].is_valid = false;
 
