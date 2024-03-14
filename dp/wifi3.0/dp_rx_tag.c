@@ -783,6 +783,7 @@ QDF_STATUS dp_rx_sfe_add_flow_entry(struct cdp_soc_t *soc_hdl,
 	 * Set FSE metadata to indicate that the SFE flow rule
 	 * is matched in FSE.
 	 */
+	flow_info.fse_metadata = DP_RX_FSE_FLOW_MATCH_SFE;
 	if (DP_RX_FLOW_INVALID_SVC_ID != svc_id) {
 		flow_info.fse_metadata =
 			DP_RX_FSE_FLOW_UPDATE_TID(DP_RX_FSE_FLOW_MATCH_SFE,
@@ -790,6 +791,8 @@ QDF_STATUS dp_rx_sfe_add_flow_entry(struct cdp_soc_t *soc_hdl,
 		flow_info.fse_metadata =
 			DP_RX_FSE_FLOW_UPDATE_EVT_REQ(flow_info.fse_metadata,
 						      1);
+	} else {
+		flow_info.fse_metadata = DP_RX_FSE_FLOW_MATCH_SFE;
 	}
 
 	if (version == 4) {
