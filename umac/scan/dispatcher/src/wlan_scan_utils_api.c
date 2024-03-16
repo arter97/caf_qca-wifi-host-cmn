@@ -2247,8 +2247,11 @@ static void util_get_ml_bv_partner_link_info(struct scan_cache_entry *scan_entry
 	}
 
 	scan_entry->ml_info.num_links = link_idx;
-	if (!offset)
+	if (!offset ||
+	    (offset + sizeof(struct wlan_ml_bv_linfo_perstaprof) >= ml_ie_len)) {
+		scm_err_rl("incorrect offset value %d", offset);
 		return;
+	}
 
 	/* TODO: loop through all the STA info fields */
 
@@ -2292,6 +2295,10 @@ static void util_get_ml_bv_partner_link_info(struct scan_cache_entry *scan_entry
 
 		/* Skip STA Info Length field */
 		offset += perstaprof_stainfo_len;
+		if (offset >= ml_ie_len) {
+			scm_err_rl("incorrect offset value %d", offset);
+			return;
+		}
 
 		/*
 		 * To point to the ie_list offset move past the STA Info
