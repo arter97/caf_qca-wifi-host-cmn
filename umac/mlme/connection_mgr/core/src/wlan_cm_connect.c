@@ -1798,7 +1798,6 @@ void cm_update_ml_partner_info(struct wlan_cm_connect_req *req,
 }
 #endif
 
-static
 void cm_update_per_peer_key_mgmt_crypto_params(struct wlan_objmgr_vdev *vdev,
 					struct security_info *neg_sec_info)
 {
@@ -1869,13 +1868,13 @@ void cm_update_per_peer_key_mgmt_crypto_params(struct wlan_objmgr_vdev *vdev,
 		key_mgmt = neg_akm;
 
 	wlan_crypto_set_vdev_param(vdev, WLAN_CRYPTO_PARAM_KEY_MGMT, key_mgmt);
+
 	/*
 	 * Overwrite the key mgmt with single key_mgmt if multiple are present
 	 */
 	neg_sec_info->key_mgmt = key_mgmt;
 }
 
-static
 void cm_update_per_peer_ucastcipher_crypto_params(struct wlan_objmgr_vdev *vdev,
 					struct security_info *neg_sec_info)
 {
