@@ -1742,8 +1742,12 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 		}
 	}
 
-	/* Allocate Primary UMAC, for STA mode do the allocation based on assoc resp */
-	if (wlan_vdev_mlme_get_opmode(vdev) != QDF_STA_MODE)
+	/*
+	 * Allocate Primary UMAC, for STA mode or SAP with link reject
+	 * do the allocation based on assoc resp
+	 */
+	if ((wlan_vdev_mlme_get_opmode(vdev) == QDF_SAP_MODE) &&
+	    !ml_dev->ap_ctx->mlo_link_reject)
 		mlo_peer_allocate_primary_umac(ml_dev, ml_peer, tmp_link_vdevs);
 
 	if (wlan_vdev_mlme_get_opmode(vdev) == QDF_SAP_MODE)
