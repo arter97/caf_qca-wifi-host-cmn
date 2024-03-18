@@ -144,14 +144,35 @@ SNR_DB_TO_BIT_PER_TONE_LUT[DB_NUM] = {0, 171, 212, 262, 323, 396, 484,
 586, 706, 844, 1000, 1176, 1370, 1583, 1812, 2058, 2317, 2588, 2870, 3161};
 #endif
 
+#ifdef WLAN_FEATURE_11BE_MLO
+static bool
+cm_is_mlo_entry(struct scan_cache_entry *bss1, struct scan_cache_entry *bss2)
+{
+	if (bss1->ie_list.multi_link_bv &&
+	    !bss2->ie_list.multi_link_bv)
+		return true;
+	else
+		return false;
+}
+#else
+static inline bool
+cm_is_mlo_entry(struct scan_cache_entry *bss1, struct scan_cache_entry *bss2)
+{
+	return false;
+}
+#endif
+
 static bool cm_is_better_bss(struct scan_cache_entry *bss1,
 			     struct scan_cache_entry *bss2)
 {
 	if (bss1->bss_score > bss2->bss_score)
 		return true;
-	else if (bss1->bss_score == bss2->bss_score)
+	else if (bss1->bss_score == bss2->bss_score) {
 		if (bss1->rssi_raw > bss2->rssi_raw)
 			return true;
+		if (qdf_is_macaddr_equal(&bss1->bssid, &bss2->bssid))
+			return cm_is_mlo_entry(bss1, bss2);
+	}
 
 	return false;
 }
