@@ -1971,6 +1971,7 @@ util_scan_get_6g_oper_channel(uint8_t *he_op_ie)
 	return 0;
 }
 #endif
+
 /*
  * util_is_bssid_non_tx() - Is the given BSSID a non-tx neighbor
  * entry in the RNR db
@@ -1982,4 +1983,15 @@ util_scan_get_6g_oper_channel(uint8_t *he_op_ie)
  */
 bool util_is_bssid_non_tx(struct wlan_objmgr_psoc *psoc,
 			  struct qdf_mac_addr *bssid, qdf_freq_t freq);
+
+/**
+ * util_scan_get_phymode() - function to get phy mode
+ * @pdev : pdev object
+ * @scan_params: scan entry
+ *
+ * Return: phy mode.
+ */
+enum wlan_phymode
+util_scan_get_phymode(struct wlan_objmgr_pdev *pdev,
+		      struct scan_cache_entry *scan_params);
 #endif
