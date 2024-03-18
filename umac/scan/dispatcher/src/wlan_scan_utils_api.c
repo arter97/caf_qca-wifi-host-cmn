@@ -962,7 +962,7 @@ util_scan_get_phymode_2g(struct scan_cache_entry *scan_params)
 	return phymode;
 }
 
-static enum wlan_phymode
+enum wlan_phymode
 util_scan_get_phymode(struct wlan_objmgr_pdev *pdev,
 		      struct scan_cache_entry *scan_params)
 {

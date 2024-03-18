@@ -38,8 +38,11 @@
 
 #define CM_PCL_RSSI_THRESHOLD -75
 
-#define TWO_LINK_BOOST 20
-#define ONE_LINK_MLMR_BOOST 10
+/* To differentiate between SLO and 11AX candidate */
+#define SLO_BOOST 5
+#define ONE_LINK_MLMR_BOOST 5
+#define LINK_BOOST 10
+
 #define CANDIDATE_DUMP_MAX_LEN 255
 
 #define LINK_SCORE                     BIT(0)
@@ -2432,25 +2435,32 @@ static void cm_vendor_specific_boost(struct wlan_objmgr_psoc *psoc,
 	uint32_t freq = 0;
 	uint32_t freq_entry = 0;
 
-	/* Add boost of 20% for 2 link candidate */
-	if (entry->ml_info.num_links == TWO_LINK)
-		score = score  + (score * TWO_LINK_BOOST) / 100;
+	if (entry->ie_list.multi_link_bv) {
+		if (entry->ml_info.num_links == ONE_LINK) {
+			freq_entry = entry->channel.chan_freq;
+			link = &entry->ml_info.link_info[0];
 
-	if (entry->ml_info.num_links == ONE_LINK) {
-		freq_entry = entry->channel.chan_freq;
-		link = &entry->ml_info.link_info[0];
+			if (!link[0].is_valid_link)
+				return;
 
-		if (!link[0].is_valid_link)
-			return;
+			freq = link[0].freq;
 
-		freq = link[0].freq;
-
-		/* Add boost of 10% for one link MLMR candidate  */
-		if (!policy_mgr_are_2_freq_on_same_mac(psoc,
-						       freq,
-						       freq_entry))
-			score = score + (score * ONE_LINK_MLMR_BOOST) / 100;
+			/* Add boost of 15% for one link MLMR candidate  */
+			if (!policy_mgr_are_2_freq_on_same_mac(psoc, freq,
+							       freq_entry))
+				score = score + (score *
+						 (LINK_BOOST +
+						  ONE_LINK_MLMR_BOOST)) / 100;
+			else
+				score = score + (score * (LINK_BOOST)) / 100;
+		} else if (entry->ml_info.num_links > ONE_LINK) {
+			/* Add boost of 5%/per link for MLO candidate */
+			score = score  + (score * (entry->ml_info.num_links * LINK_BOOST)) / 100;
+		} else {
+			/* Add boost of 5% for SLO candidate  */
+			score = score  + (score * (SLO_BOOST)) / 100;
 		}
+	}
 
 	entry->bss_score = score;
 }
@@ -2853,7 +2863,6 @@ void cm_print_candidate_list(qdf_list_t *candidate_list)
 		mlme_err("failed to get front of candidate_list");
 		return;
 	}
-
 	while (cur_node) {
 		qdf_list_peek_next(candidate_list, cur_node, &next_node);
 
@@ -2870,8 +2879,10 @@ void cm_print_candidate_list(qdf_list_t *candidate_list)
 					     QDF_MAC_ADDR_REF(link[i].link_addr.bytes),
 					     link[i].freq, link[i].link_id,
 					     link[i].is_valid_link);
-		mlme_debug("Candidate(" QDF_MAC_ADDR_FMT " freq %d self_link_id %d): %s bss_score %d ",
+			mlme_nofl_debug("Candidate(" QDF_MAC_ADDR_FMT " %s freq %d self_link_id %d): %s bss_score %d ",
 			   QDF_MAC_ADDR_REF(scan_entry->entry->bssid.bytes),
+			   scan_entry->entry->ie_list.multi_link_bv ? "MLO" :
+			   "NON MLO",
 			   scan_entry->entry->channel.chan_freq,
 			   scan_entry->entry->ml_info.self_link_id,
 			   log_str,
@@ -2950,10 +2961,12 @@ static void cm_find_and_remove_dup_candidate(struct scan_cache_node *bss_entry,
 
 		match = 0;
 		for (i = 0; i < bss_num_link; i++)
-			if (qdf_is_macaddr_equal(&bss_entry->entry->bssid,
+			if ((bss_entry->entry->ie_list.multi_link_bv &&
+			     scan_node->entry->ie_list.multi_link_bv) &&
+			    (qdf_is_macaddr_equal(&bss_entry->entry->bssid,
 						 &scan_node->entry->bssid) ||
 			    qdf_is_macaddr_equal(&bss_entry->entry->bssid,
-						 &cur_can[i].link_addr))
+						 &cur_can[i].link_addr)))
 				match++;
 		for (i = 0; i < bss_num_link; i++) {
 			for (j = 0; j < curr_num_link; j++) {
@@ -2987,8 +3000,61 @@ next:
 	}
 }
 
+#if defined(FEATURE_DENYLIST_MGR) && defined(WLAN_FEATURE_11BE_MLO)
+/**
+ * cm_add_11_ax_candidate() - update candidate list with 11AX candidate
+ * @pdev: pdev object
+ * @candidate_list: candidate list
+ * @scan_entry: scan entry node
+ *
+ * This API update candidate list with new 11AX candidate.
+ *
+ *Return: NA
+ */
+static void
+cm_add_11_ax_candidate(struct wlan_objmgr_pdev *pdev,
+		       qdf_list_t *candidate_list,
+		       struct scan_cache_node *scan_entry)
+{
+	struct scan_cache_node *scan_node = NULL;
+	struct scan_cache_entry *tmp_scan_entry = NULL;
+
+	tmp_scan_entry = util_scan_copy_cache_entry(scan_entry->entry);
+	/* Add 11AX entry for MLO Candidate */
+	if (!tmp_scan_entry->ie_list.multi_link_bv) {
+		util_scan_free_cache_entry(tmp_scan_entry);
+		return;
+	}
+
+	scan_node = qdf_mem_malloc_atomic(sizeof(*scan_node));
+	if (!scan_node) {
+		util_scan_free_cache_entry(tmp_scan_entry);
+		return;
+	}
+	tmp_scan_entry->ml_info.num_links = 0;
+	tmp_scan_entry->mlo_max_recom_simult_links = 0;
+	tmp_scan_entry->ie_list.multi_link_bv = NULL;
+	tmp_scan_entry->ie_list.ehtcap = NULL;
+	tmp_scan_entry->ie_list.ehtop = NULL;
+	qdf_mem_zero(&tmp_scan_entry->ml_info, sizeof(struct ml_info));
+	tmp_scan_entry->phy_mode =
+		util_scan_get_phymode(pdev, tmp_scan_entry);
+
+	scan_node->entry = tmp_scan_entry;
+	qdf_list_insert_after(candidate_list, &scan_node->node,
+			      &scan_entry->node);
+}
+#else
+static inline void
+cm_add_11_ax_candidate(struct wlan_objmgr_pdev *pdev,
+		       qdf_list_t *candidate_list,
+		       struct scan_cache_node *scan_entry)
+{};
+#endif
+
 /**
  * cm_mlo_generate_candidate_list() - generate candidate list
+ * @pdev: pdev object
  * @candidate_list: candidate list
  *
  * For any candidate list this api generates all possible unique
@@ -3014,7 +3080,8 @@ next:
  *
  * Return none
  */
-static void cm_mlo_generate_candidate_list(qdf_list_t *candidate_list)
+static void cm_mlo_generate_candidate_list(struct wlan_objmgr_pdev *pdev,
+					   qdf_list_t *candidate_list)
 {
 	struct scan_cache_entry *tmp_scan_entry = NULL;
 	struct scan_cache_node *scan_entry = NULL, *scan_node = NULL;
@@ -3030,6 +3097,7 @@ static void cm_mlo_generate_candidate_list(qdf_list_t *candidate_list)
 		mlme_err("failed to get front of candidate_list");
 		return;
 	}
+
 	while (cur_node) {
 		qdf_list_peek_next(candidate_list, cur_node, &next_node);
 
@@ -3089,6 +3157,8 @@ static void cm_mlo_generate_candidate_list(qdf_list_t *candidate_list)
 						      &scan_entry->node);
 			}
 		}
+
+		cm_add_11_ax_candidate(pdev, candidate_list, scan_entry);
 next:
 		cur_node = next_node;
 		next_node = NULL;
@@ -3205,8 +3275,9 @@ static void cm_validate_partner_links(struct wlan_objmgr_psoc *psoc,
 	}
 }
 #else
-
-static void cm_mlo_generate_candidate_list(qdf_list_t *candidate_list)
+static inline void
+cm_mlo_generate_candidate_list(struct wlan_objmgr_pdev *pdev,
+			       qdf_list_t *candidate_list)
 {
 }
 
@@ -3266,7 +3337,7 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 			config->bw_above_20_5ghz, config->vdev_nss_24g,
 			config->vdev_nss_5g);
 
-	cm_mlo_generate_candidate_list(scan_list);
+	cm_mlo_generate_candidate_list(pdev, scan_list);
 
 	/* calculate score for each AP */
 	if (qdf_list_peek_front(scan_list, &cur_node) != QDF_STATUS_SUCCESS) {
