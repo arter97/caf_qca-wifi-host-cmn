@@ -1939,4 +1939,15 @@ util_scan_get_6g_oper_channel(uint8_t *he_op_ie)
 	return 0;
 }
 #endif
+
+/**
+ * util_scan_get_phymode() - function to get phy mode
+ * @pdev : pdev object
+ * @scan_params: scan entry
+ *
+ * Return: phy mode.
+ */
+enum wlan_phymode
+util_scan_get_phymode(struct wlan_objmgr_pdev *pdev,
+		      struct scan_cache_entry *scan_params);
 #endif
