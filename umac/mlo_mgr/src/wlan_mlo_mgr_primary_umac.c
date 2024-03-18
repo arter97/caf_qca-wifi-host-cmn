@@ -799,9 +799,15 @@ static QDF_STATUS mlo_set_3_link_primary_umac(
 {
 	uint8_t psoc_ids[WLAN_UMAC_MLO_MAX_VDEVS];
 	int8_t central_umac_id;
+	uint8_t i;
 
 	if (ml_peer->max_links != 3)
 		return QDF_STATUS_E_FAILURE;
+
+	for (i = 0; i < WLAN_UMAC_MLO_MAX_VDEVS; i++) {
+		if (!link_vdevs[i] && (i < ml_peer->max_links))
+			return QDF_STATUS_E_FAILURE;
+	}
 
 	/* Some 3 link RDPs have restriction on the primary umac.
 	 * Only the link that is adjacent to both the links can be

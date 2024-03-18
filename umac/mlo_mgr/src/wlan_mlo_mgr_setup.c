@@ -383,7 +383,12 @@ bool mlo_vdevs_check_single_soc(struct wlan_objmgr_vdev **wlan_vdev_list,
 	uint8_t soc_id = WLAN_SOC_ID_NOT_INITIALIZED;
 
 	for (i = 0; i < vdev_count; i++) {
-		uint8_t vdev_soc_id = wlan_vdev_get_psoc_id(wlan_vdev_list[i]);
+		uint8_t vdev_soc_id;
+
+		if (!wlan_vdev_list[i])
+			continue;
+
+		vdev_soc_id = wlan_vdev_get_psoc_id(wlan_vdev_list[i]);
 
 		if (i == 0)
 			soc_id = vdev_soc_id;
