@@ -780,7 +780,6 @@ QDF_STATUS
 wifi_pos_vdev_delete_all_ranging_peers(struct wlan_objmgr_vdev *vdev)
 {
 	QDF_STATUS status;
-	struct vdev_mlme_obj *vdev_mlme;
 	struct wifi_pos_vdev_priv_obj *vdev_pos_obj;
 	struct peer_delete_all_params param;
 
@@ -795,16 +794,10 @@ wifi_pos_vdev_delete_all_ranging_peers(struct wlan_objmgr_vdev *vdev)
 
 	vdev_pos_obj->is_delete_all_pasn_peer_in_progress = true;
 
-	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
-	if (!vdev_mlme) {
-		wifi_pos_err(" VDEV MLME component object is NULL");
-		return QDF_STATUS_E_FAILURE;
-	}
-
 	param.vdev_id = wlan_vdev_get_id(vdev);
 	param.peer_type_bitmap = BIT(WLAN_PEER_RTT_PASN);
 
-	status = tgt_vdev_mgr_peer_delete_all_send(vdev_mlme, &param);
+	status = tgt_vdev_mgr_peer_delete_all_send(vdev, &param);
 	if (QDF_IS_STATUS_ERROR(status))
 		wifi_pos_err("Send vdev delete all peers failed");
 

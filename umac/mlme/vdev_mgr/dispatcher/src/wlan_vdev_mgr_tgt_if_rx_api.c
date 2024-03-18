@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -185,7 +185,7 @@ static QDF_STATUS tgt_vdev_mgr_peer_delete_all_response_handler(
 						    rsp->vdev_id,
 						    WLAN_VDEV_TARGET_IF_ID);
 	if (!vdev) {
-		mlme_err("VDEV is NULL");
+		mlme_err("VDEV is NULL for vdev_id %d", rsp->vdev_id);
 		return QDF_STATUS_E_FAILURE;
 	}
 

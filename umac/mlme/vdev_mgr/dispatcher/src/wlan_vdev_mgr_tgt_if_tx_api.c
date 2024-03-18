@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -704,12 +704,11 @@ QDF_STATUS tgt_vdev_mgr_sta_ps_param_send(
 }
 
 QDF_STATUS tgt_vdev_mgr_peer_delete_all_send(
-				struct vdev_mlme_obj *mlme_obj,
+				struct wlan_objmgr_vdev *vdev,
 				struct peer_delete_all_params *param)
 {
 	QDF_STATUS status;
 	struct wlan_lmac_if_mlme_tx_ops *txops;
-	struct wlan_objmgr_vdev *vdev;
 	uint8_t vdev_id;
 
 	if (!param) {
@@ -717,7 +716,6 @@ QDF_STATUS tgt_vdev_mgr_peer_delete_all_send(
 		return QDF_STATUS_E_INVAL;
 	}
 
-	vdev = mlme_obj->vdev;
 	vdev_id = wlan_vdev_get_id(vdev);
 	txops = wlan_vdev_mlme_get_lmac_txops(vdev);
 	if (!txops || !txops->peer_delete_all_send) {

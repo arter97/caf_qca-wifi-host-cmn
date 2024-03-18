@@ -1055,6 +1055,7 @@ QDF_STATUS vdev_mgr_peer_delete_all_send(struct vdev_mlme_obj *mlme_obj)
 {
 	QDF_STATUS status;
 	struct peer_delete_all_params param = {0};
+	struct wlan_objmgr_vdev *vdev;
 
 	if (!mlme_obj) {
 		mlme_err("Invalid input");
@@ -1067,7 +1068,9 @@ QDF_STATUS vdev_mgr_peer_delete_all_send(struct vdev_mlme_obj *mlme_obj)
 		return status;
 	}
 
-	status = tgt_vdev_mgr_peer_delete_all_send(mlme_obj, &param);
+	vdev = mlme_obj->vdev;
+
+	status = tgt_vdev_mgr_peer_delete_all_send(vdev, &param);
 
 	return status;
 }
