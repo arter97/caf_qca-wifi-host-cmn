@@ -9735,6 +9735,8 @@ static int8_t reg_find_eirp_in_afc_chan_obj(struct wlan_objmgr_pdev *pdev,
  * @cen320: Center of 320 MHz channel in Mhz
  * @bw: Bandwidth in MHz
  * @in_punc_pattern: Input puncture pattern
+ * @is_client_list_lookup_needed: Bool to indicate if the sp_eirp_pwr is fetched
+ * for client or not.
  * @reg_sp_eirp_pwr: Regulatory defined SP power for the input frequency
  *
  * Return: Regulatory and AFC intersected SP power of punctured channel
@@ -9745,6 +9747,7 @@ reg_get_sp_eirp_for_punc_chans(struct wlan_objmgr_pdev *pdev,
 			       qdf_freq_t cen320,
 			       uint16_t bw,
 			       uint16_t in_punc_pattern,
+			       bool is_client_list_lookup_needed,
 			       int16_t reg_sp_eirp_pwr)
 {
 	int16_t min_psd = REG_MIN_POWER;
@@ -9787,6 +9790,9 @@ reg_get_sp_eirp_for_punc_chans(struct wlan_objmgr_pdev *pdev,
 		  freq, bw, cen320, in_punc_pattern, reg_sp_eirp_pwr, min_psd,
 		  non_punc_bw, afc_eirp_pwr);
 
+	if (is_client_list_lookup_needed)
+		return QDF_MIN(afc_eirp_pwr - SP_AP_AND_CLIENT_POWER_DIFF_IN_DBM,
+			       reg_sp_eirp_pwr);
 	if (afc_eirp_pwr)
 		return QDF_MIN(afc_eirp_pwr, reg_sp_eirp_pwr);
 
@@ -9903,6 +9909,7 @@ static int16_t reg_get_sp_eirp(struct wlan_objmgr_pdev *pdev,
 		reg_info("Computing SP EIRP with puncturing info");
 		return reg_get_sp_eirp_for_punc_chans(pdev, freq, cen320, bw,
 						      in_punc_pattern,
+						      is_client_list_lookup_needed,
 						      reg_sp_eirp_pwr);
 	}
 
