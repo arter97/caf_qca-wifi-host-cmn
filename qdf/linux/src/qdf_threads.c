@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -44,6 +44,8 @@
 #include <qdf_defer.h>
 #include <qdf_module.h>
 #include <linux/cpumask.h>
+#include <linux/sort.h>
+
 /* Function declarations and documentation */
 
 typedef int (*qdf_thread_os_func)(void *data);
@@ -297,6 +299,27 @@ void qdf_cpumask_clear_cpu(unsigned int cpu, qdf_cpu_mask *dstp)
 
 qdf_export_symbol(qdf_cpumask_clear_cpu);
 
+int qdf_cpumask_test_cpu(unsigned int cpu, qdf_cpu_mask *cpu_mask)
+{
+	return cpumask_test_cpu(cpu, cpu_mask);
+}
+
+qdf_export_symbol(qdf_cpumask_test_cpu);
+
+uint32_t qdf_cpumask_first(qdf_cpu_mask *cpu_mask)
+{
+	return cpumask_first(cpu_mask);
+}
+
+qdf_export_symbol(qdf_cpumask_first);
+
+uint32_t qdf_cpumask_weight(qdf_cpu_mask *cpu_mask)
+{
+	return cpumask_weight(cpu_mask);
+}
+
+qdf_export_symbol(qdf_cpumask_weight);
+
 void qdf_cpumask_setall(qdf_cpu_mask *dstp)
 {
 	cpumask_setall(dstp);
@@ -386,3 +409,9 @@ qdf_cpu_mask qdf_walt_get_cpus_taken(void)
 
 qdf_export_symbol(qdf_walt_get_cpus_taken);
 #endif
+
+void qdf_sort(void *base, qdf_size_t num, qdf_size_t size,
+	      qdf_cmp_func_t cmp_func, qdf_swap_func_t swap_func)
+{
+	sort(base, num, size, cmp_func, swap_func);
+}

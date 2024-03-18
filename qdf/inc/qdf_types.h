@@ -240,6 +240,16 @@ typedef __qdf_net_dev_stats qdf_net_dev_stats;
  */
 typedef __qdf_dummy_netdev_t qdf_dummy_netdev_t;
 
+/*
+ * function pointer to compare function
+ */
+typedef __qdf_cmp_func_t qdf_cmp_func_t;
+
+/*
+ * function pointer to swap function
+ */
+typedef __qdf_swap_func_t qdf_swap_func_t;
+
 /**
  * struct qdf_dma_map_info - Information inside a DMA map.
  * @nsegs: total number mapped segments

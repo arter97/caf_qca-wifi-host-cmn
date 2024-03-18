@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -183,6 +183,31 @@ void qdf_cpumask_setall(qdf_cpu_mask *dstp);
 void qdf_cpumask_clear_cpu(unsigned int cpu, qdf_cpu_mask *dstp);
 
 /**
+ * qdf_cpumask_test_cpu() - test for a cpu in a cpumask
+ * @cpu: cpu number (< nr_cpu_ids)
+ * @cpumask: the cpumask pointer
+ *
+ * Returns 1 if @cpu is set in @cpumask, else returns 0
+ */
+int qdf_cpumask_test_cpu(unsigned int cpu, qdf_cpu_mask *cpumask);
+
+/**
+ * qdf_cpumask_first() - get the first cpu in a cpumask
+ * @cpumask: the cpumask pointer
+ *
+ * Returns >= nr_cpu_ids if no cpus set.
+ */
+uint32_t qdf_cpumask_first(qdf_cpu_mask *cpumask);
+
+/**
+ * qdf_cpumask_weight - Count of bits in *cpumask
+ * @cpumask: the cpumask to count bits (< nr_cpu_ids) in.
+ *
+ * Returns number of bits in the given cpumask
+ */
+uint32_t qdf_cpumask_weight(qdf_cpu_mask *cpumask);
+
+/**
  * qdf_cpumask_empty - Check if cpu_mask is empty
  * @srcp: cpumask pointer
  *
@@ -308,4 +333,15 @@ qdf_walt_get_cpus_taken_supported(void)
 	return false;
 }
 #endif
+
+/*
+ * qdf_sort - sort the array elements
+ * @base: pointer to array base
+ * @num: number of elements in the array
+ * @size: size of each element
+ * @cmp_func: compare function
+ * @swap_func: swap function
+ */
+void qdf_sort(void *base, qdf_size_t num, qdf_size_t size,
+	      qdf_cmp_func_t cmp_func, qdf_swap_func_t swap_func);
 #endif /* __QDF_THREADS_H */
