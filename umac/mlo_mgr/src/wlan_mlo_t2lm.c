@@ -400,8 +400,15 @@ static bool ttlm_state_negotiated_event(void *ctx, uint16_t event,
 					uint16_t data_len, void *data)
 {
 	bool event_handled = true;
+	struct wlan_mlo_peer_context *ml_peer = ctx;
 
 	switch (event) {
+	case WLAN_TTLM_SM_EV_TX_ACTION_REQ:
+		ttlm_sm_transition_to(ml_peer, WLAN_TTLM_S_INPROGRESS);
+		ttlm_sm_deliver_event_sync(ml_peer,
+				WLAN_TTLM_SM_EV_TX_ACTION_REQ_START,
+				data_len, data);
+		break;
 	default:
 		event_handled = false;
 		break;
