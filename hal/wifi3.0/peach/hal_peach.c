@@ -155,7 +155,7 @@ static void hal_rx_dump_msdu_end_tlv_peach(void *msduend,
 				(struct rx_msdu_end_compact *)msduend;
 
 	__QDF_TRACE_RL(dbg_level, QDF_MODULE_ID_HAL,
-			"rx_msdu_end tlv (1/5)- "
+			"rx_msdu_end tlv (1/7)- "
 			"rxpcu_mpdu_filter_in_category :%x "
 			"sw_frame_group_id :%x "
 			"reserved_0 :%x "
@@ -186,7 +186,7 @@ static void hal_rx_dump_msdu_end_tlv_peach(void *msduend,
 			msdu_end->l3_type);
 
 	__QDF_TRACE_RL(dbg_level, QDF_MODULE_ID_HAL,
-			"rx_msdu_end tlv (2/5)- "
+			"rx_msdu_end tlv (2/7)- "
 			"sa_sw_peer_id :%x "
 			"sa_idx_timeout :%x "
 			"da_idx_timeout :%x "
@@ -219,7 +219,7 @@ static void hal_rx_dump_msdu_end_tlv_peach(void *msduend,
 			msdu_end->da_idx_or_sw_peer_id);
 
 	__QDF_TRACE_RL(dbg_level, QDF_MODULE_ID_HAL,
-			"rx_msdu_end tlv (3/5)- "
+			"rx_msdu_end tlv (3/7)- "
 			"msdu_drop :%x "
 			"reo_destination_indication :%x "
 			"flow_idx :%x "
@@ -262,7 +262,7 @@ static void hal_rx_dump_msdu_end_tlv_peach(void *msduend,
 			msdu_end->cumulative_ip_length);
 
 	__QDF_TRACE_RL(dbg_level, QDF_MODULE_ID_HAL,
-			"rx_msdu_end tlv (4/5)- "
+			"rx_msdu_end tlv (4/7)- "
 			"msdu_length :%x "
 			"stbc :%x "
 			"ipsec_esp :%x "
@@ -284,16 +284,7 @@ static void hal_rx_dump_msdu_end_tlv_peach(void *msduend,
 			"tcp_udp_header_valid :%x "
 			"mesh_control_present :%x "
 			"ldpc :%x "
-			"ip4_protocol_ip6_next_header :%x "
-			"user_rssi :%x "
-			"pkt_type :%x "
-			"sgi :%x "
-			"rate_mcs :%x "
-			"receive_bandwidth :%x "
-			"reception_type :%x "
-			"mimo_ss_bitmap :%x "
-			"msdu_done_copy :%x "
-			"flow_id_toeplitz :%x",
+			"ip4_protocol_ip6_next_header :%x ",
 			msdu_end->msdu_length,
 			msdu_end->stbc,
 			msdu_end->ipsec_esp,
@@ -315,7 +306,25 @@ static void hal_rx_dump_msdu_end_tlv_peach(void *msduend,
 			msdu_end->tcp_udp_header_valid,
 			msdu_end->mesh_control_present,
 			msdu_end->ldpc,
-			msdu_end->ip4_protocol_ip6_next_header,
+			msdu_end->ip4_protocol_ip6_next_header);
+
+	__QDF_TRACE_RL(dbg_level, QDF_MODULE_ID_HAL,
+			"rx_msdu_end tlv (5/7)- "
+			"user_rssi :%x "
+			"pkt_type :%x "
+			"sgi :%x "
+			"rate_mcs :%x "
+			"receive_bandwidth :%x "
+			"reception_type :%x "
+			"mimo_ss_bitmap :%x "
+			"msdu_done_copy :%x "
+			"flow_id_toeplitz :%x"
+			"first_mpdu :%x "
+			"reserved_30a :%x "
+			"mcast_bcast :%x "
+			"ast_index_not_found :%x "
+			"ast_index_timeout :%x "
+			"power_mgmt :%x ",
 			msdu_end->user_rssi,
 			msdu_end->pkt_type,
 			msdu_end->sgi,
@@ -324,16 +333,16 @@ static void hal_rx_dump_msdu_end_tlv_peach(void *msduend,
 			msdu_end->reception_type,
 			msdu_end->mimo_ss_bitmap,
 			msdu_end->msdu_done_copy,
-			msdu_end->flow_id_toeplitz);
+			msdu_end->flow_id_toeplitz,
+			msdu_end->first_mpdu,
+			msdu_end->reserved_30a,
+			msdu_end->mcast_bcast,
+			msdu_end->ast_index_not_found,
+			msdu_end->ast_index_timeout,
+			msdu_end->power_mgmt);
 
 	__QDF_TRACE_RL(dbg_level, QDF_MODULE_ID_HAL,
-			"rx_msdu_end tlv (5/5)- "
-			"first_mpdu :%x "
-			"reserved_30a :%x "
-			"mcast_bcast :%x "
-			"ast_index_not_found :%x "
-			"ast_index_timeout :%x "
-			"power_mgmt :%x "
+			"rx_msdu_end tlv (6/7)- "
 			"non_qos :%x "
 			"null_data :%x "
 			"mgmt_type :%x "
@@ -350,27 +359,7 @@ static void hal_rx_dump_msdu_end_tlv_peach(void *msduend,
 			"ip_chksum_fail :%x "
 			"sa_idx_invalid :%x "
 			"da_idx_invalid :%x "
-			"amsdu_addr_mismatch :%x "
-			"rx_in_tx_decrypt_byp :%x "
-			"encrypt_required :%x "
-			"directed :%x "
-			"buffer_fragment :%x "
-			"mpdu_length_err :%x "
-			"tkip_mic_err :%x "
-			"decrypt_err :%x "
-			"unencrypted_frame_err :%x "
-			"fcs_err :%x "
-			"reserved_31a :%x "
-			"decrypt_status_code :%x "
-			"rx_bitmap_not_updated :%x "
-			"reserved_31b :%x "
-			"msdu_done :%x",
-			msdu_end->first_mpdu,
-			msdu_end->reserved_30a,
-			msdu_end->mcast_bcast,
-			msdu_end->ast_index_not_found,
-			msdu_end->ast_index_timeout,
-			msdu_end->power_mgmt,
+			"amsdu_addr_mismatch :%x ",
 			msdu_end->non_qos,
 			msdu_end->null_data,
 			msdu_end->mgmt_type,
@@ -387,7 +376,24 @@ static void hal_rx_dump_msdu_end_tlv_peach(void *msduend,
 			msdu_end->ip_chksum_fail,
 			msdu_end->sa_idx_invalid,
 			msdu_end->da_idx_invalid,
-			msdu_end->amsdu_addr_mismatch,
+			msdu_end->amsdu_addr_mismatch);
+
+	__QDF_TRACE_RL(dbg_level, QDF_MODULE_ID_HAL,
+			"rx_msdu_end tlv (7/7)- "
+			"rx_in_tx_decrypt_byp :%x "
+			"encrypt_required :%x "
+			"directed :%x "
+			"buffer_fragment :%x "
+			"mpdu_length_err :%x "
+			"tkip_mic_err :%x "
+			"decrypt_err :%x "
+			"unencrypted_frame_err :%x "
+			"fcs_err :%x "
+			"reserved_31a :%x "
+			"decrypt_status_code :%x "
+			"rx_bitmap_not_updated :%x "
+			"reserved_31b :%x "
+			"msdu_done :%x",
 			msdu_end->rx_in_tx_decrypt_byp,
 			msdu_end->encrypt_required,
 			msdu_end->directed,
