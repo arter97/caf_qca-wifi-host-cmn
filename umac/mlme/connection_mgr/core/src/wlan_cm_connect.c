@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015, 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -1932,12 +1932,12 @@ void cm_update_per_peer_key_mgmt_crypto_params(struct wlan_objmgr_vdev *vdev,
 		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_PSK);
 	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X))
 		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X);
+	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_PSK_SHA256))
+		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_PSK_SHA256);
 	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_PSK))
 		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_PSK);
 	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SHA256))
 		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SHA256);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_PSK_SHA256))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_PSK_SHA256);
 	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_FT_PSK_SHA384))
 		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_PSK_SHA384);
 	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_PSK_SHA384))
