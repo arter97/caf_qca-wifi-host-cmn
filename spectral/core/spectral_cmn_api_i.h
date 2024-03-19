@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -22,6 +22,8 @@
 #define _SPECTRAL_CMN_API_I_H_
 
 #include "spectral_defs_i.h"
+
+extern qdf_dentry_t spectral_dir;
 
 /**
  * wlan_spectral_psoc_obj_create_handler() - handler for psoc object create
@@ -191,4 +193,14 @@ spectral_get_spectral_ctx_from_vdev(struct wlan_objmgr_vdev *vdev)
 
 	return sc;
 }
+
+/**
+ * wlan_get_spectral_directory() - API to get spectral directory
+ *
+ * This API used to get spectral directory created during module init.
+ *
+ * Return: spectral directory dentry
+ */
+qdf_dentry_t
+wlan_get_spectral_directory(void);
 #endif				/* _SPECTRAL_CMN_API_I_H_ */

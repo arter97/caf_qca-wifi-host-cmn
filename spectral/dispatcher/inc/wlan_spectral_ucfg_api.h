@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -99,4 +99,15 @@ QDF_STATUS ucfg_spectral_register_to_dbr(struct wlan_objmgr_pdev *pdev);
  */
 QDF_STATUS ucfg_spectral_get_version(struct wlan_objmgr_pdev *pdev,
 				     uint32_t *version, uint32_t *sub_version);
+
+/**
+ * ucfg_spectral_get_spectral_directory() - Get the spectral directory
+ *
+ * Return the spectral directory dentry which was created during spectral
+ * module initialization.
+ *
+ * Return: Spectral directory dentry
+ */
+qdf_dentry_t
+ucfg_spectral_get_spectral_directory(void);
 #endif /* _WLAN_SPECTRAL_UCFG_API_H_ */

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011,2017-2020 The Linux Foundation. All rights reserved.
- *
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -23,6 +23,7 @@
 #include<wlan_global_lmac_if_api.h>
 #include "spectral_defs_i.h"
 #include <dispatcher_init_deinit.h>
+#include "spectral_cmn_api_i.h"
 
 MODULE_LICENSE("Dual BSD/GPL");
 
@@ -33,6 +34,18 @@ struct dispatcher_spectral_ops sops = {
 	.spectral_psoc_enable_handler = wlan_spectral_psoc_enable,
 	.spectral_psoc_disable_handler = wlan_spectral_psoc_disable,
 };
+
+void
+wlan_spectral_init_spectral_directory(void)
+{
+	spectral_dir = qdf_debugfs_create_dir("spectral", NULL);
+}
+
+void
+wlan_spectral_deinit_spectral_directory(void)
+{
+	qdf_debugfs_remove_dir_recursive(spectral_dir);
+}
 
 /**
  * spectral_init_module() - Initialize Spectral module
@@ -48,6 +61,7 @@ int spectral_init_module(void)
 {
 	spectral_info("qca_spectral module loaded");
 	wlan_spectral_init();
+	wlan_spectral_init_spectral_directory();
 	/* register spectral rxops */
 	wlan_lmac_if_sptrl_set_rx_ops_register_cb
 	    (wlan_lmac_if_sptrl_register_rx_ops);
@@ -68,6 +82,7 @@ void spectral_exit_module(void)
 #endif
 {
 	wlan_spectral_deinit();
+	wlan_spectral_deinit_spectral_directory();
 	spectral_info("qca_spectral module unloaded");
 }
 

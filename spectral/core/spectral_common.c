@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011,2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -25,6 +25,8 @@
 #include <wlan_spectral_public_structs.h>
 #include <wlan_cfg80211_spectral.h>
 #include <cfg_ucfg_api.h>
+
+qdf_dentry_t spectral_dir;
 
 /**
  * spectral_get_vdev() - Get pointer to vdev to be used for Spectral
@@ -678,4 +680,9 @@ wlan_spectral_pdev_obj_destroy_handler(struct wlan_objmgr_pdev *pdev,
 	}
 
 	return QDF_STATUS_SUCCESS;
+}
+
+qdf_dentry_t wlan_get_spectral_directory(void)
+{
+	return spectral_dir;
 }

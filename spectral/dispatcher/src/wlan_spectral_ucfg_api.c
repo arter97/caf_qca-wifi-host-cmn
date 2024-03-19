@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
- *
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -276,4 +276,10 @@ QDF_STATUS ucfg_spectral_get_version(struct wlan_objmgr_pdev *pdev,
 	spectral_debug("Spectral get version %d:%d", *version, *sub_version);
 
 	return QDF_STATUS_SUCCESS;
+}
+
+qdf_dentry_t
+ucfg_spectral_get_spectral_directory(void)
+{
+	return wlan_get_spectral_directory();
 }
