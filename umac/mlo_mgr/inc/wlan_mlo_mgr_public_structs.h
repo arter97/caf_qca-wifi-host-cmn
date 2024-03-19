@@ -90,8 +90,8 @@ struct mlo_all_link_rssi;
 /* Max LINK PEER support */
 #define MAX_MLO_LINK_PEERS WLAN_UMAC_MLO_MAX_VDEVS
 
-/* MAX MLO peer_id supported by FW is 128 */
-#define MAX_MLO_PEER_ID 128
+/* MAX MLO peer_id supported by FW is 1024 */
+#define MAX_MLO_PEER_ID 1024
 #define MLO_INVALID_PEER_ID 0xFFFF
 
 /* IE nomenclature */
