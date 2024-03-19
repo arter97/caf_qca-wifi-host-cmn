@@ -788,6 +788,150 @@ osif_free_ml_link_params(struct cfg80211_connect_resp_params *conn_rsp_params)
 }
 
 #else
+
+#ifdef WLAN_FEATURE_11BE_MLO
+static
+void osif_populate_connect_response_for_link(
+			struct wlan_objmgr_vdev *vdev,
+			struct cfg80211_connect_resp_params *conn_rsp_params,
+			uint8_t link_id,
+			uint8_t *link_addr,
+			struct cfg80211_bss *bss)
+{
+	if (!bss)
+		return;
+
+	osif_debug("Link_id :%d freq:%u", link_id,
+		   bss->channel->center_freq);
+	conn_rsp_params->valid_links |=  BIT(link_id);
+	conn_rsp_params->links[link_id].bssid = bss->bssid;
+	conn_rsp_params->links[link_id].bss = bss;
+	conn_rsp_params->links[link_id].addr = link_addr;
+}
+
+static QDF_STATUS
+osif_fill_peer_mld_mac_connect_resp(
+			struct wlan_objmgr_vdev *vdev,
+			struct wlan_cm_connect_resp *rsp,
+			struct cfg80211_connect_resp_params *conn_rsp_params)
+{
+	struct wlan_objmgr_peer *peer_obj;
+	struct wlan_objmgr_psoc *psoc;
+
+	psoc = wlan_vdev_get_psoc(vdev);
+	if (!psoc)
+		return QDF_STATUS_E_INVAL;
+
+	peer_obj = wlan_objmgr_get_peer_by_mac(psoc, rsp->bssid.bytes,
+					       WLAN_OSIF_ID);
+	if (!peer_obj)
+		return QDF_STATUS_E_INVAL;
+
+	conn_rsp_params->ap_mld_addr = wlan_peer_mlme_get_mldaddr(peer_obj);
+
+	wlan_objmgr_peer_release_ref(peer_obj, WLAN_OSIF_ID);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static void
+osif_populate_partner_links_mlo_params(
+			struct wlan_objmgr_vdev *vdev,
+			struct wlan_cm_connect_resp *rsp,
+			struct cfg80211_connect_resp_params *conn_rsp_params)
+{
+	struct mlo_link_info *rsp_partner_info;
+	struct cfg80211_bss *bss = NULL;
+	uint8_t link_id = 0, num_links;
+	int i;
+	struct wlan_objmgr_vdev *link_vdev;
+
+	num_links = rsp->ml_parnter_info.num_partner_links;
+	for (i = 0 ; i < num_links; i++) {
+		rsp_partner_info = &rsp->ml_parnter_info.partner_link_info[i];
+		if (!rsp_partner_info) {
+			osif_err("Partner_info not found link_id:%u", link_id);
+			continue;
+		}
+
+		link_id = rsp_partner_info->link_id;
+		link_vdev =
+			mlo_get_vdev_by_link_id(vdev, link_id, WLAN_OSIF_CM_ID);
+		if (!link_vdev) {
+			osif_err("Link vdev not found link_id:%u", link_id);
+			continue;
+		}
+
+		rsp_partner_info->chan_freq =
+			link_vdev->vdev_mlme.bss_chan->ch_freq;
+
+		osif_debug("Link_id: %u freq: %u mac: " QDF_MAC_ADDR_FMT,
+			   link_id, rsp_partner_info->chan_freq,
+			   QDF_MAC_ADDR_REF(rsp_partner_info->link_addr.bytes));
+
+		bss = osif_get_chan_bss_from_kernel(link_vdev,
+						    rsp_partner_info, rsp);
+		if (!bss) {
+			osif_err("BSS not found link_id:%u", link_id);
+			wlan_objmgr_vdev_release_ref(link_vdev,
+						     WLAN_OSIF_CM_ID);
+			continue;
+		}
+
+		osif_populate_connect_response_for_link(
+				vdev, conn_rsp_params, link_id,
+				link_vdev->vdev_mlme.macaddr, bss);
+
+		wlan_objmgr_vdev_release_ref(link_vdev, WLAN_OSIF_CM_ID);
+	}
+}
+
+static void osif_fill_connect_resp_mlo_params(
+		struct wlan_objmgr_vdev *vdev,
+		struct wlan_cm_connect_resp *rsp,
+		struct cfg80211_bss *bss,
+		struct cfg80211_connect_resp_params *conn_rsp_params)
+{
+	uint8_t assoc_link_id;
+	QDF_STATUS qdf_status;
+	struct mlo_link_info *link_info = NULL;
+	struct wlan_mlo_sta *sta_ctx;
+
+	if (!wlan_vdev_mlme_is_mlo_vdev(vdev)) {
+		conn_rsp_params->links[0].bssid = rsp->bssid.bytes;
+		conn_rsp_params->links[0].bss = bss;
+		return;
+	}
+
+	qdf_status = osif_fill_peer_mld_mac_connect_resp(vdev, rsp,
+							 conn_rsp_params);
+	if (QDF_IS_STATUS_ERROR(qdf_status)) {
+		osif_err("Unable to fill peer mld address: %d", qdf_status);
+		return;
+	}
+
+	assoc_link_id = wlan_vdev_get_link_id(vdev);
+
+	osif_debug("Num_partner %u mac:" QDF_MAC_ADDR_FMT,
+		   rsp->ml_parnter_info.num_partner_links,
+		   QDF_MAC_ADDR_REF(rsp->bssid.bytes));
+
+	sta_ctx = vdev->mlo_dev_ctx->sta_ctx;
+	link_info = &sta_ctx->ml_partner_info.partner_link_info[assoc_link_id];
+	link_info->chan_freq = vdev->vdev_mlme.bss_chan->ch_freq;
+
+	qdf_mem_copy(&link_info->link_addr, &rsp->bssid, QDF_MAC_ADDR_SIZE);
+	osif_debug("Assoc link_id: %u freq: %u mac: " QDF_MAC_ADDR_FMT,
+		   assoc_link_id, link_info->chan_freq,
+		   QDF_MAC_ADDR_REF(link_info->link_addr.bytes));
+
+	osif_populate_connect_response_for_link(vdev, conn_rsp_params,
+						assoc_link_id,
+						vdev->vdev_mlme.macaddr,
+						bss);
+	osif_populate_partner_links_mlo_params(vdev, rsp, conn_rsp_params);
+}
+#else
 static void osif_fill_connect_resp_mlo_params(
 			struct wlan_objmgr_vdev *vdev,
 			struct wlan_cm_connect_resp *rsp,
@@ -795,7 +939,7 @@ static void osif_fill_connect_resp_mlo_params(
 			struct cfg80211_connect_resp_params *conn_rsp_params)
 {
 }
-
+#endif
 static void
 osif_free_ml_link_params(struct cfg80211_connect_resp_params *conn_rsp_params)
 {
