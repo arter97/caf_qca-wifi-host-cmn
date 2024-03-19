@@ -6883,6 +6883,7 @@ typedef enum {
  * @num_antennas: Indicates number of antennas supported
  * @sta_dump_support: Indicates sta dump info support
  * @iface_combinations: Iface combination bit map
+ * @is_nan_eht_cap_enable: Indicates if nan eht capability enabled
  */
 struct target_feature_set {
 	WMI_HOST_WIFI_STANDARD wifi_standard;
@@ -6943,6 +6944,7 @@ struct target_feature_set {
 	WMI_HOST_NUM_ANTENNAS num_antennas;
 	bool sta_dump_support;
 	uint32_t iface_combinations;
+	bool is_nan_eht_cap_enable;
 };
 #endif
 

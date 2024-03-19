@@ -10594,6 +10594,8 @@ static inline void copy_feature_set_info(uint32_t *feature_set_bitmap,
 	WMI_SET_HOST_BAND_CAP(feature_set_bitmap, band_capability);
 	WMI_SET_STA_DUMP_SUPPORT(feature_set_bitmap,
 				 feature_set->sta_dump_support);
+	WMI_SET_NAN_EHT_SUPPORT(feature_set_bitmap,
+				feature_set->is_nan_eht_cap_enable);
 }
 
 /**
