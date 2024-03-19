@@ -307,6 +307,14 @@ const char *fw_to_hw_delay_bucket[CDP_DELAY_BUCKET_MAX + 1] = {
 	"7000 to 8000 us", "8000 to 9000 us", "9000+ us"
 };
 #endif
+const char *pdev_fw_to_hw_delay_bucket[CDP_DELAY_BUCKET_MAX + 1] = {
+	"0 to 2 ms", "2 to 4 ms",
+	"4 to 6 ms", "6 to 8 ms",
+	"8 to 10 ms", "10 to 20 ms",
+	"20 to 30 ms", "30 to 40 ms",
+	"40 to 50 ms", "50 to 100 ms",
+	"100 to 250 ms", "250 to 500 ms", "500+ ms"
+};
 #elif defined(HW_TX_DELAY_STATS_ENABLE)
 const char *fw_to_hw_delay_bucket[CDP_DELAY_BUCKET_MAX + 1] = {
 	"0 to 2 ms", "2 to 4 ms",
@@ -349,6 +357,15 @@ const char *sw_enq_delay_bucket[CDP_DELAY_BUCKET_MAX + 1] = {
 	"7000 to 8000 us", "8000 to 9000 us", "9000+ us"
 };
 #endif
+
+const char *pdev_sw_enq_delay_bucket[CDP_DELAY_BUCKET_MAX + 1] = {
+	"0 to 1 ms", "1 to 2 ms",
+	"2 to 3 ms", "3 to 4 ms",
+	"4 to 5 ms", "5 to 6 ms",
+	"6 to 7 ms", "7 to 8 ms",
+	"8 to 9 ms", "9 to 10 ms",
+	"10 to 11 ms", "11 to 12 ms", "12+ ms"
+};
 
 const char *intfrm_delay_bucket[CDP_DELAY_BUCKET_MAX + 1] = {
 	"0 to 4 ms", "5 to 9 ms",
@@ -4967,7 +4984,7 @@ void dp_peer_stats_update_protocol_cnt(struct cdp_soc_t *soc_hdl,
 }
 #endif
 
-#if defined(QCA_ENH_V3_STATS_SUPPORT) || defined(HW_TX_DELAY_STATS_ENABLE)
+#if defined(QCA_ENH_V3_STATS_SUPPORT)
 /**
  * dp_vow_str_fw_to_hw_delay() - Return string for a delay
  * @index: Index of delay
@@ -4981,6 +4998,15 @@ static inline const char *dp_vow_str_fw_to_hw_delay(uint8_t index)
 	}
 	return fw_to_hw_delay_bucket[index];
 }
+
+static inline const char *dp_pdev_vow_str_fw_to_hw_delay(uint8_t index)
+{
+	if (index > CDP_DELAY_BUCKET_MAX) {
+		return "Invalid index";
+	}
+	return pdev_fw_to_hw_delay_bucket[index];
+}
+#endif
 
 #if defined(HW_TX_DELAY_STATS_ENABLE)
 /**
@@ -4998,6 +5024,7 @@ static inline const char *dp_str_fw_to_hw_delay_bkt(uint8_t index)
 }
 #endif
 
+#if defined(QCA_ENH_V3_STATS_SUPPORT) || defined(HW_TX_DELAY_STATS_ENABLE)
 /**
  * dp_accumulate_delay_stats() - Update delay stats members
  * @total: Update stats total structure
@@ -5032,6 +5059,14 @@ static inline const char *dp_vow_str_sw_enq_delay(uint8_t index)
 		return "Invalid index";
 	}
 	return sw_enq_delay_bucket[index];
+}
+
+static inline const char *dp_pdev_vow_str_sw_enq_delay(uint8_t index)
+{
+	if (index > CDP_DELAY_BUCKET_MAX) {
+		return "Invalid index";
+	}
+	return pdev_sw_enq_delay_bucket[index];
 }
 
 /**
@@ -5263,7 +5298,7 @@ void dp_pdev_print_delay_stats(struct dp_pdev *pdev)
 			count = total_tx.swq_delay.delay_bucket[index];
 			if (count) {
 				DP_PRINT_STATS("%s:  Packets = %llu",
-					       dp_vow_str_sw_enq_delay(index),
+					       dp_pdev_vow_str_sw_enq_delay(index),
 					       count);
 			}
 		}
@@ -5277,7 +5312,7 @@ void dp_pdev_print_delay_stats(struct dp_pdev *pdev)
 			count = total_tx.hwtx_delay.delay_bucket[index];
 			if (count) {
 				DP_PRINT_STATS("%s:  Packets = %llu",
-					       dp_vow_str_fw_to_hw_delay(index),
+					       dp_pdev_vow_str_fw_to_hw_delay(index),
 					       count);
 			}
 		}
