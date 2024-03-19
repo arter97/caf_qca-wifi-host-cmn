@@ -2955,6 +2955,14 @@ hif_affinity_mgr_set_ce_irq_affinity(struct hif_softc *scn, uint32_t irq,
  * Return: None
  */
 void hif_affinity_mgr_affine_irq(struct hif_softc *scn);
+
+/**
+ * hif_affinity_mgr_supported() - checks for affinity mgr support
+ * @hif_ctx: hif opaque handle
+ *
+ * Return: true if affinity mgr supported else return flase
+ */
+bool hif_affinity_mgr_supported(struct hif_opaque_softc *hif_ctx);
 #else
 static inline void
 hif_affinity_mgr_init_ce_irq(struct hif_softc *scn, int id, int irq)
@@ -2985,6 +2993,12 @@ hif_affinity_mgr_set_ce_irq_affinity(struct hif_softc *scn, uint32_t irq,
 static inline
 void hif_affinity_mgr_affine_irq(struct hif_softc *scn)
 {
+}
+
+static inline bool
+hif_affinity_mgr_supported(struct hif_opaque_softc *hif_ctx)
+{
+	return false;
 }
 #endif
 
