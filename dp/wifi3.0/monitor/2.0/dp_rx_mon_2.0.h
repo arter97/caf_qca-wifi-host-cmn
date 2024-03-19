@@ -50,7 +50,7 @@
 			    + (DP_RX_MON_TLV_HDR_MARKER_LEN)\
 			    + (DP_RX_MON_TLV_TOTAL_LEN))
 
-#define DP_RX_MON_MAX_RX_HEADER_LEN 128
+#define DP_RX_MON_MAX_RX_HEADER_LEN (128 + DP_RX_MON_RX_HDR_OFFSET)
 
 #ifdef WLAN_PKT_CAPTURE_RX_2_0
 QDF_STATUS dp_mon_pdev_ext_init_2_0(struct dp_pdev *pdev);
