@@ -1488,7 +1488,7 @@ wlan_reg_get_5g_bonded_channel_and_state_for_pwrmode(
 
 qdf_export_symbol(wlan_reg_get_5g_bonded_channel_and_state_for_pwrmode);
 
-#if defined(WLAN_FEATURE_11BE) && defined(CONFIG_REG_CLIENT)
+#if defined(CONFIG_REG_CLIENT)
 enum channel_state
 wlan_reg_get_bonded_channel_state_for_pwrmode(struct wlan_objmgr_pdev *pdev,
 					      qdf_freq_t freq,

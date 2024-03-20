@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -9445,6 +9445,7 @@ struct wmi_roam_scan_data {
  * @status:             0 - Roaming is success ; 1 - Roaming failed ;
  * 2 - No roam
  * @fail_reason:        One of WMI_ROAM_FAIL_REASON_ID
+ * @roam_abort_reason:  Roam abort reason codes
  * @fail_bssid:         BSSID of the last attempted roam failed AP
  */
 struct wmi_roam_result {
@@ -9452,6 +9453,7 @@ struct wmi_roam_result {
 	uint32_t timestamp;
 	uint32_t status;
 	uint32_t fail_reason;
+	uint32_t roam_abort_reason;
 	struct qdf_mac_addr fail_bssid;
 };
 

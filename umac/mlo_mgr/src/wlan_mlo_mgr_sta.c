@@ -316,6 +316,24 @@ static void mlo_free_copied_conn_req(struct wlan_mlo_sta *sta_ctx)
 }
 
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+int mlo_mgr_get_per_link_chan_info(struct wlan_objmgr_vdev *vdev, int link_id,
+				   struct wlan_channel *chan_info)
+{
+	struct mlo_link_info *ml_link_info;
+
+	ml_link_info = mlo_mgr_get_ap_link_by_link_id(vdev->mlo_dev_ctx,
+						      link_id);
+	if (!ml_link_info) {
+		mlo_debug("ml_link_info null for link_id: %d", link_id);
+		return -EINVAL;
+	}
+
+	qdf_mem_copy(chan_info, ml_link_info->link_chan_info,
+		     sizeof(*chan_info));
+
+	return 0;
+}
+
 static QDF_STATUS
 mlo_validate_connect_req(struct wlan_objmgr_vdev *vdev,
 			 struct wlan_mlo_dev_context *mlo_dev_ctx,
