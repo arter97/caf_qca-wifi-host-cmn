@@ -23,6 +23,12 @@
 #ifndef __CONFIG_SPECTRAL_H
 #define __CONFIG_SPECTRAL_H
 
+#ifdef WLAN_SPECTRAL_STREAMFS
+#include <cfg_spectral_streamfs.h>
+#else
+#define CFG_SPECTRAL_STREAMFS_ALL
+#endif
+
 /*
  * <ini>
  * spectral_disable - disable spectral feature
@@ -93,6 +99,7 @@
 #define CFG_SPECTRAL_ALL \
 	CFG(CFG_SPECTRAL_DISABLE) \
 	CFG(CFG_SPECTRAL_POISON_BUFS) \
-	CFG(CFG_SPECTRAL_DATA_TRANSPORT_MECHANISM)
+	CFG(CFG_SPECTRAL_DATA_TRANSPORT_MECHANISM) \
+	CFG_SPECTRAL_STREAMFS_ALL
 
 #endif

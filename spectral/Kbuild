@@ -209,6 +209,7 @@ obj-m += qca_spectral.o
 
 INCS += -I$(obj)/$(DEPTH)/cmn_dev/umac/twt/dispatcher/inc
 INCS += -I$(obj)/$(DEPTH)/spectral/dispatcher/inc
+INCS += -I$(obj)/$(DEPTH)/component_dev/spectral/dispatcher/inc
 
 inc_file := $(obj)/$(DEPTH)/spectral_inc_opts
 inc_var := $(shell echo $(INCS) > $(inc_file))
