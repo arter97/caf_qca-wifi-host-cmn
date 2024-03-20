@@ -1008,6 +1008,7 @@ wlan_mlo_t2lm_timer_expiry_handler(void *vdev);
 QDF_STATUS
 wlan_handle_t2lm_timer(struct wlan_objmgr_vdev *vdev);
 
+#ifndef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 /**
  * wlan_mlo_t2lm_register_link_update_notify_handler() - API to register a T2LM
  * callback that needs to be invoked on mapping switch time expiry and expected
@@ -1018,6 +1019,13 @@ wlan_handle_t2lm_timer(struct wlan_objmgr_vdev *vdev);
  */
 QDF_STATUS wlan_mlo_t2lm_register_link_update_notify_handler(
 		struct wlan_mlo_dev_context *ml_dev);
+#else
+static inline QDF_STATUS
+wlan_mlo_t2lm_register_link_update_notify_handler(struct wlan_mlo_dev_context *ml_dev)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 
 /**
  * wlan_process_bcn_prbrsp_t2lm_ie() - API to process the received T2LM IE from
