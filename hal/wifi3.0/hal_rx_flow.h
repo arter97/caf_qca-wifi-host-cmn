@@ -240,4 +240,17 @@ void hal_rx_dump_fse_table(struct hal_rx_fst *fst);
  */
 void hal_rx_dump_cmem_fse(hal_soc_handle_t hal_soc_hdl, uint32_t fse_offset,
 			  int index);
+/**
+ * hal_rx_flow_cmem_update_reo_dst_ind - update reo dest indication in CMEM
+ * @hal_soc_hdl: HAL SOC handle
+ * @cmem_ba: CMEM base address
+ * @flow_idx: flow index for which CMEM update is needed
+ * @reo_dest_ind: reo destination indication
+ *
+ * Return: None
+ */
+void hal_rx_flow_cmem_update_reo_dst_ind(hal_soc_handle_t hal_soc_hdl,
+					 uint32_t cmem_ba,
+					 uint32_t flow_idx,
+					 uint8_t reo_dest_ind);
 #endif /* HAL_RX_FLOW_H */

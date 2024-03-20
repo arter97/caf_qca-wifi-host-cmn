@@ -1484,6 +1484,10 @@ struct hal_hw_txrx_ops {
 	void (*hal_rx_parse_eht_sig_hdr)(struct hal_soc *hal_soc,
 					 uint8_t *tlv,
 					 void *ppdu_info_handle);
+	void (*hal_rx_flow_cmem_update_reo_dst_ind)(struct hal_soc *hal_soc,
+						    uint32_t cmem_ba,
+						    uint32_t flow_idx,
+						    uint8_t reo_dest_ind);
 };
 
 /**

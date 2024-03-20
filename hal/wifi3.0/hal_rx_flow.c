@@ -605,3 +605,20 @@ hal_rx_find_flow_from_tuple(hal_soc_handle_t hal_soc_hdl,
 	return QDF_STATUS_SUCCESS;
 }
 qdf_export_symbol(hal_rx_find_flow_from_tuple);
+
+void
+hal_rx_flow_cmem_update_reo_dst_ind(hal_soc_handle_t hal_soc_hdl,
+				    uint32_t cmem_ba,
+				    uint32_t flow_idx, uint8_t reo_dest_ind)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if (hal_soc->ops->hal_rx_flow_cmem_update_reo_dst_ind) {
+		hal_soc->ops->hal_rx_flow_cmem_update_reo_dst_ind(hal_soc,
+								  cmem_ba,
+								  flow_idx,
+								  reo_dest_ind);
+	}
+}
+
+qdf_export_symbol(hal_rx_flow_cmem_update_reo_dst_ind);
