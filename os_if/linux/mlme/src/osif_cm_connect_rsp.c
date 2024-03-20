@@ -580,7 +580,7 @@ osif_populate_partner_links_mlo_params(struct wlan_objmgr_vdev *vdev,
 
 		osif_populate_connect_response_for_link(vdev, conn_rsp_params,
 							link_id,
-							rsp_partner_info->link_addr.bytes,
+							link_vdev->vdev_mlme.macaddr,
 							bss);
 release_ref:
 		wlan_objmgr_vdev_release_ref(link_vdev, WLAN_OSIF_CM_ID);
