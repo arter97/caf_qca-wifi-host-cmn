@@ -66,6 +66,35 @@ wlan_wifi_pos_cfg80211_set_auth_deauth_random_ta_flag(
 }
 #endif
 
+#ifdef CNSS_GENL
+/**
+ * wlan_wifi_pos_get_rsta_11az_ranging_cap() - API to read user configured RSTA
+ * 11az ranging capability.
+ * @psoc: Pointer to PSOC object
+ *
+ * Return: user configured RSTA 11az ranging capability.
+ */
+static uint32_t wlan_wifi_pos_get_rsta_11az_ranging_cap(
+		struct wlan_objmgr_psoc *psoc)
+{
+	return ucfg_wifi_pos_get_rsta_11az_ranging_cap();
+}
+#else
+static uint32_t wlan_wifi_pos_get_rsta_11az_ranging_cap(
+		struct wlan_objmgr_psoc *psoc)
+{
+	struct wifi_pos_legacy_ops *legacy_cb;
+
+	legacy_cb = wifi_pos_get_legacy_ops();
+	if (!legacy_cb || !legacy_cb->get_rsta_11az_ranging_cap) {
+		wifi_pos_err("legacy callback is not registered");
+		return 0;
+	}
+
+	return legacy_cb->get_rsta_11az_ranging_cap(psoc);
+}
+#endif
+
 #define WLAN_EXT_RANGING_CAP_IDX  11
 void
 wlan_wifi_pos_cfg80211_set_wiphy_ext_feature(struct wiphy *wiphy,
@@ -73,7 +102,8 @@ wlan_wifi_pos_cfg80211_set_wiphy_ext_feature(struct wiphy *wiphy,
 {
 	uint32_t enable_rsta_11az_ranging;
 
-	enable_rsta_11az_ranging = ucfg_wifi_pos_get_rsta_11az_ranging_cap();
+	enable_rsta_11az_ranging =
+		wlan_wifi_pos_get_rsta_11az_ranging_cap(psoc);
 	if (!enable_rsta_11az_ranging)
 		return;
 
