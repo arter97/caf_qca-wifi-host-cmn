@@ -795,32 +795,33 @@ void dp_monitor_neighbour_peer_list_remove(struct dp_pdev *pdev,
 {
 }
 
-static inline bool dp_monitor_is_chan_band_known(struct dp_pdev *pdev)
+static inline
+bool dp_monitor_is_chan_band_known(struct dp_pdev *pdev, uint8_t mac_id)
 {
 	return false;
 }
 
 static inline enum reg_wifi_band
-dp_monitor_get_chan_band(struct dp_pdev *pdev)
+dp_monitor_get_chan_band(struct dp_pdev *pdev, uint8_t mac_id)
 {
 	return 0;
 }
 
 static inline int
-dp_monitor_get_chan_num(struct dp_pdev *vdev)
+dp_monitor_get_chan_num(struct dp_vdev *vdev)
 {
 	return 0;
 }
 
 static inline qdf_freq_t
-dp_monitor_get_chan_freq(struct dp_pdev *vdev)
+dp_monitor_get_chan_freq(struct dp_vdev *vdev)
 {
 	return 0;
 }
 
 static inline void dp_monitor_get_mpdu_status(struct dp_pdev *pdev,
 					      struct dp_soc *soc,
-					      uint8_t *rx_tlv_hdr
+					      uint8_t *rx_tlv_hdr,
 					      uint8_t mac_id)
 {
 }
@@ -1038,6 +1039,25 @@ void dp_monitor_peer_deter_stats(struct dp_peer *peer,
 {
 }
 #endif /* WLAN_CONFIG_TELEMETRY_AGENT */
+
+static inline bool
+dp_mon_mode_local_pkt_capture(struct dp_soc *soc)
+{
+	return false;
+}
+
+static inline QDF_STATUS
+dp_mon_config_mon_fcs_cap(struct dp_soc *soc,
+			  struct dp_pdev *pdev,
+			  uint8_t value)
+{
+	return QDF_STATUS_E_FAILURE;
+}
+
+static inline void
+dp_monitor_update_mac_vdev_map(struct dp_vdev *vdev)
+{
+}
 #endif /* !WIFI_MONITOR_SUPPORT */
 
 /**
