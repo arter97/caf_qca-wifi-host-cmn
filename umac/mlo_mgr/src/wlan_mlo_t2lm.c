@@ -467,6 +467,10 @@ static bool ttlm_state_negotiated_event(void *ctx, uint16_t event,
 				WLAN_TTLM_SM_EV_TX_ACTION_REQ_START,
 				data_len, data);
 		break;
+	case WLAN_TTLM_SM_EV_RX_ACTION_REQ:
+		ttlm_sm_transition_to(ml_peer, WLAN_TTLM_S_INPROGRESS);
+		ttlm_sm_deliver_event_sync(ml_peer, event, data_len, data);
+		break;
 	default:
 		event_handled = false;
 		break;
