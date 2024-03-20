@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -327,6 +327,8 @@ scm_copy_valid_channels(struct wlan_objmgr_psoc *psoc,
 	uint8_t i, num_ch = *num_scan_ch;
 	struct chan_list *chan_list = &req->scan_req.chan_list;
 	qdf_freq_t freq;
+	chan_list->num_chan =
+			qdf_min(chan_list->num_chan, (uint8_t)NUM_CHANNELS);
 
 	switch (scan_mode) {
 	case SCAN_MODE_6G_NO_CHANNEL:
