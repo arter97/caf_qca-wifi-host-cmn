@@ -330,6 +330,7 @@ static bool ttlm_state_init_event(void *ctx, uint16_t event, uint16_t data_len,
 {
 	bool event_handled = true;
 	struct wlan_mlo_peer_context *ml_peer = ctx;
+	QDF_STATUS status;
 
 	switch (event) {
 	case WLAN_TTLM_SM_EV_TX_ACTION_REQ:
@@ -345,6 +346,10 @@ static bool ttlm_state_init_event(void *ctx, uint16_t event, uint16_t data_len,
 	case WLAN_TTLM_SM_EV_BEACON:
 		break;
 	case WLAN_TTLM_SM_EV_BTM_LINK_DISABLE:
+		ttlm_sm_transition_to(ml_peer, WLAN_TTLM_S_INPROGRESS);
+		status = ttlm_sm_deliver_event_sync(ml_peer, event, data_len, data);
+		if (QDF_IS_STATUS_ERROR(status))
+			event_handled = false;
 		break;
 	default:
 		event_handled = false;
@@ -397,6 +402,7 @@ static bool ttlm_state_inprogress_event(void *ctx, uint16_t event,
 {
 	struct wlan_mlo_peer_context *ml_peer = ctx;
 	bool event_handled = true;
+	QDF_STATUS status;
 
 	switch (event) {
 	case WLAN_TTLM_SM_EV_TX_ACTION_REQ_START:
@@ -407,6 +413,12 @@ static bool ttlm_state_inprogress_event(void *ctx, uint16_t event,
 		ttlm_sm_transition_to(ml_peer,
 				      WLAN_TTLM_SS_AP_ACTION_INPROGRESS);
 		ttlm_sm_deliver_event_sync(ml_peer, event, data_len, data);
+		break;
+	case WLAN_TTLM_SM_EV_BTM_LINK_DISABLE:
+		ttlm_sm_transition_to(ml_peer, WLAN_TTLM_SS_AP_BTM_INPROGRESS);
+		status = ttlm_sm_deliver_event_sync(ml_peer, event, data_len, data);
+		if (QDF_IS_STATUS_ERROR(status))
+			event_handled = false;
 		break;
 	default:
 		event_handled = false;
@@ -824,6 +836,39 @@ static void ttlm_subst_ap_btm_inprogress_exit(void *ctx)
 {
 }
 
+static QDF_STATUS
+ttlm_handle_btm_link_disable_t2lm_frame(struct wlan_mlo_peer_context *ml_peer,
+					struct wlan_t2lm_onging_negotiation_info *t2lm_neg)
+{
+	struct wlan_objmgr_peer *peer;
+	struct wlan_objmgr_vdev *vdev;
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+
+	vdev = mlo_get_first_vdev_by_ml_peer(ml_peer);
+	if (!vdev) {
+		t2lm_err("vdev is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	peer = wlan_objmgr_vdev_try_get_bsspeer(vdev, WLAN_MLO_MGR_ID);
+	if (!peer) {
+		t2lm_err("peer is null");
+		status = QDF_STATUS_E_NULL_VALUE;
+		goto release_vdev;
+	}
+
+	status = t2lm_deliver_event(vdev, peer,
+				    WLAN_T2LM_EV_ACTION_FRAME_TX_REQ,
+				    t2lm_neg, 0, &t2lm_neg->dialog_token);
+
+	wlan_objmgr_peer_release_ref(peer, WLAN_MLO_MGR_ID);
+
+release_vdev:
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLO_MGR_ID);
+
+	return status;
+}
+
 /**
  * ttlm_subst_ap_btm_inprogress_event() - AP BTM INPROGRESS sub-state event
  * handler for TTLM
@@ -840,8 +885,15 @@ static bool ttlm_subst_ap_btm_inprogress_event(void *ctx, uint16_t event,
 					       uint16_t data_len, void *data)
 {
 	bool event_handled = true;
+	QDF_STATUS status;
+	struct wlan_mlo_peer_context *ml_peer = ctx;
 
 	switch (event) {
+	case WLAN_TTLM_SM_EV_BTM_LINK_DISABLE:
+		status = ttlm_handle_btm_link_disable_t2lm_frame(ml_peer, data);
+		if (QDF_IS_STATUS_ERROR(status))
+			event_handled = false;
+		break;
 	default:
 		event_handled = false;
 		break;
