@@ -691,6 +691,7 @@ static const uint32_t vdev_param_tlv[] = {
 		  VDEV_PARAM_MAX_LI_OF_MODDTIM),
 	PARAM_MAP(vdev_param_moddtim_cnt, VDEV_PARAM_MODDTIM_CNT),
 	PARAM_MAP(vdev_param_telesdtim_cnt, VDEV_PARAM_TELESDTIM_CNT),
+	PARAM_MAP(vdev_param_min_teles_dtim_lvl, VDEV_PARAM_MIN_TELES_DTIM_LVL),
 	PARAM_MAP(vdev_param_max_li_of_moddtim_ms,
 		  VDEV_PARAM_MAX_LI_OF_MODDTIM_MS),
 	PARAM_MAP(vdev_param_dyndtim_cnt, VDEV_PARAM_DYNDTIM_CNT),

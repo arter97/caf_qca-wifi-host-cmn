@@ -6140,6 +6140,8 @@ typedef enum {
 		   VDEV_PARAM_RATE_DROPDOWN_BMAP),
 	VDEV_PARAM(vdev_param_moddtim_cnt, VDEV_PARAM_MODDTIM_CNT),
 	VDEV_PARAM(vdev_param_telesdtim_cnt, VDEV_PARAM_TELESDTIM_CNT),
+	VDEV_PARAM(vdev_param_min_teles_dtim_lvl,
+		   VDEV_PARAM_MIN_TELES_DTIM_LVL),
 	VDEV_PARAM(vdev_param_max_li_of_moddtim, VDEV_PARAM_MAX_LI_OF_MODDTIM),
 	VDEV_PARAM(vdev_param_dyndtim_cnt, VDEV_PARAM_DYNDTIM_CNT),
 	VDEV_PARAM(vdev_param_enable_disable_rtt_responder_role,
