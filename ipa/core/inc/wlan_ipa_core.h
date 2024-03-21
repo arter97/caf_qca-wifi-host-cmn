@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -72,6 +72,21 @@ bool wlan_ipa_is_rt_debugging_enabled(struct wlan_ipa_config *ipa_cfg)
 	return WLAN_IPA_IS_CONFIG_ENABLED(ipa_cfg,
 					  WLAN_IPA_REAL_TIME_DEBUGGING);
 }
+
+#ifdef IPA_WDI3_TX_TWO_PIPES
+static inline bool
+wlan_ipa_is_two_tx_pipes_enabled(struct wlan_ipa_config *ipa_cfg)
+{
+	return WLAN_IPA_IS_CONFIG_ENABLED(ipa_cfg,
+					  WLAN_IPA_TWO_TX_PIPES_ENABLE_MASK);
+}
+#else /* !IPA_WDI3_TX_TWO_PIPES */
+static inline bool
+wlan_ipa_is_two_tx_pipes_enabled(struct wlan_ipa_config *ipa_cfg)
+{
+	return false;
+}
+#endif /* IPA_WDI3_TX_TWO_PIPES */
 
 /**
  * wlan_ipa_setup - IPA initialize and setup

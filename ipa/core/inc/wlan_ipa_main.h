@@ -188,6 +188,13 @@ bool ipa_config_is_opt_wifi_dp_enabled(void);
 bool ipa_config_is_vlan_enabled(void);
 
 /**
+ * ipa_config_is_two_tx_pipes_enabled - Is IPA two tx pipes feature enabled
+ *
+ * Return: true if two tx pipes feature is enabled. Otherwise false.
+ */
+bool ipa_config_is_two_tx_pipes_enabled(void);
+
+/**
  * ipa_obj_setup() - IPA obj initialization and setup
  * @ipa_ctx: IPA obj context
  *

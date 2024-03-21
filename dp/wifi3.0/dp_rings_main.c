@@ -1287,22 +1287,30 @@ void dp_hw_link_desc_ring_deinit(struct dp_soc *soc)
 #ifdef DP_MEMORY_OPT
 static int dp_ipa_init_alt_tx_ring(struct dp_soc *soc)
 {
+	if (!wlan_cfg_is_ipa_two_tx_pipes_enabled(soc->wlan_cfg_ctx))
+		return 0;
+
 	return dp_init_tx_ring_pair_by_index(soc, IPA_TX_ALT_RING_IDX);
 }
 
 static void dp_ipa_deinit_alt_tx_ring(struct dp_soc *soc)
 {
-	dp_deinit_tx_pair_by_index(soc, IPA_TX_ALT_RING_IDX);
+	if (wlan_cfg_is_ipa_two_tx_pipes_enabled(soc->wlan_cfg_ctx))
+		dp_deinit_tx_pair_by_index(soc, IPA_TX_ALT_RING_IDX);
 }
 
 static int dp_ipa_alloc_alt_tx_ring(struct dp_soc *soc)
 {
+	if (!wlan_cfg_is_ipa_two_tx_pipes_enabled(soc->wlan_cfg_ctx))
+		return 0;
+
 	return dp_alloc_tx_ring_pair_by_index(soc, IPA_TX_ALT_RING_IDX);
 }
 
 static void dp_ipa_free_alt_tx_ring(struct dp_soc *soc)
 {
-	dp_free_tx_ring_pair_by_index(soc, IPA_TX_ALT_RING_IDX);
+	if (wlan_cfg_is_ipa_two_tx_pipes_enabled(soc->wlan_cfg_ctx))
+		dp_free_tx_ring_pair_by_index(soc, IPA_TX_ALT_RING_IDX);
 }
 
 #else /* !DP_MEMORY_OPT */
@@ -1327,6 +1335,9 @@ static void dp_ipa_free_alt_tx_ring(struct dp_soc *soc)
 
 void dp_ipa_hal_tx_init_alt_data_ring(struct dp_soc *soc)
 {
+	if (!wlan_cfg_is_ipa_two_tx_pipes_enabled(soc->wlan_cfg_ctx))
+		return;
+
 	hal_tx_init_data_ring(soc->hal_soc,
 			      soc->tcl_data_ring[IPA_TX_ALT_RING_IDX].hal_srng);
 }

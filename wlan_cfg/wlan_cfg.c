@@ -3620,6 +3620,10 @@ void wlan_cfg_fill_interrupt_mask(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
 
 #define WLAN_CFG_IPA_ENABLE_MASK BIT(0)
 #ifdef IPA_WDI3_TX_TWO_PIPES
+
+/* This must be same as WLAN_IPA_TWO_TX_PIPES_ENABLE_MASK */
+#define WLAN_CFG_IPA_TWO_TX_PIPES_ENABLE_MASK BIT(10)
+
 /**
  * wlan_soc_ipa_cfg_attach() - Update ipa tx and tx alt config
  *  in dp soc cfg context
@@ -3632,12 +3636,20 @@ static void
 wlan_soc_ipa_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
 			struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
 {
+	uint32_t ipa_config;
+
 	if (ucfg_ipa_get_pld_enable()) {
-		wlan_cfg_ctx->ipa_enabled =
-			(get_ipa_config((struct wlan_objmgr_psoc *)psoc) &
-			 WLAN_CFG_IPA_ENABLE_MASK);
+		ipa_config = get_ipa_config((struct wlan_objmgr_psoc *)psoc);
+
+		wlan_cfg_ctx->ipa_enabled = ipa_config &
+			WLAN_CFG_IPA_ENABLE_MASK;
 		dp_info("is IPA enabled from ini: %d",
 			wlan_cfg_ctx->ipa_enabled);
+
+		wlan_cfg_ctx->ipa_two_tx_pipes_enable = ipa_config &
+			WLAN_CFG_IPA_TWO_TX_PIPES_ENABLE_MASK;
+		dp_info("IPA two tx pipes feature enable: %d",
+			wlan_cfg_ctx->ipa_two_tx_pipes_enable);
 	} else {
 		wlan_cfg_ctx->ipa_enabled = false;
 		dp_info("IPA disabled from platform driver");
@@ -3686,7 +3698,7 @@ wlan_soc_ipa_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
 			struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
 {
 }
-#endif
+#endif /* IPA_OFFLOAD */
 
 #ifdef DP_HW_COOKIE_CONVERT_EXCEPTION
 static void
@@ -5655,6 +5667,11 @@ uint32_t wlan_cfg_ipa_tx_comp_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
 }
 
 #ifdef IPA_WDI3_TX_TWO_PIPES
+bool wlan_cfg_is_ipa_two_tx_pipes_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->ipa_two_tx_pipes_enable;
+}
+
 int wlan_cfg_ipa_tx_alt_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return cfg->ipa_tx_alt_ring_size;
@@ -5665,7 +5682,7 @@ int wlan_cfg_ipa_tx_alt_comp_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
 	return cfg->ipa_tx_alt_comp_ring_size;
 }
 
-#else
+#else /* !IPA_WDI3_TX_TWO_PIPES */
 int wlan_cfg_ipa_tx_alt_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return cfg->ipa_tx_ring_size;
@@ -5675,8 +5692,8 @@ int wlan_cfg_ipa_tx_alt_comp_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return cfg->ipa_tx_comp_ring_size;
 }
-#endif
-#endif
+#endif /* IPA_WDI3_TX_TWO_PIPES */
+#endif /* IPA_OFFLOAD */
 
 #ifdef WLAN_SUPPORT_PPEDS
 bool

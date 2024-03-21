@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -385,3 +385,10 @@ void ucfg_ipa_set_perf_level_bw(struct wlan_objmgr_pdev *pdev,
 }
 
 qdf_export_symbol(ucfg_ipa_set_perf_level_bw);
+
+bool ucfg_ipa_is_two_tx_pipes_enabled(void)
+{
+	return ipa_config_is_two_tx_pipes_enabled();
+}
+
+qdf_export_symbol(ucfg_ipa_is_two_tx_pipes_enabled);

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -38,6 +38,7 @@
  * bit6 - IPA UC STA enable
  * bit8 - IPA real time debugging
  * bit9 - IPA Optional wifi dp enable
+ * bit10 - IPA two TX pipes feature enable
  */
 
 /*

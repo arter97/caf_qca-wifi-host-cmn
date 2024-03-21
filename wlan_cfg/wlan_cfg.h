@@ -308,6 +308,8 @@ struct wlan_srng_cfg {
  * @peer_link_stats_enabled: true if MLO Peer Link stats are enabled
  * @ipa_tx_ring_size: IPA tx ring size
  * @ipa_tx_comp_ring_size: IPA tx completion ring size
+ * @ipa_two_tx_pipes_enable: flag to indicate if IPA two tx pipes feature is
+ *			     enabled or not
  * @ipa_tx_alt_ring_size: IPA tx alt ring size
  * @ipa_tx_alt_comp_ring_size: IPA tx alt completion ring size
  * @hw_cc_enabled: cookie conversion enabled
@@ -505,6 +507,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint32_t ipa_tx_ring_size;
 	uint32_t ipa_tx_comp_ring_size;
 #ifdef IPA_WDI3_TX_TWO_PIPES
+	bool ipa_two_tx_pipes_enable;
 	int ipa_tx_alt_ring_size;
 	int ipa_tx_alt_comp_ring_size;
 #endif /* IPA_WDI3_TX_TWO_PIPES */
@@ -2229,7 +2232,24 @@ int wlan_cfg_ipa_tx_alt_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg);
 int
 wlan_cfg_ipa_tx_alt_comp_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg);
 
-#else
+#ifdef IPA_WDI3_TX_TWO_PIPES
+/**
+ * wlan_cfg_is_ipa_two_tx_pipes_enabled() - Get IPA two tx pipes feature
+ *					    status
+ * @cfg: dp cfg context
+ *
+ * Return: true if IPA two tx pipes feature is enabled. Otherwise false
+ */
+bool wlan_cfg_is_ipa_two_tx_pipes_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
+#else /* !IPA_WDI3_TX_TWO_PIPES */
+static inline bool
+wlan_cfg_is_ipa_two_tx_pipes_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return false;
+}
+#endif /* IPA_WDI3_TX_TWO_PIPES */
+
+#else /* !IPA_OFFLOAD */
 static inline
 uint32_t wlan_cfg_ipa_tx_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
@@ -2241,7 +2261,7 @@ uint32_t wlan_cfg_ipa_tx_comp_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return 0;
 }
-#endif
+#endif /* IPA_OFFLOAD */
 
 /**
  * wlan_cfg_radio0_default_reo_get -  Get Radio0 default REO
