@@ -4621,6 +4621,7 @@ static inline void hif_config_rri_on_ddr(struct hif_softc *scn)
 	unsigned int i;
 	uint32_t high_paddr, low_paddr;
 	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
+	struct CE_attr *attr;
 	struct CE_pipe_config *ce_config;
 
 	if (hif_alloc_rri_on_ddr(scn) != QDF_STATUS_SUCCESS)
@@ -4635,7 +4636,11 @@ static inline void hif_config_rri_on_ddr(struct hif_softc *scn)
 	WRITE_CE_DDR_ADDRESS_FOR_RRI_HIGH(scn, high_paddr);
 
 	for (i = 0; i < CE_COUNT; i++) {
+		attr = &hif_state->host_ce_config[i];
 		ce_config = &hif_state->target_ce_config[i];
+
+		if (!attr->src_nentries && !attr->dest_nentries)
+			continue;
 		/*
 		 * For DST channel program both IDX_UPD_EN and
 		 * DMAX length(behalf of F.W) at once to avoid
