@@ -1678,12 +1678,13 @@ dp_rx_update_protocol_tag(struct dp_soc *soc, struct dp_vdev *vdev,
  * @vdev: vdev on which the packet is received
  * @nbuf: QDF pkt buffer on which the protocol tag should be set
  * @rx_tlv_hdr: rBbase address where the RX TLVs starts
+ * @is_mld: Whether the peer is MLD or not
  *
  * Return: bool
  */
 static inline bool
 dp_rx_err_cce_drop(struct dp_soc *soc, struct dp_vdev *vdev,
-		   qdf_nbuf_t nbuf, uint8_t *rx_tlv_hdr)
+		   qdf_nbuf_t nbuf, uint8_t *rx_tlv_hdr, bool is_mld)
 {
 	return false;
 }

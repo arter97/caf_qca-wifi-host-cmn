@@ -931,16 +931,20 @@ dp_rx_deliver_to_osif_stack(struct dp_soc *soc,
 #endif
 
 #ifdef WLAN_FEATURE_11BE_MLO
-int dp_rx_err_match_dhost(qdf_ether_header_t *eh, struct dp_vdev *vdev)
+int dp_rx_err_match_dhost(qdf_ether_header_t *eh, struct dp_vdev *vdev,
+			  bool is_ml)
 {
-	return ((qdf_mem_cmp(eh->ether_dhost, &vdev->mac_addr.raw[0],
-			     QDF_MAC_ADDR_SIZE) == 0) ||
-		(qdf_mem_cmp(eh->ether_dhost, &vdev->mld_mac_addr.raw[0],
-			     QDF_MAC_ADDR_SIZE) == 0));
+	if (is_ml)
+		return (qdf_mem_cmp(eh->ether_dhost, &vdev->mld_mac_addr.raw[0],
+				    QDF_MAC_ADDR_SIZE) == 0);
+	else
+		return (qdf_mem_cmp(eh->ether_dhost, &vdev->mac_addr.raw[0],
+				    QDF_MAC_ADDR_SIZE) == 0);
 }
 
 #else
-int dp_rx_err_match_dhost(qdf_ether_header_t *eh, struct dp_vdev *vdev)
+int dp_rx_err_match_dhost(qdf_ether_header_t *eh, struct dp_vdev *vdev,
+			  bool is_ml)
 {
 	return (qdf_mem_cmp(eh->ether_dhost, &vdev->mac_addr.raw[0],
 			    QDF_MAC_ADDR_SIZE) == 0);
@@ -1810,7 +1814,7 @@ dp_rx_err_route_hdl(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	if (is_eapol || qdf_nbuf_is_ipv4_wapi_pkt(nbuf)) {
 		qdf_ether_header_t *eh =
 			(qdf_ether_header_t *)qdf_nbuf_data(nbuf);
-		if (dp_rx_err_match_dhost(eh, vdev)) {
+		if (dp_rx_err_match_dhost(eh, vdev, txrx_peer->is_mld_peer)) {
 			DP_STATS_INC_PKT(vdev, rx_i.routed_eapol_pkt, 1,
 					 qdf_nbuf_len(nbuf));
 
