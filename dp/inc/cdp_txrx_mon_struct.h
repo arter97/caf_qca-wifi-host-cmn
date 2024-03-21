@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -262,5 +263,24 @@ struct cdp_pdev_mon_stats {
 	uint32_t mon_link_desc_invalid;
 	uint32_t mon_rx_desc_invalid;
 	uint32_t mon_nbuf_sanity_err;
+};
+
+/*
+ * enum cdp_mon_reap_source: trigger source of the reap timer of
+ * monitor status ring
+ * @CDP_MON_REAP_SOURCE_PKTLOG: pktlog
+ * @CDP_MON_REAP_SOURCE_CFR: CFR
+ * @CDP_MON_REAP_SOURCE_EMESH: easy mesh
+ * @CDP_MON_REAP_SOURCE_NUM: total number of the sources
+ * @CDP_MON_REAP_SOURCE_ANY: any of the sources
+ */
+enum cdp_mon_reap_source {
+	CDP_MON_REAP_SOURCE_PKTLOG,
+	CDP_MON_REAP_SOURCE_CFR,
+	CDP_MON_REAP_SOURCE_EMESH,
+
+	/* keep last */
+	CDP_MON_REAP_SOURCE_NUM,
+	CDP_MON_REAP_SOURCE_ANY,
 };
 #endif

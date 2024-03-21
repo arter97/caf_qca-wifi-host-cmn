@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -2720,6 +2721,12 @@ QDF_STATUS
 (*extract_mlo_teardown_cmpl_event)(wmi_unified_t wmi_handle,
 				   uint8_t *buf,
 				   struct wmi_mlo_teardown_cmpl_params *param);
+#endif
+
+#ifdef WLAN_FEATURE_SON
+QDF_STATUS
+(*extract_inst_rssi_stats_resp)(wmi_unified_t wmi_handle, void *evt_buf,
+			struct wmi_host_inst_rssi_stats_resp *inst_rssi_resp);
 #endif
 };
 

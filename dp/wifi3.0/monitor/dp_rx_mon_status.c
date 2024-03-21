@@ -635,7 +635,8 @@ static void dp_rx_stats_update(struct dp_pdev *pdev,
 		return;
 
 	if (!soc || soc->process_rx_status)
-		return;
+		if (!pdev->enhanced_stats_en)
+			return;
 
 	preamble = ppdu->u.preamble;
 	ppdu_type = ppdu->u.ppdu_type;
@@ -1582,6 +1583,11 @@ dp_rx_handle_ppdu_stats(struct dp_soc *soc, struct dp_pdev *pdev,
 			dp_wdi_event_handler(WDI_EVENT_RX_PPDU_DESC, soc,
 					     ppdu_nbuf, HTT_INVALID_PEER,
 					     WDI_NO_VAL, pdev->pdev_id);
+
+			/* Need to be freed here as WDI handler will
+			 * make a copy of the pkt
+			 */
+			qdf_nbuf_free(ppdu_nbuf);
 		} else {
 			qdf_nbuf_free(ppdu_nbuf);
 		}

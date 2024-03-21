@@ -1259,7 +1259,7 @@ void dp_deliver_mgmt_frm(struct dp_pdev *pdev, qdf_nbuf_t nbuf)
  *
  * return:QDF_STATUS_SUCCESS if nbuf as to be freed in caller
  */
-QDF_STATUS
+static QDF_STATUS
 dp_process_ppdu_stats_tx_mgmtctrl_payload_tlv(struct dp_pdev *pdev,
 					      qdf_nbuf_t tag_buf,
 					      uint32_t ppdu_id)
@@ -3651,7 +3651,7 @@ static bool dp_txrx_ppdu_stats_handler(struct dp_soc *soc,
 
 	return true;
 }
-#else
+#elif (!defined(REMOVE_PKT_LOG))
 static bool dp_txrx_ppdu_stats_handler(struct dp_soc *soc,
 				       uint8_t pdev_id, qdf_nbuf_t htt_t2h_msg)
 {
@@ -4067,10 +4067,16 @@ static int dp_set_pktlog_wifi3(struct dp_pdev *pdev, uint32_t event,
 					(pdev->wlan_cfg_ctx);
 	uint8_t mac_id = 0;
 	struct dp_mon_soc *mon_soc;
+	struct dp_mon_ops *mon_ops = NULL;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 
 	soc = pdev->soc;
 	mon_soc = soc->monitor_soc;
+	if (soc && soc->monitor_soc)
+		mon_ops = soc->monitor_soc->mon_ops;
+
+	if (!mon_ops)
+		return 0;
 	dp_is_hw_dbs_enable(soc, &max_mac_rings);
 
 	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
@@ -4088,23 +4094,23 @@ static int dp_set_pktlog_wifi3(struct dp_pdev *pdev, uint32_t event,
 				return 0;
 			}
 
-			if (mon_pdev->rx_pktlog_mode != DP_RX_PKTLOG_FULL) {
-				mon_pdev->rx_pktlog_mode = DP_RX_PKTLOG_FULL;
-				dp_mon_filter_setup_rx_pkt_log_full(pdev);
-				if (dp_mon_filter_update(pdev) !=
-						QDF_STATUS_SUCCESS) {
-					dp_cdp_err("%pK: Pktlog full filters set failed", soc);
-					dp_mon_filter_reset_rx_pkt_log_full(pdev);
-					mon_pdev->rx_pktlog_mode =
-							DP_RX_PKTLOG_DISABLED;
-					return 0;
-				}
+			if (mon_pdev->rx_pktlog_mode == DP_RX_PKTLOG_FULL)
+				break;
 
-				if (mon_soc->reap_timer_init &&
-				    (!dp_mon_is_enable_reap_timer_non_pkt(pdev)))
-					qdf_timer_mod(&mon_soc->mon_reap_timer,
-						      DP_INTR_POLL_TIMER_MS);
+			mon_pdev->rx_pktlog_mode = DP_RX_PKTLOG_FULL;
+			dp_mon_filter_setup_rx_pkt_log_full(pdev);
+			if (dp_mon_filter_update(pdev) != QDF_STATUS_SUCCESS) {
+				dp_cdp_err("%pK: Pktlog full filters set failed",
+					   soc);
+				dp_mon_filter_reset_rx_pkt_log_full(pdev);
+				mon_pdev->rx_pktlog_mode =
+					DP_RX_PKTLOG_DISABLED;
+				return 0;
 			}
+
+			dp_monitor_reap_timer_start(soc,
+						    CDP_MON_REAP_SOURCE_PKTLOG);
+
 			break;
 
 		case WDI_EVENT_LITE_RX:
@@ -4115,27 +4121,26 @@ static int dp_set_pktlog_wifi3(struct dp_pdev *pdev, uint32_t event,
 				mon_pdev->rx_pktlog_mode = DP_RX_PKTLOG_LITE;
 				return 0;
 			}
-			if (mon_pdev->rx_pktlog_mode != DP_RX_PKTLOG_LITE) {
-				mon_pdev->rx_pktlog_mode = DP_RX_PKTLOG_LITE;
+			if (mon_pdev->rx_pktlog_mode == DP_RX_PKTLOG_LITE)
+				break;
 
-				/*
-				 * Set the packet log lite mode filter.
-				 */
-				dp_mon_filter_setup_rx_pkt_log_lite(pdev);
-				if (dp_mon_filter_update(pdev) !=
-				    QDF_STATUS_SUCCESS) {
-					dp_cdp_err("%pK: Pktlog lite filters set failed", soc);
-					dp_mon_filter_reset_rx_pkt_log_lite(pdev);
-					mon_pdev->rx_pktlog_mode =
-						DP_RX_PKTLOG_DISABLED;
-					return 0;
-				}
+			mon_pdev->rx_pktlog_mode = DP_RX_PKTLOG_LITE;
 
-				if (mon_soc->reap_timer_init &&
-				    (!dp_mon_is_enable_reap_timer_non_pkt(pdev)))
-					qdf_timer_mod(&mon_soc->mon_reap_timer,
-						      DP_INTR_POLL_TIMER_MS);
+			/*
+			 * Set the packet log lite mode filter.
+			 */
+			dp_mon_filter_setup_rx_pkt_log_lite(pdev);
+			if (dp_mon_filter_update(pdev) != QDF_STATUS_SUCCESS) {
+				dp_cdp_err("%pK: Pktlog lite filters set failed",
+					   soc);
+				dp_mon_filter_reset_rx_pkt_log_lite(pdev);
+				mon_pdev->rx_pktlog_mode =
+					DP_RX_PKTLOG_DISABLED;
+				return 0;
 			}
+
+			dp_monitor_reap_timer_start(soc,
+						    CDP_MON_REAP_SOURCE_PKTLOG);
 			break;
 
 		case WDI_EVENT_LITE_T2H:
@@ -4159,31 +4164,32 @@ static int dp_set_pktlog_wifi3(struct dp_pdev *pdev, uint32_t event,
 				mon_pdev->rx_pktlog_cbf = true;
 				return 0;
 			}
-			if (!mon_pdev->rx_pktlog_cbf) {
-				mon_pdev->rx_pktlog_cbf = true;
-				mon_pdev->monitor_configured = true;
-				dp_vdev_set_monitor_mode_buf_rings(pdev);
-				/*
-				 * Set the packet log lite mode filter.
-				 */
-				qdf_info("Non mon mode: Enable destination ring");
+			if (mon_pdev->rx_pktlog_cbf)
+				break;
 
-				dp_mon_filter_setup_rx_pkt_log_cbf(pdev);
-				if (dp_mon_filter_update(pdev) !=
-				    QDF_STATUS_SUCCESS) {
-					dp_mon_err("Pktlog set CBF filters failed");
-					dp_mon_filter_reset_rx_pktlog_cbf(pdev);
-					mon_pdev->rx_pktlog_mode =
-						DP_RX_PKTLOG_DISABLED;
-					mon_pdev->monitor_configured = false;
-					return 0;
-				}
+			mon_pdev->rx_pktlog_cbf = true;
+			mon_pdev->monitor_configured = true;
+			if (mon_ops->mon_vdev_set_monitor_mode_buf_rings)
+				mon_ops->mon_vdev_set_monitor_mode_buf_rings(
+					pdev);
 
-				if (mon_soc->reap_timer_init &&
-				    !dp_mon_is_enable_reap_timer_non_pkt(pdev))
-					qdf_timer_mod(&mon_soc->mon_reap_timer,
-						      DP_INTR_POLL_TIMER_MS);
+			/*
+			 * Set the packet log lite mode filter.
+			 */
+			qdf_info("Non mon mode: Enable destination ring");
+
+			dp_mon_filter_setup_rx_pkt_log_cbf(pdev);
+			if (dp_mon_filter_update(pdev) != QDF_STATUS_SUCCESS) {
+				dp_mon_err("Pktlog set CBF filters failed");
+				dp_mon_filter_reset_rx_pktlog_cbf(pdev);
+				mon_pdev->rx_pktlog_mode =
+					DP_RX_PKTLOG_DISABLED;
+				mon_pdev->monitor_configured = false;
+				return 0;
 			}
+
+			dp_monitor_reap_timer_start(soc,
+						    CDP_MON_REAP_SOURCE_PKTLOG);
 			break;
 
 		default:
@@ -4202,27 +4208,26 @@ static int dp_set_pktlog_wifi3(struct dp_pdev *pdev, uint32_t event,
 						DP_RX_PKTLOG_DISABLED;
 				return 0;
 			}
-			if (mon_pdev->rx_pktlog_mode != DP_RX_PKTLOG_DISABLED) {
-				mon_pdev->rx_pktlog_mode =
-						DP_RX_PKTLOG_DISABLED;
-				dp_mon_filter_reset_rx_pkt_log_full(pdev);
-				if (dp_mon_filter_update(pdev) !=
-						QDF_STATUS_SUCCESS) {
-					dp_cdp_err("%pK: Pktlog filters reset failed", soc);
-					return 0;
-				}
+			if (mon_pdev->rx_pktlog_mode == DP_RX_PKTLOG_DISABLED)
+				break;
 
-				dp_mon_filter_reset_rx_pkt_log_lite(pdev);
-				if (dp_mon_filter_update(pdev) !=
-						QDF_STATUS_SUCCESS) {
-					dp_cdp_err("%pK: Pktlog filters reset failed", soc);
-					return 0;
-				}
-
-				if (mon_soc->reap_timer_init &&
-				    (!dp_mon_is_enable_reap_timer_non_pkt(pdev)))
-					qdf_timer_stop(&mon_soc->mon_reap_timer);
+			mon_pdev->rx_pktlog_mode = DP_RX_PKTLOG_DISABLED;
+			dp_mon_filter_reset_rx_pkt_log_full(pdev);
+			if (dp_mon_filter_update(pdev) != QDF_STATUS_SUCCESS) {
+				dp_cdp_err("%pK: Pktlog filters reset failed",
+					   soc);
+				return 0;
 			}
+
+			dp_mon_filter_reset_rx_pkt_log_lite(pdev);
+			if (dp_mon_filter_update(pdev) != QDF_STATUS_SUCCESS) {
+				dp_cdp_err("%pK: Pktlog filters reset failed",
+					   soc);
+				return 0;
+			}
+
+			dp_monitor_reap_timer_stop(soc,
+						   CDP_MON_REAP_SOURCE_PKTLOG);
 			break;
 		case WDI_EVENT_LITE_T2H:
 			/*
@@ -4287,11 +4292,7 @@ static void dp_pktlogmod_exit(struct dp_pdev *pdev)
 		return;
 	}
 
-	/* stop mon_reap_timer if it has been started */
-	if (mon_pdev->rx_pktlog_mode != DP_RX_PKTLOG_DISABLED &&
-	    mon_soc->reap_timer_init &&
-	    (!dp_mon_is_enable_reap_timer_non_pkt(pdev)))
-		qdf_timer_sync_cancel(&mon_soc->mon_reap_timer);
+	dp_monitor_reap_timer_stop(soc, CDP_MON_REAP_SOURCE_PKTLOG);
 
 	pktlogmod_exit(scn);
 	mon_pdev->pkt_log_init = false;
@@ -4302,8 +4303,9 @@ static void dp_pktlogmod_exit(struct dp_pdev *handle) { }
 
 #ifdef WDI_EVENT_ENABLE
 #ifdef IPA_OFFLOAD
-void dp_peer_get_tx_rx_stats(struct dp_peer *peer,
-			     struct cdp_interface_peer_stats *peer_stats_intf)
+static void
+dp_peer_get_tx_rx_stats(struct dp_peer *peer,
+			struct cdp_interface_peer_stats *peer_stats_intf)
 {
 	struct dp_rx_tid *rx_tid = NULL;
 	uint8_t i = 0;
@@ -4321,8 +4323,9 @@ void dp_peer_get_tx_rx_stats(struct dp_peer *peer,
 		peer->stats.tx.tx_ucast_success.bytes;
 }
 #else
-void dp_peer_get_tx_rx_stats(struct dp_peer *peer,
-			     struct cdp_interface_peer_stats *peer_stats_intf)
+static void
+dp_peer_get_tx_rx_stats(struct dp_peer *peer,
+			struct cdp_interface_peer_stats *peer_stats_intf)
 {
 	struct cdp_peer_stats *peer_stats = &peer->stats;
 
@@ -4711,49 +4714,20 @@ static void dp_cfr_filter(struct cdp_soc_t *soc_hdl,
 				    &htt_tlv_filter);
 	}
 }
+#endif
 
-/*
- * dp_enable_mon_reap_timer() - enable/disable reap timer
- * @soc_hdl: Datapath soc handle
- * @pdev_id: id of objmgr pdev
- * @enable: Enable/Disable reap timer of monitor status ring
- *
- * Return: none
- */
-static void
-dp_enable_mon_reap_timer(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
+bool
+dp_enable_mon_reap_timer(struct cdp_soc_t *soc_hdl,
+			 enum cdp_mon_reap_source source,
 			 bool enable)
 {
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
-	struct dp_pdev *pdev = NULL;
-	struct dp_mon_soc *mon_soc = soc->monitor_soc;
-	struct dp_mon_pdev *mon_pdev;
-
-	pdev = dp_get_pdev_from_soc_pdev_id_wifi3(soc, pdev_id);
-	if (!pdev) {
-		dp_mon_err("pdev is NULL");
-		return;
-	}
-
-	mon_pdev = pdev->monitor_pdev;
-	mon_pdev->enable_reap_timer_non_pkt = enable;
-	if (mon_pdev->rx_pktlog_mode != DP_RX_PKTLOG_DISABLED) {
-		dp_mon_debug("pktlog enabled %d", mon_pdev->rx_pktlog_mode);
-		return;
-	}
-
-	if (!mon_soc->reap_timer_init) {
-		dp_mon_err("reap timer not init");
-		return;
-	}
 
 	if (enable)
-		qdf_timer_mod(&mon_soc->mon_reap_timer,
-			      DP_INTR_POLL_TIMER_MS);
+		return dp_monitor_reap_timer_start(soc, source);
 	else
-		qdf_timer_sync_cancel(&mon_soc->mon_reap_timer);
+		return dp_monitor_reap_timer_stop(soc, source);
 }
-#endif
 
 #if defined(DP_CON_MON)
 #ifndef REMOVE_PKT_LOG
@@ -5286,9 +5260,12 @@ static void dp_mon_reap_timer_init(struct dp_soc *soc)
 {
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
 
+	qdf_spinlock_create(&mon_soc->reap_timer_lock);
 	qdf_timer_init(soc->osdev, &mon_soc->mon_reap_timer,
 		       dp_mon_reap_timer_handler, (void *)soc,
 		       QDF_TIMER_TYPE_WAKE_APPS);
+	qdf_mem_zero(mon_soc->mon_reap_src_bitmap,
+		     sizeof(mon_soc->mon_reap_src_bitmap));
 	mon_soc->reap_timer_init = 1;
 }
 #else
@@ -5302,29 +5279,81 @@ static void dp_mon_reap_timer_deinit(struct dp_soc *soc)
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
 
 	if (mon_soc->reap_timer_init) {
-		qdf_timer_free(&mon_soc->mon_reap_timer);
 		mon_soc->reap_timer_init = 0;
+		qdf_timer_free(&mon_soc->mon_reap_timer);
+		qdf_spinlock_destroy(&mon_soc->reap_timer_lock);
 	}
 }
 
-static void dp_mon_reap_timer_start(struct dp_soc *soc)
+/**
+ * dp_mon_reap_timer_start() - start reap timer of monitor status ring
+ * @soc: point to soc
+ * @source: trigger source
+ *
+ * If the source is CDP_MON_REAP_SOURCE_ANY, skip bit set, and start timer
+ * if any bit has been set in the bitmap; while for the other sources, set
+ * the bit and start timer if the bitmap is empty before that.
+ *
+ * Return: true if timer-start is performed, false otherwise.
+ */
+static bool
+dp_mon_reap_timer_start(struct dp_soc *soc, enum cdp_mon_reap_source source)
 {
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
+	bool do_start;
 
-	if (mon_soc->reap_timer_init)
+	if (!mon_soc->reap_timer_init)
+		return false;
+
+	qdf_spin_lock_bh(&mon_soc->reap_timer_lock);
+	do_start = qdf_bitmap_empty(mon_soc->mon_reap_src_bitmap,
+				    CDP_MON_REAP_SOURCE_NUM);
+	if (source == CDP_MON_REAP_SOURCE_ANY)
+		do_start = !do_start;
+	else
+		qdf_set_bit(source, mon_soc->mon_reap_src_bitmap);
+	qdf_spin_unlock_bh(&mon_soc->reap_timer_lock);
+
+	if (do_start)
 		qdf_timer_mod(&mon_soc->mon_reap_timer, DP_INTR_POLL_TIMER_MS);
+
+	return do_start;
 }
 
-static bool dp_mon_reap_timer_stop(struct dp_soc *soc)
+/**
+ * dp_mon_reap_timer_stop() - stop reap timer of monitor status ring
+ * @soc: point to soc
+ * @source: trigger source
+ *
+ * If the source is CDP_MON_REAP_SOURCE_ANY, skip bit clear, and stop timer
+ * if any bit has been set in the bitmap; while for the other sources, clear
+ * the bit and stop the timer if the bitmap is empty after that.
+ *
+ * Return: true if timer-stop is performed, false otherwise.
+ */
+static bool
+dp_mon_reap_timer_stop(struct dp_soc *soc, enum cdp_mon_reap_source source)
 {
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
+	bool do_stop;
 
-	if (mon_soc->reap_timer_init) {
+	if (!mon_soc->reap_timer_init)
+		return false;
+
+	qdf_spin_lock_bh(&mon_soc->reap_timer_lock);
+	if (source != CDP_MON_REAP_SOURCE_ANY)
+		qdf_clear_bit(source, mon_soc->mon_reap_src_bitmap);
+
+	do_stop = qdf_bitmap_empty(mon_soc->mon_reap_src_bitmap,
+				   CDP_MON_REAP_SOURCE_NUM);
+	if (source == CDP_MON_REAP_SOURCE_ANY)
+		do_stop = !do_stop;
+	qdf_spin_unlock_bh(&mon_soc->reap_timer_lock);
+
+	if (do_stop)
 		qdf_timer_sync_cancel(&mon_soc->mon_reap_timer);
-		return true;
-	}
 
-	return false;
+	return do_stop;
 }
 
 static void dp_mon_vdev_timer_init(struct dp_soc *soc)
@@ -5939,6 +5968,7 @@ static struct cdp_mon_ops dp_ops_mon = {
 	.txrx_set_advance_monitor_filter = dp_pdev_set_advance_monitor_filter,
 	.txrx_deliver_tx_mgmt = dp_deliver_tx_mgmt,
 	.config_full_mon_mode = dp_config_full_mon_mode,
+	.txrx_enable_mon_reap_timer = dp_enable_mon_reap_timer,
 };
 
 void dp_mon_ops_register(struct dp_mon_soc *mon_soc)
@@ -5958,7 +5988,6 @@ void dp_mon_cdp_ops_register(struct dp_soc *soc)
 	ops->mon_ops = &dp_ops_mon;
 #if defined(WLAN_CFR_ENABLE) && defined(WLAN_ENH_CFR_ENABLE)
 	ops->cfr_ops->txrx_cfr_filter = dp_cfr_filter;
-	ops->cfr_ops->txrx_enable_mon_reap_timer = dp_enable_mon_reap_timer;
 #endif
 	ops->cmn_drv_ops->txrx_set_monitor_mode = dp_vdev_set_monitor_mode;
 	ops->cmn_drv_ops->txrx_get_mon_vdev_from_pdev =
@@ -6011,7 +6040,6 @@ void dp_mon_cdp_ops_deregister(struct dp_soc *soc)
 	ops->mon_ops = NULL;
 #if defined(WLAN_CFR_ENABLE) && defined(WLAN_ENH_CFR_ENABLE)
 	ops->cfr_ops->txrx_cfr_filter = NULL;
-	ops->cfr_ops->txrx_enable_mon_reap_timer = NULL;
 #endif
 	ops->cmn_drv_ops->txrx_set_monitor_mode = NULL;
 	ops->cmn_drv_ops->txrx_get_mon_vdev_from_pdev = NULL;

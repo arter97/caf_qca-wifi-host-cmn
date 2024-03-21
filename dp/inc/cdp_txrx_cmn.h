@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2011-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -2578,6 +2579,34 @@ cdp_soc_config_full_mon_mode(ol_txrx_soc_handle soc, uint8_t val)
 		return QDF_STATUS_E_INVAL;
 
 	return soc->ops->mon_ops->config_full_mon_mode(soc, val);
+}
+
+/**
+ * cdp_enable_mon_reap_timer() - enable/disable reap timer
+ * @soc: Datapath soc handle
+ * @pdev_id: id of objmgr pdev
+ * @enable: enable/disable reap timer of monitor status ring
+ *
+ * Return: true if timer start/stop is performed, false otherwise.
+ */
+static inline bool
+cdp_enable_mon_reap_timer(ol_txrx_soc_handle soc,
+			  enum cdp_mon_reap_source source,
+			  bool enable)
+{
+	if (!soc || !soc->ops) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
+			  "%s invalid instance", __func__);
+		QDF_BUG(0);
+		return false;
+	}
+
+	if (!soc->ops->mon_ops ||
+	    !soc->ops->mon_ops->txrx_enable_mon_reap_timer)
+		return false;
+
+	return soc->ops->mon_ops->txrx_enable_mon_reap_timer(soc, source,
+							     enable);
 }
 
 /**

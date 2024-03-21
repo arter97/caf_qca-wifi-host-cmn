@@ -8212,4 +8212,17 @@ struct wmi_host_pdev_set_halphy_cal_event {
 	enum wmi_host_set_halphy_cal_status status;
 };
 
+#ifdef WLAN_FEATURE_SON
+/**
+ * struct wmi_host_inst_rssi_stats_resp - inst rssi stats
+ * @inst_rssi: instantaneous rssi above the noise floor in dB unit
+ * @peer_macaddr: peer mac address
+ * @vdev_id: vdev_id
+ */
+struct wmi_host_inst_rssi_stats_resp {
+	uint32_t inst_rssi;
+	struct qdf_mac_addr peer_macaddr;
+	uint32_t vdev_id;
+};
+#endif
 #endif /* _WMI_UNIFIED_PARAM_H_ */

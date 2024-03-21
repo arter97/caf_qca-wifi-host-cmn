@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -838,6 +839,9 @@ dp_peer_send_wds_disconnect(struct dp_soc *soc, struct dp_peer *peer)
 {
 	struct dp_ast_entry *ase = NULL;
 	struct dp_ast_entry *temp_ase;
+
+	if (!soc->cdp_soc.ol_ops->peer_send_wds_disconnect)
+		return;
 
 	DP_PEER_ITERATE_ASE_LIST(peer, ase, temp_ase) {
 		if (ase->type == CDP_TXRX_AST_TYPE_WDS) {
@@ -11278,7 +11282,6 @@ static struct cdp_cfr_ops dp_ops_cfr = {
 	.txrx_set_cfr_rcc = dp_set_cfr_rcc,
 	.txrx_get_cfr_dbg_stats = dp_get_cfr_dbg_stats,
 	.txrx_clear_cfr_dbg_stats = dp_clear_cfr_dbg_stats,
-	.txrx_enable_mon_reap_timer = NULL,
 };
 #endif
 
@@ -11842,7 +11845,7 @@ static QDF_STATUS dp_bus_suspend(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 		qdf_timer_stop(&soc->int_timer);
 
 	/* Stop monitor reap timer and reap any pending frames in ring */
-	dp_monitor_pktlog_reap_pending_frames(pdev);
+	dp_monitor_reap_timer_suspend(soc);
 
 	dp_suspend_fse_cache_flush(soc);
 
@@ -11863,7 +11866,7 @@ static QDF_STATUS dp_bus_resume(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 		qdf_timer_mod(&soc->int_timer, DP_INTR_POLL_TIMER_MS);
 
 	/* Start monitor reap timer */
-	dp_monitor_pktlog_start_reap_timer(pdev);
+	dp_monitor_reap_timer_start(soc, CDP_MON_REAP_SOURCE_ANY);
 
 	dp_resume_fse_cache_flush(soc);
 
@@ -11892,7 +11895,7 @@ static void dp_process_wow_ack_rsp(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 	 * response from FW reap mon status ring to make sure no packets pending
 	 * in the ring.
 	 */
-	dp_monitor_pktlog_reap_pending_frames(pdev);
+	dp_monitor_reap_timer_suspend(soc);
 }
 
 /**
@@ -11914,7 +11917,7 @@ static void dp_process_target_suspend_req(struct cdp_soc_t *soc_hdl,
 	}
 
 	/* Stop monitor reap timer and reap any pending frames in ring */
-	dp_monitor_pktlog_reap_pending_frames(pdev);
+	dp_monitor_reap_timer_suspend(soc);
 }
 
 static struct cdp_bus_ops dp_ops_bus = {
