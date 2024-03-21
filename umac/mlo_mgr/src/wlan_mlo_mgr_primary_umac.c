@@ -295,8 +295,15 @@ wlan_mld_get_best_primary_umac_w_rssi(struct wlan_mlo_peer_context *ml_peer,
 
 			bw = wlan_reg_get_bw_value(mld_ch_width[i]);
 			cap = bw * (100 - cong);
+			ml_sta_count++;
 			grp_size = (ml_sta_count) * ((cap * 100) / total_cap);
 			group_size[i] = grp_size / 100;
+			if (grp_size % 100)
+				group_size[i]++;
+
+			if (group_size[i] == 0)
+				group_size[i] = 1;
+
 			if (group_size[i] <=  mld_ml_sta_count[i]) {
 				group_full[i] = true;
 				group_full_count++;
