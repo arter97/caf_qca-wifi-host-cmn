@@ -1540,9 +1540,9 @@ wlan_ipa_get_peer_auth_state(ol_txrx_soc_handle dp_soc, uint8_t *peer_mac,
 	struct cdp_ast_entry_info ast_info = {0};
 
 	if (ipa_is_wds_enabled()) {
-		cdp_peer_get_ast_info_by_soc(dp_soc, peer_mac,
-					     &ast_info);
-		peer_mac = &ast_info.peer_mac_addr[0];
+		if (cdp_peer_get_ast_info_by_soc(dp_soc, peer_mac, &ast_info))
+			peer_mac = &ast_info.peer_mac_addr[0];
+
 		is_authenticated = wlan_ipa_get_peer_state(dp_soc,
 							   iface->session_id,
 							   peer_mac);
