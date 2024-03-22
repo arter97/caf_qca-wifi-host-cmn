@@ -634,6 +634,19 @@ void dp_print_pdev_tx_monitor_stats_2_0(struct dp_pdev *pdev)
 	DP_PRINT_STATS("\t\tppdu drop : %llu", stats.ppdu_drop_cnt);
 	DP_PRINT_STATS("\t\tmpdu drop : %llu", stats.mpdu_drop_cnt);
 	DP_PRINT_STATS("\t\ttlv drop : %llu", stats.tlv_drop_cnt);
+	DP_PRINT_STATS("\tPacket Classification");
+	DP_PRINT_STATS("\t\t ARP    : %u",
+			tx_mon_be->dp_tx_pkt_cap_stats[CDP_TX_PKT_TYPE_ARP]);
+	DP_PRINT_STATS("\t\t EAPOL  : %u",
+			tx_mon_be->dp_tx_pkt_cap_stats[CDP_TX_PKT_TYPE_EAPOL]);
+	DP_PRINT_STATS("\t\t DHCP   : %u",
+			tx_mon_be->dp_tx_pkt_cap_stats[CDP_TX_PKT_TYPE_DHCP]);
+	DP_PRINT_STATS("\t\t DNS    : %u",
+			tx_mon_be->dp_tx_pkt_cap_stats[CDP_TX_PKT_TYPE_DNS]);
+	DP_PRINT_STATS("\t\t ICMP   : %u",
+			tx_mon_be->dp_tx_pkt_cap_stats[CDP_TX_PKT_TYPE_ICMP]);
+	DP_PRINT_STATS("\t\t Invalid Pkt id: %u",
+			tx_mon_be->dp_tx_pkt_cap_stats[0]);
 }
 
 #ifdef QCA_SUPPORT_LITE_MONITOR

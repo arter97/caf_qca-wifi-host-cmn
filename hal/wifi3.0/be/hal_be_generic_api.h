@@ -640,11 +640,11 @@ hal_txmon_parse_fw2sw(void *tx_tlv, uint8_t type,
 	switch (type) {
 	case TXMON_FW2SW_TYPE_FES_SETUP:
 	{
-		uint32_t schedule_id;
+		uint32_t schedule_id, cookie = 0;
 		uint16_t c_freq1;
 		uint16_t c_freq2;
-		uint16_t freq_mhz;
-		uint8_t phy_mode;
+		uint16_t freq_mhz, seq_no = 0;
+		uint8_t phy_mode, pkt_id = 0, is_valid = 0, hw_link = 0;
 
 		c_freq1 = TXMON_FW2SW_MON_FES_SETUP_BAND_CENTER_FREQ1_GET(*msg);
 		c_freq2 = TXMON_FW2SW_MON_FES_SETUP_BAND_CENTER_FREQ2_GET(*msg);
@@ -656,12 +656,24 @@ hal_txmon_parse_fw2sw(void *tx_tlv, uint8_t type,
 		msg++;
 		schedule_id = TXMON_FW2SW_MON_FES_SETUP_SCHEDULE_ID_GET(*msg);
 
+		msg++;
+		cookie = TXMON_FW2SW_MON_FES_SETUP_FW_COOKIE_GET(*msg);
+		pkt_id = TXMON_FW2SW_MON_FES_SETUP_FW_COOKIE_PACKET_ID_GET(cookie);
+		is_valid = TXMON_FW2SW_MON_FES_SETUP_FW_COOKIE_VALID_GET(cookie);
+		seq_no = TXMON_FW2SW_MON_FES_SETUP_FW_COOKIE_SEQ_NUM_GET(cookie);
+		hw_link = TXMON_FW2SW_MON_FES_SETUP_FW_COOKIE_HW_LINK_ID_GET(cookie);
+
 		TXMON_STATUS_INFO(status_info, band_center_freq1) = c_freq1;
 		TXMON_STATUS_INFO(status_info, band_center_freq2) = c_freq2;
 		TXMON_STATUS_INFO(status_info, freq) = freq_mhz;
 		TXMON_STATUS_INFO(status_info, phy_mode) = phy_mode;
 		TXMON_STATUS_INFO(status_info, schedule_id) = schedule_id;
-
+		if (is_valid) {
+			if (pkt_id < CDP_TX_PKT_TYPE_MAX)
+				status_info->dp_tx_pkt_cap_cookie[pkt_id]++;
+			else
+				status_info->dp_tx_pkt_cap_cookie[0]++;
+		}
 		break;
 	}
 	case TXMON_FW2SW_TYPE_FES_SETUP_USER:

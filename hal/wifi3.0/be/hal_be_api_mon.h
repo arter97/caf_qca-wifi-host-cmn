@@ -1191,6 +1191,18 @@ enum txmon_generated_response {
 	TXMON_GEN_RESP_SELFGEN_NDP_LMR
 };
 
+/*
+ * List of protocols supported for TX packet Capture classification
+ */
+enum CDP_TX_PKT_CAP_PKT_TYPE {
+	CDP_TX_PKT_TYPE_ARP = 1,
+	CDP_TX_PKT_TYPE_EAPOL,
+	CDP_TX_PKT_TYPE_DHCP,
+	CDP_TX_PKT_TYPE_DNS,
+	CDP_TX_PKT_TYPE_ICMP,
+	CDP_TX_PKT_TYPE_MAX,
+};
+
 #ifdef MONITOR_TLV_RECORDING_ENABLE
 
 /*
@@ -1407,6 +1419,7 @@ struct hal_tx_tlv_info {
  * @addr2: MAC address 2
  * @addr3: MAC address 3
  * @addr4: MAC address 4
+ * @dp_tx_pkt_cap_cookie: cookie counter
  */
 struct hal_tx_status_info {
 	uint8_t reception_type;
@@ -1447,6 +1460,7 @@ struct hal_tx_status_info {
 	uint8_t addr2[QDF_MAC_ADDR_SIZE];
 	uint8_t addr3[QDF_MAC_ADDR_SIZE];
 	uint8_t addr4[QDF_MAC_ADDR_SIZE];
+	uint8_t dp_tx_pkt_cap_cookie[CDP_TX_PKT_TYPE_MAX];
 };
 
 /**

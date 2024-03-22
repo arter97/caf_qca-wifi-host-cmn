@@ -585,6 +585,7 @@ struct dp_txmon_frag_vec {
  * @last_frag_q_idx: last index of frag buffer
  * @cur_frag_q_idx: current index of frag buffer
  * @status_frag_queue: array of status frag queue to hold 64 status buffer
+ * @dp_tx_pkt_cap_stats: Tx pkt cap custom classify counter
  */
 struct dp_pdev_tx_monitor_be {
 	uint32_t be_ppdu_id;
@@ -621,6 +622,7 @@ struct dp_pdev_tx_monitor_be {
 	uint8_t last_frag_q_idx;
 	uint8_t cur_frag_q_idx;
 	struct dp_txmon_frag_vec frag_q_vec[MAX_STATUS_BUFFER_IN_PPDU];
+	uint32_t dp_tx_pkt_cap_stats[CDP_TX_PKT_TYPE_MAX];
 };
 
 /**

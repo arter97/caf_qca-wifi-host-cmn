@@ -1430,6 +1430,32 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 	return status;
 }
 
+#ifdef WLAN_SUPPORT_TX_PKT_CAP_CUSTOM_CLASSIFY
+/**
+ * dp_pdev_update_tx_pkt_cap_stats() - API to aggregate Tx pkt cap
+ * stats from ppdu counter to pdev level counter
+ *
+ * @mon_pdev_be: monitor pdev Handle
+ *
+ * Return: void
+ */
+static inline
+void dp_pdev_update_tx_pkt_cap_stats(struct dp_mon_pdev_be *mon_pdev_be)
+{
+	uint8_t i;
+
+	for (i = 0; i < CDP_TX_PKT_TYPE_MAX; i++) {
+		mon_pdev_be->tx_monitor_be.dp_tx_pkt_cap_stats[i] +=
+		mon_pdev_be->tx_monitor_be.data_status_info.dp_tx_pkt_cap_cookie[i];
+	}
+}
+#else
+static inline
+void dp_pdev_update_tx_pkt_cap_stats(struct dp_mon_pdev_be *mon_pdev_be)
+{
+}
+#endif /* WLAN_SUPPORT_TX_PKT_CAP_CUSTOM_CLASSIFY */
+
 #ifdef MONITOR_TLV_RECORDING_ENABLE
 /**
  * dp_tx_mon_record_index_update() - update the indexes of dp_mon_tlv_logger
@@ -1749,6 +1775,8 @@ dp_tx_mon_process_tlv_2_0(struct dp_pdev *pdev,
 		dp_tx_mon_record_index_update(mon_pdev_be);
 	}
 
+	/* Accumulate tx pkt cap stats in mon pdev */
+	dp_pdev_update_tx_pkt_cap_stats(mon_pdev_be);
 	/* clear the unreleased frag array */
 	dp_tx_mon_status_queue_free(pdev, tx_mon_be, mon_desc_list_ref);
 
