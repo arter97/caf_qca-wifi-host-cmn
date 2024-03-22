@@ -239,6 +239,37 @@ convert_to_spectral_data_transport_mode_internal_to_nl
 	return QDF_STATUS_SUCCESS;
 }
 
+/**
+ * convert_spectral_scan_completion_status_internal_to_nl() - Get spectral
+ * scan completion status
+ * @completion_status: Spectral scan completion status used internally
+ * @nl_cmpl_status: Spectral scan completion status for cfg80211
+ *
+ * Return: QDF_STATUS_SUCCESS on success, else QDF_STATUS_E_FAILURE
+ */
+static QDF_STATUS
+convert_spectral_scan_completion_status_internal_to_nl
+	(enum spectral_scan_complete_status completion_status,
+	 enum qca_wlan_vendor_spectral_scan_complete_status *nl_cmpl_status)
+{
+	switch (completion_status) {
+	case SPECTRAL_SCAN_COMPLETE_SUCCESS:
+		*nl_cmpl_status =
+		QCA_WLAN_VENDOR_SPECTRAL_SCAN_COMPLETE_STATUS_SUCCESSFUL;
+		break;
+	case SPECTRAL_SCAN_COMPLETE_TIMEOUT:
+		*nl_cmpl_status =
+		QCA_WLAN_VENDOR_SPECTRAL_SCAN_COMPLETE_STATUS_TIMEOUT;
+		break;
+	default:
+		osif_err("Invalid Spectral scan completion status %u",
+			 completion_status);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
 #if defined(WLAN_FEATURE_11BE) && defined(CFG80211_11BE_BASIC)
 int
 wlan_spectral_get_nl80211_chwidth(uint8_t phy_chwidth)
@@ -891,6 +922,71 @@ int wlan_cfg80211_spectral_scan_get_config(struct wiphy *wiphy,
 fail:
 	wlan_cfg80211_vendor_free_skb(skb);
 	return -EINVAL;
+}
+
+QDF_STATUS wlan_cfg80211_spectral_scan_complete_event(
+			struct wlan_objmgr_pdev *pdev,
+			struct spectral_scan_event *sptrl_event)
+{
+	struct sk_buff *vendor_event;
+	struct pdev_osif_priv *osif_priv;
+	struct spectral_scan_complete_event *cmpl_event;
+	QDF_STATUS status;
+	enum qca_wlan_vendor_spectral_scan_complete_status nl_cmpl_status;
+
+	osif_priv = wlan_pdev_get_ospriv(pdev);
+	if (!osif_priv) {
+		qdf_err("PDEV OS private structure is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (!sptrl_event) {
+		qdf_err("Spectral event is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	cmpl_event = &sptrl_event->complete_event;
+
+	/* Allocate vendor event */
+	vendor_event = wlan_cfg80211_vendor_event_alloc(
+			osif_priv->wiphy,
+			NULL,
+			(sizeof(u32) + NLA_HDRLEN) *
+			QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_COMPLETE_MAX +
+			NLMSG_HDRLEN,
+			QCA_NL80211_VENDOR_SUBCMD_SPECTRAL_SCAN_COMPLETE_INDEX,
+			GFP_ATOMIC);
+
+	if (!vendor_event) {
+		qdf_err("cfg80211_vendor_event_alloc failed");
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	status = convert_spectral_scan_completion_status_internal_to_nl
+			(cmpl_event->completion_status, &nl_cmpl_status);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		status = QDF_STATUS_E_INVAL;
+		goto fail;
+	}
+
+	if (nla_put_u32(
+		vendor_event,
+		QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_COMPLETE_STATUS,
+		nl_cmpl_status) ||
+	    nla_put_u32(
+		vendor_event,
+		QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_COMPLETE_RECEIVED_SAMPLES,
+		cmpl_event->num_received_samples))
+		goto fail;
+
+	/* Send spectral scan completion event to user space application */
+	wlan_cfg80211_vendor_event(vendor_event, GFP_ATOMIC);
+
+	return QDF_STATUS_SUCCESS;
+
+fail:
+	wlan_cfg80211_vendor_free_skb(vendor_event);
+	return status;
 }
 
 int wlan_cfg80211_spectral_scan_get_cap(struct wiphy *wiphy,

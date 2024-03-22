@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022,2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -330,6 +330,8 @@ wlan_lmac_if_sptrl_register_rx_ops(struct wlan_lmac_if_rx_ops *rx_ops)
 		wlan_spectral_is_feature_disabled_pdev;
 	sptrl_rx_ops->sptrlro_spectral_is_feature_disabled_psoc =
 		wlan_spectral_is_feature_disabled_psoc;
+	sptrl_rx_ops->sptrlro_scan_complete_event =
+		tgt_spectral_scan_complete_event;
 }
 
 QDF_STATUS

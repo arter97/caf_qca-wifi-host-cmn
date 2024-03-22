@@ -57,6 +57,7 @@
 #define SPECTRAL_GET_NOMINAL_NOISEFLOOR  (DFS_LAST_IOCTL + 22)
 #define SPECTRAL_GET_DEBUG_LEVEL         (DFS_LAST_IOCTL + 23)
 #define SPECTRAL_SET_DMA_DEBUG           (DFS_LAST_IOCTL + 24)
+#define SPECTRAL_SCAN_COMPLETE           (DFS_LAST_IOCTL + 25)
 
 /*
  * Increase spectral sub version if struct spectral_samp_msg updated.

@@ -20,6 +20,7 @@
 #include "spectral_cmn_api_i.h"
 #include "spectral_ol_api_i.h"
 #include "../dispatcher/inc/wlan_spectral_tgt_api.h"
+#include "wlan_spectral_ucfg_api.h"
 
 #ifdef DIRECT_BUF_RX_DEBUG
 static void
@@ -66,5 +67,6 @@ spectral_ctx_init_ol(struct spectral_context *sc)
 	sc->sptrlc_use_broadcast = tgt_spectral_use_broadcast;
 	sc->sptrlc_deregister_buffer_cb = tgt_spectral_deregister_buffer_cb;
 	sc->sptrlc_process_spectral_report = tgt_spectral_process_report;
+	sc->sptrlc_scan_complete_event = ucfg_spectral_scan_complete_event;
 	spectral_ctx_init_ol_dma_debug(sc);
 }

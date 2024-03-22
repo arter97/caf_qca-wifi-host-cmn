@@ -155,6 +155,7 @@ struct spectral_tgt_ops;
  * @sptrlc_deregister_buffer_cb: De-register Spectral buffer callbacks
  * @sptrlc_process_spectral_report: Process spectral report
  * @sptrlc_set_dma_debug: Set DMA debug
+ * @sptrlc_scan_complete_event: Trigger spectral scan complete event
  */
 struct spectral_context {
 	struct wlan_objmgr_psoc *psoc_obj;
@@ -218,6 +219,9 @@ struct spectral_context {
 			struct wlan_objmgr_pdev *pdev,
 			enum spectral_dma_debug dma_debug_type,
 			bool dma_debug_enable);
+	QDF_STATUS (*sptrlc_scan_complete_event)(
+			struct wlan_objmgr_pdev *pdev,
+			struct spectral_scan_event *sptrl_event);
 };
 
 #endif /* _SPECTRAL_DEFS_I_H_ */

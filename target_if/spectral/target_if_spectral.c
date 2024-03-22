@@ -5190,7 +5190,9 @@ target_if_spectral_finite_scan_init(struct target_if_spectral *spectral,
 	sscan_count =  spectral->params[smode].ss_count;
 
 	finite_scan->finite_spectral_scan =  true;
-	finite_scan->num_reports_expected = num_detectors * sscan_count;
+	finite_scan->num_reports_expected
+		= finite_scan->num_reports_requested
+		= num_detectors * sscan_count;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -8233,9 +8235,17 @@ target_if_spectral_finite_scan_update(struct target_if_spectral *spectral,
 				      enum spectral_scan_mode smode)
 {
 	struct target_if_finite_spectral_scan_params *finite_scan;
+	struct wlan_objmgr_pdev *pdev;
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	struct spectral_scan_event sptrl_event;
 
 	if (!spectral) {
 		spectral_err_rl("target if spectral object is null");
+		return QDF_STATUS_E_INVAL;
+	}
+	pdev  = spectral->pdev_obj;
+	if (!pdev) {
+		spectral_err("pdev object is NULL");
 		return QDF_STATUS_E_INVAL;
 	}
 
@@ -8253,17 +8263,73 @@ target_if_spectral_finite_scan_update(struct target_if_spectral *spectral,
 
 	finite_scan->num_reports_expected--;
 	if (!finite_scan->num_reports_expected) {
-		QDF_STATUS status;
-		enum spectral_cp_error_code err;
+		uint32_t received_reports = finite_scan->num_reports_requested;
 
-		/* received expected number of reports from target, stop scan */
-		status = target_if_stop_spectral_scan(spectral->pdev_obj, smode,
-						      &err);
+		sptrl_event.event_id = SPECTRAL_SCAN_COMPLETE;
+		sptrl_event.complete_event.completion_status =
+					SPECTRAL_SCAN_COMPLETE_SUCCESS;
+
+		sptrl_event.complete_event.num_received_samples =
+					received_reports;
+
+		status = target_if_spectral_scan_complete_event(spectral,
+								&sptrl_event);
+
 		if (QDF_IS_STATUS_ERROR(status)) {
-			spectral_err_rl("Failed to stop finite Spectral scan");
-			return QDF_STATUS_E_FAILURE;
+			spectral_err_rl
+			  ("Failed to notify finite Spectral scan completion");
 		}
+
 		finite_scan->finite_spectral_scan =  false;
+	}
+
+	return status;
+}
+
+QDF_STATUS
+target_if_spectral_scan_complete_event(struct target_if_spectral *spectral,
+				       struct spectral_scan_event *sptrl_event)
+{
+	struct wlan_objmgr_pdev *pdev;
+	struct wlan_objmgr_psoc *psoc;
+	struct wlan_lmac_if_rx_ops *rx_ops;
+	QDF_STATUS status;
+
+	if (!spectral) {
+		spectral_err_rl("target if spectral object is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	pdev  = spectral->pdev_obj;
+	if (!pdev) {
+		spectral_err("pdev object is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		spectral_err("psoc is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	rx_ops = wlan_psoc_get_lmac_if_rxops(psoc);
+	if (!rx_ops) {
+		spectral_err("rx_ops is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (!sptrl_event) {
+		spectral_err("spectral event is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	status = rx_ops->sptrl_rx_ops.sptrlro_scan_complete_event(pdev,
+								  sptrl_event);
+
+	if (QDF_IS_STATUS_ERROR(status)) {
+		spectral_err_rl
+			("Failed to notify userspace about scan completion.");
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	return QDF_STATUS_SUCCESS;

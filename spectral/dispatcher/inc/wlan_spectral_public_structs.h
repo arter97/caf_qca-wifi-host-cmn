@@ -515,6 +515,25 @@ struct spectral_cp_request {
 	};
 };
 
+enum spectral_scan_complete_status {
+	SPECTRAL_SCAN_COMPLETE_SUCCESS,
+	SPECTRAL_SCAN_COMPLETE_TIMEOUT,
+	SPECTRAL_SCAN_COMPLETE_MAX,
+	SPECTRAL_SCAN_COMPLETE_INVALID = 0xff,
+};
+
+struct spectral_scan_complete_event {
+	enum spectral_scan_complete_status completion_status;
+	uint32_t num_received_samples;
+};
+
+struct spectral_scan_event {
+	uint8_t event_id;
+	union {
+		struct spectral_scan_complete_event complete_event;
+	};
+};
+
 /**
  * struct spectral_data_stats - Spectral data stats
  * @spectral_rx_events: Number of Spectral rx events

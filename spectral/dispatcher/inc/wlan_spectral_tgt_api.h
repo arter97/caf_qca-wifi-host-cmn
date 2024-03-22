@@ -356,4 +356,19 @@ tgt_spectral_unregister_events(struct wlan_objmgr_psoc *psoc);
  */
 QDF_STATUS
 tgt_spectral_init_pdev_feature_caps(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * tgt_spectral_scan_complete_event() - tgt API to trigger spectral
+ * scan completion event
+ * @pdev: Pointer to pdev object
+ * @sptrl_event: Pointer to spectral scan event
+ *
+ * Triggers spectral scan completion event.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+tgt_spectral_scan_complete_event(struct wlan_objmgr_pdev *pdev,
+				 struct spectral_scan_event *sptrl_event);
+
 #endif /* _WLAN_SPECTRAL_TGT_API_H_ */

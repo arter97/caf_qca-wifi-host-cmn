@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017, 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -190,4 +190,17 @@ QDF_STATUS wlan_cfg80211_spectral_scan_dma_debug_config(
 		struct wlan_objmgr_vdev *vdev,
 		struct nlattr **tb,
 		enum spectral_scan_mode sscan_mode);
+
+/**
+ * wlan_cfg80211_spectral_scan_complete_event - Trigger spectral scan
+ * completion event.
+ * @pdev:       Pointer to pdev
+ * @sptrl_event: spectral scan event structure
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wlan_cfg80211_spectral_scan_complete_event
+				(struct wlan_objmgr_pdev *pdev,
+				 struct spectral_scan_event *sptrl_event);
 #endif

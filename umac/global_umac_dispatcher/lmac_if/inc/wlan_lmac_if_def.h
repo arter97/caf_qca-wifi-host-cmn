@@ -2441,6 +2441,7 @@ struct wlan_lmac_if_cfr_rx_ops {
  * disabled for a given pdev
  * @sptrlro_spectral_is_feature_disabled_psoc: Check if spectral feature is
  * disabled for a given psoc
+ * @sptrlro_scan_complete_event: Trigger spectral scan complete event
  */
 struct wlan_lmac_if_sptrl_rx_ops {
 	void * (*sptrlro_get_pdev_target_handle)(struct wlan_objmgr_pdev *pdev);
@@ -2457,6 +2458,9 @@ struct wlan_lmac_if_sptrl_rx_ops {
 			struct wlan_objmgr_pdev *pdev);
 	bool (*sptrlro_spectral_is_feature_disabled_psoc)(
 			struct wlan_objmgr_psoc *psoc);
+	QDF_STATUS (*sptrlro_scan_complete_event)
+				(struct wlan_objmgr_pdev *pdev,
+				 struct spectral_scan_event *sptrl_event);
 };
 #endif /* WLAN_CONV_SPECTRAL_ENABLE */
 

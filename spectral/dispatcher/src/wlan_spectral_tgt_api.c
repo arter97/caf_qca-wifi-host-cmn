@@ -680,3 +680,22 @@ tgt_spectral_init_pdev_feature_caps(struct wlan_objmgr_pdev *pdev)
 
 	return spectral_tx_ops->sptrlto_init_pdev_feature_caps(pdev);
 }
+
+QDF_STATUS
+tgt_spectral_scan_complete_event(struct wlan_objmgr_pdev *pdev,
+				 struct spectral_scan_event *sptrl_event)
+{
+	struct spectral_context *sc;
+
+	if (!pdev) {
+		spectral_err("PDEV is NULL!");
+		return -EPERM;
+	}
+	sc = spectral_get_spectral_ctx_from_pdev(pdev);
+	if (!sc) {
+		spectral_err("spectral context is NULL!");
+		return -EPERM;
+	}
+
+	return sc->sptrlc_scan_complete_event(pdev, sptrl_event);
+}

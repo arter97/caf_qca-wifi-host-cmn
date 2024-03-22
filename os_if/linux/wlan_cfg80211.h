@@ -195,6 +195,8 @@
  * event index
  * @QCA_NL80211_VENDOR_SUBCMD_TELEMETRY_STATS_INDEX: Event index for
  * non-blocking stats request
+ * @QCA_NL80211_VENDOR_SUBCMD_SPECTRAL_SCAN_COMPLETE_INDEX: Event index for
+ * spectral scan completion
  */
 
 enum qca_nl80211_vendor_subcmds_index {
@@ -337,6 +339,7 @@ enum qca_nl80211_vendor_subcmds_index {
 #ifdef WLAN_SUPPORT_TELEMETRY
 	QCA_NL80211_VENDOR_SUBCMD_TELEMETRY_STATS_INDEX,
 #endif
+	QCA_NL80211_VENDOR_SUBCMD_SPECTRAL_SCAN_COMPLETE_INDEX,
 };
 
 #if !defined(SUPPORT_WDEV_CFG80211_VENDOR_EVENT_ALLOC) && \

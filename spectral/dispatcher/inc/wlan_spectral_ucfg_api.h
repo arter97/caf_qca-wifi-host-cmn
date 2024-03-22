@@ -110,4 +110,18 @@ QDF_STATUS ucfg_spectral_get_version(struct wlan_objmgr_pdev *pdev,
  */
 qdf_dentry_t
 ucfg_spectral_get_spectral_directory(void);
+
+/**
+ * ucfg_spectral_scan_complete_event() - ucfg API to trigger spectral
+ * scan completion event
+ * @pdev: Pointer to pdev object
+ * @sptrl_event: Pointer to spectral scan event
+ *
+ * Triggers spectral scan completion event.
+ *
+ * Return: QDF_STATUS_SUCCESS on success, QDF_STATUS_E_FAILURE on failure
+ */
+QDF_STATUS
+ucfg_spectral_scan_complete_event(struct wlan_objmgr_pdev *pdev,
+				  struct spectral_scan_event *sptrl_event);
 #endif /* _WLAN_SPECTRAL_UCFG_API_H_ */
