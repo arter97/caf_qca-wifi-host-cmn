@@ -58,6 +58,7 @@
 #define SPECTRAL_SCAN_BIN_SCALE_DEFAULT        (0x1)
 #define SPECTRAL_SCAN_DBM_ADJ_DEFAULT          (0x0)
 #define SPECTRAL_SCAN_CHN_MASK_DEFAULT         (0x1)
+#define SPECTRAL_SCAN_CMPL_TIMEOUT_DEFAULT     (0x0)
 #else
 /*
  * Static default values for spectral state and configuration.
@@ -91,6 +92,7 @@
 #define SPECTRAL_SCAN_CHN_MASK_DEFAULT         (1)
 #define SPECTRAL_SCAN_FREQUENCY_DEFAULT        (0)
 #define SPECTRAL_FFT_RECAPTURE_DEFAULT         (0)
+#define SPECTRAL_SCAN_CMPL_TIMEOUT_DEFAULT     (0)
 #endif				/* SPECTRAL_USE_EMU_DEFAULTS */
 
 /* The below two definitions apply only to pre-11ac chipsets */

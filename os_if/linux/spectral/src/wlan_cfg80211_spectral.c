@@ -100,6 +100,8 @@ const struct nla_policy spectral_scan_policy[
 							.type = NLA_U32},
 	[QCA_WLAN_VENDOR_ATTR_SPECTRAL_DATA_TRANSPORT_MODE] = {
 							.type = NLA_U32},
+	[QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_COMPLETION_TIMEOUT] = {
+							.type = NLA_U32},
 };
 
 const struct nla_policy spectral_scan_get_status_policy[
@@ -137,6 +139,7 @@ static void wlan_spectral_intit_config(struct spectral_config *config_req)
 	config_req->ss_frequency.cfreq1 = SPECTRAL_PHYERR_PARAM_NOVAL;
 	config_req->ss_frequency.cfreq2 = SPECTRAL_PHYERR_PARAM_NOVAL;
 	config_req->ss_bandwidth = SPECTRAL_PHYERR_PARAM_NOVAL;
+	config_req->ss_completion_timeout = SPECTRAL_PHYERR_PARAM_NOVAL;
 }
 
 /**
@@ -570,6 +573,10 @@ int wlan_cfg80211_spectral_scan_config_and_start(struct wiphy *wiphy,
 			return -EINVAL;
 	}
 
+	if (tb[QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_COMPLETION_TIMEOUT])
+		config_req.ss_completion_timeout = nla_get_u32(tb
+		   [QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_COMPLETION_TIMEOUT]);
+
 	if (tb[QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_DEBUG_LEVEL]) {
 		spectral_dbg_level = nla_get_u32(tb
 		   [QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_DEBUG_LEVEL]);
@@ -894,18 +901,22 @@ int wlan_cfg80211_spectral_scan_get_config(struct wiphy *wiphy,
 	    nla_put_u32(skb,
 			QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_FFT_RECAPTURE,
 			sconfig->ss_recapture))
-
 		goto fail;
 
 	status = convert_to_spectral_data_transport_mode_internal_to_nl
 			(ps->transport_mode,
 			 &nl_transport_mode);
+
 	if (QDF_IS_STATUS_ERROR(status))
 		goto fail;
 
 	if (nla_put_u32(skb,
 			QCA_WLAN_VENDOR_ATTR_SPECTRAL_DATA_TRANSPORT_MODE,
-			nl_transport_mode))
+			nl_transport_mode) ||
+	    nla_put_u32(skb,
+			QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_COMPLETION_TIMEOUT,
+			sconfig->ss_completion_timeout))
+
 		goto fail;
 
 	sscan_req.ss_mode = sscan_mode;

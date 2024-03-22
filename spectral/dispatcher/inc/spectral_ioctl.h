@@ -96,6 +96,7 @@ enum spectral_params {
 	SPECTRAL_PARAM_FREQUENCY,
 	SPECTRAL_PARAM_CHAN_FREQUENCY,
 	SPECTRAL_PARAM_CHAN_WIDTH,
+	SPECTRAL_PARAM_COMPLETION_TIMEOUT,
 	SPECTRAL_PARAM_MAX,
 };
 
@@ -337,6 +338,7 @@ struct spectral_config_frequency {
  *                          interest.
  * @ss_bandwidth: Spectral scan bandwidth
  * @transport_mode: Spectral data transport mode
+ * @ss_completion_timeout: Spectral scan completion timeout value
  */
 struct spectral_config {
 	uint16_t ss_fft_period;
@@ -367,6 +369,7 @@ struct spectral_config {
 	struct spectral_config_frequency ss_frequency;
 	uint16_t ss_bandwidth;
 	enum spectral_data_transport_mode transport_mode;
+	uint32_t ss_completion_timeout;
 };
 
 /**
