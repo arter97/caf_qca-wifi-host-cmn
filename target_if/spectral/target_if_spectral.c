@@ -131,6 +131,55 @@ struct target_if_spectral *get_target_if_spectral_handle_from_pdev(
 qdf_export_symbol(get_target_if_spectral_handle_from_pdev);
 
 /**
+ * target_if_spectral_check_buffer_size() - API to check the
+ * report size for spectral scan of a given pdev
+ * @pdev: pdev handle
+ * @fft_size: FFT size
+ * @rpt_mode: Spectral report mode
+ *
+ * This API checks for the given fft_size and report_mode, size of the
+ * spectral report to be generated is less than or equal to the
+ * streamfs sub-buffer size allocated.
+ *
+ * Return: QDF_STATUS on success
+ */
+static QDF_STATUS
+target_if_spectral_check_buffer_size(struct wlan_objmgr_pdev *pdev,
+				     uint16_t fft_size,
+				     uint16_t rpt_mode)
+{
+	struct target_if_spectral *spectral;
+	uint32_t num_bins, report_size, buffer_size;
+	QDF_STATUS status;
+
+	spectral = get_target_if_spectral_handle_from_pdev(pdev);
+
+	status = spectral->spectral_buf_cb.get_buff_size(pdev, &buffer_size);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		spectral_err("Failed to get spectral buffer size");
+		return status;
+	}
+
+	num_bins = target_if_spectral_get_num_fft_bins(fft_size, rpt_mode);
+
+	if (num_bins < 0) {
+		spectral_err("Number of bins less than zero.");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	report_size = SPECTRAL_REPORT_HEADER_SIZE + num_bins;
+
+	if (report_size > buffer_size) {
+		spectral_err
+		("Requested report size %u is greater than buffer size %u.",
+		 report_size, buffer_size);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
  * target_if_spectral_get_normal_mode_cap() - API to get normal
  * Spectral scan capability of a given pdev
  * @pdev: pdev handle
@@ -6195,6 +6244,16 @@ target_if_start_spectral_scan(struct wlan_objmgr_pdev *pdev,
 			qdf_spin_unlock_bh(&spectral->spectral_lock);
 			return QDF_STATUS_E_FAILURE;
 		}
+	}
+
+	ret = target_if_spectral_check_buffer_size
+				(spectral->pdev_obj,
+				 spectral->params[smode].ss_fft_size,
+				 spectral->params[smode].ss_rpt_mode);
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		qdf_spin_unlock_bh(&spectral->spectral_lock);
+		spectral_err("Check buffer size failed");
+		return ret;
 	}
 
 	/* Populate detectot list first */

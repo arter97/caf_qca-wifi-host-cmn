@@ -588,6 +588,28 @@ os_if_spectral_nl_reset_tbuff(struct wlan_objmgr_pdev *pdev)
 	return QDF_STATUS_SUCCESS;
 }
 
+/**
+ * os_if_spectral_netlink_get_buff_size() -Get the sample buffer
+ * allocated size via Netlink
+ * @pdev : Pointer to pdev
+ * @buff_size: Pointer to store data
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS
+os_if_spectral_netlink_get_buff_size(struct wlan_objmgr_pdev *pdev,
+				     uint32_t *buff_size)
+{
+	if (!buff_size) {
+		osif_err("buff_size pointer is NULL!");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	*buff_size = MAX_SPECTRAL_PAYLOAD;
+
+	return QDF_STATUS_SUCCESS;
+}
+
 void
 os_if_spectral_netlink_init(struct wlan_objmgr_pdev *pdev)
 {
@@ -624,6 +646,8 @@ os_if_spectral_netlink_init(struct wlan_objmgr_pdev *pdev)
 		wlan_spectral_get_nl80211_chwidth;
 	spectral_buf_cb.reset_transport_channel =
 		os_if_spectral_nl_reset_tbuff;
+	spectral_buf_cb.get_buff_size =
+		os_if_spectral_netlink_get_buff_size;
 
 	if (sptrl_ctx->sptrlc_register_buffer_cb)
 		sptrl_ctx->sptrlc_register_buffer_cb(pdev, &spectral_buf_cb);

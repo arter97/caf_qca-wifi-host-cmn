@@ -85,6 +85,10 @@
 #define OFFSET_CH_WIDTH_80	56
 #define OFFSET_CH_WIDTH_160	50
 
+/* Update SPECTRAL_MAX_FFT_SIZE/SPECTRAL_MIN_FFT_SIZE when target_if
+ * definitions are modified
+ */
+
 /* Min and max for relevant Spectral params */
 #define SPECTRAL_PARAM_FFT_SIZE_MIN_GEN2          (1)
 #define SPECTRAL_PARAM_FFT_SIZE_MAX_GEN2          (9)
@@ -2802,7 +2806,6 @@ target_if_160mhz_delivery_state_change(struct target_if_spectral *spectral,
 				       enum spectral_scan_mode smode,
 				       uint8_t detector_id);
 
-#ifdef OPTIMIZED_SAMP_MESSAGE
 /**
  * target_if_spectral_get_num_fft_bins() - Get number of FFT bins from FFT size
  * according to the Spectral report mode.
@@ -2830,7 +2833,6 @@ target_if_spectral_get_num_fft_bins(uint32_t fft_size,
 		return -EINVAL;
 	}
 }
-#endif /* OPTIMIZED_SAMP_MESSAGE */
 
 #ifdef OPTIMIZED_SAMP_MESSAGE
 /**
