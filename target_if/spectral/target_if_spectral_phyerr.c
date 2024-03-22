@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011,2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -3540,6 +3540,7 @@ target_if_consume_spectral_report_gen3(
 	QDF_STATUS ret;
 	enum spectral_scan_mode spectral_mode = SPECTRAL_SCAN_MODE_INVALID;
 	bool finite_scan = false;
+	bool is_scan_complete = false;
 	int det = 0;
 	struct sscan_detector_list *det_list;
 	struct spectral_data_stats *spectral_dp_stats;
@@ -3594,6 +3595,20 @@ target_if_consume_spectral_report_gen3(
 	/* Drop the sample if Spectral is not active for the current mode */
 	if (!p_sops->is_spectral_active(spectral, spectral_mode)) {
 		spectral_info_rl("Spectral scan is not active");
+		print_fail_msg = false;
+		goto fail_unlock;
+	}
+
+	ret = target_if_spectral_is_scan_complete(spectral, spectral_mode,
+						  &is_scan_complete);
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		spectral_err_rl("Failed to check scan is completed");
+		goto fail_unlock;
+	}
+
+	/* Drop the sample if Spectral is already completed */
+	if (is_scan_complete) {
+		spectral_info_rl("Spectral scan is already done!");
 		print_fail_msg = false;
 		goto fail_unlock;
 	}

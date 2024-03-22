@@ -1051,11 +1051,13 @@ struct spectral_param_properties {
  * finite Spectral scan
  * @num_reports_requested: Number of Spectral reports requested from target
  * for a finite Spectral scan
+ * @is_scan_complete: Indicates if spectral scan is completed or not
  */
 struct target_if_finite_spectral_scan_params {
 	bool finite_spectral_scan;
 	uint32_t num_reports_expected;
 	uint32_t num_reports_requested;
+	bool is_scan_complete;
 };
 
 /**
@@ -2957,6 +2959,23 @@ QDF_STATUS
 target_if_spectral_scan_complete_event(
 		struct target_if_spectral *spectral,
 		struct spectral_scan_event *sptrl_event);
+
+/**
+ * target_if_spectral_is_scan_complete() - API to check if spectral
+ * scan completed
+ * @spectral: Pointer to Spectral target_if internal private data
+ * @smode: Spectral scan mode
+ * @is_scan_complete: location to store result
+ *
+ * API to check whether spectral scan is completed in case of a finite
+ * scan.
+ *
+ * Return: QDF_STATUS_SUCCESS on success, QDF_STATUS_E_FAILURE on failure
+ */
+QDF_STATUS
+target_if_spectral_is_scan_complete(struct target_if_spectral *spectral,
+				    enum spectral_scan_mode smode,
+				    bool *is_scan_complete);
 
 #ifdef BIG_ENDIAN_HOST
 /**

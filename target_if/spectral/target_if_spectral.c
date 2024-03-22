@@ -5190,6 +5190,7 @@ target_if_spectral_finite_scan_init(struct target_if_spectral *spectral,
 	sscan_count =  spectral->params[smode].ss_count;
 
 	finite_scan->finite_spectral_scan =  true;
+	finite_scan->is_scan_complete =  false;
 	finite_scan->num_reports_expected
 		= finite_scan->num_reports_requested
 		= num_detectors * sscan_count;
@@ -8231,6 +8232,41 @@ target_if_spectral_is_finite_scan(struct target_if_spectral *spectral,
 }
 
 QDF_STATUS
+target_if_spectral_is_scan_complete(struct target_if_spectral *spectral,
+				    enum spectral_scan_mode smode,
+				    bool *is_scan_complete)
+{
+	struct target_if_finite_spectral_scan_params *finite_scan;
+	bool is_finite_spectral_scan;
+
+	if (!spectral) {
+		spectral_err_rl("target if spectral object is null");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (smode >= SPECTRAL_SCAN_MODE_MAX) {
+		spectral_err_rl("invalid spectral mode %d", smode);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (!is_scan_complete) {
+		spectral_err_rl("Invalid pointer");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	finite_scan = &spectral->finite_scan[smode];
+	is_finite_spectral_scan = finite_scan->finite_spectral_scan;
+
+	/* Scan completion is valid only for finite scan mode */
+	if (is_finite_spectral_scan)
+		*is_scan_complete = finite_scan->is_scan_complete;
+	else
+		*is_scan_complete = false;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS
 target_if_spectral_finite_scan_update(struct target_if_spectral *spectral,
 				      enum spectral_scan_mode smode)
 {
@@ -8281,6 +8317,7 @@ target_if_spectral_finite_scan_update(struct target_if_spectral *spectral,
 		}
 
 		finite_scan->finite_spectral_scan =  false;
+		finite_scan->is_scan_complete =  true;
 	}
 
 	return status;
