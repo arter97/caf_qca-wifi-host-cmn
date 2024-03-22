@@ -42,6 +42,7 @@
 
 #include <spectral_defs_i.h>
 #include <wmi_unified_param.h>
+#include <qdf_hrtimer.h>
 
 #define FREQ_OFFSET_10MHZ (10)
 #define FREQ_OFFSET_40MHZ (40)
@@ -1198,6 +1199,16 @@ struct spectral_supported_bws {
 int get_supported_sscan_bw_pos(enum phy_ch_width sscan_bw);
 
 /**
+ * struct target_if_spectral_scan_timer - spectral wrapper timer object
+ * @smode: spectral scan mode
+ * @scan_completion_timer: HR timer obj for scan completion timeout
+ */
+struct target_if_spectral_scan_timer {
+	enum spectral_scan_mode smode;
+	qdf_hrtimer_data_t scan_completion_timer;
+};
+
+/**
  * struct target_if_spectral - main spectral structure
  * @pdev_obj: Pointer to pdev
  * @spectral_ops: Target if internal Spectral low level operations table
@@ -1310,6 +1321,7 @@ int get_supported_sscan_bw_pos(enum phy_ch_width sscan_bw);
  * operating widths
  * @supported_sscan_bw_list: List of supported sscan widths for all sscan modes
  * @data_stats: stats in Spectral data path
+ * @spectral_timer: spectral timer obj wrapper
  */
 struct target_if_spectral {
 	struct wlan_objmgr_pdev *pdev_obj;
@@ -1444,6 +1456,8 @@ struct target_if_spectral {
 	/* Whether a given sscan BW is supported on a given smode */
 	bool supported_sscan_bw_list[SPECTRAL_SCAN_MODE_MAX][CH_WIDTH_MAX];
 	struct spectral_data_stats data_stats;
+	struct target_if_spectral_scan_timer
+				spectral_timer[SPECTRAL_SCAN_MODE_MAX];
 };
 
 /**

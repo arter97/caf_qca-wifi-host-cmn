@@ -3692,12 +3692,11 @@ target_if_consume_spectral_report_gen3(
 		goto fail_unlock;
 	}
 
-	qdf_spin_unlock_bh(&spectral->spectral_lock);
 	ret = target_if_spectral_is_finite_scan(spectral, spectral_mode,
 						&finite_scan);
 	if (QDF_IS_STATUS_ERROR(ret)) {
 		spectral_err_rl("Failed to check scan is finite");
-		goto fail;
+		goto fail_unlock;
 	}
 
 	if (finite_scan) {
@@ -3705,9 +3704,10 @@ target_if_consume_spectral_report_gen3(
 							    spectral_mode);
 		if (QDF_IS_STATUS_ERROR(ret)) {
 			spectral_err_rl("Failed to update scan count");
-			goto fail;
+			goto fail_unlock;
 		}
 	}
+	qdf_spin_unlock_bh(&spectral->spectral_lock);
 
 	return 0;
 fail_unlock:

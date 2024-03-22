@@ -3149,6 +3149,220 @@ target_if_spectral_detach_simulation(struct target_if_spectral *spectral)
 #endif
 
 /**
+ * target_if_spectral_scan_timeout_handler() - Finite spectral scan
+ * timeout function.
+ * @arg: Container of spectral object.
+ *
+ * Send timeout event notification to userspace when timer expires
+ */
+static enum qdf_hrtimer_restart_status
+target_if_spectral_scan_timeout_handler(qdf_hrtimer_data_t *arg)
+{
+	struct target_if_spectral *spectral;
+	struct target_if_spectral_scan_timer *spectral_timer;
+	struct target_if_finite_spectral_scan_params *finite_scan;
+	uint32_t num_reports_received;
+	struct spectral_scan_event sptrl_event;
+	struct spectral_scan_complete_event compl_event;
+	QDF_STATUS status;
+	enum spectral_scan_mode smode;
+
+	spectral_timer = qdf_container_of(arg,
+					  struct target_if_spectral_scan_timer,
+					  scan_completion_timer);
+	if (!spectral_timer) {
+		spectral_err("spectral_timer pointer is null.");
+		return QDF_HRTIMER_NORESTART;
+	}
+
+	smode = spectral_timer->smode;
+
+	spectral = qdf_container_of(spectral_timer,
+				    struct target_if_spectral,
+				    spectral_timer[smode]);
+	if (!spectral) {
+		spectral_err("spectral pointer is null.");
+		return QDF_HRTIMER_NORESTART;
+	}
+
+	qdf_spin_lock_bh(&spectral->spectral_lock);
+
+	finite_scan = &spectral->finite_scan[smode];
+
+	finite_scan->finite_spectral_scan =  false;
+
+	if (finite_scan->is_scan_complete) {
+		qdf_spin_unlock_bh(&spectral->spectral_lock);
+		return QDF_HRTIMER_NORESTART;
+	}
+
+	num_reports_received = finite_scan->num_reports_requested -
+				finite_scan->num_reports_expected;
+
+	sptrl_event.event_id = SPECTRAL_SCAN_COMPLETE;
+
+	compl_event.completion_status = SPECTRAL_SCAN_COMPLETE_TIMEOUT;
+	compl_event.num_received_samples = num_reports_received;
+
+	sptrl_event.complete_event = compl_event;
+
+	status = target_if_spectral_scan_complete_event(spectral,
+							&sptrl_event);
+
+	if (QDF_IS_STATUS_ERROR(status))
+		spectral_err("Failed spectral scan completion event");
+
+	finite_scan->is_scan_complete =  true;
+
+	qdf_spin_unlock_bh(&spectral->spectral_lock);
+
+	return QDF_HRTIMER_NORESTART;
+}
+
+/**
+ * target_if_spectral_init_scan_completion_timer() - Initialize hrtimer
+ * for the given scan mode
+ * @spectral: Pointer to Spectral target_if internal private data
+ * @smode: Spectral scan mode
+ *
+ * Function to initialize hrtimer for spectral scan.
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS
+target_if_spectral_init_scan_completion_timer
+				(struct target_if_spectral *spectral,
+				 enum spectral_scan_mode smode)
+{
+	struct target_if_spectral_scan_timer *spectral_timer;
+
+	if (!spectral) {
+		spectral_err("Spectral object is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+	if (smode >= SPECTRAL_SCAN_MODE_MAX) {
+		spectral_err("Invalid Spectral mode %u", smode);
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	spectral_timer = &spectral->spectral_timer[smode];
+	spectral_timer->smode = smode;
+
+	qdf_hrtimer_init(&spectral_timer->scan_completion_timer,
+			 target_if_spectral_scan_timeout_handler,
+			 QDF_CLOCK_MONOTONIC,
+			 QDF_HRTIMER_MODE_REL,
+			 QDF_CONTEXT_TASKLET);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * target_if_spectral_deinit_scan_completion_timer() - De-initialize hrtimer
+ * for the given scan mode
+ * @spectral: Pointer to Spectral target_if internal private data
+ * @smode: Spectral scan mode
+ *
+ * Function to de-initialize/kill hrtimer for spectral scan.
+ *
+ * Return: None
+ */
+static void
+target_if_spectral_deinit_scan_completion_timer
+				(struct target_if_spectral *spectral,
+				 enum spectral_scan_mode smode)
+{
+	struct target_if_spectral_scan_timer *spectral_timer;
+
+	if (!spectral) {
+		spectral_err("Spectral object is null");
+		return;
+	}
+
+	if (smode >= SPECTRAL_SCAN_MODE_MAX) {
+		spectral_err("Invalid Spectral mode %u", smode);
+		return;
+	}
+
+	spectral_timer = &spectral->spectral_timer[smode];
+
+	qdf_hrtimer_kill(&spectral_timer->scan_completion_timer);
+}
+
+/**
+ * target_if_spectral_scan_start_timer() - Start hrtimer
+ * for the given scan mode
+ * @spectral: Pointer to Spectral target_if internal private data
+ * @smode: Spectral scan mode
+ * @completion_timeout_us: Timer interval in micro-seconds
+ *
+ * Function to start timer for finite spectral scan.
+ *
+ * Return: None
+ */
+static void
+target_if_spectral_scan_start_timer(struct target_if_spectral *spectral,
+				    enum spectral_scan_mode smode,
+				    uint32_t completion_timeout_us)
+{
+	struct target_if_spectral_scan_timer *spectral_timer;
+
+	if (!spectral) {
+		spectral_err_rl("Spectral object is null");
+		return;
+	}
+
+	if (smode >= SPECTRAL_SCAN_MODE_MAX) {
+		spectral_err("Invalid Spectral mode %u", smode);
+		return;
+	}
+
+	if (!completion_timeout_us) {
+		spectral_info
+			("Timer is not started as timeout value is set to 0");
+		return;
+	}
+
+	spectral_timer = &spectral->spectral_timer[smode];
+
+	qdf_hrtimer_start(&spectral_timer->scan_completion_timer,
+			  qdf_ns_to_ktime(completion_timeout_us *
+					  NSEC_PER_USEC),
+			  QDF_HRTIMER_MODE_REL);
+}
+
+/**
+ * target_if_spectral_scan_cancel_timer() - Start hrtimer
+ * for the given scan mode
+ * @spectral: Pointer to Spectral target_if internal private data
+ * @smode: Spectral scan mode
+ *
+ * Function to stop/cancel timer for finite spectral scan.
+ *
+ * Return: None
+ */
+static void
+target_if_spectral_scan_cancel_timer(struct target_if_spectral *spectral,
+				     enum spectral_scan_mode smode)
+{
+	struct target_if_spectral_scan_timer *spectral_timer;
+
+	if (!spectral) {
+		spectral_err_rl("Spectral LMAC object is null");
+		return;
+	}
+
+	if (smode >= SPECTRAL_SCAN_MODE_MAX) {
+		spectral_err("Invalid Spectral mode %u", smode);
+		return;
+	}
+
+	spectral_timer = &spectral->spectral_timer[smode];
+
+	qdf_hrtimer_cancel(&spectral_timer->scan_completion_timer);
+}
+
+/**
  * target_if_spectral_detach() - De-initialize target_if Spectral
  * @spectral: Pointer to Spectral target_if internal private data
  *
@@ -3163,9 +3377,13 @@ target_if_spectral_detach(struct target_if_spectral *spectral)
 	spectral_info("spectral detach");
 
 	if (spectral) {
-		for (; smode < SPECTRAL_SCAN_MODE_MAX; smode++)
+		for (; smode < SPECTRAL_SCAN_MODE_MAX; smode++) {
 			qdf_spinlock_destroy
 				(&spectral->param_info[smode].osps_lock);
+
+			target_if_spectral_deinit_scan_completion_timer
+							(spectral, smode);
+		}
 
 		target_if_spectral_detach_simulation(spectral);
 
@@ -3886,6 +4104,16 @@ target_if_pdev_spectral_init(struct wlan_objmgr_pdev *pdev)
 			init_160mhz_delivery_state_machine(spectral);
 	}
 
+	smode = SPECTRAL_SCAN_MODE_NORMAL;
+	for (; smode < SPECTRAL_SCAN_MODE_MAX; smode++) {
+		status = target_if_spectral_init_scan_completion_timer(spectral,
+								       smode);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			spectral_err("Failed to init timer for scan mode : %u",
+				     smode);
+			goto fail;
+		}
+	}
 	qdf_spinlock_create(&spectral->detector_list_lock);
 	qdf_spinlock_create(&spectral->session_report_info_lock);
 	qdf_spinlock_create(&spectral->session_det_map_lock);
@@ -5175,6 +5403,7 @@ target_if_spectral_finite_scan_init(struct target_if_spectral *spectral,
 	uint32_t num_detectors;
 	QDF_STATUS status;
 	uint16_t sscan_count;
+	uint32_t ss_completion_timeout;
 
 	if (!spectral) {
 		spectral_err("target if spectral object is null");
@@ -5197,12 +5426,16 @@ target_if_spectral_finite_scan_init(struct target_if_spectral *spectral,
 
 	finite_scan = &spectral->finite_scan[smode];
 	sscan_count =  spectral->params[smode].ss_count;
+	ss_completion_timeout =  spectral->params[smode].ss_completion_timeout;
 
 	finite_scan->finite_spectral_scan =  true;
 	finite_scan->is_scan_complete =  false;
 	finite_scan->num_reports_expected
 		= finite_scan->num_reports_requested
 		= num_detectors * sscan_count;
+
+	target_if_spectral_scan_start_timer(spectral, smode,
+					    ss_completion_timeout);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -6332,6 +6565,7 @@ target_if_stop_spectral_scan(struct wlan_objmgr_pdev *pdev,
 	struct target_if_spectral_ops *p_sops;
 	struct target_if_spectral *spectral;
 	uint8_t det;
+	QDF_STATUS status;
 
 	if (!pdev) {
 		spectral_err("pdev object is NULL");
@@ -6362,6 +6596,13 @@ target_if_stop_spectral_scan(struct wlan_objmgr_pdev *pdev,
 	}
 	p_sops = GET_TARGET_IF_SPECTRAL_OPS(spectral);
 
+	/* Cancel timer before acquiring the lock as the timer handler
+	 * would attempt to acquire the lock to send timeout event.
+	 * Cancelling timer after acquiring the lock would cause a
+	 * deadlock.
+	 */
+	target_if_spectral_scan_cancel_timer(spectral, smode);
+
 	qdf_spin_lock_bh(&spectral->spectral_lock);
 	p_sops->stop_spectral_scan(spectral, smode);
 	if (spectral->classify_scan) {
@@ -6375,6 +6616,14 @@ target_if_stop_spectral_scan(struct wlan_objmgr_pdev *pdev,
 
 	spectral->send_single_packet = 0;
 	spectral->sc_spectral_scan = 0;
+
+	status = spectral->spectral_buf_cb.reset_transport_channel(pdev);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		qdf_spin_unlock_bh(&spectral->spectral_lock);
+		spectral_err
+			("Failed to reset transport specific buffer.");
+		return status;
+	}
 
 	qdf_spin_lock_bh(&spectral->session_det_map_lock);
 	for (det = 0; det < MAX_DETECTORS_PER_PDEV; det++)
@@ -8283,6 +8532,7 @@ target_if_spectral_finite_scan_update(struct target_if_spectral *spectral,
 	struct wlan_objmgr_pdev *pdev;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	struct spectral_scan_event sptrl_event;
+	struct spectral_scan_complete_event compl_event;
 
 	if (!spectral) {
 		spectral_err_rl("target if spectral object is null");
@@ -8311,18 +8561,18 @@ target_if_spectral_finite_scan_update(struct target_if_spectral *spectral,
 		uint32_t received_reports = finite_scan->num_reports_requested;
 
 		sptrl_event.event_id = SPECTRAL_SCAN_COMPLETE;
-		sptrl_event.complete_event.completion_status =
-					SPECTRAL_SCAN_COMPLETE_SUCCESS;
 
-		sptrl_event.complete_event.num_received_samples =
-					received_reports;
+		compl_event.completion_status = SPECTRAL_SCAN_COMPLETE_SUCCESS;
+		compl_event.num_received_samples = received_reports;
+
+		sptrl_event.complete_event = compl_event;
 
 		status = target_if_spectral_scan_complete_event(spectral,
 								&sptrl_event);
 
 		if (QDF_IS_STATUS_ERROR(status)) {
 			spectral_err_rl
-			  ("Failed to notify finite Spectral scan completion");
+			  ("Failed to notify finite spectral scan completion");
 		}
 
 		finite_scan->finite_spectral_scan =  false;
