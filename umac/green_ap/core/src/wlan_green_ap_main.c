@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -394,7 +394,7 @@ void wlan_green_ap_check_mode(struct wlan_objmgr_pdev *pdev,
 	wlan_vdev_obj_lock(vdev);
 	mode = wlan_vdev_mlme_get_opmode(vdev);
 
-	if (mode != QDF_SAP_MODE && mode != QDF_STA_MODE)
+	if (mode != QDF_SAP_MODE && mode != QDF_STA_MODE && mode != QDF_MONITOR_MODE)
 		*flag = 1;
 
 	wlan_vdev_obj_unlock(vdev);
