@@ -1629,15 +1629,174 @@ void dp_tx_mon_record_clear_buffer(struct dp_mon_pdev_be *mon_pdev_be)
 {
 }
 #endif
+
+#define SW_FILTER_CHECK_PASSED		(1U)
+#define SW_FILTER_CHECK_AGAIN		(2U)
+#define SW_FILTER_CHECK_FAILED		(3U)
+
+#ifdef QCA_SUPPORT_LITE_MONITOR
+
+/**
+ * dp_tx_mon_get_sw_filter_en() - flag to indicate sw filter enable
+ *
+ * @mon_pdev_be: pointer to dp_mon_pdev_be
+ * @initiator: flag to indicate initiator window
+ * @num_users: number of users
+ *
+ * Return: bool
+ */
+static inline bool
+dp_tx_mon_get_sw_filter_en(struct dp_mon_pdev_be *mon_pdev_be,
+			   bool initiator, uint8_t num_users)
+{
+	struct dp_lite_mon_tx_config *config;
+
+	config = mon_pdev_be->lite_mon_tx_config;
+	return (initiator && config->disable_hw_filter &&
+		(1 == num_users)) ? true : false;
+}
+
+/**
+ * dp_tx_mon_sw_filter() - Filter packet based on config set by user
+ *
+ * @mon_pdev_be: pointer to dp_mon_pdev_be
+ * @tlv_status: tlv status received after parsing in hal.
+ * @tx_data_ppdu_info: pointer to Tx data ppdu info
+ * @tx_status_data: pointer to Tx status data
+ *
+ * Return: uint32_t
+ */
+static inline uint32_t
+dp_tx_mon_sw_filter(struct dp_mon_pdev_be *mon_pdev_be,
+		    uint32_t tlv_status,
+		    struct dp_tx_ppdu_info *tx_data_ppdu_info,
+		    struct hal_tx_status_info *tx_status_data)
+{
+	struct dp_lite_mon_tx_config *config = mon_pdev_be->lite_mon_tx_config;
+	uint16_t mgmt, ctrl, data;
+	uint16_t frame_ctrl;
+	uint16_t type;
+
+	/*
+	 * function will be called with two option:
+	 * 1. HAL_MON_TX_PEER_ENTRY
+	 * 2. HAL_MON_TX_QUEUE_EXTENSION
+	 */
+	if (HAL_MON_TX_PEER_ENTRY == tlv_status) {
+		struct dp_lite_mon_peer *peer;
+
+		/*
+		 * In tx peer entry, address 1 is addr_a and address 2 is addr b
+		 */
+		if (!config->tx_config.peer_count)
+			return SW_FILTER_CHECK_AGAIN;
+
+		qdf_spin_lock_bh(&config->lite_mon_tx_lock);
+		TAILQ_FOREACH(peer, &config->tx_config.peer_list,
+			      peer_list_elem) {
+			if (!qdf_mem_cmp(&peer->peer_mac.raw[0],
+					 tx_status_data->addr2,
+					 QDF_MAC_ADDR_SIZE)) {
+				qdf_spin_unlock_bh(&config->lite_mon_tx_lock);
+				/* set is sw_filter done flag set */
+				TXMON_PPDU_USR(tx_data_ppdu_info, 0,
+					       is_sw_filter_done) = 1;
+				return SW_FILTER_CHECK_PASSED;
+			}
+		}
+		qdf_spin_unlock_bh(&config->lite_mon_tx_lock);
+
+		return SW_FILTER_CHECK_AGAIN;
+	}
+
+	mgmt = config->tx_config.mgmt_filter[DP_MON_FRM_FILTER_MODE_FP];
+	ctrl = config->tx_config.ctrl_filter[DP_MON_FRM_FILTER_MODE_FP];
+	data = config->tx_config.data_filter[DP_MON_FRM_FILTER_MODE_FP];
+
+	frame_ctrl = TXMON_PPDU_COM(tx_data_ppdu_info, frame_control);
+
+	type = frame_ctrl & IEEE80211_FC0_TYPE_MASK;
+
+	if ((mgmt && QDF_IEEE80211_FC0_TYPE_MGT == type) ||
+	    (ctrl && QDF_IEEE80211_FC0_TYPE_CTL == type) ||
+	    (data && QDF_IEEE80211_FC0_TYPE_DATA == type)) {
+		TXMON_PPDU_USR(tx_data_ppdu_info, 0, is_sw_filter_done) = 1;
+		return SW_FILTER_CHECK_PASSED;
+	}
+
+	return SW_FILTER_CHECK_FAILED;
+}
+#else
+/**
+ * dp_tx_mon_get_sw_filter_en() - flag to indicate sw filter enable
+ *
+ * @mon_pdev_be: pointer to dp_mon_pdev_be
+ * @initiator: flag to indicate initiator window
+ * @num_users: number of users
+ *
+ * Return: bool
+ */
+static inline bool
+dp_tx_mon_get_sw_filter_en(struct dp_mon_pdev_be *mon_pdev_be,
+			   bool initiator, uint8_t num_users)
+{
+	return false;
+}
+
+/**
+ * dp_tx_mon_sw_filter() - Filter packet based on config set by user
+ *
+ * @mon_pdev_be: pointer to dp_mon_pdev_be
+ * @tlv_status: tlv status received after parsing in hal.
+ * @tx_data_ppdu_info: pointer to Tx data ppdu info
+ * @tx_status_data: pointer to Tx status data
+ *
+ * Return: uint32_t
+ */
+static inline uint32_t
+dp_tx_mon_sw_filter(struct dp_mon_pdev_be *mon_pdev_be,
+		    uint32_t tlv_status,
+		    struct dp_tx_ppdu_info *tx_data_ppdu_info,
+		    struct hal_tx_status_info *tx_status_data)
+{
+	return SW_FILTER_CHECK_PASSED;
+}
+#endif
+
+/**
+ * dp_tx_mon_reset_ppdu_info() - reset ppdu_info
+ *
+ * @tx_data_ppdu_info: pointer to Tx data ppdu info
+ * @tx_prot_ppdu_info: pointer to Tx prot ppdu info
+ *
+ * Return: void
+ */
+static inline
+void dp_tx_mon_reset_ppdu_info(struct dp_tx_ppdu_info *tx_data_ppdu_info,
+			       struct dp_tx_ppdu_info *tx_prot_ppdu_info)
+{
+	/*
+	 * set is_used and num_users as 0
+	 * during structure free, buffer will be freed
+	 */
+	TXMON_PPDU_HAL(tx_data_ppdu_info, is_used) = 0;
+	TXMON_PPDU_HAL(tx_data_ppdu_info, num_users) = 0;
+
+	TXMON_PPDU_HAL(tx_prot_ppdu_info, is_used) = 0;
+	TXMON_PPDU_HAL(tx_prot_ppdu_info, num_users) = 0;
+}
+
 /**
  * dp_tx_mon_process_tlv_2_0() - API to parse PPDU worth information
  * @pdev: DP_PDEV handle
+ * @initiator: flag to identify initiator
  * @mon_desc_list_ref: tx monitor descriptor list reference
  *
  * Return: status
  */
 static QDF_STATUS
 dp_tx_mon_process_tlv_2_0(struct dp_pdev *pdev,
+			  bool initiator,
 			  struct dp_tx_mon_desc_list *mon_desc_list_ref)
 {
 	struct dp_mon_pdev *mon_pdev;
@@ -1658,6 +1817,7 @@ dp_tx_mon_process_tlv_2_0(struct dp_pdev *pdev,
 	bool schedule_wrq = false;
 	uint8_t mac_id = 0;
 	struct dp_mon_mac *mon_mac;
+	bool sw_filter_en = false;
 
 	/* sanity check */
 	if (qdf_unlikely(!pdev))
@@ -1714,6 +1874,13 @@ dp_tx_mon_process_tlv_2_0(struct dp_pdev *pdev,
 		return QDF_STATUS_E_NOMEM;
 	}
 
+	/*
+	 * sw_filter_en flag will be set if the window is initiator and
+	 * disable hw filter configuration is enabled through ini.
+	 */
+	sw_filter_en = dp_tx_mon_get_sw_filter_en(mon_pdev_be,
+						  initiator, num_users);
+
 	/* iterate status buffer queue */
 	while (tx_mon_be->cur_frag_q_idx < tx_mon_be->last_frag_q_idx) {
 		/* get status buffer from frag_q_vec */
@@ -1740,6 +1907,46 @@ dp_tx_mon_process_tlv_2_0(struct dp_pdev *pdev,
 					tx_status_data,
 					tx_status_prot,
 					tx_tlv, status_frag);
+
+			/* sw filter to drop packet here */
+			if (sw_filter_en &&
+			    ((HAL_MON_TX_QUEUE_EXTENSION == tlv_status) ||
+			     (HAL_MON_TX_PEER_ENTRY == tlv_status))) {
+				uint32_t state;
+
+				state = dp_tx_mon_sw_filter(mon_pdev_be,
+							    tlv_status,
+							    tx_data_ppdu_info,
+							    tx_status_data);
+
+				switch (state) {
+				case SW_FILTER_CHECK_PASSED:
+				{
+					sw_filter_en = false;
+					break;
+				}
+				case SW_FILTER_CHECK_AGAIN:
+				{
+					/*
+					 * mac address type failed, but there is
+					 * a chance that it can matched with the
+					 * type. So we need to do filter check
+					 * again.
+					 */
+					break;
+				}
+				case SW_FILTER_CHECK_FAILED:
+				{
+					dp_tx_mon_reset_ppdu_info(
+							tx_data_ppdu_info,
+							tx_prot_ppdu_info);
+					tx_mon_be->stats.ppdu_drop_sw_filter++;
+					goto drop_packet_without_processing;
+					/* no point in putting break here */
+					break;
+				}
+				}
+			}
 
 			dp_tx_mon_record_tlv(mon_pdev_be,
 					     &tx_data_ppdu_info->hal_txmon,
@@ -1777,6 +1984,7 @@ dp_tx_mon_process_tlv_2_0(struct dp_pdev *pdev,
 
 	/* Accumulate tx pkt cap stats in mon pdev */
 	dp_pdev_update_tx_pkt_cap_stats(mon_pdev_be);
+drop_packet_without_processing:
 	/* clear the unreleased frag array */
 	dp_tx_mon_status_queue_free(pdev, tx_mon_be, mon_desc_list_ref);
 
@@ -1970,6 +2178,7 @@ dp_tx_mon_process_status_tlv(struct dp_soc *soc,
 		}
 
 		if (dp_tx_mon_process_tlv_2_0(pdev,
+					      mon_ring_desc->initiator,
 					      mon_desc_list_ref) !=
 		    QDF_STATUS_SUCCESS)
 			dp_tx_mon_status_queue_free(pdev, tx_mon_be,

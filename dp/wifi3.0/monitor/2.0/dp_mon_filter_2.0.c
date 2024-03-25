@@ -1598,7 +1598,6 @@ void dp_mon_filter_reset_tx_mon_mode_2_0(struct dp_pdev *pdev)
 	mon_soc = soc->monitor_soc;
 	mon_soc_be = dp_get_be_mon_soc_from_dp_mon_soc(mon_soc);
 	mon_soc_be->tx_mon_ring_fill_level = DP_MON_RING_FILL_LEVEL_DEFAULT;
-	mon_soc_be->rx_mon_ring_fill_level = DP_MON_RING_FILL_LEVEL_DEFAULT;
 
 	mon_pdev_be->filter_be[mode][srng_type] = filter;
 }
@@ -3267,7 +3266,7 @@ dp_mon_filter_reset_tx_lite_mon(struct dp_mon_pdev_be *be_mon_pdev)
 		return;
 	config->subtype_filtering = false;
 	config->sw_peer_filtering = false;
-
+	config->disable_hw_filter = false;
 }
 
 void

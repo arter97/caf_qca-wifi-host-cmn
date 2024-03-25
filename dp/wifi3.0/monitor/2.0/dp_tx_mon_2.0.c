@@ -647,6 +647,8 @@ void dp_print_pdev_tx_monitor_stats_2_0(struct dp_pdev *pdev)
 			tx_mon_be->dp_tx_pkt_cap_stats[CDP_TX_PKT_TYPE_ICMP]);
 	DP_PRINT_STATS("\t\t Invalid Pkt id: %u",
 			tx_mon_be->dp_tx_pkt_cap_stats[0]);
+	DP_PRINT_STATS("\tPkt drop sw filter : %llu",
+		       stats.ppdu_drop_sw_filter);
 }
 
 #ifdef QCA_SUPPORT_LITE_MONITOR
@@ -818,12 +820,15 @@ dp_lite_mon_filter_peer(struct dp_lite_mon_tx_config *config,
 	if (!config->sw_peer_filtering || !config->tx_config.peer_count)
 		return QDF_STATUS_SUCCESS;
 
+	qdf_spin_lock_bh(&config->lite_mon_tx_lock);
 	TAILQ_FOREACH(peer, &config->tx_config.peer_list, peer_list_elem) {
 		if (!qdf_mem_cmp(&peer->peer_mac.raw[0],
 				 &wh->i_addr1[0], QDF_MAC_ADDR_SIZE)) {
+			qdf_spin_unlock_bh(&config->lite_mon_tx_lock);
 			return QDF_STATUS_SUCCESS;
 		}
 	}
+	qdf_spin_unlock_bh(&config->lite_mon_tx_lock);
 
 	return QDF_STATUS_E_ABORTED;
 }
@@ -918,6 +923,71 @@ dp_lite_mon_filter_peer_subtype(struct dp_lite_mon_tx_config *config,
 }
 
 /**
+ * dp_tx_lite_mon_sw_filtering() - filter frame with peer and subtype
+ * @tx_mon_be: tx monitor be handle
+ * @config: Lite monitor configuration
+ * @buf: Pointer to nbuf
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS
+dp_tx_lite_mon_sw_filtering(struct dp_pdev_tx_monitor_be *tx_mon_be,
+			    struct dp_lite_mon_tx_config *config,
+			    qdf_nbuf_t buf)
+{
+	struct dp_lite_mon_peer *peer;
+	struct dp_lite_mon_config *tx_config = NULL;
+	struct ieee80211_frame_min_one *wh;
+	uint16_t mgmt_filter, ctrl_filter, data_filter, type;
+
+	if (dp_tx_mon_nbuf_get_num_frag(buf)) {
+		wh = (struct ieee80211_frame_min_one *)
+			qdf_nbuf_get_frag_addr(buf, 0);
+	} else {
+		qdf_nbuf_t nbuf;
+
+		nbuf = qdf_nbuf_get_ext_list(buf);
+		if (nbuf)
+			wh = (struct ieee80211_frame_min_one *)
+				qdf_nbuf_data(nbuf);
+		else
+			return QDF_STATUS_E_INVAL;
+	}
+
+	qdf_spin_lock_bh(&config->lite_mon_tx_lock);
+	TAILQ_FOREACH(peer, &config->tx_config.peer_list, peer_list_elem) {
+		if (!qdf_mem_cmp(&peer->peer_mac.raw[0],
+				 &wh->i_addr1[0],
+				 QDF_MAC_ADDR_SIZE)) {
+			qdf_spin_unlock_bh(&config->lite_mon_tx_lock);
+			return QDF_STATUS_SUCCESS;
+		}
+	}
+	qdf_spin_unlock_bh(&config->lite_mon_tx_lock);
+
+	tx_config = &config->tx_config;
+	/* if mac address didn't matched then do type based filtering */
+	mgmt_filter = tx_config->mgmt_filter[DP_MON_FRM_FILTER_MODE_FP];
+	ctrl_filter = tx_config->ctrl_filter[DP_MON_FRM_FILTER_MODE_FP];
+	data_filter = tx_config->data_filter[DP_MON_FRM_FILTER_MODE_FP];
+
+	type = (wh->i_fc[0] & IEEE80211_FC0_TYPE_MASK);
+
+	if (QDF_IEEE80211_FC0_TYPE_MGT == type && mgmt_filter)
+		return QDF_STATUS_SUCCESS;
+
+	if (QDF_IEEE80211_FC0_TYPE_CTL == type && ctrl_filter)
+		return QDF_STATUS_SUCCESS;
+
+	if (QDF_IEEE80211_FC0_TYPE_DATA == type && data_filter)
+		return QDF_STATUS_SUCCESS;
+
+	tx_mon_be->stats.ppdu_drop_sw_filter++;
+
+	return QDF_STATUS_E_ABORTED;
+}
+
+/**
  * dp_tx_lite_mon_filtering() - Additional filtering for lite monitor
  * @pdev: Pointer to physical device
  * @tx_ppdu_info: pointer to dp_tx_ppdu_info structure
@@ -946,6 +1016,18 @@ dp_tx_lite_mon_filtering(struct dp_pdev *pdev,
 	ret = dp_lite_mon_filter_ppdu(mpdu_count, config->tx_config.level);
 	if (ret)
 		return ret;
+
+	if (config->disable_hw_filter) {
+		struct mon_rx_user_status *user_status;
+
+		user_status = tx_ppdu_info->hal_txmon.rx_status.rx_user_status;
+
+		if (user_status && user_status->is_sw_filter_done)
+			return QDF_STATUS_SUCCESS;
+
+		return dp_tx_lite_mon_sw_filtering(&mon_pdev_be->tx_monitor_be,
+						   config, buf);
+	}
 
 	/* Subtype and peer filtering */
 	ret = dp_lite_mon_filter_peer_subtype(config, buf);

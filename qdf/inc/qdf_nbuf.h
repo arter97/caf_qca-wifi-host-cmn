@@ -555,6 +555,7 @@ struct mon_rx_status {
  * @ofdma_ru_width: OFDMA total RU width
  * @ofdma_ru_size: OFDMA RU size index
  * @is_ampdu: AMPDU flag
+ * @is_sw_filter_done: sw filter done flag
  * @sta_id: STA id
  * @ldpc: LDPC
  * @dcm: DCM
@@ -622,7 +623,8 @@ struct mon_rx_user_status {
 		 ofdma_ru_start_index:7,
 		 ofdma_ru_width:7,
 		 ofdma_ru_size:8,
-		 is_ampdu:1;
+		 is_ampdu:1,
+		 is_sw_filter_done:1;
 	uint32_t sta_id : 12,
 		 ldpc : 1,
 		 dcm : 1,

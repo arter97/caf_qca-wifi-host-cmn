@@ -334,6 +334,12 @@ void dp_mon_filter_setup_mon_mode(struct dp_pdev *pdev);
 void dp_mon_filter_setup_tx_mon_mode(struct dp_pdev *pdev);
 
 /**
+ * dp_mon_filter_reset_tx_mon_mode() - Reset the Tx monitor mode filter
+ * @pdev: DP pdev handle
+ */
+void dp_mon_filter_reset_tx_mon_mode(struct dp_pdev *pdev);
+
+/**
  * dp_mon_filter_reset_mon_mode() - Reset the Rx monitor mode filter
  * @pdev: DP pdev handle
  */

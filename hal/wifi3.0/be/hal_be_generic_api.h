@@ -1633,6 +1633,7 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 	}
 	case WIFITX_PEER_ENTRY_E:/* DOWNSTREAM - COMPACTION */
 	{
+		status = HAL_MON_TX_PEER_ENTRY;
 		hal_txmon_parse_peer_entry(tx_tlv, user_id,
 					   ppdu_info, tx_status_info);
 		SHOW_DEFINED(WIFITX_PEER_ENTRY_E);

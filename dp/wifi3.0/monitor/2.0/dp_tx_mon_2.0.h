@@ -450,6 +450,7 @@ struct dp_tx_ppdu_info {
  * @ppdu_info_drop_th: count ppdu info been dropped due threshold reached
  * @ppdu_info_drop_flush: count ppdu info been dropped due to flush detected
  * @ppdu_info_drop_trunc: count ppdu info been dropped due to truncated
+ * @ppdu_drop_sw_filter: count ppdu drop in sw filter
  */
 struct dp_tx_monitor_drop_stats {
 	uint64_t ppdu_drop_cnt;
@@ -472,6 +473,8 @@ struct dp_tx_monitor_drop_stats {
 	uint64_t ppdu_info_drop_th;
 	uint64_t ppdu_info_drop_flush;
 	uint64_t ppdu_info_drop_trunc;
+
+	uint64_t ppdu_drop_sw_filter;
 };
 
 /**

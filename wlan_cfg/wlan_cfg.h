@@ -336,6 +336,7 @@ struct wlan_srng_cfg {
  * @num_rxdma_dst_rings_per_pdev: Number of Rx DMA rings per pdev
  * @txmon_hw_support: TxMON HW support
  * @txmon_sw_peer_filtering: TxMON sw peer filtering support
+ * @txmon_disable_hw_filter: TXMON disable filtering support in hw
  * @num_rxdma_status_rings_per_pdev: Num RXDMA status rings
  * @tx_capt_max_mem_allowed: Max memory for Tx packet capture
  * @tx_capt_rbm_id: Return Buffer Manager ID to be used for Tx packet capture
@@ -551,6 +552,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint8_t num_rxdma_dst_rings_per_pdev;
 	bool txmon_hw_support;
 	bool txmon_sw_peer_filtering;
+	bool txmon_disable_hw_filter;
 	uint8_t num_rxdma_status_rings_per_pdev;
 #ifdef WLAN_TX_PKT_CAPTURE_ENH
 	uint32_t tx_capt_max_mem_allowed;
@@ -2661,6 +2663,10 @@ bool wlan_cfg_get_txmon_hw_support(struct wlan_cfg_dp_soc_ctxt *cfg);
 void wlan_cfg_set_txmon_sw_peer_filtering(struct wlan_cfg_dp_soc_ctxt *cfg,
 					  bool txmon_sw_peer_filtering);
 bool wlan_cfg_get_txmon_sw_peer_filtering(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+void wlan_cfg_set_txmon_disable_hw_filter(struct wlan_cfg_dp_soc_ctxt *cfg,
+					  bool txmon_disable_hw_filter);
+bool wlan_cfg_get_txmon_disable_hw_filter(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 #ifdef WLAN_TX_PKT_CAPTURE_ENH
 /**

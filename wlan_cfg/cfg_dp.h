@@ -1539,6 +1539,10 @@
 	CFG_INI_BOOL("tx_litemon_sw_peer_filtering", false, \
 		     "Enable SW based tx monitor peer fitlering")
 
+#define CFG_DP_TXMON_DISABLE_HW_FILTER \
+	CFG_INI_BOOL("tx_litemon_disable_hw_filter", false, \
+		     "Disable HW based tx monitor and enable sw fitlering")
+
 #define CFG_DP_POINTER_TIMER_THRESHOLD_RX \
 	CFG_INI_UINT("dp_rx_ptr_timer_threshold", \
 	0, 0xFFFF, 0, \
@@ -2283,6 +2287,7 @@
 		CFG_DP_SAWF_STATS_CONFIG \
 		CFG(CFG_DP_HANDLE_INVALID_DECAP_TYPE_DISABLE) \
 		CFG(CFG_DP_TXMON_SW_PEER_FILTERING) \
+		CFG(CFG_DP_TXMON_DISABLE_HW_FILTER) \
 		CFG_TX_PKT_INSPECT_FOR_ILP_CFG \
 		CFG(CFG_DP_POINTER_TIMER_THRESHOLD_RX) \
 		CFG(CFG_DP_POINTER_NUM_THRESHOLD_RX) \

@@ -4296,6 +4296,8 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	wlan_soc_sawf_stats_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_cfg_ctx->txmon_sw_peer_filtering =
 			cfg_get(psoc, CFG_DP_TXMON_SW_PEER_FILTERING);
+	wlan_cfg_ctx->txmon_disable_hw_filter =
+			cfg_get(psoc, CFG_DP_TXMON_DISABLE_HW_FILTER);
 	wlan_soc_tx_packet_inspect_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_local_pkt_capture_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_lapb_cfg_attach(psoc, wlan_cfg_ctx);
@@ -4559,6 +4561,8 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 			cfg_get(psoc, CFG_DP_HANDLE_INVALID_DECAP_TYPE_DISABLE);
 	wlan_cfg_ctx->txmon_sw_peer_filtering =
 			cfg_get(psoc, CFG_DP_TXMON_SW_PEER_FILTERING);
+	wlan_cfg_ctx->txmon_disable_hw_filter =
+			cfg_get(psoc, CFG_DP_TXMON_DISABLE_HW_FILTER);
 	wlan_cfg_ctx->pointer_timer_threshold_rx =
 			cfg_get(psoc, CFG_DP_POINTER_TIMER_THRESHOLD_RX);
 	wlan_cfg_ctx->pointer_num_threshold_rx =
@@ -6060,6 +6064,13 @@ bool wlan_cfg_get_txmon_sw_peer_filtering(struct wlan_cfg_dp_soc_ctxt *cfg)
 }
 
 qdf_export_symbol(wlan_cfg_get_txmon_sw_peer_filtering);
+
+bool wlan_cfg_get_txmon_disable_hw_filter(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->txmon_disable_hw_filter;
+}
+
+qdf_export_symbol(wlan_cfg_get_txmon_disable_hw_filter);
 
 uint16_t
 wlan_cfg_get_pointer_timer_threshold_rx(struct wlan_cfg_dp_soc_ctxt *cfg)
