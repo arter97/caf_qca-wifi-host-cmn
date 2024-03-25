@@ -2258,7 +2258,6 @@ extract_twt_session_stats_event_data(wmi_unified_t wmi_handle,
 		 session->bcast, session->trig,
 		 session->announ, session->dialog_id, session->wake_dura_us,
 		 session->wake_intvl_us, session->sp_offset_us,
-		 session->wake_intvl_us, session->sp_offset_us,
 		 session->sp_tsf_us_lo, session->sp_tsf_us_hi,
 		 session->curr_tsf_us_lo, session->curr_tsf_us_hi);
 	wmi_debug("resp_pm_valid=%d resp_pm=%d",
