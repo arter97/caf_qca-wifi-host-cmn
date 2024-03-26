@@ -2921,56 +2921,6 @@ void dp_mlo_dev_ctxt_list_detach_wrapper(dp_mlo_dev_obj_t mlo_dev_obj)
 }
 #endif /* WLAN_FEATURE_11BE_MLO */
 
-#if defined(DP_UMAC_HW_HARD_RESET) && defined(DP_UMAC_HW_RESET_SUPPORT)
-static void dp_reconfig_tx_vdev_mcast_ctrl_be(struct dp_soc *soc,
-					      struct dp_vdev *vdev)
-{
-	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
-	struct dp_vdev_be *be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
-	hal_soc_handle_t hal_soc = soc->hal_soc;
-	uint8_t vdev_id = vdev->vdev_id;
-
-	if (vdev->opmode == wlan_op_mode_sta) {
-		if (vdev->pdev->isolation)
-			hal_tx_vdev_mcast_ctrl_set(hal_soc, vdev_id,
-						HAL_TX_MCAST_CTRL_FW_EXCEPTION);
-		else
-			hal_tx_vdev_mcast_ctrl_set(hal_soc, vdev_id,
-						HAL_TX_MCAST_CTRL_MEC_NOTIFY);
-	} else if (vdev->opmode == wlan_op_mode_ap) {
-		hal_tx_mcast_mlo_reinject_routing_set(
-					hal_soc,
-					HAL_TX_MCAST_MLO_REINJECT_TQM_NOTIFY);
-		if (vdev->mlo_vdev) {
-			hal_tx_vdev_mcast_ctrl_set(
-						hal_soc,
-						vdev_id,
-						HAL_TX_MCAST_CTRL_NO_SPECIAL);
-		} else {
-			hal_tx_vdev_mcast_ctrl_set(hal_soc,
-						   vdev_id,
-						   HAL_TX_MCAST_CTRL_FW_EXCEPTION);
-		}
-	}
-}
-
-static void dp_bank_reconfig_be(struct dp_soc *soc, struct dp_vdev *vdev)
-{
-	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
-	struct dp_vdev_be *be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
-	union hal_tx_bank_config *bank_config;
-
-	if (!be_vdev || be_vdev->bank_id == DP_BE_INVALID_BANK_ID)
-		return;
-
-	bank_config = &be_soc->bank_profiles[be_vdev->bank_id].bank_config;
-
-	hal_tx_populate_bank_register(be_soc->soc.hal_soc, bank_config,
-				      be_vdev->bank_id);
-}
-
-#endif
-
 #if defined(WLAN_FEATURE_11BE_MLO) && ((defined(WLAN_MLO_MULTI_CHIP) && \
 	defined(WLAN_MCAST_MLO)) || defined(WLAN_MCAST_MLO_SAP))
 static void dp_mlo_mcast_reset_pri_mcast(struct dp_vdev_be *be_vdev,
@@ -3951,12 +3901,6 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 					dp_peer_rx_reorder_queue_setup_be;
 	arch_ops->dp_rx_peer_set_link_id = dp_rx_set_link_id_be;
 	arch_ops->txrx_print_peer_stats = dp_print_peer_txrx_stats_be;
-#if defined(DP_UMAC_HW_HARD_RESET) && defined(DP_UMAC_HW_RESET_SUPPORT)
-	arch_ops->dp_bank_reconfig = dp_bank_reconfig_be;
-	arch_ops->dp_reconfig_tx_vdev_mcast_ctrl =
-					dp_reconfig_tx_vdev_mcast_ctrl_be;
-	arch_ops->dp_cc_reg_cfg_init = dp_cc_reg_cfg_init;
-#endif
 
 #ifdef WLAN_SUPPORT_PPEDS
 	arch_ops->ppeds_handle_attached = dp_ppeds_handle_attached;

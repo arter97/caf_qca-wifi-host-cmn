@@ -2611,16 +2611,11 @@ struct dp_arch_ops {
 						     struct dp_peer *peer,
 						     uint32_t tid_bitmap,
 						     uint32_t ba_window_size);
-	void (*dp_bank_reconfig)(struct dp_soc *soc, struct dp_vdev *vdev);
 
 	struct dp_soc * (*dp_get_soc_by_chip_id)(struct dp_soc *soc,
 						 uint8_t chip_id);
 
 	uint8_t (*dp_soc_get_num_soc)(struct dp_soc *soc);
-	void (*dp_reconfig_tx_vdev_mcast_ctrl)(struct dp_soc *soc,
-					       struct dp_vdev *vdev);
-
-	void (*dp_cc_reg_cfg_init)(struct dp_soc *soc, bool is_4k_align);
 
 	QDF_STATUS
 	(*dp_tx_compute_hw_delay)(struct dp_soc *soc,
