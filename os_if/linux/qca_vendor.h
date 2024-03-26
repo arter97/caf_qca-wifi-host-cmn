@@ -859,6 +859,10 @@
  *      driver to user space which is carrying firmware page fault related
  *      summary report. The attributes for this command are defined in
  *      enum qca_wlan_vendor_attr_fw_page_fault_report.
+ * @QCA_NL80211_VENDOR_SUBCMD_SPECTRAL_SCAN_COMPLETE: Event indication from the
+ *	driver to notify user application about the spectral scan completion.
+ *	The attributes used with this subcommand are defined in
+ *	enum qca_wlan_vendor_attr_spectral_scan_complete.
  */
 
 enum qca_nl80211_vendor_subcmds {
@@ -1128,6 +1132,7 @@ enum qca_nl80211_vendor_subcmds {
 	QCA_NL80211_VENDOR_SUBCMD_REGULATORY_TPC_INFO = 237,
 	QCA_NL80211_VENDOR_SUBCMD_FW_PAGE_FAULT_REPORT = 238,
 	QCA_NL80211_VENDOR_SUBCMD_FLOW_POLICY = 239,
+	QCA_NL80211_VENDOR_SUBCMD_SPECTRAL_SCAN_COMPLETE = 242,
 };
 
 enum qca_wlan_vendor_tos {
@@ -8930,6 +8935,14 @@ enum qca_wlan_vendor_attr_spectral_scan {
 	 * the driver should configure the default transport mode to netlink.
 	 */
 	QCA_WLAN_VENDOR_ATTR_SPECTRAL_DATA_TRANSPORT_MODE = 33,
+	/* Spectral scan completion timeout. u32 attribute. This
+	 * attribute is used to configure a timeout value (in us). The
+	 * timeout value would be from the beginning of a spectral
+	 * scan. This is an optional attribute. If this attribute is
+	 * not populated, the driver would internally derive the
+	 * timeout value.
+	 */
+	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_COMPLETION_TIMEOUT = 34,
 
 	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_MAX =
@@ -17750,5 +17763,45 @@ enum qca_wlan_btm_support {
 enum qca_wlan_vendor_spectral_data_transport_mode {
 	QCA_WLAN_VENDOR_SPECTRAL_DATA_TRANSPORT_NETLINK = 0,
 	QCA_WLAN_VENDOR_SPECTRAL_DATA_TRANSPORT_RELAY = 1,
+};
+
+/* enum qca_wlan_vendor_spectral_scan_complete_status - Attribute
+ * values for QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_COMPLETE_STATUS to
+ * indicate the completion status for a spectral scan.
+ *
+ * @QCA_WLAN_VENDOR_SPECTRAL_SCAN_COMPLETE_STATUS_SUCCESSFUL:
+ * Indicates a successful completion of the scan
+ *
+ * @QCA_WLAN_VENDOR_SPECTRAL_SCAN_COMPLETE_STATUS_TIMEOUT: Indicates
+ * a timeout has occurred while processing the spectral reports.
+ */
+enum qca_wlan_vendor_spectral_scan_complete_status {
+	QCA_WLAN_VENDOR_SPECTRAL_SCAN_COMPLETE_STATUS_SUCCESSFUL = 0,
+	QCA_WLAN_VENDOR_SPECTRAL_SCAN_COMPLETE_STATUS_TIMEOUT = 1,
+};
+
+/* enum qca_wlan_vendor_attr_spectral_scan_complete- Definition of
+ * attributes for @QCA_NL80211_VENDOR_SUBCMD_SPECTRAL_SCAN_COMPLETE
+ * to indicate scan status and samples received from hardware.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_COMPLETE_INVALID: Invalid attribute
+ *
+ * @QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_COMPLETE_STATUS: u32 attribute.
+ * Indicates completion status, either the scan is successful or a timeout
+ * is issued by the driver.
+ * See enum qca_wlan_vendor_spectral_scan_complete_status
+ *
+ * @QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_COMPLETE_RECEIVED_SAMPLES: u32
+ * attribute.  Number of spectral samples received after the scan has
+ * started.
+ */
+enum qca_wlan_vendor_attr_spectral_scan_complete {
+	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_COMPLETE_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_COMPLETE_STATUS = 1,
+	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_COMPLETE_RECEIVED_SAMPLES = 2,
+
+	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_COMPLETE_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_COMPLETE_MAX =
+	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_COMPLETE_AFTER_LAST - 1,
 };
 #endif
