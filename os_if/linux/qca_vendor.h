@@ -8924,6 +8924,12 @@ enum qca_wlan_vendor_attr_spectral_scan {
 	 * when AGC gain changes.
 	 */
 	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_FFT_RECAPTURE = 31,
+	/* Spectral data transport mode. u32 attribute. It uses values
+	 * defined in enum qca_wlan_vendor_spectral_data_transport_mode.
+	 * This is an optional attribute. If this attribute is not populated,
+	 * the driver should configure the default transport mode to netlink.
+	 */
+	QCA_WLAN_VENDOR_ATTR_SPECTRAL_DATA_TRANSPORT_MODE = 33,
 
 	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_MAX =
@@ -17730,5 +17736,19 @@ enum qca_wlan_vendor_attr_flow_policy_config {
 enum qca_wlan_btm_support {
 	QCA_WLAN_BTM_SUPPORT_DEFAULT = 0,
 	QCA_WLAN_BTM_SUPPORT_DISABLE = 1,
+};
+
+/**
+ * enum qca_wlan_vendor_spectral_data_transport_mode - Attribute
+ * values for QCA_WLAN_VENDOR_ATTR_SPECTRAL_DATA_TRANSPORT_MODE.
+ *
+ * @QCA_WLAN_VENDOR_SPECTRAL_DATA_TRANSPORT_NETLINK: Use netlink to
+ * send spectral data to userspace applications.
+ * @QCA_WLAN_VENDOR_SPECTRAL_DATA_TRANSPORT_RELAY: Use relay interface
+ * to send spectral data to userspace applications.
+ */
+enum qca_wlan_vendor_spectral_data_transport_mode {
+	QCA_WLAN_VENDOR_SPECTRAL_DATA_TRANSPORT_NETLINK = 0,
+	QCA_WLAN_VENDOR_SPECTRAL_DATA_TRANSPORT_RELAY = 1,
 };
 #endif
