@@ -118,6 +118,8 @@
 #define HOST_LOG_PER_PKT_STATS           0x002
 #define HOST_LOG_FW_FLUSH_COMPLETE       0x003
 #define HOST_LOG_DRIVER_CONNECTIVITY_MSG 0x004
+#define HOST_LOG_CHIPSET_STATS           0x005
+#define FW_LOG_CHIPSET_STATS            0x006
 
 #define DIAG_TYPE_LOGS                 1
 #define PTT_MSG_DIAG_CMDS_TYPE    0x5050
@@ -1225,6 +1227,9 @@ int wlan_logging_sock_init_svc(void)
 	clear_bit(HOST_LOG_PER_PKT_STATS, &gwlan_logging.eventFlag);
 	clear_bit(HOST_LOG_FW_FLUSH_COMPLETE, &gwlan_logging.eventFlag);
 	clear_bit(HOST_LOG_DRIVER_CONNECTIVITY_MSG, &gwlan_logging.eventFlag);
+	clear_bit(HOST_LOG_CHIPSET_STATS, &gwlan_logging.eventFlag);
+	clear_bit(FW_LOG_CHIPSET_STATS, &gwlan_logging.eventFlag);
+
 	init_completion(&gwlan_logging.shutdown_comp);
 	gwlan_logging.thread = kthread_create(wlan_logging_thread, NULL,
 					      "wlan_logging_thread");
@@ -1293,6 +1298,8 @@ int wlan_logging_sock_deinit_svc(void)
 	clear_bit(HOST_LOG_PER_PKT_STATS, &gwlan_logging.eventFlag);
 	clear_bit(HOST_LOG_FW_FLUSH_COMPLETE, &gwlan_logging.eventFlag);
 	clear_bit(HOST_LOG_DRIVER_CONNECTIVITY_MSG, &gwlan_logging.eventFlag);
+	clear_bit(HOST_LOG_CHIPSET_STATS, &gwlan_logging.eventFlag);
+	clear_bit(FW_LOG_CHIPSET_STATS, &gwlan_logging.eventFlag);
 	wake_up_interruptible(&gwlan_logging.wait_queue);
 	wait_for_completion(&gwlan_logging.shutdown_comp);
 
@@ -1802,4 +1809,11 @@ void wlan_register_txrx_packetdump(uint8_t pdev_id)
 	csr_packetdump_timer_start();
 }
 #endif /* CONNECTIVITY_PKTLOG */
+#ifdef WLAN_CHIPSET_STATS
+void wlan_set_chipset_stats_bit(void)
+{
+	set_bit(HOST_LOG_CHIPSET_STATS, &gwlan_logging.eventFlag);
+	set_bit(FW_LOG_CHIPSET_STATS, &gwlan_logging.eventFlag);
+}
+#endif /* WLAN_CHIPSET_STATS */
 #endif /* WLAN_LOGGING_SOCK_SVC_ENABLE */
