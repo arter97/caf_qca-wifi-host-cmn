@@ -2392,7 +2392,16 @@ QDF_STATUS hif_try_complete_dp_tasks(struct hif_opaque_softc *hif_ctx);
 
 #if defined(HIF_IPCI) && defined(FEATURE_HAL_DELAYED_REG_WRITE)
 QDF_STATUS hif_try_prevent_ep_vote_access(struct hif_opaque_softc *hif_ctx);
-void hif_set_ep_intermediate_vote_access(struct hif_opaque_softc *hif_ctx);
+
+/**
+ * hif_set_ep_intermediate_vote_access() - Set intermediate EP vote access
+ * @hif_ctx: opaque softc handle
+ *
+ * Return: QDF_STATUS of operation
+ */
+QDF_STATUS
+hif_set_ep_intermediate_vote_access(struct hif_opaque_softc *hif_ctx);
+
 void hif_allow_ep_vote_access(struct hif_opaque_softc *hif_ctx);
 void hif_set_ep_vote_access(struct hif_opaque_softc *hif_ctx,
 			    uint8_t type, uint8_t access);
@@ -2405,9 +2414,10 @@ hif_try_prevent_ep_vote_access(struct hif_opaque_softc *hif_ctx)
 	return QDF_STATUS_SUCCESS;
 }
 
-static inline void
+static inline QDF_STATUS
 hif_set_ep_intermediate_vote_access(struct hif_opaque_softc *hif_ctx)
 {
+	return QDF_STATUS_SUCCESS;
 }
 
 static inline void
