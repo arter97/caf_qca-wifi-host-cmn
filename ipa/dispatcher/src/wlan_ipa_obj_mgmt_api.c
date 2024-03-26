@@ -385,6 +385,23 @@ QDF_STATUS ipa_opt_dpath_disable_clk_req(void *soc)
 	status = wlan_ipa_wdi_opt_dpath_disable_clk_req(ipa_obj);
 	return status;
 }
+
+QDF_STATUS wlan_ipa_set_fw_cap_opt_dp_ctrl(struct wlan_objmgr_psoc *psoc,
+					   bool fw_cap)
+{
+	struct wlan_ipa_priv *ipa_obj;
+
+	ipa_obj = ipa_psoc_get_priv_obj(psoc);
+	if (!ipa_obj) {
+		ipa_err("IPA object is NULL for psoc_id[%d]",
+			psoc->soc_objmgr.psoc_id);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	ipa_debug("fw capability for opt_dp_ctrl, received from fw %d", fw_cap);
+	ipa_obj->fw_cap_opt_dp_ctrl = fw_cap;
+	return QDF_STATUS_SUCCESS;
+}
 #endif
 
 qdf_ipa_wdi_hdl_t wlan_ipa_get_hdl(void *soc, uint8_t pdev_id)

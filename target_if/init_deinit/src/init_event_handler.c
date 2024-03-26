@@ -47,6 +47,7 @@
 #include <target_if_twt.h>
 #include <target_if_scan.h>
 #include "cdp_txrx_ctrl.h"
+#include "wlan_ipa_obj_mgmt_api.h"
 
 static void init_deinit_set_send_init_cmd(struct wlan_objmgr_psoc *psoc,
 					  struct target_psoc_info *tgt_hdl)
@@ -647,6 +648,9 @@ static int init_deinit_service_ext2_ready_event_handler(ol_scn_t scn_handle,
 					 CDP_FW_SUPPORT_ML_MON, val);
 	if (QDF_IS_STATUS_ERROR(status))
 		target_if_err("Failed to set fw_support_ml_mon");
+
+	wlan_ipa_set_fw_cap_opt_dp_ctrl(
+			psoc, info->service_ext2_param.fw_support_opt_dp_ctrl);
 
 	target_if_regulatory_set_ext_tpc(psoc);
 

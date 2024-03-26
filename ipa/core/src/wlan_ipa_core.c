@@ -4504,13 +4504,15 @@ static inline QDF_STATUS __wlan_ipa_reg_flt_cbs(
 {
 	QDF_STATUS status;
 	struct wlan_ipa_priv *ipa_ctx = gp_ipa;
+	ipa_wdi_opt_dpath_ctrl_flt_add_cb ctrl_flt_add_cb = NULL;
+	ipa_wdi_opt_dpath_ctrl_flt_rem_cb ctrl_flt_rem_cb = NULL;
+	ipa_wdi_opt_dpath_clk_status_cb clk_cb = NULL;
 
-	ipa_wdi_opt_dpath_ctrl_flt_add_cb ctrl_flt_add_cb =
-					&wlan_ipa_wdi_opt_dpath_ctrl_flt_add_cb;
-	ipa_wdi_opt_dpath_ctrl_flt_rem_cb ctrl_flt_rem_cb =
-					&wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb;
-	ipa_wdi_opt_dpath_clk_status_cb clk_cb =
-					&wlan_ipa_wdi_opt_dpath_clk_status_cb;
+	if (ipa_ctx->fw_cap_opt_dp_ctrl) {
+		ctrl_flt_add_cb	= &wlan_ipa_wdi_opt_dpath_ctrl_flt_add_cb;
+		ctrl_flt_rem_cb = &wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb;
+		clk_cb = &wlan_ipa_wdi_opt_dpath_clk_status_cb;
+	}
 
 	status = qdf_ipa_wdi_register_flt_cb_v2(hdl, flt_rsrv_cb,
 						flt_rsrv_rel_cb,
