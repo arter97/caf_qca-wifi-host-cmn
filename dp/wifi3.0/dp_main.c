@@ -13624,6 +13624,7 @@ static struct cdp_ipa_ops dp_ops_ipa = {
 	.ipa_ast_create = dp_ipa_ast_create,
 #endif
 	.ipa_get_wdi_version = dp_ipa_get_wdi_version,
+	.ipa_is_ring_ipa_rx = dp_ipa_is_ring_ipa_rx,
 };
 #endif
 

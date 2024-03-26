@@ -662,6 +662,16 @@ void dp_ipa_get_wdi_version(struct cdp_soc_t *soc_hdl, uint8_t *wdi_ver);
  * Return: bool
  */
 bool dp_ipa_is_ring_ipa_tx(struct dp_soc *soc, uint8_t ring_id);
+
+/**
+ * dp_ipa_is_ring_ipa_rx() - check if the Rx ring is used by IPA
+ *
+ * @soc_hdl: DP SOC handle
+ * @ring_id: Rx ring id
+ *
+ * Return: true if ring is used by IPA, else return false
+ */
+bool dp_ipa_is_ring_ipa_rx(struct cdp_soc_t *soc_hdl, uint8_t ring_id);
 #else
 static inline int dp_ipa_uc_detach(struct dp_soc *soc, struct dp_pdev *pdev)
 {
@@ -781,6 +791,12 @@ dp_rx_add_to_ipa_desc_free_list(struct dp_soc *soc,
 				struct dp_rx_desc *rx_desc)
 {
 	return QDF_STATUS_E_FAILURE;
+}
+
+static inline bool
+dp_ipa_is_ring_ipa_rx(struct cdp_soc_t *soc_hdl, uint8_t ring_id)
+{
+	return false;
 }
 #endif
 #endif /* _DP_IPA_H_ */

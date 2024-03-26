@@ -1114,5 +1114,27 @@ cdp_ipa_get_wdi_version(ol_txrx_soc_handle soc, uint8_t *wdi_ver)
 	if (soc->ops->ipa_ops->ipa_get_wdi_version)
 		soc->ops->ipa_ops->ipa_get_wdi_version(soc, wdi_ver);
 }
+
+/**
+ * cdp_ipa_check_is_ring_ipa_rx - check rx ring is used by IPA
+ * @soc: data path soc handle
+ * @ring_id: rx ring id
+ *
+ * Return: bool
+ */
+static inline bool
+cdp_ipa_check_is_ring_ipa_rx(ol_txrx_soc_handle soc, uint8_t ring_id)
+{
+	if (!soc || !soc->ops || !soc->ops->ipa_ops) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
+			  "%s invalid instance", __func__);
+		return false;
+	}
+
+	if (soc->ops->ipa_ops->ipa_is_ring_ipa_rx)
+		return soc->ops->ipa_ops->ipa_is_ring_ipa_rx(soc, ring_id);
+
+	return false;
+}
 #endif /* IPA_OFFLOAD */
 #endif /* _CDP_TXRX_IPA_H_ */
