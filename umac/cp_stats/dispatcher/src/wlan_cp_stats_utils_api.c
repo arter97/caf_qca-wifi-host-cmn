@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -28,6 +28,7 @@
 #include "../../core/src/wlan_cp_stats_comp_handler.h"
 #include <wlan_cp_stats_utils_api.h>
 #include <wlan_cp_stats_ucfg_api.h>
+#include <wlan_cp_stats_chipset_stats.h>
 
 QDF_STATUS wlan_cp_stats_init(void)
 {
@@ -105,6 +106,12 @@ QDF_STATUS wlan_cp_stats_init(void)
 		goto wlan_cp_stats_peer_init_fail2;
 	}
 
+	status = wlan_cp_stats_cstats_init();
+	if (QDF_IS_STATUS_ERROR(status)) {
+		cp_stats_err("Failed to init chipset stats");
+		goto wlan_cp_stats_peer_init_fail2;
+	}
+
 	return QDF_STATUS_SUCCESS;
 
 wlan_cp_stats_peer_init_fail2:
@@ -149,6 +156,8 @@ wlan_cp_stats_psoc_init_fail1:
 QDF_STATUS wlan_cp_stats_deinit(void)
 {
 	QDF_STATUS status = QDF_STATUS_E_FAILURE;
+
+	wlan_cp_stats_cstats_deinit();
 
 	status = wlan_objmgr_unregister_psoc_create_handler
 				(WLAN_UMAC_COMP_CP_STATS,
