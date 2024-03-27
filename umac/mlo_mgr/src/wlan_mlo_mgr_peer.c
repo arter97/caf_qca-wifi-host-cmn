@@ -1717,6 +1717,7 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 								     WLAN_MLO_MGR_ID);
 				}
 				mlo_reset_link_peer(ml_peer, link_peer);
+				mlo_peer_detach_link_peer(ml_peer, link_peer);
 				mlo_peer_free(ml_peer);
 				mlo_dev_release_link_vdevs(link_vdevs);
 
@@ -1733,11 +1734,10 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 			mlo_err("MLD ID %d: Failed to derive bridge peer psoc id",
 				ml_dev->mld_id);
 			mlo_reset_link_peer(ml_peer, link_peer);
+			mlo_peer_detach_link_peer(ml_peer, link_peer);
 			mlo_peer_free(ml_peer);
 			mlo_dev_release_link_vdevs(link_vdevs);
 			mlo_dev_release_link_vdevs(tmp_link_vdevs);
-			wlan_objmgr_peer_release_ref(link_peer,
-						     WLAN_MLO_MGR_ID);
 			return QDF_STATUS_E_FAILURE;
 		}
 	}
@@ -1774,10 +1774,9 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 				ml_dev->mld_id,
 				QDF_MAC_ADDR_REF(ml_peer->peer_mld_addr.bytes));
 			mlo_reset_link_peer(ml_peer, link_peer);
+			mlo_peer_detach_link_peer(ml_peer, link_peer);
 			mlo_peer_free(ml_peer);
 			mlo_dev_release_link_vdevs(link_vdevs);
-			wlan_objmgr_peer_release_ref(link_peer,
-						     WLAN_MLO_MGR_ID);
 			return QDF_STATUS_E_EXISTS;
 		}
 
@@ -1788,8 +1787,7 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 				ml_dev->mld_id,
 				QDF_MAC_ADDR_REF(ml_peer->peer_mld_addr.bytes));
 			mlo_reset_link_peer(ml_peer, link_peer);
-			wlan_objmgr_peer_release_ref(link_peer,
-						     WLAN_MLO_MGR_ID);
+			mlo_peer_detach_link_peer(ml_peer, link_peer);
 			mlo_peer_free(ml_peer);
 			mlo_dev_release_link_vdevs(link_vdevs);
 			return status;
