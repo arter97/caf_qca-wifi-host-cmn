@@ -515,7 +515,8 @@ reg_get_best_6g_power_type(struct wlan_objmgr_psoc *psoc,
 				  ap_pwr_type, REG_VERY_LOW_POWER_AP);
 			*pwr_type_6g = REG_VERY_LOW_POWER_AP;
 			return QDF_STATUS_SUCCESS;
-		} else if (QDF_IS_STATUS_SUCCESS(
+		} else if (wlan_cm_get_relaxed_lpi_conn_policy(psoc) &&
+			   QDF_IS_STATUS_SUCCESS(
 				reg_check_if_6g_pwr_type_supp_for_chan(pdev,
 								REG_INDOOR_AP,
 								chan_idx))) {
