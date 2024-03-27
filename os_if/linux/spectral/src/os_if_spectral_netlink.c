@@ -178,6 +178,9 @@ os_if_spectral_init_nl(struct wlan_objmgr_pdev *pdev)
 		osif_err("PDEV SPECTRAL object is NULL!");
 		return -EINVAL;
 	}
+
+	ps->transport_mode = SPECTRAL_DATA_TRANSPORT_NETLINK;
+
 	os_if_spectral_init_nl_cfg(&cfg);
 
 	if (!os_if_spectral_nl_sock) {

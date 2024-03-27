@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022,2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -34,6 +34,7 @@
 #include <spectral_ioctl.h>
 #include <wlan_objmgr_vdev_obj.h>
 #include "wlan_osif_features.h"
+#include <spectral_defs_i.h>
 
 const struct nla_policy spectral_scan_policy[
 		QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_MAX + 1] = {
@@ -96,6 +97,8 @@ const struct nla_policy spectral_scan_policy[
 	[QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_BANDWIDTH] = {
 							.type = NLA_U8},
 	[QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_FFT_RECAPTURE] = {
+							.type = NLA_U32},
+	[QCA_WLAN_VENDOR_ATTR_SPECTRAL_DATA_TRANSPORT_MODE] = {
 							.type = NLA_U32},
 };
 
@@ -200,6 +203,36 @@ convert_spectral_err_code_internal_to_nl
 
 	default:
 		osif_err("Invalid spectral error code %u", spectral_err_code);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * convert_to_spectral_data_transport_mode_internal_to_nl() - Get spectral
+ * data transport mode
+ * @transport_mode: Spectral transport mode used internally
+ * @nl_transport_mode: Spectral transport mode for cfg80211
+ *
+ * Return: QDF_STATUS_SUCCESS on success, else QDF_STATUS_E_FAILURE
+ */
+static QDF_STATUS
+convert_to_spectral_data_transport_mode_internal_to_nl
+	(enum spectral_data_transport_mode transport_mode,
+	 enum qca_wlan_vendor_spectral_data_transport_mode *nl_transport_mode)
+{
+	switch (transport_mode) {
+	case SPECTRAL_DATA_TRANSPORT_NETLINK:
+		*nl_transport_mode =
+			QCA_WLAN_VENDOR_SPECTRAL_DATA_TRANSPORT_NETLINK;
+		break;
+	case SPECTRAL_DATA_TRANSPORT_RELAY:
+		*nl_transport_mode =
+			QCA_WLAN_VENDOR_SPECTRAL_DATA_TRANSPORT_RELAY;
+		break;
+	default:
+		osif_err("Invalid Spectral transport mode %u", transport_mode);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -708,6 +741,9 @@ int wlan_cfg80211_spectral_scan_get_config(struct wiphy *wiphy,
 	enum spectral_scan_mode sscan_mode = SPECTRAL_SCAN_MODE_NORMAL;
 	QDF_STATUS status;
 	int sscan_bw_nl;
+	struct pdev_spectral *ps;
+	enum qca_wlan_vendor_spectral_data_transport_mode
+					nl_transport_mode;
 
 	if (wlan_cfg80211_nla_parse(
 			tb,
@@ -725,6 +761,14 @@ int wlan_cfg80211_spectral_scan_get_config(struct wiphy *wiphy,
 
 		if (QDF_IS_STATUS_ERROR(status))
 			return -EINVAL;
+	}
+
+	ps = wlan_objmgr_pdev_get_comp_private_obj(pdev,
+						   WLAN_UMAC_COMP_SPECTRAL);
+
+	if (!ps) {
+		osif_err("PDEV SPECTRAL object is NULL!");
+		return -EINVAL;
 	}
 
 	skb = wlan_cfg80211_vendor_cmd_alloc_reply_skb(wiphy,
@@ -820,6 +864,17 @@ int wlan_cfg80211_spectral_scan_get_config(struct wiphy *wiphy,
 			QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_FFT_RECAPTURE,
 			sconfig->ss_recapture))
 
+		goto fail;
+
+	status = convert_to_spectral_data_transport_mode_internal_to_nl
+			(ps->transport_mode,
+			 &nl_transport_mode);
+	if (QDF_IS_STATUS_ERROR(status))
+		goto fail;
+
+	if (nla_put_u32(skb,
+			QCA_WLAN_VENDOR_ATTR_SPECTRAL_DATA_TRANSPORT_MODE,
+			nl_transport_mode))
 		goto fail;
 
 	sscan_req.ss_mode = sscan_mode;

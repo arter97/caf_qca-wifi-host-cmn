@@ -231,6 +231,20 @@ enum spectral_cap_hw_gen {
 };
 
 /**
+ * enum spectral_data_transport_mode - Spectral data transport mode
+ * @SPECTRAL_DATA_TRANSPORT_NETLINK: Use netlink
+ * @SPECTRAL_DATA_TRANSPORT_RELAY: Use relay interface
+ * @SPECTRAL_DATA_TRANSPORT_MAX: Max number of Spectral data transport modes
+ * @SPECTRAL_DATA_TRANSPORT_INVALID: Invalid Spectral data transport mode
+ */
+enum spectral_data_transport_mode {
+	SPECTRAL_DATA_TRANSPORT_NETLINK,
+	SPECTRAL_DATA_TRANSPORT_RELAY,
+	SPECTRAL_DATA_TRANSPORT_MAX,
+	SPECTRAL_DATA_TRANSPORT_INVALID = 0xff,
+};
+
+/**
  * struct spectral_config_frequency - Spectral scan frequency
  * @cfreq1: Center frequency (in MHz) of the span of interest(primary 80 MHz
  *          span for 80 + 80 agile scan request) or center frequency (in MHz)
@@ -321,6 +335,7 @@ struct spectral_config_frequency {
  *                          any WLAN channel in the secondary 80 MHz span of
  *                          interest.
  * @ss_bandwidth: Spectral scan bandwidth
+ * @transport_mode: Spectral data transport mode
  */
 struct spectral_config {
 	uint16_t ss_fft_period;
@@ -350,6 +365,7 @@ struct spectral_config {
 	int32_t ss_nf_temp_data;
 	struct spectral_config_frequency ss_frequency;
 	uint16_t ss_bandwidth;
+	enum spectral_data_transport_mode transport_mode;
 };
 
 /**

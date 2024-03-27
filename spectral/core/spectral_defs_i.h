@@ -107,6 +107,7 @@ struct pdev_spectral_streamfs {
  * @skb:                  Socket buffer for sending samples to applications
  * @spectral_pid :        Spectral port ID
  * @streamfs_obj :        Spectral streamfs channel information structure
+ * @transport_mode :      Spectral data transport mechanism
  */
 struct pdev_spectral {
 	struct wlan_objmgr_pdev *psptrl_pdev;
@@ -117,6 +118,7 @@ struct pdev_spectral {
 #ifdef WLAN_SPECTRAL_STREAMFS
 	struct pdev_spectral_streamfs streamfs_obj;
 #endif
+	enum spectral_data_transport_mode transport_mode;
 };
 
 struct spectral_wmi_ops;
