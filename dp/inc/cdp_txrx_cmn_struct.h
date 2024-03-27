@@ -1505,6 +1505,7 @@ enum cdp_pdev_param_type {
  * @cdp_fw_support_ml_mon: FW support ML monitor mode
  * @cdp_pdev_param_mon_fcs_cap: monitor fcs capture
  * @cdp_monitor_flag: monitor interface flags
+ * @cdp_reo_rings_mapping: reo rings mapping
  */
 typedef union cdp_config_param_t {
 	/* peer params */
@@ -1625,6 +1626,7 @@ typedef union cdp_config_param_t {
 	bool cdp_fw_support_ml_mon;
 	uint8_t cdp_pdev_param_mon_fcs_cap;
 	uint8_t cdp_monitor_flag;
+	uint32_t cdp_reo_rings_mapping;
 } cdp_config_param_type;
 
 /**
@@ -1806,6 +1808,7 @@ enum cdp_vdev_param_type {
  * @CDP_CONFIG_DP_DEBUG_LOG: set/get dp debug logging
  * @CDP_FW_SUPPORT_ML_MON: FW support ML monitor
  * @CDP_MONITOR_FLAG: Monitor interface configuration
+ * @CDP_CFG_REO_RINGS_MAPPING: Reo rings mapping configuration
  */
 enum cdp_psoc_param_type {
 	CDP_ENABLE_RATE_STATS,
@@ -1838,6 +1841,7 @@ enum cdp_psoc_param_type {
 	CDP_CONFIG_DP_DEBUG_LOG,
 	CDP_FW_SUPPORT_ML_MON,
 	CDP_MONITOR_FLAG,
+	CDP_CFG_REO_RINGS_MAPPING,
 };
 
 #ifdef CONFIG_AP_PLATFORM
