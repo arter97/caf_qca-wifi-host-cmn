@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -104,7 +104,44 @@ target_if_wifi_pos_parse_measreq_chan_info(struct wlan_objmgr_pdev *pdev,
 }
 #endif /* WLAN_RTT_MEASUREMENT_NOTIFICATION */
 
-#ifdef WLAN_FEATURE_RTT_11AZ_SUPPORT
+#if defined(WLAN_FEATURE_RTT_11AZ_SUPPORT) && !defined(CNSS_GENL)
+static QDF_STATUS
+target_if_wifi_pos_send_rtt_pasn_auth_status(struct wlan_objmgr_psoc *psoc,
+					     struct wlan_pasn_auth_status *data)
+{
+	QDF_STATUS status;
+	struct wlan_objmgr_pdev *pdev;
+	struct wlan_objmgr_vdev *vdev;
+	wmi_unified_t wmi;
+
+	if (!psoc) {
+		target_if_err("psoc is null");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, data->vdev_id,
+						    WLAN_WIFI_POS_TGT_IF_ID);
+	if (!vdev) {
+		target_if_err("vdev%d is NULL", data->vdev_id);
+		return QDF_STATUS_E_INVAL;
+	}
+	pdev = wlan_vdev_get_pdev(vdev);
+	wmi = get_wmi_unified_hdl_from_pdev(pdev);
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_WIFI_POS_TGT_IF_ID);
+
+	if (!wmi) {
+		target_if_err("wmi is null");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	status = wmi_send_rtt_pasn_auth_status_cmd(wmi, data);
+	if (QDF_IS_STATUS_ERROR(status))
+		target_if_err("send pasn auth status cmd failed");
+
+	return status;
+}
+
+#elif defined(WLAN_FEATURE_RTT_11AZ_SUPPORT)
 static QDF_STATUS
 target_if_wifi_pos_send_rtt_pasn_auth_status(struct wlan_objmgr_psoc *psoc,
 					     struct wlan_pasn_auth_status *data)
@@ -123,7 +160,9 @@ target_if_wifi_pos_send_rtt_pasn_auth_status(struct wlan_objmgr_psoc *psoc,
 
 	return status;
 }
+#endif
 
+#if defined(WLAN_FEATURE_RTT_11AZ_SUPPORT)
 static QDF_STATUS
 target_if_wifi_pos_send_rtt_pasn_deauth(struct wlan_objmgr_psoc *psoc,
 					struct qdf_mac_addr *peer_mac)
