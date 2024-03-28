@@ -2241,6 +2241,42 @@ void dp_print_mlo_ast_stats_be(struct dp_soc *soc);
  * Return: Link peer Link ID
  */
 uint8_t dp_get_peer_link_id(struct dp_peer *peer);
+
+#ifdef WLAN_FEATURE_11BE_MLO_3_LINK_TX
+/*
+ * dp_peer_3_link_tx_flow_info_init() -initialize the 3 link tx flow info
+ * @peer: Datapath peer
+ *
+ * Return: void
+ */
+static inline void
+dp_peer_3_link_tx_flow_info_init(struct dp_peer *peer)
+{
+	qdf_spinlock_create(&peer->flow_info_lock);
+}
+
+/*
+ * dp_peer_3_link_tx_flow_info_deinit() - destroy the 3 link tx flow info
+ * @peer: Datapath peer
+ *
+ * Return: void
+ */
+static inline void
+dp_peer_3_link_tx_flow_info_deinit(struct dp_peer *peer)
+{
+	qdf_spinlock_destroy(&peer->flow_info_lock);
+}
+#else
+static inline void
+dp_peer_3_link_tx_flow_info_init(struct dp_peer *peer)
+{
+}
+
+static inline void
+dp_peer_3_link_tx_flow_info_deinit(struct dp_peer *peer)
+{
+}
+#endif /* WLAN_FEATURE_11BE_MLO_3_LINK_TX */
 #else
 
 #define IS_MLO_DP_MLD_TXRX_PEER(_peer) false
@@ -2397,6 +2433,16 @@ static inline void dp_print_mlo_ast_stats_be(struct dp_soc *soc)
 static inline uint8_t dp_get_peer_link_id(struct dp_peer *peer)
 {
 	return 0;
+}
+
+static inline void
+dp_peer_3_link_tx_flow_info_init(struct dp_peer *peer)
+{
+}
+
+static inline void
+dp_peer_3_link_tx_flow_info_deinit(struct dp_peer *peer)
+{
 }
 #endif /* WLAN_FEATURE_11BE_MLO */
 

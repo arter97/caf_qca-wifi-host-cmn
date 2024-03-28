@@ -2582,6 +2582,11 @@ struct cdp_sawf_ops {
 				       uint8_t *mac_addr,
 				       uint16_t peer_id,
 				       uint32_t mark_metadata);
+	QDF_STATUS
+	(*sawf_3_link_peer_set_tid_weight)(struct cdp_soc_t *hdl,
+					   uint8_t *mac_addr,
+					   uint16_t peer_id,
+					   uint8_t tid_weight[]);
 #endif
 };
 #endif

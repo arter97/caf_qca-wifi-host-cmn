@@ -5859,6 +5859,7 @@ dp_peer_create_wifi3(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 		dp_local_peer_id_alloc(pdev, peer);
 
 		qdf_spinlock_create(&peer->peer_info_lock);
+		dp_peer_3_link_tx_flow_info_init(peer);
 
 		DP_STATS_INIT(peer);
 
@@ -5955,6 +5956,7 @@ dp_peer_create_wifi3(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	qdf_spinlock_create(&peer->peer_state_lock);
 	dp_peer_add_ast(soc, peer, peer_mac_addr, ast_type, 0);
 	qdf_spinlock_create(&peer->peer_info_lock);
+	dp_peer_3_link_tx_flow_info_init(peer);
 
 	/* reset the ast index to flowid table */
 	dp_peer_reset_flowq_map(peer);
@@ -6744,6 +6746,7 @@ static QDF_STATUS dp_peer_delete_wifi3(struct cdp_soc_t *soc_hdl,
 	dp_clear_peer_internal(soc, peer);
 
 	qdf_spinlock_destroy(&peer->peer_info_lock);
+	dp_peer_3_link_tx_flow_info_deinit(peer);
 	dp_peer_multipass_list_remove(peer);
 
 	/* remove the reference to the peer from the hash table */
@@ -12916,6 +12919,7 @@ static struct cdp_sawf_ops dp_ops_sawf = {
 #ifdef WLAN_FEATURE_11BE_MLO_3_LINK_TX
 	.get_peer_msduq = dp_sawf_get_peer_msduq,
 	.sawf_3_link_peer_flow_count = dp_sawf_3_link_peer_flow_count,
+	.sawf_3_link_peer_set_tid_weight = dp_sawf_3_link_peer_set_tid_weight,
 #endif
 };
 #endif

@@ -5344,7 +5344,9 @@ struct dp_peer {
 	uint8_t num_links;
 	DP_MUTEX_TYPE link_peers_info_lock;
 #ifdef WLAN_FEATURE_11BE_MLO_3_LINK_TX
+	qdf_spinlock_t flow_info_lock;
 	uint32_t flow_cnt[CDP_DATA_TID_MAX];
+	uint8_t tid_weight[CDP_DATA_TID_MAX];
 #endif
 #endif
 #ifdef CONFIG_SAWF_DEF_QUEUES

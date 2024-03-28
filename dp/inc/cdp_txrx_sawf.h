@@ -535,5 +535,21 @@ cdp_sawf_3_link_peer_flow_count(ol_txrx_soc_handle soc, uint8_t *mac_addr,
 	return soc->ops->sawf_ops->sawf_3_link_peer_flow_count
 		(soc, mac_addr, peer_id, mark_metadata);
 }
+
+static inline QDF_STATUS
+cdp_sawf_3_link_peer_set_tid_weight(ol_txrx_soc_handle soc,
+				    uint8_t *mac_addr,
+				    uint16_t peer_id,
+				    uint8_t tid_weight[])
+{
+	if (!soc || !soc->ops || !soc->ops->sawf_ops ||
+	    !soc->ops->sawf_ops->sawf_3_link_peer_set_tid_weight) {
+		dp_cdp_debug("Invalid Instance");
+		return false;
+	}
+
+	return soc->ops->sawf_ops->sawf_3_link_peer_set_tid_weight
+		(soc, mac_addr, peer_id, tid_weight);
+}
 #endif
 #endif /* _CDP_TXRX_SAWF_H_ */
