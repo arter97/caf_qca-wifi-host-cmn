@@ -74,3 +74,8 @@ void ucfg_cp_stats_cstats_register_tx_rx_ops(struct cstats_tx_rx_ops *ops)
 {
 	wlan_cp_stats_cstats_register_tx_rx_ops(ops);
 }
+
+int ucfg_cp_stats_cstats_send_buffer_to_user(enum cstats_types type)
+{
+	return wlan_cp_stats_cstats_send_buffer_to_user(type);
+}

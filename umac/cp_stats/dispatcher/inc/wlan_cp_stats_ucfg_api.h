@@ -31,6 +31,7 @@
 #include <wlan_cp_stats_chipset_stats.h>
 #include "../../core/src/wlan_cp_stats_defs.h"
 #include "../../core/src/wlan_cp_stats_cmn_api_i.h"
+#include <wlan_cp_stats_chipset_stats.h>
 
 /**
  * ucfg_infra_cp_stats_register_resp_cb() - Register the response callback
@@ -97,4 +98,13 @@ int ucfg_cp_stats_twt_get_peer_session_params(
  * Return: void
  */
 void ucfg_cp_stats_cstats_register_tx_rx_ops(struct cstats_tx_rx_ops *ops);
+
+/*
+ * ucfg_cp_stats_cstats_send_buffer_to_user() - ucfg api to Flush chipset stats
+ * to the middleware
+ * @type - Type of chipset stats to be sent
+ *
+ * Return : 0 on success and errno on failure
+ */
+int ucfg_cp_stats_cstats_send_buffer_to_user(enum cstats_types type);
 #endif /* __WLAN_CP_STATS_UCFG_API_H__ */
