@@ -1311,7 +1311,7 @@ hal_txmon_status_get_num_users_generic_be(void *tx_tlv_hdr, uint8_t *num_users)
 	user_id = HAL_RX_GET_USER_TLV32_USERID(tx_tlv_hdr);
 	tlv_len = HAL_RX_GET_USER_TLV32_LEN(tx_tlv_hdr);
 
-	tx_tlv = (uint8_t *)tx_tlv_hdr + HAL_RX_TLV64_HDR_SIZE;
+	tx_tlv = (uint8_t *)tx_tlv_hdr + HAL_RX_TLV_HDR_SIZE;
 	/* window starts with either initiator or response */
 	switch (tlv_tag) {
 	case WIFITX_FES_SETUP_E:
@@ -1517,7 +1517,7 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 	tlv_user_id = HAL_RX_GET_USER_TLV32_USERID(tx_tlv_hdr);
 	tlv_len = HAL_RX_GET_USER_TLV32_LEN(tx_tlv_hdr);
 
-	tx_tlv = (uint8_t *)tx_tlv_hdr + HAL_RX_TLV64_HDR_SIZE;
+	tx_tlv = (uint8_t *)tx_tlv_hdr + HAL_RX_TLV_HDR_SIZE;
 
 	/* parse tlv and populate tx_ppdu_info */
 	ppdu_info = hal_tx_get_ppdu_info(data_ppdu_info,
