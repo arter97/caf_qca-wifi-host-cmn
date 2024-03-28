@@ -16,6 +16,7 @@
 
 #define MAX_CSTATS_NODE_LENGTH 2048
 #define MAX_CSTATS_NODE_COUNT 256
+#define MAX_CSTATS_VERSION_BUFF_LENGTH 100
 
 #define ANI_NL_MSG_CSTATS_HOST_LOG_TYPE 110
 #define ANI_NL_MSG_CSTATS_FW_LOG_TYPE 111
@@ -122,6 +123,15 @@ void wlan_cp_stats_cstats_register_tx_rx_ops(struct cstats_tx_rx_ops *ops);
 void wlan_cp_stats_cstats_write_to_buff(enum cstats_types type,
 					void *to_be_sent,
 					uint32_t length);
+
+/**
+ * wlan_cp_stats_cstats_send_buffer_to_user() - Flush chipset stats to the
+ * middleware
+ * @type: Type of chipset stats to be sent
+ *
+ * Return : 0 on success and errno on failure
+ */
+int wlan_cp_stats_cstats_send_buffer_to_user(enum cstats_types type);
 #else
 static inline QDF_STATUS wlan_cp_stats_cstats_init(void)
 {
@@ -141,6 +151,12 @@ static inline void
 wlan_cp_stats_cstats_write_to_buff(enum cstats_types type, void *to_be_sent,
 				   uint32_t length)
 {
+}
+
+static inline int
+wlan_cp_stats_cstats_send_buffer_to_user(enum cstats_types type)
+{
+	return 0;
 }
 #endif /* WLAN_CHIPSET_STATS */
 #endif /* __WLAN_CP_STATS_CHIPSET_STATS__ */

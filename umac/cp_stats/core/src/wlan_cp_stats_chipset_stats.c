@@ -172,4 +172,116 @@ void wlan_cp_stats_cstats_write_to_buff(enum cstats_types type,
 
 	qdf_spin_unlock_bh(&cstats.cstats_lock[type]);
 }
+
+static int wlan_cp_stats_cstats_send_version_to_usr(void)
+{
+	uint8_t buff[MAX_CSTATS_VERSION_BUFF_LENGTH] = {0};
+	uint8_t n;
+	int metadata_len;
+	int ret = -1;
+
+	metadata_len = sizeof(tAniHdr) + (2 * CSTATS_MARKER_SZ);
+
+	memcpy(&buff[sizeof(tAniHdr)], CSTATS_HOST_START_MARKER,
+	       CSTATS_MARKER_SZ);
+
+	n = scnprintf(&buff[sizeof(tAniHdr) + CSTATS_MARKER_SZ],
+		      MAX_CSTATS_VERSION_BUFF_LENGTH - metadata_len,
+		      "[%s : %d, %s : %d, %s : %d]",
+		      "Chispet stats - hdr_version",
+		      CHIPSET_STATS_HDR_VERSION, "Endianness",
+		      CHIPSET_STATS_MACHINE_ENDIANNESS, "Drop cnt",
+		      cstats.cstat_drop_cnt[CSTATS_HOST_TYPE]);
+
+	qdf_mem_copy(&buff[sizeof(tAniHdr) + CSTATS_MARKER_SZ + n],
+		     CSTATS_HOST_END_MARKER, CSTATS_MARKER_SZ);
+
+	buff[metadata_len + n] = '\0';
+
+	if (cstats.ops.cstats_send_data_to_usr) {
+		ret = cstats.ops.cstats_send_data_to_usr(buff,
+							 metadata_len + n,
+							 CSTATS_HOST_TYPE);
+	}
+
+	if (ret)
+		qdf_err("failed to send version info");
+
+	return ret;
+}
+
+int wlan_cp_stats_cstats_send_buffer_to_user(enum cstats_types type)
+{
+	int ret = -1;
+	struct cstats_node *clog_msg;
+	struct cstats_node *next;
+	int payload_len;
+	int mark_total;
+	char *ptr = NULL;
+
+	qdf_spin_lock_bh(&cstats.cstats_lock[type]);
+	wlan_cp_stats_get_cstats_free_node(type);
+	qdf_spin_unlock_bh(&cstats.cstats_lock[type]);
+
+	if (type == CSTATS_HOST_TYPE) {
+		ret = wlan_cp_stats_cstats_send_version_to_usr();
+		if (ret)
+			return ret;
+	}
+
+	/*
+	 * For fw stats the markers are already added at start and end of the
+	 * each event
+	 */
+	if (type == CSTATS_HOST_TYPE)
+		mark_total = (2 * CSTATS_MARKER_SZ);
+	else if (type == CSTATS_FW_TYPE)
+		mark_total = 0;
+
+	qdf_list_for_each_del(&cstats.cstat_filled_list[type],
+			      clog_msg, next, node) {
+		qdf_spin_lock_bh(&cstats.cstats_lock[type]);
+
+		/* For host stats marksers are added per node basis*/
+		if (type == CSTATS_HOST_TYPE) {
+			ptr = &clog_msg->logbuf[sizeof(tAniHdr)];
+			qdf_mem_copy(ptr, CSTATS_HOST_START_MARKER,
+				     CSTATS_MARKER_SZ);
+			ptr = &clog_msg->logbuf[sizeof(tAniHdr) +
+						CSTATS_MARKER_SZ +
+						clog_msg->filled_length];
+			qdf_mem_copy(ptr, CSTATS_HOST_END_MARKER,
+				     CSTATS_MARKER_SZ);
+		}
+
+		if (!cstats.cstats_no_flush[type]) {
+			qdf_list_remove_node(&cstats.cstat_free_list[type],
+					     &clog_msg->node);
+		}
+
+		qdf_spin_unlock_bh(&cstats.cstats_lock[type]);
+
+		payload_len = clog_msg->filled_length + sizeof(tAniHdr) +
+			      mark_total;
+
+		if (cstats.ops.cstats_send_data_to_usr) {
+			ret = cstats.ops.cstats_send_data_to_usr
+			       (clog_msg->logbuf, payload_len, type);
+		}
+
+		if (ret) {
+			qdf_err("Send Failed %d drop_count = %u", ret,
+				++(cstats.cstat_drop_cnt[type]));
+		}
+
+		if (!cstats.cstats_no_flush[type]) {
+			qdf_spin_lock_bh(&cstats.cstats_lock[type]);
+			qdf_list_insert_back(&cstats.cstat_free_list[type],
+					     &clog_msg->node);
+			qdf_spin_unlock_bh(&cstats.cstats_lock[type]);
+		}
+	}
+
+	return ret;
+}
 #endif /* WLAN_CHIPSET_STATS */

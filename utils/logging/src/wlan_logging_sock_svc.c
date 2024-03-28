@@ -65,6 +65,11 @@
 #include <cdp_txrx_misc.h>
 #endif
 
+#ifdef WLAN_CHIPSET_STATS
+#include <wlan_cp_stats_chipset_stats.h>
+#include <wlan_cp_stats_ucfg_api.h>
+#endif
+
 /*
  * The following commit was introduced in v5.17:
  * cead18552660 ("exit: Rename complete_and_exit to kthread_complete_and_exit")
@@ -850,6 +855,28 @@ wlan_logging_send_connectivity_event(void)
 }
 #endif
 
+#ifdef WLAN_CHIPSET_STATS
+static int wlan_logging_cstats_send_host_buf_to_usr(void)
+{
+	return ucfg_cp_stats_cstats_send_buffer_to_user(CSTATS_HOST_TYPE);
+}
+
+static int wlan_logging_cstats_send_fw_buf_to_usr(void)
+{
+	return ucfg_cp_stats_cstats_send_buffer_to_user(CSTATS_FW_TYPE);
+}
+#else
+static int wlan_logging_cstats_send_host_buf_to_usr(void)
+{
+	return 0;
+}
+
+static int wlan_logging_cstats_send_fw_buf_to_usr(void)
+{
+	return 0;
+}
+#endif
+
 /**
  * wlan_logging_thread() - The WLAN Logger thread
  * @Arg - pointer to the HDD context
@@ -912,6 +939,32 @@ static int wlan_logging_thread(void *Arg)
 			ret = pktlog_send_per_pkt_stats_to_user();
 			if (-ENOMEM == ret)
 				msleep(200);
+		}
+
+		if (test_bit(HOST_LOG_CHIPSET_STATS,
+			     &gwlan_logging.eventFlag) &&
+		    gwlan_logging.is_flush_complete) {
+			test_and_clear_bit(HOST_LOG_CHIPSET_STATS,
+					   &gwlan_logging.eventFlag);
+			ret = wlan_logging_cstats_send_host_buf_to_usr();
+			if (-ENOMEM == ret) {
+				QDF_TRACE_ERROR(QDF_MODULE_ID_QDF,
+						"No memory to flush stats");
+				msleep(200);
+			}
+		}
+
+		if (test_bit(FW_LOG_CHIPSET_STATS,
+			     &gwlan_logging.eventFlag) &&
+		    gwlan_logging.is_flush_complete) {
+			test_and_clear_bit(FW_LOG_CHIPSET_STATS,
+					   &gwlan_logging.eventFlag);
+			ret = wlan_logging_cstats_send_fw_buf_to_usr();
+			if (-ENOMEM == ret) {
+				QDF_TRACE_ERROR(QDF_MODULE_ID_QDF,
+						"No memory to flush stats");
+				msleep(200);
+			}
 		}
 
 		if (test_and_clear_bit(HOST_LOG_FW_FLUSH_COMPLETE,
