@@ -81,6 +81,11 @@ struct chipset_stats {
 	struct cstats_tx_rx_ops ops;
 };
 
+#define wlan_cstats_fw_stats(len, buf) \
+	wlan_cp_stats_cstats_write_to_buff(CSTATS_FW_TYPE, buf, len)
+#define wlan_cstats_host_stats(len, buf) \
+	wlan_cp_stats_cstats_write_to_buff(CSTATS_HOST_TYPE, buf, len)
+
 #ifdef WLAN_CHIPSET_STATS
 /**
  * wlan_cp_stats_cstats_init() - Initialize chipset stats infra
@@ -104,6 +109,19 @@ void wlan_cp_stats_cstats_deinit(void);
  * Return: void
  */
 void wlan_cp_stats_cstats_register_tx_rx_ops(struct cstats_tx_rx_ops *ops);
+
+/*
+ * wlan_cp_stats_cstats_write_to_buff() - Write stats to the chipset stats
+ * buffer
+ * @type: Type of chipset stats to be written
+ * @to_be_sent: Pointer to stats payload which is to be write to cstats buffer
+ * @length: Length of the payload
+ *
+ * Return : void
+ */
+void wlan_cp_stats_cstats_write_to_buff(enum cstats_types type,
+					void *to_be_sent,
+					uint32_t length);
 #else
 static inline QDF_STATUS wlan_cp_stats_cstats_init(void)
 {
@@ -116,6 +134,12 @@ static inline void wlan_cp_stats_cstats_deinit(void)
 
 static inline void
 wlan_cp_stats_cstats_register_tx_rx_ops(struct cstats_tx_rx_ops *ops)
+{
+}
+
+static inline void
+wlan_cp_stats_cstats_write_to_buff(enum cstats_types type, void *to_be_sent,
+				   uint32_t length)
 {
 }
 #endif /* WLAN_CHIPSET_STATS */
