@@ -2283,6 +2283,10 @@ static bool wlan_minidump_log_enabled(struct wlan_objmgr_psoc *psoc,
 		if (cfg_get(psoc, CFG_OL_MD_DP_PDEV))
 			setval = true;
 		break;
+	case WLAN_MD_DP_VDEV:
+		if (cfg_get(psoc, CFG_OL_MD_DP_VDEV))
+			setval = true;
+		break;
 	case WLAN_MD_DP_CFG_PDEV_CTXT:
 	case WLAN_MD_DP_CFG_SOC_CTXT:
 		if (cfg_get(psoc, CFG_OL_MD_DP_CFG))
