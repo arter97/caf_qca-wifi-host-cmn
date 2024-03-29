@@ -3235,13 +3235,28 @@ static void cm_validate_partner_links(struct wlan_objmgr_psoc *psoc,
 						   partner_info->link_addr.bytes,
 						   WLAN_MLME_CM_ID);
 		if (peer) {
-			mlme_debug(QDF_MAC_ADDR_FMT "link (%d) dup peer existed on vdev %d",
+			mlme_debug(QDF_MAC_ADDR_FMT " link (%d) dup peer existed on vdev %d",
 				   QDF_MAC_ADDR_REF(partner_info->link_addr.bytes),
 				   partner_info->freq,
 				   wlan_vdev_get_id(wlan_peer_get_vdev(peer)));
 			partner_info->is_valid_link = false;
 			wlan_objmgr_peer_release_ref(peer, WLAN_MLME_CM_ID);
 			continue;
+		}
+
+		if (partner_info->link_id == entry->ml_info.self_link_id) {
+			mlme_err(QDF_MAC_ADDR_FMT " dup link id %d",
+				 QDF_MAC_ADDR_REF(partner_info->link_addr.bytes),
+				 partner_info->link_id);
+			partner_info->is_valid_link = false;
+		}
+
+		if (qdf_is_macaddr_equal(&partner_info->link_addr,
+					 &entry->bssid)) {
+			mlme_err(QDF_MAC_ADDR_FMT " link id %d dup mac",
+				 QDF_MAC_ADDR_REF(partner_info->link_addr.bytes),
+				 partner_info->link_id);
+			partner_info->is_valid_link = false;
 		}
 
 		/*
