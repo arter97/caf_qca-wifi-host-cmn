@@ -4634,3 +4634,24 @@ void dp_soc_reset_dpdk_intr_mask(struct dp_soc *soc)
 	}
 }
 #endif
+
+#ifdef WLAN_DP_LOAD_BALANCE_SUPPORT
+int dp_soc_get_ext_grp_id_from_reo_num(struct cdp_soc_t *cdp_soc,
+				       uint8_t reo_num)
+{
+	struct dp_soc *soc = (struct dp_soc *)cdp_soc;
+	struct dp_intr *intr_ctx;
+	int i;
+
+	for (i = 0; i < WLAN_CFG_INT_NUM_CONTEXTS; i++) {
+		intr_ctx = &soc->intr_ctx[i];
+		if (!intr_ctx->rx_ring_mask)
+			continue;
+
+		if (intr_ctx->rx_ring_mask & (1 << reo_num))
+			return i;
+	}
+
+	return -EINVAL;
+}
+#endif

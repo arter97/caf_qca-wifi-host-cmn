@@ -771,6 +771,8 @@ struct cdp_cmn_ops {
 	void (*get_per_ring_pkt_avg)(struct cdp_soc_t *soc_hdl,
 				     uint32_t *pkt_avg,
 				     uint32_t *total_avg_pkt_cnt);
+	int (*get_ext_grp_id_from_reo_num)(struct cdp_soc_t *soc_hdl,
+					   uint8_t reo_num);
 #endif
 };
 

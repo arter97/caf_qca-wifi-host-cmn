@@ -3614,5 +3614,27 @@ cdp_get_per_ring_pkt_avg(ol_txrx_soc_handle soc,
 	soc->ops->cmn_drv_ops->get_per_ring_pkt_avg(soc, pkt_avg_cnt,
 						    total_avg_pkt_cnt);
 }
+
+/**
+ * cdp_get_ext_grp_id_from_reo_num() - get ext group id from reo number
+ * @soc: Datapath soc handle
+ * @reo_num: reo ring number
+ *
+ * Return: ext group id
+ */
+static inline int
+cdp_get_ext_grp_id_from_reo_num(ol_txrx_soc_handle soc, uint8_t reo_num)
+{
+	if (!soc) {
+		dp_cdp_debug("Invalid Instance");
+		return -EINVAL;
+	}
+
+	if (!soc->ops->cmn_drv_ops ||
+	    !soc->ops->cmn_drv_ops->get_ext_grp_id_from_reo_num)
+		return -EINVAL;
+
+	return soc->ops->cmn_drv_ops->get_ext_grp_id_from_reo_num(soc, reo_num);
+}
 #endif
 #endif /* _CDP_TXRX_CMN_H_ */

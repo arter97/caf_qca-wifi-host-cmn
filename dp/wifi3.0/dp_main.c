@@ -12710,6 +12710,7 @@ static struct cdp_cmn_ops dp_ops_cmn = {
 #ifdef WLAN_DP_LOAD_BALANCE_SUPPORT
 	.calculate_per_ring_pkt_avg = dp_rx_calculate_per_ring_pkt_avg,
 	.get_per_ring_pkt_avg = dp_rx_get_per_ring_pkt_avg,
+	.get_ext_grp_id_from_reo_num = dp_soc_get_ext_grp_id_from_reo_num,
 #endif
 };
 
