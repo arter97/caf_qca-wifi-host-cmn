@@ -13,6 +13,7 @@
 #include <wlan_cmn.h>
 #include <qdf_status.h>
 #include <qdf_trace.h>
+#include "wlan_cp_stats_chipset_stats_events.h"
 
 #define MAX_CSTATS_NODE_LENGTH 2048
 #define MAX_CSTATS_NODE_COUNT 256
