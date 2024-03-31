@@ -775,6 +775,7 @@ struct ptqm_link_migration_rsp_params {
  * @begin: Callback to be called at the beginning
  * @end: Callback to be called at the end
  * @user_data: Opaque user data
+ * @force_mig: allow migration to vdevs which are disabled to be primary umac
  */
 struct ptqm_peer_migrate_params {
 	enum ptqm_migration_module_id module_id;
@@ -785,6 +786,7 @@ struct ptqm_peer_migrate_params {
 		    enum primary_link_peer_migration_evenr_status status,
 		    void *user_data);
 	void *user_data;
+	bool force_mig;
 };
 
 /*
@@ -796,6 +798,7 @@ struct ptqm_peer_migrate_params {
  * @end: Callback to be called at the end
  * @user_data: Opaque user data
  * @link_disable: Link disable flag
+ * @force_mig: allow migration to vdevs which are disabled to be primary umac
  */
 struct ptqm_link_migrate_params {
 	enum ptqm_migration_module_id module_id;
@@ -806,6 +809,7 @@ struct ptqm_link_migrate_params {
 		    struct ptqm_link_migration_rsp_params *rsp_params);
 	void *user_data;
 	bool link_disable;
+	bool force_mig;
 };
 
 /*
