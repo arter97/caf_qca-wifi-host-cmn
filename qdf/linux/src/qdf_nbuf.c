@@ -5269,24 +5269,28 @@ qdf_nbuf_update_radiotap_he_mu_flags(struct mon_rx_status *rx_status,
 		rtap_buf[rtap_len] = rx_status->he_RU[3];
 		rtap_len += 1;
 	} else {
-		put_unaligned_le16(rx_user_status->he_flags1,
-				   &rtap_buf[rtap_len]);
+		put_unaligned_le16(rx_user_status->he_flags1 |
+				   rx_status->he_flags1, &rtap_buf[rtap_len]);
 		rtap_len += 2;
 
-		put_unaligned_le16(rx_user_status->he_flags2,
-				   &rtap_buf[rtap_len]);
+		put_unaligned_le16(rx_user_status->he_flags2 |
+				   rx_status->he_flags2, &rtap_buf[rtap_len]);
 		rtap_len += 2;
 
-		rtap_buf[rtap_len] = rx_user_status->he_RU[0];
+		rtap_buf[rtap_len] = rx_user_status->he_RU[0] |
+					rx_status->he_RU[0];
 		rtap_len += 1;
 
-		rtap_buf[rtap_len] = rx_user_status->he_RU[1];
+		rtap_buf[rtap_len] = rx_user_status->he_RU[1] |
+					rx_status->he_RU[1];
 		rtap_len += 1;
 
-		rtap_buf[rtap_len] = rx_user_status->he_RU[2];
+		rtap_buf[rtap_len] = rx_user_status->he_RU[2] |
+					rx_status->he_RU[2];
 		rtap_len += 1;
 
-		rtap_buf[rtap_len] = rx_user_status->he_RU[3];
+		rtap_buf[rtap_len] = rx_user_status->he_RU[3] |
+					rx_status->he_RU[3];
 		rtap_len += 1;
 		qdf_debug("he_flags %x %x he-RU %x %x %x %x",
 			  rx_user_status->he_flags1,
