@@ -732,6 +732,151 @@ QDF_STATUS wlan_mlo_set_ptqm_migration(struct wlan_objmgr_vdev *vdev,
 				       bool link_migration,
 				       uint32_t link_id,
 				       bool force_mig);
+
+#define HW_LINK_ID_ANY 0xff
+
+/*
+ * enum ptqm_migration_module_id: PTQM migration user module ids
+ *
+ * @PTQM_MIGRATION_MODULE_FWR: Firmware recovery
+ * @PTQM_MIGRATION_MODULE_MLR: ML reconfiguration
+ * @PTQM_MIGRATION_MODULE_NW: Network application
+ * @PTQM_MIGRATION_MODULE_MAX: Max module id
+ * @PTQM_MIGRATION_MODULE_LINK_REQ: Module id for internal link request
+ * @PTQM_MIGRATION_MODULE_TEST: Test module id
+ */
+enum ptqm_migration_module_id {
+	PTQM_MIGRATION_MODULE_FWR = 0,
+	PTQM_MIGRATION_MODULE_MLR = 1,
+	PTQM_MIGRATION_MODULE_NW = 2,
+	PTQM_MIGRATION_MODULE_MAX,
+
+	PTQM_MIGRATION_MODULE_LINK_REQ = 254,
+	PTQM_MIGRATION_MODULE_TEST = 255,
+};
+
+/*
+ * struct ptqm_link_migration_rsp_params: Link migration status
+ *
+ * @total_peer_count: Total MLO peer count
+ * @fail_peer_count: Peer count for which migration failed
+ */
+struct ptqm_link_migration_rsp_params {
+	uint16_t total_peer_count;
+	uint16_t fail_peer_count;
+};
+
+/*
+ * struct ptqm_peer_migrate_params
+ *
+ * @module_id: Module id
+ * @src_link_id: Source link id
+ * @dst_link_id: Destination link id
+ * @begin: Callback to be called at the beginning
+ * @end: Callback to be called at the end
+ * @user_data: Opaque user data
+ */
+struct ptqm_peer_migrate_params {
+	enum ptqm_migration_module_id module_id;
+	uint8_t src_link_id;
+	uint8_t dst_link_id;
+	void (*begin)(struct wlan_mlo_peer_context *ml_peer, void *user_data);
+	void (*end)(struct wlan_mlo_peer_context *ml_peer,
+		    enum primary_link_peer_migration_evenr_status status,
+		    void *user_data);
+	void *user_data;
+};
+
+/*
+ * struct ptqm_link_migrate_params
+ *
+ * @module_id: Module id
+ * @src_link_id: Source link id
+ * @begin: Callback to be called at the beginning
+ * @end: Callback to be called at the end
+ * @user_data: Opaque user data
+ * @link_disable: Link disable flag
+ */
+struct ptqm_link_migrate_params {
+	enum ptqm_migration_module_id module_id;
+	uint8_t src_link_id;
+	void (*begin)(struct wlan_objmgr_vdev *vdev, void *user_data);
+	void (*end)(struct wlan_objmgr_vdev *vdev,
+		    QDF_STATUS status, void *user_data,
+		    struct ptqm_link_migration_rsp_params *rsp_params);
+	void *user_data;
+	bool link_disable;
+};
+
+/*
+ * wlan_ptqm_peer_migrate_ctx_alloc: Allocate PTQM migration peer context
+ *
+ * @ml_peer: ML peer object
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wlan_ptqm_peer_migrate_ctx_alloc(struct wlan_mlo_peer_context *ml_peer);
+
+/*
+ * wlan_ptqm_peer_migrate_ctx_free: Free PTQM migration peer context
+ *
+ * @ml_peer: ML peer object
+ *
+ * Return: None
+ */
+void
+wlan_ptqm_peer_migrate_ctx_free(struct wlan_mlo_peer_context *ml_peer);
+
+/*
+ * wlan_ptqm_peer_migrate_req_add: API to add PTQM peer migration request
+ *
+ * @vdev: VDEV object
+ * @ml_peer: ML peer object
+ * @params: Request parameters
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wlan_ptqm_peer_migrate_req_add(struct wlan_objmgr_vdev *vdev,
+			       struct wlan_mlo_peer_context *ml_peer,
+			       struct ptqm_peer_migrate_params *params);
+
+/*
+ * wlan_ptqm_peer_migrate_completion: API to indicate completion
+ *
+ * @ml_dev: ML device object
+ * @ml_peer: ML peer object
+ * @status: Completion status
+ *
+ * Return: None
+ */
+void
+wlan_ptqm_peer_migrate_completion(struct wlan_mlo_dev_context *ml_dev,
+				  struct wlan_mlo_peer_context *ml_peer,
+				  uint8_t status);
+
+/*
+ * wlan_ptqm_link_migrate_req_add: API to add PTQM link request
+ *
+ * @vdev: VDEV object
+ * @params: Request params
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wlan_ptqm_link_migrate_req_add(struct wlan_objmgr_vdev *vdev,
+			       struct ptqm_link_migrate_params *params);
+#else
+static inline QDF_STATUS
+wlan_ptqm_peer_migrate_ctx_alloc(struct wlan_mlo_peer_context *ml_peer)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline void
+wlan_ptqm_peer_migrate_ctx_free(struct wlan_mlo_peer_context *ml_peer)
+{}
 #endif
 
 /*

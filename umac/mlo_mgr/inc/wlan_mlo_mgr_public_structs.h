@@ -86,6 +86,8 @@ struct wlan_t2lm_context;
 struct mlo_link_switch_context;
 struct wlan_mlo_link_switch_req;
 struct mlo_all_link_rssi;
+struct ptqm_migrate_link_context;
+struct ptqm_migrate_peer_context;
 
 /* Max LINK PEER support */
 #define MAX_MLO_LINK_PEERS WLAN_UMAC_MLO_MAX_VDEVS
@@ -548,7 +550,7 @@ struct ttlm_comp_priv {
 };
 
 /**
- * ttlm_rsp_info - TTLM response frame info
+ * struct ttlm_rsp_info - TTLM response frame info
  * @t2lm_info: TTLM mapping
  * @t2lm_resp_type: TTLM status corresponds to TTL response frame
  */
@@ -1038,6 +1040,7 @@ struct wlan_mlo_link_mac_update {
  * @mlo_max_recom_simult_links: Max Recommended Simultaneous Links
  * @mlo_extmld_cap_advertisement: Enable/disable Extended MLD Cap and OP
  *                                advertisement
+ * @link_ptqm_migrate_ctx: PTQM migration link context
  */
 struct wlan_mlo_dev_context {
 	qdf_list_node_t node;
@@ -1068,6 +1071,8 @@ struct wlan_mlo_dev_context {
 #ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
 	qdf_timer_t ptqm_migrate_timer;
 	qdf_bitmap(mlo_peer_id_bmap, MAX_MLO_PEER_ID);
+	struct ptqm_migrate_link_req_context *link_ptqm_migrate_ctx
+		[WLAN_UMAC_MLO_MAX_VDEVS];
 #endif
 	struct mlo_link_switch_context *link_ctx;
 	uint8_t mlo_max_recom_simult_links;
@@ -1236,6 +1241,7 @@ struct ttlm_state_sm {
  * @primary_umac_migration_in_progress: flag to indicate primary umac migration
  * in progress
  * @ttlm_sm: TTLM state machine
+ * @peer_ptqm_migrate_ctx: PTQM migration peer context
  */
 struct wlan_mlo_peer_context {
 	qdf_list_node_t peer_node;
@@ -1281,6 +1287,9 @@ struct wlan_mlo_peer_context {
 	bool primary_umac_migration_in_progress;
 #ifdef WLAN_FEATURE_11BE_MLO_TTLM
 	struct ttlm_state_sm ttlm_sm;
+#endif
+#ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
+	struct ptqm_migrate_peer_context *peer_ptqm_migrate_ctx;
 #endif
 };
 

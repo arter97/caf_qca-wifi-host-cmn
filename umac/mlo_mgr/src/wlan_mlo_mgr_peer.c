@@ -853,6 +853,7 @@ static void mlo_peer_free(struct wlan_mlo_peer_context *ml_peer)
 	mlo_ap_ml_peerid_free(ml_peer->mlo_peer_id);
 	mlo_peer_free_aid(ml_dev, ml_peer);
 	mlo_peer_free_primary_umac(ml_dev, ml_peer);
+	wlan_ptqm_peer_migrate_ctx_free(ml_peer);
 	qdf_mem_free(ml_peer);
 }
 
@@ -1762,6 +1763,7 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 	if ((wlan_vdev_mlme_get_opmode(vdev) == QDF_SAP_MODE) &&
 	    !ml_dev->ap_ctx->mlo_link_reject)
 		mlo_peer_allocate_primary_umac(ml_dev, ml_peer, tmp_link_vdevs);
+	wlan_ptqm_peer_migrate_ctx_alloc(ml_peer);
 
 	if (wlan_vdev_mlme_get_opmode(vdev) == QDF_SAP_MODE)
 		mlo_dev_release_link_vdevs(tmp_link_vdevs);
