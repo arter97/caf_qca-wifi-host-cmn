@@ -6305,6 +6305,8 @@ typedef enum {
 		   VDEV_PARAM_MLO_MAX_RECOM_ACTIVE_LINKS),
 	VDEV_PARAM(vdev_param_dcs,
 		   VDEV_PARAM_DCS),
+	VDEV_PARAM(vdev_param_hwcts2self_ofdma,
+		   VDEV_PARAM_HWCTS2SELF_OFDMA),
 	vdev_param_max,
 } wmi_conv_vdev_param_id;
 

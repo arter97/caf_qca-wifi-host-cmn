@@ -760,6 +760,8 @@ static const uint32_t vdev_param_tlv[] = {
 		  VDEV_PARAM_11AZ_SECURITY_CONFIG),
 	PARAM_MAP(vdev_param_mlo_max_recom_active_links,
 		  VDEV_PARAM_MLO_MAX_RECOM_ACTIVE_LINKS),
+	PARAM_MAP(vdev_param_hwcts2self_ofdma,
+		  VDEV_PARAM_HWCTS2SELF_OFDMA),
 };
 #endif
 
