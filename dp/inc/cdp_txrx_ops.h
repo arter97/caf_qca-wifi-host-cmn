@@ -1748,6 +1748,8 @@ struct ol_if_ops {
 				      uint32_t service_interval,
 				      uint32_t burst_size, uint32_t min_tput,
 				      uint32_t max_latency, uint8_t add_sub);
+	int (*notify_deactivate_msduq)(void *psoc, uint8_t pdev_id,
+				       bool is_mlo, void *result_params);
 #endif
 	uint32_t (*dp_get_tx_inqueue)(ol_txrx_soc_handle soc);
 	QDF_STATUS(*dp_send_unit_test_cmd)(uint32_t vdev_id,

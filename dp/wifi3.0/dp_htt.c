@@ -2899,6 +2899,19 @@ static void dp_sawf_mpdu_stats_handler(struct htt_soc *soc,
 {
 	dp_sawf_htt_mpdu_stats_handler(soc, htt_t2h_msg);
 }
+
+/**
+ * dp_sawf_msduq_recfg_ind() - HTT message handler for recfg indication
+ * @soc: soc handle
+ * @msg_word: HTT message nbuf
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS
+dp_sawf_msduq_recfg_ind(struct htt_soc *soc, uint32_t *msg_word)
+{
+	return dp_htt_sawf_msduq_recfg_ind(soc, msg_word);
+}
 #else
 static void dp_sawf_msduq_map(struct htt_soc *soc, uint32_t *msg_word,
 			      qdf_nbuf_t htt_t2h_msg)
@@ -2910,6 +2923,11 @@ static void dp_sawf_mpdu_stats_handler(struct htt_soc *soc,
 static void dp_sawf_dynamic_ast_update(struct htt_soc *soc, uint32_t *msg_word,
 				       qdf_nbuf_t htt_t2h_msg)
 {}
+static QDF_STATUS
+dp_sawf_msduq_recfg_ind(struct htt_soc *soc, uint32_t *msg_word)
+{
+	return QDF_STATUS_SUCCESS;
+}
 #endif
 
 /**
@@ -4686,6 +4704,11 @@ void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 	case HTT_T2H_MSG_TYPE_TX_LATENCY_STATS_PERIODIC_IND:
 	{
 		dp_htt_tx_latency_stats_handler(soc, htt_t2h_msg);
+		break;
+	}
+	case HTT_T2H_MSG_TYPE_SDWF_MSDUQ_CFG_IND:
+	{
+		dp_sawf_msduq_recfg_ind(soc, msg_word);
 		break;
 	}
 	default:
