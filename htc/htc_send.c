@@ -133,6 +133,7 @@ static void send_packet_completion(HTC_TARGET *target, HTC_PACKET *pPacket)
 
 	restore_tx_packet(target, pPacket);
 
+#ifndef CONFIG_HL_SUPPORT
 	/*
 	 * In case of SSR, we cannot call the upper layer completion
 	 * callbacks, hence just free the nbuf and HTC packet here.
@@ -141,6 +142,7 @@ static void send_packet_completion(HTC_TARGET *target, HTC_PACKET *pPacket)
 		htc_free_control_tx_packet(target, pPacket);
 		return;
 	}
+#endif
 
 	/* do completion */
 	AR_DEBUG_PRINTF(ATH_DEBUG_SEND,
