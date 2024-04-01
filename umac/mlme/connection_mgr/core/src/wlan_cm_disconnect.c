@@ -434,11 +434,20 @@ QDF_STATUS cm_disconnect_active(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 	mlme_debug("op_mode:%d, source:%d, reason_code:%d", op_mode, source,
 		   reason_code);
 
+	/*
+	 * Don't send RSO stop for internal link cleanup, as it clears the
+	 * RCL in firmware.
+	 */
 	if (op_mode == QDF_STA_MODE &&
-	    (reason_code != REASON_FW_TRIGGERED_ROAM_FAILURE) &&
-	    (source != CM_MLO_ROAM_INTERNAL_DISCONNECT))
-		status = mlme_cm_rso_stop_req(cm_ctx->vdev);
+	    wlan_vdev_mlme_is_mlo_link_vdev(cm_ctx->vdev) &&
+	    source == CM_MLO_ROAM_INTERNAL_DISCONNECT &&
+	    reason_code == REASON_FW_TRIGGERED_ROAM_FAILURE) {
+		mlme_debug("Link vdev:%d internal disconnect don't send RSO stop",
+			   wlan_vdev_get_id(cm_ctx->vdev));
+		return  QDF_STATUS_SUCCESS;
+	}
 
+	status = mlme_cm_rso_stop_req(cm_ctx->vdev);
 	if (status != QDF_STATUS_E_NOSUPPORT)
 		return status;
 
