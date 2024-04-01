@@ -1266,6 +1266,9 @@ dp_rx_mon_deliver_mpdu(struct dp_pdev *pdev,
 	qdf_nbuf_t nbuf;
 	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 	struct dp_vdev *mvdev = mon_mac->mvdev;
+	struct dp_soc *soc = pdev->soc;
+	void *hdr_desc;
+	struct ieee80211_frame *wh;
 
 	if (mvdev && mvdev->monitor_vdev->osif_rx_mon) {
 		mon_mac->rx_mon_stats.mpdus_buf_to_stack++;
@@ -1275,9 +1278,21 @@ dp_rx_mon_deliver_mpdu(struct dp_pdev *pdev,
 			mon_mac->rx_mon_stats.mpdus_buf_to_stack++;
 			nbuf = nbuf->next;
 		}
+		/* hdr_desc points to 80211 hdr */
+		hdr_desc = qdf_nbuf_get_frag_addr(mpdu, 0);
+
+		wh = (struct ieee80211_frame *)hdr_desc;
+
+		/* linearize mgmt frames */
+		if ((wh->i_fc[0] & IEEE80211_FC0_TYPE_MASK) == IEEE80211_FC0_TYPE_MGT) {
+			if (qdf_unlikely(wlan_cfg_get_rxmon_mgmt_linearization(soc->wlan_cfg_ctx))) {
+				if (qdf_nbuf_linearize(mpdu) == -ENOMEM)
+					return QDF_STATUS_E_FAILURE;
+			}
+		}
 		mvdev->monitor_vdev->osif_rx_mon(mvdev->osif_vdev,
-							   mpdu,
-							   rx_status);
+						 mpdu,
+						 rx_status);
 	} else {
 		return QDF_STATUS_E_FAILURE;
 	}

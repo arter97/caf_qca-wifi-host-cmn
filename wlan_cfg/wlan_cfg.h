@@ -364,6 +364,7 @@ struct wlan_srng_cfg {
  * @is_lapb_enabled: LAPB feature enable flag.
  * @is_audio_shared_iommu_group: flag to indicate if iommu group is shared with
  *  audio
+ * @rxmon_mgmt_linearization: Linearize paged rxmon mgmt frame
  */
 struct wlan_cfg_dp_soc_ctxt {
 	int num_int_ctxts;
@@ -591,6 +592,7 @@ struct wlan_cfg_dp_soc_ctxt {
 #ifdef FEATURE_DIRECT_LINK
 	bool is_audio_shared_iommu_group;
 #endif
+	bool rxmon_mgmt_linearization;
 };
 
 /**
@@ -2860,4 +2862,13 @@ uint8_t wlan_cfg_get_rx_mon_wq_threshold(struct wlan_cfg_dp_soc_ctxt *cfg);
  * Return: uint8_t
  */
 uint8_t wlan_cfg_get_rx_mon_wq_depth(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_get_rxmon_mgmt_linearization () - Get rxmon mgmt linearization
+ *
+ * @cfg: soc configuration context
+ *
+ * Return: uint8_t
+ */
+bool wlan_cfg_get_rxmon_mgmt_linearization(struct wlan_cfg_dp_soc_ctxt *cfg);
 #endif /*__WLAN_CFG_H*/

@@ -4575,6 +4575,8 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	wlan_soc_ast_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_sawf_mcast_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_direct_link_cfg_attach(psoc, wlan_cfg_ctx);
+	wlan_cfg_ctx->rxmon_mgmt_linearization =
+		cfg_get(psoc, CFG_DP_RXMON_MGMT_LINEARIZATION);
 
 	return wlan_cfg_ctx;
 }
@@ -6112,3 +6114,10 @@ uint8_t wlan_cfg_get_rx_mon_wq_depth(struct wlan_cfg_dp_soc_ctxt *cfg)
 }
 
 qdf_export_symbol(wlan_cfg_get_rx_mon_wq_depth);
+
+bool wlan_cfg_get_rxmon_mgmt_linearization(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->rxmon_mgmt_linearization;
+}
+
+qdf_export_symbol(wlan_cfg_get_rxmon_mgmt_linearization);

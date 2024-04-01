@@ -2149,6 +2149,10 @@
 #define CFG_DP_RESV_AST_IDX_CFG
 #endif /* FEATURE_AST */
 
+#define CFG_DP_RXMON_MGMT_LINEARIZATION \
+	CFG_INI_BOOL("en_rxmon_mgmt_linearization", false, \
+		     "Enable/Disable RxMON mgmt frame linearization")
+
 #define CFG_DP \
 		CFG(CFG_DP_HTT_PACKET_TYPE) \
 		CFG(CFG_DP_INT_BATCH_THRESHOLD_OTHER) \
@@ -2296,5 +2300,6 @@
 		CFG(CFG_DP_RX_BUFFER_SIZE) \
 		CFG(CFG_DP_STATS_AVG_RATE_FILTER) \
 		CFG_DP_RESV_AST_IDX_CFG \
-		CFG_DP_SAWF_MCAST
+		CFG_DP_SAWF_MCAST \
+		CFG(CFG_DP_RXMON_MGMT_LINEARIZATION)
 #endif /* _CFG_DP_H_ */
