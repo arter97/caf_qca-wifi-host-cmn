@@ -46,6 +46,7 @@
 #define KIWI_V2                         0x40170200
 #define QCA6490_v2_1                    0x400c1211
 #define QCA6490_v2                      0x400c0200
+#define QCA6490_V2_2			0x400C0210
 #define WCN6750_V1                      0x40140110
 #define WCN6750_V2                      0x40140120
 #define WCN7750_V1                      0x40260100
