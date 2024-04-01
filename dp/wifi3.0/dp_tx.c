@@ -5557,6 +5557,14 @@ dp_tx_update_peer_stats(struct dp_tx_desc_s *tx_desc,
 		tid_stats->tqm_status_cnt[ts->status]++;
 	}
 
+	if (ts->first_msdu) {
+		DP_PEER_PER_PKT_STATS_INCC(txrx_peer, tx.mpdu_retries, 1,
+					ts->transmit_cnt > 1, link_id);
+		DP_PEER_PER_PKT_STATS_INCC(txrx_peer, tx.total_mpdu_retries,
+					(ts->transmit_cnt - 1),
+					ts->transmit_cnt > 1, link_id);
+	}
+
 	if (qdf_likely(ts->status == HAL_TX_TQM_RR_FRAME_ACKED)) {
 		DP_PEER_PER_PKT_STATS_INCC(txrx_peer, tx.retry_count, 1,
 					   ts->transmit_cnt > 1, link_id);

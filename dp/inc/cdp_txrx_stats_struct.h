@@ -1529,6 +1529,8 @@ struct protocol_trace_count {
  * @tx_ratecode: Tx rate code of last frame
  * @ampdu_cnt: completion of aggregation
  * @non_ampdu_cnt: tx completion not aggregated
+ * @mpdu_retries: number of mpdu retries
+ * @total_mpdu_retries: total number of mpdu retries
  * @failed_retry_count: packets failed due to retry above 802.11 retry limit
  * @retry_count: packets successfully send after one or more retry
  * @multiple_retry_count: packets successfully sent after more than one retry
@@ -1661,6 +1663,8 @@ struct cdp_tx_stats {
 	/*add for peer and updated from ppdu*/
 	uint32_t ampdu_cnt;
 	uint32_t non_ampdu_cnt;
+	uint32_t mpdu_retries;
+	uint32_t total_mpdu_retries;
 	uint32_t failed_retry_count;
 	uint32_t retry_count;
 	uint32_t multiple_retry_count;

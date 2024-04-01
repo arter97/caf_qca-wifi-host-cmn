@@ -2068,6 +2068,10 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		_tgtobj->tx.ofdma += _srcobj->tx.ofdma; \
 		_tgtobj->tx.non_amsdu_cnt += _srcobj->tx.non_amsdu_cnt; \
 		_tgtobj->tx.amsdu_cnt += _srcobj->tx.amsdu_cnt; \
+		_tgtobj->tx.mpdu_retries += \
+					_srcobj->tx.mpdu_retries; \
+		_tgtobj->tx.total_mpdu_retries += \
+					_srcobj->tx.total_mpdu_retries; \
 		_tgtobj->tx.failed_retry_count += \
 					_srcobj->tx.failed_retry_count; \
 		_tgtobj->tx.inval_link_id_pkt_cnt += \

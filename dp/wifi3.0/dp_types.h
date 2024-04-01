@@ -4724,6 +4724,8 @@ typedef void *dp_txrx_ref_handle;
  * @tqm_rr_counter.invalid_drop: Invalid msdu drop
  * @tqm_rr_counter.mcast_vdev_drop: MCAST drop configured for VDEV in HW
  * @tqm_rr_counter.invalid_rr: Invalid TQM release reason
+ * @mpdu_retries: number of mpdu retries
+ * @total_mpdu_retries: total number of mpdu retries
  * @failed_retry_count: packets failed due to retry above 802.11 retry limit
  * @retry_count: packets successfully send after one or more retry
  * @multiple_retry_count: packets successfully sent after more than one retry
@@ -4777,6 +4779,8 @@ struct dp_peer_per_pkt_tx_stats {
 			uint64_t fw_rem_tx_bytes;
 		} tqm_rr_update;
 	} tqm_rr_counter;
+	uint32_t mpdu_retries;
+	uint32_t total_mpdu_retries;
 	uint32_t failed_retry_count;
 	uint32_t retry_count;
 	uint32_t multiple_retry_count;
