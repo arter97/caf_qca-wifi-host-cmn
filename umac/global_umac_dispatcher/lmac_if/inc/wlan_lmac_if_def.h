@@ -1685,6 +1685,7 @@ struct wlan_lmac_if_mlo_tx_ops {
  * @mlo_link_removal_handler: function pointer for MLO link removal handler
  * @process_mlo_link_state_info_event: function pointer for mlo link state
  * @mlo_link_disable_request_handler: function ptr for mlo link disable request
+ * @mlo_3_link_tlt_selection_handler: function pointer for mlo tlt selection
  * @mlo_link_switch_request_handler: Handler function pointer to deliver link
  * switch request params from FW to host.
  * @mlo_link_state_switch_event_handler: Function pointer to handle link state
@@ -1706,6 +1707,11 @@ struct wlan_lmac_if_mlo_rx_ops {
 	QDF_STATUS (*mlo_link_disable_request_handler)(
 			struct wlan_objmgr_psoc *psoc,
 			void *evt_params);
+#ifdef WLAN_FEATURE_11BE_MLO_3_LINK_TX
+	QDF_STATUS (*mlo_3_link_tlt_selection_handler)(
+			struct wlan_objmgr_psoc *psoc,
+			struct mlo_tlt_selection_evt_params *evt_params);
+#endif
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 	QDF_STATUS
 	(*mlo_link_switch_request_handler)(struct wlan_objmgr_psoc *psoc,
