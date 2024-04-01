@@ -13,6 +13,7 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
+#include <qdf_module.h>
 #include <dp_types.h>
 #include "dp_rx.h"
 #include "dp_peer.h"
@@ -4367,6 +4368,8 @@ QDF_STATUS dp_peer_stats_notify(struct dp_pdev *dp_pdev, struct dp_peer *peer)
 
 	return QDF_STATUS_SUCCESS;
 }
+
+qdf_export_symbol(dp_peer_stats_notify);
 #endif
 
 #ifdef FEATURE_NAC_RSSI
