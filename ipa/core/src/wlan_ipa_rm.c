@@ -199,6 +199,7 @@ void wlan_ipa_init_metering(struct wlan_ipa_priv *ipa_ctx)
 void wlan_ipa_add_rem_flt_cb_event(struct wlan_ipa_priv *ipa_ctx)
 {
 	qdf_event_create(&ipa_ctx->ipa_flt_evnt);
+	qdf_event_create(&ipa_ctx->ipa_ctrl_flt_evnt);
 }
 #endif
 

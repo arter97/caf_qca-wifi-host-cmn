@@ -386,15 +386,13 @@ void dp_tx_process_htt_completion_be(struct dp_soc *soc,
 					  DP_MOD_ID_HTT_COMP);
 	}
 	switch (tx_status) {
-	case HTT_TX_FW2WBM_TX_STATUS_OK:
-		fallthrough;
 	case HTT_TX_FW2WBM_TX_STATUS_DROP:
 		if (tx_desc->flags & DP_TX_DESC_FLAG_OPT_DP_CTRL) {
 			dp_info("opt_dp_ctrl: pkt dropped in fw, unvote clk");
-			ipa_opt_dpath_disable_clk_req(soc);
-
-			break;
+			ipa_opt_dpath_disable_clk_req(soc->ctrl_psoc);
 		}
+		fallthrough;
+	case HTT_TX_FW2WBM_TX_STATUS_OK:
 		fallthrough;
 	case HTT_TX_FW2WBM_TX_STATUS_TTL:
 	{

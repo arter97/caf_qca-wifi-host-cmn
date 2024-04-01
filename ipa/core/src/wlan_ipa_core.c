@@ -4619,6 +4619,7 @@ static inline
 void wlan_ipa_destroy_opt_wifi_flt_cb_event(struct wlan_ipa_priv *ipa_ctx)
 {
 	qdf_event_destroy(&ipa_ctx->ipa_flt_evnt);
+	qdf_event_destroy(&ipa_ctx->ipa_ctrl_flt_evnt);
 }
 
 /**
@@ -5347,6 +5348,7 @@ QDF_STATUS wlan_ipa_uc_ol_init(struct wlan_ipa_priv *ipa_ctx,
 	}
 
 	if (true == ipa_ctx->uc_loaded) {
+		wlan_ipa_add_rem_flt_cb_event(ipa_ctx);
 		status = wlan_ipa_wdi_setup(ipa_ctx, osdev);
 		if (status) {
 			ipa_err("Failure to setup IPA pipes (status=%d)",
@@ -5357,6 +5359,7 @@ QDF_STATUS wlan_ipa_uc_ol_init(struct wlan_ipa_priv *ipa_ctx,
 				qdf_cancel_work(&ipa_ctx->mcc_work);
 				wlan_ipa_teardown_sys_pipe(ipa_ctx);
 			}
+			wlan_ipa_destroy_opt_wifi_flt_cb_event(ipa_ctx);
 			ipa_ctx->uc_loaded = false;
 
 			goto fail_return;
@@ -5375,7 +5378,6 @@ QDF_STATUS wlan_ipa_uc_ol_init(struct wlan_ipa_priv *ipa_ctx,
 
 		cdp_ipa_set_doorbell_paddr(ipa_ctx->dp_soc, IPA_DEF_PDEV_ID);
 		wlan_ipa_init_metering(ipa_ctx);
-		wlan_ipa_add_rem_flt_cb_event(ipa_ctx);
 		if (wlan_ipa_init_perf_level(ipa_ctx) != QDF_STATUS_SUCCESS)
 			ipa_err("Failed to init perf level");
 	}
@@ -6247,14 +6249,14 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_add_cb(
 	dp_flt_param->op = HTT_TX_LCE_SUPER_RULE_INSTALL;
 	dp_flt_param->pdev_id = IPA_DEF_PDEV_ID;
 	dp_flt_param->num_filters = num_flts;
-	qdf_event_reset(&ipa_obj->ipa_flt_evnt);
+	qdf_event_reset(&ipa_obj->ipa_ctrl_flt_evnt);
 
 	ipa_debug("opt_dp_ctrl: op %d, pdev_id %d. num_flts %d",
 		  dp_flt_param->op, dp_flt_param->pdev_id, num_flts);
 
 	cdp_ipa_tx_super_rule_setup(ipa_obj->dp_soc, dp_flt_param);
 
-	status = qdf_wait_single_event(&ipa_obj->ipa_flt_evnt,
+	status = qdf_wait_single_event(&ipa_obj->ipa_ctrl_flt_evnt,
 				       DP_MAX_SLEEP_TIME);
 
 	for (i = 0; i < IPA_WDI_MAX_TX_FILTER; i++)
@@ -6333,7 +6335,7 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
 	dp_flt_params->op = HTT_TX_LCE_SUPER_RULE_RELEASE;
 	dp_flt_params->pdev_id = IPA_DEF_PDEV_ID;
 	dp_flt_params->num_filters = num_flts;
-	qdf_event_reset(&ipa_obj->ipa_flt_evnt);
+	qdf_event_reset(&ipa_obj->ipa_ctrl_flt_evnt);
 
 	ipa_debug("opt_dp_ctrl: op %d, pdev_id %d. num_flts %d",
 		  dp_flt_params->op, dp_flt_params->pdev_id, num_flts);
@@ -6341,7 +6343,7 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
 	cdp_ipa_tx_super_rule_setup(ipa_obj->dp_soc, dp_flt_params);
 	qdf_spin_unlock_bh(&dp_flt_params->flt_rem_lock);
 
-	status = qdf_wait_single_event(&ipa_obj->ipa_flt_evnt,
+	status = qdf_wait_single_event(&ipa_obj->ipa_ctrl_flt_evnt,
 				       DP_MAX_SLEEP_TIME);
 
 	for (i = 0; i < IPA_WDI_MAX_TX_FILTER; i++)
@@ -6427,7 +6429,7 @@ void wlan_ipa_wdi_opt_dpath_ctrl_notify_flt_install(struct filter_response
 	}
 	ipa_debug("opt_dp_ctrl: ipa_flt_event_response set status: %d",
 		  dp_flt_params->ipa_flt_evnt_response);
-	qdf_event_set(&ipa_obj->ipa_flt_evnt);
+	qdf_event_set(&ipa_obj->ipa_ctrl_flt_evnt);
 }
 
 void wlan_ipa_wdi_opt_dpath_ctrl_notify_flt_delete(struct filter_response
@@ -6522,7 +6524,7 @@ void wlan_ipa_wdi_opt_dpath_ctrl_notify_flt_delete(struct filter_response
 				notify_msg->rsvd = result;
 				notify_msg->rsvd_snd = 0;
 				is_flt_rem_req = true;
-				qdf_event_set(&ipa_obj->ipa_flt_evnt);
+				qdf_event_set(&ipa_obj->ipa_ctrl_flt_evnt);
 			}
 
 			id = notify_msg->rsvd_snd;
