@@ -2902,6 +2902,16 @@ static void dp_reap_timer_deinit(struct dp_soc *soc)
 }
 #endif
 
+#ifndef CONFIG_SAWF
+void dp_soc_sawf_msduq_timer_init(struct dp_soc *soc)
+{
+}
+
+void dp_soc_sawf_msduq_timer_deinit(struct dp_soc *soc)
+{
+}
+#endif
+
 #if defined(QCA_HOST2FW_RXBUF_RING) && defined(QCA_IPA_LL_TX_FLOW_CONTROL)
 /**
  * dp_rxdma_ring_alloc() - allocate the RXDMA rings
@@ -4204,6 +4214,7 @@ static void dp_soc_detach(struct cdp_soc_t *txrx_soc)
 	dp_soc_rx_history_detach(soc);
 	dp_soc_cfg_history_detach(soc);
 	dp_soc_msdu_done_fail_history_detach(soc);
+	dp_soc_sawf_msduq_timer_deinit(soc);
 
 	if (!dp_monitor_modularized_enable()) {
 		dp_mon_soc_detach_wrapper(soc);
@@ -14015,6 +14026,8 @@ dp_soc_attach(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 		dp_err("wlan_cfg_ctx failed");
 		goto fail2;
 	}
+
+	dp_soc_sawf_msduq_timer_init(soc);
 
 	qdf_ssr_driver_dump_register_region("wlan_cfg_ctx", soc->wlan_cfg_ctx,
 					    sizeof(*soc->wlan_cfg_ctx));

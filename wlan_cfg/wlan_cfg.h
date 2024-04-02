@@ -342,6 +342,7 @@ struct wlan_srng_cfg {
  * @tx_capt_max_mem_allowed: Max memory for Tx packet capture
  * @tx_capt_rbm_id: Return Buffer Manager ID to be used for Tx packet capture
  * @sawf_enabled:  Is SAWF enabled
+ * @sawf_msduq_reclaim_enabled: SAWF MSDUQ reclaim feature enable/disable
  * @sawf_mcast_enabled : SAWF for multicast enable/disable
  * @sawf_stats: SAWF Statistics
  * @mpdu_retry_threshold_1: MPDU retry threshold 1 to increment tx bad count
@@ -562,6 +563,7 @@ struct wlan_cfg_dp_soc_ctxt {
 #endif
 #ifdef CONFIG_SAWF
 	bool sawf_enabled;
+	bool sawf_msduq_reclaim_enabled;
 	bool sawf_mcast_enabled;
 #endif
 #ifdef CONFIG_SAWF_STATS
@@ -2584,6 +2586,16 @@ wlan_cfg_set_sawf_config(struct wlan_cfg_dp_soc_ctxt *cfg, bool value);
  */
 bool
 wlan_cfg_get_sawf_config(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_get_sawf_msduq_reclaim_config() - Get SAWF MSDUQ reclaim config
+ * enable/disable
+ * @cfg: config context
+ *
+ * Return: true or false
+ */
+bool
+wlan_cfg_get_sawf_msduq_reclaim_config(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
  * wlan_cfg_get_sawf_mc_config() - get SAWF - Multicast config enable/disable

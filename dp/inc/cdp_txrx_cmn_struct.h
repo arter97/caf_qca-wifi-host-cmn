@@ -1478,6 +1478,7 @@ enum cdp_pdev_param_type {
  * @cdp_psoc_param_vdev_stats_hw_offload: Configure HW vdev stats offload
  * @cdp_pdev_param_undecoded_metadata_enable: Undecoded metadata capture enable
  * @cdp_sawf_enabled: SAWF enable/disable
+ * @cdp_sawf_msduq_reclaim_enabled: SAWF MSDUQ reclaim enable/disable
  * @cdp_sawf_stats: SAWF stats config
  * @cdp_vdev_param_traffic_end_ind: Traffic end indication enable/disable
  * @cdp_skel_enable : Enable/Disable skeleton code for Umac reset debug
@@ -1595,6 +1596,7 @@ typedef union cdp_config_param_t {
 	bool cdp_psoc_param_vdev_stats_hw_offload;
 	bool cdp_pdev_param_undecoded_metadata_enable;
 	bool cdp_sawf_enabled;
+	bool cdp_sawf_msduq_reclaim_enabled;
 	uint8_t cdp_sawf_stats;
 	bool cdp_drop_3addr_mcast;
 	bool cdp_vdev_param_traffic_end_ind;

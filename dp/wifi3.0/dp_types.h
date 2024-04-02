@@ -3274,6 +3274,15 @@ struct dp_soc {
 	/*Timer for AST entry ageout maintenance */
 	qdf_timer_t ast_aging_timer;
 
+#ifdef CONFIG_SAWF
+	/*
+	 * Timer variable for SAWF MSDU Queue state maintenance and HTT
+	 * response timeout
+	 */
+	qdf_timer_t sawf_msduq_timer;
+	bool sawf_msduq_timer_enabled;
+#endif
+
 	/*Timer counter for WDS AST entry ageout*/
 	uint8_t wds_ast_aging_timer_cnt;
 	bool pending_ageout;

@@ -916,8 +916,14 @@
 		CFG_INI_BOOL("dp_sawf_mcast", false, \
 		"Service Aware Wifi - Enhanched Multicast Enable/Disable")
 #define CFG_DP_SAWF_MCAST  CFG(CFG_DP_SAWF_MCAST_ENABLE)
+
+#define CFG_DP_SAWF_MSDUQ_RECLAIM_ENABLE \
+		CFG_INI_BOOL("dp_sawf_msduq_reclaim", false, \
+			     "SAWF MSDUQ Reclaim Enable/Disable")
+#define CFG_DP_SAWF_MSDUQ_RECLAIM CFG(CFG_DP_SAWF_MSDUQ_RECLAIM_ENABLE)
 #else
 #define CFG_DP_SAWF_MCAST
+#define CFG_DP_SAWF_MSDUQ_RECLAIM
 #endif
 
 #ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
@@ -2318,5 +2324,6 @@
 		CFG(CFG_DP_STATS_AVG_RATE_FILTER) \
 		CFG_DP_RESV_AST_IDX_CFG \
 		CFG_DP_SAWF_MCAST \
+		CFG_DP_SAWF_MSDUQ_RECLAIM \
 		CFG(CFG_DP_RXMON_MGMT_LINEARIZATION)
 #endif /* _CFG_DP_H_ */
