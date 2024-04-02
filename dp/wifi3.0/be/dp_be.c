@@ -4039,11 +4039,17 @@ dp_primary_link_migration(struct dp_soc *soc, void *cb_ctxt,
 
 	primary_vdev_id = new_primary_peer->vdev->vdev_id;
 
+	/* Update  current params */
+	params.old_vdev_id = mld_peer->vdev->vdev_id;
+	params.old_pdev_id = mld_peer->vdev->pdev->pdev_id;
+	params.old_chip_id = dp_get_chip_id(mld_peer->vdev->pdev->soc);
+
 	dp_vdev_unref_delete(soc, mld_peer->vdev, DP_MOD_ID_CHILD);
 	mld_peer->vdev = dp_vdev_get_ref_by_id(pr_soc, primary_vdev_id,
 			 DP_MOD_ID_CHILD);
 	mld_peer->txrx_peer->vdev = mld_peer->vdev;
 
+	/* Update  new params after update */
 	params.vdev_id = new_primary_peer->vdev->vdev_id;
 	params.peer_mac = mld_peer->mac_addr.raw;
 	params.chip_id = pr_peer_info->chip_id;

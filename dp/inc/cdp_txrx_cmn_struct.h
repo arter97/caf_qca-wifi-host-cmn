@@ -3348,12 +3348,18 @@ struct cdp_pdev_attach_params {
  * @peer_mac: Peer mac address
  * @chip_id: CHIP ID
  * @pdev_id: PDEV ID
+ * @old_vdev_id: previous vdev_id used only for primary umac migration event
+ * @old_chip_id: previous vdev_id used only for primary umac migration event
+ * @old_pdev_id: previous vdev_id used only for primary umac migration event
  */
 struct cdp_txrx_peer_params_update {
-	uint8_t	vdev_id;
-	uint8_t	*peer_mac;
-	uint8_t	chip_id;
-	uint8_t	pdev_id;
+	uint8_t vdev_id;
+	uint8_t *peer_mac;
+	uint8_t chip_id;
+	uint8_t pdev_id;
+	uint8_t old_vdev_id;
+	uint8_t old_chip_id;
+	uint8_t old_pdev_id;
 };
 
 /**

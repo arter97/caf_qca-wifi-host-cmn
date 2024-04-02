@@ -6181,6 +6181,10 @@ QDF_STATUS dp_peer_mlo_setup(
 				mld_peer->vdev, vdev_id,
 				qdf_atomic_read(&mld_peer->vdev->ref_cnt));
 
+			params.old_vdev_id = mld_peer->vdev->vdev_id;
+			params.old_pdev_id = mld_peer->vdev->pdev->pdev_id;
+			params.old_chip_id =
+				dp_get_chip_id(mld_peer->vdev->pdev->soc);
 			dp_mld_peer_change_vdev(soc, mld_peer, vdev_id);
 
 			params.vdev_id = peer->vdev->vdev_id;
