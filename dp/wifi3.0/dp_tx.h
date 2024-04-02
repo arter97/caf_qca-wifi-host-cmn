@@ -2369,6 +2369,84 @@ dp_tx_nbuf_dev_kfree_list(qdf_nbuf_queue_head_t *nbuf_queue_head)
 }
 #endif /* QCA_DP_TX_NBUF_LIST_FREE */
 
+/**
+ * dp_tx_update_peer_basic_stats() - Update basic pper stats
+ * @txrx_peer: Peer handle
+ * @length: Length of the packet in bytes
+ * @tx_status: Tx status
+ * @update: flag to check enable ol_stats
+ *
+ * Return: None
+ */
+void dp_tx_update_peer_basic_stats(struct dp_txrx_peer *txrx_peer,
+				   uint32_t length, uint8_t tx_status,
+				   bool update);
+
+/**
+ * dp_tx_get_link_id_from_ppdu_id() - Get HW link Id from PPDU Id
+ * @soc: dp_soc handle
+ * @ts: Tx completion status structure
+ * @txrx_peer: peer handle
+ * @vdev: dp_vdev handle
+ *
+ * Return: HW link id
+ */
+uint8_t
+dp_tx_get_link_id_from_ppdu_id(struct dp_soc *soc,
+			       struct hal_tx_completion_status *ts,
+			       struct dp_txrx_peer *txrx_peer,
+			       struct dp_vdev *vdev);
+
+/**
+ * dp_tx_update_peer_stats() - Update peer stats from Tx completion indications
+ *				per wbm ring
+ *
+ * @tx_desc: software descriptor head pointer
+ * @ts: Tx completion status
+ * @txrx_peer: peer handle
+ * @ring_id: ring number
+ * @link_id: Link id
+ *
+ * Return: None
+ */
+void
+dp_tx_update_peer_stats(struct dp_tx_desc_s *tx_desc,
+			struct hal_tx_completion_status *ts,
+			struct dp_txrx_peer *txrx_peer, uint8_t ring_id,
+			uint8_t link_id);
+
+/**
+ * hal_tx_comp_desc_sync_wrapper() - wrapper function for HAL tx comp desc
+ * @tx_comp_hal_desc: Handle to HAL desc
+ * @tx_desc_pool: Tx desc pool handle
+ * @tx_desc: Tx Descriptor
+ * @buffer_src: FW/TQM who released the buffer
+ * @comp_index: Tx completion index position
+ * @read_status: 0 - Do not read status words from descriptors
+ *               1 - Enable reading of status words from descriptor
+ *
+ * Return: None
+ */
+void hal_tx_comp_desc_sync_wrapper(void *tx_comp_hal_desc,
+				   struct dp_tx_desc_pool_s *tx_desc_pool,
+				   struct dp_tx_desc_s *tx_desc,
+				   uint8_t buffer_src,
+				   uint16_t comp_index, bool read_status);
+
+/**
+ * hal_tx_comp_get_status_wrapper() - wrapper function for HAL get tx status
+ * @soc: dp_soc handle
+ * @tx_desc_pool: Tx desc pool handle
+ * @tx_desc: Tx Descriptor
+ * @ts: Tx completion status structure
+ * @comp_index: Tx completion index position
+ *
+ * Return: None
+ */
+void hal_tx_comp_get_status_wrapper(struct dp_soc *soc,
+				    struct dp_tx_desc_pool_s *tx_desc_pool,
+				    struct dp_tx_desc_s *tx_desc,
+				    void *ts, uint16_t comp_index);
 #ifndef WLAN_SOFTUMAC_SUPPORT
 /**
  * dp_tx_dump_tx_desc() - Dump tx desc for debugging

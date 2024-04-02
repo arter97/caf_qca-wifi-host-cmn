@@ -376,12 +376,33 @@ dp_tx_release_ds_tx_desc(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 
 	return 0;
 }
+
+static inline void
+dp_tx_update_ppeds_tx_comp_stats(struct dp_soc *soc,
+				 struct dp_txrx_peer *txrx_peer,
+				 struct hal_tx_completion_status *ts,
+				 struct dp_tx_desc_s *desc,
+				 uint8_t ring_id, uint16_t comp_index)
+{
+	soc->arch_ops.dp_tx_update_ppeds_tx_comp_stats(soc, txrx_peer, ts,
+						       desc, ring_id,
+						       comp_index);
+}
 #else
 static inline int
 dp_tx_release_ds_tx_desc(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 			 uint8_t desc_pool_id)
 {
 	return 0;
+}
+
+static inline void
+dp_tx_update_ppeds_tx_comp_stats(struct dp_soc *soc,
+				 struct dp_txrx_peer *txrx_peer,
+				 struct hal_tx_completion_status *ts,
+				 struct dp_tx_desc_s *desc,
+				 uint8_t ring_id, uint16_t comp_index)
+{
 }
 #endif
 
@@ -419,8 +440,7 @@ dp_tx_desc_release(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 
 	if (HAL_TX_COMP_RELEASE_SOURCE_TQM ==
 				tx_desc->buffer_src)
-		comp_status = hal_tx_comp_get_release_reason(&tx_desc->comp,
-							     soc->hal_soc);
+		comp_status = tx_desc->tx_status;
 	else
 		comp_status = HAL_TX_COMP_RELEASE_REASON_FW;
 	if (soc->dp_debug_log_en) {
@@ -5450,7 +5470,7 @@ dp_tx_update_peer_extd_stats(struct hal_tx_completion_status *ts,
 #if defined(WLAN_FEATURE_11BE_MLO) && \
 	(defined(QCA_ENHANCED_STATS_SUPPORT) || \
 		defined(DP_MLO_LINK_STATS_SUPPORT))
-static inline uint8_t
+uint8_t
 dp_tx_get_link_id_from_ppdu_id(struct dp_soc *soc,
 			       struct hal_tx_completion_status *ts,
 			       struct dp_txrx_peer *txrx_peer,
@@ -5478,7 +5498,7 @@ dp_tx_get_link_id_from_ppdu_id(struct dp_soc *soc,
 	return hw_link_id;
 }
 #else
-static inline uint8_t
+uint8_t
 dp_tx_get_link_id_from_ppdu_id(struct dp_soc *soc,
 			       struct hal_tx_completion_status *ts,
 			       struct dp_txrx_peer *txrx_peer,
@@ -5519,7 +5539,7 @@ dp_tx_check_broadcast_packet(struct dp_tx_desc_s *tx_desc,
  *
  * Return: None
  */
-static inline void
+void
 dp_tx_update_peer_stats(struct dp_tx_desc_s *tx_desc,
 			struct hal_tx_completion_status *ts,
 			struct dp_txrx_peer *txrx_peer, uint8_t ring_id,
@@ -6462,50 +6482,6 @@ dp_tx_mcast_reinject_handler(struct dp_soc *soc, struct dp_tx_desc_s *desc)
 }
 #endif
 
-#ifdef WLAN_SUPPORT_PPEDS
-static inline void
-dp_tx_update_ppeds_tx_comp_stats(struct dp_soc *soc,
-				 struct dp_txrx_peer *txrx_peer,
-				 struct hal_tx_completion_status *ts,
-				 struct dp_tx_desc_s *desc,
-				 uint8_t ring_id)
-{
-	uint8_t link_id = 0;
-	struct dp_vdev *vdev = NULL;
-
-	if (qdf_likely(txrx_peer)) {
-		if (!(desc->flags & DP_TX_DESC_FLAG_SIMPLE)) {
-			hal_tx_comp_get_status(&desc->comp,
-					       ts,
-					       soc->hal_soc);
-			vdev = txrx_peer->vdev;
-			link_id = dp_tx_get_link_id_from_ppdu_id(soc,
-								 ts,
-								 txrx_peer,
-								 vdev);
-			if (link_id < 1 || link_id > DP_MAX_MLO_LINKS)
-				link_id = 0;
-			dp_tx_update_peer_stats(desc, ts,
-						txrx_peer,
-						ring_id,
-						link_id);
-		} else {
-			dp_tx_update_peer_basic_stats(txrx_peer, desc->length,
-						      desc->tx_status, false);
-		}
-	}
-}
-#else
-static inline void
-dp_tx_update_ppeds_tx_comp_stats(struct dp_soc *soc,
-				 struct dp_txrx_peer *txrx_peer,
-				 struct hal_tx_completion_status *ts,
-				 struct dp_tx_desc_s *desc,
-				 uint8_t ring_id)
-{
-}
-#endif
-
 void
 dp_tx_comp_process_desc_list_fast(struct dp_soc *soc,
 				  struct dp_tx_desc_s *head_desc,
@@ -6531,6 +6507,9 @@ dp_tx_comp_process_desc_list(struct dp_soc *soc,
 	uint16_t peer_id = DP_INVALID_PEER;
 	dp_txrx_ref_handle txrx_ref_handle = NULL;
 	qdf_nbuf_queue_head_t h;
+	uint8_t valid_tx_desc_pool = 0;
+	uint16_t comp_index = 0, ppeds_comp_index = 0;
+	struct dp_tx_desc_pool_s *tx_desc_pool = NULL;
 
 	desc = comp_head;
 
@@ -6556,10 +6535,29 @@ dp_tx_comp_process_desc_list(struct dp_soc *soc,
 			continue;
 		}
 
+		if (!valid_tx_desc_pool) {
+			tx_desc_pool = dp_get_tx_desc_pool(soc, desc->pool_id);
+			valid_tx_desc_pool = 1;
+		}
+
 		if (desc->flags & DP_TX_DESC_FLAG_PPEDS) {
 			qdf_nbuf_t nbuf;
-			dp_tx_update_ppeds_tx_comp_stats(soc, txrx_peer, &ts,
-							 desc, ring_id);
+
+			if (qdf_likely(txrx_peer)) {
+				if (!(desc->flags & DP_TX_DESC_FLAG_SIMPLE)) {
+					dp_tx_update_ppeds_tx_comp_stats(
+							soc, txrx_peer, &ts,
+							desc, ring_id,
+							ppeds_comp_index);
+				} else {
+					dp_tx_update_peer_basic_stats(
+							txrx_peer,
+							desc->length,
+							desc->tx_status,
+							false);
+				}
+			}
+			ppeds_comp_index++;
 
 			if (desc->pool_id != DP_TX_PPEDS_POOL_ID) {
 				nbuf = desc->nbuf;
@@ -6603,7 +6601,9 @@ dp_tx_comp_process_desc_list(struct dp_soc *soc,
 			continue;
 		}
 
-		hal_tx_comp_get_status(&desc->comp, &ts, soc->hal_soc);
+		hal_tx_comp_get_status_wrapper(soc, tx_desc_pool, desc,
+					       &ts, comp_index);
+		comp_index++;
 
 		dp_tx_comp_process_tx_status(soc, desc, &ts, txrx_peer,
 					     ring_id);
@@ -6788,6 +6788,9 @@ uint32_t dp_tx_comp_handler(struct dp_intr *int_ctx, struct dp_soc *soc,
 	uint32_t num_entries;
 	qdf_nbuf_queue_head_t h;
 	QDF_STATUS status;
+	uint8_t valid_tx_desc_pool = 0;
+	uint16_t comp_index = 0;
+	struct dp_tx_desc_pool_s *tx_desc_pool = NULL;
 
 	DP_HIST_INIT();
 
@@ -6900,6 +6903,12 @@ more_data:
 
 		dp_tx_comp_reset_stale_entry_detection(soc, ring_id);
 		tx_desc->buffer_src = buffer_src;
+		/* get tx_desc pool from first sw desc */
+		if (!valid_tx_desc_pool) {
+			tx_desc_pool = dp_get_tx_desc_pool(soc,
+							   tx_desc->pool_id);
+			valid_tx_desc_pool = 1;
+		}
 
 		/*
 		 * If the release source is FW, process the HTT status
@@ -6911,8 +6920,10 @@ more_data:
 			hal_tx_comp_get_htt_desc(tx_comp_hal_desc,
 					htt_tx_status);
 			/* Collect hw completion contents */
-			hal_tx_comp_desc_sync(tx_comp_hal_desc,
-					      &tx_desc->comp, 1);
+			hal_tx_comp_desc_sync_wrapper(tx_comp_hal_desc,
+						      tx_desc_pool, tx_desc,
+						      buffer_src,
+						      comp_index, 1);
 			soc->arch_ops.dp_tx_process_htt_completion(
 							soc,
 							tx_desc,
@@ -6976,8 +6987,11 @@ more_data:
 			}
 
 			/* Collect hw completion contents */
-			hal_tx_comp_desc_sync(tx_comp_hal_desc,
-					      &tx_desc->comp, 1);
+			hal_tx_comp_desc_sync_wrapper(tx_comp_hal_desc,
+						      tx_desc_pool, tx_desc,
+						      buffer_src,
+						      comp_index, 1);
+			comp_index++;
 add_to_pool:
 			DP_HIST_PACKET_COUNT_INC(tx_desc->pdev->pdev_id);
 
@@ -8155,3 +8169,50 @@ void dp_tx_override_flow_pool_id(struct dp_soc *soc,
 {
 }
 #endif
+
+#ifdef QCA_DP_OPTIMIZED_TX_DESC
+void hal_tx_comp_desc_sync_wrapper(void *tx_comp_hal_desc,
+				   struct dp_tx_desc_pool_s *tx_desc_pool,
+				   struct dp_tx_desc_s *tx_desc,
+				   uint8_t buffer_src,
+				   uint16_t comp_index,
+				   bool read_status)
+{
+	if (buffer_src == HAL_TX_COMP_RELEASE_SOURCE_FW)
+		return;
+
+	hal_tx_comp_desc_sync(tx_comp_hal_desc,
+			      &tx_desc_pool->comp[comp_index],
+			      read_status);
+}
+
+void hal_tx_comp_get_status_wrapper(struct dp_soc *soc,
+				    struct dp_tx_desc_pool_s *tx_desc_pool,
+				    struct dp_tx_desc_s *desc,
+				    void *ts,
+				    uint16_t comp_index)
+{
+	hal_tx_comp_get_status(&tx_desc_pool->comp[comp_index],
+			       ts, soc->hal_soc);
+}
+#else
+void hal_tx_comp_desc_sync_wrapper(void *tx_comp_hal_desc,
+				   struct dp_tx_desc_pool_s *tx_desc_pool,
+				   struct dp_tx_desc_s *tx_desc,
+				   uint8_t buffer_src,
+				   uint16_t comp_index,
+				   bool read_status)
+{
+	hal_tx_comp_desc_sync(tx_comp_hal_desc,
+			      &tx_desc->comp, read_status);
+}
+
+void hal_tx_comp_get_status_wrapper(struct dp_soc *soc,
+				    struct dp_tx_desc_pool_s *tx_desc_pool,
+				    struct dp_tx_desc_s *desc,
+				    void *ts,
+				    uint16_t comp_index)
+{
+	hal_tx_comp_get_status(&desc->comp, ts, soc->hal_soc);
+}
+#endif /* QCA_DP_OPTIMIZED_TX_DESC */

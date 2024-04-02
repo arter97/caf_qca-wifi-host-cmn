@@ -28,6 +28,15 @@
 #define IRQ_DISABLED_MAX_DURATION_NS 100000000
 #endif
 
+/* mapping NAPI budget 0 to internal budget 0
+ * NAPI budget 1 to internal budget [1,scaler -1]
+ * NAPI budget 2 to internal budget [scaler, 2 * scaler - 1], etc
+ */
+#define NAPI_BUDGET_TO_INTERNAL_BUDGET(n, s) \
+	(((n) << (s)) - 1)
+#define INTERNAL_BUDGET_TO_NAPI_BUDGET(n, s) \
+	(((n) + 1) >> (s))
+
 struct hif_exec_context;
 
 struct hif_execution_ops {
