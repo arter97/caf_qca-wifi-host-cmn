@@ -109,6 +109,7 @@ static QDF_STATUS ttlm_tx_action_req_cb(struct scheduler_msg *msg)
 				       sizeof(struct wlan_t2lm_info),
 				       &ttlm_req->t2lm_info[dir]);
 
+	qdf_mem_free(msg->bodyptr);
 	return status;
 }
 
@@ -142,10 +143,11 @@ wlan_ttlm_handle_tx_action_req(struct wlan_mlo_peer_context *ml_peer,
 					QDF_MODULE_ID_OS_IF,
 					&ttlm_msg);
 
-	if (QDF_IS_STATUS_ERROR(qdf_status))
+	if (QDF_IS_STATUS_ERROR(qdf_status)) {
 		mlo_err("Post TTLM STA Request msg fail");
+		qdf_mem_free(ttlm_req_info);
+	}
 
-	qdf_mem_free(ttlm_req_info);
 	return qdf_status;
 }
 
@@ -163,6 +165,11 @@ ttlm_populate_tx_action_req(struct wlan_mlo_peer_context *ml_peer,
 	struct wlan_t2lm_info *ttlm_req_info;
 	uint8_t tid_num;
 	QDF_STATUS status;
+
+	if (!ml_peer) {
+		t2lm_err("ML peer is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
 
 	vdev = mlo_get_first_vdev_by_ml_peer(ml_peer);
 
