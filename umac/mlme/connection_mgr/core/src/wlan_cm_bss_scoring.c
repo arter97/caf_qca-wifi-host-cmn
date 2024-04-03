@@ -1749,53 +1749,24 @@ static uint16_t cm_get_ch_width(struct scan_cache_entry *entry,
 static uint8_t mlo_boost_pct[MLO_TYPE_MAX] = {0, 10, CM_MAX_PCT_SCORE};
 
 /**
- * struct mlo_rssi_pct: MLO AP rssi joint factor and score percent
- * @joint_factor: rssi joint factor (0 - 100)
- * @rssi_pcnt: Rssi score percent (0 - 100)
- * @prorate_pcnt: RSSI prorated percent
- */
-struct mlo_rssi_pct {
-	uint16_t joint_factor;
-	uint16_t rssi_pcnt;
-	uint16_t prorate_pcnt;
-};
-
-#define CM_RSSI_BUCKET_NUM 7
-static struct mlo_rssi_pct mlo_rssi_pcnt[CM_RSSI_BUCKET_NUM] = {
-{80, 100, 100}, {60, 87, 100}, {44, 74, 100}, {30, 61, 100}, {20, 48, 54},
-{10, 35, 28}, {0, 22, 1} };
-
-/**
- * cm_get_mlo_rssi_score() - Calculate joint rssi score for MLO AP
- * @rssi_weightage: rssi weightage
+ * cm_get_mlo_rssi() - Calculate joint rssi for MLO AP
+ *
  * @link1_rssi: link1 rssi
  * @link2_rssi: link2 rssi
- * @prorate_pcnt: pointer to store RSSI prorated percent
+ * @cw_link1: channel width of link 1
+ * @cw_link2: channel width of link 2
  *
  * Return: MLO AP joint rssi score
  */
-static uint32_t cm_get_mlo_rssi_score(uint8_t rssi_weightage, int8_t link1_rssi,
-				      int8_t link2_rssi, uint16_t *prorate_pcnt)
+static uint32_t cm_get_mlo_rssi(int8_t link1_rssi, int8_t link2_rssi,
+				uint16_t cw_link1, uint16_t cw_link2)
 {
-	int8_t link1_factor = 0, link2_factor = 0;
-	int32_t joint_factor = 0;
-	int16_t rssi_pcnt = 0;
-	int8_t i;
+	uint32_t rssi_mlo;
 
-	/* Calculate RSSI score -- using joint rssi, but limit to 2 links */
-	link1_factor = QDF_MAX(QDF_MIN(link1_rssi, -50), -95) + 95;
-	link2_factor = QDF_MAX(QDF_MIN(link2_rssi, -50), -95) + 95;
-	joint_factor = QDF_MIN((link1_factor * link1_factor +
-			    link2_factor * link2_factor) * 100 / (2 * 45 * 45),
-			    100);
-	for (i = 0; i < CM_RSSI_BUCKET_NUM; i++)
-		if (joint_factor > mlo_rssi_pcnt[i].joint_factor) {
-			rssi_pcnt = mlo_rssi_pcnt[i].rssi_pcnt;
-			*prorate_pcnt = mlo_rssi_pcnt[i].prorate_pcnt;
-			break;
-		}
+	rssi_mlo = (cw_link1 * link1_rssi + cw_link2 * link2_rssi) /
+		   (cw_link1 + cw_link2);
 
-	return (rssi_weightage * rssi_pcnt);
+	return rssi_mlo;
 }
 
 static inline int cm_calculate_emlsr_score(struct weight_cfg *weight_config)
@@ -2031,6 +2002,7 @@ static int cm_calculate_mlo_bss_score(struct wlan_objmgr_psoc *psoc,
 {
 	struct scan_cache_entry *entry_partner[MLD_MAX_LINKS - 1];
 	int32_t rssi[MLD_MAX_LINKS - 1];
+	uint32_t rssi_mlo[MLD_MAX_LINKS - 1] = {};
 	uint32_t rssi_score[MLD_MAX_LINKS - 1] = {};
 	uint16_t prorated_pct[MLD_MAX_LINKS - 1] = {};
 	uint32_t freq[MLD_MAX_LINKS - 1];
@@ -2125,10 +2097,18 @@ static int cm_calculate_mlo_bss_score(struct wlan_objmgr_psoc *psoc,
 							    true);
 			mlme_nofl_debug("No entry for partner, estimate with rnr");
 		}
+		rssi_mlo[i] =
+			cm_get_mlo_rssi(entry->rssi_raw, rssi[i],
+					chan_width, ch_width[i]);
+
 		rssi_score[i] =
-			cm_get_mlo_rssi_score(weight_config->rssi_weightage,
-					      entry->rssi_raw, rssi[i],
-					      &prorated_pct[i]);
+			cm_calculate_rssi_score(&score_params->rssi_score,
+						rssi_mlo[i],
+						weight_config->rssi_weightage);
+		prorated_pct[i] =
+			cm_get_rssi_prorate_pct(&score_params->rssi_score,
+						rssi_mlo[i],
+						weight_config->rssi_weightage);
 
 		bandwidth_score[i] =
 			cm_get_bw_score(weight_config->chan_width_weightage,
@@ -2779,8 +2759,13 @@ static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 					   prorated_pcnt);
 	score += eht_score;
 
-	if (!(IS_LINK_SCORE(ml_flag)))
+	if (!(IS_LINK_SCORE(ml_flag))) {
+		/* Add boost of 10% for one partner link MLMR candidate  */
+		if (bss_mlo_type == MLMR)
+			score = score + (score * ONE_LINK_MLMR_BOOST) / 100;
+
 		entry->bss_score = score;
+	}
 
 	if (bss_mlo_type == SLO || IS_LINK_SCORE(ml_flag))
 		mlme_nofl_debug("%s("QDF_MAC_ADDR_FMT" freq %d): rssi %d HT %d VHT %d HE %d EHT %d su_bfer %d phy %d atf %d qbss %d cong_pct %d NSS %d ap_tx_pwr %d oce_subnet %d sae_pk_cap %d prorated_pcnt %d keymgmt 0x%x mlo type %d",
