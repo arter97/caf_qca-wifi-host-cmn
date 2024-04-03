@@ -553,10 +553,14 @@ struct ttlm_comp_priv {
  * struct ttlm_rsp_info - TTLM response frame info
  * @t2lm_info: TTLM mapping
  * @t2lm_resp_type: TTLM status corresponds to TTL response frame
+ * @token: TTLM request dialog token
+ * @dest_addr: Action resp destination address
  */
 struct ttlm_rsp_info {
 	struct wlan_t2lm_info *t2lm_info;
 	enum wlan_t2lm_resp_frm_type t2lm_resp_type;
+	uint8_t token;
+	struct qdf_mac_addr dest_addr;
 };
 
 /**
