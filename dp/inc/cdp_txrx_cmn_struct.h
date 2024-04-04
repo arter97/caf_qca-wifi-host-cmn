@@ -1508,6 +1508,7 @@ enum cdp_pdev_param_type {
  * @cdp_monitor_flag: monitor interface flags
  * @cdp_reo_rings_mapping: reo rings mapping
  * @cdp_eapol_over_control_port_disable: disable eapol over control port
+ * @cdp_scan_radio_support: Set scan radio support capability
  */
 typedef union cdp_config_param_t {
 	/* peer params */
@@ -1631,6 +1632,7 @@ typedef union cdp_config_param_t {
 	uint8_t cdp_monitor_flag;
 	uint32_t cdp_reo_rings_mapping;
 	bool cdp_eapol_over_control_port_disable;
+	bool cdp_scan_radio_support;
 } cdp_config_param_type;
 
 /**
@@ -1815,6 +1817,7 @@ enum cdp_vdev_param_type {
  * @CDP_FW_SUPPORT_ML_MON: FW support ML monitor
  * @CDP_MONITOR_FLAG: Monitor interface configuration
  * @CDP_CFG_REO_RINGS_MAPPING: Reo rings mapping configuration
+ * @CDP_SCAN_RADIO_SUPPORT: Scan Radio capability
  */
 enum cdp_psoc_param_type {
 	CDP_ENABLE_RATE_STATS,
@@ -1848,6 +1851,7 @@ enum cdp_psoc_param_type {
 	CDP_FW_SUPPORT_ML_MON,
 	CDP_MONITOR_FLAG,
 	CDP_CFG_REO_RINGS_MAPPING,
+	CDP_SCAN_RADIO_SUPPORT,
 };
 
 #ifdef CONFIG_AP_PLATFORM

@@ -310,6 +310,13 @@ dp_rxdma_ring_sel_cfg_li(struct dp_soc *soc)
 	htt_tlv_filter.rx_attn_offset =
 				hal_rx_attn_offset_get(soc->hal_soc);
 
+	/* reset fp filters for scan radio */
+	if (soc->scan_radio_support) {
+		htt_tlv_filter.enable_fp = 0;
+		htt_tlv_filter.fp_ctrl_filter = 0;
+		htt_tlv_filter.fp_data_filter = 0;
+	}
+
 	for (i = 0; i < MAX_PDEV_CNT; i++) {
 		struct dp_pdev *pdev = soc->pdev_list[i];
 
@@ -397,6 +404,12 @@ dp_rxdma_ring_sel_cfg_li(struct dp_soc *soc)
 				hal_rx_msdu_end_offset_get(soc->hal_soc);
 	htt_tlv_filter.rx_attn_offset =
 				hal_rx_attn_offset_get(soc->hal_soc);
+	/* reset fp filters for scan radio */
+	if (soc->scan_radio_support) {
+		htt_tlv_filter.enable_fp = 0;
+		htt_tlv_filter.fp_ctrl_filter = 0;
+		htt_tlv_filter.fp_data_filter = 0;
+	}
 
 	for (i = 0; i < MAX_PDEV_CNT; i++) {
 		struct dp_pdev *pdev = soc->pdev_list[i];

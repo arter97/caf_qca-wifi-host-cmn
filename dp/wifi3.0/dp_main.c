@@ -9427,6 +9427,9 @@ dp_set_psoc_param(struct cdp_soc_t *cdp_soc,
 		soc->mon_flags = val.cdp_monitor_flag;
 		dp_info("monior interface flags: 0x%x", soc->mon_flags);
 		break;
+	case CDP_SCAN_RADIO_SUPPORT:
+		soc->scan_radio_support = val.cdp_scan_radio_support;
+		break;
 	default:
 		break;
 	}
@@ -14866,6 +14869,8 @@ static QDF_STATUS dp_pdev_init(struct cdp_soc_t *txrx_soc,
 	struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx;
 	int nss_cfg;
 	void *sojourn_buf;
+	uint32_t target_type;
+	bool rx_refill_lt_disable = true;
 
 	struct dp_soc *soc = (struct dp_soc *)txrx_soc;
 	struct dp_pdev *pdev = soc->pdev_list[pdev_id];
@@ -14879,6 +14884,12 @@ static QDF_STATUS dp_pdev_init(struct cdp_soc_t *txrx_soc,
 	 * radio detach execution .i.e. in the absence of any vdev.
 	 */
 	pdev->pdev_deinit = 0;
+
+	/* For Pine scan radio, disable RXDMA refill low threshold status */
+	target_type = hal_get_target_type(soc->hal_soc);
+	if (target_type == TARGET_TYPE_QCN9000 && soc->scan_radio_support)
+		wlan_cfg_set_dp_soc_rxdma_refill_lt_disable(soc_cfg_ctx,
+							    rx_refill_lt_disable);
 
 	if (dp_wdi_event_attach(pdev)) {
 		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,

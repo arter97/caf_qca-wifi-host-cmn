@@ -3561,6 +3561,7 @@ struct dp_soc {
 	int8_t pcie_slot;
 	/* monitor interface flags */
 	uint32_t mon_flags;
+	bool scan_radio_support;
 };
 
 #define MAX_RX_MAC_RINGS 2

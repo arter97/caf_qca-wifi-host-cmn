@@ -247,6 +247,7 @@ struct wlan_srng_cfg {
  * @reo_status_ring: reo status ting size
  * @rxdma_refill_ring: rxdma refill ring size
  * @rxdma_refill_lt_disable: rxdma refill low threshold disable
+ * @rxdma_scan_radio_refill_ring: rxdma scan radio refill ring size
  * @rxdma_err_dst_ring: rxdma error destination ring size
  * @per_pkt_trace:
  * @raw_mode_war: enable/disable raw mode war
@@ -464,6 +465,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	int reo_status_ring;
 	int rxdma_refill_ring;
 	bool rxdma_refill_lt_disable;
+	int rxdma_scan_radio_refill_ring;
 	int rxdma_err_dst_ring;
 	uint32_t per_pkt_trace;
 	bool raw_mode_war;
@@ -1724,6 +1726,28 @@ int
 wlan_cfg_get_dp_soc_reo_reinject_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
+ * wlan_cfg_get_dp_soc_rxdma_scan_radio_refill_ring_size - Get rxdma scan radio
+ * ring size
+ * @cfg: soc configuration context
+ *
+ * Return: rxdma scan radio refill ring size
+ */
+int
+wlan_cfg_get_dp_soc_rxdma_scan_radio_refill_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_set_dp_soc_rxdma_scan_radio_refill_ring_size - Set rxdma scan radio
+ * refill ring size
+ * @ctrl_psoc: PSOC object
+ * @cfg: cfg ctx where values will be populated
+ *
+ * Return: None
+ */
+void
+wlan_cfg_set_dp_soc_rxdma_scan_radio_refill_ring_size(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
+						      struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
  * wlan_cfg_get_dp_soc_rx_release_ring_size - Get rx_release_ring size
  * @cfg: soc configuration context
  *
@@ -1842,6 +1866,17 @@ wlan_cfg_set_dp_soc_rxdma_refill_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg,
  */
 bool
 wlan_cfg_get_dp_soc_rxdma_refill_lt_disable(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_set_dp_soc_rxdma_refill_lt_disable - Set RxDMA refill LT stats
+ * @cfg: soc configuration context
+ * @rx_refill_lt_disable: Enable/Disable low interrupt threshold
+ *
+ * Return: None
+ */
+void
+wlan_cfg_set_dp_soc_rxdma_refill_lt_disable(struct wlan_cfg_dp_soc_ctxt *cfg,
+					    bool rx_refill_lt_disable);
 
 /**
  * wlan_cfg_get_dp_soc_rxdma_err_dst_ring_size - Get rxdma dst ring size
