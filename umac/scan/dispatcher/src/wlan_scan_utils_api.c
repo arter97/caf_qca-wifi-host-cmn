@@ -1014,13 +1014,12 @@ util_scan_is_hidden_ssid(struct ie_ssid *ssid)
 }
 
 #ifdef WLAN_FEATURE_11BE_MLO
-static void
-util_scan_update_rnr_mld(struct rnr_bss_info *rnr,
-			 struct neighbor_ap_info_field *ap_info, uint8_t *data)
+static void util_scan_update_rnr_mld(struct rnr_bss_info *rnr, uint8_t *data,
+				     uint8_t tbtt_info_length)
 {
 	bool mld_info_present = false;
 
-	switch (ap_info->tbtt_header.tbtt_info_length) {
+	switch (tbtt_info_length) {
 	case TBTT_NEIGHBOR_AP_BSSID_S_SSID_BSS_PARAM_20MHZ_PSD_MLD_PARAM:
 		qdf_mem_copy(&rnr->mld_info, &data[13],
 			     sizeof(struct rnr_mld_info));
@@ -1031,9 +1030,9 @@ util_scan_update_rnr_mld(struct rnr_bss_info *rnr,
 	rnr->mld_info_valid = mld_info_present;
 }
 #else
-static void
-util_scan_update_rnr_mld(struct rnr_bss_info *rnr,
-			 struct neighbor_ap_info_field *ap_info, uint8_t *data)
+static inline void
+util_scan_update_rnr_mld(struct rnr_bss_info *rnr, uint8_t *data,
+			 uint8_t tbtt_info_length)
 {
 }
 #endif
@@ -1046,6 +1045,17 @@ util_scan_update_rnr(struct rnr_bss_info *rnr,
 	uint8_t tbtt_info_length;
 
 	tbtt_info_length = ap_info->tbtt_header.tbtt_info_length;
+
+	/*
+	 * Max TBTT sub-element length in RNR IE is 255 bytes and AP can send
+	 * data above defined length and the bytes in excess to this length
+	 * shall be treated as reserved.
+	 *
+	 * Limit the TBTT sub-element read operation to current supported
+	 * length i.e TBTT_NEIGHBOR_AP_PARAM_MAX
+	 */
+	if (tbtt_info_length > TBTT_NEIGHBOR_AP_PARAM_MAX)
+		tbtt_info_length = TBTT_NEIGHBOR_AP_PARAM_MAX;
 
 	switch (tbtt_info_length) {
 	case TBTT_NEIGHBOR_AP_OFFSET_ONLY:
@@ -1078,7 +1088,7 @@ util_scan_update_rnr(struct rnr_bss_info *rnr,
 		break;
 
 	case TBTT_NEIGHBOR_AP_BSSID_S_SSID_BSS_PARAM_20MHZ_PSD_MLD_PARAM:
-		util_scan_update_rnr_mld(rnr, ap_info, data);
+		util_scan_update_rnr_mld(rnr, data, tbtt_info_length);
 		fallthrough;
 	case TBTT_NEIGHBOR_AP_BSSID_S_SSID_BSS_PARAM_20MHZ_PSD:
 		rnr->psd_20mhz = data[12];
@@ -1713,7 +1723,8 @@ static void util_scan_update_esp_data(struct wlan_esp_ie *esp_information,
 	esp_ie = (struct wlan_esp_ie *)
 		util_scan_entry_esp_info(scan_entry);
 
-	total_elements  = esp_ie->esp_len;
+	// Ignore ESP_ID_EXTN element
+	total_elements  = esp_ie->esp_len - 1;
 	data = (uint8_t *)esp_ie + 3;
 	do_div(total_elements, ESP_INFORMATION_LIST_LENGTH);
 
@@ -1723,7 +1734,7 @@ static void util_scan_update_esp_data(struct wlan_esp_ie *esp_information,
 	}
 
 	for (i = 0; i < total_elements &&
-	     data < ((uint8_t *)esp_ie + esp_ie->esp_len + 3); i++) {
+	     data < ((uint8_t *)esp_ie + esp_ie->esp_len); i++) {
 		esp_info = (struct wlan_esp_info *)data;
 		if (esp_info->access_category == ESP_AC_BK) {
 			qdf_mem_copy(&esp_information->esp_info_AC_BK,
@@ -2242,8 +2253,11 @@ util_get_ml_bv_partner_link_info(struct wlan_objmgr_pdev *pdev,
 	}
 
 	scan_entry->ml_info.num_links = link_idx;
-	if (!offset)
+	if (!offset ||
+	    (offset + sizeof(struct wlan_ml_bv_linfo_perstaprof) >= ml_ie_len)) {
+		scm_err_rl("incorrect offset value %d", offset);
 		return;
+	}
 
 	/* TODO: loop through all the STA info fields */
 
@@ -2277,6 +2291,11 @@ util_get_ml_bv_partner_link_info(struct wlan_objmgr_pdev *pdev,
 
 		/* Skip STA Info Length field */
 		offset += WLAN_ML_BV_LINFO_PERSTAPROF_STAINFO_LENGTH_SIZE;
+
+		if (offset >= ml_ie_len) {
+			scm_err_rl("incorrect offset value %d", offset);
+			return;
+		}
 
 		/*
 		 * To point to the ie_list offset move past the STA Info
