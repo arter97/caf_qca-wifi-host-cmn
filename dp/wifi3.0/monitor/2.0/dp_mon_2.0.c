@@ -938,8 +938,10 @@ dp_mon_buffers_replenish(struct dp_soc *dp_soc,
 						dp_soc->hal_soc,
 						mon_srng);
 
-		if (!mon_ring_entry)
+		if (!mon_ring_entry) {
+			qdf_frag_free(mon_desc.buf_addr);
 			break;
+		}
 
 		qdf_assert_always((*desc_list)->mon_desc.in_use == 0);
 
