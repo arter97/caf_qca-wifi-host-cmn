@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2012-2018, 2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -28,6 +29,7 @@
 #include <qdf_mem.h>
 #include <qdf_event.h>
 #include <qdf_talloc.h>
+#include <qdf_module.h>
 
 MODULE_AUTHOR("Qualcomm Atheros Inc.");
 MODULE_DESCRIPTION("Qualcomm Atheros Device Framework Module");
@@ -64,6 +66,8 @@ int qdf_mod_init(void)
 
 #ifndef QCA_SINGLE_WIFI_3_0
 module_init(qdf_mod_init);
+#else
+qdf_export_symbol(qdf_mod_init);
 #endif
 /**
  * qdf_mod_exit() - module remove
@@ -89,4 +93,6 @@ void qdf_mod_exit(void)
 
 #ifndef QCA_SINGLE_WIFI_3_0
 module_exit(qdf_mod_exit);
+#else
+qdf_export_symbol(qdf_mod_exit);
 #endif

@@ -89,4 +89,7 @@ void spectral_exit_module(void)
 #ifndef QCA_SINGLE_WIFI_3_0
 module_init(spectral_init_module);
 module_exit(spectral_exit_module);
+#else
+qdf_export_symbol(spectral_init_module);
+qdf_export_symbol(spectral_exit_module);
 #endif
