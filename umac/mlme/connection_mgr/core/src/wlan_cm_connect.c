@@ -2738,6 +2738,7 @@ cm_resume_connect_after_peer_create(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 		       req.is_osen_connection, req.force_rsne_override,
 		       country_code[0],
 		       country_code[1]);
+	cm_cp_stats_cstats_log_connecting_event(cm_ctx->vdev, &req, cm_req);
 connect_req:
 	status = mlme_cm_connect_req(cm_ctx->vdev, &req);
 	if (QDF_IS_STATUS_ERROR(status)) {
