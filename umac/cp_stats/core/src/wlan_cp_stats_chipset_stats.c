@@ -284,4 +284,104 @@ int wlan_cp_stats_cstats_send_buffer_to_user(enum cstats_types type)
 
 	return ret;
 }
+
+static inline enum cstats_pkt_type
+get_cstat_type(enum qdf_proto_type type,
+	       enum qdf_proto_subtype subtype)
+{
+	if (type == QDF_PROTO_TYPE_EAPOL) {
+		if (subtype == QDF_PROTO_EAPOL_M1)
+			return CSTATS_EAPOL_M1;
+		else if (subtype == QDF_PROTO_EAPOL_M2)
+			return CSTATS_EAPOL_M2;
+		else if (subtype == QDF_PROTO_EAPOL_M3)
+			return CSTATS_EAPOL_M3;
+		else if (subtype == QDF_PROTO_EAPOL_M4)
+			return CSTATS_EAPOL_M4;
+	} else if (type == QDF_PROTO_TYPE_DHCP) {
+		if (subtype == QDF_PROTO_DHCP_DISCOVER)
+			return CSTATS_DHCP_DISCOVER;
+		else if (subtype == QDF_PROTO_DHCP_REQUEST)
+			return CSTATS_DHCP_REQ;
+		else if (subtype == QDF_PROTO_DHCP_OFFER)
+			return CSTATS_DHCP_OFFER;
+		else if (subtype == QDF_PROTO_DHCP_ACK)
+			return CSTATS_DHCP_ACK;
+		else if (subtype == QDF_PROTO_DHCP_NACK)
+			return CSTATS_DHCP_NACK;
+		else if (subtype == QDF_PROTO_DHCP_RELEASE)
+			return CSTATS_DHCP_RELEASE;
+		else if (subtype == QDF_PROTO_DHCP_DECLINE)
+			return CSTATS_DHCP_DECLINE;
+		else if (subtype == QDF_PROTO_DHCP_INFORM)
+			return CSTATS_DHCP_INFORM;
+	}
+
+	return CSTATS_PKT_TYPE_INVALID;
+}
+
+static inline enum cstats_dir
+get_cstat_dir(enum qdf_proto_dir dir)
+{
+	switch (dir) {
+	case QDF_TX:
+		return CSTATS_DIR_TX;
+	case QDF_RX:
+		return CSTATS_DIR_RX;
+	default:
+		return CSTATS_DIR_INVAL;
+	}
+}
+
+static inline enum cstats_pkt_status
+get_cstat_pkt_status(enum qdf_dp_tx_rx_status status)
+{
+	switch (status) {
+	case QDF_TX_RX_STATUS_INVALID:
+		return CSTATS_STATUS_INVALID;
+	case QDF_TX_RX_STATUS_OK:
+		return CSTATS_TX_STATUS_OK;
+	case QDF_TX_RX_STATUS_FW_DISCARD:
+		return CSTATS_TX_STATUS_FW_DISCARD;
+	case QDF_TX_RX_STATUS_NO_ACK:
+		return CSTATS_TX_STATUS_NO_ACK;
+	case QDF_TX_RX_STATUS_DROP:
+		return CSTATS_TX_STATUS_DROP;
+	case QDF_TX_RX_STATUS_DOWNLOAD_SUCC:
+		return CSTATS_TX_STATUS_DOWNLOAD_SUCC;
+	case QDF_TX_RX_STATUS_DEFAULT:
+		return CSTATS_TX_STATUS_DEFAULT;
+	default:
+		return CSTATS_STATUS_INVALID;
+	}
+}
+
+void wlan_cp_stats_cstats_pkt_log(uint8_t *sa, uint8_t *da,
+				  enum qdf_proto_type pkt_type,
+				  enum qdf_proto_subtype subtype,
+				  enum qdf_proto_dir dir,
+				  enum qdf_dp_tx_rx_status status,
+				  uint8_t vdev_id,
+				  enum QDF_OPMODE op_mode)
+{
+	struct cstats_pkt_info stat = {0};
+
+	stat.cmn.hdr.evt_id = WLAN_CHIPSET_STATS_DATA_PKT_EVENT_ID;
+	stat.cmn.hdr.length = sizeof(struct cstats_pkt_info) -
+				sizeof(struct cstats_hdr);
+	stat.cmn.opmode = op_mode;
+	stat.cmn.vdev_id = vdev_id;
+	stat.cmn.timestamp_us = qdf_get_time_of_the_day_us();
+	stat.cmn.time_tick = qdf_get_log_timestamp();
+
+	CSTATS_MAC_COPY(stat.src_mac, sa);
+	CSTATS_MAC_COPY(stat.dst_mac, da);
+
+	stat.type = get_cstat_type(pkt_type, subtype);
+	stat.dir = get_cstat_dir(dir);
+	stat.status = get_cstat_pkt_status(status);
+
+	wlan_cstats_host_stats(sizeof(struct cstats_pkt_info), &stat);
+}
+
 #endif /* WLAN_CHIPSET_STATS */

@@ -135,6 +135,26 @@ void wlan_cp_stats_cstats_write_to_buff(enum cstats_types type,
  * Return : 0 on success and errno on failure
  */
 int wlan_cp_stats_cstats_send_buffer_to_user(enum cstats_types type);
+
+/*
+ * wlan_cp_stats_cstats_pkt_log() - Data packets stats
+ * @sa - Source addr
+ * @da - Destination addr
+ * @pkt_type - Packet type
+ * @subtype - Subtype
+ * @dir - Direction
+ * @status - Status
+ * @vdev_id - Vdev iD
+ * @op_mode - opmode
+ *
+ * Return : void
+ */
+void wlan_cp_stats_cstats_pkt_log(uint8_t *sa, uint8_t *da,
+				  enum qdf_proto_type pkt_type,
+				  enum qdf_proto_subtype subtype,
+				  enum qdf_proto_dir dir,
+				  enum qdf_dp_tx_rx_status status,
+				  uint8_t vdev_id, enum QDF_OPMODE op_mode);
 #else
 static inline QDF_STATUS wlan_cp_stats_cstats_init(void)
 {
