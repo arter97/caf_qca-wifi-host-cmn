@@ -2940,7 +2940,8 @@ dp_rx_mon_buffers_alloc(struct dp_soc *soc, uint32_t size)
 	return dp_mon_buffers_replenish(soc, mon_buf_ring,
 					rx_mon_desc_pool,
 					size,
-					&desc_list, &tail, NULL);
+					&desc_list, &tail, NULL,
+					RXDMA_MONITOR_BUF);
 }
 
 QDF_STATUS dp_rx_mon_soc_init_2_0(struct dp_soc *soc)

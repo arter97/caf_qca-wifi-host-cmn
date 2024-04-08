@@ -548,7 +548,7 @@ QDF_STATUS dp_rx_mon_refill_buf_ring_2_0(struct dp_intr *int_ctx)
 		dp_mon_buffers_replenish(soc, rx_mon_buf_ring,
 					 &mon_soc_be->rx_desc_mon,
 					 num_entries, &desc_list, &tail,
-					 NULL);
+					 NULL, RXDMA_MONITOR_BUF);
 	}
 
 	return QDF_STATUS_SUCCESS;
@@ -857,6 +857,47 @@ void dp_mon_pool_frag_unmap_and_free(struct dp_soc *soc,
 	qdf_spin_unlock_bh(&mon_desc_pool->lock);
 }
 
+/**
+ * dp_mon_update_num_req_buf() - update the number of requested buffers
+ *
+ * @mon_soc: monitor soc
+ * @ring_type: Ring type
+ * @num_req_buffers_ref: reference to number of requested buffers
+ * @num_entries_avail: number of entries available
+ *
+ * Return: return true or false
+ */
+static inline bool
+dp_mon_update_num_req_buf(struct dp_mon_soc *mon_soc, int ring_type,
+			  uint32_t *num_req_buffers_ref,
+			  uint32_t num_entries_avail)
+{
+	struct dp_mon_soc_be *mon_soc_be = NULL;
+	uint32_t fill_level = 0;
+	bool status = true;
+
+	switch (ring_type) {
+	case TX_MONITOR_BUF:
+		mon_soc_be = dp_get_be_mon_soc_from_dp_mon_soc(mon_soc);
+		fill_level = mon_soc_be->tx_mon_ring_fill_level;
+
+		if (num_entries_avail > fill_level) {
+			*num_req_buffers_ref = (num_entries_avail - fill_level);
+		} else {
+			*num_req_buffers_ref = 0;
+			status = false;
+		}
+
+		break;
+	case RXDMA_MONITOR_BUF:
+		if (num_entries_avail < *num_req_buffers_ref)
+			*num_req_buffers_ref = num_entries_avail;
+		break;
+	}
+
+	return status;
+}
+
 QDF_STATUS
 dp_mon_buffers_replenish(struct dp_soc *dp_soc,
 			 struct dp_srng *dp_mon_srng,
@@ -864,7 +905,8 @@ dp_mon_buffers_replenish(struct dp_soc *dp_soc,
 			 uint32_t num_req_buffers,
 			 union dp_mon_desc_list_elem_t **desc_list,
 			 union dp_mon_desc_list_elem_t **tail,
-			 uint32_t *replenish_cnt_ref)
+			 uint32_t *replenish_cnt_ref,
+			 int ring_type)
 {
 	uint32_t num_alloc_desc;
 	uint32_t num_entries_avail;
@@ -893,11 +935,23 @@ dp_mon_buffers_replenish(struct dp_soc *dp_soc,
 						   mon_srng, sync_hw_ptr);
 
 	if (!num_entries_avail) {
+		ret = QDF_STATUS_SUCCESS;
 		hal_srng_access_end(dp_soc->hal_soc, mon_srng);
 		goto free_desc;
 	}
-	if (num_entries_avail < num_req_buffers)
-		num_req_buffers = num_entries_avail;
+
+	if (!dp_mon_update_num_req_buf(mon_soc, ring_type, &num_req_buffers,
+				       num_entries_avail)) {
+		/*
+		 * if the previous fill level is smaller compared to current
+		 * fill level then the number of entries available will be
+		 * smaller. We need to release the desc list back to free
+		 * list until it reaches the fill level threshold.
+		 */
+		ret = QDF_STATUS_SUCCESS;
+		hal_srng_access_end(dp_soc->hal_soc, mon_srng);
+		goto free_desc;
+	}
 
 	/*
 	 * if desc_list is NULL, allocate the descs from freelist
@@ -964,6 +1018,9 @@ dp_mon_buffers_replenish(struct dp_soc *dp_soc,
 					   mon_desc.paddr);
 
 		*desc_list = next;
+
+		if (!*desc_list)
+			break;
 	}
 
 	hal_srng_access_end(dp_soc->hal_soc, mon_srng);
@@ -1036,9 +1093,6 @@ QDF_STATUS dp_vdev_set_monitor_mode_buf_rings_tx_2_0(struct dp_pdev *pdev,
 				   soc);
 			return QDF_STATUS_E_FAILURE;
 		}
-		mon_soc_be->tx_mon_ring_fill_level +=
-					(num_of_buffers -
-					mon_soc_be->tx_mon_ring_fill_level);
 	}
 
 	return QDF_STATUS_SUCCESS;
