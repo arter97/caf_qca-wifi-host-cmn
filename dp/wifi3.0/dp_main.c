@@ -11860,7 +11860,45 @@ dp_peer_teardown_wifi3(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
 	return status;
 }
-#endif
+#elif defined(FEATURE_WDS_AST_LEARNING) /* !FEATURE_AST */
+static QDF_STATUS
+dp_peer_teardown_wifi3(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+		       uint8_t *peer_mac)
+{
+	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
+	struct dp_peer *peer;
+	QDF_STATUS status;
+
+	dp_debug("vdev_id %u peer " QDF_MAC_ADDR_FMT, vdev_id,
+		 QDF_MAC_ADDR_REF(peer_mac));
+
+	peer = dp_peer_find_hash_find(soc, peer_mac, 0, vdev_id, DP_MOD_ID_CDP);
+	if (qdf_unlikely(!peer)) {
+		dp_err_rl("vdev_id %u peer " QDF_MAC_ADDR_FMT " not found",
+			  vdev_id, QDF_MAC_ADDR_REF(peer_mac));
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (peer->bss_peer) {
+		dp_debug("peer " QDF_MAC_ADDR_FMT " is self peer",
+			 QDF_MAC_ADDR_REF(peer_mac));
+		dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
+		return QDF_STATUS_SUCCESS;
+	}
+
+	status = dp_wds_hash_cleanup_by_peer_id(soc, vdev_id, peer->peer_id);
+
+	dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
+	return status;
+}
+#else /* !FEATURE_AST && !FEATURE_WDS_AST_LEARNING */
+static inline QDF_STATUS
+dp_peer_teardown_wifi3(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+		       uint8_t *peer_mac)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* FEATURE_AST && FEATURE_WDS_AST_LEARNING */
 
 #ifndef WLAN_SUPPORT_RX_TAG_STATISTICS
 /**
@@ -13086,11 +13124,7 @@ static struct cdp_cmn_ops dp_ops_cmn = {
 	.txrx_pdev_deinit = dp_pdev_deinit_wifi3,
 	.txrx_peer_create = dp_peer_create_wifi3,
 	.txrx_peer_setup = dp_peer_setup_wifi3_wrapper,
-#ifdef FEATURE_AST
 	.txrx_peer_teardown = dp_peer_teardown_wifi3,
-#else
-	.txrx_peer_teardown = NULL,
-#endif
 	.txrx_peer_add_ast = dp_peer_add_ast_wifi3,
 	.txrx_peer_update_ast = dp_peer_update_ast_wifi3,
 	.txrx_peer_get_ast_info_by_soc = dp_peer_get_ast_info_by_soc_wifi3,
