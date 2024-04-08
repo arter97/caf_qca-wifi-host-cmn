@@ -244,10 +244,12 @@ QDF_STATUS dp_soc_umac_reset_init(struct cdp_soc_t *txrx_soc);
 /**
  * dp_soc_umac_reset_deinit() - De-initialize UMAC reset context
  * @txrx_soc: DP soc object
+ * @recovery_type: Mode 0 or Mode 1 recovery
  *
  * Return: QDF status of operation
  */
-QDF_STATUS dp_soc_umac_reset_deinit(struct cdp_soc_t *txrx_soc);
+QDF_STATUS dp_soc_umac_reset_deinit(struct cdp_soc_t *txrx_soc,
+				    uint8_t recovery_type);
 
 /**
  * dp_umac_reset_interrupt_attach() - Register handlers for UMAC reset interrupt
@@ -262,10 +264,12 @@ QDF_STATUS dp_umac_reset_interrupt_attach(struct dp_soc *soc,
 /**
  * dp_umac_reset_interrupt_detach() - Unregister UMAC reset interrupt handlers
  * @soc: DP soc object
+ * @recovery_type: Mode 0 or Mode 1 recovery
  *
  * Return: QDF status of operation
  */
-QDF_STATUS dp_umac_reset_interrupt_detach(struct dp_soc *soc);
+QDF_STATUS dp_umac_reset_interrupt_detach(struct dp_soc *soc,
+					  uint8_t recovery_type);
 
 /**
  * dp_umac_reset_register_rx_action_callback() - Register a callback for a given
@@ -349,7 +353,8 @@ QDF_STATUS dp_soc_umac_reset_init(struct cdp_soc_t *txrx_soc)
 }
 
 static inline
-QDF_STATUS dp_soc_umac_reset_deinit(struct cdp_soc_t *txrx_soc)
+QDF_STATUS dp_soc_umac_reset_deinit(struct cdp_soc_t *txrx_soc,
+				    uint8_t recovery_type)
 {
 	return QDF_STATUS_SUCCESS;
 }

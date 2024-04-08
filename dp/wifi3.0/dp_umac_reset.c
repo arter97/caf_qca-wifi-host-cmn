@@ -793,7 +793,8 @@ QDF_STATUS dp_umac_reset_interrupt_attach(struct dp_soc *soc,
 				umac_reset_irq);
 }
 
-QDF_STATUS dp_umac_reset_interrupt_detach(struct dp_soc *soc)
+QDF_STATUS
+dp_umac_reset_interrupt_detach(struct dp_soc *soc, uint8_t recovery_type)
 {
 	struct dp_global_context *dp_global;
 
@@ -807,20 +808,22 @@ QDF_STATUS dp_umac_reset_interrupt_detach(struct dp_soc *soc)
 		return QDF_STATUS_SUCCESS;
 	}
 
-	dp_global = wlan_objmgr_get_global_ctx();
-	if (dp_global->dev_base_addr_pcie0) {
-		iounmap(dp_global->dev_base_addr_pcie0);
-		dp_global->dev_base_addr_pcie0 = NULL;
-	}
+	if (recovery_type != MLO_RECOVERY_MODE_1) {
+		dp_global = wlan_objmgr_get_global_ctx();
+		if (dp_global->dev_base_addr_pcie0) {
+			iounmap(dp_global->dev_base_addr_pcie0);
+			dp_global->dev_base_addr_pcie0 = NULL;
+		}
 
-	if (dp_global->dev_base_addr_pcie1) {
-		iounmap(dp_global->dev_base_addr_pcie1);
-		dp_global->dev_base_addr_pcie1 = NULL;
-	}
+		if (dp_global->dev_base_addr_pcie1) {
+			iounmap(dp_global->dev_base_addr_pcie1);
+			dp_global->dev_base_addr_pcie1 = NULL;
+		}
 
-	if (dp_global->dev_base_addr_pcie2) {
-		iounmap(dp_global->dev_base_addr_pcie2);
-		dp_global->dev_base_addr_pcie2 = NULL;
+		if (dp_global->dev_base_addr_pcie2) {
+			iounmap(dp_global->dev_base_addr_pcie2);
+			dp_global->dev_base_addr_pcie2 = NULL;
+		}
 	}
 
 	return hif_unregister_umac_reset_handler(soc->hif_handle);
@@ -1093,10 +1096,12 @@ QDF_STATUS dp_umac_reset_notify_action_completion(
 /**
  * dp_soc_umac_reset_deinit() - Deinitialize the umac reset module
  * @txrx_soc: DP soc object
+ * @recovery_type: Mode 0 or Mode 1 recovery
  *
  * Return: QDF status of operation
  */
-QDF_STATUS dp_soc_umac_reset_deinit(struct cdp_soc_t *txrx_soc)
+QDF_STATUS
+dp_soc_umac_reset_deinit(struct cdp_soc_t *txrx_soc, uint8_t recovery_type)
 {
 	struct dp_soc *soc = (struct dp_soc *)txrx_soc;
 	struct dp_soc_umac_reset_ctx *umac_reset_ctx;
@@ -1130,7 +1135,7 @@ QDF_STATUS dp_soc_umac_reset_deinit(struct cdp_soc_t *txrx_soc)
 		nbuf_list = nbuf;
 	}
 
-	dp_umac_reset_interrupt_detach(soc);
+	dp_umac_reset_interrupt_detach(soc, recovery_type);
 
 	umac_reset_ctx = &soc->umac_reset_ctx;
 	qdf_mem_free_consistent(soc->osdev, soc->osdev->dev,

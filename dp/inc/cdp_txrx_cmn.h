@@ -1924,8 +1924,11 @@ static inline void cdp_txrx_umac_reset_init(ol_txrx_soc_handle soc)
 /**
  * cdp_txrx_umac_reset_deinit(): De-initialize UMAC HW reset module
  * @soc: soc handle
+ * @recovery_type: Mode0 or mode 1 recovery
  */
-static inline void cdp_txrx_umac_reset_deinit(ol_txrx_soc_handle soc)
+static inline
+void cdp_txrx_umac_reset_deinit(ol_txrx_soc_handle soc,
+				uint8_t recovery_type)
 {
 	if (!soc || !soc->ops) {
 		dp_cdp_debug("Invalid Instance:");
@@ -1937,7 +1940,7 @@ static inline void cdp_txrx_umac_reset_deinit(ol_txrx_soc_handle soc)
 	    !soc->ops->cmn_drv_ops->txrx_umac_reset_deinit)
 		return;
 
-	soc->ops->cmn_drv_ops->txrx_umac_reset_deinit(soc);
+	soc->ops->cmn_drv_ops->txrx_umac_reset_deinit(soc, recovery_type);
 }
 
 /**
