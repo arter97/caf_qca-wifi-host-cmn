@@ -491,11 +491,14 @@ void osif_populate_connect_response_for_link(struct wlan_objmgr_vdev *vdev,
 					     uint8_t *link_addr,
 					     struct cfg80211_bss *bss)
 {
-	osif_debug("Link_id :%d", link_id);
-	conn_rsp_params->valid_links |=  BIT(link_id);
-	conn_rsp_params->links[link_id].bssid = bss->bssid;
-	conn_rsp_params->links[link_id].bss = bss;
-	conn_rsp_params->links[link_id].addr = link_addr;
+	if (bss) {
+		osif_debug("Link_id :%d", link_id);
+		conn_rsp_params->valid_links |=  BIT(link_id);
+		conn_rsp_params->links[link_id].bssid = bss->bssid;
+		conn_rsp_params->links[link_id].bss = bss;
+		conn_rsp_params->links[link_id].addr = link_addr;
+	}
+
 	mlo_mgr_osif_update_connect_info(vdev, link_id);
 }
 
@@ -546,8 +549,6 @@ osif_populate_partner_links_mlo_params(struct wlan_objmgr_vdev *vdev,
 
 		bss = osif_get_chan_bss_from_kernel(vdev, rsp_partner_info,
 						    rsp);
-		if (!bss)
-			continue;
 
 		osif_populate_connect_response_for_link(vdev, conn_rsp_params,
 							link_id,

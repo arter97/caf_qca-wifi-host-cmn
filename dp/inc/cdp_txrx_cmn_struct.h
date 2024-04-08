@@ -1492,6 +1492,7 @@ enum cdp_pdev_param_type {
  * @rx_pkt_tlv_size: RX packet TLV size
  * @cdp_ast_indication_disable: AST indication disable
  * @cdp_psoc_param_mlo_oper_mode: mlo operation mode
+ * @cdp_monitor_flag: monitor interface flags
  */
 typedef union cdp_config_param_t {
 	/* peer params */
@@ -1609,6 +1610,7 @@ typedef union cdp_config_param_t {
 	uint16_t rx_pkt_tlv_size;
 	bool cdp_ast_indication_disable;
 	uint8_t cdp_psoc_param_mlo_oper_mode;
+	uint8_t cdp_monitor_flag;
 } cdp_config_param_type;
 
 /**
@@ -1782,6 +1784,7 @@ enum cdp_vdev_param_type {
  * @CDP_CFG_GET_MLO_OPER_MODE: Get MLO operation mode
  * @CDP_CFG_PEER_JITTER_STATS: Peer Jitter Stats
  * @CDP_CONFIG_DP_DEBUG_LOG: set/get dp debug logging
+ * @CDP_MONITOR_FLAG: Monitor interface configuration
  */
 enum cdp_psoc_param_type {
 	CDP_ENABLE_RATE_STATS,
@@ -1812,6 +1815,7 @@ enum cdp_psoc_param_type {
 	CDP_CFG_GET_MLO_OPER_MODE,
 	CDP_CFG_PEER_JITTER_STATS,
 	CDP_CONFIG_DP_DEBUG_LOG,
+	CDP_MONITOR_FLAG,
 };
 
 #ifdef CONFIG_AP_PLATFORM

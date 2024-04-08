@@ -826,7 +826,7 @@ static inline bool dp_skip_rx_mon_ring_mask_set(struct dp_soc *soc)
 {
 	return !!(soc->cdp_soc.ol_ops->get_con_mode() !=
 		 QDF_GLOBAL_MONITOR_MODE &&
-		 !wlan_cfg_get_local_pkt_capture(soc->wlan_cfg_ctx));
+		 !dp_mon_mode_local_pkt_capture(soc));
 }
 #else
 static inline bool dp_skip_rx_mon_ring_mask_set(struct dp_soc *soc)

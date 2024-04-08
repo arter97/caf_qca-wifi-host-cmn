@@ -5950,6 +5950,14 @@ enum qca_wlan_vendor_attr_config {
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_COEX_TRAFFIC_SHAPING_MODE = 105,
 
+	/* 8-bit unsigned value to configure BTM support.
+	 *
+	 * The attribute is applicable only for STA interface. Uses enum
+	 * qca_wlan_btm_support values. This configuration is not allowed in
+	 * connected state.
+	 */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_BTM_SUPPORT = 107,
+
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_CONFIG_MAX =
@@ -17620,5 +17628,25 @@ enum qca_wlan_vendor_attr_flow_policy_config {
 	QCA_WLAN_VENDOR_ATTR_FLOW_POLICY_CONFIG_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_FLOW_POLICY_CONFIG_MAX =
 		QCA_WLAN_VENDOR_ATTR_FLOW_POLICY_CONFIG_AFTER_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_btm_support: BTM support configuration
+ *
+ * @QCA_WLAN_BTM_SUPPORT_DEFAULT: Restore default BTM support policy. The driver
+ * follows the BSS Transition bit in the Extended Capabilities element from the
+ * connect request IEs with the default BTM support policy.
+ *
+ * @QCA_WLAN_BTM_SUPPORT_DISABLE: Disable BTM support for the subsequent
+ * (re)association attempts. The driver shall restore the default BTM support
+ * policy during the first disconnection after successful association. When this
+ * configuration is enabled, the driver shall overwrite the BSS Transition bit
+ * as zero in the Extended Capabilities element while sending (Re)Association
+ * Request frames. Also, the driver shall drop the BTM frames from userspace and
+ * the connected AP when this configuration is enabled.
+ */
+enum qca_wlan_btm_support {
+	QCA_WLAN_BTM_SUPPORT_DEFAULT = 0,
+	QCA_WLAN_BTM_SUPPORT_DISABLE = 1,
 };
 #endif

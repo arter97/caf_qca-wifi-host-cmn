@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015,2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -79,11 +79,13 @@ osif_roam_populate_mlo_info_for_link(struct wlan_objmgr_vdev *roamed_vdev,
 				     uint8_t link_id, struct cfg80211_bss *bss,
 				     uint8_t *self_link_addr)
 {
-	osif_debug("Link_id :%d", link_id);
-	roam_info->valid_links |=  BIT(link_id);
-	roam_info->links[link_id].bssid = bss->bssid;
-	roam_info->links[link_id].bss = bss;
-	roam_info->links[link_id].addr = self_link_addr;
+	if (bss) {
+		osif_debug("Link_id :%d", link_id);
+		roam_info->valid_links |=  BIT(link_id);
+		roam_info->links[link_id].bssid = bss->bssid;
+		roam_info->links[link_id].bss = bss;
+		roam_info->links[link_id].addr = self_link_addr;
+	}
 
 	mlo_mgr_osif_update_connect_info(roamed_vdev, link_id);
 }
@@ -131,11 +133,6 @@ osif_populate_partner_links_roam_mlo_params(struct wlan_objmgr_vdev *roamed_vdev
 
 		bss = osif_get_chan_bss_from_kernel(roamed_vdev,
 						    rsp_partner_info, rsp);
-		if (!bss) {
-			osif_debug("kernel bss not found for link_id:%d",
-				   link_id);
-			continue;
-		}
 
 		osif_roam_populate_mlo_info_for_link(roamed_vdev,
 						     roam_info_params,
