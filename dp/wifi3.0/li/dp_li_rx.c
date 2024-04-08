@@ -1468,8 +1468,7 @@ dp_rx_null_q_desc_handle_li(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	if (hal_rx_msdu_end_sa_is_valid_get(soc->hal_soc, rx_tlv_hdr)) {
 		sa_idx = hal_rx_msdu_end_sa_idx_get(soc->hal_soc, rx_tlv_hdr);
 
-		if ((sa_idx < 0) ||
-		    (sa_idx >= wlan_cfg_get_max_ast_idx(soc->wlan_cfg_ctx))) {
+		if (sa_idx >= wlan_cfg_get_max_ast_idx(soc->wlan_cfg_ctx)) {
 			DP_STATS_INC(soc, rx.err.invalid_sa_da_idx, 1);
 			goto drop_nbuf;
 		}

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -120,6 +120,25 @@ util_get_last_scan_time(struct wlan_objmgr_vdev *vdev)
 	else
 		return 0;
 }
+
+#ifdef WLAN_FEATURE_11BE_MLO
+uint32_t util_scan_entry_t2lm_len(struct scan_cache_entry *scan_entry)
+{
+	int i = 0;
+	uint32_t len = 0;
+
+	if (!scan_entry || !scan_entry->ie_list.t2lm[0])
+		return 0;
+
+	for (i = 0; i < WLAN_MAX_T2LM_IE; i++) {
+		if (scan_entry->ie_list.t2lm[i])
+			len += scan_entry->ie_list.t2lm[i][TAG_LEN_POS] +
+				sizeof(struct ie_header);
+	}
+
+	return len;
+}
+#endif
 
 enum wlan_band util_scan_scm_freq_to_band(uint16_t freq)
 {
@@ -3318,6 +3337,15 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 		if (!mbssid_elem)
 			break;
 
+		/*
+		 * The max_bssid_indicator field is mandatory, therefore the
+		 * length of the MBSSID element should atleast be 1.
+		 */
+		if (!mbssid_elem[TAG_LEN_POS]) {
+			scm_debug_rl("MBSSID IE is of length zero");
+			break;
+		}
+
 		mbssid_info.profile_count =
 			(1 << mbssid_elem[MBSSID_INDICATOR_POS]);
 
@@ -3882,7 +3910,8 @@ util_scan_parse_beacon_frame(struct wlan_objmgr_pdev *pdev,
 		mbssid_ie = util_scan_find_ie(WLAN_ELEMID_MULTIPLE_BSSID,
 					      (uint8_t *)&bcn->ie, ie_len);
 		if (mbssid_ie) {
-			if (mbssid_ie[TAG_LEN_POS] < VALID_ELEM_LEAST_LEN) {
+			/* some APs announce the MBSSID ie_len as 1 */
+			if (mbssid_ie[TAG_LEN_POS] < 1) {
 				scm_debug("MBSSID IE length is wrong %d",
 					  mbssid_ie[TAG_LEN_POS]);
 				return status;
