@@ -1290,6 +1290,13 @@ struct hal_hw_txrx_ops {
 	void (*hal_cmem_write)(hal_soc_handle_t hal_soc_hdl, uint32_t offset,
 			       uint32_t value);
 
+	void (*hal_umac_reset_intr)(hal_soc_handle_t hal_soc_hdl,
+				    uint32_t offset, uint32_t value,
+				    void __iomem *addr);
+
+	uint32_t (*hal_umac_reset_read)(hal_soc_handle_t hal_soc_hdl,
+					uint32_t offset, void __iomem *addr);
+
 	void (*hal_rx_msdu_get_reo_destination_indication)(uint8_t *buf,
 							   uint32_t *reo_destination_indication);
 	uint8_t (*hal_tx_get_num_tcl_banks)(void);
@@ -1573,6 +1580,9 @@ struct hal_suspend_write_history {
  * @dev_base_addr: Device base address
  * @dev_base_addr_ce: Device base address for ce - qca5018 target
  * @dev_base_addr_cmem: Device base address for CMEM
+ * @dev_base_addr_pcie0: Device base address for PCIE0
+ * @dev_base_addr_pcie1: Device base address for PCIE1
+ * @dev_base_addr_pcie2: Device base address for PCIE2
  * @dev_base_addr_pmm: Device base address for PMM
  * @srng_list: HAL internal state for all SRNG rings
  * @shadow_rdptr_mem_vaddr: Remote pointer memory for HW/FW updates (virtual)
@@ -1616,6 +1626,9 @@ struct hal_soc {
 	void *dev_base_addr;
 	void *dev_base_addr_ce;
 	void *dev_base_addr_cmem;
+	void *dev_base_addr_pcie0;
+	void *dev_base_addr_pcie1;
+	void *dev_base_addr_pcie2;
 	void *dev_base_addr_pmm;
 	struct hal_srng srng_list[HAL_SRNG_ID_MAX];
 

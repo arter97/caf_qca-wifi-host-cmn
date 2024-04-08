@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -51,11 +51,13 @@ static QDF_STATUS dp_get_umac_reset_intr_ctx(struct dp_soc *soc, int *intr_ctx)
 /**
  * dp_umac_reset_send_setup_cmd(): Send the UMAC reset setup command
  * @soc: dp soc object
+ * @target_type: Chip type
  *
  * Return: QDF_STATUS of operation
  */
 static QDF_STATUS
-dp_umac_reset_send_setup_cmd(struct dp_soc *soc)
+dp_umac_reset_send_setup_cmd(struct dp_soc *soc,
+			     uint32_t target_type)
 {
 	struct dp_soc_umac_reset_ctx *umac_reset_ctx;
 	int msi_vector_count, ret;
@@ -64,14 +66,20 @@ dp_umac_reset_send_setup_cmd(struct dp_soc *soc)
 
 	umac_reset_ctx = &soc->umac_reset_ctx;
 	qdf_mem_zero(&params, sizeof(params));
-	ret = pld_get_user_msi_assignment(soc->osdev->dev, "DP",
-					  &msi_vector_count, &msi_base_data,
-					  &msi_vector_start);
-	if (ret) {
-		params.msi_data = UMAC_RESET_IPC;
+
+	if (target_type == TARGET_TYPE_QCN6432) {
+		params.msi_data = UMAC_RESET_IPC_6432;
 	} else {
-		params.msi_data = (umac_reset_ctx->intr_offset %
-				  msi_vector_count) + msi_base_data;
+		ret = pld_get_user_msi_assignment(soc->osdev->dev, "DP",
+						  &msi_vector_count,
+						  &msi_base_data,
+						  &msi_vector_start);
+		if (ret) {
+			params.msi_data = UMAC_RESET_IPC_5332;
+		} else {
+			params.msi_data = (umac_reset_ctx->intr_offset %
+					   msi_vector_count) + msi_base_data;
+		}
 	}
 
 	params.shmem_addr_low =
@@ -87,6 +95,7 @@ QDF_STATUS dp_soc_umac_reset_init(struct cdp_soc_t *txrx_soc)
 	struct dp_soc *soc = (struct dp_soc *)txrx_soc;
 	struct dp_soc_umac_reset_ctx *umac_reset_ctx;
 	size_t alloc_size;
+	uint32_t target_type;
 	QDF_STATUS status;
 
 	if (!soc) {
@@ -99,6 +108,7 @@ QDF_STATUS dp_soc_umac_reset_init(struct cdp_soc_t *txrx_soc)
 		return QDF_STATUS_E_NOSUPPORT;
 	}
 
+	target_type = hal_get_target_type(soc->hal_soc);
 	umac_reset_ctx = &soc->umac_reset_ctx;
 	qdf_mem_zero(umac_reset_ctx, sizeof(*umac_reset_ctx));
 
@@ -135,7 +145,7 @@ QDF_STATUS dp_soc_umac_reset_init(struct cdp_soc_t *txrx_soc)
 		DP_UMAC_RESET_SHMEM_MAGIC_NUM;
 
 	/* Attach the interrupts */
-	status = dp_umac_reset_interrupt_attach(soc);
+	status = dp_umac_reset_interrupt_attach(soc, target_type);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		dp_umac_reset_err("Interrupt attach failed");
 		qdf_mem_free_consistent(soc->osdev, soc->osdev->dev,
@@ -147,7 +157,7 @@ QDF_STATUS dp_soc_umac_reset_init(struct cdp_soc_t *txrx_soc)
 	}
 
 	/* Send the setup cmd to the target */
-	return dp_umac_reset_send_setup_cmd(soc);
+	return dp_umac_reset_send_setup_cmd(soc, target_type);
 }
 
 /**
@@ -448,6 +458,76 @@ static bool dp_umac_reset_is_soc_ignored(struct dp_soc *soc)
 #endif
 
 /**
+ * dp_umac_reset_intr_reset() - DP wrapper function to reset interrupt
+ * @soc: dp soc object
+ *
+ * In QCN6432, for umac recovery to work, the umac_hw_reset interrupts
+ * are needed to be reset after it is received at host. Currently,
+ * for QCN6432, below lines are being used.
+ *
+ * PCIE0_TYPE0_MSI_CTRL_INT_7_STATUS_OFF --> 0x20000884
+ * PCIE1_TYPE0_MSI_CTRL_INT_7_STATUS_OFF --> 0x18000884
+ * PCIE2_TYPE0_MSI_CTRL_INT_7_STATUS_OFF --> 0x10000884
+ *
+ * Here, the interrupt reset needs to be triggered from host right after
+ * receiving the T2H interrupt.
+ * reset_val: The value used to reset the interrupt
+ * reg_write_status: 0, means the reg write is successful
+ *
+ * Return: None.
+ */
+static inline
+void dp_umac_reset_intr_reset(struct dp_soc *soc)
+{
+	struct hal_soc *hal_soc;
+	hal_soc_handle_t hal_soc_hdl = soc->hal_soc;
+	uint32_t reset_val = 0x00000100;
+	uint32_t reg_write_status = 0;
+
+	hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	switch (soc->pcie_slot) {
+	case 0: /* Interrupt received from PCIE0 */
+		hal_umac_reset_intr(hal_soc_hdl,
+				    PCIE0_TYPE0_MSI_CTRL,
+				    reset_val,
+				    hal_soc->dev_base_addr_pcie0);
+		reg_write_status =
+			hal_umac_reset_read(hal_soc_hdl,
+					    PCIE0_TYPE0_MSI_CTRL,
+					    hal_soc->dev_base_addr_pcie0);
+		break;
+	case 1: /* Interrupt received from PCIE1 */
+		hal_umac_reset_intr(hal_soc_hdl,
+				    PCIE1_TYPE0_MSI_CTRL,
+				    reset_val,
+				    hal_soc->dev_base_addr_pcie1);
+		reg_write_status =
+			hal_umac_reset_read(hal_soc_hdl,
+					    PCIE1_TYPE0_MSI_CTRL,
+					    hal_soc->dev_base_addr_pcie1);
+		break;
+	case 2: /* Interrupt received from PCIE2 */
+		hal_umac_reset_intr(hal_soc_hdl,
+				    PCIE2_TYPE0_MSI_CTRL,
+				    reset_val,
+				    hal_soc->dev_base_addr_pcie2);
+		reg_write_status =
+			hal_umac_reset_read(hal_soc_hdl,
+					    PCIE2_TYPE0_MSI_CTRL,
+					    hal_soc->dev_base_addr_pcie2);
+		break;
+	default:
+		dp_umac_reset_err("Invalid pcie slot: %d", soc->pcie_slot);
+		break;
+	}
+
+	if (reg_write_status)
+		dp_umac_reset_err("Reg write is unsuccessful for pcie slot: %d",
+				  soc->pcie_slot);
+}
+
+/**
  * dp_umac_reset_rx_event_handler() - Main Rx event handler for UMAC reset
  * @dp_ctx: Interrupt context corresponding to UMAC reset
  *
@@ -462,6 +542,7 @@ static int dp_umac_reset_rx_event_handler(void *dp_ctx)
 	QDF_STATUS status = QDF_STATUS_E_INVAL;
 	enum umac_reset_action action = UMAC_RESET_ACTION_NONE;
 	bool target_recovery = false;
+	uint32_t target_type;
 
 	if (!soc) {
 		dp_umac_reset_err("DP SOC is null");
@@ -471,6 +552,10 @@ static int dp_umac_reset_rx_event_handler(void *dp_ctx)
 	umac_reset_ctx = &soc->umac_reset_ctx;
 
 	dp_umac_reset_debug("enter");
+	target_type = hal_get_target_type(soc->hal_soc);
+	if (target_type == TARGET_TYPE_QCN6432)
+		dp_umac_reset_intr_reset(soc);
+
 	rx_event = dp_umac_reset_get_rx_event(umac_reset_ctx);
 
 	if (umac_reset_ctx->pending_action) {
@@ -564,12 +649,39 @@ exit:
 	return qdf_status_to_os_return(status);
 }
 
-QDF_STATUS dp_umac_reset_interrupt_attach(struct dp_soc *soc)
+/**
+ * dp_umac_reset_interrupt_attach() - umac reset irq registration
+ * @soc: DP SOC
+ * @target_type: Chip type
+ *
+ *
+ * IPQ5332 and QCN6432 use IPC interrupts; QCN9224 uses MSI interrupts.
+ * This method takes care of fetching the IRQ and does the registration
+ * from HIF Layer.
+ *
+ * Use IPQ5332 dev to get the virtual address of below physical addr;
+ * and store them in dp_global_context.
+ * PCIEX_TYPE0_MSI_CTRL...:
+ * PCIE0_TYPE0_MSI_CTRL_INT_7_STATUS_OFF --> 0x20000884
+ * PCIE1_TYPE0_MSI_CTRL_INT_7_STATUS_OFF --> 0x18000884
+ * PCIE2_TYPE0_MSI_CTRL_INT_7_STATUS_OFF --> 0x10000884
+ *
+ * During QCN6432 execution, store these virtual addresses in hal context.
+ * This addresses will be used later to reset the interrupts.
+ * The interrupt reset needs to be triggered from host right after
+ * receiving the T2H interrupt.
+ *
+ * Return: None.
+ */
+QDF_STATUS dp_umac_reset_interrupt_attach(struct dp_soc *soc,
+					  uint32_t target_type)
 {
 	struct dp_soc_umac_reset_ctx *umac_reset_ctx;
 	int msi_vector_count, ret;
 	uint32_t msi_base_data, msi_vector_start;
 	uint32_t umac_reset_vector, umac_reset_irq;
+	struct hal_soc *hal_soc;
+	struct dp_global_context *dp_global;
 	QDF_STATUS status;
 
 	if (!soc) {
@@ -589,32 +701,87 @@ QDF_STATUS dp_umac_reset_interrupt_attach(struct dp_soc *soc)
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	ret = pld_get_user_msi_assignment(soc->osdev->dev, "DP",
-					  &msi_vector_count, &msi_base_data,
-					  &msi_vector_start);
-	if (ret) {
-		/* UMAC reset uses IPC interrupt for AHB devices */
+	hal_soc = (struct hal_soc *)soc->hal_soc;
+	dp_global = wlan_objmgr_get_global_ctx();
+
+	if (target_type == TARGET_TYPE_QCA5332) {
+		dp_global->dev_base_addr_pcie0 =
+			qdf_ioremap(PCIE0_TYPE0_MSI_CTRL, PCIE_MEM_SIZE);
+		if (IS_ERR(dp_global->dev_base_addr_pcie0)) {
+			dp_umac_reset_err("ioremap failed for PCIE0");
+			return QDF_STATUS_E_IO;
+		}
+
+		dp_global->dev_base_addr_pcie1 =
+			qdf_ioremap(PCIE1_TYPE0_MSI_CTRL, PCIE_MEM_SIZE);
+		if (IS_ERR(dp_global->dev_base_addr_pcie1)) {
+			dp_umac_reset_err("ioremap failed for PCIE1");
+			return QDF_STATUS_E_IO;
+		}
+
+		dp_global->dev_base_addr_pcie2 =
+			qdf_ioremap(PCIE2_TYPE0_MSI_CTRL, PCIE_MEM_SIZE);
+		if (IS_ERR(dp_global->dev_base_addr_pcie2)) {
+			dp_umac_reset_err("ioremap failed for PCIE2");
+			return QDF_STATUS_E_IO;
+		}
+	}
+
+	if (target_type == TARGET_TYPE_QCN6432) {
+		soc->pcie_slot = pld_get_pci_slot(soc->osdev->dev);
+		if (soc->pcie_slot < 0) {
+			dp_umac_reset_err("Invalid PCI SLOT %d",
+					  soc->pcie_slot);
+			qdf_assert_always(0);
+			return QDF_STATUS_E_FAILURE;
+		}
+
+		hal_soc->dev_base_addr_pcie0 =
+			dp_global->dev_base_addr_pcie0;
+		hal_soc->dev_base_addr_pcie1 =
+			dp_global->dev_base_addr_pcie1;
+		hal_soc->dev_base_addr_pcie2 =
+			dp_global->dev_base_addr_pcie2;
+
 		status = hif_get_umac_reset_irq(soc->hif_handle,
 						&umac_reset_irq);
+
 		if (status) {
 			dp_umac_reset_err("get_umac_reset_irq failed status %d",
 					  status);
 			return QDF_STATUS_E_FAILURE;
 		}
 	} else {
-		if (umac_reset_ctx->intr_offset < 0 ||
-		    umac_reset_ctx->intr_offset >= WLAN_CFG_INT_NUM_CONTEXTS) {
-			dp_umac_reset_err("Invalid interrupt offset: %d",
-					  umac_reset_ctx->intr_offset);
-			return QDF_STATUS_E_FAILURE;
+		ret = pld_get_user_msi_assignment(soc->osdev->dev, "DP",
+						  &msi_vector_count,
+						  &msi_base_data,
+						  &msi_vector_start);
+		if (ret) {
+			/* UMAC reset uses IPC interrupt for AHB devices */
+			status = hif_get_umac_reset_irq(soc->hif_handle,
+							&umac_reset_irq);
+			if (status) {
+				dp_umac_reset_err("umac_reset_irq status %d",
+						  status);
+				return QDF_STATUS_E_FAILURE;
+			}
+		} else {
+			if (umac_reset_ctx->intr_offset < 0 ||
+			    (umac_reset_ctx->intr_offset >=
+			     WLAN_CFG_INT_NUM_CONTEXTS)) {
+				dp_umac_reset_err("Invalid interrupt offset:%d",
+						  umac_reset_ctx->intr_offset);
+				return QDF_STATUS_E_FAILURE;
+			}
+
+			umac_reset_vector = msi_vector_start +
+				(umac_reset_ctx->intr_offset %
+				 msi_vector_count);
+
+			/* Get IRQ number */
+			umac_reset_irq = pld_get_msi_irq(soc->osdev->dev,
+							 umac_reset_vector);
 		}
-
-		umac_reset_vector = msi_vector_start +
-			       (umac_reset_ctx->intr_offset % msi_vector_count);
-
-		/* Get IRQ number */
-		umac_reset_irq = pld_get_msi_irq(soc->osdev->dev,
-						 umac_reset_vector);
 	}
 
 	/* Finally register to this IRQ from HIF layer */
@@ -628,6 +795,8 @@ QDF_STATUS dp_umac_reset_interrupt_attach(struct dp_soc *soc)
 
 QDF_STATUS dp_umac_reset_interrupt_detach(struct dp_soc *soc)
 {
+	struct dp_global_context *dp_global;
+
 	if (!soc) {
 		dp_umac_reset_err("DP SOC is null");
 		return QDF_STATUS_E_NULL_VALUE;
@@ -636,6 +805,22 @@ QDF_STATUS dp_umac_reset_interrupt_detach(struct dp_soc *soc)
 	if (!soc->features.umac_hw_reset_support) {
 		dp_umac_reset_info("Target doesn't support the UMAC HW reset feature");
 		return QDF_STATUS_SUCCESS;
+	}
+
+	dp_global = wlan_objmgr_get_global_ctx();
+	if (dp_global->dev_base_addr_pcie0) {
+		iounmap(dp_global->dev_base_addr_pcie0);
+		dp_global->dev_base_addr_pcie0 = NULL;
+	}
+
+	if (dp_global->dev_base_addr_pcie1) {
+		iounmap(dp_global->dev_base_addr_pcie1);
+		dp_global->dev_base_addr_pcie1 = NULL;
+	}
+
+	if (dp_global->dev_base_addr_pcie2) {
+		iounmap(dp_global->dev_base_addr_pcie2);
+		dp_global->dev_base_addr_pcie2 = NULL;
 	}
 
 	return hif_unregister_umac_reset_handler(soc->hif_handle);

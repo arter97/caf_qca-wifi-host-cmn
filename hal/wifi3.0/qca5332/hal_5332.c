@@ -1480,6 +1480,8 @@ static void hal_hw_txrx_ops_attach_qca5332(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_get_hw_hptp = hal_get_hw_hptp_generic;
 	hal_soc->ops->hal_get_window_address = hal_get_window_address_5332;
 	hal_soc->ops->hal_cmem_write = hal_cmem_write_5332;
+	hal_soc->ops->hal_umac_reset_intr = NULL;
+	hal_soc->ops->hal_umac_reset_read = NULL;
 
 	/* tx */
 	hal_soc->ops->hal_tx_set_dscp_tid_map = hal_tx_set_dscp_tid_map_5332;

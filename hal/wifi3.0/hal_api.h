@@ -3373,6 +3373,48 @@ void hal_update_ring_util(void *hal_soc, hal_ring_handle_t hal_ring_hdl,
 }
 
 /**
+ * hal_umac_reset_read() - To check if the interrupt reset is successful
+ * @hal_soc_hdl: HAL SoC context
+ * @offset: Physical address of PCIE
+ * @addr: IOremapped address
+ *
+ * Return: void
+ */
+static inline
+uint32_t hal_umac_reset_read(hal_soc_handle_t hal_soc_hdl,
+			     uint32_t offset, void __iomem *addr)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if (hal_soc->ops->hal_umac_reset_read)
+		return hal_soc->ops->hal_umac_reset_read(hal_soc_hdl,
+							 offset, addr);
+
+	return 0;
+}
+
+/**
+ * hal_umac_reset_intr() - function to reset the interrupt
+ * @hal_soc_hdl: HAL SOC handle
+ * @offset: Physical address of PCIE
+ * @value: (Reset) value to write
+ * @addr: IOremapped address
+ *
+ * Return: None.
+ */
+static inline
+void hal_umac_reset_intr(hal_soc_handle_t hal_soc_hdl,
+			 uint32_t offset, uint32_t value,
+			 void __iomem *addr)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if (hal_soc->ops->hal_umac_reset_intr)
+		hal_soc->ops->hal_umac_reset_intr(hal_soc_hdl, offset,
+						  value, addr);
+}
+
+/**
  * hal_cmem_write() - function for CMEM buffer writing
  * @hal_soc_hdl: HAL SOC handle
  * @offset: CMEM address

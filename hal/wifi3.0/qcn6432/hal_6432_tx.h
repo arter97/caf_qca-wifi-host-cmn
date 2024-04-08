@@ -33,6 +33,28 @@
 #define HAL_PPE_VP_SEARCH_IDX_REG_MAX 8
 
 /**
+ * hal_tx_ppe2tcl_ring_halt_get_6432() - Get ring halt for the ppe2tcl ring
+ * @hal_soc: HAL SoC context
+ *
+ * Return: Ring halt status.
+ */
+static uint32_t hal_tx_ppe2tcl_ring_halt_get_6432(hal_soc_handle_t hal_soc)
+{
+	uint32_t cmn_reg_addr;
+	uint32_t regval;
+	struct hal_soc *soc = (struct hal_soc *)hal_soc;
+
+	cmn_reg_addr =
+		HWIO_TCL_R0_CONS_RING_CMN_CTRL_REG_ADDR(MAC_TCL_REG_REG_BASE);
+
+	/* Get RING_HALT status */
+	regval = HAL_REG_READ(soc, cmn_reg_addr);
+	return (regval &
+		(1 <<
+		 HWIO_TCL_R0_CONS_RING_CMN_CTRL_REG_PPE2TCL1_RNG_HALT_SHFT));
+}
+
+/**
  * hal_tx_get_num_ppe_vp_search_idx_reg_entries_6432() - get number of PPE VP
  *                                                       search index registers
  * @hal_soc_hdl: HAL SoC handle

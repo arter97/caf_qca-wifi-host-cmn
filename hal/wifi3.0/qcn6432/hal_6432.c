@@ -1335,6 +1335,43 @@ static void hal_rx_dump_pkt_tlvs_6432(hal_soc_handle_t hal_soc_hdl,
 #define HAL_NUM_TCL_BANKS_6432 24
 
 /**
+ * hal_umac_reset_intr_read_6432() - Check if the interrupt reset is successful
+ * @hal_soc_hdl: HAL SOC handle
+ * @offset: Physical address of PCIE
+ * @dev_addr: IOremapped address
+ *
+ * Return: Return the value that is written.
+ */
+static inline
+uint32_t hal_umac_reset_intr_read_6432(hal_soc_handle_t hal_soc_hdl,
+				       uint32_t offset, void __iomem *dev_addr)
+{
+	struct hal_soc *hal = (struct hal_soc *)hal_soc_hdl;
+	uint32_t value = 0;
+
+	pld_reg_read(hal->qdf_dev->dev, offset, &value, dev_addr);
+	return value;
+}
+
+/**
+ * hal_umac_reset_intr_6432() - function to reset the interrupt
+ * @hal_soc_hdl: HAL SOC handle
+ * @offset: Physical address of PCIE
+ * @value: (Reset) value to write
+ * @dev_addr: IOremapped address
+ *
+ * Return: None.
+ */
+static void hal_umac_reset_intr_6432(hal_soc_handle_t hal_soc_hdl,
+				     uint32_t offset, uint32_t value,
+				     void __iomem *dev_addr)
+{
+	struct hal_soc *hal = (struct hal_soc *)hal_soc_hdl;
+
+	pld_reg_write(hal->qdf_dev->dev, offset, value, dev_addr);
+}
+
+/**
  * hal_cmem_write_6432() - function for CMEM buffer writing
  * @hal_soc_hdl: HAL SOC handle
  * @offset: CMEM address
@@ -1618,6 +1655,8 @@ static void hal_hw_txrx_ops_attach_qcn6432(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_get_hw_hptp = hal_get_hw_hptp_generic;
 	hal_soc->ops->hal_get_window_address = hal_get_window_address_6432;
 	hal_soc->ops->hal_cmem_write = hal_cmem_write_6432;
+	hal_soc->ops->hal_umac_reset_intr = hal_umac_reset_intr_6432;
+	hal_soc->ops->hal_umac_reset_read = hal_umac_reset_intr_read_6432;
 
 	/* tx */
 	hal_soc->ops->hal_tx_set_dscp_tid_map = hal_tx_set_dscp_tid_map_6432;
@@ -1906,6 +1945,7 @@ static void hal_hw_txrx_ops_attach_qcn6432(struct hal_soc *hal_soc)
 		hal_tx_ppe2tcl_ring_halt_done_6432;
 	hal_soc->ops->hal_tx_get_num_ppe_vp_search_idx_tbl_entries =
 		hal_tx_get_num_ppe_vp_search_idx_reg_entries_6432;
+	hal_soc->ops->hal_tx_ring_halt_get = hal_tx_ppe2tcl_ring_halt_get_6432;
 };
 
 struct hal_hw_srng_config hw_srng_table_6432[] = {

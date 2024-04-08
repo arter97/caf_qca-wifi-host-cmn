@@ -107,7 +107,8 @@
 
 #define WLAN_MAX_MLO_LINKS_PER_SOC 2
 
-#define UMAC_RESET_IPC 451
+#define UMAC_RESET_IPC_5332 451
+#define UMAC_RESET_IPC_6432 7
 
 struct wlan_cfg_dp_pdev_ctxt;
 

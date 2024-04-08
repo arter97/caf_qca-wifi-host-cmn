@@ -3500,6 +3500,8 @@ struct dp_soc {
 #ifdef FEATURE_DIRECT_LINK
 	qdf_atomic_t direct_link_active;
 #endif
+	/* Placeholder for pcie slot for every radio attached */
+	uint8_t pcie_slot;
 	/* monitor interface flags */
 	uint32_t mon_flags;
 };
