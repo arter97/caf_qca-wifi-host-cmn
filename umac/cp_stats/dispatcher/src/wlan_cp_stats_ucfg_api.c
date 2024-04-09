@@ -68,6 +68,13 @@ int ucfg_cp_stats_twt_get_peer_session_params(
 {
 	return wlan_cp_stats_twt_get_peer_session_params(psoc_obj, params);
 }
+
+#ifdef WLAN_CHIPSET_STATS
+bool ucfg_cp_stats_get_chipset_stats_enable(struct wlan_objmgr_psoc *psoc)
+{
+	return wlan_cp_stats_get_chipset_stats_enable(psoc);
+}
+#endif
 #endif
 
 void ucfg_cp_stats_cstats_register_tx_rx_ops(struct cstats_tx_rx_ops *ops)

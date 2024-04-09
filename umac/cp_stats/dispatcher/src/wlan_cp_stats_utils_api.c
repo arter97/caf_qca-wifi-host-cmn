@@ -23,6 +23,7 @@
  * This file provide public API definitions for other accessing other UMAC
  * components
  */
+#include <cfg_ucfg_api.h>
 #include "../../core/src/wlan_cp_stats_defs.h"
 #include "../../core/src/wlan_cp_stats_obj_mgr_handler.h"
 #include "../../core/src/wlan_cp_stats_comp_handler.h"
@@ -218,6 +219,25 @@ QDF_STATUS wlan_cp_stats_deinit(void)
 	return status;
 }
 
+#ifdef WLAN_CHIPSET_STATS
+static void wlan_cp_stats_init_cfg(struct wlan_objmgr_psoc *psoc,
+				   struct cp_stats_context *csc)
+{
+	if (!psoc) {
+		cp_stats_err("psoc is NULL");
+		return;
+	}
+	csc->host_params.chipset_stats_enable =
+			cfg_get(psoc, CHIPSET_STATS_ENABLE);
+}
+#else
+static inline
+void wlan_cp_stats_init_cfg(struct wlan_objmgr_psoc *psoc,
+			    struct cp_stats_context *csc)
+{
+}
+#endif
+
 /* DA/OL specific call back initialization */
 QDF_STATUS wlan_cp_stats_open(struct wlan_objmgr_psoc *psoc)
 {
@@ -234,6 +254,7 @@ QDF_STATUS wlan_cp_stats_open(struct wlan_objmgr_psoc *psoc)
 		cp_stats_err("cp_stats_context is null!");
 		return QDF_STATUS_E_FAILURE;
 	}
+	wlan_cp_stats_init_cfg(psoc, csc);
 
 	if (csc->cp_stats_open)
 		status = csc->cp_stats_open(psoc);
