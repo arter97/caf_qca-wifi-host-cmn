@@ -56,6 +56,7 @@
 #else
 #define CFG_WLAN_CM_UTF_PARAM
 #endif
+#include <cfg_cp_stats.h>
 #include <cfg_mgmt_txrx.h>
 #include <cfg_ipa.h>
 
@@ -73,7 +74,8 @@
 		CFG_CMN_MLME_ALL \
 		CFG_MGMT_TXRX_ALL \
 		CFG_IPA \
-		CFG_WIFI_RADAR_ALL
+		CFG_WIFI_RADAR_ALL \
+		CFG_CP_STATS_ALL
 
 #endif /* __CFG_CONVERGED_H */
 

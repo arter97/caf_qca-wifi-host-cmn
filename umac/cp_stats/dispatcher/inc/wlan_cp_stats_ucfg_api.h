@@ -88,6 +88,24 @@ int ucfg_cp_stats_twt_get_peer_session_params(
 					struct wlan_objmgr_psoc *psoc_obj,
 					struct twt_session_stats_info *params);
 #endif
+
+#ifdef WLAN_CHIPSET_STATS
+/**
+ * ucfg_cp_stats_get_chipset_stats_enable() - Returns INI CHIPSET_STATS_ENABLE
+ *
+ * @psoc: psoc object
+ *
+ * Return: True if Chipset Stats is enabled
+ *        False if Chipset Stats is not supported or disabled
+ */
+bool ucfg_cp_stats_get_chipset_stats_enable(struct wlan_objmgr_psoc *psoc);
+#else
+static inline
+bool ucfg_cp_stats_get_chipset_stats_enable(struct wlan_objmgr_psoc *psoc)
+{
+	return false;
+}
+#endif
 #endif /* QCA_SUPPORT_CP_STATS */
 
 /**

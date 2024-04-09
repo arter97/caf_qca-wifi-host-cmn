@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -205,6 +205,18 @@ wlan_cp_stats_send_telemetry_cp_req(struct wlan_objmgr_pdev *pdev,
 int wlan_cp_stats_twt_get_peer_session_params(
 					struct wlan_objmgr_psoc *psoc,
 					struct twt_session_stats_info *params);
+#endif
+#ifdef WLAN_CHIPSET_STATS
+/**
+ * wlan_cp_stats_get_chipset_stats_enable() - Returns INI
+ * CHIPSET_STATS_ENABLE
+ *
+ * @psoc: psoc object
+ *
+ * Return: True if Chipset Stats is enabled
+ *	   False if Chipset Stats is not supported or disabled
+ */
+bool wlan_cp_stats_get_chipset_stats_enable(struct wlan_objmgr_psoc *psoc);
 #endif
 
 #endif /* QCA_SUPPORT_CP_STATS */
