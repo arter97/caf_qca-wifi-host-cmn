@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -28,6 +28,7 @@
 
 #ifdef QCA_SUPPORT_CP_STATS
 #include <wlan_cp_stats_utils_api.h>
+#include <wlan_cp_stats_chipset_stats.h>
 #include "../../core/src/wlan_cp_stats_defs.h"
 #include "../../core/src/wlan_cp_stats_cmn_api_i.h"
 
@@ -87,4 +88,13 @@ int ucfg_cp_stats_twt_get_peer_session_params(
 					struct twt_session_stats_info *params);
 #endif
 #endif /* QCA_SUPPORT_CP_STATS */
+
+/**
+ * ucfg_cp_stats_cstats_register_tx_rx_ops() - Register chipset stats ops
+ *
+ * @ops : pointer to tx/rx ops structure
+ *
+ * Return: void
+ */
+void ucfg_cp_stats_cstats_register_tx_rx_ops(struct cstats_tx_rx_ops *ops);
 #endif /* __WLAN_CP_STATS_UCFG_API_H__ */

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -26,6 +26,7 @@
 #include <wlan_cp_stats_utils_api.h>
 #include <wlan_cp_stats_ucfg_api.h>
 #include "../../core/src/wlan_cp_stats_obj_mgr_handler.h"
+#include <wlan_cp_stats_chipset_stats.h>
 
 #ifdef WLAN_SUPPORT_INFRA_CTRL_PATH_STATS
 QDF_STATUS
@@ -68,3 +69,8 @@ int ucfg_cp_stats_twt_get_peer_session_params(
 	return wlan_cp_stats_twt_get_peer_session_params(psoc_obj, params);
 }
 #endif
+
+void ucfg_cp_stats_cstats_register_tx_rx_ops(struct cstats_tx_rx_ops *ops)
+{
+	wlan_cp_stats_cstats_register_tx_rx_ops(ops);
+}
