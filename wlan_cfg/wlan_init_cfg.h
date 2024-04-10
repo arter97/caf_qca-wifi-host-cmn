@@ -84,4 +84,8 @@
 #define MAX_RX_MAC_RINGS 2
 
 #define WBM2SW_TXCOMP_RING4_NUM 4
+
+/* Num of tx desc pools */
+#define WLAN_CFG_NUM_POOL 4
+
 #endif /* __WLAN_INIT_CFG_H */

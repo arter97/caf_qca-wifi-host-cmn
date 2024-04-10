@@ -387,7 +387,11 @@ struct wlan_cfg_dp_soc_ctxt {
 	int num_tx_ext_desc_pool;
 	int num_global_tx_desc;
 	int num_global_spcl_tx_desc;
+#ifdef WLAN_SUPPORT_TX_DESC_PER_POOL
+	int num_tx_desc[WLAN_CFG_NUM_POOL];
+#else
 	int num_tx_desc;
+#endif
 	int num_tx_spl_desc;
 	int min_tx_desc;
 	int num_tx_ext_desc;
@@ -1295,10 +1299,12 @@ int wlan_cfg_get_num_global_spcl_tx_desc(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_c
 /**
  * wlan_cfg_get_num_tx_desc() - Number of Tx Descriptors per pool
  * @wlan_cfg_ctx: Configuration Handle
+ * @pool_num: pool number
  *
  * Return: num_tx_desc
  */
-int wlan_cfg_get_num_tx_desc(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
+int wlan_cfg_get_num_tx_desc(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
+			     int pool_num);
 
 /**
  * wlan_cfg_set_num_tx_spl_desc() - Set the number of special Tx Descriptors
@@ -1326,6 +1332,14 @@ int wlan_cfg_get_num_tx_spl_desc(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
  * Return: num_tx_desc
  */
 int wlan_cfg_get_min_tx_desc(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
+
+/**
+ * wlan_cfg_get_max_tx_desc_pool() - Max number of Tx Descriptors for all pools
+ * @cfg: Configuration Handle
+ *
+ * Return: num_tx_desc
+ */
+int wlan_cfg_get_max_tx_desc_pool(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
  * wlan_cfg_set_num_tx_desc() - Set the number of Tx Descriptors per pool

@@ -7417,8 +7417,7 @@ QDF_STATUS dp_tx_vdev_detach(struct dp_vdev *vdev)
 
 #ifdef QCA_LL_TX_FLOW_CONTROL_V2
 /* Pools will be allocated dynamically */
-static QDF_STATUS dp_tx_alloc_static_pools(struct dp_soc *soc, int num_pool,
-					   int num_desc)
+static QDF_STATUS dp_tx_alloc_static_pools(struct dp_soc *soc, int num_pool)
 {
 	uint8_t i;
 
@@ -7437,8 +7436,7 @@ static QDF_STATUS dp_tx_spcl_alloc_static_pools(struct dp_soc *soc,
 	return QDF_STATUS_SUCCESS;
 }
 
-static QDF_STATUS dp_tx_init_static_pools(struct dp_soc *soc, int num_pool,
-					  uint32_t num_desc)
+static QDF_STATUS dp_tx_init_static_pools(struct dp_soc *soc, int num_pool)
 {
 	return QDF_STATUS_SUCCESS;
 }
@@ -7468,19 +7466,28 @@ static void dp_tx_spcl_delete_static_pools(struct dp_soc *soc, int num_pool)
 {
 }
 #else /* QCA_LL_TX_FLOW_CONTROL_V2! */
-static QDF_STATUS dp_tx_alloc_static_pools(struct dp_soc *soc, int num_pool,
-					   uint32_t num_desc)
+static QDF_STATUS dp_tx_alloc_static_pools(struct dp_soc *soc, int num_pool)
 {
 	uint8_t i, count;
 	struct dp_global_context *dp_global;
+	uint32_t num_desc = 0;
 
 	dp_global = wlan_objmgr_get_global_ctx();
+
+	if (num_pool > WLAN_CFG_NUM_POOL)
+		return QDF_STATUS_E_RESOURCES;
 
 	/* Allocate software Tx descriptor pools */
 
 	if (dp_global->tx_desc_pool_alloc_cnt[soc->arch_id] == 0) {
 		for (i = 0; i < num_pool; i++) {
-			if (dp_tx_desc_pool_alloc(soc, i, num_desc, false)) {
+			num_desc = wlan_cfg_get_num_tx_desc(soc->wlan_cfg_ctx,
+							    i);
+			if (num_desc > WLAN_CFG_NUM_TX_DESC_MAX)
+				return QDF_STATUS_E_RESOURCES;
+
+			if (dp_tx_desc_pool_alloc(soc, i,
+						  num_desc, false)) {
 			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
 				  FL("Tx Desc Pool alloc %d failed %pK"),
 				      i, soc);
@@ -7527,16 +7534,24 @@ fail:
 	return QDF_STATUS_E_NOMEM;
 }
 
-static QDF_STATUS dp_tx_init_static_pools(struct dp_soc *soc, int num_pool,
-					  uint32_t num_desc)
+static QDF_STATUS dp_tx_init_static_pools(struct dp_soc *soc, int num_pool)
 {
 	uint8_t i;
 	struct dp_global_context *dp_global;
+	uint32_t num_desc;
 
 	dp_global = wlan_objmgr_get_global_ctx();
 
+	if (num_pool > WLAN_CFG_NUM_POOL)
+		return QDF_STATUS_E_RESOURCES;
+
 	if (dp_global->tx_desc_pool_init_cnt[soc->arch_id] == 0) {
 		for (i = 0; i < num_pool; i++) {
+			num_desc = wlan_cfg_get_num_tx_desc(soc->wlan_cfg_ctx,
+							    i);
+			if (num_desc > WLAN_CFG_NUM_TX_DESC_MAX)
+				return QDF_STATUS_E_RESOURCES;
+
 			if (dp_tx_desc_pool_init(soc, i, num_desc, false)) {
 				QDF_TRACE(QDF_MODULE_ID_DP,
 					  QDF_TRACE_LEVEL_ERROR,
@@ -7777,7 +7792,6 @@ static QDF_STATUS dp_tx_tso_cmn_desc_pool_init(struct dp_soc *soc,
 QDF_STATUS dp_soc_tx_desc_sw_pools_alloc(struct dp_soc *soc)
 {
 	uint8_t num_pool, num_ext_pool;
-	uint32_t num_desc;
 	uint32_t num_spcl_desc;
 	uint32_t num_ext_desc;
 
@@ -7786,19 +7800,18 @@ QDF_STATUS dp_soc_tx_desc_sw_pools_alloc(struct dp_soc *soc)
 
 	num_pool = wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
 	num_ext_pool = dp_get_ext_tx_desc_pool_num(soc);
-	num_desc = wlan_cfg_get_num_tx_desc(soc->wlan_cfg_ctx);
 	num_spcl_desc = wlan_cfg_get_num_tx_spl_desc(soc->wlan_cfg_ctx);
 	num_ext_desc = wlan_cfg_get_num_tx_ext_desc(soc->wlan_cfg_ctx);
 
-	dp_info("Tx Desc Alloc num_pool: %d descs: %d", num_pool, num_desc);
+	dp_info("Tx Desc Alloc num_pool: %d ", num_pool);
+
 
 	if ((num_pool > MAX_TXDESC_POOLS) ||
 	    (num_ext_pool > MAX_TXDESC_POOLS) ||
-	    (num_desc > WLAN_CFG_NUM_TX_DESC_MAX) ||
 	    (num_spcl_desc > WLAN_CFG_NUM_TX_SPL_DESC_MAX))
 		goto fail1;
 
-	if (dp_tx_alloc_static_pools(soc, num_pool, num_desc))
+	if (dp_tx_alloc_static_pools(soc, num_pool))
 		goto fail1;
 
 	if (dp_tx_spcl_alloc_static_pools(soc, num_pool, num_spcl_desc))
@@ -7828,7 +7841,6 @@ fail1:
 QDF_STATUS dp_soc_tx_desc_sw_pools_init(struct dp_soc *soc)
 {
 	uint8_t num_pool, num_ext_pool;
-	uint32_t num_desc;
 	uint32_t num_spcl_desc;
 	uint32_t num_ext_desc;
 
@@ -7837,11 +7849,10 @@ QDF_STATUS dp_soc_tx_desc_sw_pools_init(struct dp_soc *soc)
 
 	num_pool = wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
 	num_ext_pool = dp_get_ext_tx_desc_pool_num(soc);
-	num_desc = wlan_cfg_get_num_tx_desc(soc->wlan_cfg_ctx);
 	num_spcl_desc = wlan_cfg_get_num_tx_spl_desc(soc->wlan_cfg_ctx);
 	num_ext_desc = wlan_cfg_get_num_tx_ext_desc(soc->wlan_cfg_ctx);
 
-	if (dp_tx_init_static_pools(soc, num_pool, num_desc))
+	if (dp_tx_init_static_pools(soc, num_pool))
 		goto fail1;
 
 	if (dp_tx_spcl_init_static_pools(soc, num_pool, num_spcl_desc))
@@ -7874,26 +7885,22 @@ fail1:
 QDF_STATUS dp_soc_tx_desc_sw_pools_alloc(struct dp_soc *soc)
 {
 	uint8_t num_pool;
-	uint32_t num_desc;
 	uint32_t num_spcl_desc;
 
 	if (wlan_cfg_get_dp_soc_nss_cfg(soc->wlan_cfg_ctx))
 		return QDF_STATUS_SUCCESS;
 
 	num_pool = wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
-	num_desc = wlan_cfg_get_num_tx_desc(soc->wlan_cfg_ctx);
 	num_spcl_desc = wlan_cfg_get_num_tx_spl_desc(soc->wlan_cfg_ctx);
 
 	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO,
-		  "%s Tx Desc Alloc num_pool = %d, descs = %d",
-		  __func__, num_pool, num_desc);
+		  "%s Tx Desc Alloc num_pool = %d,", __func__, num_pool);
 
 	if ((num_pool > MAX_TXDESC_POOLS) ||
-	    (num_desc > WLAN_CFG_NUM_TX_DESC_MAX) ||
 	    (num_spcl_desc > WLAN_CFG_NUM_TX_SPL_DESC_MAX))
 		goto fail1;
 
-	if (dp_tx_alloc_static_pools(soc, num_pool, num_desc))
+	if (dp_tx_alloc_static_pools(soc, num_pool))
 		goto fail1;
 
 	if (dp_tx_spcl_alloc_static_pools(soc, num_pool, num_spcl_desc))
@@ -7909,17 +7916,15 @@ fail1:
 QDF_STATUS dp_soc_tx_desc_sw_pools_init(struct dp_soc *soc)
 {
 	uint8_t num_pool;
-	uint32_t num_desc;
 	uint32_t num_spcl_desc;
 
 	if (wlan_cfg_get_dp_soc_nss_cfg(soc->wlan_cfg_ctx))
 		return QDF_STATUS_SUCCESS;
 
 	num_pool = wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
-	num_desc = wlan_cfg_get_num_tx_desc(soc->wlan_cfg_ctx);
 	num_spcl_desc = wlan_cfg_get_num_tx_spl_desc(soc->wlan_cfg_ctx);
 
-	if (dp_tx_init_static_pools(soc, num_pool, num_desc))
+	if (dp_tx_init_static_pools(soc, num_pool))
 		goto fail;
 
 	if (dp_tx_spcl_init_static_pools(soc, num_pool, num_spcl_desc))

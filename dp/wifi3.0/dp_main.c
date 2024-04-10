@@ -9494,7 +9494,9 @@ static QDF_STATUS dp_get_psoc_param(struct cdp_soc_t *cdp_soc,
 		val->hal_soc_hdl = soc->hal_soc;
 		break;
 	case CDP_CFG_TX_DESC_NUM:
-		val->cdp_tx_desc_num = wlan_cfg_get_num_tx_desc(wlan_cfg_ctx);
+		val->cdp_tx_desc_num =
+			wlan_cfg_get_num_tx_desc(wlan_cfg_ctx,
+						 DP_TXDESC_POOL_ANY);
 		break;
 	case CDP_CFG_TX_EXT_DESC_NUM:
 		val->cdp_tx_ext_desc_num =
@@ -11882,14 +11884,15 @@ static uint32_t dp_tx_flow_ctrl_configure_pdev(struct cdp_soc_t *soc_handle,
 			uint32_t tx_min, tx_max;
 
 			tx_min = wlan_cfg_get_min_tx_desc(soc->wlan_cfg_ctx);
-			tx_max = wlan_cfg_get_num_tx_desc(soc->wlan_cfg_ctx);
+			tx_max = wlan_cfg_get_max_tx_desc_pool(
+							   soc->wlan_cfg_ctx);
 
 			if (!buff) {
 				if ((value >= tx_min) && (value <= tx_max)) {
 					pdev->num_tx_allowed = value;
 				} else {
-					dp_tx_info("%pK: Failed to update num_tx_allowed, Q_min = %d Q_max = %d",
-						   soc, tx_min, tx_max);
+					dp_tx_info("%pK: Failed to update num_tx_allowed,"
+						   "Q_min = %d Q_max = %d",soc, tx_min, tx_max);
 					break;
 				}
 			} else {
@@ -14981,7 +14984,9 @@ static QDF_STATUS dp_pdev_init(struct cdp_soc_t *txrx_soc,
 	qdf_event_create(&pdev->fw_stats_event);
 	qdf_event_create(&pdev->fw_obss_stats_event);
 
-	pdev->num_tx_allowed = wlan_cfg_get_num_tx_desc(soc->wlan_cfg_ctx);
+	pdev->num_tx_allowed = wlan_cfg_get_max_tx_desc_pool(
+							soc->wlan_cfg_ctx);
+
 	pdev->num_tx_spl_allowed =
 		wlan_cfg_get_num_tx_spl_desc(soc->wlan_cfg_ctx);
 	pdev->num_reg_tx_allowed =

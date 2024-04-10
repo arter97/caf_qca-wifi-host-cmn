@@ -935,7 +935,7 @@ static QDF_STATUS dp_soc_tx_cookie_attach_be(struct dp_soc *soc)
 				sizeof(struct dp_hw_cookie_conversion_t));
 			cc_ctx = dp_global->tx_cc_ctx[i];
 			num_entries =
-				wlan_cfg_get_num_tx_desc(soc->wlan_cfg_ctx);
+				wlan_cfg_get_num_tx_desc(soc->wlan_cfg_ctx, i);
 			qdf_status =
 				dp_hw_cookie_conversion_attach(
 						be_soc,
@@ -1039,7 +1039,7 @@ static QDF_STATUS dp_soc_tx_cookie_attach_be(struct dp_soc *soc)
 	QDF_STATUS qdf_status;
 
 	for (i = 0; i < MAX_TXDESC_POOLS; i++) {
-		num_entries = wlan_cfg_get_num_tx_desc(soc->wlan_cfg_ctx);
+		num_entries = wlan_cfg_get_num_tx_desc(soc->wlan_cfg_ctx, i);
 		qdf_status =
 			dp_hw_cookie_conversion_attach(
 					be_soc,

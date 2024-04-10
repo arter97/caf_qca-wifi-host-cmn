@@ -4142,7 +4142,14 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	wlan_cfg_ctx->num_tx_desc_pool = MAX_TXDESC_POOLS;
 	wlan_cfg_ctx->num_tx_ext_desc_pool = cfg_get(psoc,
 						     CFG_DP_TX_EXT_DESC_POOLS);
+#ifdef WLAN_SUPPORT_TX_DESC_PER_POOL
+	wlan_cfg_ctx->num_tx_desc[0] = cfg_get(psoc, CFG_DP_TX_DESC_POOL_0);
+	wlan_cfg_ctx->num_tx_desc[1] = cfg_get(psoc, CFG_DP_TX_DESC_POOL_1);
+	wlan_cfg_ctx->num_tx_desc[2] = cfg_get(psoc, CFG_DP_TX_DESC_POOL_2);
+	wlan_cfg_ctx->num_tx_desc[3] = cfg_get(psoc, CFG_DP_TX_DESC_POOL_3);
+#else
 	wlan_cfg_ctx->num_tx_desc = cfg_get(psoc, CFG_DP_TX_DESC);
+#endif
 	wlan_cfg_ctx->num_tx_spl_desc = cfg_get(psoc, CFG_DP_TX_SPL_DESC);
 	wlan_cfg_ctx->min_tx_desc = WLAN_CFG_NUM_TX_DESC_MIN;
 	wlan_cfg_ctx->num_tx_ext_desc = cfg_get(psoc, CFG_DP_TX_EXT_DESC);
@@ -4360,7 +4367,14 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	wlan_cfg_ctx->num_tx_desc_pool = MAX_TXDESC_POOLS;
 	wlan_cfg_ctx->num_tx_ext_desc_pool = cfg_get(psoc,
 						     CFG_DP_TX_EXT_DESC_POOLS);
+#ifdef WLAN_SUPPORT_TX_DESC_PER_POOL
+	wlan_cfg_ctx->num_tx_desc[0] = cfg_get(psoc, CFG_DP_TX_DESC_POOL_0);
+	wlan_cfg_ctx->num_tx_desc[1] = cfg_get(psoc, CFG_DP_TX_DESC_POOL_1);
+	wlan_cfg_ctx->num_tx_desc[2] = cfg_get(psoc, CFG_DP_TX_DESC_POOL_2);
+	wlan_cfg_ctx->num_tx_desc[3] = cfg_get(psoc, CFG_DP_TX_DESC_POOL_3);
+#else
 	wlan_cfg_ctx->num_tx_desc = cfg_get(psoc, CFG_DP_TX_DESC);
+#endif
 	wlan_cfg_ctx->num_tx_spl_desc = cfg_get(psoc, CFG_DP_TX_SPL_DESC);
 	wlan_cfg_ctx->min_tx_desc = WLAN_CFG_NUM_TX_DESC_MIN;
 	wlan_cfg_ctx->num_tx_ext_desc = cfg_get(psoc, CFG_DP_TX_EXT_DESC);
@@ -5114,11 +5128,22 @@ int wlan_cfg_get_num_global_spcl_tx_desc(struct wlan_cfg_dp_soc_ctxt *cfg)
 	return cfg->num_global_spcl_tx_desc;
 }
 
-int wlan_cfg_get_num_tx_desc(struct wlan_cfg_dp_soc_ctxt *cfg)
+#ifdef WLAN_SUPPORT_TX_DESC_PER_POOL
+int wlan_cfg_get_num_tx_desc(struct wlan_cfg_dp_soc_ctxt *cfg,
+			     int pool_num)
+{
+	if (pool_num != DP_TXDESC_POOL_ANY)
+		return cfg->num_tx_desc[pool_num];
+	else
+		return cfg->num_tx_desc[0];
+}
+#else
+int wlan_cfg_get_num_tx_desc(struct wlan_cfg_dp_soc_ctxt *cfg,
+			     int pool_num)
 {
 	return cfg->num_tx_desc;
 }
-
+#endif
 
 void wlan_cfg_set_num_tx_spl_desc(struct wlan_cfg_dp_soc_ctxt *cfg, int num_desc)
 {
@@ -5130,10 +5155,39 @@ int wlan_cfg_get_num_tx_spl_desc(struct wlan_cfg_dp_soc_ctxt *cfg)
 	return cfg->num_tx_spl_desc;
 }
 
+#ifdef WLAN_SUPPORT_TX_DESC_PER_POOL
+void wlan_cfg_set_num_tx_desc(struct wlan_cfg_dp_soc_ctxt *cfg, int num_desc)
+{
+	int i = 0;
+
+	for (i = 0 ; i < WLAN_CFG_NUM_POOL; i++)
+		cfg->num_tx_desc[i] = num_desc;
+}
+
+int wlan_cfg_get_max_tx_desc_pool(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	int i = 0;
+	uint32_t num_tx_allowed_max;
+
+	num_tx_allowed_max = wlan_cfg_get_min_tx_desc(cfg);
+	for (i = 0; i < WLAN_CFG_NUM_POOL; i++) {
+		if (num_tx_allowed_max < wlan_cfg_get_num_tx_desc(cfg, i))
+			num_tx_allowed_max = wlan_cfg_get_num_tx_desc(cfg, i);
+	}
+
+	return num_tx_allowed_max;
+}
+#else
 void wlan_cfg_set_num_tx_desc(struct wlan_cfg_dp_soc_ctxt *cfg, int num_desc)
 {
 	cfg->num_tx_desc = num_desc;
 }
+
+int wlan_cfg_get_max_tx_desc_pool(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return wlan_cfg_get_num_tx_desc(cfg, DP_TXDESC_POOL_ANY);
+}
+#endif
 
 int wlan_cfg_get_min_tx_desc(struct wlan_cfg_dp_soc_ctxt *cfg)
 {

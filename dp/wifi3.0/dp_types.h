@@ -91,6 +91,7 @@ struct dp_tx_queue;
 #else
 #define MAX_TXDESC_POOLS 4
 #endif
+#define DP_TXDESC_POOL_ANY 0xffff
 
 /* Max no of descriptors to handle special frames like EAPOL */
 #define MAX_TX_SPL_DESC 1024

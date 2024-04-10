@@ -5675,8 +5675,14 @@ void dp_print_soc_cfg_params(struct dp_soc *soc)
 		       soc_cfg_ctx->num_tx_desc_pool);
 	DP_PRINT_STATS("Num tx ext desc pool: %u ",
 		       soc_cfg_ctx->num_tx_ext_desc_pool);
-	DP_PRINT_STATS("Num tx desc: %u ",
+#ifdef WLAN_SUPPORT_TX_DESC_PER_POOL
+	for (i = 0; i < WLAN_CFG_NUM_POOL; i++)
+		DP_PRINT_STATS("Num tx desc pool[%d]: %u ",
+				i, soc_cfg_ctx->num_tx_desc[i]);
+#else
+	DP_PRINT_STATS("Num tx desc pool: %u ",
 		       soc_cfg_ctx->num_tx_desc);
+#endif
 	DP_PRINT_STATS("Num tx ext desc: %u ",
 		       soc_cfg_ctx->num_tx_ext_desc);
 	DP_PRINT_STATS("Htt packet type: %u ",

@@ -804,6 +804,27 @@
 		WLAN_CFG_NUM_TX_DESC, \
 		CFG_VALUE_OR_DEFAULT, "DP Tx Descriptors")
 
+#define CFG_DP_TX_DESC_POOL_0 \
+		CFG_INI_UINT("dp_tx_desc_pool_0", \
+		WLAN_CFG_NUM_TX_DESC_MIN, \
+		WLAN_CFG_NUM_TX_DESC_MAX, \
+		WLAN_CFG_NUM_TX_DESC, \
+		CFG_VALUE_OR_DEFAULT, "DP Tx Descriptors of zero pool")
+
+#define CFG_DP_TX_DESC_POOL_1 \
+		CFG_INI_UINT("dp_tx_desc_pool_1", \
+		WLAN_CFG_NUM_TX_DESC_MIN, \
+		WLAN_CFG_NUM_TX_DESC_MAX, \
+		WLAN_CFG_NUM_TX_DESC, \
+		CFG_VALUE_OR_DEFAULT, "DP Tx Descriptors of 1st pool")
+
+#define CFG_DP_TX_DESC_POOL_2 \
+		CFG_INI_UINT("dp_tx_desc_pool_2", \
+		WLAN_CFG_NUM_TX_DESC_MIN, \
+		WLAN_CFG_NUM_TX_DESC_MAX, \
+		WLAN_CFG_NUM_TX_DESC, \
+		CFG_VALUE_OR_DEFAULT, "DP Tx Descriptors of 2nd pool")
+
 #define CFG_DP_TX_DESC_POOL_3 \
 		CFG_INI_UINT("dp_tx_desc_pool_3", \
 		WLAN_CFG_NUM_TX_DESC_MIN, \
@@ -2206,6 +2227,9 @@
 		CFG(CFG_DP_NSS_REO_DEST_RINGS) \
 		CFG(CFG_DP_NSS_TCL_DATA_RINGS) \
 		CFG(CFG_DP_TX_DESC) \
+		CFG(CFG_DP_TX_DESC_POOL_0) \
+		CFG(CFG_DP_TX_DESC_POOL_1) \
+		CFG(CFG_DP_TX_DESC_POOL_2) \
 		CFG(CFG_DP_TX_DESC_POOL_3) \
 		CFG(CFG_DP_TX_SPL_DESC) \
 		CFG(CFG_DP_TX_EXT_DESC) \
