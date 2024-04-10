@@ -23146,6 +23146,10 @@ static void populate_tlv_service(uint32_t *wmi_service)
 			WMI_SERVICE_MULTIPLE_REORDER_QUEUE_SETUP_SUPPORT;
 	wmi_service[wmi_service_p2p_device_update_mac_addr_support] =
 			WMI_SERVICE_P2P_DEVICE_UPDATE_MAC_ADDR_SUPPORT;
+#ifdef WLAN_CHIPSET_STATS
+	wmi_service[wmi_service_chipset_logging_support] =
+				WMI_SERVICE_CHIPSET_LOGGING_SUPPORT;
+#endif
 }
 
 /**

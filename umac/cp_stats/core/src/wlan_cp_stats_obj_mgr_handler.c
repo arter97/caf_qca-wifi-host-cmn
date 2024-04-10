@@ -32,6 +32,102 @@
 #include "wlan_cp_stats_utils_api.h"
 #include <target_if_cp_stats.h>
 #include <wlan_twt_public_structs.h>
+#include <wlan_cp_stats_chipset_stats.h>
+
+#ifdef WLAN_CHIPSET_STATS
+int wlan_cp_stats_cstats_qmi_event_handler(void *cb_ctx, uint16_t type,
+					   void *event, int event_len)
+{
+	if (type == CSTATS_QMI_EVENT_TYPE)
+		wlan_cstats_fw_stats(event_len, event);
+
+	return 0;
+}
+
+static void
+wlan_cp_stats_cstats_register_qmi_event_handler(struct cp_stats_context *csc)
+{
+	QDF_STATUS status;
+
+	status =
+	    qdf_reg_qmi_indication(csc, wlan_cp_stats_cstats_qmi_event_handler);
+
+	if (QDF_IS_STATUS_ERROR(status))
+		cp_stats_err("cstats QMI evt handler registration failed");
+}
+
+bool wlan_cp_stats_get_chipset_stats_enable(struct wlan_objmgr_psoc *psoc)
+{
+	struct cp_stats_context *csc;
+
+	csc = wlan_objmgr_psoc_get_comp_private_obj(psoc,
+						    WLAN_UMAC_COMP_CP_STATS);
+	if (!csc) {
+		cp_stats_err("CP Stats Context is NULL");
+		return false;
+	}
+
+	return csc->host_params.chipset_stats_enable;
+}
+
+static void wlan_cp_stats_enable_init_cstats(struct wlan_objmgr_pdev *pdev)
+{
+	bool fw_support = false;
+	struct wlan_objmgr_psoc *psoc;
+	struct wlan_lmac_if_cp_stats_tx_ops *tx_ops;
+	struct cp_stats_context *csc;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		cp_stats_err("PSOC is NULL");
+		return;
+	}
+
+	csc = wlan_objmgr_psoc_get_comp_private_obj(psoc,
+						    WLAN_UMAC_COMP_CP_STATS);
+	if (!csc) {
+		cp_stats_err("CP Stats Context is NULL");
+		return;
+	}
+
+	target_if_cp_stats_is_service_cstats_enabled(psoc, &fw_support);
+
+	/* If feature is enabled in INI and FW also supports this feature
+	 * Then send WMI_PDEV_PARAM_ENABLE_CHIPSET_LOGGING to enable
+	 * the functionality in FW
+	 */
+	if (!fw_support || !wlan_cp_stats_get_chipset_stats_enable(psoc)) {
+		cp_stats_debug("Chipset Stats is disabled");
+		return;
+	}
+
+	tx_ops = target_if_cp_stats_get_tx_ops(psoc);
+	if (!tx_ops) {
+		cp_stats_err("could not get tx_ops");
+		return;
+	}
+
+	if (!tx_ops->send_cstats_enable) {
+		cp_stats_err("could not get send_cstats_enable");
+		return;
+	}
+
+	wlan_cp_stats_cstats_register_qmi_event_handler(csc);
+
+	/* Send WMI PDEV command to enable chipset stats with SOC ID
+	 * a valid pdev id for this command will not work. This command
+	 * always expects SOC ID to be sent. Chipset Stats logging enabled
+	 * for all the PDEVs.
+	 */
+	tx_ops->send_cstats_enable(psoc, CSTATS_QMI_EVENT_TYPE,
+				   WMI_PDEV_ID_SOC);
+}
+#else
+static inline
+void wlan_cp_stats_enable_init_cstats(struct wlan_objmgr_pdev *pdev)
+{
+}
+#endif /* WLAN_CHIPSET_STATS */
 
 QDF_STATUS
 wlan_cp_stats_psoc_obj_create_handler(struct wlan_objmgr_psoc *psoc, void *arg)
@@ -181,6 +277,7 @@ wlan_cp_stats_pdev_obj_create_handler(struct wlan_objmgr_pdev *pdev, void *arg)
 						       pdev_cs,
 						       QDF_STATUS_SUCCESS);
 
+	wlan_cp_stats_enable_init_cstats(pdev);
 	cp_stats_debug("pdev cp stats object attached");
 wlan_cp_stats_pdev_obj_create_handler_return:
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -777,19 +874,3 @@ wlan_cp_stats_twt_get_peer_session_params(struct wlan_objmgr_psoc *psoc,
 	return num_twt_session;
 }
 #endif /* WLAN_SUPPORT_TWT */
-
-#ifdef WLAN_CHIPSET_STATS
-bool wlan_cp_stats_get_chipset_stats_enable(struct wlan_objmgr_psoc *psoc)
-{
-	struct cp_stats_context *csc;
-
-	csc = wlan_objmgr_psoc_get_comp_private_obj(psoc,
-						    WLAN_UMAC_COMP_CP_STATS);
-	if (!csc) {
-		cp_stats_err("CP Stats Context is NULL");
-		return false;
-	}
-
-	return csc->host_params.chipset_stats_enable;
-}
-#endif
