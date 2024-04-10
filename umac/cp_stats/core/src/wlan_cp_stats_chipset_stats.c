@@ -87,4 +87,9 @@ void wlan_cp_stats_cstats_deinit(void)
 		}
 	}
 }
+
+void wlan_cp_stats_cstats_register_tx_rx_ops(struct cstats_tx_rx_ops *ops)
+{
+	cstats.ops.cstats_send_data_to_usr = ops->cstats_send_data_to_usr;
+}
 #endif /* WLAN_CHIPSET_STATS */
