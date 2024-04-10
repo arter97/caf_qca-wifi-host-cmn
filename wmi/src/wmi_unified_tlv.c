@@ -23864,6 +23864,10 @@ static void populate_tlv_service(uint32_t *wmi_service)
 #endif
 	wmi_service[wmi_service_therm_throt_pout_reduction] =
 			WMI_SERVICE_THERM_THROT_POUT_REDUCTION;
+#ifdef WLAN_CHIPSET_STATS
+	wmi_service[wmi_service_chipset_logging_support] =
+				WMI_SERVICE_CHIPSET_LOGGING_SUPPORT;
+#endif
 }
 
 /**

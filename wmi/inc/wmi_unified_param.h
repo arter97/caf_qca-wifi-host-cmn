@@ -6716,6 +6716,9 @@ typedef enum {
 	wmi_service_nan_pairing_peer_create,
 #endif
 	wmi_service_therm_throt_pout_reduction,
+#ifdef WLAN_CHIPSET_STATS
+	wmi_service_chipset_logging_support,
+#endif
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF

@@ -217,7 +217,20 @@ int wlan_cp_stats_twt_get_peer_session_params(
  *	   False if Chipset Stats is not supported or disabled
  */
 bool wlan_cp_stats_get_chipset_stats_enable(struct wlan_objmgr_psoc *psoc);
-#endif
+
+/**
+ * wlan_cp_stats_cstats_qmi_event_handler() - chipset stats QMI event handler
+ *
+ * @cb_ctx: callback context
+ * @type : Type of stats
+ * @event: event data
+ * @event_len: event data length
+ *
+ * Return : 0 on success and -ve value on error
+ */
+int wlan_cp_stats_cstats_qmi_event_handler(void *cb_ctx, uint16_t type,
+					   void *event, int event_len);
+#endif /* WLAN_CHIPSET_STATS */
 
 #endif /* QCA_SUPPORT_CP_STATS */
 #endif /* __WLAN_CP_STATS_OBJ_MGR_HANDLER_H__ */
