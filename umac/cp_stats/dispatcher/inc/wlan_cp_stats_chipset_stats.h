@@ -95,6 +95,15 @@ QDF_STATUS wlan_cp_stats_cstats_init(void);
  * Return: void
  */
 void wlan_cp_stats_cstats_deinit(void);
+
+/**
+ * wlan_cp_stats_cstats_register_tx_rx_ops() - Register chipset stats ops
+ *
+ * @ops : tx rx ops
+ *
+ * Return: void
+ */
+void wlan_cp_stats_cstats_register_tx_rx_ops(struct cstats_tx_rx_ops *ops);
 #else
 static inline QDF_STATUS wlan_cp_stats_cstats_init(void)
 {
@@ -102,6 +111,11 @@ static inline QDF_STATUS wlan_cp_stats_cstats_init(void)
 }
 
 static inline void wlan_cp_stats_cstats_deinit(void)
+{
+}
+
+static inline void
+wlan_cp_stats_cstats_register_tx_rx_ops(struct cstats_tx_rx_ops *ops)
 {
 }
 #endif /* WLAN_CHIPSET_STATS */
