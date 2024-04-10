@@ -489,8 +489,6 @@ hal_txmon_parse_peer_entry(void *tx_tlv,
 				peer_entry->mac_addr_b_47_16;
 	TXMON_HAL_USER(tx_ppdu_info, user_id, sw_peer_id) =
 				peer_entry->sw_peer_id;
-	TXMON_HAL_USER(tx_ppdu_info, user_id, sw_peer_id) =
-				peer_entry->key_type;
 }
 
 /**

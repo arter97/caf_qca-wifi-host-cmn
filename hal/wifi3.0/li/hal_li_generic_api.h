@@ -1700,9 +1700,6 @@ hal_rx_status_get_tlv_info_generic_li(void *rx_tlv_hdr, void *ppduinfo,
 		ppdu_info->rx_user_status[user_id].sw_peer_id =
 			HAL_RX_GET_SW_PEER_ID(rx_mpdu_start);
 
-		ppdu_info->rx_user_status[user_id].enc_type =
-			HAL_RX_GET_ENCRYPT_TYPE(rx_mpdu_start);
-
 		hal_update_rx_ctrl_frame_stats(ppdu_info, user_id);
 
 		if (ppdu_info->sw_frame_group_id ==
