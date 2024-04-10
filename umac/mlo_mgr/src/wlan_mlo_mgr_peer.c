@@ -1555,6 +1555,8 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 				ml_dev->mld_id,
 				QDF_MAC_ADDR_REF(link_peer->mldaddr),
 				WLAN_UMAC_MLO_ASSOC_MAX_SUPPORTED_LINKS);
+			if (!ml_dev->ap_ctx->mlo_link_reject)
+				return QDF_STATUS_E_RESOURCES;
 		}
 
 		status = mlo_dev_get_link_vdevs(vdev, ml_dev,
@@ -1590,13 +1592,15 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 			if (vdev_link && (vdev_link != vdev) &&
 			    (wlan_vdev_get_peer_count(vdev_link) >
 			     wlan_vdev_get_max_peer_count(vdev_link))) {
-				mlo_dev_release_link_vdevs(link_vdevs);
 				mlo_err("MLD ID %d ML Peer " QDF_MAC_ADDR_FMT " Max peer count reached on link vdev %d",
 					ml_dev->mld_id,
 					QDF_MAC_ADDR_REF
 						(link_peer->mldaddr),
 					wlan_vdev_get_id(vdev_link));
-				return QDF_STATUS_E_RESOURCES;
+				if (!ml_dev->ap_ctx->mlo_link_reject) {
+					mlo_dev_release_link_vdevs(link_vdevs);
+					return QDF_STATUS_E_RESOURCES;
+				}
 			}
 		}
 	}
