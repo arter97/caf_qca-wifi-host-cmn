@@ -475,6 +475,7 @@ static QDF_STATUS wlan_mlo_parse_t2lm_request_action_frame(
 		enum wlan_t2lm_category category)
 {
 	uint8_t *t2lm_action_frm;
+	uint32_t ie_len_parsed;
 
 	t2lm->category = category;
 
@@ -490,13 +491,20 @@ static QDF_STATUS wlan_mlo_parse_t2lm_request_action_frame(
 	 *-------------------------------------------
 	 */
 
+	ie_len_parsed = sizeof(*action_frm) + sizeof(uint8_t);
+
+	if (frame_len < ie_len_parsed) {
+		t2lm_err("Action frame length %d too short", frame_len);
+		return QDF_STATUS_E_FAILURE;
+	}
+
 	t2lm_action_frm = (uint8_t *)action_frm + sizeof(*action_frm);
 
 	t2lm->dialog_token = *t2lm_action_frm;
 
 	return wlan_mlo_parse_t2lm_ie(t2lm,
 				      t2lm_action_frm + sizeof(uint8_t),
-				      frame_len);
+				      frame_len - ie_len_parsed);
 }
 
 /**
@@ -517,6 +525,7 @@ static QDF_STATUS wlan_mlo_parse_t2lm_response_action_frame(
 {
 	uint8_t *t2lm_action_frm;
 	QDF_STATUS ret_val = QDF_STATUS_SUCCESS;
+	uint32_t ie_len_parsed;
 
 	t2lm->category = WLAN_T2LM_CATEGORY_RESPONSE;
 	/*
@@ -531,6 +540,14 @@ static QDF_STATUS wlan_mlo_parse_t2lm_response_action_frame(
 	 *----------------------------------------------------
 	 */
 
+	ie_len_parsed = sizeof(*action_frm) + sizeof(uint8_t) +
+			sizeof(uint16_t);
+
+	if (frame_len < ie_len_parsed) {
+		t2lm_err("Action frame length %d too short", frame_len);
+		return QDF_STATUS_E_FAILURE;
+	}
+
 	t2lm_action_frm = (uint8_t *)action_frm + sizeof(*action_frm);
 
 	t2lm->dialog_token = *t2lm_action_frm;
@@ -541,7 +558,7 @@ static QDF_STATUS wlan_mlo_parse_t2lm_response_action_frame(
 			WLAN_T2LM_RESP_TYPE_PREFERRED_TID_TO_LINK_MAPPING) {
 		t2lm_action_frm += sizeof(uint8_t) + sizeof(uint16_t);
 		ret_val = wlan_mlo_parse_t2lm_ie(t2lm, t2lm_action_frm,
-						 frame_len);
+						 frame_len - ie_len_parsed);
 	}
 
 	return ret_val;
