@@ -114,7 +114,9 @@
 #define MAX_UTF_EVENT_LENGTH	2048
 #define MAX_WMI_UTF_LEN	252
 #define MAX_WMI_QVIT_LEN	252
-#define THERMAL_LEVELS	4
+#define DEFAULT_THERMAL_LEVELS	4
+#define ENHANCED_THERMAL_LEVELS	5
+#define MAX_THERMAL_LEVELS 5
 #define WMI_HOST_BCN_FLT_MAX_SUPPORTED_IES	256
 #define WMI_HOST_BCN_FLT_MAX_ELEMS_IE_LIST \
 			(WMI_HOST_BCN_FLT_MAX_SUPPORTED_IES/32)
@@ -3376,12 +3378,14 @@ struct set_ps_mode_params {
  * @tmphwm: Temperature high water mark
  * @dcoffpercent: dc off percentage
  * @priority: priority
+ * @pout_reduction_db: Pout reduction (0.25 dB scaling factor)
  */
 typedef struct {
 	uint32_t tmplwm;
 	uint32_t tmphwm;
 	uint32_t dcoffpercent;
 	uint32_t priority;
+	uint32_t pout_reduction_db;
 } tt_level_config;
 
 /**
@@ -3403,7 +3407,7 @@ struct thermal_mitigation_params {
 	uint8_t num_thermal_conf;
 	uint8_t client_id;
 	uint8_t priority;
-	tt_level_config levelconf[THERMAL_LEVELS];
+	tt_level_config levelconf[MAX_THERMAL_LEVELS];
 };
 
 /**
@@ -6711,6 +6715,7 @@ typedef enum {
 #ifdef WLAN_FEATURE_NAN
 	wmi_service_nan_pairing_peer_create,
 #endif
+	wmi_service_therm_throt_pout_reduction,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF

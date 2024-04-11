@@ -9611,6 +9611,8 @@ static QDF_STATUS send_thermal_mitigation_param_cmd_tlv(
 	tt_conf->dc = param->dc;
 	tt_conf->dc_per_event = param->dc_per_event;
 	tt_conf->therm_throt_levels = param->num_thermal_conf;
+	wmi_debug("Total thermal throttle levels: %u",
+		  tt_conf->therm_throt_levels);
 	wmi_fill_client_id_priority(tt_conf, param);
 	buf_ptr = (uint8_t *) ++tt_conf;
 	/* init TLV params */
@@ -9627,6 +9629,12 @@ static QDF_STATUS send_thermal_mitigation_param_cmd_tlv(
 		lvl_conf->temp_hwm = param->levelconf[i].tmphwm;
 		lvl_conf->dc_off_percent = param->levelconf[i].dcoffpercent;
 		lvl_conf->prio = param->levelconf[i].priority;
+		lvl_conf->pout_reduction_25db =
+				param->levelconf[i].pout_reduction_db;
+		wmi_debug("Thermal level config:\nLevel %u Low threshold %u High threshold %u\n Duty cycle off %u Priority %u Pout reduction %u",
+			  i, lvl_conf->temp_lwm, lvl_conf->temp_hwm,
+			  lvl_conf->dc_off_percent, lvl_conf->prio,
+			  lvl_conf->pout_reduction_25db);
 		lvl_conf++;
 	}
 
@@ -16329,7 +16337,7 @@ extract_thermal_level_stats_tlv(wmi_unified_t wmi_handle,
 
 	tt_level_info = param_buf->therm_throt_level_stats_info;
 
-	if (idx < THERMAL_LEVELS) {
+	if (idx < MAX_THERMAL_LEVELS) {
 		*levelcount = tt_level_info[idx].level_count;
 		*dccount = tt_level_info[idx].dc_count;
 		return QDF_STATUS_SUCCESS;
@@ -23850,11 +23858,12 @@ static void populate_tlv_service(uint32_t *wmi_service)
 			WMI_SERVICE_MLO_MODE2_RECOVERY_SUPPORTED;
 	wmi_service[wmi_service_dynamic_wsi_remap_support] =
 			WMI_SERVICE_DYNAMIC_WSI_REMAP_SUPPORT;
-
 #ifdef WLAN_FEATURE_NAN
 	wmi_service[wmi_service_nan_pairing_peer_create] =
 				WMI_SERVICE_NAN_PAIRING_PEER_CREATE_BY_HOST;
 #endif
+	wmi_service[wmi_service_therm_throt_pout_reduction] =
+			WMI_SERVICE_THERM_THROT_POUT_REDUCTION;
 }
 
 /**
