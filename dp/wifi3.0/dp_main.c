@@ -4804,7 +4804,7 @@ static QDF_STATUS dp_vdev_attach_wifi3(struct cdp_soc_t *cdp_soc,
 	} else if (dp_soc_get_con_mode(soc) == QDF_GLOBAL_MISSION_MODE &&
 		   soc->intr_mode == DP_INTR_MSI &&
 		   wlan_op_mode_monitor == vdev->opmode &&
-		   !wlan_cfg_get_local_pkt_capture(soc->wlan_cfg_ctx)) {
+		   !dp_mon_mode_local_pkt_capture(soc)) {
 		/* Timer to reap status ring in mission mode */
 		dp_monitor_vdev_timer_start(soc);
 	}
@@ -9162,6 +9162,10 @@ dp_set_psoc_param(struct cdp_soc_t *cdp_soc,
 		break;
 	case CDP_CONFIG_DP_DEBUG_LOG:
 		soc->dp_debug_log_en = val.cdp_psoc_param_dp_debug_log;
+		break;
+	case CDP_MONITOR_FLAG:
+		soc->mon_flags = val.cdp_monitor_flag;
+		dp_info("monior interface flags: 0x%x", soc->mon_flags);
 		break;
 	default:
 		break;

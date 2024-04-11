@@ -641,6 +641,13 @@ static int32_t cm_calculate_pcl_score(struct wlan_objmgr_psoc *psoc,
 	if (!policy_mgr_is_pcl_weightage_required(psoc))
 		return 0;
 
+	/*
+	 * Always choose the best candidate for non-DBS,
+	 * irrespective of the band.
+	 */
+	if (!policy_mgr_is_hw_dbs_capable(psoc))
+		return 0;
+
 	if (pcl_chan_weight) {
 		temp_pcl_chan_weight =
 			(CM_MAX_WEIGHT_OF_PCL_CHANNELS - pcl_chan_weight);
@@ -2510,7 +2517,7 @@ static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 		score = cm_calculate_etp_score(psoc, entry, phy_config,
 					       bss_mlo_type, ml_flag);
 		entry->bss_score = score;
-		if (bss_mlo_type == MLMR)
+		if (bss_mlo_type == MLMR || bss_mlo_type == MLSR)
 			cm_sort_vendor_algo_mlo_bss_entry(psoc, entry,
 							  phy_config, scan_list,
 							  bss_mlo_type);
