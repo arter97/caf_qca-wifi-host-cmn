@@ -4504,7 +4504,14 @@ struct dp_vdev {
 	/* accumulative number of packets delay has accumulated */
 	qdf_atomic_t ul_pkts_accum;
 #endif /* WLAN_FEATURE_TSF_UPLINK_DELAY */
-
+#ifdef WLAN_FEATURE_UL_JITTER
+	/* accumulative delay jitter for every TX completion */
+	qdf_atomic_t ul_jitter_accum;
+	/* accumulative number of packets jitter has accumulated */
+	qdf_atomic_t ul_jitter_pkts_accum;
+	/* previous delay to calculate jitter */
+	qdf_atomic_t prev_delay;
+#endif /* WLAN_FEATURE_UL_JITTER */
 	/* vdev_stats_id - ID used for stats collection by FW from HW*/
 	uint8_t vdev_stats_id;
 #ifdef HW_TX_DELAY_STATS_ENABLE

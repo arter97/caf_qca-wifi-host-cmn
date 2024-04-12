@@ -10442,6 +10442,78 @@ dp_fw_stats_process(struct dp_vdev *vdev,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef WLAN_FEATURE_UL_JITTER
+#define VENDOR_ATTR_NSS_PKT_NSS_VALUE 0
+#define VENDOR_ATTR_NSS_PKT_TX_PACKET_COUNT 1
+#define VENDOR_ATTR_NSS_PKT_RX_PACKET_COUNT 2
+#define SS_COUNT_JITTER 2
+/**
+ * dp_txrx_nss_request - function to get txrx nss stats
+ * @soc_handle: soc handle
+ * @vdev_id: virtual device ID
+ * @req: stats request
+ *
+ * Return: QDF_STATUS
+ */
+static
+QDF_STATUS dp_txrx_nss_request(struct cdp_soc_t *soc_handle,
+			       uint8_t vdev_id,
+			       int **req)
+{
+	struct dp_pdev *pdev = dp_get_pdev_from_soc_pdev_id_wifi3(
+						(struct dp_soc *)soc_handle, 0);
+
+	for (int i = 0; i < SS_COUNT_JITTER; i++) {
+		req[i][VENDOR_ATTR_NSS_PKT_NSS_VALUE] = i + 1;
+		req[i][VENDOR_ATTR_NSS_PKT_TX_PACKET_COUNT] =
+							  pdev->stats.tx.nss[i];
+		req[i][VENDOR_ATTR_NSS_PKT_RX_PACKET_COUNT] =
+							  pdev->stats.rx.nss[i];
+	}
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * dp_get_avg_ul_jitter- function to get average UL delay jitter
+ * @soc_handle: soc handle
+ * @vdev_id: virtual device ID
+ * @val: jitter value
+ *
+ * Return: QDF_STATUS
+ */
+static
+QDF_STATUS dp_get_avg_ul_jitter(struct cdp_soc_t *soc_handle,
+				uint8_t vdev_id, uint32_t *val)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_handle);
+	struct dp_vdev *vdev;
+	uint32_t jitter_accum;
+	uint32_t pkts_accum;
+
+	vdev = dp_vdev_get_ref_by_id(soc, vdev_id, DP_MOD_ID_CDP);
+	if (!vdev) {
+		dp_err_rl("vdev %d does not exist", vdev_id);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	/* Average uplink jitter based on current accumulated values */
+	jitter_accum = qdf_atomic_read(&vdev->ul_jitter_accum) * 1000;
+	pkts_accum = qdf_atomic_read(&vdev->ul_jitter_pkts_accum) * 1000;
+
+	*val = jitter_accum / pkts_accum; /* jitter is in microsecs */
+	dp_debug("uplink_jitter %u delay_accum %u pkts_accum %u", *val,
+		 jitter_accum, pkts_accum);
+
+	/* Reset accumulated values to 0 */
+	qdf_atomic_set(&vdev->ul_jitter_accum, 0);
+	qdf_atomic_set(&vdev->ul_jitter_pkts_accum, 0);
+
+	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 /**
  * dp_txrx_stats_request - function to map to firmware and host stats
  * @soc_handle: soc handle
@@ -12833,6 +12905,10 @@ static struct cdp_ctrl_ops dp_ops_ctrl = {
 #ifdef WLAN_FEATURE_TSF_UPLINK_DELAY
 	.txrx_set_tsf_ul_delay_report = dp_set_tsf_ul_delay_report,
 	.txrx_get_uplink_delay = dp_get_uplink_delay,
+#endif
+#ifdef WLAN_FEATURE_UL_JITTER
+	.txrx_nss_request = dp_txrx_nss_request,
+	.avg_ul_delay_jitter_stats = dp_get_avg_ul_jitter,
 #endif
 #ifdef QCA_UNDECODED_METADATA_SUPPORT
 	.txrx_set_pdev_phyrx_error_mask = dp_set_pdev_phyrx_error_mask,

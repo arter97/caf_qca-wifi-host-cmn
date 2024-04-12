@@ -6172,6 +6172,7 @@ void dp_set_delta_tsf(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
 }
 #endif
+
 #ifdef WLAN_FEATURE_TSF_UPLINK_DELAY
 QDF_STATUS dp_set_tsf_ul_delay_report(struct cdp_soc_t *soc_hdl,
 				      uint8_t vdev_id, bool enable)
@@ -6229,12 +6230,18 @@ QDF_STATUS dp_get_uplink_delay(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 }
 
 static void dp_tx_update_uplink_delay(struct dp_soc *soc, struct dp_vdev *vdev,
-				      struct hal_tx_completion_status *ts)
+				      struct hal_tx_completion_status *ts,
+				      uint32_t *curr_ul_delay)
 {
 	uint32_t ul_delay;
 
 	if (qdf_unlikely(!vdev)) {
 		dp_info_rl("vdev is null or delete in progress");
+		return;
+	}
+
+	if (qdf_unlikely(!curr_ul_delay)) {
+		dp_info_rl("delay pointer null");
 		return;
 	}
 
@@ -6250,14 +6257,52 @@ static void dp_tx_update_uplink_delay(struct dp_soc *soc, struct dp_vdev *vdev,
 
 	qdf_atomic_add(ul_delay, &vdev->ul_delay_accum);
 	qdf_atomic_inc(&vdev->ul_pkts_accum);
+	*curr_ul_delay = ul_delay;
+
 }
 #else /* !WLAN_FEATURE_TSF_UPLINK_DELAY */
 static inline
 void dp_tx_update_uplink_delay(struct dp_soc *soc, struct dp_vdev *vdev,
-			       struct hal_tx_completion_status *ts)
+			       struct hal_tx_completion_status *ts,
+			       uint32_t *ul_delay)
 {
 }
 #endif /* WLAN_FEATURE_TSF_UPLINK_DELAY */
+
+#ifdef WLAN_FEATURE_UL_JITTER
+static void dp_tx_update_uplink_jitter(struct dp_soc *soc,
+				       struct dp_vdev *vdev,
+				       struct hal_tx_completion_status *ts,
+				       uint32_t curr_ul_delay)
+{
+	uint32_t ul_jitter;
+	uint32_t prev_delay = qdf_atomic_read(&vdev->prev_delay);
+
+	if (qdf_unlikely(!vdev)) {
+		dp_info_rl("vdev is null or delete in progress");
+		return;
+	}
+
+	if (!qdf_atomic_read(&vdev->ul_delay_report))
+		return;
+
+	if (curr_ul_delay > prev_delay)
+		ul_jitter = curr_ul_delay - prev_delay;
+	else
+		ul_jitter = prev_delay - curr_ul_delay;
+
+	qdf_atomic_add(ul_jitter, &vdev->ul_jitter_accum);
+	qdf_atomic_inc(&vdev->ul_jitter_pkts_accum);
+	qdf_atomic_set(&vdev->prev_delay, curr_ul_delay);
+}
+#else
+static inline
+void dp_tx_update_uplink_jitter(struct dp_soc *soc, struct dp_vdev *vdev,
+				struct hal_tx_completion_status *ts,
+				uint32_t ul_delay)
+{
+}
+#endif
 
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
 /**
@@ -6323,6 +6368,7 @@ void dp_tx_comp_process_tx_status(struct dp_soc *soc,
 	enum qdf_dp_tx_rx_status dp_status;
 	uint8_t link_id = 0;
 	enum QDF_OPMODE op_mode = QDF_MAX_NO_OF_MODE;
+	uint32_t ul_delay;
 
 	if (!nbuf) {
 		dp_info_rl("invalid tx descriptor. nbuf NULL");
@@ -6391,7 +6437,8 @@ void dp_tx_comp_process_tx_status(struct dp_soc *soc,
 
 	op_mode = vdev->qdf_opmode;
 	dp_tx_update_connectivity_stats(soc, vdev, tx_desc, ts->status);
-	dp_tx_update_uplink_delay(soc, vdev, ts);
+	dp_tx_update_uplink_delay(soc, vdev, ts, &ul_delay);
+	dp_tx_update_uplink_jitter(soc, vdev, ts, ul_delay);
 
 	/* check tx complete notification */
 	if (qdf_nbuf_tx_notify_comp_get(nbuf))

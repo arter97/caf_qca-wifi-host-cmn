@@ -12875,6 +12875,16 @@ enum qca_vendor_wlan_sta_guard_interval {
  * rate value of RX packets. Every index of this nested attribute corresponds
  * to MCS index, for example Index 0 represents MCS0 RX rate. This can be
  * queried in connected state.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_GET_STA_INFO_UPLINK_DELAY_JITTER: u32, used in STA mode
+ * only. This represents the average of the delta between successive uplink
+ * frames congestion duration in MAC queue in unit of ms. This can be queried
+ * either in connected state or disconnected state.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_GET_STA_INFO_NSS_PKT_COUNT: Array of nested attributes,
+ * used in STA mode. This represents the number of MSDU packets
+ * (unicast/multicast/broadcast) transmitted/received with each NSS value. See
+ * enum qca_wlan_vendor_attr_nss_pkt.
  */
 enum qca_wlan_vendor_attr_get_sta_info {
 	QCA_WLAN_VENDOR_ATTR_GET_STA_INFO_INVALID = 0,
@@ -12927,6 +12937,8 @@ enum qca_wlan_vendor_attr_get_sta_info {
 	QCA_WLAN_VENDOR_ATTR_GET_STA_INFO_UPLINK_DELAY = 50,
 	QCA_WLAN_VENDOR_ATTR_GET_STA_INFO_PER_MCS_TX_PACKETS = 51,
 	QCA_WLAN_VENDOR_ATTR_GET_STA_INFO_PER_MCS_RX_PACKETS = 52,
+	QCA_WLAN_VENDOR_ATTR_GET_STA_INFO_UPLINK_DELAY_JITTER = 54,
+	QCA_WLAN_VENDOR_ATTR_GET_STA_INFO_NSS_PKT_COUNT = 55,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_GET_STA_INFO_AFTER_LAST,
@@ -18534,5 +18546,31 @@ enum qca_wlan_vendor_attr_async_stats_policy {
 	QCA_WLAN_VENDOR_ATTR_ASYNC_STATS_POLICY_LAST,
 	QCA_WLAN_VENDOR_ATTR_ASYNC_STATS_POLICY_MAX =
 	QCA_WLAN_VENDOR_ATTR_ASYNC_STATS_POLICY_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_nss_pkt - Attributes used by
+ * %QCA_WLAN_VENDOR_ATTR_GET_STA_INFO_NSS_PKT_COUNT.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_NSS_PKT_NSS_VALUE: u8 attribute. This
+ * represents the number of spatial streams.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_NSS_PKT_TX_PACKET_COUNT: u64 attribute. This
+ * represents the number of MSDU packets transmitted with the number of spatial
+ * streams specified in %QCA_WLAN_VENDOR_ATTR_NSS_PKT_NSS_VALUE.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_NSS_PKT_RX_PACKET_COUNT: u64 attribute. This
+ * represents the number of MSDU packets received with the number of spatial
+ * streams specified in %QCA_WLAN_VENDOR_ATTR_NSS_PKT_NSS_VALUE.
+ */
+enum qca_wlan_vendor_attr_nss_pkt {
+	QCA_WLAN_VENDOR_ATTR_NSS_PKT_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_NSS_PKT_NSS_VALUE = 1,
+	QCA_WLAN_VENDOR_ATTR_NSS_PKT_TX_PACKET_COUNT = 2,
+	QCA_WLAN_VENDOR_ATTR_NSS_PKT_RX_PACKET_COUNT = 3,
+
+	QCA_WLAN_VENDOR_ATTR_NSS_PKT_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_NSS_PKT_MAX =
+	QCA_WLAN_VENDOR_ATTR_NSS_PKT_AFTER_LAST - 1,
 };
 #endif
