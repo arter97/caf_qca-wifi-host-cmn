@@ -2491,7 +2491,7 @@ static void wmi_11be_attach_mlo_setup_tlv(wmi_unified_t wmi_handle)
 
 #endif /*WLAN_MLO_MULTI_CHIP*/
 
-#if defined(WLAN_FEATURE_MULTI_LINK_SAP) && defined(WLAN_FEATURE_11BE_MLO)
+#if defined(WLAN_FEATURE_11BE_MLO)
 /**
  * extract_mgmt_rx_ml_cu_params_tlv() - extract MGMT Critical Update params
  * from MGMT_RX_EVENT_ID or WMI_MLO_LINK_INFO_SYNC_EVENTID

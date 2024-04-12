@@ -5482,7 +5482,7 @@ typedef enum {
 #ifdef WLAN_MGMT_RX_REO_SUPPORT
 	wmi_mgmt_rx_fw_consumed_eventid,
 #endif
-#if defined(WLAN_FEATURE_MULTI_LINK_SAP) && defined(WLAN_FEATURE_11BE_MLO)
+#if defined(WLAN_FEATURE_11BE_MLO)
 	wmi_mlo_link_info_sync_event_id,
 #endif
 #ifdef WLAN_FEATURE_11BE_MLO
