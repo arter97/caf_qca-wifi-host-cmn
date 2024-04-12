@@ -235,6 +235,20 @@ struct mlo_state_params {
 #endif
 
 /**
+ * enum mlo_link_rej_cfg - Link rejection config
+ * @MLO_LINK_REJ_DISABLED: Disabled
+ * @MLO_LINK_REJ_RANGE: Range config enabled
+ * @MLO_LINK_REJ_THROUGHPUT: Throughput config enabled
+ * @MLO_LINK_REJ_CFG_MAX: Max limit for config
+ */
+enum mlo_link_rej_cfg {
+	MLO_LINK_REJ_DISABLED,
+	MLO_LINK_REJ_RANGE,
+	MLO_LINK_REJ_THROUGHPUT,
+	MLO_LINK_REJ_CFG_MAX,
+};
+
+/**
  * enum wlan_mlo_link_switch_notify_reason - Enum for link switch notifier
  *                                           callback trigger reason.
  * @MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_PRE_SER: Prior to start of
@@ -948,7 +962,7 @@ struct wlan_mlo_sta {
  * @mlo_vdev_quiet_bmap: Bitmap of vdevs for which quiet ie needs to enabled
  * @mlo_vdev_up_bmap: Bitmap of vdevs for which sync complete can be dispatched
  * @assoc_list: MLO sta assoc pending list entry (for FT-over-DS)
- * @mlo_link_reject: Flag to indicate if MLO link rejection is enabled
+ * @mlo_link_reject: Enum to indicate if MLO link rejection configuration
  */
 struct wlan_mlo_ap {
 	uint8_t num_ml_vdevs;
@@ -961,7 +975,7 @@ struct wlan_mlo_ap {
 	qdf_bitmap(mlo_vdev_quiet_bmap, WLAN_UMAC_MLO_MAX_VDEVS);
 	qdf_bitmap(mlo_vdev_up_bmap, WLAN_UMAC_MLO_MAX_VDEVS);
 	struct wlan_mlo_sta_assoc_pending_list assoc_list;
-	bool mlo_link_reject;
+	enum mlo_link_rej_cfg mlo_link_reject;
 };
 
 /**
