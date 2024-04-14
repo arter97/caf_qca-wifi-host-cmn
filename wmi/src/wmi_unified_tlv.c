@@ -23861,6 +23861,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 #ifdef WLAN_FEATURE_NAN
 	wmi_service[wmi_service_nan_pairing_peer_create] =
 				WMI_SERVICE_NAN_PAIRING_PEER_CREATE_BY_HOST;
+	wmi_service[wmi_service_sta_sap_ndp_concurrency_support] =
+				WMI_SERVICE_STA_SAP_NDP_CONCURRENCY_SUPPORT;
 #endif
 	wmi_service[wmi_service_therm_throt_pout_reduction] =
 			WMI_SERVICE_THERM_THROT_POUT_REDUCTION;

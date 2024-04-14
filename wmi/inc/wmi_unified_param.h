@@ -6714,6 +6714,7 @@ typedef enum {
 	wmi_service_dynamic_wsi_remap_support,
 #ifdef WLAN_FEATURE_NAN
 	wmi_service_nan_pairing_peer_create,
+	wmi_service_sta_sap_ndp_concurrency_support,
 #endif
 	wmi_service_therm_throt_pout_reduction,
 #ifdef WLAN_CHIPSET_STATS
