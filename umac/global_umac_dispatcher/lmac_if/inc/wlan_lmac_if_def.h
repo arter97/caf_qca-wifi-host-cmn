@@ -1767,6 +1767,7 @@ struct wlan_lmac_if_mlo_rx_ops {
  * @resume_req: function pointer to send TWT resume dialog command to FW
  * @nudge_req: function pointer to send TWT nudge dialog command to FW
  * @set_ac_param: function pointer to send TWT access category param to FW
+ * @unavailability_mode: Function pointer to send TWT unavailability mode to FW
  * @register_events: function pointer to register events from FW
  * @deregister_events: function pointer to deregister events from FW
  */
@@ -1787,6 +1788,9 @@ struct wlan_lmac_if_twt_tx_ops {
 				 struct twt_nudge_dialog_cmd_param *params);
 	QDF_STATUS (*set_ac_param)(struct wlan_objmgr_psoc *psoc,
 				   enum twt_traffic_ac twt_ac, uint8_t mac_id);
+	QDF_STATUS (*unavailability_mode)(struct wlan_objmgr_psoc *psoc,
+					  struct wlan_objmgr_vdev *vdev,
+					  bool unavailability_mode);
 	QDF_STATUS (*register_events)(struct wlan_objmgr_psoc *psoc);
 	QDF_STATUS (*deregister_events)(struct wlan_objmgr_psoc *psoc);
 };

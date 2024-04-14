@@ -6333,6 +6333,7 @@ typedef enum {
 		   VDEV_PARAM_DCS),
 	VDEV_PARAM(vdev_param_hwcts2self_ofdma,
 		   VDEV_PARAM_HWCTS2SELF_OFDMA),
+	VDEV_PARAM(vdev_param_twt_unavail_mode, VDEV_PARAM_TWT_UNAVAIL_MODE),
 	vdev_param_max,
 } wmi_conv_vdev_param_id;
 
