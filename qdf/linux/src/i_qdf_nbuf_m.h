@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -236,8 +236,10 @@ struct qdf_nbuf_cb {
 						} tcp;
 						struct {
 							uint32_t mpdu_seq:12,
-								 reserved:20;
-							uint32_t reserved1;
+								 rx_flow_id:8,
+								 track_flow:1,
+								 reserved:11;
+							uint32_t rx_flow_mdata;
 						} ext;
 					} dp_ext;
 					union {
@@ -578,6 +580,15 @@ QDF_COMPILE_TIME_ASSERT(qdf_nbuf_cb_size,
 #define QDF_NBUF_CB_RX_MPDU_SEQ_NUM(skb) \
 	(((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.dev.priv_cb_m. \
 	 dp_ext.ext.mpdu_seq)
+#define QDF_NBUF_CB_EXT_RX_FLOW_ID(skb) \
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.dev.priv_cb_m. \
+	 dp_ext.ext.rx_flow_id)
+#define QDF_NBUF_CB_RX_TRACK_FLOW(skb) \
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.dev.priv_cb_m. \
+	 dp_ext.ext.track_flow)
+#define QDF_NBUF_CB_RX_FLOW_METADATA(skb) \
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.dev.priv_cb_m. \
+	 dp_ext.ext.rx_flow_mdata)
 
 #define QDF_NBUF_CB_RX_LRO_CTX(skb) \
 	(((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.dev.priv_cb_m.lro_ctx)
