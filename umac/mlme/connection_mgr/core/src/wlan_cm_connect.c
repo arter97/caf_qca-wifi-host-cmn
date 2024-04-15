@@ -3026,7 +3026,7 @@ static void cm_update_link_channel_info(struct wlan_objmgr_vdev *vdev,
 	uint8_t link_id;
 	struct wlan_objmgr_pdev *pdev;
 	struct scan_cache_entry *cache_entry;
-	struct wlan_channel channel;
+	struct wlan_channel channel = {0};
 
 	pdev = wlan_vdev_get_pdev(vdev);
 	cache_entry = wlan_scan_get_scan_entry_by_mac_freq(pdev, mac_addr,
