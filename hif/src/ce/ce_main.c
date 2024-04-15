@@ -3865,7 +3865,9 @@ static void hif_post_recv_buffers_failure(struct HIF_CE_pipe_info *pipe_info,
 	    (ce_srng_based(scn) &&
 	     bufs_needed_tmp == CE_state->dest_ring->nentries - 2)) {
 		qdf_atomic_inc(&scn->active_oom_work_cnt);
-		qdf_sched_work(scn->qdf_dev, &CE_state->oom_allocation_work);
+		if (!qdf_sched_work(scn->qdf_dev,
+				    &CE_state->oom_allocation_work))
+			qdf_atomic_dec(&scn->active_oom_work_cnt);
 	}
 
 }

@@ -1437,11 +1437,12 @@ QDF_STATUS hif_try_complete_tasks(struct hif_softc *scn)
 			 * There is chance of OOM thread getting scheduled
 			 * continuously or execution get delayed during low
 			 * memory state. So avoid panic and prevent suspend
-			 * only if OOM thread is unable to complete pending
+			 * if OOM thread is unable to complete pending
 			 * work.
 			 */
-			if ((!tasklet) && (!grp_tasklet) && (!work) && oom_work)
-				hif_err("OOM thread is still pending cannot complete the work");
+			if (oom_work)
+				hif_err("OOM thread is still pending %d tasklets %d grp tasklets %d work %d",
+					oom_work, tasklet, grp_tasklet, work);
 			else
 				QDF_DEBUG_PANIC("Complete tasks takes more than %u ms: tasklets %d grp tasklets %d work %d oom_work %d",
 						HIF_TASK_DRAIN_WAIT_CNT * 10,
