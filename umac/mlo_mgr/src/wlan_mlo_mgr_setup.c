@@ -1233,7 +1233,7 @@ uint8_t mlo_get_wsi_stats_info_support(struct wlan_objmgr_psoc *psoc)
 
 	ml_grp_id = wlan_mlo_get_psoc_group_id(psoc);
 	if ((ml_grp_id ==  WLAN_MLO_GROUP_INVALID) ||
-	    (ml_grp_id < 0)) {
+	    (ml_grp_id < 0) || (ml_grp_id > mlo_ctx->total_grp)) {
 		mlo_err("Invalid ML Grp ID %d", ml_grp_id);
 		return 0;
 	}

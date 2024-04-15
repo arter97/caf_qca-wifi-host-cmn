@@ -1759,7 +1759,7 @@ struct hal_srng *hal_ring_handle_to_hal_srng(hal_ring_handle_t hal_ring)
  */
 #define REO_QUEUE_REF_NON_ML_TABLE_SIZE 278528
 /* Calculated based on 512 MLO peers */
-#define REO_QUEUE_REF_ML_TABLE_SIZE 69632
+#define REO_QUEUE_REF_ML_TABLE_SIZE 69768
 #define HAL_ML_PEER_ID_START 0x2000
 #define HAL_PEER_ID_IS_MLO(peer_id) ((peer_id) & HAL_ML_PEER_ID_START)
 
