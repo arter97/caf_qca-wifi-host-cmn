@@ -10474,7 +10474,10 @@ static QDF_STATUS dp_soc_notify_asserted_soc(struct cdp_soc_t *psoc)
 		return QDF_STATUS_E_INVAL;
 	}
 
-	return dp_umac_reset_notify_asserted_soc(soc);
+	if (soc->arch_ops.mlo_umac_reset_notify_asserted_soc)
+		return soc->arch_ops.mlo_umac_reset_notify_asserted_soc(soc);
+
+	return QDF_STATUS_E_INVAL;
 }
 
 /**

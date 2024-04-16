@@ -2379,6 +2379,7 @@ enum dp_context_type {
  * @txrx_get_mon_context_size:
  * @dp_srng_test_and_update_nf_params: Check if the srng is in near full state
  *				and set the near-full params.
+ * @mlo_umac_reset_notify_asserted_soc: Notify asserted soc info to other socs
  * @dp_tx_mcast_handler:
  * @dp_rx_mcast_handler:
  * @dp_tx_is_mcast_primary:
@@ -2574,6 +2575,8 @@ struct dp_arch_ops {
 	int (*dp_srng_test_and_update_nf_params)(struct dp_soc *soc,
 						 struct dp_srng *dp_srng,
 						 int *max_reap_limit);
+
+	QDF_STATUS (*mlo_umac_reset_notify_asserted_soc)(struct dp_soc *soc);
 
 	/* MLO ops */
 #ifdef WLAN_FEATURE_11BE_MLO

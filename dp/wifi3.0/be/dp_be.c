@@ -3672,6 +3672,10 @@ dp_initialize_arch_ops_be_mlo(struct dp_arch_ops *arch_ops)
 	arch_ops->mlo_peer_find_hash_remove = dp_mlo_peer_find_hash_remove_be;
 	arch_ops->mlo_peer_find_hash_find = dp_mlo_peer_find_hash_find_be;
 	arch_ops->get_hw_link_id = dp_get_hw_link_id_be;
+#ifdef DP_UMAC_HW_RESET_SUPPORT
+	arch_ops->mlo_umac_reset_notify_asserted_soc =
+					dp_umac_reset_notify_asserted_soc;
+#endif
 }
 
 static struct cdp_cmn_mlo_ops dp_cmn_mlo_ops = {
