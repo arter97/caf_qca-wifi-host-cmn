@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -2099,7 +2099,7 @@ static int target_if_direct_buf_rx_rsp_event_handler(ol_scn_t scn,
 						uint8_t *data_buf,
 						uint32_t data_len)
 {
-	int ret = 0;
+	int ret = QDF_STATUS_E_FAILURE;
 	uint8_t i = 0;
 	QDF_STATUS status;
 	uint32_t cookie = 0;
@@ -2182,8 +2182,7 @@ static int target_if_direct_buf_rx_rsp_event_handler(ol_scn_t scn,
 				  dbr_rsp.num_meta_data_entry,
 				  dbr_rsp.num_cv_meta_data_entry,
 				  dbr_rsp.num_buf_release_entry);
-		wlan_objmgr_pdev_release_ref(pdev, dbr_mod_id);
-		return QDF_STATUS_E_FAILURE;
+		goto out;
 	}
 	if (dbr_rsp.num_cv_meta_data_entry > dbr_rsp.num_buf_release_entry) {
 		direct_buf_rx_err("More than expected number of cv metadata");
@@ -2191,8 +2190,7 @@ static int target_if_direct_buf_rx_rsp_event_handler(ol_scn_t scn,
 				  dbr_rsp.num_meta_data_entry,
 				  dbr_rsp.num_cv_meta_data_entry,
 				  dbr_rsp.num_buf_release_entry);
-		wlan_objmgr_pdev_release_ref(pdev, dbr_mod_id);
-		return QDF_STATUS_E_FAILURE;
+		goto out;
 	}
 	if (dbr_rsp.num_cqi_meta_data_entry > dbr_rsp.num_buf_release_entry) {
 		direct_buf_rx_err("More than expected number of cqi metadata");
@@ -2200,8 +2198,7 @@ static int target_if_direct_buf_rx_rsp_event_handler(ol_scn_t scn,
 				  dbr_rsp.num_meta_data_entry,
 				  dbr_rsp.num_cqi_meta_data_entry,
 				  dbr_rsp.num_buf_release_entry);
-		wlan_objmgr_pdev_release_ref(pdev, dbr_mod_id);
-		return QDF_STATUS_E_FAILURE;
+		goto out;
 	}
 	QDF_ASSERT(!(dbr_rsp.num_cv_meta_data_entry &&
 		     dbr_rsp.num_meta_data_entry));
@@ -2211,18 +2208,14 @@ static int target_if_direct_buf_rx_rsp_event_handler(ol_scn_t scn,
 			&dbr_rsp.dbr_entries[i]) != QDF_STATUS_SUCCESS) {
 			direct_buf_rx_err("Unable to extract DBR buf entry %d",
 					  i+1);
-			qdf_mem_free(dbr_rsp.dbr_entries);
-			wlan_objmgr_pdev_release_ref(pdev, dbr_mod_id);
-			return QDF_STATUS_E_FAILURE;
+			goto out;
 		}
 		status = target_if_get_dbr_data(pdev, mod_param, &dbr_rsp,
 						&dbr_data, i, &cookie);
 
 		if (QDF_IS_STATUS_ERROR(status)) {
 			direct_buf_rx_err("DBR data get failed");
-			qdf_mem_free(dbr_rsp.dbr_entries);
-			wlan_objmgr_pdev_release_ref(pdev, dbr_mod_id);
-			return QDF_STATUS_E_FAILURE;
+			goto out;
 		}
 
 		dbr_data.meta_data_valid = false;
@@ -2264,13 +2257,13 @@ static int target_if_direct_buf_rx_rsp_event_handler(ol_scn_t scn,
 
 			if (QDF_IS_STATUS_ERROR(status)) {
 				direct_buf_rx_err("Ring replenish failed");
-				qdf_mem_free(dbr_rsp.dbr_entries);
-				wlan_objmgr_pdev_release_ref(pdev, dbr_mod_id);
-				return QDF_STATUS_E_FAILURE;
+				goto out;
 			}
 		}
 	}
+	ret = QDF_STATUS_SUCCESS;
 
+out:
 	qdf_mem_free(dbr_rsp.dbr_entries);
 	wlan_objmgr_pdev_release_ref(pdev, dbr_mod_id);
 
