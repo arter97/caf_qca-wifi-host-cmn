@@ -1003,6 +1003,18 @@ struct peer_set_params {
 };
 
 /**
+ * struct peer_active_traffic_map_params - traffic map indication parameters
+ * @vdev_id: VDEV ID
+ * @peer_macaddr: peer mac address
+ * @active_traffic_map: active traffic bitmap on this peer
+ */
+struct peer_active_traffic_map_params {
+	uint32_t vdev_id;
+	struct qdf_mac_addr peer_macaddr;
+	uint32_t active_traffic_map;
+};
+
+/**
  * struct peer_create_params - peer create cmd parameter
  * @peer_addr: peer mac addr
  * @peer_type: peer type

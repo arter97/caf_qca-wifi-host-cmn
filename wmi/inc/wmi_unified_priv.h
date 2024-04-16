@@ -3554,6 +3554,8 @@ QDF_STATUS (*extract_vendor_pdev_event)(wmi_unified_t wmi_handle,
 					uint8_t *evt_buf,
 					void *param, void *subtype);
 #endif /* WLAN_VENDOR_EXTN */
+QDF_STATUS (*send_active_traffic_map_cmd)(wmi_unified_t wmi_handle,
+					  struct peer_active_traffic_map_params *param);
 };
 
 /* Forward declaration for psoc*/

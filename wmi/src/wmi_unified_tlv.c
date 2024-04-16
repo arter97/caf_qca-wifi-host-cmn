@@ -22037,6 +22037,47 @@ static QDF_STATUS extract_tgtr2p_table_event_tlv(wmi_unified_t wmi_handle,
 	return QDF_STATUS_SUCCESS;
 }
 
+static QDF_STATUS
+send_active_traffic_map_cmd_tlv(wmi_unified_t wmi_handle,
+				struct peer_active_traffic_map_params *param)
+{
+	wmi_peer_active_traffic_map_cmd_fixed_param *cmd;
+	int32_t len = sizeof(*cmd);
+	wmi_buf_t buf;
+	int ret;
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf)
+		return QDF_STATUS_E_NOMEM;
+
+	cmd = (wmi_peer_active_traffic_map_cmd_fixed_param *)wmi_buf_data(buf);
+
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		       WMITLV_TAG_STRUC_wmi_peer_active_traffic_map_cmd_fixed_param,
+		       WMITLV_GET_STRUCT_TLVLEN(wmi_peer_active_traffic_map_cmd_fixed_param));
+
+	cmd->vdev_id = param->vdev_id;
+	WMI_CHAR_ARRAY_TO_MAC_ADDR(param->peer_macaddr.bytes,
+				   &cmd->peer_macaddr);
+	cmd->active_traffic_map = param->active_traffic_map;
+
+	wmi_debug("set traffic map 0x%x for peer " QDF_MAC_ADDR_FMT,
+		  param->active_traffic_map,
+		  QDF_MAC_ADDR_REF(param->peer_macaddr.bytes));
+
+	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
+				   WMI_PEER_ACTIVE_TRAFFIC_MAP_CMDID);
+	if (ret) {
+		wmi_err("Failed to send active traffic map, peer: "
+			QDF_MAC_ADDR_FMT,
+			QDF_MAC_ADDR_REF(param->peer_macaddr.bytes));
+		wmi_buf_free(buf);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
 #ifdef WLAN_VENDOR_EXTN
 static QDF_STATUS
 send_vendor_peer_cmd_tlv(wmi_unified_t wmi_handle,
@@ -22676,6 +22717,7 @@ struct wmi_ops tlv_ops =  {
 	.extract_vendor_vdev_event = extract_vendor_vdev_event_tlv,
 	.extract_vendor_pdev_event = extract_vendor_pdev_event_tlv,
 #endif
+	.send_active_traffic_map_cmd = send_active_traffic_map_cmd_tlv,
 };
 
 #ifdef WLAN_FEATURE_11BE_MLO

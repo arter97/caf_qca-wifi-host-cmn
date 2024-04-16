@@ -5161,6 +5161,17 @@ wmi_unified_peer_ppe_ds_param_send(wmi_unified_t wmi_handle,
 #endif /* WLAN_SUPPORT_PPEDS */
 
 /**
+ * wmi_unified_peer_active_traffic_map_send - Send traffic map to FW
+ * @wmi_handle: WMI handle
+ * @param: Traffic map indication param
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wmi_unified_peer_active_traffic_map_send(wmi_unified_t wmi_handle,
+					 struct peer_active_traffic_map_params *param);
+
+/**
  * wmi_extract_pktlog_decode_info_event() - Extract pktlog decode info
  * @wmi_handle: WMI handle
  * @evt_buf: event buffer
