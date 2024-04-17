@@ -1217,10 +1217,40 @@ wmi_get_reject_reason(enum dlm_reject_ap_reason reject_reason)
 		return WMI_BL_REASON_REASSOC_RSSI_REJECT;
 	case REASON_REASSOC_NO_MORE_STAS:
 		return WMI_BL_REASON_REASSOC_NO_MORE_STAS;
+	case REASON_BASIC_RATES_MISMATCH:
+		return  WMI_BL_REASON_BASIC_RATES_MIS_MATCH;
+	case REASON_OTHER:
+		return WMI_BL_REASON_DENIED_OTHER_REASON;
+	case REASON_STA_AFFILIATED_WITH_MLD_WITH_EXISTING_MLD_ASSOCIATION:
+		return WMI_BL_REASON_EXISTING_MLD_ASSOCIATION;
+	case REASON_EHT_NOT_SUPPORTED:
+		return WMI_BL_REASON_EHT_NOT_SUPPORTED;
+	case REASON_TX_LINK_NOT_ACCEPTED:
+		return WMI_BL_REASON_LINK_TRANSMITTED_NOT_ACCEPTED;
 	default:
 		return 0;
 	}
 }
+
+#ifdef WLAN_FEATURE_11BE_MLO
+static void
+wmi_update_mlo_info(wmi_pdev_bssid_disallow_list_config_param *chan_list,
+		    struct reject_ap_config_params *reject_list)
+{
+	WMI_CHAR_ARRAY_TO_MAC_ADDR(reject_list->reject_mlo_ap_config_param.mld_addr.bytes,
+				   &chan_list->mld);
+	chan_list->ml_failed_link_combo_count =
+		reject_list->reject_mlo_ap_config_param.tried_link_count;
+	qdf_mem_copy(&chan_list->ml_failed_links_combo_bitmap,
+		     reject_list->reject_mlo_ap_config_param.tried_links,
+		     chan_list->ml_failed_link_combo_count * sizeof(uint16_t));
+}
+#else
+static inline void
+wmi_update_mlo_info(wmi_pdev_bssid_disallow_list_config_param *chan_list,
+		    struct reject_ap_config_params *reject_list)
+{}
+#endif
 
 static QDF_STATUS
 send_reject_ap_list_cmd_tlv(wmi_unified_t wmi_handle,
@@ -1275,6 +1305,7 @@ send_reject_ap_list_cmd_tlv(wmi_unified_t wmi_handle,
 		chan_list->original_timeout = reject_list[i].original_timeout;
 		chan_list->timestamp = reject_list[i].received_time;
 		chan_list->source = reject_list[i].source;
+		wmi_update_mlo_info(chan_list, &reject_list[i]);
 		chan_list++;
 	}
 
