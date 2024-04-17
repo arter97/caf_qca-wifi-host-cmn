@@ -1820,6 +1820,7 @@ dp_srng_configure_interrupt_thresholds(struct dp_soc *soc,
 {
 	uint8_t wbm2_sw_rx_rel_ring_id;
 	bool rx_refill_lt_disable;
+	bool scan_radio_rx_refill_lt_disable;
 
 	wbm2_sw_rx_rel_ring_id = wlan_cfg_get_rx_rel_ring_id(soc->wlan_cfg_ctx);
 
@@ -1840,14 +1841,19 @@ dp_srng_configure_interrupt_thresholds(struct dp_soc *soc,
 		rx_refill_lt_disable =
 			wlan_cfg_get_dp_soc_rxdma_refill_lt_disable
 							(soc->wlan_cfg_ctx);
+		scan_radio_rx_refill_lt_disable =
+			wlan_cfg_get_dp_soc_rxdma_scan_radio_refill_lt_disable
+							(soc->wlan_cfg_ctx);
 		ring_params->intr_timer_thres_us =
 			wlan_cfg_get_int_timer_threshold_rx(soc->wlan_cfg_ctx);
 
-		if (!rx_refill_lt_disable) {
+		if ((soc->scan_radio_support && !scan_radio_rx_refill_lt_disable) ||
+		    (!soc->scan_radio_support && !rx_refill_lt_disable)) {
 			ring_params->low_threshold = num_entries >> 3;
 			ring_params->flags |= HAL_SRNG_LOW_THRES_INTR_ENABLE;
 			ring_params->intr_batch_cntr_thres_entries = 0;
 		}
+
 	} else {
 		ring_params->intr_timer_thres_us =
 			wlan_cfg_get_int_timer_threshold_other(soc->wlan_cfg_ctx);
@@ -1951,10 +1957,14 @@ int dp_process_lmac_rings(struct dp_intr *int_ctx, int total_budget)
 	int budget = total_budget;
 	int ring = 0;
 	bool rx_refill_lt_disable;
+	bool scan_radio_rx_refill_lt_disable;
 
 	rx_refill_lt_disable =
 		wlan_cfg_get_dp_soc_rxdma_refill_lt_disable(soc->wlan_cfg_ctx);
 
+	scan_radio_rx_refill_lt_disable =
+		wlan_cfg_get_dp_soc_rxdma_scan_radio_refill_lt_disable
+						(soc->wlan_cfg_ctx);
 	/* Process LMAC interrupts */
 	for  (ring = 0 ; ring < MAX_NUM_LMAC_HW; ring++) {
 		int mac_for_pdev = ring;
@@ -2013,12 +2023,14 @@ int dp_process_lmac_rings(struct dp_intr *int_ctx, int total_budget)
 
 			intr_stats->num_host2rxdma_ring_masks++;
 
-			if (!rx_refill_lt_disable)
+			if ((soc->scan_radio_support && !scan_radio_rx_refill_lt_disable) ||
+			    (!soc->scan_radio_support && !rx_refill_lt_disable)) {
 				dp_rx_buffers_lt_replenish_simple
 							(soc, mac_for_pdev,
 							 rx_refill_buf_ring,
 							 rx_desc_pool,
 							 false);
+			}
 		}
 	}
 
@@ -14965,6 +14977,9 @@ static QDF_STATUS dp_pdev_srng_alloc(struct dp_pdev *pdev)
 	soc_cfg_ctx = soc->wlan_cfg_ctx;
 
 	ring_size = wlan_cfg_get_dp_soc_rxdma_refill_ring_size(soc_cfg_ctx);
+	if (soc->scan_radio_support)
+		ring_size = wlan_cfg_get_dp_soc_rxdma_scan_radio_refill_ring_size(soc_cfg_ctx);
+
 	if (!soc->features.dmac_cmn_src_rxbuf_ring_enabled) {
 		if (dp_srng_alloc(soc, &soc->rx_refill_buf_ring[pdev->lmac_id],
 				  RXDMA_BUF, ring_size, 0)) {
@@ -15082,8 +15097,6 @@ static QDF_STATUS dp_pdev_init(struct cdp_soc_t *txrx_soc,
 	struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx;
 	int nss_cfg;
 	void *sojourn_buf;
-	uint32_t target_type;
-	bool rx_refill_lt_disable = true;
 
 	struct dp_soc *soc = (struct dp_soc *)txrx_soc;
 	struct dp_pdev *pdev = soc->pdev_list[pdev_id];
@@ -15097,12 +15110,6 @@ static QDF_STATUS dp_pdev_init(struct cdp_soc_t *txrx_soc,
 	 * radio detach execution .i.e. in the absence of any vdev.
 	 */
 	pdev->pdev_deinit = 0;
-
-	/* For Pine scan radio, disable RXDMA refill low threshold status */
-	target_type = hal_get_target_type(soc->hal_soc);
-	if (target_type == TARGET_TYPE_QCN9000 && soc->scan_radio_support)
-		wlan_cfg_set_dp_soc_rxdma_refill_lt_disable(soc_cfg_ctx,
-							    rx_refill_lt_disable);
 
 	if (dp_wdi_event_attach(pdev)) {
 		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,

@@ -264,6 +264,7 @@ struct wlan_srng_cfg {
  * @rxdma_refill_ring: rxdma refill ring size
  * @rxdma_refill_lt_disable: rxdma refill low threshold disable
  * @rxdma_scan_radio_refill_ring: rxdma scan radio refill ring size
+ * @rxdma_scan_radio_refill_lt_disable: scan radio rxdma refill low threshold disable
  * @rxdma_err_dst_ring: rxdma error destination ring size
  * @per_pkt_trace:
  * @raw_mode_war: enable/disable raw mode war
@@ -492,6 +493,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	int rxdma_refill_ring;
 	bool rxdma_refill_lt_disable;
 	int rxdma_scan_radio_refill_ring;
+	bool rxdma_scan_radio_refill_lt_disable;
 	int rxdma_err_dst_ring;
 	uint32_t per_pkt_trace;
 	bool raw_mode_war;
@@ -1781,14 +1783,14 @@ wlan_cfg_get_dp_soc_rxdma_scan_radio_refill_ring_size(struct wlan_cfg_dp_soc_ctx
 /**
  * wlan_cfg_set_dp_soc_rxdma_scan_radio_refill_ring_size - Set rxdma scan radio
  * refill ring size
- * @ctrl_psoc: PSOC object
- * @cfg: cfg ctx where values will be populated
+ * @cfg: soc configuration context
+ * @ring_size: rxdma scan refill ring size to be set
  *
  * Return: None
  */
 void
-wlan_cfg_set_dp_soc_rxdma_scan_radio_refill_ring_size(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
-						      struct wlan_cfg_dp_soc_ctxt *cfg);
+wlan_cfg_set_dp_soc_rxdma_scan_radio_refill_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg,
+						      int ring_size);
 
 /**
  * wlan_cfg_get_dp_soc_rx_release_ring_size - Get rx_release_ring size
@@ -1911,7 +1913,7 @@ bool
 wlan_cfg_get_dp_soc_rxdma_refill_lt_disable(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
- * wlan_cfg_set_dp_soc_rxdma_refill_lt_disable - Set RxDMA refill LT stats
+ * wlan_cfg_set_dp_soc_rxdma_refill_lt_disable - Set RxDMA refill LT status
  * @cfg: soc configuration context
  * @rx_refill_lt_disable: Enable/Disable low interrupt threshold
  *
@@ -1920,6 +1922,28 @@ wlan_cfg_get_dp_soc_rxdma_refill_lt_disable(struct wlan_cfg_dp_soc_ctxt *cfg);
 void
 wlan_cfg_set_dp_soc_rxdma_refill_lt_disable(struct wlan_cfg_dp_soc_ctxt *cfg,
 					    bool rx_refill_lt_disable);
+
+/**
+ * wlan_cfg_get_dp_soc_rxdma_scan_radio_refill_lt_disable - Get RxDMA refill
+ * status for scan radio
+ * @cfg: soc configuration context
+ *
+ * Return: true if Low threshold disable else false
+ */
+bool
+wlan_cfg_get_dp_soc_rxdma_scan_radio_refill_lt_disable(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_set_dp_soc_rxdma_scan_radio_refill_lt_disable - Set RxDMA refill
+ * status for scan radio
+ * @cfg: soc configuration context
+ * @rx_refill_lt_disable: Enable/Disable low interrupt threshold
+ *
+ * Return: None
+ */
+void
+wlan_cfg_set_dp_soc_rxdma_scan_radio_refill_lt_disable(struct wlan_cfg_dp_soc_ctxt *cfg,
+						       bool rx_refill_lt_disable);
 
 /**
  * wlan_cfg_get_dp_soc_rxdma_err_dst_ring_size - Get rxdma dst ring size

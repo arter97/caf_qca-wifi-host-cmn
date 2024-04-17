@@ -4349,6 +4349,11 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 
 	wlan_cfg_ctx->rxdma_refill_ring = cfg_get(psoc,
 						  CFG_DP_RXDMA_REFILL_RING);
+	wlan_cfg_ctx->rxdma_scan_radio_refill_ring = cfg_get(psoc,
+					CFG_DP_RXDMA_SCAN_RADIO_REFILL_RING);
+	wlan_cfg_ctx->rxdma_scan_radio_refill_lt_disable =
+					cfg_get(psoc,
+						CFG_DP_RXDMA_SCAN_RADIO_REFILL_LT_DISABLE);
 	wlan_cfg_ctx->tx_desc_limit_0 = cfg_get(psoc,
 						CFG_DP_TX_DESC_LIMIT_0);
 	wlan_cfg_ctx->tx_desc_limit_1 = cfg_get(psoc,
@@ -4608,9 +4613,14 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 						CFG_DP_REO_STATUS_RING);
 	wlan_cfg_ctx->rxdma_refill_ring = cfg_get(psoc,
 						  CFG_DP_RXDMA_REFILL_RING);
+	wlan_cfg_ctx->rxdma_scan_radio_refill_ring = cfg_get(psoc,
+					CFG_DP_RXDMA_SCAN_RADIO_REFILL_RING);
 	wlan_cfg_ctx->rxdma_refill_lt_disable =
 					cfg_get(psoc,
 						CFG_DP_RXDMA_REFILL_LT_DISABLE);
+	wlan_cfg_ctx->rxdma_scan_radio_refill_lt_disable =
+					cfg_get(psoc,
+						CFG_DP_RXDMA_SCAN_RADIO_REFILL_LT_DISABLE);
 	wlan_cfg_ctx->tx_desc_limit_0 = cfg_get(psoc,
 						CFG_DP_TX_DESC_LIMIT_0);
 	wlan_cfg_ctx->tx_desc_limit_1 = cfg_get(psoc,
@@ -5618,11 +5628,10 @@ wlan_cfg_get_dp_soc_rxdma_scan_radio_refill_ring_size(struct wlan_cfg_dp_soc_ctx
 }
 
 void
-wlan_cfg_set_dp_soc_rxdma_scan_radio_refill_ring_size(struct cdp_ctrl_objmgr_psoc *psoc,
-						      struct wlan_cfg_dp_soc_ctxt *cfg)
+wlan_cfg_set_dp_soc_rxdma_scan_radio_refill_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg,
+						      int ring_size)
 {
-	cfg->rxdma_scan_radio_refill_ring = cfg_get(psoc,
-						    CFG_DP_RXDMA_SCAN_RADIO_REFILL_RING);
+	cfg->rxdma_scan_radio_refill_ring = ring_size;
 }
 bool
 wlan_cfg_get_dp_soc_rxdma_refill_lt_disable(struct wlan_cfg_dp_soc_ctxt *cfg)
@@ -5635,6 +5644,19 @@ wlan_cfg_set_dp_soc_rxdma_refill_lt_disable(struct wlan_cfg_dp_soc_ctxt *cfg,
 					    bool rx_refill_lt_disable)
 {
 	cfg->rxdma_refill_lt_disable = rx_refill_lt_disable;
+}
+
+bool
+wlan_cfg_get_dp_soc_rxdma_scan_radio_refill_lt_disable(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->rxdma_scan_radio_refill_lt_disable;
+}
+
+void
+wlan_cfg_set_dp_soc_rxdma_scan_radio_refill_lt_disable(struct wlan_cfg_dp_soc_ctxt *cfg,
+						       bool rx_refill_lt_disable)
+{
+	cfg->rxdma_scan_radio_refill_lt_disable = rx_refill_lt_disable;
 }
 
 int
