@@ -1954,3 +1954,15 @@ enum wlan_phymode
 util_scan_get_phymode(struct wlan_objmgr_pdev *pdev,
 		      struct scan_cache_entry *scan_params);
 #endif
+
+/*
+ * util_is_bssid_non_tx() - Is the given BSSID a non-tx neighbor
+ * entry in the RNR db
+ * @psoc: psoc
+ * @bssid: bssid
+ * @freq: frequency corresponding to the bssid
+ *
+ * Return: Is bssid non tx
+ */
+bool util_is_bssid_non_tx(struct wlan_objmgr_psoc *psoc,
+			  struct qdf_mac_addr *bssid, qdf_freq_t freq);

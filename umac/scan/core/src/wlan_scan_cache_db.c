@@ -162,6 +162,7 @@ static void scm_add_rnr_channel_db(struct wlan_objmgr_psoc *psoc,
 		/* Skip if entry is not valid */
 		if (!rnr_bss->channel_number)
 			continue;
+
 		chan_freq = wlan_reg_chan_opclass_to_freq(rnr_bss->channel_number,
 							  rnr_bss->operating_class,
 							  true);
@@ -257,6 +258,11 @@ void scm_filter_rnr_flag_pno(struct wlan_objmgr_vdev *vdev,
 			}
 		}
 	}
+}
+#else
+static void scm_add_rnr_channel_db(struct wlan_objmgr_psoc *psoc,
+				   struct scan_cache_entry *entry)
+{
 }
 #endif
 
@@ -1384,6 +1390,9 @@ QDF_STATUS __scm_handle_bcn_probe(struct scan_bcn_probe_event *bcn)
 			qdf_mem_free(scan_node);
 			continue;
 		}
+
+		if (bcn->save_rnr_info)
+			scm_add_rnr_channel_db(psoc, scan_entry);
 
 		qdf_mem_free(scan_node);
 	}
