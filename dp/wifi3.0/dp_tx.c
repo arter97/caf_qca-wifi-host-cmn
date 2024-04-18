@@ -5527,6 +5527,32 @@ dp_tx_check_broadcast_packet(struct dp_tx_desc_s *tx_desc,
 }
 #endif
 
+#ifndef CONFIG_AP_PLATFORM
+/**
+ * dp_update_mcast_stats() - Update Tx Mcast stats
+ * @txrx_peer: txrx_peer pointer
+ * @link_id: Link ID
+ * @length: packet length
+ * @nbuf: nbuf handle
+ *
+ * Return: None
+ */
+static inline void
+dp_update_mcast_stats(struct dp_txrx_peer *txrx_peer, uint8_t link_id,
+		      uint32_t length, qdf_nbuf_t nbuf)
+{
+	if (QDF_NBUF_CB_GET_IS_MCAST(nbuf))
+		DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer, tx.mcast, 1,
+					      length, link_id);
+}
+#else
+static inline void
+dp_update_mcast_stats(struct dp_txrx_peer *txrx_peer, uint8_t link_id,
+		      uint32_t length, qdf_nbuf_t nbuf)
+{
+}
+#endif
+
 /**
  * dp_tx_update_peer_stats() - Update peer stats from Tx completion indications
  *				per wbm ring
@@ -5546,12 +5572,47 @@ dp_tx_update_peer_stats(struct dp_tx_desc_s *tx_desc,
 			uint8_t link_id)
 {
 	struct dp_pdev *pdev = txrx_peer->vdev->pdev;
+	struct dp_vdev *vdev = txrx_peer->vdev;
 	uint8_t tid = ts->tid;
 	uint32_t length;
 	struct cdp_tid_tx_stats *tid_stats;
 
 	if (!pdev)
 		return;
+
+	length = qdf_nbuf_len(tx_desc->nbuf);
+	/* Update peer level ucast stats */
+	if (qdf_unlikely(txrx_peer->bss_peer &&
+			 vdev->opmode == wlan_op_mode_ap)) {
+		if (ts->status != HAL_TX_TQM_RR_REM_CMD_REM) {
+			DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer, tx.mcast, 1,
+						      length, link_id);
+			if (txrx_peer->vdev->tx_encap_type ==
+			    htt_cmn_pkt_type_ethernet &&
+			    dp_tx_check_broadcast_packet(tx_desc,
+							 tx_desc->nbuf)) {
+				DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer,
+							      tx.bcast, 1,
+							      length, link_id);
+			}
+		}
+	} else {
+		DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer, tx.ucast, 1, length,
+					      link_id);
+		if (ts->status == HAL_TX_TQM_RR_FRAME_ACKED) {
+			DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer, tx.tx_success,
+						      1, length, link_id);
+			if (qdf_unlikely(txrx_peer->in_twt)) {
+				DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer,
+							      tx.tx_success_twt,
+							      1, length,
+							      link_id);
+			}
+
+			dp_update_mcast_stats(txrx_peer, link_id, length,
+					      tx_desc->nbuf);
+		}
+	}
 
 	if (qdf_unlikely(tid >= CDP_MAX_DATA_TIDS))
 		tid = CDP_MAX_DATA_TIDS - 1;
@@ -5566,7 +5627,6 @@ dp_tx_update_peer_stats(struct dp_tx_desc_s *tx_desc,
 		return;
 	}
 
-	length = qdf_nbuf_len(tx_desc->nbuf);
 	DP_PEER_STATS_FLAT_INC_PKT(txrx_peer, comp_pkt, 1, length);
 
 	if (qdf_unlikely(pdev->delay_stats_flag) ||
@@ -6163,31 +6223,6 @@ void dp_tx_update_uplink_delay(struct dp_soc *soc, struct dp_vdev *vdev,
 }
 #endif /* WLAN_FEATURE_TSF_UPLINK_DELAY */
 
-#ifndef CONFIG_AP_PLATFORM
-/**
- * dp_update_mcast_stats() - Update Tx Mcast stats
- * @txrx_peer: txrx_peer pointer
- * @link_id: Link ID
- * @length: packet length
- * @nbuf: nbuf handle
- *
- * Return: None
- */
-static inline void
-dp_update_mcast_stats(struct dp_txrx_peer *txrx_peer, uint8_t link_id,
-		      uint32_t length, qdf_nbuf_t nbuf)
-{
-	if (QDF_NBUF_CB_GET_IS_MCAST(nbuf))
-		DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer, tx.mcast, 1,
-					      length, link_id);
-}
-#else
-static inline void
-dp_update_mcast_stats(struct dp_txrx_peer *txrx_peer, uint8_t link_id,
-		      uint32_t length, qdf_nbuf_t nbuf)
-{
-}
-#endif
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
 /**
  * dp_tx_comp_set_nbuf_band() - set nbuf band.
@@ -6331,37 +6366,6 @@ void dp_tx_comp_process_tx_status(struct dp_soc *soc,
 	if (qdf_unlikely(vdev->mesh_vdev) &&
 			!(tx_desc->flags & DP_TX_DESC_FLAG_TO_FW))
 		dp_tx_comp_fill_tx_completion_stats(tx_desc, ts);
-
-	/* Update peer level stats */
-	if (qdf_unlikely(txrx_peer->bss_peer &&
-			 vdev->opmode == wlan_op_mode_ap)) {
-		if (ts->status != HAL_TX_TQM_RR_REM_CMD_REM) {
-			DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer, tx.mcast, 1,
-						      length, link_id);
-			if (txrx_peer->vdev->tx_encap_type ==
-			    htt_cmn_pkt_type_ethernet &&
-			    dp_tx_check_broadcast_packet(tx_desc, nbuf)) {
-				DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer,
-							      tx.bcast, 1,
-							      length, link_id);
-			}
-		}
-	} else {
-		DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer, tx.ucast, 1, length,
-					      link_id);
-		if (ts->status == HAL_TX_TQM_RR_FRAME_ACKED) {
-			DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer, tx.tx_success,
-						      1, length, link_id);
-			if (qdf_unlikely(txrx_peer->in_twt)) {
-				DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer,
-							      tx.tx_success_twt,
-							      1, length,
-							      link_id);
-			}
-
-			dp_update_mcast_stats(txrx_peer, link_id, length, nbuf);
-		}
-	}
 
 	dp_tx_update_peer_stats(tx_desc, ts, txrx_peer, ring_id, link_id);
 	dp_tx_update_peer_delay_stats(txrx_peer, tx_desc, ts, ring_id);
