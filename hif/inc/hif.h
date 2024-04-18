@@ -3029,5 +3029,7 @@ void hif_ce_print_ring_stats(struct hif_opaque_softc *hif_ctx);
 void hif_get_wlan_rx_time_stats(struct hif_opaque_softc *hif_ctx,
 				uint64_t *wlan_irq_time,
 				uint64_t *wlan_ksoftirqd_time);
+void hif_check_and_apply_irq_affinity(struct hif_opaque_softc *hif_ctx,
+				      uint8_t grp_id, uint32_t cpu_id);
 #endif
 #endif /* _HIF_H_ */

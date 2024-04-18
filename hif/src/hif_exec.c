@@ -732,6 +732,61 @@ void hif_get_wlan_rx_time_stats(struct hif_opaque_softc *hif_ctx,
 		}
 	}
 }
+
+/**
+ * hif_check_and_apply_irq_affinity() - function to affine the hif group
+ * to the given cpu if it's affined to a different CPU.
+ *
+ * @hif_ctx: hif context
+ * @grp_id: hif group id
+ * @cpu_id: cpu id
+ *
+ * Return: none
+ */
+void hif_check_and_apply_irq_affinity(struct hif_opaque_softc *hif_ctx,
+				      uint8_t grp_id, uint32_t cpu_id)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
+	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
+	struct hif_exec_context *hif_ext_group;
+	qdf_cpu_mask cpu_mask;
+	QDF_STATUS status;
+	int i;
+
+	qdf_cpumask_clear(&cpu_mask);
+	qdf_cpumask_set_cpu(cpu_id, &cpu_mask);
+
+	if (grp_id >= hif_state->hif_num_extgroup) {
+		hif_debug("Invalid group id received %d", grp_id);
+		return;
+	}
+
+	hif_ext_group = hif_state->hif_ext_group[grp_id];
+
+	for (i = 0; i < hif_ext_group->numirq; i++) {
+		if (qdf_cpumask_equal(&hif_ext_group->new_cpu_mask[i],
+				      &cpu_mask)) {
+			hif_debug("Skip affining same cpu for grp_id %d cpu_mask %*pbl",
+				  hif_ext_group->grp_id,
+				  qdf_cpumask_pr_args(&cpu_mask));
+			continue;
+		}
+
+		status = hif_irq_set_affinity_hint(hif_ext_group->os_irq[i],
+						   &cpu_mask);
+		if (QDF_IS_STATUS_SUCCESS(status)) {
+			qdf_cpumask_copy(&hif_ext_group->new_cpu_mask[i],
+					 &cpu_mask);
+			qdf_atomic_set(&hif_ext_group->force_napi_complete, -1);
+			hif_debug("Affined IRQ %d to cpu_mask %*pbl",
+				  hif_ext_group->os_irq[i],
+				  qdf_cpumask_pr_args(&hif_ext_group->new_cpu_mask[i]));
+		} else {
+			hif_err("set affinity failed for IRQ %d",
+				hif_ext_group->os_irq[i]);
+		}
+	}
+}
 #else
 static inline void
 hif_exec_update_soft_irq_time(struct hif_exec_context *hif_ext_group)

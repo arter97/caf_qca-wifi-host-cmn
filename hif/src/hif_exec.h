@@ -113,10 +113,12 @@ struct hif_exec_context {
 	unsigned long long poll_start_time;
 	bool force_break;
 #if defined(FEATURE_IRQ_AFFINITY) || defined(HIF_CPU_PERF_AFFINE_MASK) || \
-	defined(HIF_CPU_CLEAR_AFFINITY)
+	defined(HIF_CPU_CLEAR_AFFINITY) || \
+	defined(WLAN_DP_LOAD_BALANCE_SUPPORT)
 	qdf_cpu_mask new_cpu_mask[HIF_MAX_GRP_IRQ];
 #endif
-#ifdef FEATURE_IRQ_AFFINITY
+#if defined(FEATURE_IRQ_AFFINITY) || \
+	defined(WLAN_DP_LOAD_BALANCE_SUPPORT)
 	qdf_atomic_t force_napi_complete;
 #endif
 	unsigned long long irq_disabled_start_time;
