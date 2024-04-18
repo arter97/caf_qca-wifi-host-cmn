@@ -3568,6 +3568,60 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 	cm_print_candidate_list(scan_list);
 }
 
+#if defined(WLAN_FEATURE_11BE_MLO_ADV_FEATURE) && defined(FEATURE_DENYLIST_MGR)
+void cm_update_dlm_mlo_score(struct wlan_objmgr_pdev *pdev,
+			     qdf_list_t *scan_list,
+			     qdf_list_node_t *prev_node,
+			     bool *dlm_entry_updated)
+{
+	struct scan_cache_node *scan_entry;
+	qdf_list_node_t *cur_node = NULL, *next_node = NULL;
+	QDF_STATUS status;
+	enum cm_denylist_action denylist_action;
+
+	/* Get cur node next to prev candidate */
+	if (qdf_list_peek_next(scan_list, prev_node, &cur_node) !=
+	    QDF_STATUS_SUCCESS) {
+		mlme_err("failed to peer front of scan list");
+		return;
+	}
+
+	while (cur_node) {
+		qdf_list_peek_next(scan_list, cur_node, &next_node);
+		scan_entry = qdf_container_of(cur_node, struct scan_cache_node,
+					      node);
+		denylist_action = wlan_denylist_action_on_bssid(
+						pdev, scan_entry->entry);
+		if (denylist_action == CM_DLM_AVOID &&
+		    scan_entry->entry->bss_score !=
+		    CM_AVOID_CANDIDATE_MIN_SCORE) {
+			scan_entry->entry->bss_score =
+						CM_AVOID_CANDIDATE_MIN_SCORE;
+
+			mlme_nofl_debug("Candidate("QDF_MAC_ADDR_FMT" freq %d): rssi %d, is in Avoidlist, give min score %d",
+					QDF_MAC_ADDR_REF(
+						scan_entry->entry->bssid.bytes),
+					scan_entry->entry->channel.chan_freq,
+					scan_entry->entry->rssi_raw,
+					scan_entry->entry->bss_score);
+
+			/* Remove node from current location to add node back */
+			status = qdf_list_remove_node(scan_list, cur_node);
+			if (QDF_IS_STATUS_ERROR(status)) {
+				mlme_err("failed to remove node for BSS "QDF_MAC_ADDR_FMT" from scan list",
+					 QDF_MAC_ADDR_REF(
+					 scan_entry->entry->bssid.bytes));
+				return;
+			}
+			qdf_list_insert_back(scan_list, &scan_entry->node);
+			*dlm_entry_updated = true;
+		}
+		cur_node = next_node;
+		next_node = NULL;
+	}
+}
+#endif
+
 #ifdef CONFIG_BAND_6GHZ
 #ifdef CONN_MGR_ADV_FEATURE
 static bool wlan_cm_wfa_get_test_feature_flags(struct wlan_objmgr_psoc *psoc)

@@ -341,6 +341,36 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 				 struct qdf_mac_addr *bssid_hint,
 				 struct qdf_mac_addr *self_mac);
 
+#if defined(WLAN_FEATURE_11BE_MLO_ADV_FEATURE) && defined(FEATURE_DENYLIST_MGR)
+/**
+ * cm_update_dlm_mlo_score() - Update dlm score
+ * @pdev: pointer to pdev object
+ * @scan_list: scan list, contains the input list and after the
+ *             func it will have sorted list with dlm entries
+ * @prev_node: prev node
+ * @dlm_entry_updated: is dlm entry updated
+ *
+ * This API will update score of the pending ML candidates
+ * acrroding to the previous candidate failures.
+ * Example: For a particular link if host needs to reject all
+ * combination including that link. So score needs to be updated
+ * for all the entries with minimum score.
+ *
+ * Return: void
+ */
+void cm_update_dlm_mlo_score(struct wlan_objmgr_pdev *pdev,
+			     qdf_list_t *scan_list,
+			     qdf_list_node_t *prev_node,
+			     bool *dlm_entry_updated);
+#else
+static inline
+void cm_update_dlm_mlo_score(struct wlan_objmgr_pdev *pdev,
+			     qdf_list_t *scan_list,
+			     qdf_list_node_t *prev_node,
+			     bool *dlm_entry_updated)
+{}
+#endif
+
 #ifdef WLAN_FEATURE_11BE
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 /**

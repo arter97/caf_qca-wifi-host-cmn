@@ -1531,7 +1531,7 @@ cm_connect_fetch_candidates(struct wlan_objmgr_pdev *pdev,
 			    struct cnx_mgr *cm_ctx,
 			    struct cm_connect_req *cm_req,
 			    qdf_list_t **fetched_candidate_list,
-			    uint32_t *num_bss_found)
+			    uint32_t *num_bss_found, bool calculate_bss_score)
 {
 	struct scan_filter *filter;
 	uint32_t num_bss = 0;
@@ -1583,7 +1583,7 @@ cm_connect_fetch_candidates(struct wlan_objmgr_pdev *pdev,
 		cm_remove_mbssid_links_without_scan_entry(candidate_list);
 
 	op_mode = wlan_vdev_mlme_get_opmode(cm_ctx->vdev);
-	if (num_bss && op_mode == QDF_STA_MODE &&
+	if (calculate_bss_score && num_bss && op_mode == QDF_STA_MODE &&
 	    !cm_req->req.is_non_assoc_link)
 		cm_calculate_scores(cm_ctx, pdev, filter, candidate_list);
 	qdf_mem_free(filter);
@@ -1608,7 +1608,7 @@ static QDF_STATUS cm_connect_get_candidates(struct wlan_objmgr_pdev *pdev,
 	QDF_STATUS status;
 
 	status = cm_connect_fetch_candidates(pdev, cm_ctx, cm_req,
-					     &candidate_list, &num_bss);
+					     &candidate_list, &num_bss, true);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		if (candidate_list)
 			wlan_scan_purge_results(candidate_list);
@@ -1645,7 +1645,8 @@ static QDF_STATUS cm_connect_get_candidates(struct wlan_objmgr_pdev *pdev,
 #ifdef CONN_MGR_ADV_FEATURE
 static void cm_update_candidate_list(struct cnx_mgr *cm_ctx,
 				     struct cm_connect_req *cm_req,
-				     struct scan_cache_node *prev_candidate)
+				     struct scan_cache_node *prev_candidate,
+				     bool *new_entry_added)
 {
 	struct wlan_objmgr_pdev *pdev;
 	uint32_t num_bss = 0;
@@ -1665,7 +1666,7 @@ static void cm_update_candidate_list(struct cnx_mgr *cm_ctx,
 	}
 
 	status = cm_connect_fetch_candidates(pdev, cm_ctx, cm_req,
-					     &candidate_list, &num_bss);
+					     &candidate_list, &num_bss, false);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		mlme_debug(CM_PREFIX_FMT "failed to fetch bss: %d",
 			   CM_PREFIX_REF(vdev_id, cm_req->cm_id), num_bss);
@@ -1711,6 +1712,7 @@ static void cm_update_candidate_list(struct cnx_mgr *cm_ctx,
 			qdf_mem_free(scan_entry);
 			goto free_list;
 		}
+		*new_entry_added = true;
 		prev_candidate = scan_entry;
 		mlme_debug(CM_PREFIX_FMT "insert new node " QDF_MAC_ADDR_FMT " to candidate list",
 			   CM_PREFIX_REF(vdev_id, cm_req->cm_id),
@@ -1719,10 +1721,6 @@ next:
 		cur_node = next_node;
 		next_node = NULL;
 	}
-	/* print updated candidate list */
-	mlme_debug(CM_PREFIX_FMT "updated candidate list",
-		   CM_PREFIX_REF(vdev_id, cm_req->cm_id));
-	cm_print_candidate_list(cm_req->candidate_list);
 free_list:
 	if (candidate_list)
 		wlan_scan_purge_results(candidate_list);
@@ -1731,7 +1729,8 @@ free_list:
 static inline void
 cm_update_candidate_list(struct cnx_mgr *cm_ctx,
 			 struct cm_connect_req *cm_req,
-			 struct scan_cache_node *prev_candidate)
+			 struct scan_cache_node *prev_candidate,
+			 bool *new_entry_added)
 {
 }
 #endif
@@ -2130,6 +2129,8 @@ static QDF_STATUS cm_get_valid_candidate(struct cnx_mgr *cm_ctx,
 	bool use_same_candidate = false;
 	int32_t akm;
 	struct qdf_mac_addr *pmksa_mac;
+	bool canidate_list_updated = false;
+	bool dlm_canidate_list_updated = false;
 
 	psoc = wlan_vdev_get_psoc(cm_ctx->vdev);
 	if (!psoc) {
@@ -2198,7 +2199,17 @@ static QDF_STATUS cm_get_valid_candidate(struct cnx_mgr *cm_ctx,
 		 * current candidate list.
 		 */
 		cm_update_candidate_list(cm_ctx, &cm_req->connect_req,
-					 prev_candidate);
+				prev_candidate,  &canidate_list_updated);
+		cm_update_dlm_mlo_score(wlan_vdev_get_pdev(cm_ctx->vdev),
+					cm_req->connect_req.candidate_list,
+					&prev_candidate->node,
+					&dlm_canidate_list_updated);
+		if (dlm_canidate_list_updated || canidate_list_updated) {
+			mlme_debug(CM_PREFIX_FMT "dump updated candidate list",
+				   CM_PREFIX_REF(vdev_id, cm_req->cm_id));
+			cm_print_candidate_list(
+					cm_req->connect_req.candidate_list);
+		}
 		qdf_list_peek_next(cm_req->connect_req.candidate_list,
 				   &prev_candidate->node, &cur_node);
 	} else {
