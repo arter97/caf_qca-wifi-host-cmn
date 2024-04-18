@@ -10284,6 +10284,12 @@ void wmi_copy_resource_config(wmi_unified_t wmi_handle,
 				resource_cfg->flag1, 1);
 
 	/*
+	 * Enable fw to send TX mgmt ack RSSI to host as part of
+	 * TX_COMPLETION
+	 */
+	WMI_RSRC_CFG_FLAG_TX_ACK_RSSI_SET(resource_cfg->flag1, 1);
+
+	/*
 	 * Control padding using config param/ini of iphdr_pad_config
 	 */
 	if (tgt_res_cfg->iphdr_pad_config)
