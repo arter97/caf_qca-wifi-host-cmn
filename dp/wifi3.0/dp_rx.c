@@ -1864,7 +1864,7 @@ static inline uint32_t dp_get_l3_hdr_pad_len(struct dp_soc *soc,
 
 qdf_nbuf_t dp_rx_sg_create(struct dp_soc *soc, qdf_nbuf_t nbuf)
 {
-	qdf_nbuf_t parent, frag_list, next = NULL;
+	qdf_nbuf_t parent, frag_list, frag_tail, next = NULL;
 	uint16_t frag_list_len = 0;
 	uint16_t mpdu_len;
 	bool last_nbuf;
@@ -1877,6 +1877,19 @@ qdf_nbuf_t dp_rx_sg_create(struct dp_soc *soc, qdf_nbuf_t nbuf)
 	 */
 	mpdu_len = QDF_NBUF_CB_RX_PKT_LEN(nbuf);
 
+	/*
+	 * If MSDU length of the first fragment is zero, need to
+	 * use the length of the last fragment to overwrite.
+	 */
+	if (!mpdu_len) {
+		frag_tail = nbuf;
+		while (frag_tail && qdf_nbuf_is_rx_chfrag_cont(frag_tail))
+			frag_tail = frag_tail->next;
+
+		if (frag_tail)
+			QDF_NBUF_CB_RX_PKT_LEN(nbuf) =
+			    QDF_NBUF_CB_RX_PKT_LEN(frag_tail);
+	}
 	/*
 	 * this is a case where the complete msdu fits in one single nbuf.
 	 * in this case HW sets both start and end bit and we only need to
