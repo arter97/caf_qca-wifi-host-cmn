@@ -6742,6 +6742,7 @@ typedef enum {
 	wmi_service_traffic_context_support,
 #endif
 	wmi_service_support_ap_suspend_resume,
+	wmi_service_epm,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -7126,6 +7127,7 @@ struct target_feature_set {
  * @fw_ast_indication_disable: Disable AST indication
  * @is_full_bw_nol_supported: Is full bandwidth needed to put to NOL
  * @is_smem_mailbox_supported: Is smem mailbox functionality supported
+ * @is_epm_supported: Is epm functionality supported
  * @con_mode_monitor: Device is in Full monitor mode
  */
 typedef struct {
@@ -7264,6 +7266,9 @@ typedef struct {
 	bool is_full_bw_nol_supported;
 #ifdef FEATURE_SMEM_MAILBOX
 	bool is_smem_mailbox_supported;
+#endif
+#ifdef FEATURE_EPM
+	bool is_epm_supported;
 #endif
 	bool con_mode_monitor;
 } target_resource_config;
