@@ -6249,29 +6249,40 @@ enum qca_wlan_vendor_attr_config {
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_KEEP_ALIVE_INTERVAL = 108,
 
-	/* 8-bit unsigned value. Refer to Tx/Rx NSS and Chain interactions */
-	QCA_WLAN_VENDOR_ATTR_CONFIG_TX_NSS_2GHZ = 109,
+	/* 8-bit unsigned value to configure reduced power scan mode.
+	 *
+	 * This attribute is used to configure the driver to optimize power
+	 * during scan. For e.g., the driver can switch to 1x1 from 2x2 mode
+	 * for additional power save.
+	 *
+	 * 1 - Enable reduced power scan mode.
+	 * 0 - Disable reduced power scan mode.
+	 */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_REDUCED_POWER_SCAN_MODE = 109,
 
 	/* 8-bit unsigned value. Refer to Tx/Rx NSS and Chain interactions */
-	QCA_WLAN_VENDOR_ATTR_CONFIG_RX_NSS_2GHZ = 110,
+	QCA_WLAN_VENDOR_ATTR_CONFIG_TX_NSS_2GHZ = 110,
 
 	/* 8-bit unsigned value. Refer to Tx/Rx NSS and Chain interactions */
-	QCA_WLAN_VENDOR_ATTR_CONFIG_TX_NSS_5GHZ = 111,
+	QCA_WLAN_VENDOR_ATTR_CONFIG_RX_NSS_2GHZ = 111,
 
 	/* 8-bit unsigned value. Refer to Tx/Rx NSS and Chain interactions */
-	QCA_WLAN_VENDOR_ATTR_CONFIG_RX_NSS_5GHZ = 112,
+	QCA_WLAN_VENDOR_ATTR_CONFIG_TX_NSS_5GHZ = 112,
 
 	/* 8-bit unsigned value. Refer to Tx/Rx NSS and Chain interactions */
-	QCA_WLAN_VENDOR_ATTR_CONFIG_NUM_TX_CHAINS_2GHZ = 113,
+	QCA_WLAN_VENDOR_ATTR_CONFIG_RX_NSS_5GHZ = 113,
 
 	/* 8-bit unsigned value. Refer to Tx/Rx NSS and Chain interactions */
-	QCA_WLAN_VENDOR_ATTR_CONFIG_NUM_RX_CHAINS_2GHZ = 114,
+	QCA_WLAN_VENDOR_ATTR_CONFIG_NUM_TX_CHAINS_2GHZ = 114,
 
 	/* 8-bit unsigned value. Refer to Tx/Rx NSS and Chain interactions */
-	QCA_WLAN_VENDOR_ATTR_CONFIG_NUM_TX_CHAINS_5GHZ = 115,
+	QCA_WLAN_VENDOR_ATTR_CONFIG_NUM_RX_CHAINS_2GHZ = 115,
 
 	/* 8-bit unsigned value. Refer to Tx/Rx NSS and Chain interactions */
-	QCA_WLAN_VENDOR_ATTR_CONFIG_NUM_RX_CHAINS_5GHZ = 116,
+	QCA_WLAN_VENDOR_ATTR_CONFIG_NUM_TX_CHAINS_5GHZ = 116,
+
+	/* 8-bit unsigned value. Refer to Tx/Rx NSS and Chain interactions */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_NUM_RX_CHAINS_5GHZ = 117,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_AFTER_LAST,
