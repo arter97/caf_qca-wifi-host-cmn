@@ -43,6 +43,7 @@
 #define DP_PEER_AST3_FLOW_MASK 0x2
 #define DP_MAX_AST_INDEX_PER_PEER 4
 
+#ifndef IPA_WDS_EASYMESH_FEATURE
 static void
 dp_peer_age_ast_entries(struct dp_soc *soc, struct dp_peer *peer, void *arg)
 {
@@ -147,7 +148,6 @@ static void dp_ast_aging_timer_fn(void *soc_hdl)
 			      DP_AST_AGING_TIMER_DEFAULT_MS);
 }
 
-#ifndef IPA_WDS_EASYMESH_FEATURE
 /*
  * dp_soc_wds_attach() - Setup WDS timer and AST table
  * @soc:		Datapath SOC handle
@@ -1162,6 +1162,9 @@ void dp_hmwds_ast_add_notify(struct dp_peer *peer,
 #endif
 }
 
+#if defined(QCA_SUPPORT_LATENCY_CAPTURE) || \
+	defined(QCA_TX_CAPTURE_SUPPORT) || \
+	defined(QCA_MCOPY_SUPPORT)
 #ifdef FEATURE_PERPKT_INFO
 /**
  * dp_get_completion_indication_for_stack() - send completion to stack
@@ -1261,4 +1264,5 @@ void dp_send_completion_to_stack(struct dp_soc *soc,  struct dp_pdev *pdev,
 			     netbuf, peer_id,
 			     WDI_NO_VAL, pdev->pdev_id);
 }
+#endif
 #endif

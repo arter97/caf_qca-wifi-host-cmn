@@ -1,6 +1,6 @@
-
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -382,6 +382,7 @@ dp_rx_wds_srcport_learn(struct dp_soc *soc,
  * @msdu_end_info: msdu end info
  * @ad4_valid: address4 valid bit
  * @chfrag_start: Msdu start bit
+ * @sa_valid: indicate whether SA has a valid entry in AST table
  *
  * Return: void
  */
@@ -389,11 +390,12 @@ static inline void
 dp_rx_ipa_wds_srcport_learn(struct dp_soc *soc,
 			    struct dp_peer *ta_peer, qdf_nbuf_t nbuf,
 			    struct hal_rx_msdu_metadata msdu_end_info,
-			    bool ad4_valid, bool chfrag_start)
+			    bool ad4_valid, bool chfrag_start,
+			    bool sa_valid)
 {
-	uint8_t sa_is_valid = qdf_nbuf_is_sa_valid(nbuf);
 	uint8_t is_chfrag_start = (uint8_t)chfrag_start;
 	uint8_t is_ad4_valid = (uint8_t)ad4_valid;
+	uint8_t sa_is_valid = (uint8_t)sa_valid;
 
 	if (qdf_unlikely(!ta_peer))
 		return;

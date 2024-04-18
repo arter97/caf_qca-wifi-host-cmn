@@ -171,6 +171,7 @@ struct reg_domain_pair {
  * @APL1_6G_04: Super domain APL1_6G_04 for Korea
  * @FCC1_6G_05: Super domain FCC1_6G_05 for Chile
  * @APL2_6G_06: Super domain APL2_6G_06 for Guatemala
+ * @MKK1_6G_0B: Super domain MKK1_6G_0B for Japan
  */
 enum reg_super_domain_6g {
 	FCC1_6G_01 = 0x01,
@@ -179,6 +180,7 @@ enum reg_super_domain_6g {
 	APL1_6G_04 = 0x04,
 	FCC1_6G_05 = 0x05,
 	APL2_6G_06 = 0x06,
+	MKK1_6G_0B = 0x0B,
 };
 
 #if defined(COMPILE_REGDB_6G)

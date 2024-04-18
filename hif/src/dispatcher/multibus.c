@@ -635,7 +635,7 @@ void hif_config_irq_clear_cpu_affinity(struct hif_opaque_softc *scn,
 							  intr_ctxt_id, cpu);
 }
 
-qdf_export_symbol(hif_config_irq_clear_affinity);
+qdf_export_symbol(hif_config_irq_clear_cpu_affinity);
 #endif
 
 #ifdef HIF_BUS_LOG_INFO
