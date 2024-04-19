@@ -1042,11 +1042,10 @@ int htt_h2t_tx_ring_cfg(struct htt_soc *htt_soc, int pdev_id,
 	int target_pdev_id;
 	QDF_STATUS status;
 
-	htt_msg = qdf_nbuf_alloc(soc->osdev,
-				 HTT_MSG_BUF_SIZE(HTT_TX_MONITOR_CFG_SZ),
-
-	/* reserve room for the HTC header */
-	HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING, 4, TRUE);
+	htt_msg = qdf_nbuf_alloc_no_recycler(
+			HTT_MSG_BUF_SIZE(HTT_TX_MONITOR_CFG_SZ),
+			/* reserve room for the HTC header */
+			HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING, 4);
 	if (!htt_msg)
 		goto fail0;
 

@@ -63,6 +63,31 @@
 #define HTT_MASK_UPPER_TIMESTAMP 0xFFFFFFFF00000000
 #define HTT_BKP_STATS_MAX_QUEUE_DEPTH 16
 
+#ifdef HTT_HTC_NO_RECYCLER_ALLOC
+static inline qdf_nbuf_t dp_htt_htc_msg_alloc(qdf_device_t osdev,
+					      qdf_size_t size,
+					      int reserve,
+					      int align, int prio)
+{
+	return qdf_nbuf_alloc_no_recycler(
+			size,
+			reserve,
+			align);
+}
+#else
+static inline qdf_nbuf_t dp_htt_htc_msg_alloc(qdf_device_t osdev,
+					      qdf_size_t size,
+					      int reserve,
+					      int align, int prio)
+{
+	return qdf_nbuf_alloc(
+			osdev,
+			size,
+			reserve,
+			align, prio);
+}
+#endif
+
 struct dp_htt_htc_pkt *
 htt_htc_pkt_alloc(struct htt_soc *soc)
 {
@@ -328,7 +353,7 @@ static int dp_htt_h2t_add_tcl_metadata_ver_v1(struct htt_soc *soc,
 {
 	uint32_t *msg_word;
 
-	*msg = qdf_nbuf_alloc(
+	*msg = dp_htt_htc_msg_alloc(
 		soc->osdev,
 		HTT_MSG_BUF_SIZE(HTT_VER_REQ_BYTES),
 		/* reserve room for the HTC header */
@@ -374,7 +399,7 @@ static int dp_htt_h2t_add_tcl_metadata_ver_v2(struct htt_soc *soc,
 {
 	uint32_t *msg_word;
 
-	*msg = qdf_nbuf_alloc(
+	*msg = dp_htt_htc_msg_alloc(
 		soc->osdev,
 		HTT_MSG_BUF_SIZE(HTT_VER_REQ_BYTES + HTT_TCL_METADATA_VER_SZ),
 		/* reserve room for the HTC header */
@@ -502,10 +527,11 @@ QDF_STATUS htt_h2t_rx_cce_super_rule_setup(struct htt_soc *soc, void *param)
 		return QDF_STATUS_FILT_REQ_ERROR;
 	}
 
-	msg = qdf_nbuf_alloc(soc->osdev,
-			     HTT_MSG_BUF_SIZE(HTT_RX_CCE_SUPER_RULE_SETUP_SZ),
-			     HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING, 4,
-			     true);
+	msg = dp_htt_htc_msg_alloc(
+			soc->osdev,
+			HTT_MSG_BUF_SIZE(HTT_RX_CCE_SUPER_RULE_SETUP_SZ),
+			HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING, 4,
+			true);
 	if (!msg) {
 		dp_htt_err("Fail to allocate SUPER_RULE_SETUP msg ");
 		return QDF_STATUS_E_FAILURE;
@@ -626,10 +652,11 @@ QDF_STATUS htt_h2t_tx_super_rule_setup(struct htt_soc *soc, void *param)
 		dp_htt_err("Wrong tx filter count %d", num_filters);
 		return QDF_STATUS_FILT_REQ_ERROR;
 	}
-	msg = qdf_nbuf_alloc(soc->osdev,
-			     HTT_MSG_BUF_SIZE(HTT_TX_LCE_SUPER_RULE_SETUP_SZ),
-			     HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING, 4,
-			     true);
+	msg = dp_htt_htc_msg_alloc(
+			soc->osdev,
+			HTT_MSG_BUF_SIZE(HTT_TX_LCE_SUPER_RULE_SETUP_SZ),
+			HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING, 4,
+			true);
 	if (!msg) {
 		dp_htt_err("Fail to allocate TX SUPER_RULE_SETUP msg ");
 		return QDF_STATUS_E_FAILURE;
@@ -758,10 +785,11 @@ int htt_srng_setup(struct htt_soc *soc, int mac_id,
 	/* Sizes should be set in 4-byte words */
 	ring_entry_size = ring_entry_size >> 2;
 
-	htt_msg = qdf_nbuf_alloc(soc->osdev,
-		HTT_MSG_BUF_SIZE(HTT_SRING_SETUP_SZ),
-		/* reserve room for the HTC header */
-		HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING, 4, TRUE);
+	htt_msg = dp_htt_htc_msg_alloc(
+			soc->osdev,
+			HTT_MSG_BUF_SIZE(HTT_SRING_SETUP_SZ),
+			/* reserve room for the HTC header */
+			HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING, 4, TRUE);
 	if (!htt_msg) {
 		dp_err("htt_msg alloc failed ring type %d", hal_ring_type);
 		goto fail0;
@@ -1055,13 +1083,14 @@ int htt_h2t_full_mon_cfg(struct htt_soc *htt_soc,
 	uint8_t *htt_logger_bufp;
 	QDF_STATUS status;
 
-	htt_msg = qdf_nbuf_alloc(soc->osdev,
-				 HTT_MSG_BUF_SIZE(
-				 HTT_RX_FULL_MONITOR_MODE_SETUP_SZ),
-				 /* reserve room for the HTC header */
-				 HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING,
-				 4,
-				 TRUE);
+	htt_msg = dp_htt_htc_msg_alloc(
+				soc->osdev,
+				HTT_MSG_BUF_SIZE(
+				HTT_RX_FULL_MONITOR_MODE_SETUP_SZ),
+				/* reserve room for the HTC header */
+				HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING,
+				4,
+				TRUE);
 	if (!htt_msg)
 		return QDF_STATUS_E_FAILURE;
 
@@ -1206,10 +1235,11 @@ int htt_h2t_rx_ring_cfg(struct htt_soc *htt_soc, int pdev_id,
 	int target_pdev_id;
 	QDF_STATUS status;
 
-	htt_msg = qdf_nbuf_alloc(soc->osdev,
-		HTT_MSG_BUF_SIZE(HTT_RX_RING_SELECTION_CFG_SZ),
-	/* reserve room for the HTC header */
-	HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING, 4, TRUE);
+	htt_msg = dp_htt_htc_msg_alloc(
+			soc->osdev,
+			HTT_MSG_BUF_SIZE(HTT_RX_RING_SELECTION_CFG_SZ),
+			/* reserve room for the HTC header */
+			HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING, 4, TRUE);
 	if (!htt_msg) {
 		dp_err("htt_msg alloc failed ring type %d", hal_ring_type);
 		goto fail0;
@@ -2570,7 +2600,7 @@ dp_h2t_ptqm_migration_msg_send(struct dp_soc *dp_soc, uint16_t vdev_id,
 	QDF_STATUS ret = QDF_STATUS_SUCCESS;
 	bool src_info_valid = false;
 
-	msg = qdf_nbuf_alloc(
+	msg = dp_htt_htc_msg_alloc(
 			soc->osdev,
 			HTT_MSG_BUF_SIZE(sizeof(htt_h2t_primary_link_peer_migrate_resp_t)),
 			HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING, 4, TRUE);
@@ -4058,9 +4088,10 @@ dp_h2t_tx_latency_stats_cfg_msg_send(struct dp_soc *dp_soc, uint16_t vdev_id,
 		return QDF_STATUS_E_INVAL;
 
 	size = sizeof(struct htt_h2t_tx_latency_stats_cfg);
-	msg = qdf_nbuf_alloc(soc->osdev, HTT_MSG_BUF_SIZE(size),
-			     HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING,
-			     4, TRUE);
+	msg = dp_htt_htc_msg_alloc(
+			soc->osdev, HTT_MSG_BUF_SIZE(size),
+			HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING,
+			4, TRUE);
 	if (!msg)
 		return QDF_STATUS_E_NOMEM;
 
@@ -4891,7 +4922,7 @@ QDF_STATUS dp_h2t_ext_stats_msg_send(struct dp_pdev *pdev,
 	int target_pdev_id;
 	QDF_STATUS status;
 
-	msg = qdf_nbuf_alloc(
+	msg = dp_htt_htc_msg_alloc(
 			soc->osdev,
 			HTT_MSG_BUF_SIZE(HTT_H2T_EXT_STATS_REQ_MSG_SZ),
 			HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING, 4, TRUE);
@@ -5018,7 +5049,7 @@ QDF_STATUS dp_h2t_hw_vdev_stats_config_send(struct dp_soc *dpsoc,
 	uint32_t bitmask;
 	int target_pdev_id;
 
-	msg = qdf_nbuf_alloc(
+	msg = dp_htt_htc_msg_alloc(
 			soc->osdev,
 			HTT_MSG_BUF_SIZE(sizeof(struct htt_h2t_vdevs_txrx_stats_cfg)),
 			HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING, 4, true);
@@ -5145,7 +5176,7 @@ QDF_STATUS dp_h2t_3tuple_config_send(struct dp_pdev *pdev,
 	int mac_for_pdev;
 	int target_pdev_id;
 
-	msg = qdf_nbuf_alloc(
+	msg = dp_htt_htc_msg_alloc(
 			soc->osdev,
 			HTT_MSG_BUF_SIZE(HTT_3_TUPLE_HASH_CFG_REQ_BYTES),
 			HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING, 4, TRUE);
@@ -5224,7 +5255,7 @@ QDF_STATUS dp_h2t_cfg_stats_msg_send(struct dp_pdev *pdev,
 	uint8_t pdev_mask;
 	QDF_STATUS status;
 
-	msg = qdf_nbuf_alloc(
+	msg = dp_htt_htc_msg_alloc(
 			soc->osdev,
 			HTT_MSG_BUF_SIZE(HTT_H2T_PPDU_STATS_CFG_MSG_SZ),
 			HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING, 4, true);
@@ -5348,7 +5379,7 @@ dp_htt_rx_flow_fst_setup(struct dp_pdev *pdev,
 	u_int32_t *key;
 	QDF_STATUS status;
 
-	msg = qdf_nbuf_alloc(
+	msg = dp_htt_htc_msg_alloc(
 		soc->osdev,
 		HTT_MSG_BUF_SIZE(sizeof(struct htt_h2t_msg_rx_fse_setup_t)),
 		/* reserve room for the HTC header */
@@ -5482,7 +5513,7 @@ dp_htt_rx_flow_fse_operation(struct dp_pdev *pdev,
 	uint8_t *htt_logger_bufp;
 	QDF_STATUS status;
 
-	msg = qdf_nbuf_alloc(
+	msg = dp_htt_htc_msg_alloc(
 		soc->osdev,
 		HTT_MSG_BUF_SIZE(sizeof(struct htt_h2t_msg_rx_fse_operation_t)),
 		/* reserve room for the HTC header */
@@ -5633,12 +5664,13 @@ dp_htt_rx_fisa_config(struct dp_pdev *pdev,
 
 	len = HTT_MSG_BUF_SIZE(sizeof(struct htt_h2t_msg_type_fisa_config_t));
 
-	msg = qdf_nbuf_alloc(soc->osdev,
-			     len,
-			     /* reserve room for the HTC header */
-			     HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING,
-			     4,
-			     TRUE);
+	msg = dp_htt_htc_msg_alloc(
+			soc->osdev,
+			len,
+			/* reserve room for the HTC header */
+			HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING,
+			4,
+			TRUE);
 	if (!msg)
 		return QDF_STATUS_E_NOMEM;
 
@@ -5735,12 +5767,13 @@ dp_htt_rxdma_rxole_ppe_cfg_set(struct dp_soc *soc,
 	len = HTT_MSG_BUF_SIZE(
 	      sizeof(struct htt_h2t_msg_type_rxdma_rxole_ppe_cfg_t));
 
-	msg = qdf_nbuf_alloc(soc->osdev,
-			     len,
-			     /* reserve room for the HTC header */
-			     HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING,
-			     4,
-			     TRUE);
+	msg = dp_htt_htc_msg_alloc(
+			soc->osdev,
+			len,
+			/* reserve room for the HTC header */
+			HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING,
+			4,
+			TRUE);
 	if (!msg)
 		return QDF_STATUS_E_NOMEM;
 
@@ -5939,12 +5972,13 @@ QDF_STATUS dp_htt_umac_reset_send_setup_cmd(
 	len = HTT_MSG_BUF_SIZE(
 		HTT_H2T_UMAC_HANG_RECOVERY_PREREQUISITE_SETUP_BYTES);
 
-	msg = qdf_nbuf_alloc(soc->osdev,
-			     len,
-			     /* reserve room for the HTC header */
-			     HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING,
-			     4,
-			     TRUE);
+	msg = dp_htt_htc_msg_alloc(
+			soc->osdev,
+			len,
+			/* reserve room for the HTC header */
+			HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING,
+			4,
+			TRUE);
 	if (!msg)
 		return QDF_STATUS_E_NOMEM;
 
@@ -6040,12 +6074,13 @@ QDF_STATUS dp_htt_umac_reset_send_start_pre_reset_cmd(
 	len = HTT_MSG_BUF_SIZE(
 		HTT_H2T_UMAC_HANG_RECOVERY_START_PRE_RESET_BYTES);
 
-	msg = qdf_nbuf_alloc(soc->osdev,
-			     len,
-			     /* reserve room for the HTC header */
-			     HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING,
-			     4,
-			     TRUE);
+	msg = dp_htt_htc_msg_alloc(
+			soc->osdev,
+			len,
+			/* reserve room for the HTC header */
+			HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING,
+			4,
+			TRUE);
 	if (!msg)
 		return QDF_STATUS_E_NOMEM;
 
