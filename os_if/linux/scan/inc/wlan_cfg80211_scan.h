@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -124,6 +124,7 @@ struct scan_req {
  * @scan_f_2ghz: Scan only 2GHz channels
  * @scan_f_5ghz: Scan only 5+6GHz channels
  * @mld_id: MLD ID of the requested BSS within ML probe request
+ * @opmode: Interface type from where this scan request is initiated
  */
 struct scan_params {
 	uint8_t source;
@@ -142,6 +143,7 @@ struct scan_params {
 	bool scan_f_2ghz;
 	bool scan_f_5ghz;
 	uint8_t mld_id;
+	enum QDF_OPMODE opmode;
 };
 
 /**

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -172,6 +172,10 @@ struct probe_time_dwell_time {
 #define SCAN_FLAG_EXT_AUX_FAST_SCAN		0x00020000
 
 #define SCAN_FLAG_EXT_STOP_IF_BSSID_FOUND	0x00080000
+
+/* Indicate to use STA vdev for P2P scan */
+#define SCAN_FLAG_EXT_P2P_SCAN                  0x00100000
+
 /**
  * struct cb_handler - defines scan event handler
  * call back function and arguments

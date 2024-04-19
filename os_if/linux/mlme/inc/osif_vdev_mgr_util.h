@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021, 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -29,6 +29,7 @@
  *                                       response from FW
  * @osif_vdev_mgr_send_scan_done_complete_cb: send scan done indication to
  * upper layer
+ * @osif_vdev_mgr_get_p2p_wdev_cb: Get p2p wdev
  */
 struct osif_vdev_mgr_ops {
 #ifdef WLAN_FEATURE_DYNAMIC_MAC_ADDR_UPDATE
@@ -36,6 +37,7 @@ struct osif_vdev_mgr_ops {
 						    uint8_t resp_status);
 #endif
 	void (*osif_vdev_mgr_send_scan_done_complete_cb)(uint8_t vdev_id);
+	void (*osif_vdev_mgr_get_p2p_wdev_cb)(struct wireless_dev *wdev);
 };
 
 /**
@@ -67,4 +69,12 @@ void osif_vdev_mgr_reset_legacy_cb(void);
  * Return: QDF_STATUS
  */
 QDF_STATUS osif_vdev_mgr_register_cb(void);
+
+/**
+ * osif_vdev_mgr_get_p2p_wdev() - Get P2P wdev
+ * @wdev: pointer to wdev
+ *
+ * Return: None
+ */
+void osif_vdev_mgr_get_p2p_wdev(struct wireless_dev *wdev);
 #endif /* __OSIF_CM_UTIL_H */

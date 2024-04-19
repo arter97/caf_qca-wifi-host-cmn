@@ -45,6 +45,12 @@
 #include "host_diag_core_event.h"
 #endif
 #include "utils_mlo.h"
+
+#ifdef CONVERGED_P2P_ENABLE
+#include "wlan_mlme_ucfg_api.h"
+#include "wlan_p2p_ucfg_api.h"
+#endif
+
 #define INVALID_LINK_ID 255
 
 const struct nla_policy cfg80211_scan_policy[
@@ -1564,6 +1570,28 @@ bool wlan_is_scan_allowed(struct wlan_objmgr_vdev *vdev)
 	return true;
 }
 
+#ifdef CONVERGED_P2P_ENABLE
+static void
+wlan_handle_sta_vdev_for_p2p_device(struct wlan_objmgr_psoc *psoc,
+				    struct scan_start_request *req)
+{
+	struct qdf_mac_addr mac_addr = {0};
+
+	if (ucfg_p2p_is_sta_vdev_usage_allowed_for_p2p_dev(psoc)) {
+		wlan_mlme_get_p2p_device_mac_addr(req->vdev, &mac_addr);
+		qdf_mem_copy(req->scan_req.scan_random.mac_addr, &mac_addr,
+			     QDF_MAC_ADDR_SIZE);
+		req->scan_req.scan_random.randomize = true;
+		req->scan_req.scan_ctrl_flags_ext |= SCAN_FLAG_EXT_P2P_SCAN;
+	}
+}
+#else
+static void
+wlan_handle_sta_vdev_for_p2p_device(struct wlan_objmgr_psoc *psoc,
+				    struct scan_start_request *req)
+{}
+#endif
+
 int wlan_cfg80211_scan(struct wlan_objmgr_vdev *vdev,
 		       struct cfg80211_scan_request *request,
 		       struct scan_params *params)
@@ -1835,6 +1863,9 @@ int wlan_cfg80211_scan(struct wlan_objmgr_vdev *vdev,
 	if (params->scan_probe_unicast_ra)
 		req->scan_req.scan_ctrl_flags_ext |=
 				SCAN_FLAG_EXT_FORCE_UNICAST_RA;
+
+	if (is_p2p_scan && params->opmode == QDF_P2P_DEVICE_MODE)
+		wlan_handle_sta_vdev_for_p2p_device(psoc, req);
 
 	osif_debug("scan_ctrl_flags_ext %0x",
 		   req->scan_req.scan_ctrl_flags_ext);

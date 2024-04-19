@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021, 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -44,6 +44,13 @@ static void osif_vdev_mgr_send_scan_done_complete_cb(uint8_t vdev_id)
 	    osif_vdev_mgr_legacy_ops->osif_vdev_mgr_send_scan_done_complete_cb)
 	     osif_vdev_mgr_legacy_ops->osif_vdev_mgr_send_scan_done_complete_cb(
 								vdev_id);
+}
+
+void osif_vdev_mgr_get_p2p_wdev(struct wireless_dev *wdev)
+{
+	if (osif_vdev_mgr_legacy_ops &&
+	    osif_vdev_mgr_legacy_ops->osif_vdev_mgr_get_p2p_wdev_cb)
+		osif_vdev_mgr_legacy_ops->osif_vdev_mgr_get_p2p_wdev_cb(wdev);
 }
 
 static struct mlme_vdev_mgr_ops vdev_mgr_ops = {
