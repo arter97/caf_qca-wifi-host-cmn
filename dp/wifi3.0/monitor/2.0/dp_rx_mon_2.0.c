@@ -1942,6 +1942,7 @@ end:
 		 (tlv_status == HAL_TLV_STATUS_MPDU_END) ||
 		 (tlv_status == HAL_TLV_STATUS_MSDU_END) ||
 		 (tlv_status == HAL_TLV_STATUS_MON_BUF_ADDR) ||
+		 (tlv_status == HAL_TLV_STATUS_MON_DROP) ||
 		 (tlv_status == HAL_TLV_STATUS_MPDU_START));
 
 	return work_done;
@@ -2251,6 +2252,7 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 			 (tlv_status == HAL_TLV_STATUS_MPDU_END) ||
 			 (tlv_status == HAL_TLV_STATUS_MSDU_END) ||
 			 (tlv_status == HAL_TLV_STATUS_MON_BUF_ADDR) ||
+			 (tlv_status == HAL_TLV_STATUS_MON_DROP) ||
 			 (tlv_status == HAL_TLV_STATUS_MPDU_START));
 
 		/* set status buffer pointer to NULL */
