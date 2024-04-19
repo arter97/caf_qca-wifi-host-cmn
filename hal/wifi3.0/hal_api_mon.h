@@ -171,7 +171,7 @@
 #endif
 
 /* Max MPDUs per status buffer */
-#define HAL_RX_MAX_MPDU 256
+#define HAL_RX_MAX_MPDU 512
 #define HAL_RX_NUM_WORDS_PER_PPDU_BITMAP (HAL_RX_MAX_MPDU >> 5)
 #define HAL_RX_MAX_MPDU_H_PER_STATUS_BUFFER 16
 

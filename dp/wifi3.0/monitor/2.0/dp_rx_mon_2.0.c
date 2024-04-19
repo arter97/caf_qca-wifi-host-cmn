@@ -664,7 +664,7 @@ dp_rx_mon_handle_mpdu_end(struct hal_rx_ppdu_info *ppdu_info)
 	struct hal_rx_mon_mpdu_info *mpdu_info, *mpdu_meta;
 	qdf_nbuf_t nbuf;
 	uint8_t user_id = ppdu_info->user_id;
-	uint8_t mpdu_idx = ppdu_info->mpdu_count[user_id];
+	uint16_t mpdu_idx = ppdu_info->mpdu_count[user_id];
 
 	mpdu_info = &ppdu_info->mpdu_info[user_id];
 	if (qdf_unlikely(!ppdu_info->rx_hdr_rcvd[user_id])) {
@@ -707,7 +707,7 @@ dp_rx_mon_handle_mpdu_start(struct hal_rx_ppdu_info *ppdu_info)
 	struct hal_rx_mon_mpdu_info *mpdu_info, *mpdu_meta;
 	qdf_nbuf_t nbuf;
 	uint8_t user_id = ppdu_info->user_id;
-	uint8_t mpdu_idx = ppdu_info->mpdu_count[user_id];
+	uint16_t mpdu_idx = ppdu_info->mpdu_count[user_id];
 	uint8_t type;
 
 	if (qdf_unlikely(!ppdu_info->rx_hdr_rcvd[user_id])) {
@@ -752,7 +752,7 @@ dp_rx_mon_handle_msdu_end(struct dp_pdev *pdev,
 	struct hal_rx_mon_msdu_info *msdu_info;
 	struct hal_rx_mon_msdu_info *last_buf_info;
 	uint8_t user_id = ppdu_info->user_id;
-	uint8_t mpdu_idx = ppdu_info->mpdu_count[user_id];
+	uint16_t mpdu_idx = ppdu_info->mpdu_count[user_id];
 
 	msdu_info = &ppdu_info->msdu[user_id];
 	/* update msdu metadata at last buffer of msdu in MPDU */
