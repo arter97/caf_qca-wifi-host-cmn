@@ -565,7 +565,7 @@ mlo_mgr_link_switch_notification(struct wlan_objmgr_vdev *vdev,
 	switch (notify_reason) {
 	case MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_PRE_SER:
 	case MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_POST_SER:
-		if (mlo_check_if_all_vdev_up(vdev)) {
+		if (!mlo_check_if_all_vdev_up(vdev)) {
 			mlo_debug("Not all VDEVs up");
 			status = QDF_STATUS_E_AGAIN;
 			break;
