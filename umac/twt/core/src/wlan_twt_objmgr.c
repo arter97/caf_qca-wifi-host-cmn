@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -50,6 +50,7 @@ wlan_twt_psoc_obj_create_handler(struct wlan_objmgr_psoc *psoc, void *arg)
 		return status;
 	}
 
+	qdf_atomic_init(&twt_psoc_obj->twt_requestor_enable_pending);
 	twt_debug("twt psoc priv obj attach successful");
 	return status;
 }

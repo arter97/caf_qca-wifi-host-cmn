@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -63,6 +63,7 @@ struct twt_tgt_caps {
  * @enable_context: enable context
  * @disable_context: disable context
  * @twt_pmo_disabled: twt pmo disabled
+ * @twt_requestor_enable_pending: If TWT requestor enable command is pending
  */
 struct twt_psoc_priv_obj {
 	psoc_twt_ext_cfg_params_t cfg_params;
@@ -70,6 +71,7 @@ struct twt_psoc_priv_obj {
 	struct twt_en_dis_context enable_context;
 	struct twt_en_dis_context disable_context;
 	uint32_t twt_pmo_disabled;
+	qdf_atomic_t twt_requestor_enable_pending;
 };
 
 /**
