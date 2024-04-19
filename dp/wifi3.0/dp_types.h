@@ -4926,6 +4926,7 @@ struct dp_peer_per_pkt_tx_stats {
  * @transmit_type: pkt info for tx transmit type
  * @mu_group_id: mumimo mu group id
  * @last_ack_rssi: RSSI of last acked packet
+ * @avg_ack_rssi: Averaged RSSI of acked packets
  * @nss_info: NSS 1,2, ...8
  * @mcs_info: MCS index
  * @bw_info: Bandwidth
@@ -4987,6 +4988,7 @@ struct dp_peer_extd_tx_stats {
 	uint32_t mu_group_id[MAX_MU_GROUP_ID];
 
 	uint32_t last_ack_rssi;
+	uint32_t avg_ack_rssi;
 
 	uint32_t nss_info:4,
 		 mcs_info:4,

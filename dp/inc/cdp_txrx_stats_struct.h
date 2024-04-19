@@ -1486,6 +1486,7 @@ struct protocol_trace_count {
  * @rnd_avg_tx_rate: Rounded average tx rate
  * @avg_tx_rate: Average TX rate
  * @last_ack_rssi: RSSI of last acked packet
+ * @avg_ack_rssi: Averaged RSSI of acked packets
  * @tx_bytes_success_last: last Tx success bytes
  * @tx_data_success_last: last Tx success data
  * @tx_byte_rate: Bytes Trasmitted in last one sec
@@ -1607,6 +1608,7 @@ struct cdp_tx_stats {
 	uint64_t rnd_avg_tx_rate;
 	uint64_t avg_tx_rate;
 	uint32_t last_ack_rssi;
+	uint32_t avg_ack_rssi;
 	uint32_t tx_bytes_success_last;
 	uint32_t tx_data_success_last;
 	uint32_t tx_byte_rate;

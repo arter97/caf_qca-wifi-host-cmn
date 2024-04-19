@@ -1938,6 +1938,8 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 								  \
 		_tgtobj->stats.tx.last_ack_rssi =	\
 			_srcobj->stats.tx.last_ack_rssi; \
+		_tgtobj->stats.tx.avg_ack_rssi =	\
+			_srcobj->stats.tx.avg_ack_rssi; \
 		DP_STATS_AGGR(_tgtobj, _srcobj, rx.multipass_rx_pkt_drop); \
 		DP_STATS_AGGR(_tgtobj, _srcobj, rx.peer_unauth_rx_pkt_drop); \
 		DP_STATS_AGGR(_tgtobj, _srcobj, rx.policy_check_drop); \
@@ -2226,6 +2228,7 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		_tgtobj->tx.ru_start = _srcobj->tx.ru_start; \
 		_tgtobj->tx.ru_tones = _srcobj->tx.ru_tones; \
 		_tgtobj->tx.last_ack_rssi = _srcobj->tx.last_ack_rssi; \
+		_tgtobj->tx.avg_ack_rssi = _srcobj->tx.avg_ack_rssi; \
 		_tgtobj->tx.nss_info = _srcobj->tx.nss_info; \
 		_tgtobj->tx.mcs_info = _srcobj->tx.mcs_info; \
 		_tgtobj->tx.bw_info = _srcobj->tx.bw_info; \

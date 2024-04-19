@@ -6896,6 +6896,8 @@ void dp_print_tx_rates(struct dp_vdev *vdev)
 	DP_PRINT_STATS("LDPC = %d", pdev->stats.tx.ldpc);
 	DP_PRINT_STATS("Retries = %d", pdev->stats.tx.retries);
 	DP_PRINT_STATS("Last ack rssi = %d\n", pdev->stats.tx.last_ack_rssi);
+	DP_PRINT_STATS("Average ack rssi = %d\n",
+			CDP_SNR_OUT(pdev->stats.tx.avg_ack_rssi));
 	DP_PRINT_STATS("Number of PPDU's with Punctured Preamble = %d",
 			   pdev->stats.tx.pream_punct_cnt);
 
@@ -7553,6 +7555,8 @@ void dp_print_peer_stats(struct dp_peer *peer,
 		       peer_stats->tx.ampdu_cnt);
 	DP_PRINT_STATS("Last Packet RSSI = %d",
 		       peer_stats->tx.last_ack_rssi);
+	DP_PRINT_STATS("Average Packet RSSI = %d",
+		       CDP_SNR_OUT(peer_stats->tx.avg_ack_rssi));
 	DP_PRINT_STATS("Dropped At FW: Removed Pkts = %llu",
 		       peer_stats->tx.dropped.fw_rem.num);
 	DP_PRINT_STATS("Release source not TQM = %u",
@@ -9467,6 +9471,7 @@ void dp_update_pdev_stats(struct dp_pdev *tgtobj,
 	tgtobj->stats.tx.ru_start = srcobj->tx.ru_start;
 	tgtobj->stats.tx.ru_tones = srcobj->tx.ru_tones;
 	tgtobj->stats.tx.last_ack_rssi = srcobj->tx.last_ack_rssi;
+	tgtobj->stats.tx.avg_ack_rssi = srcobj->tx.avg_ack_rssi;
 	tgtobj->stats.tx.nss_info = srcobj->tx.nss_info;
 	tgtobj->stats.tx.mcs_info = srcobj->tx.mcs_info;
 	tgtobj->stats.tx.bw_info = srcobj->tx.bw_info;
@@ -9613,6 +9618,8 @@ void dp_update_pdev_stats(struct dp_pdev *tgtobj,
 
 	tgtobj->stats.tx.last_ack_rssi =
 		srcobj->tx.last_ack_rssi;
+	tgtobj->stats.tx.avg_ack_rssi =
+		srcobj->tx.avg_ack_rssi;
 	tgtobj->stats.rx.mec_drop.num += srcobj->rx.mec_drop.num;
 	tgtobj->stats.rx.mec_drop.bytes += srcobj->rx.mec_drop.bytes;
 	tgtobj->stats.rx.ppeds_drop.num += srcobj->rx.ppeds_drop.num;
@@ -10396,6 +10403,8 @@ dp_print_per_link_peer_txrx_stats(struct cdp_peer_stats *peer_stats,
 		       peer_stats->tx.ampdu_cnt);
 	DP_PRINT_STATS("Last Packet RSSI = %u",
 		       peer_stats->tx.last_ack_rssi);
+	DP_PRINT_STATS("Average Packet RSSI = %u",
+		       CDP_SNR_OUT(peer_stats->tx.avg_ack_rssi));
 	DP_PRINT_STATS("Dropped At FW: Removed Pkts = %llu",
 		       peer_stats->tx.dropped.fw_rem.num);
 	DP_PRINT_STATS("Release source not TQM = %u",
