@@ -2582,6 +2582,7 @@ static QDF_STATUS
 mlo_sta_handle_ptqm_migration(struct wlan_objmgr_vdev *removal_vdev)
 {
 	struct wlan_objmgr_peer *bss_peer;
+	struct ptqm_peer_migrate_params params = {0};
 
 	if (!wlan_cm_is_vdev_connected(removal_vdev))
 		return QDF_STATUS_E_INVAL;
@@ -2595,8 +2596,13 @@ mlo_sta_handle_ptqm_migration(struct wlan_objmgr_vdev *removal_vdev)
 		!= wlan_vdev_get_link_id(removal_vdev))
 		return QDF_STATUS_SUCCESS;
 
-	return wlan_mlo_set_ptqm_migration(removal_vdev, bss_peer->mlo_peer_ctx,
-					   false, WLAN_LINK_ID_INVALID, true);
+	params.module_id = PTQM_MIGRATION_MODULE_MLR;
+	params.src_link_id = HW_LINK_ID_ANY;
+	params.dst_link_id = HW_LINK_ID_ANY;
+	params.force_mig = true;
+
+	return wlan_ptqm_peer_migrate_req_add(removal_vdev,
+					      bss_peer->mlo_peer_ctx, &params);
 }
 #else
 static QDF_STATUS
