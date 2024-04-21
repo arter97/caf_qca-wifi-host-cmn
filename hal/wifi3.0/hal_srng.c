@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -801,6 +801,20 @@ static void hal_reg_write_work(void *arg)
 		if (!q_elem->valid)
 			break;
 
+		qdf_rmb();
+		/* buy some more time to make sure all fields
+		 * in q_elem is updated per different CPUs, in
+		 * case wmb/rmb is not taken effect
+		 */
+		if (qdf_unlikely(!q_elem->srng ||
+				 (qdf_atomic_read(&q_elem->ring_id) !=
+				 q_elem->srng->ring_id))) {
+			hal_err_rl("q_elem fields not up to date %d %d",
+				   q_elem->srng->ring_id,
+				   qdf_atomic_read(&q_elem->ring_id));
+			qdf_assert_always(0);
+		}
+
 		q_elem->dequeue_time = qdf_get_log_timestamp();
 		ring_id = q_elem->srng->ring_id;
 		addr = q_elem->addr;
@@ -900,6 +914,7 @@ static void hal_reg_write_enqueue(struct hal_soc *hal_soc,
 
 	q_elem->srng = srng;
 	q_elem->addr = addr;
+	qdf_atomic_set(&q_elem->ring_id, srng->ring_id);
 	q_elem->enqueue_val = value;
 	q_elem->enqueue_time = qdf_get_log_timestamp();
 
