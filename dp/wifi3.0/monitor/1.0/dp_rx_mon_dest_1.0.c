@@ -1494,7 +1494,8 @@ dp_rx_pdev_mon_cmn_desc_pool_init(struct dp_pdev *pdev, int mac_id)
 	dp_rx_pdev_mon_dest_desc_pool_init(pdev, mac_for_pdev);
 }
 
-#ifdef FEATURE_ML_MONITOR_MODE_SUPPORT
+#if defined(FEATURE_ML_MONITOR_MODE_SUPPORT) || \
+	defined(FEATURE_ML_LOCAL_PKT_CAPTURE)
 void
 dp_rx_pdev_mon_desc_pool_deinit(struct dp_pdev *pdev)
 {

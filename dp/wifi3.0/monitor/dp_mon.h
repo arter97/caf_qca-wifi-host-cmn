@@ -1111,7 +1111,8 @@ struct  dp_mon_pdev {
 	bool monitor_configured;
 	uint32_t mon_vdev_id;
 
-#ifdef FEATURE_ML_MONITOR_MODE_SUPPORT
+#if defined(FEATURE_ML_MONITOR_MODE_SUPPORT) || \
+	defined(FEATURE_ML_LOCAL_PKT_CAPTURE)
 	struct dp_mon_mac mon_mac[MAX_NUM_LMAC_HW];
 #else
 	struct dp_mon_mac mon_mac;
@@ -1312,7 +1313,8 @@ struct  dp_mon_vdev {
 	uint8_t mac_id;
 };
 
-#ifdef FEATURE_ML_MONITOR_MODE_SUPPORT
+#if defined(FEATURE_ML_MONITOR_MODE_SUPPORT) || \
+	defined(FEATURE_ML_LOCAL_PKT_CAPTURE)
 /**
  * dp_get_mon_mac() - Get mon_mac handle
  * @pdev: dp pdev handle
@@ -1323,11 +1325,6 @@ struct  dp_mon_vdev {
 static inline
 struct dp_mon_mac *dp_get_mon_mac(struct dp_pdev *pdev, uint8_t mac_id)
 {
-	struct dp_soc *soc = pdev->soc;
-
-	if (soc->wlan_cfg_ctx->num_rxdma_dst_rings_per_pdev == 1)
-		return &pdev->monitor_pdev->mon_mac[0];
-
 	return &pdev->monitor_pdev->mon_mac[mac_id];
 }
 #else
@@ -4090,17 +4087,21 @@ void dp_monitor_pdev_set_mon_vdev(struct dp_vdev *vdev)
 	 *
 	 * vdev - mac mapping will be updated during vdev start.
 	 **/
-	uint8_t mac_id = 0;
+	uint8_t mac_id;
 	struct dp_mon_mac *mon_mac;
 
 	if (!vdev->pdev->monitor_pdev)
 		return;
 
-	mon_mac = dp_get_mon_mac(vdev->pdev, mac_id);
-	if (!mon_mac->mvdev)
-		mon_mac->mvdev = vdev;
-	else
-		dp_info("set mvdev skipped for vdev_id: %u", vdev->vdev_id);
+	/* Need to initialize both mon_mac to same vdev for ML LPC */
+	for (mac_id = 0; mac_id < MAX_NUM_LMAC_HW; mac_id++) {
+		mon_mac = dp_get_mon_mac(vdev->pdev, mac_id);
+		if (!mon_mac->mvdev)
+			mon_mac->mvdev = vdev;
+		else
+			dp_info("skip to set mvdev - vdev_id: %u, mac_id: %u",
+				vdev->vdev_id, mac_id);
+	}
 }
 
 static inline
