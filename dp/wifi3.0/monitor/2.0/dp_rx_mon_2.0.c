@@ -2275,6 +2275,8 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 							  rx_mon_desc_pool);
 	}
 
+	/* convert encryption type to cdp enum */
+	dp_convert_enc_to_cdp_enc(ppdu_info);
 	ppdu_info->rx_status.tsft = ppdu_info->rx_status.tsft +
 				    pdev->timestamp.mlo_offset_lo_us +
 				    ((uint64_t)pdev->timestamp.mlo_offset_hi_us

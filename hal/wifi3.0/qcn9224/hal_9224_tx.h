@@ -392,7 +392,12 @@ struct tx_peer_entry_compact_9224 {
 	/* DWORD - 2 */
 	uint32_t mac_addr_b_47_16		: 32;
 	/* DWORD - 3 */
-	uint32_t reserved_3			: 32;
+	uint32_t use_ad_b			:  1,
+		 strip_insert_vlan_inner	:  1,
+		 strip_insert_vlan_outer	:  1,
+		 vlan_llc_mode			:  1,
+		 key_type			:  4,
+		 reserved_3			: 24;
 	/* DWORD - 16 */
 	uint32_t reserved_16			: 32;
 	/* DWORD - 17 */
