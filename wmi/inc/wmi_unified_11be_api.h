@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -99,6 +99,20 @@ QDF_STATUS wmi_extract_mlo_link_removal_evt_fixed_param(
 		struct wmi_unified *wmi_handle,
 		void *buf,
 		struct mlo_link_removal_evt_params *params);
+
+/**
+ * wmi_extract_mlo_3_link_tlt_selection_fixed_param() - Extract fixed
+ * parameters TLV from the MLO 3 link tlt selection WMI  event
+ * @wmi_handle: wmi handle
+ * @buf: pointer to event buffer
+ * @params: MLO 3 link tlt selection event parameters
+ *
+ * Return: QDF_STATUS_SUCCESS of operation
+ */
+QDF_STATUS wmi_extract_mlo_3_link_tlt_selection_fixed_param(
+		struct wmi_unified *wmi_handle,
+		void *buf,
+		struct mlo_tlt_selection_evt_params *params);
 
 /**
  * wmi_extract_mlo_link_removal_tbtt_update() - Extract TBTT update TLV

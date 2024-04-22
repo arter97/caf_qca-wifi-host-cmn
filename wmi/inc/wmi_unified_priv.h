@@ -3262,6 +3262,11 @@ QDF_STATUS (*extract_mlo_link_removal_evt_fixed_param)(
 		void *buf,
 		struct mlo_link_removal_evt_params *params);
 
+QDF_STATUS (*extract_mlo_3_link_tlt_selection_fixed_param)(
+		struct wmi_unified *wmi_handle,
+		void *buf,
+		struct mlo_tlt_selection_evt_params *params);
+
 QDF_STATUS (*extract_mlo_link_removal_tbtt_update)(
 		struct wmi_unified *wmi_handle,
 		void *buf,

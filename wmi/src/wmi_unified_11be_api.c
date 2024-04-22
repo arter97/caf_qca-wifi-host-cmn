@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -225,6 +225,18 @@ QDF_STATUS wmi_extract_mlo_link_removal_evt_fixed_param(
 {
 	if (wmi->ops->extract_mlo_link_removal_evt_fixed_param)
 		return wmi->ops->extract_mlo_link_removal_evt_fixed_param(
+							wmi, buf, params);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS wmi_extract_mlo_3_link_tlt_selection_fixed_param(
+		struct wmi_unified *wmi,
+		void *buf,
+		struct mlo_tlt_selection_evt_params *params)
+{
+	if (wmi->ops->extract_mlo_3_link_tlt_selection_fixed_param)
+		return wmi->ops->extract_mlo_3_link_tlt_selection_fixed_param(
 							wmi, buf, params);
 
 	return QDF_STATUS_E_FAILURE;

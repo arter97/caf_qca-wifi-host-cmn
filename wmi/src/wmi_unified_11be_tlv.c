@@ -1275,6 +1275,50 @@ extract_mlo_link_removal_evt_fixed_param_tlv(
 }
 
 /**
+ * extract_mlo_3_link_tlt_selection_fixed_param_tlv() - Extract fixed parameters
+ * TLV from the MLO 3 link tlt selection  WMI  event
+ * @wmi_handle: wmi handle
+ * @buf: pointer to event buffer
+ * @params: MLO 3 link tlt selection event parameters
+ *
+ * Return: QDF_STATUS of operation
+ */
+static QDF_STATUS
+extract_mlo_3_link_tlt_selection_fixed_param_tlv(
+	struct wmi_unified *wmi_handle,
+	void *buf,
+	struct mlo_tlt_selection_evt_params *params)
+{
+	WMI_MLO_TLT_SELECTION_FOR_TID_SPRAY_EVENTID_param_tlvs *param_buf = buf;
+	wmi_mlo_tlt_selection_for_tid_spray_event_fixed_param *ev;
+
+	if (!param_buf) {
+		wmi_err_rl("Param_buf is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (!params) {
+		wmi_err_rl("params is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	ev = param_buf->fixed_param;
+
+	/* copy mld mac address */
+	WMI_MAC_ADDR_TO_CHAR_ARRAY(&ev->mld_mac, params->mld_addr.bytes);
+
+	/* fill link bit map values */
+	qdf_mem_copy(params->link_bmap, ev->link_bmap,
+		     sizeof(params->link_bmap));
+
+	/* fill link priority */
+	qdf_mem_copy(params->link_priority, ev->hwlink_priority,
+		     sizeof(params->link_priority));
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
  * extract_mlo_link_removal_tbtt_update_tlv() - Extract TBTT update TLV
  * from the MLO link removal WMI  event
  * @wmi_handle: wmi handle
@@ -2841,6 +2885,8 @@ void wmi_11be_attach_tlv(wmi_unified_t wmi_handle)
 	ops->send_mlo_link_removal_cmd = send_mlo_link_removal_cmd_tlv;
 	ops->extract_mlo_link_removal_evt_fixed_param =
 			extract_mlo_link_removal_evt_fixed_param_tlv;
+	ops->extract_mlo_3_link_tlt_selection_fixed_param =
+			extract_mlo_3_link_tlt_selection_fixed_param_tlv;
 	ops->extract_mlo_link_removal_tbtt_update =
 			extract_mlo_link_removal_tbtt_update_tlv;
 	ops->extract_mgmt_rx_mlo_link_removal_info =
