@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -41,7 +41,8 @@
 #include <qdf_nbuf_frag.h>
 #include "qdf_time.h"
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0)) || \
+    (LINUX_VERSION_CODE == KERNEL_VERSION(5, 14, 0))
 /* Since commit
  *  baebdf48c3600 ("net: dev: Makes sure netif_rx() can be invoked in any context.")
  *
