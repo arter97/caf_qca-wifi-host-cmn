@@ -13968,6 +13968,7 @@ dp_soc_attach(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 			  &soc->cmem_total_size);
 	soc->cmem_avail_size = soc->cmem_total_size;
 	soc->device_id = device_id;
+	soc->pcie_slot = -1;
 	soc->cdp_soc.ops =
 		(struct cdp_ops *)qdf_mem_malloc(sizeof(struct cdp_ops));
 	if (!soc->cdp_soc.ops)
