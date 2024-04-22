@@ -3075,6 +3075,7 @@ static void cm_eliminate_common_candidate(qdf_list_t *candidate_list)
 	struct scan_cache_node *scan_entry = NULL;
 	qdf_list_node_t *cur_node = NULL, *next_node = NULL;
 	uint32_t size = 0;
+	QDF_STATUS status;
 
 	size = qdf_list_size(candidate_list);
 
@@ -3093,8 +3094,17 @@ static void cm_eliminate_common_candidate(qdf_list_t *candidate_list)
 		cm_find_and_remove_dup_candidate(scan_entry,
 						 next_node, candidate_list);
 
-		/* find next again as next entry might have deleted */
-		qdf_list_peek_next(candidate_list, cur_node, &next_node);
+		/*
+		 * Find next again as next entry might have deleted.
+		 * If reach end of list, next_node won't be updated, may still
+		 * be freed node, but it's next is itself, qdf_list_peek_next
+		 * will return QDF_STATUS_E_EMPTY, need break loop, or double
+		 * free will happen.
+		 */
+		status = qdf_list_peek_next(candidate_list, cur_node,
+					    &next_node);
+		if (QDF_IS_STATUS_ERROR(status))
+			break;
 
 		cur_node = next_node;
 		next_node = NULL;
