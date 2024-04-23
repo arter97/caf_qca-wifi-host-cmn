@@ -8122,6 +8122,51 @@ static QDF_STATUS send_start_oemv2_data_cmd_tlv(wmi_unified_t wmi_handle,
 }
 #endif
 
+#ifdef WLAN_DP_FEATURE_STC
+/**
+ * send_opm_stats_cmd_tlv() - start OPM stats command to target
+ * @wmi_handle: wmi handle
+ * @pdevid: pdev id
+ *
+ * Return: QDF status
+ */
+static QDF_STATUS send_opm_stats_cmd_tlv(wmi_unified_t wmi_handle,
+					 uint8_t pdevid)
+{
+	QDF_STATUS ret;
+	wmi_request_opm_stats_cmd_fixed_param *cmd;
+	wmi_buf_t buf;
+	uint16_t len = sizeof(*cmd);
+	uint8_t *buf_ptr;
+	uint32_t pdev_id;
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf)
+		return QDF_STATUS_E_NOMEM;
+
+	buf_ptr = (uint8_t *)wmi_buf_data(buf);
+	cmd = (wmi_request_opm_stats_cmd_fixed_param *)buf_ptr;
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		       WMITLV_TAG_STRUC_wmi_request_opm_stats_cmd_fixed_param,
+		       WMITLV_GET_STRUCT_TLVLEN(wmi_request_opm_stats_cmd_fixed_param));
+
+	pdev_id = wmi_handle->ops->convert_host_pdev_id_to_target(wmi_handle,
+								  pdevid);
+
+	cmd->pdev_id = pdev_id;
+
+	wmi_mtrace(WMI_REQUEST_OPM_STATS_CMDID, NO_SESSION, 0);
+	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
+				   WMI_REQUEST_OPM_STATS_CMDID);
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		wmi_err_rl("Failed with ret = %d", ret);
+		wmi_buf_free(buf);
+	}
+
+	return ret;
+}
+#endif
+
 /**
  * send_dfs_phyerr_filter_offload_en_cmd_tlv() - enable dfs phyerr filter
  * @wmi_handle: wmi handle
@@ -22765,6 +22810,10 @@ struct wmi_ops tlv_ops =  {
 #endif
 	.send_active_traffic_map_cmd = send_active_traffic_map_cmd_tlv,
 	.send_sap_suspend_cmd = send_ap_suspend_cmd_tlv,
+
+#ifdef WLAN_DP_FEATURE_STC
+	.send_opm_stats_cmd = send_opm_stats_cmd_tlv,
+#endif
 };
 
 #ifdef WLAN_FEATURE_11BE_MLO

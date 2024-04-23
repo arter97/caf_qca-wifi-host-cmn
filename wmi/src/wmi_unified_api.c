@@ -4265,3 +4265,15 @@ wmi_extract_vendor_pdev_event(wmi_unified_t wmi_handle,
 	return QDF_STATUS_E_FAILURE;
 }
 #endif /* WLAN_VENDOR_EXTN */
+
+#ifdef WLAN_DP_FEATURE_STC
+QDF_STATUS wmi_unified_send_opm_stats_cmd(wmi_unified_t wmi_handle,
+					  uint8_t pdev_id)
+{
+	if (wmi_handle->ops->send_opm_stats_cmd)
+		return wmi_handle->ops->send_opm_stats_cmd(wmi_handle,
+							   pdev_id);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif

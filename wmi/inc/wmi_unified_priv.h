@@ -3558,6 +3558,10 @@ QDF_STATUS (*send_active_traffic_map_cmd)(wmi_unified_t wmi_handle,
 					  struct peer_active_traffic_map_params *param);
 QDF_STATUS (*send_sap_suspend_cmd)(wmi_unified_t wmi_handle,
 				   struct vdev_suspend_params *param);
+
+#ifdef WLAN_DP_FEATURE_STC
+QDF_STATUS (*send_opm_stats_cmd)(wmi_unified_t wmi_handle, uint8_t pdev_id);
+#endif
 };
 
 /* Forward declaration for psoc*/

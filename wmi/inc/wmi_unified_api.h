@@ -1544,6 +1544,20 @@ QDF_STATUS
 wmi_unified_lro_config_cmd(wmi_unified_t wmi_handle,
 			   struct wmi_lro_config_cmd_t *wmi_lro_cmd);
 
+#ifdef WLAN_DP_FEATURE_STC
+/**
+ * wmi_unified_send_opm_stats_cmd() - Send OPM stats command
+ * @wmi_handle: Pointer to wmi handle
+ * @pdev_id: pdev_id
+ *
+ * This function sends down the OPM stats command to firmware.
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_send_opm_stats_cmd(wmi_unified_t wmi_handle,
+					  uint8_t pdev_id);
+#endif
+
 /**
  * wmi_unified_set_thermal_mgmt_cmd() - set thermal mgmt command to fw
  * @wmi_handle: Pointer to wmi handle
