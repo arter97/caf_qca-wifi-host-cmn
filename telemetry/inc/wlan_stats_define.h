@@ -202,9 +202,11 @@ enum stats_type_e {
  * enum stats_info_attr: Defines the bitmap for the
  *                       telemetric info attribute
  * @STATS_INFO_AGGREGATE:   Indicate aggregation flag for driver
+ * @STATS_INFO_RESOLVE_STA: Indicate Host driver to resolve STA internaly
  */
 enum stats_info_attr {
 	STATS_INFO_AGGREGATE = 1,
+	STATS_INFO_RESOLVE_STA = 2,
 };
 
 enum stats_if_wme_ac {
