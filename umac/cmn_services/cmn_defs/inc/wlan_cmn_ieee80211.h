@@ -856,6 +856,7 @@ enum extn_element_ie {
  * REASON_PROP_START and decrease the value of REASON_PROP_START
  * accordingly.
  *
+ * @REASON_KEY_FAIL_TO_INSTALL: key fail to install reason code
  * @REASON_PROP_START: Start of prop reason code
  * @REASON_FW_TRIGGERED_LINK_SWITCH: Link Switch from active to standby link
  * @REASON_HOST_TRIGGERED_LINK_DELETE: Dynamic link removal
@@ -950,6 +951,7 @@ enum wlan_reason_code {
 	 * REASON_PROP_START and decrease the value of REASON_PROP_START
 	 * accordingly.
 	 */
+	REASON_KEY_FAIL_TO_INSTALL = 65514,
 	REASON_PROP_START = 65515,
 	REASON_FW_TRIGGERED_LINK_SWITCH = 65516,
 	REASON_HOST_TRIGGERED_LINK_DELETE = 65517,
