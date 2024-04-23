@@ -5602,6 +5602,37 @@ void dp_pdev_clear_tx_delay_stats(struct dp_soc *soc)
 }
 #endif
 
+#ifdef IPA_OFFLOAD
+#ifdef IPA_WDI3_TX_TWO_PIPES
+static inline void
+dp_ipa_print_soc_cfg_params(struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx)
+{
+	DP_PRINT_STATS("IPA Status: %u", soc_cfg_ctx->ipa_enabled);
+	DP_PRINT_STATS("IPA TX ring size: %u", soc_cfg_ctx->ipa_tx_ring_size);
+	DP_PRINT_STATS("IPA TX comp ring size: %u",
+		       soc_cfg_ctx->ipa_tx_comp_ring_size);
+	DP_PRINT_STATS("IPA TX_ALT ring size: %u",
+		       soc_cfg_ctx->ipa_tx_alt_ring_size);
+	DP_PRINT_STATS("IPA TX_ALT comp ring size: %u",
+		       soc_cfg_ctx->ipa_tx_alt_comp_ring_size);
+}
+#else
+static inline void
+dp_ipa_print_soc_cfg_params(struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx)
+{
+	DP_PRINT_STATS("IPA Status: %u", soc_cfg_ctx->ipa_enabled);
+	DP_PRINT_STATS("IPA TX ring size: %u", soc_cfg_ctx->ipa_tx_ring_size);
+	DP_PRINT_STATS("IPA TX comp ring size: %u",
+		       soc_cfg_ctx->ipa_tx_comp_ring_size);
+}
+#endif
+#else
+static inline void
+dp_ipa_print_soc_cfg_params(struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx)
+{
+}
+#endif
+
 void dp_print_soc_cfg_params(struct dp_soc *soc)
 {
 	struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx;
@@ -5839,6 +5870,7 @@ void dp_print_soc_cfg_params(struct dp_soc *soc)
 		       soc_cfg_ctx->is_rx_flow_search_table_per_pdev);
 	DP_PRINT_STATS("Rx desc pool size: %u ",
 		       soc_cfg_ctx->rx_sw_desc_num);
+	dp_ipa_print_soc_cfg_params(soc_cfg_ctx);
 }
 
 void
