@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022,2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -426,6 +426,10 @@ target_if_add_wds_entry(struct cdp_ctrl_objmgr_psoc *soc, uint8_t vdev_id,
 	wmi_wds_param.vdev_id = vdev_id;
 	wmi_wds_param.flags = flags;
 
+	target_if_debug("dest " QDF_MAC_ADDR_FMT " peer " QDF_MAC_ADDR_FMT,
+			QDF_MAC_ADDR_REF(dest_mac),
+			QDF_MAC_ADDR_REF(peer_mac));
+
 	status = wmi_unified_peer_add_wds_entry_cmd(pdev_wmi_handle,
 						    &wmi_wds_param);
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_WDS_ID);
@@ -471,6 +475,8 @@ target_if_del_wds_entry(struct cdp_ctrl_objmgr_psoc *soc, uint8_t vdev_id,
 
 	qdf_mem_copy(&wmi_wds_param.dest_addr, dest_mac, QDF_MAC_ADDR_SIZE);
 	wmi_wds_param.vdev_id = vdev_id;
+	target_if_debug("dest mac " QDF_MAC_ADDR_FMT,
+			QDF_MAC_ADDR_REF(dest_mac));
 
 	wmi_unified_peer_del_wds_entry_cmd(pdev_wmi_handle,
 					   &wmi_wds_param);

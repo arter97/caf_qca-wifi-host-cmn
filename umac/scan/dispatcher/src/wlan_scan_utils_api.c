@@ -1013,13 +1013,12 @@ util_scan_is_hidden_ssid(struct ie_ssid *ssid)
 }
 
 #ifdef WLAN_FEATURE_11BE_MLO
-static void
-util_scan_update_rnr_mld(struct rnr_bss_info *rnr,
-			 struct neighbor_ap_info_field *ap_info, uint8_t *data)
+static void util_scan_update_rnr_mld(struct rnr_bss_info *rnr, uint8_t *data,
+				     uint8_t tbtt_info_length)
 {
 	bool mld_info_present = false;
 
-	switch (ap_info->tbtt_header.tbtt_info_length) {
+	switch (tbtt_info_length) {
 	case TBTT_NEIGHBOR_AP_BSSID_S_SSID_BSS_PARAM_20MHZ_PSD_MLD_PARAM:
 		qdf_mem_copy(&rnr->mld_info, &data[13],
 			     sizeof(struct rnr_mld_info));
@@ -1030,9 +1029,9 @@ util_scan_update_rnr_mld(struct rnr_bss_info *rnr,
 	rnr->mld_info_valid = mld_info_present;
 }
 #else
-static void
-util_scan_update_rnr_mld(struct rnr_bss_info *rnr,
-			 struct neighbor_ap_info_field *ap_info, uint8_t *data)
+static inline void
+util_scan_update_rnr_mld(struct rnr_bss_info *rnr, uint8_t *data,
+			 uint8_t tbtt_info_length)
 {
 }
 #endif
@@ -1045,6 +1044,17 @@ util_scan_update_rnr(struct rnr_bss_info *rnr,
 	uint8_t tbtt_info_length;
 
 	tbtt_info_length = ap_info->tbtt_header.tbtt_info_length;
+
+	/*
+	 * Max TBTT sub-element length in RNR IE is 255 bytes and AP can send
+	 * data above defined length and the bytes in excess to this length
+	 * shall be treated as reserved.
+	 *
+	 * Limit the TBTT sub-element read operation to current supported
+	 * length i.e TBTT_NEIGHBOR_AP_PARAM_MAX
+	 */
+	if (tbtt_info_length > TBTT_NEIGHBOR_AP_PARAM_MAX)
+		tbtt_info_length = TBTT_NEIGHBOR_AP_PARAM_MAX;
 
 	switch (tbtt_info_length) {
 	case TBTT_NEIGHBOR_AP_OFFSET_ONLY:
@@ -1077,7 +1087,7 @@ util_scan_update_rnr(struct rnr_bss_info *rnr,
 		break;
 
 	case TBTT_NEIGHBOR_AP_BSSID_S_SSID_BSS_PARAM_20MHZ_PSD_MLD_PARAM:
-		util_scan_update_rnr_mld(rnr, ap_info, data);
+		util_scan_update_rnr_mld(rnr, data, tbtt_info_length);
 		fallthrough;
 	case TBTT_NEIGHBOR_AP_BSSID_S_SSID_BSS_PARAM_20MHZ_PSD:
 		rnr->psd_20mhz = data[12];
@@ -1112,7 +1122,8 @@ util_scan_parse_rnr_ie(struct scan_cache_entry *scan_entry,
 	data = (uint8_t *)ie + sizeof(struct ie_header);
 	idx = scan_entry->rnr.count;
 
-	while (data < ((uint8_t *)ie + rnr_ie_len + 2)) {
+	while ((data + sizeof(struct neighbor_ap_info_field)) <=
+					((uint8_t *)ie + rnr_ie_len + 2)) {
 		neighbor_ap_info = (struct neighbor_ap_info_field *)data;
 		tbtt_count = neighbor_ap_info->tbtt_header.tbtt_info_count;
 		tbtt_length = neighbor_ap_info->tbtt_header.tbtt_info_length;
@@ -1127,7 +1138,8 @@ util_scan_parse_rnr_ie(struct scan_cache_entry *scan_entry,
 			break;
 
 		for (i = 0; i < (tbtt_count + 1) &&
-		     data < ((uint8_t *)ie + rnr_ie_len + 2); i++) {
+		     (data + tbtt_length) <=
+				((uint8_t *)ie + rnr_ie_len + 2); i++) {
 			if ((i < MAX_RNR_BSS) && (idx < MAX_RNR_BSS))
 				util_scan_update_rnr(
 					&scan_entry->rnr.bss_info[idx++],
@@ -2867,7 +2879,7 @@ static int util_handle_rnr_ie_for_mbssid(const uint8_t *rnr,
 	pos += MIN_IE_LEN;
 
 	data = rnr + PAYLOAD_START_POS;
-	while (data < rnr_end) {
+	while (data + sizeof(struct neighbor_ap_info_field) <= rnr_end) {
 		neighbor_ap_info = (struct neighbor_ap_info_field *)data;
 		tbtt_count = neighbor_ap_info->tbtt_header.tbtt_info_count;
 		tbtt_len = neighbor_ap_info->tbtt_header.tbtt_info_length;
@@ -3348,6 +3360,15 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 		if (!mbssid_elem)
 			break;
 
+		/*
+		 * The max_bssid_indicator field is mandatory, therefore the
+		 * length of the MBSSID element should atleast be 1.
+		 */
+		if (!mbssid_elem[TAG_LEN_POS]) {
+			scm_debug_rl("MBSSID IE is of length zero");
+			break;
+		}
+
 		mbssid_info.profile_count =
 			(1 << mbssid_elem[MBSSID_INDICATOR_POS]);
 
@@ -3520,6 +3541,8 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 			}
 
 			if (mbssid_info.split_prof_continue) {
+				if (!split_prof_start)
+					break;
 				nontx_profile = split_prof_start;
 				subie_len = split_prof_len;
 			} else {
@@ -3538,6 +3561,7 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 					qdf_mem_free(split_prof_start);
 					split_prof_start = NULL;
 					split_prof_end = NULL;
+					split_prof_len = 0;
 				}
 				continue;
 			}
@@ -3608,6 +3632,7 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 					qdf_mem_free(split_prof_start);
 					split_prof_start = NULL;
 					split_prof_end = NULL;
+					split_prof_len = 0;
 					qdf_mem_zero(&mbssid_info,
 						     sizeof(mbssid_info));
 				}
@@ -3622,6 +3647,7 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 				qdf_mem_free(split_prof_start);
 				split_prof_start = NULL;
 				split_prof_end = NULL;
+				split_prof_len = 0;
 			}
 			qdf_mem_free(new_frame);
 		}

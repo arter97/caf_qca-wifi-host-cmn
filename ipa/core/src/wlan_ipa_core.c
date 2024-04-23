@@ -1492,9 +1492,9 @@ wlan_ipa_get_peer_auth_state(ol_txrx_soc_handle dp_soc, uint8_t *peer_mac,
 	struct cdp_ast_entry_info ast_info = {0};
 
 	if (ipa_is_wds_enabled()) {
-		cdp_peer_get_ast_info_by_soc(dp_soc, peer_mac,
-					     &ast_info);
-		peer_mac = &ast_info.peer_mac_addr[0];
+		if (cdp_peer_get_ast_info_by_soc(dp_soc, peer_mac, &ast_info))
+			peer_mac = &ast_info.peer_mac_addr[0];
+
 		is_authenticated = wlan_ipa_get_peer_state(dp_soc,
 							   iface->session_id,
 							   peer_mac);
@@ -2965,6 +2965,33 @@ wlan_ipa_save_bssid_iface_ctx(struct wlan_ipa_priv *ipa_ctx, uint8_t iface_id,
 }
 
 #ifdef IPA_WDS_EASYMESH_FEATURE
+
+/** wlan_ipa_get_ta_peer_id() - Get peer_id with mac address
+ * @cdp_soc: cdp soc handle
+ * @mac_addr: peer mac addr
+ * @peer_id: output parameter to store peer_id
+ *
+ * Return: QDF STATUS
+ */
+static QDF_STATUS wlan_ipa_get_ta_peer_id(struct cdp_soc_t *cdp_soc,
+					  uint8_t *mac_addr,
+					  uint16_t *peer_id)
+{
+	struct cdp_ast_entry_info peer_ast_info = {0};
+
+	if (cdp_peer_get_ast_info_by_soc(cdp_soc, mac_addr, &peer_ast_info)) {
+		*peer_id = peer_ast_info.peer_id;
+		return QDF_STATUS_SUCCESS;
+	}
+
+	/* Fall back to check if direct connected peer exists */
+	*peer_id = cdp_get_peer_id(cdp_soc, CDP_VDEV_ALL, mac_addr);
+	if (*peer_id == HTT_INVALID_PEER)
+		return QDF_STATUS_E_FAILURE;
+
+	return QDF_STATUS_SUCCESS;
+}
+
 /** wlan_ipa_set_peer_id() - Set ta_peer_id in IPA
  * @ipa_ctx: ipa context
  * @meta: Meta data for IPA
@@ -2981,11 +3008,10 @@ wlan_ipa_set_peer_id(struct wlan_ipa_priv *ipa_ctx,
 		     qdf_ipa_wlan_event type,
 		     const uint8_t *mac_addr)
 {
-	uint8_t ta_peer_id;
-	struct cdp_ast_entry_info peer_ast_info = {0};
+	uint16_t ta_peer_id;
 	struct cdp_soc_t *cdp_soc;
 	qdf_ipa_wlan_msg_ex_t *msg_ex;
-	bool status;
+	QDF_STATUS status;
 
 	QDF_IPA_MSG_META_MSG_LEN(meta) =
 		(sizeof(qdf_ipa_wlan_msg_ex_t) +
@@ -3011,17 +3037,15 @@ wlan_ipa_set_peer_id(struct wlan_ipa_priv *ipa_ctx,
 	memcpy(msg_ex->attribs[0].u.mac_addr, mac_addr, IPA_MAC_ADDR_SIZE);
 
 	msg_ex->attribs[1].attrib_type = WLAN_HDR_ATTRIB_TA_PEER_ID;
-	cdp_soc = (struct cdp_soc_t *)ipa_ctx->dp_soc;
-	status = cdp_peer_get_ast_info_by_soc(cdp_soc,
-					      msg_ex->attribs[0].u.mac_addr,
-					      &peer_ast_info);
 
-	if (!status) {
+	cdp_soc = (struct cdp_soc_t *)ipa_ctx->dp_soc;
+	status = wlan_ipa_get_ta_peer_id(cdp_soc, msg_ex->attribs[0].u.mac_addr,
+					 &ta_peer_id);
+	if (QDF_IS_STATUS_ERROR(status)) {
 		qdf_mem_free(msg_ex);
-		return QDF_STATUS_E_FAILURE;
+		return status;
 	}
 
-	ta_peer_id = peer_ast_info.peer_id;
 	ipa_info("ta_peer_id set to: %d", ta_peer_id);
 	msg_ex->attribs[1].u.ta_peer_id = ta_peer_id;
 
