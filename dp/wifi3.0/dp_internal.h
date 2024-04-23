@@ -561,7 +561,8 @@ static inline void dp_monitor_print_pdev_rx_mon_stats(struct dp_pdev *pdev)
 }
 
 static inline QDF_STATUS dp_monitor_config_enh_tx_capture(struct dp_pdev *pdev,
-							  uint32_t val)
+							  uint32_t val,
+							  uint8_t mac_id)
 {
 	return QDF_STATUS_E_INVAL;
 }

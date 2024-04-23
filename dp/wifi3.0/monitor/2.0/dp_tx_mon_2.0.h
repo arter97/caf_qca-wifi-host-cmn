@@ -66,11 +66,13 @@ void dp_tx_mon_buf_desc_pool_free(struct dp_soc *soc);
  * @mon_pdev: DP_MON_PDEV handle
  * @ppdu_id: ppdu_id
  * @end_reason: monitor destination descriptor end reason
+ * @mac_id: LMAC ID
  *
  * Return: void
  */
 void dp_tx_mon_update_end_reason(struct dp_mon_pdev *mon_pdev,
-				 int ppdu_id, int end_reason);
+				 int ppdu_id, int end_reason,
+				 uint8_t mac_id);
 
 /**
  * dp_tx_mon_status_free_packet_buf() - API to free packet buffer
@@ -78,6 +80,7 @@ void dp_tx_mon_update_end_reason(struct dp_mon_pdev *mon_pdev,
  * @status_frag: status frag
  * @end_offset: status fragment end offset
  * @mon_desc_list_ref: tx monitor descriptor list reference
+ * @mac_id: LMAC ID
  *
  * Return: void
  */
@@ -85,7 +88,8 @@ void
 dp_tx_mon_status_free_packet_buf(struct dp_pdev *pdev,
 				 qdf_frag_t status_frag,
 				 uint32_t end_offset,
-				 struct dp_tx_mon_desc_list *mon_desc_list_ref);
+				 struct dp_tx_mon_desc_list *mon_desc_list_ref,
+				 uint8_t mac_id);
 
 #if defined(WLAN_TX_PKT_CAPTURE_ENH_BE) && defined(WLAN_PKT_CAPTURE_TX_2_0) && \
 	defined(BE_PKTLOG_SUPPORT)
@@ -123,6 +127,7 @@ dp_tx_process_pktlog_be(struct dp_soc *soc, struct dp_pdev *pdev,
  * @status_frag: status buffer frag address
  * @end_offset: end offset of buffer that has valid buffer
  * @mon_desc_list_ref: tx monitor descriptor list reference
+ * @mac_id: LMAC ID
  *
  * Return: QDF_STATUS
  */
@@ -132,7 +137,8 @@ dp_tx_mon_process_status_tlv(struct dp_soc *soc,
 			     struct hal_mon_desc *mon_ring_desc,
 			     qdf_frag_t status_frag,
 			     uint32_t end_offset,
-			     struct dp_tx_mon_desc_list *mon_desc_list_ref);
+			     struct dp_tx_mon_desc_list *mon_desc_list_ref,
+			     uint8_t mac_id);
 
 /**
  * dp_tx_mon_process_2_0() - tx monitor interrupt process
@@ -551,6 +557,13 @@ struct dp_peer_tx_capture_be {
 };
 #endif
 
+#ifdef FEATURE_ML_LOCAL_PKT_CAPTURE
+struct dp_tx_mon_work_arg {
+	struct dp_pdev *dp_pdev;
+	uint8_t mac_id;
+};
+#endif
+
 #ifdef WLAN_TX_PKT_CAPTURE_ENH_BE
 /**
  * struct dp_txmon_frag_vec - a contiguous range of physical memory address
@@ -569,6 +582,7 @@ struct dp_txmon_frag_vec {
  * @be_ppdu_id: current ppdu id
  * @be_end_reason_bitmap: current end reason bitmap
  * @mode: tx monitor current mode
+ * @mon_work_arg: tx monitor post ppdu work argument
  * @tx_mon_list_lock: spinlock protection to list
  * @post_ppdu_workqueue: tx monitor workqueue representation
  * @post_ppdu_work: tx monitor post ppdu work
@@ -595,6 +609,9 @@ struct dp_pdev_tx_monitor_be {
 	uint32_t be_end_reason_bitmap;
 	uint32_t mode;
 
+#ifdef FEATURE_ML_LOCAL_PKT_CAPTURE
+	struct dp_tx_mon_work_arg mon_work_arg;
+#endif
 	qdf_spinlock_t tx_mon_list_lock;
 
 	qdf_work_t post_ppdu_work;
@@ -674,13 +691,15 @@ void dp_tx_mon_free_ppdu_info(struct dp_tx_ppdu_info *tx_ppdu_info,
  * @type: type of ppdu_info data or protection
  * @num_user: number user in a ppdu_info
  * @ppdu_id: ppdu_id number
+ * @mac_id: MAC ID
  *
  * Return: pointer to dp_tx_ppdu_info
  */
 struct dp_tx_ppdu_info *dp_tx_mon_get_ppdu_info(struct dp_pdev *pdev,
 						enum tx_ppdu_info_type type,
 						uint8_t num_user,
-						uint32_t ppdu_id);
+						uint32_t ppdu_id,
+						uint8_t mac_id);
 
 #endif /* WLAN_PKT_CAPTURE_TX_2_0 */
 
@@ -689,10 +708,13 @@ struct dp_tx_ppdu_info *dp_tx_mon_get_ppdu_info(struct dp_pdev *pdev,
  * dp_config_enh_tx_monitor_2_0()- API to validate tx monitor feature
  * @pdev: DP_PDEV handle
  * @val: user provided value
+ * @mac_id: LMAC ID
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS dp_config_enh_tx_monitor_2_0(struct dp_pdev *pdev, uint8_t val);
+QDF_STATUS dp_config_enh_tx_monitor_2_0(struct dp_pdev *pdev,
+					uint8_t val,
+					uint8_t mac_id);
 #endif
 
 #ifdef WLAN_TX_MON_CORE_DEBUG
@@ -700,10 +722,13 @@ QDF_STATUS dp_config_enh_tx_monitor_2_0(struct dp_pdev *pdev, uint8_t val);
  * dp_config_enh_tx_core_monitor_2_0()- API to validate core framework
  * @pdev: DP_PDEV handle
  * @val: user provided value
+ * @mac_id: LMAC ID
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS dp_config_enh_tx_core_monitor_2_0(struct dp_pdev *pdev, uint8_t val);
+QDF_STATUS dp_config_enh_tx_core_monitor_2_0(struct dp_pdev *pdev,
+					     uint8_t val,
+					     uint8_t mac_id);
 #endif
 
 #ifdef WLAN_PKT_CAPTURE_TX_2_0
@@ -729,7 +754,9 @@ dp_tx_mon_buffers_free(struct dp_soc *soc);
 QDF_STATUS
 dp_tx_mon_buf_desc_pool_alloc(struct dp_soc *soc);
 void dp_tx_ppdu_stats_attach_2_0(struct dp_pdev *pdev);
-QDF_STATUS dp_config_enh_tx_monitor_2_0(struct dp_pdev *pdev, uint8_t val);
+QDF_STATUS dp_config_enh_tx_monitor_2_0(struct dp_pdev *pdev,
+					uint8_t val,
+					uint8_t mac_id);
 QDF_STATUS dp_peer_set_tx_capture_enabled_2_0(struct dp_pdev *pdev_handle,
 					      struct dp_peer *peer_handle,
 					      uint8_t is_tx_pkt_cap_enable,

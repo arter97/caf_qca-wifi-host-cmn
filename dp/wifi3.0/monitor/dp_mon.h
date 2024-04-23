@@ -728,7 +728,7 @@ struct dp_mon_ops {
 #ifdef WIFI_MONITOR_SUPPORT
 	void (*mon_print_pdev_tx_capture_stats)(struct dp_pdev *pdev);
 	QDF_STATUS (*mon_config_enh_tx_capture)(struct dp_pdev *pdev,
-						uint8_t val);
+						uint8_t val, uint8_t mac_id);
 	QDF_STATUS (*mon_tx_peer_filter)(struct dp_pdev *pdev_handle,
 					 struct dp_peer *peer_handle,
 					 uint8_t is_tx_pkt_cap_enable,
@@ -3385,11 +3385,13 @@ static inline void dp_monitor_print_pdev_tx_capture_stats(struct dp_pdev *pdev)
  * dp_monitor_config_enh_tx_capture() - configure tx capture
  * @pdev: Datapath PDEV handle
  * @val: mode
+ * @mac_id: LMAC ID
  *
  * Return: status
  */
 static inline QDF_STATUS dp_monitor_config_enh_tx_capture(struct dp_pdev *pdev,
-							  uint32_t val)
+							  uint32_t val,
+							  uint8_t mac_id)
 {
 	struct dp_mon_ops *monitor_ops;
 	struct dp_mon_soc *mon_soc = pdev->soc->monitor_soc;
@@ -3405,7 +3407,7 @@ static inline QDF_STATUS dp_monitor_config_enh_tx_capture(struct dp_pdev *pdev,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	return monitor_ops->mon_config_enh_tx_capture(pdev, val);
+	return monitor_ops->mon_config_enh_tx_capture(pdev, val, mac_id);
 }
 
 /**

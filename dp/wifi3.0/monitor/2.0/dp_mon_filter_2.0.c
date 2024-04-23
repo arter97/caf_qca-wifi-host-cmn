@@ -2976,10 +2976,10 @@ dp_tx_mon_ht2_ring_cfg(struct dp_soc *soc,
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be =
 				dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
-	struct dp_pdev_tx_monitor_be *tx_mon_be =
-				&mon_pdev_be->tx_monitor_be;
+	struct dp_pdev_tx_monitor_be *tx_mon_be = NULL;
 	uint8_t tx_cap_custom_classify = 0;
 
+	tx_mon_be = dp_mon_pdev_get_tx_mon(mon_pdev_be, 0);
 	if (tx_mon_be->mode == TX_MON_BE_PKT_CAP_CUSTOM)
 		tx_cap_custom_classify = 1;
 
@@ -3449,6 +3449,36 @@ void dp_cfr_filter_register_2_0(struct cdp_ops *ops)
 	ops->mon_ops->txrx_cfr_filter = dp_cfr_filter_2_0;
 }
 
+#ifdef FEATURE_ML_LOCAL_PKT_CAPTURE
+/**
+ * dp_tx_mon_be_mode_set() - Set TX monitor mode
+ * @mon_pdev_be: monitor pdev object
+ * @mode: TX monitor mode
+ *
+ * Return: None
+ */
+static inline void dp_tx_mon_be_mode_set(struct dp_mon_pdev_be *mon_pdev_be,
+					 enum dp_tx_monitor_mode mode)
+{
+	struct dp_pdev_tx_monitor_be *tx_mon_be;
+	uint8_t mac_id = 0;
+
+	for (mac_id = 0; mac_id < MAX_NUM_LMAC_HW; mac_id++) {
+		tx_mon_be = dp_mon_pdev_get_tx_mon(mon_pdev_be, mac_id);
+		tx_mon_be->mode = mode;
+	}
+}
+#else
+static inline void dp_tx_mon_be_mode_set(struct dp_mon_pdev_be *mon_pdev_be,
+					 enum dp_tx_monitor_mode mode)
+{
+	struct dp_pdev_tx_monitor_be *tx_mon_be;
+
+	tx_mon_be = &mon_pdev_be->tx_monitor_be;
+	tx_mon_be->mode = TX_MON_BE_FULL_CAPTURE;
+}
+#endif
+
 #if defined(WLAN_FEATURE_LOCAL_PKT_CAPTURE) && \
 defined(WLAN_PKT_CAPTURE_TX_2_0)
 void dp_mon_filter_setup_local_pkt_capture_tx(struct dp_pdev *pdev)
@@ -3460,11 +3490,9 @@ void dp_mon_filter_setup_local_pkt_capture_tx(struct dp_pdev *pdev)
 	struct dp_mon_pdev_be *mon_pdev_be = NULL;
 	struct dp_mon_filter_be filter = {0};
 	struct htt_tx_ring_tlv_filter *tx_tlv_filter = &filter.tx_tlv_filter;
-	struct dp_pdev_tx_monitor_be *tx_mon_be;
 
 	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
-	tx_mon_be = &mon_pdev_be->tx_monitor_be;
-	tx_mon_be->mode = TX_MON_BE_FULL_CAPTURE;
+	dp_tx_mon_be_mode_set(mon_pdev_be, TX_MON_BE_FULL_CAPTURE);
 	mon_pdev_be->tx_mon_mode = 1;
 	mon_pdev_be->tx_mon_filter_length = DMA_LENGTH_256B;
 
@@ -3516,12 +3544,9 @@ void dp_mon_filter_reset_local_pkt_capture_tx(struct dp_pdev *pdev)
 	enum dp_mon_filter_srng_type srng_type =
 				DP_MON_FILTER_SRNG_TYPE_TXMON_DEST;
 	struct dp_mon_pdev_be *mon_pdev_be = NULL;
-	struct dp_pdev_tx_monitor_be *tx_mon_be;
 
 	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
-
-	tx_mon_be = &mon_pdev_be->tx_monitor_be;
-	tx_mon_be->mode = TX_MON_BE_DISABLE;
+	dp_tx_mon_be_mode_set(mon_pdev_be, TX_MON_BE_DISABLE);
 	mon_pdev_be->tx_mon_mode = 0;
 	filter.tx_valid = true;
 	mon_pdev_be->filter_be[mode][srng_type] = filter;

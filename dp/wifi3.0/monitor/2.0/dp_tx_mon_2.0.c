@@ -134,7 +134,7 @@ dp_tx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 	if (qdf_unlikely(!mon_pdev_be))
 		return work_done;
 
-	tx_mon_be = &mon_pdev_be->tx_monitor_be;
+	tx_mon_be = dp_mon_pdev_get_tx_mon(mon_pdev_be, mac_id);
 	hal_soc = soc->hal_soc;
 
 	qdf_assert((hal_soc && pdev));
@@ -255,11 +255,13 @@ dp_tx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 
 			dp_tx_mon_update_end_reason(mon_pdev,
 						    hal_mon_tx_desc.ppdu_id,
-						    hal_mon_tx_desc.end_reason);
+						    hal_mon_tx_desc.end_reason,
+						    mac_id);
 			/* check and free packet buffer from status buffer */
 			dp_tx_mon_status_free_packet_buf(pdev, status_frag,
 							 end_offset,
-							 &mon_desc_list);
+							 &mon_desc_list,
+							 mac_id);
 
 			tx_mon_be->stats.status_buf_free++;
 			qdf_frag_free(status_frag);
@@ -277,7 +279,8 @@ dp_tx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 					     &hal_mon_tx_desc,
 					     status_frag,
 					     end_offset,
-					     &mon_desc_list);
+					     &mon_desc_list,
+					     mac_id);
 
 		work_done++;
 		hal_srng_dst_get_next(hal_soc, mon_dst_srng);
@@ -541,23 +544,25 @@ void dp_tx_mon_free_ppdu_info(struct dp_tx_ppdu_info *tx_ppdu_info,
  * @type - type of ppdu_info data or protection
  * @num_user - number user in a ppdu_info
  * @ppdu_id - ppdu_id number
+ * @mac_id - LMAC ID
  *
  * Return: pointer to dp_tx_ppdu_info
  */
 struct dp_tx_ppdu_info *dp_tx_mon_get_ppdu_info(struct dp_pdev *pdev,
 						enum tx_ppdu_info_type type,
 						uint8_t num_user,
-						uint32_t ppdu_id)
+						uint32_t ppdu_id,
+						uint8_t mac_id)
 {
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be =
 			dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
-	struct dp_pdev_tx_monitor_be *tx_mon_be =
-			&mon_pdev_be->tx_monitor_be;
+	struct dp_pdev_tx_monitor_be *tx_mon_be = NULL;
 	struct dp_tx_ppdu_info *tx_ppdu_info;
 	size_t sz_ppdu_info = 0;
 	uint8_t i;
 
+	tx_mon_be = dp_mon_pdev_get_tx_mon(mon_pdev_be, mac_id);
 	/* allocate new tx_ppdu_info */
 	sz_ppdu_info = (sizeof(struct dp_tx_ppdu_info) +
 			(sizeof(struct mon_rx_user_status) * num_user));
@@ -607,7 +612,7 @@ void dp_print_pdev_tx_monitor_stats_2_0(struct dp_pdev *pdev)
 	struct dp_mon_pdev_be *mon_pdev_be =
 			dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
 	struct dp_pdev_tx_monitor_be *tx_mon_be =
-			&mon_pdev_be->tx_monitor_be;
+			dp_mon_pdev_get_tx_mon(mon_pdev_be, 0);
 	struct dp_tx_monitor_drop_stats stats = {0};
 
 	qdf_mem_copy(&stats, &tx_mon_be->stats,
@@ -676,18 +681,19 @@ static void dp_lite_mon_free_tx_peers(struct dp_pdev *pdev)
  * dp_config_enh_tx_monitor_2_0()- API to enable/disable enhanced tx capture
  * @pdev_handle: DP_PDEV handle
  * @val: user provided value
+ * @mac_id: LMAC ID
  *
  * Return: QDF_STATUS
  */
 QDF_STATUS
-dp_config_enh_tx_monitor_2_0(struct dp_pdev *pdev, uint8_t val)
+dp_config_enh_tx_monitor_2_0(struct dp_pdev *pdev, uint8_t val, uint8_t mac_id)
 {
 	struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be =
 			dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
 	struct dp_pdev_tx_monitor_be *tx_mon_be =
-			&mon_pdev_be->tx_monitor_be;
+			dp_mon_pdev_get_tx_mon(mon_pdev_be, mac_id);
 	struct dp_soc *soc = pdev->soc;
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
 	struct dp_mon_soc_be *mon_soc_be =
@@ -1170,18 +1176,20 @@ dp_tx_mon_lpc_type_filtering(struct dp_pdev *pdev,
  * @mpdu: pointer to mpdu
  * @num_frag: number of frag in mpdu
  * @ppdu_id: ppdu id of the mpdu
+ * @mac_id: LMAC ID
  *
  * Return: void
  */
 static void
 dp_tx_mon_send_to_stack(struct dp_pdev *pdev, qdf_nbuf_t mpdu,
-			uint32_t num_frag, uint32_t ppdu_id)
+			uint32_t num_frag, uint32_t ppdu_id,
+			uint8_t mac_id)
 {
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be =
 			dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
 	struct dp_pdev_tx_monitor_be *tx_mon_be =
-			&mon_pdev_be->tx_monitor_be;
+			dp_mon_pdev_get_tx_mon(mon_pdev_be, mac_id);
 	struct cdp_tx_indication_info tx_capture_info = {0};
 
 	tx_mon_be->stats.pkt_buf_to_stack += num_frag;
@@ -1226,13 +1234,14 @@ dp_tx_mon_send_to_stack(struct dp_pdev *pdev, qdf_nbuf_t mpdu,
  * @pdev: pdev Handle
  * @ppdu_info: pointer to dp_tx_ppdu_info
  * @user_idx: current user index
+ * @mac_id: LMAC ID
  *
  * Return: void
  */
 static void
 dp_tx_mon_send_per_usr_mpdu(struct dp_pdev *pdev,
 			    struct dp_tx_ppdu_info *ppdu_info,
-			    uint8_t user_idx)
+			    uint8_t user_idx, uint8_t mac_id)
 {
 	qdf_nbuf_queue_t *usr_mpdu_q = NULL;
 	qdf_nbuf_t buf = NULL;
@@ -1257,7 +1266,8 @@ dp_tx_mon_send_per_usr_mpdu(struct dp_pdev *pdev,
 					 buf, qdf_nbuf_headroom(buf));
 
 		dp_tx_mon_send_to_stack(pdev, buf, num_frag,
-					TXMON_PPDU(ppdu_info, ppdu_id));
+					TXMON_PPDU(ppdu_info, ppdu_id),
+					mac_id);
 	}
 }
 
@@ -1268,18 +1278,20 @@ dp_tx_mon_send_per_usr_mpdu(struct dp_pdev *pdev,
  * dp_populate_tsft_from_phy_timestamp() - API to get tsft from phy timestamp
  * @pdev: pdev Handle
  * @ppdu_info: ppdi_info Handle
+ * @mac_id: LMAC ID
  *
  * Return: QDF_STATUS
  */
 static QDF_STATUS
 dp_populate_tsft_from_phy_timestamp(struct dp_pdev *pdev,
-				    struct dp_tx_ppdu_info *ppdu_info)
+				    struct dp_tx_ppdu_info *ppdu_info,
+				    uint8_t mac_id)
 {
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be =
 			dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
 	struct dp_pdev_tx_monitor_be *tx_mon_be =
-			&mon_pdev_be->tx_monitor_be;
+			dp_mon_pdev_get_tx_mon(mon_pdev_be, mac_id);
 	uint64_t tsft = 0;
 	uint32_t ppdu_timestamp = 0;
 
@@ -1356,12 +1368,14 @@ dp_tx_mon_update_channel_freq(struct dp_pdev *pdev, struct dp_soc *soc,
  * dp_tx_mon_update_radiotap() - API to update radiotap information
  * @pdev: pdev Handle
  * @ppdu_info: pointer to dp_tx_ppdu_info
+ * @mac_id: LMAC ID
  *
  * Return: void
  */
 static void
 dp_tx_mon_update_radiotap(struct dp_pdev *pdev,
-			  struct dp_tx_ppdu_info *ppdu_info)
+			  struct dp_tx_ppdu_info *ppdu_info,
+			  uint8_t mac_id)
 {
 	uint32_t usr_idx = 0;
 	uint32_t num_users = 0;
@@ -1387,7 +1401,7 @@ dp_tx_mon_update_radiotap(struct dp_pdev *pdev,
 	}
 
 	if (QDF_STATUS_SUCCESS !=
-	    dp_populate_tsft_from_phy_timestamp(pdev, ppdu_info))
+	    dp_populate_tsft_from_phy_timestamp(pdev, ppdu_info, mac_id))
 		return;
 
 	/* update mlo timestamp */
@@ -1426,7 +1440,7 @@ dp_tx_mon_update_radiotap(struct dp_pdev *pdev,
 			TXMON_PPDU_COM(ppdu_info, rate) = rate;
 		}
 
-		dp_tx_mon_send_per_usr_mpdu(pdev, ppdu_info, usr_idx);
+		dp_tx_mon_send_per_usr_mpdu(pdev, ppdu_info, usr_idx, mac_id);
 	}
 }
 
@@ -1438,13 +1452,15 @@ dp_tx_mon_update_radiotap(struct dp_pdev *pdev,
  */
 static void dp_tx_mon_ppdu_process(void *context)
 {
-	struct dp_pdev *pdev = (struct dp_pdev *)context;
+	struct dp_pdev *pdev = NULL;
+	uint8_t mac_id = 0;
 	struct dp_mon_pdev *mon_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be;
 	struct dp_tx_ppdu_info *defer_ppdu_info = NULL;
 	struct dp_tx_ppdu_info *defer_ppdu_info_next = NULL;
 	struct dp_pdev_tx_monitor_be *tx_mon_be;
 
+	dp_tx_mon_get_pdev_mac_from_work_arg(context, &pdev, &mac_id);
 	/* sanity check */
 	if (qdf_unlikely(!pdev))
 		return;
@@ -1458,7 +1474,7 @@ static void dp_tx_mon_ppdu_process(void *context)
 	if (qdf_unlikely(!mon_pdev_be))
 		return;
 
-	tx_mon_be = &mon_pdev_be->tx_monitor_be;
+	tx_mon_be = dp_mon_pdev_get_tx_mon(mon_pdev_be, mac_id);
 	if (qdf_unlikely(TX_MON_BE_DISABLE == tx_mon_be->mode &&
 			 !dp_lite_mon_is_tx_enabled(mon_pdev)))
 		return;
@@ -1482,7 +1498,7 @@ static void dp_tx_mon_ppdu_process(void *context)
 			      tx_ppdu_info_queue_elem);
 		tx_mon_be->defer_ppdu_info_list_depth--;
 
-		dp_tx_mon_update_radiotap(pdev, defer_ppdu_info);
+		dp_tx_mon_update_radiotap(pdev, defer_ppdu_info, mac_id);
 
 		/* free the ppdu_info */
 		dp_tx_mon_free_ppdu_info(defer_ppdu_info, tx_mon_be);
@@ -1490,26 +1506,16 @@ static void dp_tx_mon_ppdu_process(void *context)
 	}
 }
 
-void dp_tx_ppdu_stats_attach_2_0(struct dp_pdev *pdev)
+/**
+ * dp_tx_mon_stats_init() - Initialize pdev TX Mon context
+ * @tx_mon_be: pointer to pdev TX Mon context
+ * @work_arg: argument for creating work
+ *
+ * Return: None
+ */
+static void dp_tx_mon_stats_init(struct dp_pdev_tx_monitor_be *tx_mon_be,
+				 void *work_arg)
 {
-	struct dp_mon_pdev *mon_pdev;
-	struct dp_mon_pdev_be *mon_pdev_be;
-	struct dp_pdev_tx_monitor_be *tx_mon_be;
-
-	if (qdf_unlikely(!pdev))
-		return;
-
-	mon_pdev = pdev->monitor_pdev;
-
-	if (qdf_unlikely(!mon_pdev))
-		return;
-
-	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
-	if (qdf_unlikely(!mon_pdev_be))
-		return;
-
-	tx_mon_be = &mon_pdev_be->tx_monitor_be;
-
 	STAILQ_INIT(&tx_mon_be->tx_ppdu_info_queue);
 	tx_mon_be->tx_ppdu_info_list_depth = 0;
 
@@ -1519,35 +1525,22 @@ void dp_tx_ppdu_stats_attach_2_0(struct dp_pdev *pdev)
 	qdf_spinlock_create(&tx_mon_be->tx_mon_list_lock);
 	/* Work queue setup for TX MONITOR post handling */
 	qdf_create_work(0, &tx_mon_be->post_ppdu_work,
-			dp_tx_mon_ppdu_process, pdev);
+			dp_tx_mon_ppdu_process, work_arg);
 
 	tx_mon_be->post_ppdu_workqueue =
 			qdf_alloc_unbound_workqueue("tx_mon_ppdu_work_queue");
 }
 
-void dp_tx_ppdu_stats_detach_2_0(struct dp_pdev *pdev)
+/**
+ * dp_tx_mon_stats_deinit() - De-initialize pdev TX Mon context
+ * @tx_mon_be: pointer to pdev TX Mon context
+ *
+ * Return: None
+ */
+static void dp_tx_mon_stats_deinit(struct dp_pdev_tx_monitor_be *tx_mon_be)
 {
-	struct dp_mon_pdev *mon_pdev;
-	struct dp_mon_pdev_be *mon_pdev_be;
-	struct dp_pdev_tx_monitor_be *tx_mon_be;
 	struct dp_tx_ppdu_info *tx_ppdu_info = NULL;
 	struct dp_tx_ppdu_info *tx_ppdu_info_next = NULL;
-
-	if (qdf_unlikely(!pdev))
-		return;
-
-	mon_pdev = pdev->monitor_pdev;
-
-	if (qdf_unlikely(!mon_pdev))
-		return;
-
-	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
-	if (qdf_unlikely(!mon_pdev_be))
-		return;
-
-	tx_mon_be = &mon_pdev_be->tx_monitor_be;
-	/* TODO: disable tx_monitor, to avoid further packet from HW */
-	dp_monitor_config_enh_tx_capture(pdev, TX_MON_BE_DISABLE);
 
 	/* flush workqueue */
 	qdf_flush_workqueue(0, tx_mon_be->post_ppdu_workqueue);
@@ -1588,6 +1581,112 @@ void dp_tx_ppdu_stats_detach_2_0(struct dp_pdev *pdev)
 
 	qdf_spinlock_destroy(&tx_mon_be->tx_mon_list_lock);
 }
+
+#ifdef FEATURE_ML_LOCAL_PKT_CAPTURE
+/**
+ * dp_tx_ppdu_stats_init() - Initialize all TX Mon stats under pdev
+ * @pdev: pointer to dp pdev structure
+ * @mon_pdev_be: pointer to monitor pdev context
+ *
+ * Return: None
+ */
+static void dp_tx_ppdu_stats_init(struct dp_pdev *pdev,
+				  struct dp_mon_pdev_be *mon_pdev_be)
+{
+	struct dp_pdev_tx_monitor_be *tx_mon_be;
+	uint8_t mac_id = 0;
+	struct dp_tx_mon_work_arg *work_arg = NULL;
+
+	for (mac_id = 0; mac_id < MAX_NUM_LMAC_HW; mac_id++) {
+		tx_mon_be = &mon_pdev_be->tx_monitor_be[mac_id];
+		work_arg = &tx_mon_be->mon_work_arg;
+		work_arg->dp_pdev = pdev;
+		work_arg->mac_id = mac_id;
+		dp_tx_mon_stats_init(tx_mon_be, work_arg);
+	}
+}
+
+/**
+ * dp_tx_ppdu_stats_deinit() - De-initialize all TX Mon stats under pdev
+ * @pdev: DP Pdev context
+ * @mon_pdev_be: pointer to monitor pdev context
+ *
+ * return: None
+ */
+static void dp_tx_ppdu_stats_deinit(struct dp_pdev *pdev,
+				    struct dp_mon_pdev_be *mon_pdev_be)
+{
+	struct dp_pdev_tx_monitor_be *tx_mon_be;
+	uint8_t mac_id = 0;
+
+	for (mac_id = 0; mac_id < MAX_NUM_LMAC_HW; mac_id++) {
+		tx_mon_be = &mon_pdev_be->tx_monitor_be[mac_id];
+		dp_monitor_config_enh_tx_capture(pdev, TX_MON_BE_DISABLE,
+						 mac_id);
+		dp_tx_mon_stats_deinit(tx_mon_be);
+	}
+}
+#else
+static void dp_tx_ppdu_stats_init(struct dp_pdev *pdev,
+				  struct dp_mon_pdev_be *mon_pdev_be)
+{
+	struct dp_pdev_tx_monitor_be *tx_mon_be;
+
+	tx_mon_be = &mon_pdev_be->tx_monitor_be;
+	dp_tx_mon_stats_init(tx_mon_be, pdev);
+}
+
+static void dp_tx_ppdu_stats_deinit(struct dp_pdev *pdev,
+				    struct dp_mon_pdev_be *mon_pdev_be)
+{
+	struct dp_pdev_tx_monitor_be *tx_mon_be;
+
+	tx_mon_be = &mon_pdev_be->tx_monitor_be;
+
+	dp_monitor_config_enh_tx_capture(pdev, TX_MON_BE_DISABLE, 0);
+	dp_tx_mon_stats_deinit(tx_mon_be);
+}
+#endif
+
+void dp_tx_ppdu_stats_attach_2_0(struct dp_pdev *pdev)
+{
+	struct dp_mon_pdev *mon_pdev;
+	struct dp_mon_pdev_be *mon_pdev_be;
+
+	if (qdf_unlikely(!pdev))
+		return;
+
+	mon_pdev = pdev->monitor_pdev;
+
+	if (qdf_unlikely(!mon_pdev))
+		return;
+
+	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
+	if (qdf_unlikely(!mon_pdev_be))
+		return;
+
+	dp_tx_ppdu_stats_init(pdev, mon_pdev_be);
+}
+
+void dp_tx_ppdu_stats_detach_2_0(struct dp_pdev *pdev)
+{
+	struct dp_mon_pdev *mon_pdev;
+	struct dp_mon_pdev_be *mon_pdev_be;
+
+	if (qdf_unlikely(!pdev))
+		return;
+
+	mon_pdev = pdev->monitor_pdev;
+
+	if (qdf_unlikely(!mon_pdev))
+		return;
+
+	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
+	if (qdf_unlikely(!mon_pdev_be))
+		return;
+
+	dp_tx_ppdu_stats_deinit(pdev, mon_pdev_be);
+}
 #endif /* WLAN_TX_PKT_CAPTURE_ENH_BE */
 
 #if (defined(WIFI_MONITOR_SUPPORT) && defined(WLAN_TX_MON_CORE_DEBUG))
@@ -1595,18 +1694,21 @@ void dp_tx_ppdu_stats_detach_2_0(struct dp_pdev *pdev)
  * dp_config_enh_tx_core_monitor_2_0()- API to validate core framework
  * @pdev_handle: DP_PDEV handle
  * @val: user provided value
+ * @mac_id: LMAC ID
  *
  * Return: QDF_STATUS
  */
 QDF_STATUS
-dp_config_enh_tx_core_monitor_2_0(struct dp_pdev *pdev, uint8_t val)
+dp_config_enh_tx_core_monitor_2_0(struct dp_pdev *pdev,
+				  uint8_t val,
+				  uint8_t mac_id)
 {
 	struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be =
 			dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
 	struct dp_pdev_tx_monitor_be *tx_mon_be =
-			&mon_pdev_be->tx_monitor_be;
+			dp_mon_pdev_get_tx_mon(mon_pdev_be, mac_id);
 	struct dp_soc *soc = pdev->soc;
 	uint16_t num_of_buffers;
 	QDF_STATUS status;
