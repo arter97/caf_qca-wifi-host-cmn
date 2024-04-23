@@ -517,11 +517,13 @@ enum ol_txrx_peer_state {
 /**
  * struct cdp_peer_output_param - peer output info for dp hash find
  * @vdev_id: Vdev ID
+ * @peer_id: Peer ID
  * @state: peer state
  * @mld_peer: whether is mld peer
  */
 struct cdp_peer_output_param {
 	uint8_t vdev_id;
+	uint16_t peer_id;
 	enum ol_txrx_peer_state state;
 	bool mld_peer;
 };
