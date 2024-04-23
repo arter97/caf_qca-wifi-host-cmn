@@ -2383,7 +2383,8 @@ void dp_tx_update_peer_basic_stats(struct dp_txrx_peer *txrx_peer,
 				   bool update);
 
 /**
- * dp_tx_get_link_id_from_ppdu_id() - Get HW link Id from PPDU Id
+ * dp_tx_get_link_id_from_ppdu_id_wrapper() - wrapper function to
+ * get HW link Id from PPDU Id
  * @soc: dp_soc handle
  * @ts: Tx completion status structure
  * @txrx_peer: peer handle
@@ -2392,14 +2393,15 @@ void dp_tx_update_peer_basic_stats(struct dp_txrx_peer *txrx_peer,
  * Return: HW link id
  */
 uint8_t
-dp_tx_get_link_id_from_ppdu_id(struct dp_soc *soc,
-			       struct hal_tx_completion_status *ts,
-			       struct dp_txrx_peer *txrx_peer,
-			       struct dp_vdev *vdev);
+dp_tx_get_link_id_from_ppdu_id_wrapper(
+				struct dp_soc *soc,
+				struct hal_tx_completion_status *ts,
+				struct dp_txrx_peer *txrx_peer,
+				struct dp_vdev *vdev);
 
 /**
- * dp_tx_update_peer_stats() - Update peer stats from Tx completion indications
- *				per wbm ring
+ * dp_tx_update_peer_stats_wrapper() - wrapper function to Update peer stats
+ * from Tx completion indications per wbm ring
  *
  * @tx_desc: software descriptor head pointer
  * @ts: Tx completion status
@@ -2410,10 +2412,10 @@ dp_tx_get_link_id_from_ppdu_id(struct dp_soc *soc,
  * Return: None
  */
 void
-dp_tx_update_peer_stats(struct dp_tx_desc_s *tx_desc,
-			struct hal_tx_completion_status *ts,
-			struct dp_txrx_peer *txrx_peer, uint8_t ring_id,
-			uint8_t link_id);
+dp_tx_update_peer_stats_wrapper(struct dp_tx_desc_s *tx_desc,
+				struct hal_tx_completion_status *ts,
+				struct dp_txrx_peer *txrx_peer, uint8_t ring_id,
+				uint8_t link_id);
 
 /**
  * hal_tx_comp_desc_sync_wrapper() - wrapper function for HAL tx comp desc

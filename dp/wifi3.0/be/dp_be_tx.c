@@ -1312,16 +1312,16 @@ dp_update_ppeds_tx_comp_stats(struct dp_soc *soc,
 	hal_ppeds_tx_comp_get_status_wrapper(soc, tx_desc_pool, desc,
 					     ts, comp_index);
 	vdev = txrx_peer->vdev;
-	link_id = dp_tx_get_link_id_from_ppdu_id(soc,
-						 ts,
-						 txrx_peer,
-						 vdev);
+	link_id = dp_tx_get_link_id_from_ppdu_id_wrapper(soc,
+							 ts,
+							 txrx_peer,
+							 vdev);
 	if (link_id < 1 || link_id > DP_MAX_MLO_LINKS)
 		link_id = 0;
-	dp_tx_update_peer_stats(desc, ts,
-				txrx_peer,
-				ring_id,
-				link_id);
+	dp_tx_update_peer_stats_wrapper(desc, ts,
+					txrx_peer,
+					ring_id,
+					link_id);
 }
 
 static inline
@@ -2379,7 +2379,6 @@ uint32_t dp_tx_comp_handler_be(struct dp_intr *int_ctx, struct dp_soc *soc,
 	uint32_t num_entries;
 	qdf_nbuf_queue_head_t h;
 	QDF_STATUS status;
-	uint8_t valid_tx_desc_pool = 0;
 	uint16_t comp_index = 0;
 	struct dp_tx_desc_pool_s *tx_desc_pool = NULL;
 
@@ -2437,10 +2436,9 @@ more_data:
 							  tx_comp_hal_desc);
 
 		/* get tx_desc pool from first sw desc */
-		if (!valid_tx_desc_pool) {
+		if (!tx_desc_pool) {
 			tx_desc_pool = dp_get_tx_desc_pool(soc,
 							   tx_desc->pool_id);
-			valid_tx_desc_pool = 1;
 		}
 		/*
 		 * If the release source is FW, process the HTT status

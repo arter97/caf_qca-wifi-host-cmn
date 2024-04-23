@@ -5470,7 +5470,7 @@ dp_tx_update_peer_extd_stats(struct hal_tx_completion_status *ts,
 #if defined(WLAN_FEATURE_11BE_MLO) && \
 	(defined(QCA_ENHANCED_STATS_SUPPORT) || \
 		defined(DP_MLO_LINK_STATS_SUPPORT))
-uint8_t
+static inline uint8_t
 dp_tx_get_link_id_from_ppdu_id(struct dp_soc *soc,
 			       struct hal_tx_completion_status *ts,
 			       struct dp_txrx_peer *txrx_peer,
@@ -5498,7 +5498,7 @@ dp_tx_get_link_id_from_ppdu_id(struct dp_soc *soc,
 	return hw_link_id;
 }
 #else
-uint8_t
+static inline uint8_t
 dp_tx_get_link_id_from_ppdu_id(struct dp_soc *soc,
 			       struct hal_tx_completion_status *ts,
 			       struct dp_txrx_peer *txrx_peer,
@@ -5539,7 +5539,7 @@ dp_tx_check_broadcast_packet(struct dp_tx_desc_s *tx_desc,
  *
  * Return: None
  */
-void
+static inline void
 dp_tx_update_peer_stats(struct dp_tx_desc_s *tx_desc,
 			struct hal_tx_completion_status *ts,
 			struct dp_txrx_peer *txrx_peer, uint8_t ring_id,
@@ -5646,6 +5646,27 @@ dp_tx_update_peer_stats(struct dp_tx_desc_s *tx_desc,
 					  1, 0);
 		break;
 	}
+}
+
+uint8_t
+dp_tx_get_link_id_from_ppdu_id_wrapper(
+				struct dp_soc *soc,
+				struct hal_tx_completion_status *ts,
+				struct dp_txrx_peer *txrx_peer,
+				struct dp_vdev *vdev)
+{
+	return dp_tx_get_link_id_from_ppdu_id(soc, ts, txrx_peer, vdev);
+}
+
+void
+dp_tx_update_peer_stats_wrapper(
+			struct dp_tx_desc_s *tx_desc,
+			struct hal_tx_completion_status *ts,
+			struct dp_txrx_peer *txrx_peer, uint8_t ring_id,
+			uint8_t link_id)
+{
+	return dp_tx_update_peer_stats(tx_desc, ts, txrx_peer,
+				       ring_id, link_id);
 }
 
 #ifdef QCA_LL_TX_FLOW_CONTROL_V2

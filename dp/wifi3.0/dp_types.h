@@ -705,6 +705,7 @@ struct dp_tx_ext_desc_pool_s {
 	qdf_dma_mem_context(memctx);
 };
 
+#ifdef QCA_DP_OPTIMIZED_TX_DESC
 /**
  * struct dp_tx_desc_s - Tx Descriptor
  * @next: Next in the chain of descriptors in freelist or in the completion list
@@ -762,14 +763,46 @@ struct dp_tx_desc_s {
 	qdf_ktime_t driver_egress_ts;
 	qdf_ktime_t driver_ingress_ts;
 #endif
-#ifndef QCA_DP_OPTIMIZED_TX_DESC
-	struct hal_tx_desc_comp_s comp;
-#endif
 #ifdef WLAN_SOFTUMAC_SUPPORT
 	void *tcl_cmd_vaddr;
 	qdf_dma_addr_t tcl_cmd_paddr;
 #endif
 };
+#else /* QCA_DP_OPTIMIZED_TX_DESC */
+struct dp_tx_desc_s {
+	struct dp_tx_desc_s *next;
+	qdf_nbuf_t nbuf;
+	uint16_t length;
+#ifdef DP_TX_TRACKING
+	uint32_t magic;
+	uint64_t timestamp_tick;
+#endif
+	uint32_t flags;
+	uint32_t id;
+	qdf_dma_addr_t dma_addr;
+	uint8_t vdev_id;
+	uint8_t tx_status;
+	uint16_t peer_id;
+	struct dp_pdev *pdev;
+	uint8_t tx_encap_type:2,
+		buffer_src:3,
+		reserved:3;
+	uint8_t frm_type;
+	uint8_t pkt_offset;
+	uint8_t  pool_id;
+	struct dp_tx_ext_desc_elem_s *msdu_ext_desc;
+	qdf_ktime_t timestamp;
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+	qdf_ktime_t driver_egress_ts;
+	qdf_ktime_t driver_ingress_ts;
+#endif
+	struct hal_tx_desc_comp_s comp;
+#ifdef WLAN_SOFTUMAC_SUPPORT
+	void *tcl_cmd_vaddr;
+	qdf_dma_addr_t tcl_cmd_paddr;
+#endif
+};
+#endif /* QCA_DP_OPTIMIZED_TX_DESC */
 
 #ifdef QCA_AC_BASED_FLOW_CONTROL
 /**
