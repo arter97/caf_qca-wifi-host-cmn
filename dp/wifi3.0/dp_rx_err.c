@@ -911,7 +911,8 @@ dp_rx_deliver_to_osif_stack(struct dp_soc *soc,
 			    qdf_nbuf_t tail,
 			    bool is_eapol)
 {
-	if (is_eapol && soc->eapol_over_control_port)
+	if (is_eapol && soc->eapol_over_control_port &&
+	    !vdev->eapol_over_control_port_disable)
 		dp_rx_eapol_deliver_to_stack(soc, vdev, txrx_peer, nbuf, NULL);
 	else
 		dp_rx_deliver_to_stack(soc, vdev, txrx_peer, nbuf, NULL);

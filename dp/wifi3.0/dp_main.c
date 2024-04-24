@@ -4985,6 +4985,7 @@ static QDF_STATUS dp_vdev_attach_wifi3(struct cdp_soc_t *cdp_soc,
 	vdev->prev_tx_enq_tstamp = 0;
 	vdev->prev_rx_deliver_tstamp = 0;
 	vdev->skip_sw_tid_classification = DP_TX_HW_DSCP_TID_MAP_VALID;
+	vdev->eapol_over_control_port_disable = 0;
 	dp_tx_vdev_traffic_end_indication_attach(vdev);
 
 	dp_vdev_pdev_list_add(soc, pdev, vdev);
@@ -9103,6 +9104,13 @@ dp_set_vdev_param(struct cdp_soc_t *cdp_soc, uint8_t vdev_id,
 		chan_band = wlan_reg_freq_to_band(val.cdp_vdev_param_mon_freq);
 		dp_monitor_set_chan_freq(vdev, val.cdp_vdev_param_mon_freq);
 		dp_monitor_set_chan_band(vdev, chan_band);
+		break;
+	case CDP_EAPOL_OVER_CONTROL_PORT_DISABLE:
+		dp_cdp_err("%pK: eapol_over_control_port_disable %d for vdev(%pK) id(%d)",
+			   dsoc, val.cdp_eapol_over_control_port_disable,
+			   vdev, vdev->vdev_id);
+		vdev->eapol_over_control_port_disable =
+				val.cdp_eapol_over_control_port_disable;
 		break;
 	default:
 		break;

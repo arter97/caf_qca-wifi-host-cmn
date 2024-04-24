@@ -1506,6 +1506,7 @@ enum cdp_pdev_param_type {
  * @cdp_pdev_param_mon_fcs_cap: monitor fcs capture
  * @cdp_monitor_flag: monitor interface flags
  * @cdp_reo_rings_mapping: reo rings mapping
+ * @cdp_eapol_over_control_port_disable: disable eapol over control port
  */
 typedef union cdp_config_param_t {
 	/* peer params */
@@ -1627,6 +1628,7 @@ typedef union cdp_config_param_t {
 	uint8_t cdp_pdev_param_mon_fcs_cap;
 	uint8_t cdp_monitor_flag;
 	uint32_t cdp_reo_rings_mapping;
+	bool cdp_eapol_over_control_port_disable;
 } cdp_config_param_type;
 
 /**
@@ -1722,6 +1724,7 @@ enum cdp_pdev_bpr_param {
  * @CDP_VDEV_SET_MAC_ADDR: Set mac address for vdev
  * @CDP_MONITOR_CHANNEL: monitor channel
  * @CDP_MONITOR_FREQUENCY: monitor frequency
+ * @CDP_EAPOL_OVER_CONTROL_PORT_DISABLE: Disable eapol over control port
  */
 enum cdp_vdev_param_type {
 	CDP_ENABLE_NAWDS,
@@ -1775,6 +1778,7 @@ enum cdp_vdev_param_type {
 	CDP_VDEV_SET_MAC_ADDR,
 	CDP_MONITOR_CHANNEL,
 	CDP_MONITOR_FREQUENCY,
+	CDP_EAPOL_OVER_CONTROL_PORT_DISABLE,
 };
 
 /**

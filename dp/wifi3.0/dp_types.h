@@ -4522,6 +4522,7 @@ struct dp_vdev {
 	/* configuration for tx latency stats */
 	struct dp_tx_latency_config tx_latency_cfg;
 #endif
+	bool eapol_over_control_port_disable;
 };
 
 enum {
