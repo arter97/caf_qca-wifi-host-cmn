@@ -28,6 +28,7 @@
 #include "wlan_utility.h"
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_FEATURE_11BE_MLO_ADV_FEATURE)
 #include <wlan_t2lm_api.h>
+#include <wlan_mlo_link_force.h>
 #endif
 #include <wlan_mlo_mgr_sta.h>
 #include <wlan_sm_engine.h>
@@ -165,6 +166,8 @@ ttlm_populate_tx_action_req(struct wlan_mlo_peer_context *ml_peer,
 	struct wlan_t2lm_info *ttlm_req_info;
 	uint8_t tid_num;
 	QDF_STATUS status;
+	struct ml_link_force_state curr_force_state = {0};
+	struct wlan_objmgr_psoc *psoc;
 
 	if (!ml_peer) {
 		t2lm_err("ML peer is NULL");
@@ -187,6 +190,32 @@ ttlm_populate_tx_action_req(struct wlan_mlo_peer_context *ml_peer,
 
 	if (!vdev->mlo_dev_ctx) {
 		status = QDF_STATUS_E_NULL_VALUE;
+		goto release_peer;
+	}
+
+	psoc = wlan_vdev_get_psoc(vdev);
+	if (!psoc) {
+		status = QDF_STATUS_E_NULL_VALUE;
+		goto release_peer;
+	}
+
+	ml_nlink_get_curr_force_state(psoc, vdev, &curr_force_state);
+	t2lm_debug("Current force state force_inactive_bitmap: %d force_active_bitmap: %d curr_dynamic_inactive_bitmap: %d curr_active_bitmap: %d curr_inactive_bitmap: %d",
+		   curr_force_state.force_inactive_bitmap,
+		   curr_force_state.force_active_bitmap,
+		   curr_force_state.curr_dynamic_inactive_bitmap,
+		   curr_force_state.curr_active_bitmap,
+		   curr_force_state.curr_inactive_bitmap);
+
+	if (!ttlm_info->default_link_mapping &&
+	    ttlm_info->ieee_link_map_tid[0] &&
+	    ((ttlm_info->ieee_link_map_tid[0] &
+	      curr_force_state.force_inactive_bitmap) ==
+	    ttlm_info->ieee_link_map_tid[0])) {
+		t2lm_err("TTLM req: 0x%x failed due to force_inactive link: 0x%x",
+			 ttlm_info->ieee_link_map_tid[0],
+			 curr_force_state.force_inactive_bitmap);
+		status = QDF_STATUS_E_INVAL;
 		goto release_peer;
 	}
 
