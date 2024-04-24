@@ -471,6 +471,7 @@ static bool ttlm_state_negotiated_event(void *ctx, uint16_t event,
 {
 	bool event_handled = true;
 	struct wlan_mlo_peer_context *ml_peer = ctx;
+	QDF_STATUS status;
 
 	switch (event) {
 	case WLAN_TTLM_SM_EV_TX_ACTION_REQ:
@@ -482,6 +483,12 @@ static bool ttlm_state_negotiated_event(void *ctx, uint16_t event,
 	case WLAN_TTLM_SM_EV_RX_ACTION_REQ:
 		ttlm_sm_transition_to(ml_peer, WLAN_TTLM_S_INPROGRESS);
 		ttlm_sm_deliver_event_sync(ml_peer, event, data_len, data);
+		break;
+	case WLAN_TTLM_SM_EV_BTM_LINK_DISABLE:
+		ttlm_sm_transition_to(ml_peer, WLAN_TTLM_S_INPROGRESS);
+		status = ttlm_sm_deliver_event_sync(ml_peer, event, data_len, data);
+		if (QDF_IS_STATUS_ERROR(status))
+			event_handled = false;
 		break;
 	default:
 		event_handled = false;
