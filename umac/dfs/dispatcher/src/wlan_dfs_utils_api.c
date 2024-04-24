@@ -866,9 +866,9 @@ static void utils_dfs_get_channel_list(struct wlan_objmgr_pdev *pdev,
 		policy_mgr_get_pcl(psoc, mode, pcl_ch,
 				   &len, weight_list, weight_len, vdev_id);
 	else
-		policy_mgr_get_pcl_for_existing_conn(
-			psoc, mode, pcl_ch, &len, weight_list,
-			weight_len, true, vdev_id);
+		policy_mgr_get_pcl_for_scc_in_same_mode(psoc, mode, pcl_ch,
+							&len, weight_list,
+							weight_len, vdev_id);
 
 	if (*num_chan < len) {
 		dfs_err(NULL, WLAN_DEBUG_DFS_ALWAYS,
