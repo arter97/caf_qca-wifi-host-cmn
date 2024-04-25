@@ -2354,8 +2354,7 @@ static int32_t build_child_vap_list(struct interface_list *if_list,
 			strlcpy(temp_obj->mld_ifname, mld_intf, IFNAME_LEN);
 		}
 
-		if (build_child_sta_list(ifname, curr_obj))
-			return -EIO;
+		build_child_sta_list(ifname, curr_obj);
 	}
 
 	return 0;
@@ -2406,10 +2405,8 @@ static int32_t build_child_radio_list(struct interface_list *if_list,
 			curr_obj->next = temp_obj;
 		curr_obj = temp_obj;
 
-		if (build_child_vap_list(if_list, ifname,
-					 if_list->radio[rinx].hw_addr,
-					 curr_obj))
-			return -EIO;
+		build_child_vap_list(if_list, ifname,
+				     if_list->radio[rinx].hw_addr, curr_obj);
 	}
 
 	return 0;
@@ -2643,11 +2640,8 @@ static void *build_object_list(struct stats_command *cmd)
 			curr_obj->next = temp_obj;
 		curr_obj = temp_obj;
 
-		if (build_child_radio_list(&if_list, soc_if, if_count,
-					   curr_obj)) {
-			ret = -1;
-			break;
-		}
+		build_child_radio_list(&if_list, soc_if, if_count, curr_obj);
+
 		if_count = 0;
 		memset(soc_if, 0, (MAX_RADIO_NUM * sizeof(struct soc_ifnames)));
 	}
