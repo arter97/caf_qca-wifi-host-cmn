@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -1145,6 +1145,11 @@ static QDF_STATUS mlo_dev_ctx_init(struct wlan_objmgr_vdev *vdev)
 		}
 		mlo_dev_lock_release(ml_dev);
 		return QDF_STATUS_SUCCESS;
+	}
+
+	if (qdf_list_size(&g_mlo_ctx->ml_dev_list) >= WLAN_UMAC_MLO_MAX_DEV) {
+		mlo_err("No more MLD allowed");
+		return QDF_STATUS_E_RESOURCES;
 	}
 
 	/* Create a new ML dev context */
