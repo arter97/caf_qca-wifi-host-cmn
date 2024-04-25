@@ -1488,7 +1488,7 @@ dp_rx_mon_add_ppdu_info_to_wq(struct dp_pdev *pdev,
 		}
 		qdf_spin_unlock_bh(&mon_pdev_be->rx_mon_wq_lock);
 
-		if (mon_pdev_be->rx_mon_queue_depth >
+		if (mon_pdev_be->rx_mon_queue_depth >=
 		    wlan_cfg_get_rx_mon_wq_depth(soc->wlan_cfg_ctx)) {
 			qdf_queue_work(0, mon_pdev_be->rx_mon_workqueue,
 				       &mon_pdev_be->rx_mon_work);
