@@ -1721,6 +1721,18 @@ void dp_tx_mon_pdev_rings_free_2_0(struct dp_pdev *pdev, uint32_t lmac_id)
 	dp_srng_free(soc, &mon_soc_be->tx_mon_dst_ring[lmac_id]);
 }
 
+#ifdef FEATURE_ML_LOCAL_PKT_CAPTURE
+QDF_STATUS dp_tx_mon_pdev_rings_init_2_0(struct dp_pdev *pdev, uint32_t lmac_id)
+{
+	struct dp_soc *soc = pdev->soc;
+	struct dp_mon_soc *mon_soc = soc->monitor_soc;
+	struct dp_mon_soc_be *mon_soc_be = dp_get_be_mon_soc_from_dp_mon_soc(mon_soc);
+
+	/* Select lmac_id as ring_num to assign different msi data */
+	return dp_srng_init(soc, &mon_soc_be->tx_mon_dst_ring[lmac_id],
+				 TX_MONITOR_DST, lmac_id, lmac_id);
+}
+#else
 QDF_STATUS dp_tx_mon_pdev_rings_init_2_0(struct dp_pdev *pdev, uint32_t lmac_id)
 {
 	struct dp_soc *soc = pdev->soc;
@@ -1730,6 +1742,7 @@ QDF_STATUS dp_tx_mon_pdev_rings_init_2_0(struct dp_pdev *pdev, uint32_t lmac_id)
 	return dp_srng_init(soc, &mon_soc_be->tx_mon_dst_ring[lmac_id],
 				 TX_MONITOR_DST, pdev->pdev_id, lmac_id);
 }
+#endif
 
 void dp_tx_mon_pdev_rings_deinit_2_0(struct dp_pdev *pdev, uint32_t lmac_id)
 {

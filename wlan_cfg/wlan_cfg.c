@@ -228,7 +228,8 @@ static const  uint8_t rxdma2host_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
 #endif /* CONFIG_BERYLLIUM */
 
 #ifdef CONFIG_BERYLLIUM
-#ifdef FEATURE_ML_MONITOR_MODE_SUPPORT
+#if defined(FEATURE_ML_MONITOR_MODE_SUPPORT) || \
+	defined(FEATURE_ML_LOCAL_PKT_CAPTURE)
 static const  uint8_t rx_mon_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
 	[13] = WLAN_CFG_RX_MON_RING_MASK_0, [14] = WLAN_CFG_RX_MON_RING_MASK_1};
 #else
@@ -271,10 +272,18 @@ static const  uint8_t reo_status_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
 
 #ifdef CONFIG_BERYLLIUM
 #ifdef WLAN_FEATURE_NEAR_FULL_IRQ
+#ifdef FEATURE_ML_LOCAL_PKT_CAPTURE
+/* msi vector 15, 16 will be used for TX MON */
+static const uint8_t rx_ring_near_full_irq_1_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
+	[17] = WLAN_CFG_RX_NEAR_FULL_IRQ_MASK_1};
+static const uint8_t rx_ring_near_full_irq_2_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
+	[17] = WLAN_CFG_RX_NEAR_FULL_IRQ_MASK_1};
+#else
 static const uint8_t rx_ring_near_full_irq_1_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
 	[15] = WLAN_CFG_RX_NEAR_FULL_IRQ_MASK_1};
 static const uint8_t rx_ring_near_full_irq_2_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
 	[16] = WLAN_CFG_RX_NEAR_FULL_IRQ_MASK_1};
+#endif /* FEATURE_ML_LOCAL_PKT_CAPTURE */
 static const uint8_t tx_ring_near_full_irq_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
 	[17] = WLAN_CFG_TX_RING_NEAR_FULL_IRQ_MASK};
 #else
@@ -296,8 +305,13 @@ static const uint8_t tx_ring_near_full_irq_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] =
 
 #ifdef CONFIG_BERYLLIUM
 #ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
+#ifdef FEATURE_ML_LOCAL_PKT_CAPTURE
+static const  uint8_t tx_mon_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
+	[15] = WLAN_CFG_TX_MON_RING_MASK_0, [16] = WLAN_CFG_TX_MON_RING_MASK_1};
+#else
 static const  uint8_t tx_mon_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
 	[13] = WLAN_CFG_TX_MON_RING_MASK_0 | WLAN_CFG_TX_MON_RING_MASK_1};
+#endif /* FEATURE_ML_LOCAL_PKT_CAPTURE */
 #else
 static const  uint8_t tx_mon_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {0};
 #endif /* WLAN_FEATURE_LOCAL_PKT_CAPTURE */
