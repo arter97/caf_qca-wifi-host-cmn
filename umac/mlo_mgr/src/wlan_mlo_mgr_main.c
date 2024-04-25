@@ -1157,6 +1157,11 @@ static QDF_STATUS mlo_dev_ctx_init(struct wlan_objmgr_vdev *vdev)
 		return QDF_STATUS_SUCCESS;
 	}
 
+	if (qdf_list_size(&g_mlo_ctx->ml_dev_list) >= WLAN_UMAC_MLO_MAX_DEV) {
+		mlo_err("No more MLD allowed");
+		return QDF_STATUS_E_RESOURCES;
+	}
+
 	/* Create a new ML dev context */
 	ml_dev = qdf_mem_malloc(sizeof(*ml_dev));
 	if (!ml_dev) {
