@@ -364,19 +364,25 @@ static bool ttlm_state_init_event(void *ctx, uint16_t event, uint16_t data_len,
 	switch (event) {
 	case WLAN_TTLM_SM_EV_TX_ACTION_REQ:
 		ttlm_sm_transition_to(ml_peer, WLAN_TTLM_S_INPROGRESS);
-		ttlm_sm_deliver_event_sync(ml_peer,
+		status = ttlm_sm_deliver_event_sync(ml_peer,
 					   WLAN_TTLM_SM_EV_TX_ACTION_REQ_START,
 					   data_len, data);
+		if (QDF_IS_STATUS_ERROR(status))
+			event_handled = false;
 		break;
 	case WLAN_TTLM_SM_EV_RX_ACTION_REQ:
 		ttlm_sm_transition_to(ml_peer, WLAN_TTLM_S_INPROGRESS);
-		ttlm_sm_deliver_event_sync(ml_peer, event, data_len, data);
+		status = ttlm_sm_deliver_event_sync(ml_peer, event, data_len,
+						    data);
+		if (QDF_IS_STATUS_ERROR(status))
+			event_handled = false;
 		break;
 	case WLAN_TTLM_SM_EV_BEACON:
 		break;
 	case WLAN_TTLM_SM_EV_BTM_LINK_DISABLE:
 		ttlm_sm_transition_to(ml_peer, WLAN_TTLM_S_INPROGRESS);
-		status = ttlm_sm_deliver_event_sync(ml_peer, event, data_len, data);
+		status = ttlm_sm_deliver_event_sync(ml_peer, event, data_len,
+						    data);
 		if (QDF_IS_STATUS_ERROR(status))
 			event_handled = false;
 		break;
@@ -436,16 +442,23 @@ static bool ttlm_state_inprogress_event(void *ctx, uint16_t event,
 	switch (event) {
 	case WLAN_TTLM_SM_EV_TX_ACTION_REQ_START:
 		ttlm_sm_transition_to(ml_peer, WLAN_TTLM_SS_STA_INPROGRESS);
-		ttlm_sm_deliver_event_sync(ml_peer, event, data_len, data);
+		status = ttlm_sm_deliver_event_sync(ml_peer, event, data_len,
+						    data);
+		if (QDF_IS_STATUS_ERROR(status))
+			event_handled = false;
 		break;
 	case WLAN_TTLM_SM_EV_RX_ACTION_REQ:
 		ttlm_sm_transition_to(ml_peer,
 				      WLAN_TTLM_SS_AP_ACTION_INPROGRESS);
-		ttlm_sm_deliver_event_sync(ml_peer, event, data_len, data);
+		status = ttlm_sm_deliver_event_sync(ml_peer, event, data_len,
+						    data);
+		if (QDF_IS_STATUS_ERROR(status))
+			event_handled = false;
 		break;
 	case WLAN_TTLM_SM_EV_BTM_LINK_DISABLE:
 		ttlm_sm_transition_to(ml_peer, WLAN_TTLM_SS_AP_BTM_INPROGRESS);
-		status = ttlm_sm_deliver_event_sync(ml_peer, event, data_len, data);
+		status = ttlm_sm_deliver_event_sync(ml_peer, event, data_len,
+						    data);
 		if (QDF_IS_STATUS_ERROR(status))
 			event_handled = false;
 		break;
@@ -505,17 +518,23 @@ static bool ttlm_state_negotiated_event(void *ctx, uint16_t event,
 	switch (event) {
 	case WLAN_TTLM_SM_EV_TX_ACTION_REQ:
 		ttlm_sm_transition_to(ml_peer, WLAN_TTLM_S_INPROGRESS);
-		ttlm_sm_deliver_event_sync(ml_peer,
+		status = ttlm_sm_deliver_event_sync(ml_peer,
 				WLAN_TTLM_SM_EV_TX_ACTION_REQ_START,
 				data_len, data);
+		if (QDF_IS_STATUS_ERROR(status))
+			event_handled = false;
 		break;
 	case WLAN_TTLM_SM_EV_RX_ACTION_REQ:
 		ttlm_sm_transition_to(ml_peer, WLAN_TTLM_S_INPROGRESS);
-		ttlm_sm_deliver_event_sync(ml_peer, event, data_len, data);
+		status = ttlm_sm_deliver_event_sync(ml_peer, event, data_len,
+						    data);
+		if (QDF_IS_STATUS_ERROR(status))
+			event_handled = false;
 		break;
 	case WLAN_TTLM_SM_EV_BTM_LINK_DISABLE:
 		ttlm_sm_transition_to(ml_peer, WLAN_TTLM_S_INPROGRESS);
-		status = ttlm_sm_deliver_event_sync(ml_peer, event, data_len, data);
+		status = ttlm_sm_deliver_event_sync(ml_peer, event, data_len,
+						    data);
 		if (QDF_IS_STATUS_ERROR(status))
 			event_handled = false;
 		break;
@@ -765,13 +784,18 @@ static bool ttlm_subst_ap_action_inprogress_event(void *ctx, uint16_t event,
 {
 	bool event_handled = true;
 	struct wlan_mlo_peer_context *ml_peer = ctx;
+	QDF_STATUS status;
 
 	switch (event) {
 	case WLAN_TTLM_SM_EV_RX_ACTION_REQ:
-		ttlm_handle_ap_action_req(ml_peer, data);
+		status = ttlm_handle_ap_action_req(ml_peer, data);
+		if (QDF_IS_STATUS_ERROR(status))
+			event_handled = false;
 		break;
 	case WLAN_TTLM_SM_EV_TX_ACTION_RSP:
-		ttlm_send_ttlm_action_rsp(ml_peer, data);
+		status = ttlm_send_ttlm_action_rsp(ml_peer, data);
+		if (QDF_IS_STATUS_ERROR(status))
+			event_handled = false;
 		ttlm_sm_transition_to(ml_peer, WLAN_TTLM_S_NEGOTIATED);
 		break;
 	default:
@@ -2831,6 +2855,8 @@ QDF_STATUS wlan_mlo_dev_t2lm_notify_link_update(
 			continue;
 
 		handler(vdev, t2lm);
+
+		return QDF_STATUS_SUCCESS;
 	}
 	return QDF_STATUS_SUCCESS;
 }
