@@ -856,6 +856,15 @@ void wlan_ipa_cleanup_dev_iface(struct wlan_ipa_priv *ipa_ctx,
 				qdf_netdev_t net_dev, uint8_t session_id);
 
 /**
+ * wlan_ipa_uc_shutdown_opt_dp_ctrl_cleanup() - enables flag to clean filters
+ * in opt_dp_ctrl
+ * @ipa_ctx: IPA context
+ *
+ * Return: None
+ */
+void wlan_ipa_uc_shutdown_opt_dp_ctrl_cleanup(struct wlan_ipa_priv *ipa_ctx);
+
+/**
  * wlan_ipa_uc_ssr_cleanup() - handle IPA UC clean up during SSR
  * @ipa_ctx: IPA context
  *
@@ -992,15 +1001,29 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_add_cb(
 			    void *ipa_ctx,
 			    struct ipa_wdi_opt_dpath_flt_add_cb_params *in_out);
 /**
- * wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb -remove filter tuple from lce filter
+ * wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb_wrapper - callback to remove
+ * filter tuple from lce filter
  * @ipa_ctx: IPA context
  * @in: filter tuple info
  *
  * Return: 0 on success, negative on failure
  */
-int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
+int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb_wrapper(
 			   void *ipa_ctx,
 			   struct ipa_wdi_opt_dpath_flt_rem_cb_params *in);
+
+/**
+ * wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb -remove filter tuple from lce filter
+ * @ipa_ctx: IPA context
+ * @in: filter tuple info
+ * @source: filter delete caller
+ *
+ * Return: 0 on success, negative on failure
+ */
+int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
+			   void *ipa_ctx,
+			   struct ipa_wdi_opt_dpath_flt_rem_cb_params *in,
+			   uint16_t source);
 /**
  * wlan_ipa_wdi_opt_dpath_clk_status_cb - notify clock enable
  * @ipa_ctx: IPA context

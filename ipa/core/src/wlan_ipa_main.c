@@ -787,6 +787,23 @@ void ipa_cleanup_dev_iface(struct wlan_objmgr_pdev *pdev,
 	return wlan_ipa_cleanup_dev_iface(ipa_obj, net_dev, session_id);
 }
 
+void ipa_uc_shutdown_opt_dp_ctrl_cleanup(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_ipa_priv *ipa_obj;
+	struct wlan_objmgr_psoc *psoc = wlan_pdev_get_psoc(pdev);
+
+	if (!ipa_cb_is_ready())
+		return;
+
+	ipa_obj = ipa_psoc_get_priv_obj(psoc);
+	if (!ipa_obj) {
+		ipa_err("IPA object is NULL");
+		return;
+	}
+
+	return wlan_ipa_uc_shutdown_opt_dp_ctrl_cleanup(ipa_obj);
+}
+
 void ipa_uc_ssr_cleanup(struct wlan_objmgr_pdev *pdev)
 {
 	struct wlan_ipa_priv *ipa_obj;

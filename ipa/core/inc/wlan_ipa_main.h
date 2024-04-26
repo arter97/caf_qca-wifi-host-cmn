@@ -523,6 +523,15 @@ QDF_STATUS ipa_uc_disconnect_ap(struct wlan_objmgr_pdev *pdev,
 void ipa_cleanup_dev_iface(struct wlan_objmgr_pdev *pdev,
 			   qdf_netdev_t net_dev, uint8_t session_id);
 
+/*
+ * ipa_uc_shutdown_opt_dp_ctrl_cleanup() - enables flag to clean filters
+ * in opt_dp_ctrl
+ * @pdev: pdev obj
+ *
+ * Return: None
+ */
+void ipa_uc_shutdown_opt_dp_ctrl_cleanup(struct wlan_objmgr_pdev *pdev);
+
 /**
  * ipa_uc_ssr_cleanup() - handle IPA UC cleanup during SSR
  * @pdev: pdev obj

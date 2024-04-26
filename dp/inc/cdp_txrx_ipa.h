@@ -944,6 +944,7 @@ struct addr_params {
 	uint8_t ipa_flt_evnt_required;
 	bool ipa_flt_in_use;
 	qdf_event_t ipa_ctrl_flt_rm_evt;
+	uint16_t req_src;
 };
 
 struct wifi_dp_flt_setup {
