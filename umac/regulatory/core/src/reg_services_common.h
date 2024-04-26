@@ -152,6 +152,7 @@
 #define EIRP_PWR_SCALE 100
 
 #define SP_AP_AND_CLIENT_POWER_DIFF_IN_DBM 6
+#define SP_AP_AND_CLIENT_POWER_DIFF_IN_SCALE 600
 
 extern const struct chan_map *channel_map;
 extern const struct chan_map channel_map_us[];
@@ -2827,7 +2828,7 @@ enum reg_6g_ap_type reg_get_best_pwr_mode(struct wlan_objmgr_pdev *pdev,
  * @is_client_list_lookup_needed: Boolean to indicate if client list lookup is
  * needed
  * @client_type: Client power type
- *
+ * @is_twice_power: Boolean to indicate EIRP power in 0.5dbm steps
  * Return: EIRP power
  */
 int16_t reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
@@ -2835,8 +2836,8 @@ int16_t reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
 			 uint16_t bw, enum reg_6g_ap_type ap_pwr_type,
 			 uint16_t in_punc_pattern,
 			 bool is_client_list_lookup_needed,
-			 enum reg_6g_client_type client_type);
-
+			 enum reg_6g_client_type client_type,
+			 bool is_twice_power);
 #else
 static inline
 qdf_freq_t reg_compute_6g_center_freq_from_cfi(uint8_t ieee_6g_cfi)

@@ -2726,6 +2726,7 @@ wlan_reg_get_best_pwr_mode(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
  * @is_client_list_lookup_needed: Boolean to indicate if client list lookup is
  * needed
  * @client_type: Client power type
+ * @is_twice_power: Boolean to indicate EIRP in 0.5 dBm
  *
  * Return: EIRP power
  */
@@ -2734,7 +2735,8 @@ int16_t wlan_reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
 			      enum reg_6g_ap_type ap_pwr_type,
 			      uint16_t in_punc_pattern,
 			      bool is_client_list_lookup_needed,
-			      enum reg_6g_client_type client_type);
+			      enum reg_6g_client_type client_type,
+			      bool is_twice_power);
 #else
 static inline
 qdf_freq_t wlan_reg_get_thresh_priority_freq(struct wlan_objmgr_pdev *pdev)
@@ -2774,7 +2776,8 @@ wlan_reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev,
 		      enum reg_6g_ap_type ap_pwr_type,
 		      uint16_t in_punc_pattern,
 		      bool is_client_list_lookup_needed,
-		      enum reg_6g_client_type client_type)
+		      enum reg_6g_client_type client_type,
+		      bool is_twice_power)
 {
 	return 0;
 }
