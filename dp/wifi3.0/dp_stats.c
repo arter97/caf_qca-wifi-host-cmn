@@ -7430,9 +7430,9 @@ void dp_print_peer_stats(struct dp_peer *peer,
 		       peer_stats->tx.tx_failed);
 	DP_PRINT_STATS("Packets Failed due to retry threshold breach = %d",
 		       peer_stats->tx.failed_retry_count);
-	DP_PRINT_STATS("mdpu Packets Retries = %u",
+	DP_PRINT_STATS("mpdu Packets Retries = %u",
 			peer_stats->tx.mpdu_retries);
-	DP_PRINT_STATS("Total mdpu packets retries = %u",
+	DP_PRINT_STATS("Total mpdu packets retries = %u",
 			peer_stats->tx.total_mpdu_retries);
 	DP_PRINT_STATS("Packets In OFDMA = %d",
 		       peer_stats->tx.ofdma);
@@ -10273,9 +10273,9 @@ dp_print_per_link_peer_txrx_stats(struct cdp_peer_stats *peer_stats,
 		       peer_stats->tx.multiple_retry_count);
 	DP_PRINT_STATS("Packets Failed due to retry threshold breach = %u",
 		       peer_stats->tx.failed_retry_count);
-	DP_PRINT_STATS("mdpu Packets Retries = %u",
+	DP_PRINT_STATS("mpdu Packets Retries = %u",
 			peer_stats->tx.mpdu_retries);
-	DP_PRINT_STATS("Total mdpu packets retries = %u",
+	DP_PRINT_STATS("Total mpdu packets retries = %u",
 			peer_stats->tx.total_mpdu_retries);
 	DP_PRINT_STATS("Packets In OFDMA = %u",
 		       peer_stats->tx.ofdma);

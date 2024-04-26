@@ -996,7 +996,7 @@ dp_rx_err_populate_mpdu_desc_info(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	if (first_msdu_in_mpdu_processed) {
 		/*
 		 * This is the 2nd indication of first_msdu in the same mpdu.
-		 * Skip re-parsing the mdpu_desc_info and use the cached one,
+		 * Skip re-parsing the mpdu_desc_info and use the cached one,
 		 * since this msdu is most probably from the current mpdu
 		 * which is being processed
 		 */

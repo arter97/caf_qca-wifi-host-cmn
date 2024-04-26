@@ -607,7 +607,7 @@ static int dp_rx_mon_drop_one_mpdu(struct dp_pdev *pdev,
  * @rx_bufs_dropped: Number of msdus dropped
  *
  * Return: QDF_STATUS_SUCCESS, if the mpdu was to be dropped
- *	   QDF_STATUS_E_INVAL/QDF_STATUS_E_FAILURE, if the mdpu was not dropped
+ *	   QDF_STATUS_E_INVAL/QDF_STATUS_E_FAILURE, if the mpdu was not dropped
  */
 static QDF_STATUS
 dp_rx_mon_check_n_drop_mpdu(struct dp_pdev *pdev, uint32_t mac_id,
