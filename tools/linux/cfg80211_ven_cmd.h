@@ -901,6 +901,9 @@ enum {
 	IEEE80211_PARAM_TPE_COMMON_PSD = 824,
 	IEEE80211_PARAM_TPE_PWR_UNIT = 825, /* User config to choose PSD or EIRP in a TPE IE */
 	IEEE80211_PARAM_TPE_PUNC_PWR = 826, /* User config to set the PSD power of the punctured channel */
+#ifdef QCA_SUPPORT_WDS_EXTENDED
+	IEEE80211_PARAM_WDS_EXT_AP_BRIDGE  = 827,  /* Flag to enable/disable wds_ext specific ap bridge */
+#endif
 };
 
 enum {
@@ -2624,6 +2627,8 @@ struct vendor_commands vap_vendor_cmds[] = {
 	{"drop_tx_mcast",      IEEE80211_PARAM_DROP_TX_MCAST, SET_PARAM, 1},
 	{"get_drop_tx_mcast",  IEEE80211_PARAM_DROP_TX_MCAST, GET_PARAM, 0},
 	{"get_wds_ext",        IEEE80211_PARAM_WDS_EXT_EN, GET_PARAM, 0},
+	{"wds_ext_ap_bridge",  IEEE80211_PARAM_WDS_EXT_AP_BRIDGE, SET_PARAM, 1},
+	{"get_wds_ext_ap_bridge", IEEE80211_PARAM_WDS_EXT_AP_BRIDGE, GET_PARAM, 0},
 #endif
 	{"get_ppevp_type",     IEEE80211_PARAM_PPEVP_TYPE, GET_PARAM, 0},
 #ifdef CONFIG_MLO_SINGLE_DEV
