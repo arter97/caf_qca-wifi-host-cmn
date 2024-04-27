@@ -4874,6 +4874,25 @@ static inline bool dp_vdev_self_peer_required(struct dp_soc *soc,
 }
 #endif
 
+#ifdef QCA_SUPPORT_WDS_EXTENDED
+static inline void
+dp_wds_ext_ap_bridge_init(struct dp_vdev *vdev)
+{
+	if (wlan_op_mode_sta != vdev->opmode)
+		vdev->wds_ext_ap_bridge = true;
+	else
+		vdev->wds_ext_ap_bridge = false;
+
+	dp_init_info("%pK: wds_ext_ap_bridge %d",
+		     vdev, vdev->wds_ext_ap_bridge);
+}
+#else
+static inline void
+dp_wds_ext_ap_bridge_init(struct dp_vdev *vdev)
+{
+}
+#endif
+
 /**
  * dp_vdev_attach_wifi3() - attach txrx vdev
  * @cdp_soc: CDP SoC context
@@ -5012,6 +5031,7 @@ static QDF_STATUS dp_vdev_attach_wifi3(struct cdp_soc_t *cdp_soc,
 	dp_init_info("%pK: wlan_cfg_ap_bridge_enabled %d",
 		     cdp_soc, vdev->ap_bridge_enabled);
 
+	dp_wds_ext_ap_bridge_init(vdev);
 	dp_tx_vdev_attach(vdev);
 
 	dp_monitor_vdev_attach(vdev);
@@ -8901,6 +8921,9 @@ static QDF_STATUS dp_get_vdev_param(struct cdp_soc_t *cdp_soc, uint8_t vdev_id,
 	case CDP_DROP_TX_MCAST:
 		val->cdp_drop_tx_mcast = vdev->drop_tx_mcast;
 		break;
+	case CDP_WDS_EXT_AP_BRIDGE:
+		val->cdp_vdev_paran_wds_ext_ap_bridge = vdev->wds_ext_ap_bridge;
+		break;
 #endif
 
 #ifdef MESH_MODE_SUPPORT
@@ -9060,6 +9083,13 @@ dp_set_vdev_param(struct cdp_soc_t *cdp_soc, uint8_t vdev_id,
 		dp_info("vdev_id %d drop tx mcast :%d", vdev_id,
 			val.cdp_drop_tx_mcast);
 		vdev->drop_tx_mcast = val.cdp_drop_tx_mcast;
+		break;
+	case CDP_WDS_EXT_AP_BRIDGE:
+		dp_info("vdev_id %d wds ext ap bridge :%d", vdev_id,
+			val.cdp_vdev_paran_wds_ext_ap_bridge);
+		if (vdev->opmode == wlan_op_mode_ap)
+			vdev->wds_ext_ap_bridge =
+					val.cdp_vdev_paran_wds_ext_ap_bridge;
 		break;
 #endif
 	case CDP_ENABLE_PEER_AUTHORIZE:

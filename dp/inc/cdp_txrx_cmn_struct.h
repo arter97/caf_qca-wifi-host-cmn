@@ -1441,6 +1441,7 @@ enum cdp_pdev_param_type {
  * @cdp_vdev_param_wrap: qwrap ap vap
  * @cdp_vdev_param_mon_freq: set monitor frequency
  * @cdp_vdev_param_monitor_chan: monitor channel
+ * @cdp_vdev_paran_wds_ext_ap_bridge: enable/disable ap_bridge for wds_ext peers
  *
  * @cdp_pdev_param_dbg_snf: Enable debug sniffer feature
  * @cdp_pdev_param_bpr_enable: Enable bcast probe feature
@@ -1550,6 +1551,7 @@ typedef union cdp_config_param_t {
 	bool cdp_vdev_param_wrap;
 	qdf_freq_t cdp_vdev_param_mon_freq;
 	int cdp_vdev_param_monitor_chan;
+	bool cdp_vdev_paran_wds_ext_ap_bridge;
 
 	/* pdev params */
 	bool cdp_pdev_param_cptr_latcy;
@@ -1713,6 +1715,7 @@ enum cdp_pdev_bpr_param {
  * @CDP_ENABLE_HLOS_TID_OVERRIDE: set hlos tid override flag
  * @CDP_CFG_WDS_EXT: enable/disable wds ext feature
  * @CDP_DROP_TX_MCAST: enable/disable tx mcast drop
+ * @CDP_WDS_EXT_AP_BRIDGE: enable/disable ap_bridge for wds_ext peers
  * @CDP_ENABLE_PEER_AUTHORIZE: enable peer authorize flag
  * @CDP_ENABLE_PEER_TID_LATENCY: set peer tid latency enable flag
  * @CDP_SET_VAP_MESH_TID: Set latency tid in vap
@@ -1758,6 +1761,7 @@ enum cdp_vdev_param_type {
 #ifdef QCA_SUPPORT_WDS_EXTENDED
 	CDP_CFG_WDS_EXT,
 	CDP_DROP_TX_MCAST,
+	CDP_WDS_EXT_AP_BRIDGE,
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
 	CDP_ENABLE_PEER_AUTHORIZE,
 #ifdef WLAN_SUPPORT_MESH_LATENCY
