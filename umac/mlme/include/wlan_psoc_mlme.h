@@ -94,7 +94,7 @@ struct psoc_config {
 	struct psoc_mlo_config mlo_config;
 };
 
-#ifdef WLAN_FEATURE_PEER_TRANS_HIST
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 /**
  * enum wlan_peer_tbl_trans_entry_flags - Peer table transition flags
  * @WLAN_PEER_TBL_TRANS_CREATE: Peer table modify due to create
@@ -165,7 +165,7 @@ struct psoc_mlme_obj {
 #endif
 	struct wlan_6ghz_rnr_global_cache rnr_6ghz_cache[WLAN_UMAC_MAX_PDEVS];
 	struct psoc_config psoc_cfg;
-#ifdef WLAN_FEATURE_PEER_TRANS_HIST
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 	qdf_list_t peer_history_list;
 #endif
 };

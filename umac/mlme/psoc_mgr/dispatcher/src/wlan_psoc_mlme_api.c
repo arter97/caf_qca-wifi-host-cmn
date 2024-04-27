@@ -74,7 +74,7 @@ struct psoc_mlme_obj *wlan_psoc_mlme_get_cmpt_obj(struct wlan_objmgr_psoc *psoc)
 
 qdf_export_symbol(wlan_psoc_mlme_get_cmpt_obj);
 
-#ifdef WLAN_FEATURE_PEER_TRANS_HIST
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 void wlan_mlme_psoc_peer_trans_hist_remove_back(qdf_list_t *peer_history)
 {
 	struct wlan_peer_tbl_trans_entry *peer_trans_entry;
