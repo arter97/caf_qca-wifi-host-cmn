@@ -24,7 +24,7 @@
 
 #include <include/wlan_psoc_mlme.h>
 
-#ifdef WLAN_FEATURE_PEER_TRANS_HIST
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 #define MAX_PEER_HIST_LIST_SIZE 256
 #endif
 
@@ -40,7 +40,7 @@
 struct psoc_mlme_obj *wlan_psoc_mlme_get_cmpt_obj(
 						struct wlan_objmgr_psoc *psoc);
 
-#ifdef WLAN_FEATURE_PEER_TRANS_HIST
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 /**
  * wlan_mlme_psoc_init_peer_trans_history() - Initialize PSOC peer trans history
  * @psoc_mlme: PSOC MLME priv object
