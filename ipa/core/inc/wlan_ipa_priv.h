@@ -468,7 +468,7 @@ struct ipa_uc_stas_map {
  * @rsvd_snd: Reserved
  * @vdev_id: vdev id
  * @nbuf: tx nbuf
- * @flt_del_hdl: flt handle deleted in opt_dp_ctrl
+ * @ctrl_del_hdl: flt handle deleted in opt_dp_ctrl
  */
 struct op_msg_type {
 	uint8_t msg_t;
@@ -478,7 +478,7 @@ struct op_msg_type {
 	uint16_t rsvd_snd;
 	uint8_t vdev_id;
 	qdf_nbuf_t nbuf;
-	uint32_t flt_del_hdl[TX_SUPER_RULE_SETUP_NUM];
+	uint32_t ctrl_del_hdl;
 };
 
 /**
@@ -570,11 +570,15 @@ struct uc_rm_work_struct {
  * @vdev_id: vdev id
  * @nbuf: nbuf
  * @op_code: IPA Operation type
+ * @hdl: handle of filter deleted
+ * @result: result of deletion
  */
 struct msg_elem {
 	uint8_t vdev_id;
 	qdf_nbuf_t nbuf;
-	uint8_t op_code;
+	uint16_t op_code;
+	uint32_t hdl;
+	uint8_t result;
 };
 
 /**
@@ -583,12 +587,14 @@ struct msg_elem {
  * @tp: tp of list
  * @entries: list of messages
  * @list_size: max list size
+ * @lock: spin lock for list
  */
 struct op_msg_list {
 	uint16_t hp;
 	uint16_t tp;
 	struct msg_elem *entries;
 	uint16_t list_size;
+	qdf_spinlock_t lock;
 };
 
 /**
