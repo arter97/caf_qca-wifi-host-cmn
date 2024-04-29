@@ -709,12 +709,14 @@ enum wlan_cm_active_request_type {
  * @SLO: Non-ML or Single link ML
  * @MLSR: Multi link Single Radio, indicates that both links
  *        have to be on one mac
+ * @EMLSR: Enhanced multi link single radio
  * @MLMR: Multi link Multi Radio, indicates that both links
  *        can be on different macs
  */
 enum MLO_TYPE {
 	SLO,
 	MLSR,
+	EMLSR,
 	MLMR,
 	MLO_TYPE_MAX
 };

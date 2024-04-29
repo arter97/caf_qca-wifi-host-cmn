@@ -35,12 +35,14 @@
 #endif
 #include "wlan_cm_main_api.h"
 #include "wlan_cm_public_struct.h"
+#include "utils_mlo.h"
 
 #define CM_PCL_RSSI_THRESHOLD -75
 
 /* To differentiate between SLO and 11AX candidate */
 #define SLO_BOOST 5
 #define ONE_LINK_MLMR_BOOST 5
+#define ONE_LINK_EMLSR_BOOST 3
 #define LINK_BOOST 10
 
 #define CANDIDATE_DUMP_MAX_LEN 255
@@ -1770,7 +1772,7 @@ static uint16_t cm_get_ch_width(struct scan_cache_entry *entry,
 #define CM_MLO_BAD_RSSI_PCT 61
 #define CM_MLO_CONGESTION_PCT_BAD_RSSI 6
 
-static uint8_t mlo_boost_pct[MLO_TYPE_MAX] = {0, 10, CM_MAX_PCT_SCORE};
+static uint8_t mlo_boost_pct[MLO_TYPE_MAX] = {0, 10, 10, CM_MAX_PCT_SCORE};
 
 /**
  * cm_get_mlo_rssi() - Calculate joint rssi for MLO AP
@@ -1841,6 +1843,17 @@ static bool is_cm_emlsr_mode_enabled(struct wlan_objmgr_psoc *psoc)
 
 	return emlsr_enabled;
 }
+
+/**
+ * is_cm_hw_emlsr_capable() - Get hw emlsr capability
+ * @psoc: PSOC pointer
+ *
+ * Return: True if hw supports emlsr else false.
+ */
+static bool is_cm_hw_emlsr_capable(struct wlan_objmgr_psoc *psoc)
+{
+	return policy_mgr_is_hw_emlsr_capable(psoc);
+}
 #else
 static inline
 uint8_t cm_get_sta_mlo_conn_max_num(struct wlan_objmgr_psoc *psoc)
@@ -1856,6 +1869,11 @@ static inline bool is_freq_dbs_or_sbs(struct wlan_objmgr_psoc *psoc,
 }
 
 static bool is_cm_emlsr_mode_enabled(struct wlan_objmgr_psoc *psoc)
+{
+	return false;
+}
+
+static inline bool is_cm_hw_emlsr_capable(struct wlan_objmgr_psoc *psoc)
 {
 	return false;
 }
@@ -1879,14 +1897,26 @@ enum MLO_TYPE cm_bss_mlo_type(struct wlan_objmgr_psoc *psoc,
 	uint32_t freq[MLD_MAX_LINKS - 1];
 	struct scan_cache_entry *entry_partner[MLD_MAX_LINKS - 1];
 	bool multi_link = false;
+	uint8_t *ml_ie = entry->ie_list.multi_link_bv;
+	bool eml_cap_found = false, emlsr_supp = false;
+	uint16_t eml_cap;
+	qdf_size_t ml_ie_len;
+	bool is_hw_emlsr_cap = false;
 
 	mlo_link_num = cm_get_sta_mlo_conn_max_num(psoc);
-	if (!entry->ie_list.multi_link_bv)
+	if (!ml_ie || !entry->ml_info.num_links || mlo_link_num == 1)
 		return SLO;
-	else if (!entry->ml_info.num_links)
-		return SLO;
-	else if (mlo_link_num == 1)
-		return SLO;
+
+	is_hw_emlsr_cap = is_cm_hw_emlsr_capable(psoc);
+	if (is_hw_emlsr_cap) {
+		ml_ie_len = ml_ie[TAG_LEN_POS] + sizeof(struct ie_header);
+		util_get_bvmlie_eml_cap(ml_ie, ml_ie_len,
+					&eml_cap_found, &eml_cap);
+		if (eml_cap_found)
+			emlsr_supp = QDF_GET_BITS(eml_cap,
+				WLAN_ML_BV_CINFO_EMLCAP_EMLSRSUPPORT_IDX,
+				WLAN_ML_BV_CINFO_EMLCAP_EMLSRSUPPORT_BITS);
+	}
 
 	for (i = 0; i < entry->ml_info.num_links; i++) {
 		if (!entry->ml_info.link_info[i].is_valid_link)
@@ -1896,6 +1926,7 @@ enum MLO_TYPE cm_bss_mlo_type(struct wlan_objmgr_psoc *psoc,
 		entry_partner[i] =
 			cm_get_entry(scan_list,
 				     &entry->ml_info.link_info[i].link_addr);
+
 		if (entry_partner[i])
 			freq[i] = entry_partner[i]->channel.chan_freq;
 		if (is_freq_dbs_or_sbs(psoc, freq[i], freq_entry)) {
@@ -1911,10 +1942,12 @@ enum MLO_TYPE cm_bss_mlo_type(struct wlan_objmgr_psoc *psoc,
 		}
 	}
 
-	if (multi_link)
+	if (multi_link && emlsr_supp)
+		return EMLSR;
+	else if (multi_link)
 		return MLSR;
-	else
-		return SLO;
+
+	return SLO;
 }
 
 /**
@@ -2456,7 +2489,7 @@ static int cm_calculate_ml_scores(struct wlan_objmgr_psoc *psoc,
 
 	weight_config = &score_config->weight_config;
 	if (IS_LINK_SCORE(ml_flag) || bss_mlo_type == SLO ||
-	    bss_mlo_type == MLSR ||
+	    bss_mlo_type == MLSR || bss_mlo_type == EMLSR ||
 	    !wlan_cm_is_eht_allowed_for_current_security(psoc, entry, false)) {
 		rssi_score =
 			cm_calculate_rssi_score(&score_config->rssi_score,
@@ -2484,7 +2517,7 @@ static int cm_calculate_ml_scores(struct wlan_objmgr_psoc *psoc,
 					       score_config);
 		score += band_score;
 
-		if (bss_mlo_type == MLSR)
+		if (bss_mlo_type == MLSR || bss_mlo_type == EMLSR)
 			score += cm_calculate_emlsr_score(weight_config);
 	} else {
 		score += cm_calculate_mlo_bss_score(psoc, entry, score_config,
@@ -2520,47 +2553,57 @@ cm_check_and_update_bssid_hint_entry_bss_score(struct scan_cache_entry *entry,
 }
 
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+/**
+ * cm_vendor_specific_boost() - Add vendor specific boost to candidates
+ * @psoc: PSOC pointer
+ * @entry: Scan cache entry pointer
+ * @bss_mlo_type: mlo type
+ *
+ * Add per link, score boost for MLO candidates to achieve
+ * priority order: MLMR > eMLSR > MLSR > SLO.
+ *
+ * Return: None
+ */
 static void cm_vendor_specific_boost(struct wlan_objmgr_psoc *psoc,
 				     struct scan_cache_entry *entry,
-				     int32_t score)
+				     enum MLO_TYPE bss_mlo_type)
 {
-	struct partner_link_info *link = NULL;
-	uint32_t freq = 0;
-	uint32_t freq_entry = 0;
+	int per_link_boost;
+	int32_t score = entry->bss_score;
 
-	if (entry->ie_list.multi_link_bv) {
-		if (entry->ml_info.num_links == ONE_LINK) {
-			freq_entry = entry->channel.chan_freq;
-			link = &entry->ml_info.link_info[0];
+	if (!entry->ie_list.multi_link_bv)
+		return;
 
-			if (!link[0].is_valid_link)
-				return;
-
-			freq = link[0].freq;
-
-			/* Add boost of 15% for one link MLMR candidate  */
-			if (!policy_mgr_are_2_freq_on_same_mac(psoc, freq,
-							       freq_entry))
-				score = score + (score *
-						 (LINK_BOOST +
-						  ONE_LINK_MLMR_BOOST)) / 100;
-			else
-				score = score + (score * (LINK_BOOST)) / 100;
-		} else if (entry->ml_info.num_links > ONE_LINK) {
-			/* Add boost of 5%/per link for MLO candidate */
-			score = score  + (score * (entry->ml_info.num_links * LINK_BOOST)) / 100;
-		} else {
-			/* Add boost of 5% for SLO candidate  */
-			score = score  + (score * (SLO_BOOST)) / 100;
-		}
+	switch (bss_mlo_type) {
+	case MLMR:
+		/* Add boost of 15% per link for MLMR candidate */
+		per_link_boost = (score * (LINK_BOOST +
+					   ONE_LINK_MLMR_BOOST)) / 100;
+		break;
+	case EMLSR:
+		/* Add boost of 13% per link for EMLSR candidate */
+		per_link_boost = (score * (LINK_BOOST +
+					   ONE_LINK_EMLSR_BOOST)) / 100;
+		break;
+	case MLSR:
+		/* Add boost of 10% per link for MLSR candidate */
+		per_link_boost = (score * (LINK_BOOST)) / 100;
+		break;
+	case SLO:
+		/* Add boost of 5% for SLO candidate */
+	default:
+		per_link_boost = (score * (SLO_BOOST)) / 100;
 	}
 
-	entry->bss_score = score;
+	if (entry->ml_info.num_links >= ONE_LINK)
+		entry->bss_score += per_link_boost * entry->ml_info.num_links;
+	else
+		entry->bss_score += per_link_boost;
 }
 #else
 static void cm_vendor_specific_boost(struct wlan_objmgr_psoc *psoc,
 				     struct scan_cache_entry *entry,
-				     int32_t score)
+				     enum MLO_TYPE bss_mlo_type)
 {
 }
 #endif
@@ -2640,12 +2683,12 @@ static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 		score = cm_calculate_etp_score(psoc, entry, phy_config,
 					       bss_mlo_type, ml_flag);
 		entry->bss_score = score;
-		if (bss_mlo_type == MLMR || bss_mlo_type == MLSR)
+		if (bss_mlo_type > SLO && bss_mlo_type < MLO_TYPE_MAX)
 			cm_sort_vendor_algo_mlo_bss_entry(psoc, entry,
 							  phy_config, scan_list,
 							  bss_mlo_type);
 		/* vendor specific boost */
-		cm_vendor_specific_boost(psoc, entry, score);
+		cm_vendor_specific_boost(psoc, entry, bss_mlo_type);
 
 		if (cm_check_and_update_bssid_hint_entry_bss_score(entry,
 								   score_config,
@@ -2653,10 +2696,11 @@ static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 								   ml_flag))
 			return CM_BEST_CANDIDATE_MAX_BSS_SCORE;
 
-		mlme_nofl_debug("Candidate score("QDF_MAC_ADDR_FMT" freq %d): rssi %d score %d",
+		mlme_nofl_debug("Candidate score("QDF_MAC_ADDR_FMT" freq %d): rssi %d score %d, mlo type %d",
 				QDF_MAC_ADDR_REF(entry->bssid.bytes),
 				entry->channel.chan_freq,
-				entry->rssi_raw, entry->bss_score);
+				entry->rssi_raw, entry->bss_score,
+				bss_mlo_type);
 
 		return score;
 	}
