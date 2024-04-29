@@ -3090,7 +3090,7 @@ static uint8_t *util_copy_reporting_ap_vendor_ies(struct wlan_objmgr_psoc *psoc,
 						  uint32_t ie_len,
 						  uint8_t *buf_ie)
 {
-	struct action_oui_search_attr attr;
+	struct action_oui_search_attr attr = {0};
 	enum action_oui_id oui_id = ACTION_OUI_RESTRICT_MAX_MLO_LINKS;
 
 	attr.ie_data = (uint8_t *)ie;
