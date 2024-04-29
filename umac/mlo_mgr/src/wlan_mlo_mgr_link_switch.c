@@ -567,29 +567,25 @@ mlo_mgr_link_switch_notification(struct wlan_objmgr_vdev *vdev,
 	case MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_POST_SER:
 		if (!mlo_check_if_all_vdev_up(vdev)) {
 			mlo_debug("Not all VDEVs up");
-			status = QDF_STATUS_E_AGAIN;
-			break;
+			return QDF_STATUS_E_AGAIN;
 		}
 
 		if (mlo_is_chan_switch_in_progress(vdev)) {
 			mlo_debug("CSA is in progress on one of ML vdevs, abort link switch");
-			status = QDF_STATUS_E_AGAIN;
-			break;
+			return QDF_STATUS_E_AGAIN;
 		}
 
 		if (notify_reason ==
 		    MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_PRE_SER) {
-			status = QDF_STATUS_SUCCESS;
-			break;
+			return QDF_STATUS_SUCCESS;
 		}
 
-		status = mlo_mgr_link_switch_osif_notification(vdev,
-							       lswitch_req);
 		break;
 	default:
-		status = QDF_STATUS_SUCCESS;
 		break;
 	}
+
+	status = mlo_mgr_link_switch_osif_notification(vdev, lswitch_req);
 
 	return status;
 }
