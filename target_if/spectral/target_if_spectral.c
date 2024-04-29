@@ -154,6 +154,11 @@ target_if_spectral_check_buffer_size(struct wlan_objmgr_pdev *pdev,
 
 	spectral = get_target_if_spectral_handle_from_pdev(pdev);
 
+	if (!spectral) {
+		spectral_err("spectral variable in null.");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
 	status = spectral->spectral_buf_cb.get_buff_size(pdev, &buffer_size);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		spectral_err("Failed to get spectral buffer size");
@@ -3176,6 +3181,11 @@ target_if_spectral_scan_timeout_handler(qdf_hrtimer_data_t *arg)
 	}
 
 	smode = spectral_timer->smode;
+
+	if (smode >= SPECTRAL_SCAN_MODE_MAX) {
+		spectral_err("Invalid Spectral mode %u", smode);
+		return QDF_HRTIMER_NORESTART;
+	}
 
 	spectral = qdf_container_of(spectral_timer,
 				    struct target_if_spectral,
