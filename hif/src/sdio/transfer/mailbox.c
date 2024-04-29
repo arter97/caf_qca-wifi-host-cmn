@@ -1819,10 +1819,6 @@ static int async_task(void *param)
 
 	device = (struct hif_sdio_dev *)param;
 	set_current_state(TASK_INTERRUPTIBLE);
-	/* Currently thread ar6k priority is 0, per test experience
-	 * change it to -5 can improve RX throughtput
-	 */
-	qdf_set_user_nice(current, -5);
 	while (!device->async_shutdown) {
 		/* wait for work */
 		if (down_interruptible(&device->sem_async) != 0) {
