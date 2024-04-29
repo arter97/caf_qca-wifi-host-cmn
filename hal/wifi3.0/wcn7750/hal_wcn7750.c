@@ -3020,8 +3020,8 @@ struct hal_hw_srng_config hw_srng_table_7750[] = {
 		.max_size = HAL_RXDMA_MAX_RING_SIZE,
 	},
 	{ /* RXDMA_MONITOR_STATUS */
-		.start_ring_id = HAL_SRNG_WMAC1_SW2RXDMA1_STATBUF,
-		.max_rings = 1,
+		.start_ring_id = HAL_SRNG_WMAC1_SW2RXDMA0_STATBUF,
+		.max_rings = NUM_RXDMA_STATUS_RINGS_PER_PDEV,
 		.entry_size = sizeof(struct wbm_buffer_ring) >> 2,
 		.lmac_ring = TRUE,
 		.ring_dir = HAL_SRNG_SRC_RING,

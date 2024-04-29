@@ -2306,7 +2306,7 @@ struct hal_hw_srng_config hw_srng_table_6432[] = {
 	{},
 #endif
 	{ /* RXDMA_MONITOR_STATUS */
-		.start_ring_id = HAL_SRNG_WMAC1_SW2RXDMA1_STATBUF,
+		.start_ring_id = HAL_SRNG_WMAC1_SW2RXDMA0_STATBUF,
 		.max_rings = 0,
 		.entry_size = sizeof(struct wbm_buffer_ring) >> 2,
 		.lmac_ring = TRUE,
