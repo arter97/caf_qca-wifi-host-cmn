@@ -166,8 +166,11 @@ QDF_STATUS wlan_send_dcs_cmd_for_vdev(struct wlan_objmgr_psoc *psoc,
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
-	dcs_enable = dcs_pdev_priv->dcs_host_params.dcs_enable &
-			dcs_pdev_priv->dcs_host_params.dcs_enable_cfg;
+	if (policy_mgr_is_vdev_ll_lt_sap(psoc, vdev_id))
+		dcs_enable = dcs_pdev_priv->dcs_host_params.dcs_enable;
+	else
+		dcs_enable = (dcs_pdev_priv->dcs_host_params.dcs_enable &
+				dcs_pdev_priv->dcs_host_params.dcs_enable_cfg);
 
 	dcs_tx_ops = target_if_dcs_get_tx_ops(psoc);
 
