@@ -2262,7 +2262,8 @@ flush_single_pmk:
 	 */
 	if (prev_candidate && !use_same_candidate &&
 	    util_scan_entry_single_pmk(psoc, prev_candidate->entry) &&
-	    QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_SAE)) {
+	    (QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_SAE) ||
+	     QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY))) {
 		pmksa_mac = &prev_candidate->entry->bssid;
 		cm_delete_pmksa_for_single_pmk_bssid(cm_ctx, pmksa_mac);
 
