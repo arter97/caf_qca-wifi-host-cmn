@@ -23870,6 +23870,10 @@ static void populate_tlv_service(uint32_t *wmi_service)
 	wmi_service[wmi_service_chipset_logging_support] =
 				WMI_SERVICE_CHIPSET_LOGGING_SUPPORT;
 #endif
+#ifdef WLAN_DP_FEATURE_STC
+	wmi_service[wmi_service_traffic_context_support] =
+					WMI_SERVICE_TRAFFIC_CONTEXT_SUPPORT;
+#endif
 }
 
 /**
