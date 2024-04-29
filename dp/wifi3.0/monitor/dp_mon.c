@@ -1531,10 +1531,12 @@ QDF_STATUS dp_peer_stats_notify(struct dp_pdev *dp_pdev, struct dp_peer *peer)
 
 	mon_peer_stats = &peer->monitor_peer->stats;
 
-	if (mon_peer_stats->rx.last_snr != mon_peer_stats->rx.snr)
+	if (mon_peer_stats->tx.last_ack_rssi !=
+			mon_peer_stats->tx.prev_ack_rssi)
 		peer_stats_intf.rssi_changed = true;
 
-	if ((mon_peer_stats->rx.snr && peer_stats_intf.rssi_changed) ||
+	if ((mon_peer_stats->tx.last_ack_rssi &&
+	     peer_stats_intf.rssi_changed) ||
 	    (mon_peer_stats->tx.tx_rate &&
 	     mon_peer_stats->tx.tx_rate != mon_peer_stats->tx.last_tx_rate)) {
 		qdf_mem_copy(peer_stats_intf.peer_mac, peer->mac_addr.raw,
@@ -1545,6 +1547,7 @@ QDF_STATUS dp_peer_stats_notify(struct dp_pdev *dp_pdev, struct dp_peer *peer)
 		peer_stats_intf.peer_tx_rate = mon_peer_stats->tx.tx_rate;
 		peer_stats_intf.peer_rssi = mon_peer_stats->rx.snr;
 		peer_stats_intf.ack_rssi = mon_peer_stats->tx.last_ack_rssi;
+		peer_stats_intf.avg_ack_rssi = CDP_SNR_OUT(mon_peer_stats->tx.avg_ack_rssi);
 		dp_peer_get_tx_rx_stats(peer, &peer_stats_intf);
 		peer_stats_intf.per = tgt_peer->stats.tx.last_per;
 		peer_stats_intf.free_buff = INVALID_FREE_BUFF;
@@ -3477,6 +3480,9 @@ dp_tx_stats_update(struct dp_pdev *pdev, struct dp_peer *peer,
 	dp_pdev_update_erp_tx_stats(pdev, ppdu);
 
 	dp_peer_stats_notify(pdev, peer);
+
+	if (!(ppdu->is_mcast) && ppdu->ack_rssi_valid)
+		DP_STATS_UPD(mon_peer, tx.prev_ack_rssi, ppdu_desc->ack_rssi);
 
 	ratekbps = mon_peer->stats.tx.tx_rate;
 	DP_STATS_UPD(mon_peer, tx.last_tx_rate, ratekbps);
