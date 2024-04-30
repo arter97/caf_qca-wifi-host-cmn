@@ -2331,6 +2331,11 @@ static uint32_t util_gen_new_ie(uint8_t *ie, uint32_t ielen,
 	tmp_old = util_scan_find_ie(WLAN_ELEMID_SSID, ie, ielen);
 	tmp_old = (tmp_old) ? tmp_old + tmp_old[1] + MIN_IE_LEN : ie;
 
+	if (((tmp_old + MIN_IE_LEN) - ie) >= ielen) {
+		qdf_mem_free(sub_copy);
+		return 0;
+	}
+
 	while (((tmp_old + tmp_old[1] + MIN_IE_LEN) - ie) <= ielen) {
 		ninh.non_inh_ie_found = 0;
 		if (ninh.non_inherit) {
@@ -2352,6 +2357,9 @@ static uint32_t util_gen_new_ie(uint8_t *ie, uint32_t ielen,
 		}
 
 		if (ninh.non_inh_ie_found || (tmp_old[0] == 0)) {
+			if (((tmp_old + tmp_old[1] + MIN_IE_LEN) - ie) >=
+			    (ielen - MIN_IE_LEN))
+				break;
 			tmp_old += tmp_old[1] + MIN_IE_LEN;
 			continue;
 		}
@@ -2372,39 +2380,23 @@ static uint32_t util_gen_new_ie(uint8_t *ie, uint32_t ielen,
 		} else {
 			/* ie in transmitting ie also in subelement,
 			 * copy from subelement and flag the ie in subelement
-			 * as copied (by setting eid field to 0xff). For
-			 * vendor ie, compare OUI + type + subType to
-			 * determine if they are the same ie.
+			 * as copied (by setting eid field to 0xff).
+			 * To determine if the vendor ies are same:
+			 * 1. For Cisco OUI, compare only OUI + type
+			 * 2. For other OUI, compare OUI + type + subType
 			 */
 			tmp_rem_len = subie_len - (tmp - sub_copy);
 			if (tmp_old[0] == WLAN_ELEMID_VENDOR &&
 			    tmp_rem_len >= MIN_VENDOR_TAG_LEN) {
-				if (!qdf_mem_cmp(tmp_old + PAYLOAD_START_POS,
-						 tmp + PAYLOAD_START_POS,
-						 OUI_LEN)) {
-					/* same vendor ie, copy from
-					 * subelement
-					 */
-					if ((pos + tmp[1] + MIN_IE_LEN) <=
-					    (new_ie + ielen)) {
-						qdf_mem_copy(pos, tmp,
-							     tmp[1] +
-							     MIN_IE_LEN);
-						pos += tmp[1] + MIN_IE_LEN;
-						tmp[0] = 0;
-					}
-				} else {
-					if ((pos + tmp_old[1] +
-					     MIN_IE_LEN) <=
-					    (new_ie + ielen)) {
-						qdf_mem_copy(pos, tmp_old,
-							     tmp_old[1] +
-							     MIN_IE_LEN);
-						pos += tmp_old[1] +
-							MIN_IE_LEN;
-					}
-				}
-			} else if (tmp_old[0] == WLAN_ELEMID_EXTN_ELEM) {
+				/* If Vendor IE also presents in STA profile,
+				 * then ignore the Vendor IE which is for
+				 * reporting STA. It only needs to copy Vendor
+				 * IE from STA profile for reported BSSID.
+				 * The copy happens when going through the
+				 * remaining IEs.
+				 */
+			} else if (tmp_old[0] == WLAN_ELEMID_EXTN_ELEM &&
+				   tmp_rem_len >= (MIN_IE_LEN + 1)) {
 				if (tmp_old[PAYLOAD_START_POS] ==
 				    tmp[PAYLOAD_START_POS]) {
 					/* same ie, copy from subelement */
@@ -2439,7 +2431,8 @@ static uint32_t util_gen_new_ie(uint8_t *ie, uint32_t ielen,
 			}
 		}
 
-		if (((tmp_old + tmp_old[1] + MIN_IE_LEN) - ie) >= ielen)
+		if (((tmp_old + tmp_old[1] + MIN_IE_LEN) - ie) >=
+		    (ielen - MIN_IE_LEN))
 			break;
 
 		tmp_old += tmp_old[1] + MIN_IE_LEN;
