@@ -4951,18 +4951,25 @@ log_ingress_frame_exit(struct mgmt_rx_reo_context *reo_ctx,
 	if (link_id >= MAX_MLO_LINKS)
 		return QDF_STATUS_E_INVAL;
 
+	if (desc->type >= MGMT_RX_REO_FRAME_DESC_TYPE_MAX)
+		return QDF_STATUS_E_INVAL;
+
+	queued_list = desc->queued_list;
+
+	if (desc->drop_reason >= MGMT_RX_REO_INGRESS_DROP_REASON_MAX)
+		return QDF_STATUS_E_INVAL;
+
 	ingress_frame_debug_info = &reo_ctx->ingress_frame_debug_info;
 
 	stats = &ingress_frame_debug_info->stats;
-	queued_list = desc->queued_list;
 	stats->ingress_count[link_id][desc->type]++;
 	if (desc->reo_required)
 		stats->reo_count[link_id][desc->type]++;
-	if (is_queued)
+	if (is_queued && queued_list < MGMT_RX_REO_LIST_TYPE_MAX)
 		stats->queued_count[link_id][queued_list]++;
-	if (desc->zero_wait_count_rx)
+	if (desc->zero_wait_count_rx && queued_list < MGMT_RX_REO_LIST_TYPE_MAX)
 		stats->zero_wait_count_rx_count[link_id][queued_list]++;
-	if (desc->immediate_delivery)
+	if (desc->immediate_delivery && queued_list < MGMT_RX_REO_LIST_TYPE_MAX)
 		stats->immediate_delivery_count[link_id][queued_list]++;
 	if (is_error)
 		stats->error_count[link_id][desc->type]++;
