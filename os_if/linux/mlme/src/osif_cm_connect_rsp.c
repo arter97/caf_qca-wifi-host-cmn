@@ -938,6 +938,8 @@ static void osif_fill_connect_resp_mlo_params(
 			struct cfg80211_bss *bss,
 			struct cfg80211_connect_resp_params *conn_rsp_params)
 {
+	conn_rsp_params->links[0].bssid = rsp->bssid.bytes;
+	conn_rsp_params->links[0].bss = bss;
 }
 #endif
 static void
