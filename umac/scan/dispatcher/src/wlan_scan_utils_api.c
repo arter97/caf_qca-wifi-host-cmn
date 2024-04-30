@@ -3102,6 +3102,11 @@ static uint32_t util_gen_new_ie(struct wlan_objmgr_pdev *pdev,
 	tmp_old = util_scan_find_ie(WLAN_ELEMID_SSID, ie, ielen);
 	tmp_old = (tmp_old) ? tmp_old + tmp_old[1] + MIN_IE_LEN : ie;
 
+	if (((tmp_old + MIN_IE_LEN) - ie) >= ielen) {
+		qdf_mem_free(sub_copy);
+		return 0;
+	}
+
 	while (((tmp_old + tmp_old[1] + MIN_IE_LEN) - ie) <= ielen) {
 		ninh.non_inh_ie_found = 0;
 		if (ninh.non_inherit) {
@@ -3123,6 +3128,9 @@ static uint32_t util_gen_new_ie(struct wlan_objmgr_pdev *pdev,
 		}
 
 		if (ninh.non_inh_ie_found || (tmp_old[0] == 0)) {
+			if (((tmp_old + tmp_old[1] + MIN_IE_LEN) - ie) >=
+			    (ielen - MIN_IE_LEN))
+				break;
 			tmp_old += tmp_old[1] + MIN_IE_LEN;
 			continue;
 		}
@@ -3176,7 +3184,8 @@ static uint32_t util_gen_new_ie(struct wlan_objmgr_pdev *pdev,
 				 * The copy happens when going through the
 				 * remaining IEs.
 				 */
-			} else if (tmp_old[0] == WLAN_ELEMID_EXTN_ELEM) {
+			} else if (tmp_old[0] == WLAN_ELEMID_EXTN_ELEM &&
+				   tmp_rem_len >= (MIN_IE_LEN + 1)) {
 				if (tmp_old[PAYLOAD_START_POS] ==
 				    tmp[PAYLOAD_START_POS]) {
 					/* same ie, copy from subelement */
@@ -3211,7 +3220,8 @@ static uint32_t util_gen_new_ie(struct wlan_objmgr_pdev *pdev,
 			}
 		}
 
-		if (((tmp_old + tmp_old[1] + MIN_IE_LEN) - ie) >= ielen)
+		if (((tmp_old + tmp_old[1] + MIN_IE_LEN) - ie) >=
+		    (ielen - MIN_IE_LEN))
 			break;
 
 		tmp_old += tmp_old[1] + MIN_IE_LEN;
