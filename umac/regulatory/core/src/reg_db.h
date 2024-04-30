@@ -115,6 +115,8 @@ enum reg_domain {
 	ETSI19_WORLD = 0x7B,
 	ETSI20_WORLD = 0x7C,
 	ETSI21_WORLD = 0x7D,
+	ETSI22_WORLD = 0x7F,
+	ETSI22_ETSIC = 0x8A,
 
 	APL1_WORLD = 0x52,
 	APL1_ETSIC = 0x55,
@@ -260,6 +262,7 @@ enum reg_domains_5g {
 	ETSI19,
 	ETSI20,
 	ETSI21,
+	ETSI22,
 
 	APL1,
 	APL2,
@@ -671,6 +674,7 @@ struct reg_domain_pair {
  * @FCC1_6G_14: Super domain FCC1_6G_14 for DOMINICAN REPUBLIC
  * @APL5_APL6_6G_15: super domain APL5_APL6_6G_15 for Mexico
  * @MKK2_6G_16: Super domain MKK2_6G_16 for Japan LPI and VLP support for 320 MHz
+ * @FCC1_6G_18: Super domain FCC1_6G_18 for US VLP enablement
  */
 enum reg_super_domain_6g {
 	FCC1_6G_01 = 0x01,
@@ -694,6 +698,7 @@ enum reg_super_domain_6g {
 	FCC1_6G_14 = 0x14,
 	APL5_APL6_6G_15 = 0x15,
 	MKK2_6G_16 = 0x16,
+	FCC1_6G_18 = 0x18,
 };
 
 #if defined(COMPILE_REGDB_6G)
