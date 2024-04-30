@@ -2459,6 +2459,7 @@ enum dp_context_type {
  * @dp_txrx_ppeds_rings_stats: Printing the util stats of ring
  * @dp_txrx_ppeds_clear_rings_stats: Clearing the ring util stats
  * @dp_tx_update_ppeds_tx_comp_stats: Update ppeds Tx completion stats
+ * @dp_tx_release_ds_tx_desc: Release the tx desc to pool
  * @txrx_soc_ppeds_start:
  * @txrx_soc_ppeds_stop:
  * @dp_register_ppeds_interrupts:
@@ -2715,6 +2716,9 @@ struct dp_arch_ops {
 						 struct dp_tx_desc_s *desc,
 						 uint8_t ring_id,
 						 uint16_t comp_index);
+	int (*dp_tx_release_ds_tx_desc)(struct dp_soc *soc,
+					struct dp_tx_desc_s *tx_desc,
+					uint8_t desc_pool_id);
 #endif
 	bool (*ppeds_handle_attached)(struct dp_soc *soc);
 	QDF_STATUS (*txrx_soc_ppeds_start)(struct dp_soc *soc);

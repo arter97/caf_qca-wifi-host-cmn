@@ -325,6 +325,7 @@ struct wlan_srng_cfg {
  * @ppeds_num_tx_desc: Number of tx descs for PPE DS
  * @ppeds_tx_comp_napi_budget: Napi budget for tx completions
  * @ppeds_tx_desc_hotlist_len: PPE DS tx desc hotlist max length
+ * @ppeds_borrow_limit: PPE DS desc borrow limit
  * @pkt_capture_mode: Packet capture mode config
  * @rx_mon_buf_ring_size: Rx monitor buf ring size
  * @tx_mon_buf_ring_size: Tx monitor buf ring size
@@ -542,6 +543,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	int ppeds_num_tx_desc;
 	int ppeds_tx_comp_napi_budget;
 	int ppeds_tx_desc_hotlist_len;
+	int ppeds_borrow_limit;
 #endif
 #ifdef WLAN_FEATURE_PKT_CAPTURE_V2
 	uint32_t pkt_capture_mode;
@@ -2461,6 +2463,15 @@ wlan_cfg_get_dp_soc_ppeds_tx_desc_hotlist_len(struct wlan_cfg_dp_soc_ctxt *cfg);
  */
 int
 wlan_cfg_get_dp_soc_ppeds_tx_comp_napi_budget(struct wlan_cfg_dp_soc_ctxt *cfg);
+/**
+ * wlan_cfg_get_dp_soc_ppeds_tx_desc_borrow_limit() - ppeds tx desc borrow limit
+ * @cfg: Configuration Handle
+ *
+ * Return: tx desc borrow limit
+ */
+int
+wlan_cfg_get_dp_soc_ppeds_tx_desc_borrow_limit(
+					struct wlan_cfg_dp_soc_ctxt *cfg);
 #else
 static inline bool
 wlan_cfg_get_dp_soc_ppeds_enable(struct wlan_cfg_dp_soc_ctxt *cfg)
@@ -2494,6 +2505,12 @@ wlan_cfg_get_dp_soc_ppeds_tx_comp_napi_budget(struct wlan_cfg_dp_soc_ctxt *cfg)
 
 static inline int
 wlan_cfg_get_dp_soc_ppeds_tx_desc_hotlist_len(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return 0;
+}
+
+static inline int
+wlan_cfg_get_dp_soc_ppeds_tx_desc_borrow_limit(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return 0;
 }

@@ -367,12 +367,9 @@ static inline int
 dp_tx_release_ds_tx_desc(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 			 uint8_t desc_pool_id)
 {
-	if (tx_desc->flags & DP_TX_DESC_FLAG_PPEDS) {
-		__dp_tx_outstanding_dec(soc);
-		dp_tx_desc_free(soc, tx_desc, desc_pool_id);
-
-		return 1;
-	}
+	if (soc->arch_ops.dp_tx_release_ds_tx_desc)
+		return soc->arch_ops.dp_tx_release_ds_tx_desc(soc, tx_desc,
+							      desc_pool_id);
 
 	return 0;
 }
@@ -6582,24 +6579,13 @@ dp_tx_comp_process_desc_list(struct dp_soc *soc,
 							false);
 				}
 			}
+
 			ppeds_comp_index++;
 
-			if (desc->pool_id != DP_TX_PPEDS_POOL_ID) {
-				nbuf = desc->nbuf;
-				dp_tx_nbuf_dev_queue_free_no_flag(&h, nbuf);
-				if (desc->flags & DP_TX_DESC_FLAG_SPECIAL)
-					dp_tx_spcl_desc_free(soc, desc,
-							     desc->pool_id);
-				else
-					dp_tx_desc_free(soc, desc,
-							desc->pool_id);
-
-				__dp_tx_outstanding_dec(soc);
-			} else {
-				nbuf = dp_ppeds_tx_desc_free(soc, desc);
-				dp_tx_nbuf_dev_queue_free_no_flag(&h, nbuf);
-			}
+			nbuf = dp_ppeds_tx_desc_free(soc, desc);
+			dp_tx_nbuf_dev_queue_free_no_flag(&h, nbuf);
 			desc = next;
+
 			continue;
 		}
 

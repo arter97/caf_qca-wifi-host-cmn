@@ -24,6 +24,7 @@
 #include "dp_be.h"
 #include "dp_be_tx.h"
 #include "dp_be_rx.h"
+#include "dp_tx_desc.h"
 #ifdef WIFI_MONITOR_SUPPORT
 #if !defined(DISABLE_MON_CONFIG) && (defined(WLAN_PKT_CAPTURE_TX_2_0) || \
 	defined(WLAN_PKT_CAPTURE_RX_2_0))
@@ -131,6 +132,23 @@ static void dp_ppeds_clear_assert_war_stats(struct dp_soc_be *be_soc)
 {
 }
 #endif
+
+static int dp_tx_release_ds_tx_desc(struct dp_soc *soc,
+				    struct dp_tx_desc_s *tx_desc,
+				    uint8_t desc_pool_id)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+
+	if (tx_desc->flags & DP_TX_DESC_FLAG_PPEDS) {
+		__dp_tx_outstanding_dec(soc);
+		qdf_atomic_dec(&be_soc->borrow_count);
+		dp_tx_desc_free(soc, tx_desc, desc_pool_id);
+
+		return 1;
+	}
+
+	return 0;
+}
 
 static void dp_ppeds_inuse_desc(struct dp_soc *soc)
 {
@@ -3924,6 +3942,7 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 				dp_tx_ppeds_cfg_astidx_cache_mapping;
 	arch_ops->dp_tx_update_ppeds_tx_comp_stats =
 				dp_update_ppeds_tx_comp_stats;
+	arch_ops->dp_tx_release_ds_tx_desc = dp_tx_release_ds_tx_desc;
 #ifdef DP_UMAC_HW_RESET_SUPPORT
 	arch_ops->txrx_soc_ppeds_interrupt_stop = dp_ppeds_interrupt_stop_be;
 	arch_ops->txrx_soc_ppeds_interrupt_start = dp_ppeds_interrupt_start_be;
