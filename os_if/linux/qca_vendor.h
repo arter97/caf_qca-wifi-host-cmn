@@ -981,6 +981,27 @@
  *	driver to notify user application about the spectral scan completion.
  *	The attributes used with this subcommand are defined in
  *	enum qca_wlan_vendor_attr_spectral_scan_complete.
+ *
+ * @QCA_NL80211_VENDOR_SUBCMD_ASYNC_GET_STATION: This command can be used for
+ *	receiving NL80211_CMD_GET_STATION response as a unicast event when
+ *	there is a %NL80211_CMD_GET_STATION request from any userspace module
+ *	on the same interface on which this command is sent. This command is
+ *	also used as the unicast event to indicate the %NL80211_CMD_GET_STATION
+ *	response. The attributes for this command are defined in
+ *	enum qca_wlan_vendor_async_get_station_attr.
+ *
+ *	Driver will send the unicast event with nl port id of the userspace
+ *	application received with this command. If multiple userspace
+ *	applications send this command for registering the unicast event then
+ *	driver shall send the unicast event to each userspace application
+ *	separately with the corresponding application nl port id received in the
+ *	command.
+ *
+ *	Driver will remove the userspace application nl port id from the unicast
+ *	event registration either when the application explicitly sends the
+ *	command to disable reporting the unicast event or when the registered
+ *	userspace application nl port id is closed.
+ *
  * @QCA_NL80211_VENDOR_SUBCMD_AP_SUSPEND: Vendor command to put an AP interface
  *      in suspend state. On enabling suspend, AP deauthenticates all associated
  *      stations and stops TX/RX operations on the interface. The driver
@@ -992,6 +1013,7 @@
  *
  *      The attributes used with this command/event are defined in enum
  *      qca_wlan_vendor_attr_ap_suspend.
+ *
  * @QCA_NL80211_VENDOR_SUBCMD_FLOW_STATS: Event indication from the driver to
  *	the userspace which contains all the statistics collected for a flow to
  *	be classified. This event is sent if the userspace enables the
@@ -1289,6 +1311,7 @@ enum qca_nl80211_vendor_subcmds {
 	QCA_NL80211_VENDOR_SUBCMD_FLOW_POLICY = 239,
 	QCA_NL80211_VENDOR_SUBCMD_ADJUST_TX_POWER = 241,
 	QCA_NL80211_VENDOR_SUBCMD_SPECTRAL_SCAN_COMPLETE = 242,
+	QCA_NL80211_VENDOR_SUBCMD_ASYNC_GET_STATION = 243,
 	QCA_NL80211_VENDOR_SUBCMD_AP_SUSPEND = 244,
 	QCA_NL80211_VENDOR_SUBCMD_FLOW_STATS = 245,
 	QCA_NL80211_VENDOR_SUBCMD_FLOW_CLASSIFY_RESULT = 246,
@@ -18562,5 +18585,30 @@ enum qca_wlan_vendor_attr_nss_pkt {
 	QCA_WLAN_VENDOR_ATTR_NSS_PKT_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_NSS_PKT_MAX =
 	QCA_WLAN_VENDOR_ATTR_NSS_PKT_AFTER_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_async_get_station_attr - Attribute values for
+ * %QCA_NL80211_VENDOR_SUBCMD_ASYNC_GET_STATION command.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_ASYNC_GET_STATION_CONFIG: 8-bit unsigned value to
+ * configure driver to enable/disable reporting
+ * %QCA_NL80211_VENDOR_SUBCMD_ASYNC_GET_STATION event. 1-Enable, 0-Disable.
+ * This is required in a command.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_ASYNC_GET_STATION_RESPONSE: Nested attribute. This is
+ * required in %QCA_NL80211_VENDOR_SUBCMD_ASYNC_GET_STATION event.
+ * This attribute is nested with the station MAC address in %NL80211_ATTR_MAC
+ * and the station information in %NL80211_ATTR_STA_INFO nested attribute, see
+ * enum nl80211_sta_info.
+ */
+enum qca_wlan_vendor_async_get_station_attr {
+	QCA_WLAN_VENDOR_ATTR_ASYNC_GET_STATION_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_ASYNC_GET_STATION_CONFIG = 1,
+	QCA_WLAN_VENDOR_ATTR_ASYNC_GET_STATION_RESPONSE = 2,
+
+	QCA_WLAN_VENDOR_ATTR_ASYNC_GET_STATION_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_ASYNC_GET_STATION_MAX =
+	QCA_WLAN_VENDOR_ATTR_ASYNC_GET_STATION_AFTER_LAST - 1,
 };
 #endif
