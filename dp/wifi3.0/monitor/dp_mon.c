@@ -6326,14 +6326,17 @@ QDF_STATUS dp_mon_vdev_attach(struct dp_vdev *vdev)
 		return QDF_STATUS_E_NOMEM;
 	}
 
-	if (pdev && pdev->monitor_pdev &&
-	    pdev->monitor_pdev->scan_spcl_vap_configured)
-		dp_scan_spcl_vap_stats_attach(mon_vdev);
+	if (pdev) {
+		if (pdev->monitor_pdev &&
+		    pdev->monitor_pdev->scan_spcl_vap_configured)
+			dp_scan_spcl_vap_stats_attach(mon_vdev);
+
+		wlan_minidump_log(mon_vdev, sizeof(*mon_vdev),
+				  pdev->soc->ctrl_psoc, WLAN_MD_DP_MON_VDEV,
+				  "dp_mon_vdev");
+	}
 
 	vdev->monitor_vdev = mon_vdev;
-
-	wlan_minidump_log(mon_vdev, sizeof(*mon_vdev), pdev->soc->ctrl_psoc,
-			  WLAN_MD_DP_MON_VDEV, "dp_mon_vdev");
 
 	return QDF_STATUS_SUCCESS;
 }
