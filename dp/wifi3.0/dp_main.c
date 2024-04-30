@@ -2903,10 +2903,12 @@ static void dp_reap_timer_deinit(struct dp_soc *soc)
 #endif
 
 #ifndef CONFIG_SAWF
+static inline
 void dp_soc_sawf_msduq_timer_init(struct dp_soc *soc)
 {
 }
 
+static inline
 void dp_soc_sawf_msduq_timer_deinit(struct dp_soc *soc)
 {
 }
