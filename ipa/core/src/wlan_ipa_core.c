@@ -6574,6 +6574,7 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
 	void *htc_handle;
 	QDF_STATUS status;
 	bool delete_all = false;
+	bool valid = false;
 
 	psoc = ipa_obj->psoc;
 	pdev = psoc->soc_objmgr.wlan_pdev_list[IPA_DEF_PDEV_ID];
@@ -6593,6 +6594,20 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
 		return QDF_STATUS_FILT_REQ_ERROR;
 	}
 
+	if (num_flts > IPA_WDI_MAX_TX_FILTER) {
+		ipa_err("opt_dp_ctrl, num of flts received from ipa is invalid");
+		return QDF_STATUS_FILT_REQ_ERROR;
+	}
+
+	for (i = 0; i < num_flts; i++) {
+		if (rem_flt && (rem_flt->hdl_info[i] < WLAN_HDL_TX_FILTER1 ||
+				rem_flt->hdl_info[i] > WLAN_HDL_TX_FILTER3)) {
+			ipa_err("opt_dp_ctrl, wrong flt hdl %d",
+				rem_flt->hdl_info[i]);
+			return QDF_STATUS_FILT_REQ_ERROR;
+		}
+	}
+
 	ipa_obj->ctrl_stats.flt_rm_req_cnt += num_flts;
 	dp_flt_params = &ipa_obj->dp_tx_super_rule_flt_param;
 	qdf_spin_lock_bh(&dp_flt_params->flt_rem_lock);
@@ -6600,6 +6615,7 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
 		if (rem_flt)
 			ipa_debug("opt_dp_ctrl: flt handle received from ipa %u",
 				  rem_flt->hdl_info[i]);
+
 		for (j = 0; j < IPA_WDI_MAX_TX_FILTER; j++) {
 			if ((delete_all || (rem_flt && rem_flt->hdl_info[i] ==
 			    dp_flt_params->flt_addr_params[j].flt_hdl)) &&
@@ -6614,8 +6630,15 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
 				qdf_event_reset(
 					&dp_flt_params->flt_addr_params[j].
 					ipa_ctrl_flt_rm_evt);
+				valid = true;
 			}
 		}
+	}
+
+	if (!valid) {
+		ipa_err("opt_dp_ctrl, filter received not found in internal DB");
+		qdf_spin_unlock_bh(&dp_flt_params->flt_rem_lock);
+		return QDF_STATUS_FILT_REQ_ERROR;
 	}
 
 	dp_flt_params->op = HTT_TX_LCE_SUPER_RULE_RELEASE;
@@ -6645,7 +6668,7 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
 		ipa_debug("opt_dp_ctrl: flt delete failure");
 		if (status == QDF_STATUS_E_TIMEOUT)
 			qdf_err("TIMEOUT_OCCURS");
-		else
+		else if (status != QDF_STATUS_SUCCESS)
 			qdf_err("Error on event wait for filter rem cb");
 	}
 
