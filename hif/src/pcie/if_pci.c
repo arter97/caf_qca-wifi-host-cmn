@@ -4353,3 +4353,20 @@ void hif_allow_l1(struct hif_opaque_softc *hif)
 	}
 }
 #endif
+
+/**
+ * hif_pci_get_device_handle()
+ * @hif_ctx: hif context
+ * @handle: placeholder to carry the device pointer
+ *
+ * This callback provides the underlying PCI device handle
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS hif_pci_get_device_handle(struct hif_softc *hif_ctx, void **handle)
+{
+	struct hif_pci_softc *sc = HIF_GET_PCI_SOFTC(hif_ctx);
+
+	*handle = sc->pdev;
+	return QDF_STATUS_SUCCESS;
+}

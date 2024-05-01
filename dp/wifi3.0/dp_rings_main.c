@@ -519,6 +519,12 @@ QDF_STATUS dp_srng_init_idx(struct dp_soc *soc, struct dp_srng *srng,
 		dp_srng_set_msi2_ring_params(soc, &ring_params, 0, 0);
 		dp_verbose_debug("Skipping MSI for ring_type: %d, ring_num %d",
 				 ring_type, ring_num);
+		if (soc->arch_ops.dp_register_ppeds_interrupts)
+			if (soc->arch_ops.dp_register_ppeds_interrupts
+								(soc, srng, 0,
+								 ring_type,
+								 ring_num))
+				return QDF_STATUS_E_FAILURE;
 	}
 
 	dp_srng_configure_interrupt_thresholds(soc, &ring_params,
