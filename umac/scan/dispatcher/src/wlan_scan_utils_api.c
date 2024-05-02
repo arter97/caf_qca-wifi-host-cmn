@@ -3136,6 +3136,9 @@ static uint32_t util_gen_new_ie(struct wlan_objmgr_pdev *pdev,
 	/* copy subelement as we need to change its content to
 	 * mark an ie after it is processed.
 	 */
+	if (subie_len == 0 || !subelement)
+		return 0;
+
 	sub_copy = qdf_mem_malloc(subie_len);
 	if (!sub_copy)
 		return 0;
