@@ -4207,6 +4207,7 @@ static void dp_soc_detach(struct cdp_soc_t *txrx_soc)
 	dp_soc_srng_free(soc);
 	dp_hw_link_desc_ring_free(soc);
 	dp_hw_link_desc_pool_banks_free(soc, WLAN_INVALID_PDEV_ID);
+	dp_soc_sawf_msduq_timer_deinit(soc);
 	wlan_cfg_soc_detach(soc->wlan_cfg_ctx);
 	dp_soc_tx_hw_desc_history_detach(soc);
 	dp_soc_tx_history_detach(soc);
@@ -4214,7 +4215,6 @@ static void dp_soc_detach(struct cdp_soc_t *txrx_soc)
 	dp_soc_rx_history_detach(soc);
 	dp_soc_cfg_history_detach(soc);
 	dp_soc_msdu_done_fail_history_detach(soc);
-	dp_soc_sawf_msduq_timer_deinit(soc);
 
 	if (!dp_monitor_modularized_enable()) {
 		dp_mon_soc_detach_wrapper(soc);
