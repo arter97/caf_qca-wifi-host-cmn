@@ -66,6 +66,7 @@ enum qca_chipset_stats_event_type {
 	WLAN_CHIPSET_STATS_NAN_NDP_INDICATION_EVENT_ID,
 	WLAN_CHIPSET_STATS_NAN_NDP_NEW_PEER_EVENT_ID,
 	WLAN_CHIPSET_STATS_DATA_PKT_EVENT_ID,
+	WLAN_CHIPSET_STATS_CSA_EVENT_ID,
 	WLAN_CHIPSET_STATS_MAX_EVENT_ID,
 };
 
@@ -491,6 +492,16 @@ struct cstats_pkt_info {
 	uint8_t type;
 	uint8_t dir;
 	uint8_t status;
+} qdf_packed;
+
+struct cstats_csa_evt {
+	struct cstats_cmn cmn;
+	uint8_t direction;
+	uint16_t target_freq;
+	uint8_t target_ch_width;
+	uint16_t current_freq;
+	uint8_t current_ch_width;
+	uint8_t switch_mode;
 } qdf_packed;
 
 #endif /* __WLAN_CP_STATS_CHIPSET_STATS_EVENTS_H */
