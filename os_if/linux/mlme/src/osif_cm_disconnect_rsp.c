@@ -169,7 +169,7 @@ static struct wlan_objmgr_vdev *osif_cm_get_anchor_vdev(
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 213)) && \
-	(LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0))
+	(LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0))
 /**
  * osif_cm_indicate_disconnect_for_non_assoc_link() - Wrapper API to clear
  * current bss param of non-assoc link
