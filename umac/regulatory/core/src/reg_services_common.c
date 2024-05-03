@@ -9605,6 +9605,7 @@ reg_is_chan_punc(uint16_t in_punc_pattern, uint16_t bw)
  * @is_client_list_lookup_needed: Boolean to indicate if client list lookup is
  * needed
  * @client_type: Client power type
+ * @is_twice_power: Boolean to indicate if EIRP to be in 0.5 dBm
  *
  * Return: EIRP
  */
@@ -9613,7 +9614,8 @@ reg_get_eirp_from_mas_chan_list(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
 				uint16_t bw, uint16_t in_punc_pattern,
 				enum reg_6g_ap_type ap_pwr_type,
 				bool is_client_list_lookup_needed,
-				enum reg_6g_client_type client_type)
+				enum reg_6g_client_type client_type,
+				bool is_twice_power)
 {
 	bool is_psd;
 	struct regulatory_channel *master_chan_list = NULL;
@@ -9638,6 +9640,9 @@ reg_get_eirp_from_mas_chan_list(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
 						       master_chan_list,
 						       freq, non_punc_bw,
 						       &txpower);
+
+	if (is_twice_power)
+		return txpower * 2;
 
 	return txpower;
 }
@@ -9858,10 +9863,10 @@ reg_get_sp_eirp_for_punc_chans(struct wlan_objmgr_pdev *pdev,
 	if (is_client_list_lookup_needed)
 		min_eirp_pwr = QDF_MIN(afc_eirp_pwr - SP_AP_AND_CLIENT_POWER_DIFF_IN_DBM,
 				       reg_sp_eirp_pwr);
-	if (afc_eirp_pwr)
+	else if (afc_eirp_pwr)
 		min_eirp_pwr = QDF_MIN(afc_eirp_pwr, reg_sp_eirp_pwr);
 
-	if (is_twice_power) 
+	if (is_twice_power)
 		min_eirp_pwr *= 2;
 
 	return min_eirp_pwr;
@@ -9913,7 +9918,8 @@ reg_get_sp_eirp_before_afc_resp_rx(struct wlan_objmgr_pdev *pdev,
 						           NO_SCHANS_PUNC,
 							   REG_STANDARD_POWER_AP,
 							   is_client_list_lookup_needed,
-							   client_type);
+							   client_type,
+							   is_twice_power);
 	return eirp_pwr;
 }
 
@@ -10022,10 +10028,12 @@ static int16_t reg_get_sp_eirp(struct wlan_objmgr_pdev *pdev,
 						       &reg_sp_eirp_pwr);
 
 	if (is_twice_power)
-		return reg_get_twice_eirp_pwr(afc_eirp_pwr, reg_sp_eirp_pwr, is_client_list_lookup_needed);
+		return reg_get_twice_eirp_pwr(afc_eirp_pwr,
+					      reg_sp_eirp_pwr,
+					      is_client_list_lookup_needed);
 
 	if (is_client_list_lookup_needed)
-		return QDF_MIN(afc_eirp_pwr - SP_AP_AND_CLIENT_POWER_DIFF_IN_SCALE,
+		return QDF_MIN(afc_eirp_pwr - SP_AP_AND_CLIENT_POWER_DIFF_IN_DBM,
 			       reg_sp_eirp_pwr);
 
 	if (afc_eirp_pwr)
@@ -10046,7 +10054,8 @@ static int8_t reg_get_sp_eirp(struct wlan_objmgr_pdev *pdev,
 	return reg_get_eirp_from_mas_chan_list(pdev, freq, bw, in_punc_pattern,
 					       REG_STANDARD_POWER_AP,
 					       is_client_list_lookup_needed,
-					       client_type);
+					       client_type,
+					       is_twice_power);
 }
 #endif
 
@@ -10099,7 +10108,7 @@ int16_t reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
 	return reg_get_eirp_from_mas_chan_list(pdev, freq, bw, in_punc_pattern,
 					       ap_pwr_type,
 					       is_client_list_lookup_needed,
-					       client_type);
+					       client_type, is_twice_power);
 }
 
 enum reg_6g_ap_type reg_get_best_pwr_mode(struct wlan_objmgr_pdev *pdev,
