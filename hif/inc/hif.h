@@ -3026,6 +3026,7 @@ static inline void hif_print_reg_write_stats(struct hif_opaque_softc *hif_ctx)
 void hif_ce_print_ring_stats(struct hif_opaque_softc *hif_ctx);
 
 #ifdef WLAN_DP_LOAD_BALANCE_SUPPORT
+void hif_set_load_balance_enabled_flag(struct hif_opaque_softc *hif_ctx);
 void hif_get_wlan_rx_time_stats(struct hif_opaque_softc *hif_ctx,
 				uint64_t *wlan_irq_time,
 				uint64_t *wlan_ksoftirqd_time);

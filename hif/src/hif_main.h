@@ -522,6 +522,9 @@ struct hif_softc {
 	struct hif_reg_write_soc_stats wstats;
 	qdf_atomic_t active_work_cnt;
 #endif /* FEATURE_HIF_DELAYED_REG_WRITE */
+#ifdef WLAN_DP_LOAD_BALANCE_SUPPORT
+	bool is_load_balance_enabled;
+#endif
 };
 
 #if defined(NUM_SOC_PERF_CLUSTER) && (NUM_SOC_PERF_CLUSTER > 1)

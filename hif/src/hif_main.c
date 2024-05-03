@@ -3436,3 +3436,12 @@ void hif_config_irq_set_perf_affinity_hint(
 
 qdf_export_symbol(hif_config_irq_set_perf_affinity_hint);
 #endif
+
+#ifdef WLAN_DP_LOAD_BALANCE_SUPPORT
+void hif_set_load_balance_enabled_flag(struct hif_opaque_softc *hif_ctx)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
+
+	scn->is_load_balance_enabled = true;
+}
+#endif
