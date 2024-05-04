@@ -121,7 +121,8 @@ tgt_mgmt_rx_reo_enter_algo_without_buffer(
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
-	if (!wlan_mgmt_rx_reo_is_feature_enabled_at_pdev(pdev))
+	if (!wlan_mgmt_rx_reo_is_feature_enabled_at_pdev(pdev) ||
+	    wlan_mgmt_rx_reo_is_fpmo_war_applicable(reo_params))
 		return  QDF_STATUS_SUCCESS;
 
 	if (!reo_params) {
@@ -330,7 +331,8 @@ QDF_STATUS tgt_mgmt_rx_reo_frame_handler(
 		goto cleanup;
 	}
 
-	if (!wlan_mgmt_rx_reo_is_feature_enabled_at_pdev(pdev))
+	if (!wlan_mgmt_rx_reo_is_feature_enabled_at_pdev(pdev) ||
+	    wlan_mgmt_rx_reo_is_fpmo_war_applicable(mgmt_rx_params->reo_params))
 		return tgt_mgmt_txrx_process_rx_frame(pdev, buf,
 						      mgmt_rx_params);
 

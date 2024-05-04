@@ -8216,3 +8216,14 @@ mgmt_rx_reo_print_egress_frame_info(uint8_t ml_grp_id, uint16_t num_frames)
 	return QDF_STATUS_SUCCESS;
 }
 #endif /* WLAN_MGMT_RX_REO_DEBUG_SUPPORT */
+
+bool wlan_mgmt_rx_reo_is_fpmo_war_applicable(
+			struct mgmt_rx_reo_params *mgmt_rx_reo_params) {
+	if (!mgmt_rx_reo_params) {
+		mgmt_rx_reo_err("MGMT rx REO params is NULL");
+		return false;
+	}
+	/*If frame is invalid and timestamp is zero then reo should be bypass*/
+	return !mgmt_rx_reo_params->valid &&
+	       !mgmt_rx_reo_params->global_timestamp;
+}
