@@ -33,6 +33,9 @@
 #include <target_if_cp_stats.h>
 #include <wlan_twt_public_structs.h>
 #include <wlan_cp_stats_chipset_stats.h>
+#ifdef WLAN_CHIPSET_STATS
+#include <cfg_ucfg_api.h>
+#endif
 
 #ifdef WLAN_CHIPSET_STATS
 int wlan_cp_stats_cstats_qmi_event_handler(void *cb_ctx, uint16_t type,
@@ -54,6 +57,18 @@ wlan_cp_stats_cstats_register_qmi_event_handler(struct cp_stats_context *csc)
 
 	if (QDF_IS_STATUS_ERROR(status))
 		cp_stats_err("cstats QMI evt handler registration failed");
+}
+
+void wlan_cp_stats_init_cfg(struct wlan_objmgr_psoc *psoc,
+			    struct cp_stats_context *csc)
+{
+	if (!psoc) {
+		cp_stats_err("psoc is NULL");
+		return;
+	}
+
+	csc->host_params.chipset_stats_enable =
+				cfg_get(psoc, CHIPSET_STATS_ENABLE);
 }
 
 bool wlan_cp_stats_get_chipset_stats_enable(struct wlan_objmgr_psoc *psoc)
@@ -185,6 +200,10 @@ wlan_cp_stats_psoc_obj_create_handler(struct wlan_objmgr_psoc *psoc, void *arg)
 						       WLAN_UMAC_COMP_CP_STATS,
 						       csc,
 						       QDF_STATUS_SUCCESS);
+	if (QDF_IS_STATUS_SUCCESS(status)) {
+		wlan_cp_stats_init_cfg(psoc, csc);
+		wlan_cp_stats_cstats_init(psoc);
+	}
 
 wlan_cp_stats_psoc_obj_create_handler_return:
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -225,6 +244,8 @@ wlan_cp_stats_psoc_obj_destroy_handler(struct wlan_objmgr_psoc *psoc, void *arg)
 		cp_stats_err("cp_stats context is NULL!");
 		return QDF_STATUS_E_INVAL;
 	}
+
+	wlan_cp_stats_cstats_deinit();
 
 	wlan_objmgr_psoc_component_obj_detach(psoc,
 					      WLAN_UMAC_COMP_CP_STATS, csc);
