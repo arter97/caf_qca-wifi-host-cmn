@@ -83,6 +83,7 @@ struct chipset_stats {
 	/* Dont move filled list nodes to free list after flush to user space */
 	bool cstats_no_flush[CSTATS_MAX_TYPE];
 	struct cstats_tx_rx_ops ops;
+	bool is_cstats_ini_enabled;
 };
 
 #define wlan_cstats_fw_stats(len, buf) \
@@ -94,9 +95,11 @@ struct chipset_stats {
 /**
  * wlan_cp_stats_cstats_init() - Initialize chipset stats infra
  *
+ * @psoc: pointer to psoc object
+ *
  * Return: QDF_STATUS
  */
-QDF_STATUS wlan_cp_stats_cstats_init(void);
+QDF_STATUS wlan_cp_stats_cstats_init(struct wlan_objmgr_psoc *psoc);
 
 /**
  * wlan_cp_stats_cstats_deinit() - Deinitialize chipset stats infra
@@ -156,7 +159,8 @@ void wlan_cp_stats_cstats_pkt_log(uint8_t *sa, uint8_t *da,
 				  enum qdf_dp_tx_rx_status status,
 				  uint8_t vdev_id, enum QDF_OPMODE op_mode);
 #else
-static inline QDF_STATUS wlan_cp_stats_cstats_init(void)
+static inline QDF_STATUS
+wlan_cp_stats_cstats_init(struct wlan_objmgr_psoc *psoc)
 {
 	return 0;
 }

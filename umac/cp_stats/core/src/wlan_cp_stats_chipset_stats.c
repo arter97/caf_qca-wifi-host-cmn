@@ -19,14 +19,23 @@
 #include <qdf_module.h>
 #include <wlan_nlink_common.h>
 #include <wlan_cp_stats_chipset_stats.h>
+#include "wlan_cp_stats_obj_mgr_handler.h"
 
-struct chipset_stats cstats;
+static struct chipset_stats cstats;
 static struct cstats_node *gcstats_buffer[CSTATS_MAX_TYPE];
 
-QDF_STATUS wlan_cp_stats_cstats_init(void)
+QDF_STATUS wlan_cp_stats_cstats_init(struct wlan_objmgr_psoc *psoc)
 {
 	qdf_list_node_t *tmp_node = NULL;
 	int i, j, k;
+
+	if (!wlan_cp_stats_get_chipset_stats_enable(psoc)) {
+		qdf_info("Chipset Stats feature is disabled");
+		cstats.is_cstats_ini_enabled = false;
+		return QDF_STATUS_SUCCESS;
+	}
+
+	cstats.is_cstats_ini_enabled = true;
 
 	for (i = 0; i < CSTATS_MAX_TYPE; i++) {
 		qdf_spinlock_create(&cstats.cstats_lock[i]);
@@ -74,6 +83,11 @@ QDF_STATUS wlan_cp_stats_cstats_init(void)
 void wlan_cp_stats_cstats_deinit(void)
 {
 	int i;
+
+	if (!cstats.is_cstats_ini_enabled) {
+		qdf_info("Chipset Stats feature is disabled");
+		return;
+	}
 
 	for (i = 0; i < CSTATS_MAX_TYPE; i++) {
 		qdf_spin_lock_bh(&cstats.cstats_lock[i]);
@@ -129,6 +143,9 @@ void wlan_cp_stats_cstats_write_to_buff(enum cstats_types type,
 	char *ptr;
 	unsigned int *pfilled_length;
 	unsigned int tlen;
+
+	if (!cstats.is_cstats_ini_enabled)
+		return;
 
 	/* tAniNlHdr + Start Marker + End Marker */
 	tlen = sizeof(tAniNlHdr) + (2 * CSTATS_MARKER_SZ);
@@ -218,6 +235,9 @@ int wlan_cp_stats_cstats_send_buffer_to_user(enum cstats_types type)
 	int payload_len;
 	int mark_total;
 	char *ptr = NULL;
+
+	if (!cstats.is_cstats_ini_enabled)
+		return QDF_STATUS_SUCCESS;
 
 	qdf_spin_lock_bh(&cstats.cstats_lock[type]);
 	wlan_cp_stats_get_cstats_free_node(type);
