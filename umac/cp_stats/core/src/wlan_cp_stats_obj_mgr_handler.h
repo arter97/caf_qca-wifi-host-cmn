@@ -230,6 +230,22 @@ bool wlan_cp_stats_get_chipset_stats_enable(struct wlan_objmgr_psoc *psoc);
  */
 int wlan_cp_stats_cstats_qmi_event_handler(void *cb_ctx, uint16_t type,
 					   void *event, int event_len);
+
+/**
+ * wlan_cp_stats_init_cfg() - update cp_stats_context with ini value
+ *
+ * @psoc: pointer to psoc
+ * @csc: pointer to cp_stats_context
+ *
+ * Return : void
+ */
+void wlan_cp_stats_init_cfg(struct wlan_objmgr_psoc *psoc,
+			    struct cp_stats_context *csc);
+#else
+static inline void wlan_cp_stats_init_cfg(struct wlan_objmgr_psoc *psoc,
+					  struct cp_stats_context *csc)
+{
+}
 #endif /* WLAN_CHIPSET_STATS */
 
 #endif /* QCA_SUPPORT_CP_STATS */
