@@ -1824,6 +1824,7 @@ enum cdp_vdev_param_type {
  * @CDP_MONITOR_FLAG: Monitor interface configuration
  * @CDP_CFG_REO_RINGS_MAPPING: Reo rings mapping configuration
  * @CDP_SCAN_RADIO_SUPPORT: Scan Radio capability
+ * @CDP_SAWF_MSDUQ_RECLAIM_SUPPORT: To initiate msduq reclaim related functions
  */
 enum cdp_psoc_param_type {
 	CDP_ENABLE_RATE_STATS,
@@ -1858,6 +1859,9 @@ enum cdp_psoc_param_type {
 	CDP_MONITOR_FLAG,
 	CDP_CFG_REO_RINGS_MAPPING,
 	CDP_SCAN_RADIO_SUPPORT,
+#ifdef CONFIG_SAWF
+	CDP_SAWF_MSDUQ_RECLAIM_SUPPORT,
+#endif
 };
 
 #ifdef CONFIG_AP_PLATFORM

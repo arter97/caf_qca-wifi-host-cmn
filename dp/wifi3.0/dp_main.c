@@ -2902,18 +2902,6 @@ static void dp_reap_timer_deinit(struct dp_soc *soc)
 }
 #endif
 
-#ifndef CONFIG_SAWF
-static inline
-void dp_soc_sawf_msduq_timer_init(struct dp_soc *soc)
-{
-}
-
-static inline
-void dp_soc_sawf_msduq_timer_deinit(struct dp_soc *soc)
-{
-}
-#endif
-
 #if defined(QCA_HOST2FW_RXBUF_RING) && defined(QCA_IPA_LL_TX_FLOW_CONTROL)
 /**
  * dp_rxdma_ring_alloc() - allocate the RXDMA rings
@@ -4209,7 +4197,6 @@ static void dp_soc_detach(struct cdp_soc_t *txrx_soc)
 	dp_soc_srng_free(soc);
 	dp_hw_link_desc_ring_free(soc);
 	dp_hw_link_desc_pool_banks_free(soc, WLAN_INVALID_PDEV_ID);
-	dp_soc_sawf_msduq_timer_deinit(soc);
 	wlan_cfg_soc_detach(soc->wlan_cfg_ctx);
 	dp_soc_tx_hw_desc_history_detach(soc);
 	dp_soc_tx_history_detach(soc);
@@ -9460,6 +9447,19 @@ dp_set_psoc_param(struct cdp_soc_t *cdp_soc,
 	case CDP_SCAN_RADIO_SUPPORT:
 		soc->scan_radio_support = val.cdp_scan_radio_support;
 		break;
+#ifdef CONFIG_SAWF
+	case CDP_SAWF_MSDUQ_RECLAIM_SUPPORT:
+		if (val.cdp_sawf_msduq_reclaim_enabled) {
+			wlan_cfg_set_sawf_msduq_reclaim_config(
+					soc->wlan_cfg_ctx, true);
+			dp_soc_sawf_msduq_timer_init(soc);
+		} else {
+			dp_soc_sawf_msduq_timer_deinit(soc);
+			wlan_cfg_set_sawf_msduq_reclaim_config(
+					soc->wlan_cfg_ctx, false);
+		}
+		break;
+#endif
 	default:
 		break;
 	}
@@ -14068,8 +14068,6 @@ dp_soc_attach(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 		dp_err("wlan_cfg_ctx failed");
 		goto fail2;
 	}
-
-	dp_soc_sawf_msduq_timer_init(soc);
 
 	qdf_ssr_driver_dump_register_region("wlan_cfg_ctx", soc->wlan_cfg_ctx,
 					    sizeof(*soc->wlan_cfg_ctx));

@@ -4058,24 +4058,10 @@ wlan_soc_sawf_mcast_attach(struct cdp_ctrl_objmgr_psoc *psoc,
 	wlan_cfg_ctx->sawf_mcast_enabled =
 		cfg_get(psoc, CFG_DP_SAWF_MCAST_ENABLE);
 }
-
-static void
-wlan_soc_sawf_msduq_reclaim_attach(struct cdp_ctrl_objmgr_psoc *psoc,
-				   struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
-{
-	wlan_cfg_ctx->sawf_msduq_reclaim_enabled =
-		cfg_get(psoc, CFG_DP_SAWF_MSDUQ_RECLAIM_ENABLE);
-}
 #else
 static void
 wlan_soc_sawf_mcast_attach(struct cdp_ctrl_objmgr_psoc *psoc,
 			   struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
-{
-}
-
-static void
-wlan_soc_sawf_msduq_reclaim_attach(struct cdp_ctrl_objmgr_psoc *psoc,
-				   struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
 {
 }
 #endif
@@ -4332,7 +4318,6 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 		cfg_get(psoc, CFG_DP_STATS_AVG_RATE_FILTER);
 	wlan_soc_ast_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_sawf_mcast_attach(psoc, wlan_cfg_ctx);
-	wlan_soc_sawf_msduq_reclaim_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_direct_link_cfg_attach(psoc, wlan_cfg_ctx);
 
 	return wlan_cfg_ctx;
@@ -4613,7 +4598,6 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 		cfg_get(psoc, CFG_DP_STATS_AVG_RATE_FILTER);
 	wlan_soc_ast_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_sawf_mcast_attach(psoc, wlan_cfg_ctx);
-	wlan_soc_sawf_msduq_reclaim_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_direct_link_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_cfg_ctx->rxmon_mgmt_linearization =
 		cfg_get(psoc, CFG_DP_RXMON_MGMT_LINEARIZATION);
@@ -6093,6 +6077,12 @@ void wlan_cfg_set_sawf_config(struct wlan_cfg_dp_soc_ctxt *cfg, bool val)
 	cfg->sawf_enabled = val;
 }
 
+void wlan_cfg_set_sawf_msduq_reclaim_config(struct wlan_cfg_dp_soc_ctxt *cfg,
+					    bool val)
+{
+	cfg->sawf_msduq_reclaim_enabled = val;
+}
+
 bool wlan_cfg_get_sawf_msduq_reclaim_config(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return cfg->sawf_msduq_reclaim_enabled;
@@ -6112,6 +6102,10 @@ void wlan_cfg_set_sawf_config(struct wlan_cfg_dp_soc_ctxt *cfg, bool val)
 {
 }
 
+void wlan_cfg_set_sawf_msduq_reclaim_config(struct wlan_cfg_dp_soc_ctxt *cfg,
+					    bool val)
+{
+}
 bool wlan_cfg_get_sawf_msduq_reclaim_config(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return false;

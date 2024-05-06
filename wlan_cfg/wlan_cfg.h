@@ -2654,6 +2654,18 @@ bool
 wlan_cfg_get_sawf_config(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
+ * wlan_cfg_set_sawf_msduq_reclaim_config() - Set SAWF MSDUQ reclaim config
+ * enable/disable
+ * @cfg: config context
+ * @val: True/False
+ *
+ * Return: none
+ */
+void
+wlan_cfg_set_sawf_msduq_reclaim_config(struct wlan_cfg_dp_soc_ctxt *cfg,
+				       bool val);
+
+/**
  * wlan_cfg_get_sawf_msduq_reclaim_config() - Get SAWF MSDUQ reclaim config
  * enable/disable
  * @cfg: config context
