@@ -2408,6 +2408,8 @@ void dp_soc_deinit(void *txrx_soc)
 
 	dp_peer_mec_spinlock_destroy(soc);
 
+	dp_soc_sawf_deinit(soc);
+
 	qdf_nbuf_queue_free(&soc->htt_stats.msg);
 
 	qdf_nbuf_queue_free(&soc->invalid_buf_queue);
@@ -3786,6 +3788,7 @@ void *dp_soc_init(struct dp_soc *soc, HTC_HANDLE htc_handle,
 
 	qdf_spinlock_create(&soc->ast_lock);
 	dp_peer_mec_spinlock_create(soc);
+	dp_soc_sawf_init(soc);
 
 	qdf_spinlock_create(&soc->reo_desc_freelist_lock);
 	qdf_list_create(&soc->reo_desc_freelist, REO_DESC_FREELIST_SIZE);

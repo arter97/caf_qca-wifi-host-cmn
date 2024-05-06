@@ -1772,6 +1772,14 @@ static inline bool dp_sawf_tag_valid_get(qdf_nbuf_t nbuf)
 {
 	return false;
 }
+
+static inline void dp_soc_sawf_init(struct dp_soc *soc)
+{
+}
+
+static inline void dp_soc_sawf_deinit(struct dp_soc *soc)
+{
+}
 #endif
 
 #ifdef HW_TX_DELAY_STATS_ENABLE

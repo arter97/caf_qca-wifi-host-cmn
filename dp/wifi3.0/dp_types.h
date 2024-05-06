@@ -3280,6 +3280,7 @@ struct dp_soc {
 	qdf_timer_t ast_aging_timer;
 
 #ifdef CONFIG_SAWF
+	qdf_spinlock_t sawf_flow_sync_lock;
 	/*
 	 * Timer variable for SAWF MSDU Queue state maintenance and HTT
 	 * response timeout
