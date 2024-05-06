@@ -1255,6 +1255,71 @@ mlo_sta_ignore_link_connect_fail(struct wlan_objmgr_vdev *vdev)
 }
 #endif
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+/**
+ * mlo_mgr_update_ap_mac() - Update AP MAC information
+ * @vdev: Object Manager vdev
+ * @link_id: Link id of the AP MLD link
+ * @ap_link_addr: AP link address
+ *
+ * Update AP MAC for 1 link of AP MLD
+ * For some IoT MLO AP, AP link addr in RNR of beacon are wrong, doesn't
+ * match that of assoc rsp, AP link addr in link info in mlo context of vdev
+ * is got from scan entry, is wrong too, the wrong AP link addr is used to
+ * save PTK, the PTK will be failed to install for can't find BSS peer by
+ * wrong AP link addr.
+ * To fix it, when assoc vdev connected, use partner AP link addr in assoc
+ * rsp to update AP link addr of link info in mlo context of vdev.
+ *
+ * Return: void
+ */
+static void mlo_mgr_update_ap_mac(struct wlan_objmgr_vdev *vdev,
+				  uint8_t link_id,
+				  struct qdf_mac_addr *ap_link_addr)
+{
+	struct mlo_link_info *link_info;
+
+	if (!vdev || !vdev->mlo_dev_ctx || !ap_link_addr)
+		return;
+
+	link_info = mlo_mgr_get_ap_link_by_link_id(vdev->mlo_dev_ctx, link_id);
+	if (!link_info)
+		return;
+
+	qdf_copy_macaddr(&link_info->ap_link_addr, ap_link_addr);
+
+	mlo_debug("update AP link addr link_id: %d, vdev_id:%d, link_addr:"
+		  QDF_MAC_ADDR_FMT,
+		  link_info->link_id, link_info->vdev_id,
+		  QDF_MAC_ADDR_REF(link_info->ap_link_addr.bytes));
+}
+
+static void mlo_mgr_update_parnter_info(struct wlan_objmgr_vdev *vdev,
+				        struct wlan_cm_connect_resp *rsp)
+{
+	struct qdf_mac_addr *ap_link_addr;
+	uint8_t link_id, i;
+	struct mlo_partner_info *partner_info;
+
+	if (wlan_vdev_mlme_is_mlo_link_vdev(vdev))
+		return;
+
+	partner_info = &rsp->ml_parnter_info;
+	for (i = 0; i < partner_info->num_partner_links; i++) {
+		link_id = partner_info->partner_link_info[i].link_id;
+		ap_link_addr =
+			&partner_info->partner_link_info[i].link_addr;
+		mlo_mgr_update_ap_mac(vdev, link_id, ap_link_addr);
+	}
+}
+#else
+static inline
+void mlo_mgr_update_parnter_info(struct wlan_objmgr_vdev *vdev,
+			         struct wlan_cm_connect_resp *rsp)
+{
+}
+#endif
+
 void mlo_sta_link_connect_notify(struct wlan_objmgr_vdev *vdev,
 				 struct wlan_cm_connect_resp *rsp)
 {
@@ -1323,6 +1388,7 @@ void mlo_sta_link_connect_notify(struct wlan_objmgr_vdev *vdev,
 			mlo_update_connected_links_bmap(mlo_dev_ctx,
 							rsp->ml_parnter_info);
 		}
+		mlo_mgr_update_parnter_info(vdev, rsp);
 		mlo_send_link_connect(vdev, rsp);
 	}
 }
