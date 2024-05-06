@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -365,6 +366,7 @@ QDF_STATUS tgt_scan_bcn_probe_rx_callback(struct wlan_objmgr_psoc *psoc,
 
 	bcn->psoc = psoc;
 	bcn->buf = buf;
+	bcn->save_rnr_info = false;
 	qdf_mem_copy(bcn->rx_data, rx_param, sizeof(*rx_param));
 
 	msg.bodyptr = bcn;
