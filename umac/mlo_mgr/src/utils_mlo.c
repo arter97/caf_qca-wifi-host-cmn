@@ -1742,7 +1742,7 @@ util_add_mlie_for_prb_rsp_gen(const uint8_t *reportingsta_ie,
 	    common_info_len > reportingsta_ie_len ||
 	    (reportingsta_ie_len - common_info_len <
 	     sizeof(struct wlan_ie_multilink))) {
-		mlo_err("Failed to parse common info, mlie len %d common info len %d",
+		mlo_err("Failed to parse common info, mlie len %zu common info len %d",
 			reportingsta_ie_len, common_info_len);
 		return status;
 	}

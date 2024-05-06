@@ -2996,7 +2996,7 @@ dp_rx_wbm_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
 				dp_rx_nbuf_free(nbuf);
 			} else {
 				/* should not enter here */
-				dp_err("invalid rxdma push reason %u, wbm_err 0x%lx",
+				dp_err("invalid rxdma push reason %u, wbm_err 0x%x",
 				       wbm_err.info_bit.rxdma_psh_rsn,
 				       wbm_err.info);
 				dp_rx_nbuf_free(nbuf);
