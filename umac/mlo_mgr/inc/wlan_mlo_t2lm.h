@@ -243,6 +243,7 @@ enum wlan_ttlm_sm_state {
  * @WLAN_TTLM_SM_EV_TX_TEARDOWN: TTLM Teardown from STA
  * @WLAN_TTLM_SM_EV_RX_TEARDOWN: TTLM Teardown from AP
  * @WLAN_TTLM_SM_EV_TIMEOUT: TTLM Timeout happen
+ * @WLAN_TTLM_SM_EV_TTLM_REQ_TIMEOUT: TTLM req timer timeout happen
  * @WLAN_TTLM_SM_EV_MAX: Max event
  */
 enum wlan_ttlm_sm_evt {
@@ -257,6 +258,7 @@ enum wlan_ttlm_sm_evt {
 	WLAN_TTLM_SM_EV_TX_TEARDOWN = 8,
 	WLAN_TTLM_SM_EV_RX_TEARDOWN = 9,
 	WLAN_TTLM_SM_EV_TIMEOUT = 10,
+	WLAN_TTLM_SM_EV_TTLM_REQ_TIMEOUT = 11,
 	WLAN_TTLM_SM_EV_MAX,
 };
 
@@ -328,6 +330,24 @@ void ttlm_sm_state_update(struct wlan_mlo_peer_context *ml_peer,
  * Return: void
  */
 void ttlm_lock_create(struct wlan_mlo_peer_context *ml_peer);
+
+/**
+ * ttlm_timer_init() - Initialize TTLM request timers
+ * @ml_peer: ML peer
+ *
+ * Return: void
+ */
+void ttlm_timer_init(struct wlan_mlo_peer_context *ml_peer);
+
+/**
+ * ttlm_req_timeout_cb() - Callback which will be invoked on TTLM req timeout
+ * @user_data: ML peer context
+ *
+ * API to handle the timeout for the TTLM request
+ *
+ * Return: None
+ */
+void ttlm_req_timeout_cb(void *user_data);
 
 /**
  * ttlm_lock_destroy() - Destroy the TTLM sm lock
@@ -426,9 +446,9 @@ QDF_STATUS ttlm_sm_create(struct wlan_mlo_peer_context *ml_peer);
 QDF_STATUS ttlm_sm_destroy(struct wlan_mlo_peer_context *ml_peer);
 
 /**
- * get_ttlm_send_ind_cb() - API to handle the TTLM send indication callback
- * @priv: pointer to priv ttlm stricture
- * @cookies: cookie fr request context
+ * typedef get_ttlm_send_ind_cb() - API to handle TTLM send indication callback
+ * @priv: pointer to private ttlm structure
+ * @cookie: cookie for request context
  */
 typedef void (*get_ttlm_send_ind_cb)(struct ttlm_comp_priv *priv, void *cookie);
 #else

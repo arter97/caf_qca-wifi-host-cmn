@@ -1245,6 +1245,7 @@ struct ttlm_state_sm {
  * @primary_umac_migration_in_progress: flag to indicate primary umac migration
  * in progress
  * @ttlm_sm: TTLM state machine
+ * @ttlm_request_timer: TTLM request timer
  * @peer_ptqm_migrate_ctx: PTQM migration peer context
  */
 struct wlan_mlo_peer_context {
@@ -1291,6 +1292,7 @@ struct wlan_mlo_peer_context {
 	bool primary_umac_migration_in_progress;
 #ifdef WLAN_FEATURE_11BE_MLO_TTLM
 	struct ttlm_state_sm ttlm_sm;
+	qdf_mc_timer_t ttlm_request_timer;
 #endif
 #ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
 	struct ptqm_migrate_peer_context *peer_ptqm_migrate_ctx;
