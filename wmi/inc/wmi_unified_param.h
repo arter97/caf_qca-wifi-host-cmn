@@ -6726,6 +6726,9 @@ typedef enum {
 	wmi_service_smem_mailbox_dlkm_support,
 	wmi_service_mlo_mode2_recovery_supported,
 	wmi_service_dynamic_wsi_remap_support,
+#ifdef CONFIG_SAWF
+	wmi_service_msduq_recfg,
+#endif
 #ifdef WLAN_FEATURE_NAN
 	wmi_service_nan_pairing_peer_create,
 	wmi_service_sta_sap_ndp_concurrency_support,
