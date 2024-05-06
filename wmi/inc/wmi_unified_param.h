@@ -6737,6 +6737,7 @@ typedef enum {
 #ifdef WLAN_DP_FEATURE_STC
 	wmi_service_traffic_context_support,
 #endif
+	wmi_service_support_ap_suspend_resume,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF

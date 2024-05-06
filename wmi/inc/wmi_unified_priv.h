@@ -3556,6 +3556,8 @@ QDF_STATUS (*extract_vendor_pdev_event)(wmi_unified_t wmi_handle,
 #endif /* WLAN_VENDOR_EXTN */
 QDF_STATUS (*send_active_traffic_map_cmd)(wmi_unified_t wmi_handle,
 					  struct peer_active_traffic_map_params *param);
+QDF_STATUS (*send_sap_suspend_cmd)(wmi_unified_t wmi_handle,
+				   struct vdev_suspend_params *param);
 };
 
 /* Forward declaration for psoc*/

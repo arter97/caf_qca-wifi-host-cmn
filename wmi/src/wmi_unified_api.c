@@ -4177,7 +4177,15 @@ wmi_unified_peer_active_traffic_map_send(wmi_unified_t wmi_handle,
 	if (wmi_handle->ops->send_active_traffic_map_cmd)
 		return wmi_handle->ops->send_active_traffic_map_cmd(wmi_handle,
 								    param);
+	return QDF_STATUS_E_FAILURE;
+}
 
+QDF_STATUS
+wmi_unified_sap_suspend_cmd_send(wmi_unified_t wmi_handle,
+				 struct vdev_suspend_params *param)
+{
+	if (wmi_handle->ops->send_sap_suspend_cmd)
+		return wmi_handle->ops->send_sap_suspend_cmd(wmi_handle, param);
 	return QDF_STATUS_E_FAILURE;
 }
 

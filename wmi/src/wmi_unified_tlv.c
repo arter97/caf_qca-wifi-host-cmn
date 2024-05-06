@@ -3389,6 +3389,50 @@ send_multiple_vdev_param_cmd_tlv(wmi_unified_t wmi_handle,
 #endif /*end of WLAN_PDEV_VDEV_SEND_MULTI_PARAM */
 
 /**
+ * send_ap_suspend_cmd_tlv() - WMI to set SAP in suspend/resume
+ * @wmi_handle : handle to WMI.
+ * @params: pointer to hold vdev_suspend_params info
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+static QDF_STATUS
+send_ap_suspend_cmd_tlv(wmi_unified_t wmi_handle,
+			struct vdev_suspend_params *params)
+{
+	int32_t ret = 0;
+	wmi_set_ap_suspend_resume_fixed_param *cmd;
+	uint16_t len = sizeof(*cmd);
+	wmi_buf_t buf;
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf)
+		return QDF_STATUS_E_NOMEM;
+
+	cmd = (wmi_set_ap_suspend_resume_fixed_param *)wmi_buf_data(buf);
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		WMITLV_TAG_STRUC_wmi_set_ap_suspend_resume_cmd_fixed_param,
+		WMITLV_GET_STRUCT_TLVLEN
+		(wmi_set_ap_suspend_resume_fixed_param));
+	cmd->vdev_id = params->vdev_id;
+	cmd->is_ap_suspend = params->suspend;
+	qdf_mem_copy(&cmd->mld_mac_address, &params->mac_addr,
+		     sizeof(wmi_mac_addr));
+
+	wmi_mtrace(WMI_SET_AP_SUSPEND_RESUME_CMDID, cmd->vdev_id, 0);
+	wmi_debug("vdev_id:%d is_ap_suspend:%d, mld_addr: " QDF_MAC_ADDR_FMT,
+		  cmd->vdev_id, cmd->is_ap_suspend,
+		  QDF_MAC_ADDR_REF(params->mac_addr));
+	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
+				   WMI_SET_AP_SUSPEND_RESUME_CMDID);
+	if (ret) {
+		wmi_err("Failed to send set AP suspend command, ret = %d", ret);
+		wmi_buf_free(buf);
+	}
+
+	return ret;
+}
+
+/**
  * send_vdev_set_mu_snif_cmd_tlv() - WMI vdev set mu snif function
  * @wmi_handle: handle to WMI.
  * @param: pointer to hold mu sniffer parameter
@@ -22720,6 +22764,7 @@ struct wmi_ops tlv_ops =  {
 	.extract_vendor_pdev_event = extract_vendor_pdev_event_tlv,
 #endif
 	.send_active_traffic_map_cmd = send_active_traffic_map_cmd_tlv,
+	.send_sap_suspend_cmd = send_ap_suspend_cmd_tlv,
 };
 
 #ifdef WLAN_FEATURE_11BE_MLO
@@ -23918,6 +23963,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 	wmi_service[wmi_service_traffic_context_support] =
 					WMI_SERVICE_TRAFFIC_CONTEXT_SUPPORT;
 #endif
+	wmi_service[wmi_service_support_ap_suspend_resume] =
+				WMI_SERVICE_SUPPORT_AP_SUSPEND_RESUME;
 }
 
 /**

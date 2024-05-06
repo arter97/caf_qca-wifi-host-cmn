@@ -5338,5 +5338,16 @@ wmi_extract_vendor_pdev_event(wmi_unified_t wmi_hdl,
 			      void *evt_buf,
 			      void *param, void *subtype);
 #endif /* WLAN_VENDOR_EXTN */
+/**
+ * wmi_unified_sap_suspend_cmd_send() - WMI to set AP in suspend/resume
+ *
+ * @wmi_handle: handle to WMI.
+ * @param: pointer to hold vdev suspend params
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS
+wmi_unified_sap_suspend_cmd_send(wmi_unified_t wmi_handle,
+				 struct vdev_suspend_params *param);
 
 #endif /* _WMI_UNIFIED_API_H_ */
