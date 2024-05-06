@@ -516,6 +516,8 @@ enum wlan_mlme_cfg_id;
  * @target_if_mlo_teardown_req: MLO teardown
  * @vdev_send_set_mac_addr: API to send set MAC address request to FW
  * @vdev_peer_set_param_send: API to send peer param to FW
+ * @sap_suspend_param_send: API to send SAP vdev suspend param
+ * @is_sap_suspend_support_enabled: API to check SAP vdev suspend support
  */
 struct wlan_lmac_if_mlme_tx_ops {
 	uint32_t (*get_wifi_iface_id) (struct wlan_objmgr_pdev *pdev);
@@ -620,6 +622,12 @@ QDF_STATUS (*vdev_send_set_mac_addr)(struct qdf_mac_addr mac_addr,
 					       uint8_t *peer_mac_addr,
 					       uint32_t param_id,
 					       uint32_t param_value);
+	QDF_STATUS (*sap_suspend_param_send)(
+				struct wlan_objmgr_vdev *vdev,
+				struct vdev_suspend_params *param);
+	bool (*is_sap_suspend_support_enabled)
+				(struct wlan_objmgr_vdev *vdev);
+
 };
 
 /**

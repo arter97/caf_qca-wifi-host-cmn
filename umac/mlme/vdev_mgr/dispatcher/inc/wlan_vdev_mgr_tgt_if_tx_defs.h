@@ -758,6 +758,18 @@ struct vdev_set_params {
 };
 
 /**
+ * struct vdev_suspend_params - vdev suspend cmd parameter
+ * @vdev_id: vdev id
+ * @mac_addr: mac address, MLD mac where vdev belongs to MLO SAP
+ * @suspend: suspend flag
+ */
+struct vdev_suspend_params {
+	uint32_t vdev_id;
+	uint8_t mac_addr[QDF_MAC_ADDR_SIZE];
+	uint32_t suspend;
+};
+
+/**
  * struct dev_set_param - vdev/pdev set param info
  * @param_id: parameter id
  * @param_value: parameter value
