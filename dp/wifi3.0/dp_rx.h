@@ -45,6 +45,11 @@
 #define RX_DATA_BUFFER_OPT_ALIGNMENT	RX_DATA_BUFFER_ALIGNMENT
 #endif
 
+#ifdef WLAN_FEATURE_LATENCY_SENSITIVE_REO
+#define LSR_DEST_RING_IDX	7	//reo_dest_ring[7] -> REO_REMAP_SW8
+#define LSR_DEST_RING		REO_REMAP_SW8
+#endif
+
 #if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
 #define DP_WBM2SW_RBM(sw0_bm_id)	HAL_RX_BUF_RBM_SW1_BM(sw0_bm_id)
 /* RBM value used for re-injecting defragmented packets into REO */

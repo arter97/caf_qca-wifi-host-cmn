@@ -1758,6 +1758,36 @@ configure_msi2:
 			   nf_msi_grp_num);
 }
 
+#ifdef WLAN_FEATURE_LATENCY_SENSITIVE_REO
+static void
+dp_srng_reo_intr_timer_thres_set(struct dp_soc *soc,
+				 struct hal_srng_params *ring_params,
+				 int ring_num)
+{
+	if (ring_num == LSR_DEST_RING_IDX) {
+		ring_params->intr_timer_thres_us = DP_LSR_RING_INT_TIMER_US;
+		ring_params->intr_batch_cntr_thres_entries =
+			DP_LSR_RING_BATCH_THRESHOLD;
+	} else {
+		ring_params->intr_timer_thres_us =
+			wlan_cfg_get_int_timer_threshold_rx(soc->wlan_cfg_ctx);
+		ring_params->intr_batch_cntr_thres_entries =
+			wlan_cfg_get_int_batch_threshold_rx(soc->wlan_cfg_ctx);
+	}
+}
+#else
+static void
+dp_srng_reo_intr_timer_thres_set(struct dp_soc *soc,
+				 struct hal_srng_params *ring_params,
+				 int ring_num)
+{
+	ring_params->intr_timer_thres_us =
+		wlan_cfg_get_int_timer_threshold_rx(soc->wlan_cfg_ctx);
+	ring_params->intr_batch_cntr_thres_entries =
+		wlan_cfg_get_int_batch_threshold_rx(soc->wlan_cfg_ctx);
+}
+#endif
+
 #ifdef WLAN_DP_PER_RING_TYPE_CONFIG
 /**
  * dp_srng_configure_interrupt_thresholds() - Retrieve interrupt
@@ -1785,10 +1815,7 @@ dp_srng_configure_interrupt_thresholds(struct dp_soc *soc,
 	wbm2_sw_rx_rel_ring_id = wlan_cfg_get_rx_rel_ring_id(soc->wlan_cfg_ctx);
 
 	if (ring_type == REO_DST) {
-		ring_params->intr_timer_thres_us =
-			wlan_cfg_get_int_timer_threshold_rx(soc->wlan_cfg_ctx);
-		ring_params->intr_batch_cntr_thres_entries =
-			wlan_cfg_get_int_batch_threshold_rx(soc->wlan_cfg_ctx);
+		dp_srng_reo_intr_timer_thres_set(soc, ring_params, ring_num);
 	} else if (ring_type == WBM2SW_RELEASE &&
 		   (ring_num == wbm2_sw_rx_rel_ring_id)) {
 		ring_params->intr_timer_thres_us =

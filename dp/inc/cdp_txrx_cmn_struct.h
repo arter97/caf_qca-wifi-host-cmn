@@ -424,6 +424,12 @@ enum cdp_host_reo_dest_ring {
     cdp_host_reo_dest_ring_2 = 2,
     cdp_host_reo_dest_ring_3 = 3,
     cdp_host_reo_dest_ring_4 = 4,
+#ifdef CONFIG_BERYLLIUM
+    cdp_host_reo_dest_ring_5 = 7,
+    cdp_host_reo_dest_ring_6 = 8,
+    cdp_host_reo_dest_ring_7 = 9,
+    cdp_host_reo_dest_ring_8 = 10,
+#endif
 };
 
 enum htt_cmn_t2h_en_stats_type {
