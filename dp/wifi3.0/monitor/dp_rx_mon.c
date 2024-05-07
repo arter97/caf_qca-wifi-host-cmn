@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1671,7 +1671,7 @@ int dp_rx_handle_local_pkt_capture(struct dp_pdev *pdev,
 				   struct hal_rx_ppdu_info *ppdu_info,
 				   qdf_nbuf_t nbuf)
 {
-	uint8_t size;
+	uint16_t size;
 	struct dp_mon_vdev *mon_vdev;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 
