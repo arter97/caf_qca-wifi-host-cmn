@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -442,6 +442,26 @@ inline struct qca_napi_data *hif_napi_get_all(struct hif_opaque_softc *hif_ctx)
 	struct hif_softc *hif = HIF_GET_SOFTC(hif_ctx);
 
 	return &(hif->napi_data);
+}
+
+qdf_napi_struct *hif_get_dp_rx_napi(struct hif_opaque_softc *hif,
+				    uint8_t grp_id)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif);
+	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
+	struct hif_exec_context *hif_ext_group;
+	struct hif_napi_exec_context *ctx;
+
+	if (unlikely(!hif))
+		QDF_ASSERT(hif); /* WARN */
+
+	if (qdf_unlikely(grp_id >= hif_state->hif_num_extgroup))
+		return NULL;
+
+	hif_ext_group = hif_state->hif_ext_group[grp_id];
+	ctx = hif_exec_get_napi(hif_ext_group);
+
+	return (qdf_napi_struct *)&ctx->napi;
 }
 
 struct qca_napi_info *hif_get_napi(int napi_id, struct qca_napi_data *napid)

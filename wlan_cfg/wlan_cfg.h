@@ -2129,6 +2129,16 @@ void wlan_cfg_fill_interrupt_mask(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
 				  bool umac_reset_support);
 
 /**
+ * wlan_cfg_get_intr_idx_from_rx_ring_id() - Get interrupt context index from
+ *					     Rx re02sw ring id
+ *
+ * @rx_ring_id: Rx ring id
+ *
+ * Return: interrupt context index for valid rx_ring_id else error code.
+ */
+int wlan_cfg_get_intr_idx_from_rx_ring_id(uint8_t rx_ring_id);
+
+/**
  * wlan_cfg_is_rx_buffer_pool_enabled() - Get RX buffer pool enabled flag
  *
  *

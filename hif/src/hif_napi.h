@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -167,6 +167,16 @@ struct qca_napi_data *hif_napi_get_all(struct hif_opaque_softc   *hif);
  */
 struct qca_napi_info *hif_get_napi(int napi_id, struct qca_napi_data *napid);
 
+/**
+ * hif_get_dp_rx_napi() - get NAPI corresponding to grp_id
+ * @hif: pointer to hif context
+ * @grp_id: interrupt group instance
+ *
+ * Return: napi corresponding grp_id
+ */
+qdf_napi_struct *hif_get_dp_rx_napi(struct hif_opaque_softc *hif,
+				    uint8_t grp_id);
+
 int hif_napi_event(struct hif_opaque_softc     *hif,
 		   enum  qca_napi_event event,
 		   void                *data);
@@ -251,6 +261,10 @@ static inline struct qca_napi_data *hif_napi_get_all(
 
 static inline struct qca_napi_info *hif_get_napi(int napi_id,
 						 struct qca_napi_data *napid)
+{ return NULL; }
+
+static inline qdf_napi_struct *hif_get_dp_rx_napi(struct hif_opaque_softc *hif,
+						  uint8_t grp_id)
 { return NULL; }
 
 static inline int hif_napi_event(struct hif_opaque_softc     *hif,

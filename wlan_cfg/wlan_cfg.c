@@ -194,6 +194,10 @@ uint8_t *wlan_cfg_get_tx_ring_int_mask(struct wlan_cfg_dp_soc_ctxt *cfg_ctx)
 #endif /* CONFIG_BERYLLIUM */
 
 #ifdef CONFIG_BERYLLIUM
+int wlan_cfg_get_intr_idx_from_rx_ring_id(uint8_t rx_ring_id)
+{
+	return (rx_ring_id + 5);
+}
 #ifdef IPA_OFFLOAD
 static const uint8_t rx_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
 	[5] = WLAN_CFG_RX_RING_MASK_0, [6] = WLAN_CFG_RX_RING_MASK_1,
@@ -211,10 +215,23 @@ static const uint8_t rx_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
 #endif /* IPA_OFFLOAD */
 #else /* !defined(CONFIG_BERYLLIUM) */
 #ifdef IPA_OFFLOAD
+int wlan_cfg_get_intr_idx_from_rx_ring_id(uint8_t rx_ring_id)
+{
+	return (rx_ring_id + 1);
+}
 static const uint8_t rx_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
 	[1] = WLAN_CFG_RX_RING_MASK_0, [2] = WLAN_CFG_RX_RING_MASK_1,
 	[3] = WLAN_CFG_RX_RING_MASK_2};
 #else
+int wlan_cfg_get_intr_idx_from_rx_ring_id(uint8_t rx_ring_id)
+{
+	if (rx_ring_id < 2)
+		return (rx_ring_id + 1);
+	else if (rx_ring_id < 4)
+		return 3;
+	else
+		return -EINVAL;
+}
 static const uint8_t rx_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
 	[1] = WLAN_CFG_RX_RING_MASK_0, [2] = WLAN_CFG_RX_RING_MASK_1,
 	[3] = WLAN_CFG_RX_RING_MASK_2 | WLAN_CFG_RX_RING_MASK_3};
