@@ -1722,7 +1722,7 @@ int dp_rx_handle_local_pkt_capture(struct dp_pdev *pdev,
 				   struct hal_rx_ppdu_info *ppdu_info,
 				   qdf_nbuf_t nbuf, uint8_t mac_id)
 {
-	uint8_t size;
+	uint16_t size;
 	struct dp_mon_vdev *mon_vdev;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
