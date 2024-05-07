@@ -2249,9 +2249,10 @@ util_get_ml_bv_partner_link_info(struct wlan_objmgr_pdev *pdev,
 			link_info->freq = freq;
 
 			if (!link_info->freq)
-				scm_debug("freq 0 rnr channel %u op_class %u",
-					  rnr->channel_number,
-					  rnr->operating_class);
+				scm_debug_rl("freq 0 rnr channel %u op_class %u " QDF_MAC_ADDR_FMT,
+					     rnr->channel_number,
+					     rnr->operating_class,
+					     QDF_MAC_ADDR_REF(rnr->bssid.bytes));
 			link_info->op_class = rnr->operating_class;
 			link_idx++;
 		}
@@ -2261,7 +2262,7 @@ util_get_ml_bv_partner_link_info(struct wlan_objmgr_pdev *pdev,
 	scan_entry->ml_info.num_links = link_idx;
 	if (!offset ||
 	    (offset + sizeof(struct wlan_ml_bv_linfo_perstaprof) >= ml_ie_len)) {
-		scm_err_rl("incorrect offset value %d", offset);
+		scm_debug_rl("incorrect offset value %d", offset);
 		return;
 	}
 
@@ -2284,9 +2285,11 @@ util_get_ml_bv_partner_link_info(struct wlan_objmgr_pdev *pdev,
 
 		if (!(end_ptr <= (ml_ie + ml_ie_len))) {
 			if (ml_ie[TAG_LEN_POS] >= 255)
-				scm_debug("Possible fragmentation in ml_ie. Ignore the processing");
+				scm_debug_rl("Possible fragmentation in ml_ie for tag_len %d. Ignore the processing",
+					     ml_ie[TAG_LEN_POS]);
 			else
-				scm_debug("perstaprof exceeds ML IE boundary. Ignore the processing");
+				scm_debug_rl("perstaprof exceeds ML IE boundary for tag_len %d. Ignore the processing",
+					     ml_ie[TAG_LEN_POS]);
 			return;
 		}
 
@@ -2333,7 +2336,8 @@ util_get_ml_bv_partner_link_info(struct wlan_objmgr_pdev *pdev,
 					(WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_SIZE +
 					 perstaprof_stainfo_len);
 		} else {
-			scm_debug("No STA profile IE list found");
+			scm_debug_rl("No STA profile IE list found for perstaprof_stainfo_len %d perstaprof_len %d",
+				     perstaprof_stainfo_len, perstaprof_len);
 			ielist_len = 0;
 		}
 
