@@ -1666,6 +1666,24 @@ hal_rx_flow_setup_fse_kiwi(uint8_t *rx_fst, uint32_t table_offset,
 	return fse;
 }
 
+static inline QDF_STATUS
+hal_rx_flow_delete_cmem_fse_kiwi(struct hal_soc *hal_soc, uint32_t cmem_ba,
+				 uint32_t table_offset)
+{
+	uint32_t fse_offset;
+
+	fse_offset = cmem_ba + (table_offset * HAL_RX_FST_ENTRY_SIZE);
+	if (!(HAL_CMEM_READ(hal_soc, fse_offset +
+			    HAL_OFFSET(RX_FLOW_SEARCH_ENTRY, VALID))))
+		return QDF_STATUS_E_NOENT;
+
+	/* Reset the Valid bit */
+	HAL_CMEM_WRITE(hal_soc, fse_offset + HAL_OFFSET(RX_FLOW_SEARCH_ENTRY,
+							VALID), 0);
+
+	return QDF_STATUS_SUCCESS;
+}
+
 /**
  * hal_rx_flow_setup_cmem_fse_kiwi() - Setup a flow search entry in HW CMEM FST
  * @hal_soc: hal_soc reference
@@ -2476,6 +2494,8 @@ static void hal_hw_txrx_ops_attach_kiwi(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_fst_get_fse_size = hal_rx_fst_get_fse_size_be;
 	hal_soc->ops->hal_compute_reo_remap_ix2_ix3 =
 					hal_compute_reo_remap_ix2_ix3_kiwi;
+	hal_soc->ops->hal_rx_flow_delete_cmem_fse =
+					hal_rx_flow_delete_cmem_fse_kiwi;
 	hal_soc->ops->hal_rx_flow_setup_cmem_fse =
 						hal_rx_flow_setup_cmem_fse_kiwi;
 	hal_soc->ops->hal_rx_flow_get_cmem_fse_ts =

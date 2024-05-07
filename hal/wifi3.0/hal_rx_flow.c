@@ -190,6 +190,22 @@ hal_rx_flow_setup_cmem_fse(hal_soc_handle_t hal_soc_hdl, uint32_t cmem_ba,
 }
 qdf_export_symbol(hal_rx_flow_setup_cmem_fse);
 
+QDF_STATUS
+hal_rx_flow_delete_cmem_fse(hal_soc_handle_t hal_soc_hdl, uint32_t cmem_ba,
+			    uint32_t table_offset)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if (hal_soc->ops->hal_rx_flow_delete_cmem_fse) {
+		return hal_soc->ops->hal_rx_flow_delete_cmem_fse(hal_soc,
+								 cmem_ba,
+								 table_offset);
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+qdf_export_symbol(hal_rx_flow_delete_cmem_fse);
+
 uint32_t hal_rx_flow_get_cmem_fse_timestamp(hal_soc_handle_t hal_soc_hdl,
 					    uint32_t fse_offset)
 {

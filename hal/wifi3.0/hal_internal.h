@@ -1281,6 +1281,9 @@ struct hal_hw_txrx_ops {
 	uint32_t (*hal_rx_flow_setup_cmem_fse)(
 				struct hal_soc *soc, uint32_t cmem_ba,
 				uint32_t table_offset, uint8_t *rx_flow);
+	QDF_STATUS (*hal_rx_flow_delete_cmem_fse)(struct hal_soc *soc,
+						  uint32_t cmem_ba,
+						  uint32_t table_offset);
 	uint32_t (*hal_rx_flow_get_cmem_fse_ts)(struct hal_soc *soc,
 						uint32_t fse_offset);
 	void (*hal_rx_flow_get_cmem_fse)(struct hal_soc *soc,

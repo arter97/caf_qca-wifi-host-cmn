@@ -108,6 +108,18 @@ hal_rx_flow_setup_cmem_fse(hal_soc_handle_t hal_soc_hdl, uint32_t cmem_ba,
 			   uint32_t table_offset, struct hal_rx_flow *flow);
 
 /**
+ * hal_rx_flow_delete_cmem_fse() - Delete flow search entry in HW CMEM FST
+ * @hal_soc_hdl: HAL SOC handle
+ * @cmem_ba: CMEM base address
+ * @table_offset: offset into the table where the flow is to be setup
+ *
+ * Return: Success if entry found valid and gets deleted
+ */
+QDF_STATUS
+hal_rx_flow_delete_cmem_fse(hal_soc_handle_t hal_soc_hdl, uint32_t cmem_ba,
+			    uint32_t table_offset);
+
+/**
  * hal_rx_flow_get_cmem_fse_timestamp() - Get timestamp field from CMEM FSE
  * @hal_soc_hdl: HAL SOC handle
  * @fse_offset: CMEM FSE offset
