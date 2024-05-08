@@ -1424,6 +1424,8 @@ struct wlan_ie_vhtop {
 #define WLAN_HE_MACCAP_LEN 6
 #define WLAN_HE_PHYCAP_LEN 11
 #define WLAN_HE_MAX_MCS_MAPS 3
+#define WLAN_HE_MCS_MAP_LEN 2
+#define WLAN_INVALID_RX_MCS_MAP 0xFFFF
 /**
  * struct wlan_ie_hecaps - HT capabilities
  * @elem_id: HE caps IE
