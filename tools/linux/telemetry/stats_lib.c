@@ -2281,6 +2281,32 @@ static int32_t build_child_sta_list(char *ifname,
 	return 0;
 }
 
+static void fill_mld_interface(struct object_list *obj)
+{
+	struct cfg80211_data buffer = {0};
+	char mld_intf[IFNAME_LEN] = {0};
+
+	if (!obj)
+		return;
+
+	if (!libstats_is_ifname_valid(obj->ifname, STATS_OBJ_VAP))
+		return;
+
+	buffer.data = mld_intf;
+	buffer.length = sizeof(mld_intf);
+	wifi_cfg80211_send_getparam_command(&g_sock_ctx.cfg80211_ctxt,
+					    QCA_NL80211_VENDOR_SUBCMD_WIFI_PARAMS,
+					    IEEE80211_PARAM_MLD_NETDEV_NAME,
+					    obj->ifname, (char *)&buffer,
+					    buffer.length);
+
+	strlcpy(mld_intf, (char *)buffer.data, IFNAME_LEN);
+	if (mld_intf[0] && is_interface_active(mld_intf, STATS_OBJ_VAP)) {
+		obj->is_mld_slave = true;
+		strlcpy(obj->mld_ifname, mld_intf, IFNAME_LEN);
+	}
+}
+
 static int32_t build_child_vap_list(struct interface_list *if_list,
 				    char *rifname, uint8_t *rhw_addr,
 				    struct object_list *parent_obj)
@@ -2294,9 +2320,6 @@ static int32_t build_child_vap_list(struct interface_list *if_list,
 		return -EINVAL;
 
 	for (inx = 0; inx < if_list->v_count; inx++) {
-		struct cfg80211_data buffer = {0};
-		char mld_intf[IFNAME_LEN] = {0};
-
 		ifname = if_list->vap[inx].name;
 		if (if_list->vap[inx].added)
 			continue;
@@ -2320,20 +2343,7 @@ static int32_t build_child_vap_list(struct interface_list *if_list,
 			curr_obj->next = temp_obj;
 		curr_obj = temp_obj;
 
-
-		buffer.data = mld_intf;
-		buffer.length = sizeof(mld_intf);
-		wifi_cfg80211_send_getparam_command(&g_sock_ctx.cfg80211_ctxt,
-						    QCA_NL80211_VENDOR_SUBCMD_WIFI_PARAMS,
-						    IEEE80211_PARAM_MLD_NETDEV_NAME,
-						    ifname, (char *)&buffer,
-						    buffer.length);
-
-		strlcpy(mld_intf, (char *)buffer.data, IFNAME_LEN);
-		if (mld_intf[0] && is_interface_active(mld_intf, STATS_OBJ_VAP)) {
-			temp_obj->is_mld_slave = true;
-			strlcpy(temp_obj->mld_ifname, mld_intf, IFNAME_LEN);
-		}
+		fill_mld_interface(temp_obj);
 
 		if (build_child_sta_list(ifname, curr_obj))
 			return -EIO;
@@ -2567,6 +2577,9 @@ static void *build_single_object(struct stats_command *cmd)
 	if (temp_obj->obj_type == STATS_OBJ_STA)
 		memcpy(temp_obj->hw_addr, cmd->sta_mac.ether_addr_octet,
 		       ETH_ALEN);
+
+	if (temp_obj->obj_type == STATS_OBJ_VAP)
+		fill_mld_interface(temp_obj);
 
 error_handle:
 	if (free_if_list)
