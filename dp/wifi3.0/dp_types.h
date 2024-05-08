@@ -87,7 +87,12 @@ struct dp_tx_queue;
 
 #if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
 #define WLAN_DP_RESET_MON_BUF_RING_FILTER
+#if defined(QCA_WIFI_WCN7750) || defined(QCA_WIFI_QCA6750) || \
+    defined(QCA_WIFI_WCN6450)
+#define MAX_TXDESC_POOLS 3
+#else
 #define MAX_TXDESC_POOLS 6
+#endif
 #else
 #define MAX_TXDESC_POOLS 4
 #endif
