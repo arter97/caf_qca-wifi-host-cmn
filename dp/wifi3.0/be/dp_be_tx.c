@@ -1107,17 +1107,19 @@ bool dp_tx_mlo_is_mcast_primary_be(struct dp_soc *soc,
  * @soc: DP soc handle
  * @hal_tx_desc_cached: tx descriptor
  * @fw_metadata: firmware metadata
- * @nbuf: skb buffer
+ * @tx_desc: tx descriptor
  * @msdu_info: msdu info
  *
  * Return: tid value in mark metadata
  */
 uint8_t dp_sawf_config_be(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
-			  uint16_t *fw_metadata, qdf_nbuf_t nbuf,
+			  uint16_t *fw_metadata, struct dp_tx_desc_s *tx_desc,
 			  struct dp_tx_msdu_info_s *msdu_info)
 {
+	qdf_nbuf_t nbuf = tx_desc->nbuf;
 	uint8_t q_id = 0;
 	uint8_t tid = HTT_TX_EXT_TID_INVALID;
+	uint16_t tcl_cmd_num;
 
 	q_id = dp_sawf_queue_id_get(nbuf);
 
@@ -1138,8 +1140,13 @@ uint8_t dp_sawf_config_be(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 	if (!wlan_cfg_get_sawf_config(soc->wlan_cfg_ctx))
 		return tid;
 
+	tcl_cmd_num = dp_sawf_tcl_cmd(soc, tx_desc, false);
+	if (tcl_cmd_num == DP_SAWF_INVALID_TCL_CMD)
+		return tid;
+
 	if (fw_metadata)
-		dp_sawf_tcl_cmd(fw_metadata, nbuf);
+		*fw_metadata = tcl_cmd_num;
+
 	hal_tx_desc_set_flow_override_enable(hal_tx_desc_cached,
 					     DP_TX_FLOW_OVERRIDE_ENABLE);
 	hal_tx_desc_set_flow_override(hal_tx_desc_cached,
@@ -1156,13 +1163,13 @@ uint8_t dp_sawf_config_be(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 
 uint8_t dp_sawf_config_fast_send_be(struct dp_soc *soc,
 				    uint32_t *hal_tx_desc_cached,
-				    qdf_nbuf_t nbuf)
+				    struct dp_tx_desc_s *tx_desc)
 {
-	uint32_t mark = nbuf->mark;
+	uint32_t mark = tx_desc->nbuf->mark;
 	uint16_t fw_metadata = 0;
 	uint8_t q_id;
 	uint8_t tid;
-	uint8_t service_id;
+	uint16_t tcl_cmd_num;
 
 	q_id = mark & SAWF_MSDUQ_MASK;
 
@@ -1175,13 +1182,9 @@ uint8_t dp_sawf_config_fast_send_be(struct dp_soc *soc,
 	    (q_id < DP_SAWF_DEFAULT_QUEUE_MAX))
 		return tid;
 
-	service_id = (mark >> SAWF_SERVICE_CLASS_SHIFT) &
-				SAWF_SERVICE_CLASS_MASK;
-
-	HTT_TX_TCL_METADATA_TYPE_V2_SET
-		(fw_metadata, HTT_TCL_METADATA_V2_TYPE_SVC_ID_BASED);
-	HTT_TX_FLOW_METADATA_TID_OVERRIDE_SET(fw_metadata, 1);
-	HTT_TX_TCL_METADATA_SVC_CLASS_ID_SET(fw_metadata, service_id - 1);
+	tcl_cmd_num = dp_sawf_tcl_cmd(soc, tx_desc, true);
+	if (tcl_cmd_num == DP_SAWF_INVALID_TCL_CMD)
+		return tid;
 
 	hal_tx_desc_cached[3] = fw_metadata << TCL_DATA_CMD_TCL_CMD_NUMBER_LSB;
 
@@ -1197,7 +1200,7 @@ uint8_t dp_sawf_config_fast_send_be(struct dp_soc *soc,
 
 static inline
 uint8_t dp_sawf_config_be(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
-			  uint16_t *fw_metadata, qdf_nbuf_t nbuf,
+			  uint16_t *fw_metadata, struct dp_tx_desc_s *tx_desc,
 			  struct dp_tx_msdu_info_s *msdu_info)
 {
 	return HTT_TX_EXT_TID_INVALID;
@@ -1206,7 +1209,7 @@ uint8_t dp_sawf_config_be(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 static inline
 uint8_t dp_sawf_config_fast_send_be(struct dp_soc *soc,
 				    uint32_t *hal_tx_desc_cached,
-				    qdf_nbuf_t nbuf)
+				    struct dp_tx_desc_s *tx_desc)
 {
 	return HTT_TX_EXT_TID_INVALID;
 }
@@ -1216,13 +1219,6 @@ QDF_STATUS dp_sawf_reinject_handler(struct dp_soc *soc, qdf_nbuf_t nbuf,
 				    uint32_t *htt_desc)
 {
 	return QDF_STATUS_E_FAILURE;
-}
-
-static inline
-QDF_STATUS dp_sawf_tx_enqueue_peer_stats(struct dp_soc *soc,
-					 struct dp_tx_desc_s *tx_desc)
-{
-	return QDF_STATUS_SUCCESS;
 }
 
 static inline
@@ -1648,8 +1644,7 @@ dp_tx_hw_enqueue_be(struct dp_soc *soc, struct dp_vdev *vdev,
 
 	if (dp_sawf_tag_valid_get(tx_desc->nbuf)) {
 		dp_sawf_config_be(soc, hal_tx_desc_cached,
-				  &fw_metadata, tx_desc->nbuf, msdu_info);
-		dp_sawf_tx_enqueue_peer_stats(soc, tx_desc);
+				  &fw_metadata, tx_desc, msdu_info);
 	}
 
 	hal_tx_desc_set_buf_addr_be(soc->hal_soc, hal_tx_desc_cached,
@@ -2279,7 +2274,7 @@ qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 
 	if (qdf_unlikely(dp_sawf_tag_valid_get(nbuf))) {
 		sawf_tid = dp_sawf_config_fast_send_be(soc, hal_tx_desc_cached,
-						       nbuf);
+						       tx_desc);
 		if (sawf_tid != HTT_TX_EXT_TID_INVALID)
 			tid = sawf_tid;
 	}

@@ -445,7 +445,7 @@ QDF_STATUS dp_tx_compute_hw_delay_li(struct dp_soc *soc,
  * @hal_tx_desc_cached: tx descriptor
  * @fw_metadata: firmware metadata
  * @vdev_id: vdev id
- * @nbuf: skb buffer
+ * @tx_desc: Tx descriptor
  * @msdu_info: msdu info
  *
  * Return: void
@@ -453,10 +453,13 @@ QDF_STATUS dp_tx_compute_hw_delay_li(struct dp_soc *soc,
 static inline
 void dp_sawf_config_li(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 		       uint16_t *fw_metadata, uint16_t vdev_id,
-		       qdf_nbuf_t nbuf, struct dp_tx_msdu_info_s *msdu_info)
+		       struct dp_tx_desc_s *tx_desc,
+		       struct dp_tx_msdu_info_s *msdu_info)
 {
+	qdf_nbuf_t nbuf = tx_desc->nbuf;
 	uint8_t q_id = 0;
 	uint32_t flow_idx = 0;
+	uint16_t tcl_cmd_num;
 
 	q_id = dp_sawf_queue_id_get(nbuf);
 	if (q_id == DP_SAWF_DEFAULT_Q_INVALID)
@@ -473,7 +476,12 @@ void dp_sawf_config_li(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 	if (!wlan_cfg_get_sawf_config(soc->wlan_cfg_ctx))
 		return;
 
-	dp_sawf_tcl_cmd(fw_metadata, nbuf);
+	tcl_cmd_num = dp_sawf_tcl_cmd(soc, tx_desc, false);
+	if (tcl_cmd_num == DP_SAWF_INVALID_TCL_CMD)
+		return;
+
+	if (fw_metadata)
+		*fw_metadata = tcl_cmd_num;
 
 	/* For SAWF, q_id starts from DP_SAWF_Q_MAX */
 	if (!dp_sawf_get_search_index(soc, nbuf, vdev_id,
@@ -489,11 +497,11 @@ void dp_sawf_config_li(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 static inline
 void dp_sawf_config_li(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 		       uint16_t *fw_metadata, uint16_t vdev_id,
-		       qdf_nbuf_t nbuf, struct dp_tx_msdu_info_s *msdu_info)
+		       struct dp_tx_desc_s *tx_desc,
+		       struct dp_tx_msdu_info_s *msdu_info)
 {
 }
 
-#define dp_sawf_tx_enqueue_peer_stats(soc, tx_desc)
 #define dp_sawf_tx_enqueue_fail_peer_stats(soc, tx_desc)
 #endif
 
@@ -553,8 +561,7 @@ dp_tx_hw_enqueue_li(struct dp_soc *soc, struct dp_vdev *vdev,
 
 	if (dp_sawf_tag_valid_get(tx_desc->nbuf)) {
 		dp_sawf_config_li(soc, hal_tx_desc_cached, &fw_metadata,
-				  vdev->vdev_id, tx_desc->nbuf, msdu_info);
-		dp_sawf_tx_enqueue_peer_stats(soc, tx_desc);
+				  vdev->vdev_id, tx_desc, msdu_info);
 	}
 
 	hal_tx_desc_set_fw_metadata(hal_tx_desc_cached, fw_metadata);
