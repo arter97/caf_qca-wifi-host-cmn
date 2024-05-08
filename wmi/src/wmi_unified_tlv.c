@@ -471,6 +471,8 @@ static const uint32_t pdev_param_tlv[] = {
 		  PDEV_PARAM_ENABLE_LARGE_MRU),
 	PARAM_MAP(pdev_param_pwr_reduction_in_quarter_db,
 		  PDEV_PARAM_PWR_REDUCTION_IN_QUARTER_DB),
+	PARAM_MAP(pdev_param_scan_mode,
+		  PDEV_PARAM_SCAN_MODE),
 };
 
 /* Populate vdev_param array whose index is host param, value is target param */
