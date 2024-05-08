@@ -260,8 +260,6 @@ dp_rx_add_to_ipa_desc_free_list(struct dp_soc *soc,
 	if (num_entries >= MAX_IPA_RX_FREE_DESC)
 		return QDF_STATUS_E_FAILURE;
 
-	dp_info("opt_dp_ctrl: Adding rx desc to ipa free list, num_entries available: %u",
-		num_entries);
 	qdf_spin_lock_bh(&free_list->lock);
 	dp_rx_add_to_free_desc_list(&free_list->head,
 				    &free_list->tail, rx_desc);
@@ -4056,7 +4054,9 @@ struct dp_rx_desc *dp_ipa_rx_get_free_desc(struct dp_soc *soc)
 	qdf_spin_lock_bh(&free_list->lock);
 	rx_desc = &free_list->head->rx_desc;
 	free_list->head = free_list->head->next;
-	dp_info("opt_dp_ctrl: rx desc allocated");
+	free_list->list_size--;
+	dp_info("opt_dp_ctrl: rx desc allocated, list size %d",
+		free_list->list_size);
 	qdf_spin_unlock_bh(&free_list->lock);
 	return rx_desc;
 }
