@@ -929,6 +929,8 @@ hal_txmon_get_user_desc_common(void *tx_tlv,
 	usr_common->spatial_reuse =
 		HAL_TX_DESC_GET_64(tx_tlv, MACTX_USER_DESC_COMMON,
 				   SPATIAL_REUSE);
+	usr_common->gi =
+		HAL_TX_DESC_GET_64(tx_tlv, MACTX_PHY_DESC, CP_SETTING);
 
 	usr_common->ru_channel_0[0] =
 	HAL_TX_DESC_GET_64(tx_tlv, MACTX_USER_DESC_COMMON,
@@ -1092,6 +1094,8 @@ hal_txmon_populate_eht_sig_common(struct hal_txmon_usr_desc_common *usr_common,
 	uint8_t i = 0;
 
 	eht_known = (QDF_MON_STATUS_EHT_SPATIAL_REUSE_KNOWN |
+		     QDF_MON_STATUS_EHT_GUARD_INTERVAL_KNOWN |
+		     QDF_MON_STATUS_EHT_LTF_KNOWN |
 		     QDF_MON_STATUS_EHT_EHT_LTF_KNOWN |
 		     QDF_MON_STATUS_EHT_PRE_FEC_PADDING_FACTOR_KNOWN |
 		     QDF_MON_STATUS_EHT_PE_DISAMBIGUITY_KNOWN |
@@ -1099,6 +1103,10 @@ hal_txmon_populate_eht_sig_common(struct hal_txmon_usr_desc_common *usr_common,
 
 	eht_data[0] |= (usr_common->spatial_reuse <<
 			QDF_MON_STATUS_EHT_SPATIAL_REUSE_SHIFT);
+	eht_data[0] |= (usr_common->gi <<
+			QDF_MON_STATUS_EHT_GI_SHIFT);
+	eht_data[0] |= (usr_common->ltf_size <<
+			QDF_MON_STATUS_EHT_LTF_SHIFT);
 	eht_data[0] |= (usr_common->num_ltf_symbols <<
 			QDF_MON_STATUS_EHT_EHT_LTF_SHIFT);
 	eht_data[0] |= (usr_common->a_factor <<

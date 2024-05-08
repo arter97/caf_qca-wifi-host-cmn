@@ -1369,6 +1369,7 @@ struct hal_txmon_user_desc_per_user {
  * @doppler_indication: doppler indication
  * @reserved: reserved
  * @spatial_reuse: spatial reuse
+ * @gi: guard interval
  * @ru_channel_0: RU arrangement for band 0
  * @ru_channel_1: RU arrangement for band 1
  */
@@ -1383,6 +1384,7 @@ struct hal_txmon_usr_desc_common {
 		 doppler_indication	:1,
 		 reserved		:2;
 	uint16_t spatial_reuse;
+	uint8_t  gi;
 	uint16_t ru_channel_0[8];
 	uint16_t ru_channel_1[8];
 };
