@@ -2515,7 +2515,6 @@ void cm_update_ml_partner_info(struct wlan_objmgr_vdev *vdev,
 }
 #endif
 
-static
 void cm_update_per_peer_key_mgmt_crypto_params(struct wlan_objmgr_vdev *vdev,
 					struct security_info *neg_sec_info)
 {
@@ -2596,7 +2595,6 @@ void cm_update_per_peer_key_mgmt_crypto_params(struct wlan_objmgr_vdev *vdev,
 	neg_sec_info->key_mgmt = key_mgmt;
 }
 
-static
 void cm_update_per_peer_ucastcipher_crypto_params(struct wlan_objmgr_vdev *vdev,
 					struct security_info *neg_sec_info)
 {
