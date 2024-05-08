@@ -3570,6 +3570,10 @@ QDF_STATUS (*send_sap_suspend_cmd)(wmi_unified_t wmi_handle,
 #ifdef WLAN_DP_FEATURE_STC
 QDF_STATUS (*send_opm_stats_cmd)(wmi_unified_t wmi_handle, uint8_t pdev_id);
 #endif
+
+QDF_STATUS
+(*send_sta_vdev_report_ap_oper_bw_cmd)(wmi_unified_t wmi_handle,
+				       struct wmi_sta_vdev_report_ap_oper_bw_params *param);
 };
 
 /* Forward declaration for psoc*/
