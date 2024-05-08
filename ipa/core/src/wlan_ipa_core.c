@@ -5304,9 +5304,10 @@ static void wlan_ipa_uc_op_cb(struct op_msg_type *op_msg,
 }
 
 #ifdef IPA_OPT_WIFI_DP_CTRL
-QDF_STATUS wlan_fw_event_msg_list_enqueue(struct uc_op_work_struct *uc_op_work,
-					  uint8_t op_code, uint8_t vdev_id,
-					  qdf_nbuf_t nbuf)
+static QDF_STATUS
+wlan_fw_event_msg_list_enqueue(struct uc_op_work_struct *uc_op_work,
+			       uint8_t op_code, uint8_t vdev_id,
+			       qdf_nbuf_t nbuf)
 {
 	uint16_t hp, tp;
 	struct op_msg_list *list = uc_op_work->msg_list;
@@ -5387,8 +5388,8 @@ static QDF_STATUS wlan_fw_event_msg_list_enqueue_flt_hdl(
 }
 #endif
 
-struct msg_elem *wlan_fw_event_msg_list_dequeue(
-					struct uc_op_work_struct *uc_op_work)
+static struct msg_elem *
+wlan_fw_event_msg_list_dequeue(struct uc_op_work_struct *uc_op_work)
 {
 	uint16_t hp, tp;
 	struct op_msg_list *list = uc_op_work->msg_list;
