@@ -2182,6 +2182,14 @@ bool wlan_reg_is_2ghz_op_class(const uint8_t *country, uint8_t op_class);
 bool wlan_reg_is_6ghz_op_class(struct wlan_objmgr_pdev *pdev,
 			       uint8_t op_class);
 
+/**
+ * wlan_reg_is_5dot9_ghz_supported() - Check if 5.9GHz is supported or not.
+ * @psoc: PSOC pointer
+ *
+ * Return: bool
+ */
+bool wlan_reg_is_5dot9_ghz_supported(struct wlan_objmgr_psoc *psoc);
+
 #ifdef CONFIG_REG_CLIENT
 /**
  * wlan_reg_is_6ghz_supported() - Whether 6ghz is supported

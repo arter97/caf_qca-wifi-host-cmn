@@ -1570,6 +1570,13 @@ bool wlan_reg_is_6ghz_op_class(struct wlan_objmgr_pdev *pdev,
 
 qdf_export_symbol(wlan_reg_is_6ghz_op_class);
 
+bool wlan_reg_is_5dot9_ghz_supported(struct wlan_objmgr_psoc *psoc)
+{
+	return reg_is_5dot9_ghz_supported(psoc);
+}
+
+qdf_export_symbol(wlan_reg_is_5dot9_ghz_supported);
+
 #ifdef CONFIG_REG_CLIENT
 bool wlan_reg_is_6ghz_supported(struct wlan_objmgr_psoc *psoc)
 {

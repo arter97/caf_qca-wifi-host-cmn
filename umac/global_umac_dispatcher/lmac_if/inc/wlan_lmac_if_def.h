@@ -2110,6 +2110,8 @@ struct wlan_lmac_if_mgmt_txrx_rx_ops {
  * @reg_get_eirp_preferred_support:
  * @reg_r2p_table_update_response_handler: function pointer to handle
  *		rate2power update response from fw.
+ * @reg_is_5dot9_ghz_supported: Function pointer to get the 5.9GHz support
+ * information.
  */
 struct wlan_lmac_if_reg_rx_ops {
 	QDF_STATUS (*master_list_handler)(struct cur_regulatory_info
@@ -2204,6 +2206,7 @@ struct wlan_lmac_if_reg_rx_ops {
 	QDF_STATUS (*reg_r2p_table_update_response_handler)(
 			struct wlan_objmgr_psoc *psoc,
 			uint32_t pdev_id);
+	bool (*reg_is_5dot9_ghz_supported)(struct wlan_objmgr_psoc *psoc);
 };
 
 #ifdef CONVERGED_P2P_ENABLE
