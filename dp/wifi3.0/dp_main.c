@@ -9285,6 +9285,9 @@ static QDF_STATUS dp_get_psoc_param(struct cdp_soc_t *cdp_soc,
 	case CDP_CONFIG_DP_DEBUG_LOG:
 		val->cdp_psoc_param_dp_debug_log = soc->dp_debug_log_en;
 		break;
+	case CDP_MONITOR_FLAG:
+		val->cdp_monitor_flag = soc->mon_flags;
+		break;
 	default:
 		dp_warn("Invalid param: %u", param);
 		break;
