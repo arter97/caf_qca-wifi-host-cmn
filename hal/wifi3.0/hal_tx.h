@@ -257,7 +257,11 @@ struct hal_tx_completion_status {
 		 mcs:4,
 		 ofdma:1,
 		 tones_in_ru:12,
+	#ifdef TX_NSS_STATS_SUPPORT
+		 tx_nss:3;
+	#else
 		 reserved5:3;
+	#endif
 	uint32_t tsf;
 	uint32_t peer_id:16,
 		 tid:8,

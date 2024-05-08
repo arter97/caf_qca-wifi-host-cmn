@@ -5404,6 +5404,43 @@ dp_tx_get_mpdu_retry_threshold(struct dp_txrx_peer *txrx_peer)
 }
 #endif
 
+#ifdef TX_NSS_STATS_SUPPORT
+/**
+ * dp_update_tx_nss() - Update peer ext stats with tx nss
+ * @ts: Tx completion stats
+ * @txrx_peer: datapath txrx_peer handle
+ * @link_id: Link id
+ *
+ * Return: void
+ */
+static void
+dp_update_tx_nss(struct hal_tx_completion_status *ts,
+		 struct dp_txrx_peer *txrx_peer, uint8_t link_id)
+{
+	uint8_t nss;
+
+	nss = ts->tx_nss;
+	/*
+	 * TRANMSIT_NSS enum received
+	 * <enum 0 1_spatial_stream>Single spatial stream
+	 * <enum 1 2_spatial_streams>2 spatial streams
+	 * <enum 2 3_spatial_streams>3 spatial streams
+	 * <enum 3 4_spatial_streams>4 spatial streams
+	 * <enum 4 5_spatial_streams>5 spatial streams
+	 * <enum 5 6_spatial_streams>6 spatial streams
+	 * <enum 6 7_spatial_streams>7 spatial streams
+	 * <enum 7 8_spatial_streams>8 spatial streams
+	 */
+	DP_PEER_EXTD_STATS_INC(txrx_peer, tx.nss[nss], 1, link_id);
+}
+#else
+static void
+dp_update_tx_nss(struct hal_tx_completion_status *ts,
+		 struct dp_txrx_peer *txrx_peer, uint8_t link_id)
+{
+}
+#endif
+
 /**
  * dp_tx_update_peer_extd_stats()- Update Tx extended path stats for peer
  *
@@ -5443,6 +5480,8 @@ dp_tx_update_peer_extd_stats(struct hal_tx_completion_status *ts,
 	DP_PEER_EXTD_STATS_INCC(txrx_peer, tx.ldpc, 1, ts->ldpc, link_id);
 	DP_PEER_EXTD_STATS_INCC(txrx_peer, tx.retries, 1, ts->transmit_cnt > 1,
 				link_id);
+
+	dp_update_tx_nss(ts, txrx_peer, link_id);
 	if (ts->first_msdu) {
 		DP_PEER_EXTD_STATS_INCC(txrx_peer, tx.retries_mpdu, 1,
 					ts->transmit_cnt > 1, link_id);

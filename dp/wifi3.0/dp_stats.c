@@ -6848,6 +6848,33 @@ void dp_print_rx_rates(struct dp_vdev *vdev)
 		       pdev->stats.rx.non_amsdu_cnt);
 }
 
+#ifdef TX_NSS_STATS_SUPPORT
+/**
+ * dp_print_tx_nss_stats() - print tx nss stats
+ * @pdev: pdev
+ *
+ * Return: void
+ */
+static
+void dp_print_tx_nss_stats(struct dp_pdev *pdev)
+{
+	uint8_t i;
+	uint8_t index = 0;
+	char nss[DP_NSS_LENGTH];
+
+	for (i = 0; i < SS_COUNT; i++) {
+		index += qdf_snprint(&nss[index], DP_NSS_LENGTH - index,
+				     " %d", pdev->stats.tx.nss[i]);
+	}
+	DP_PRINT_STATS("NSS(1-8) = %s", nss);
+}
+#else
+static inline
+void dp_print_tx_nss_stats(struct dp_pdev *pdev)
+{
+}
+#endif
+
 void dp_print_tx_rates(struct dp_vdev *vdev)
 {
 	struct dp_pdev *pdev = (struct dp_pdev *)vdev->pdev;
@@ -6855,6 +6882,7 @@ void dp_print_tx_rates(struct dp_vdev *vdev)
 	DP_PRINT_STATS("Tx Rate Info:\n");
 	dp_print_common_rates_info(pdev->stats.tx.pkt_type);
 
+	dp_print_tx_nss_stats(pdev);
 	DP_PRINT_STATS("SGI = 0.8us %d 0.4us %d 1.6us %d 3.2us %d",
 		       pdev->stats.tx.sgi_count[0],
 		       pdev->stats.tx.sgi_count[1],
