@@ -9586,6 +9586,9 @@ static QDF_STATUS dp_get_psoc_param(struct cdp_soc_t *cdp_soc,
 		val->cdp_reo_rings_mapping =
 			wlan_cfg_get_reo_rings_mapping(soc->wlan_cfg_ctx);
 		break;
+	case CDP_MONITOR_FLAG:
+		val->cdp_monitor_flag = soc->mon_flags;
+		break;
 	default:
 		dp_warn("Invalid param: %u", param);
 		break;
