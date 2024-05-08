@@ -267,6 +267,9 @@ typedef void dp_ptnr_soc_iter_func(struct dp_soc *ptnr_soc, void *arg,
 #define DP_VDEV_ITERATE_ALL 1
 #endif
 
+#define RX_SIDE 0
+#define TX_SIDE 1
+
 /**
  * enum dp_pkt_xmit_type - The type of ingress stats are being referred
  *

@@ -518,7 +518,8 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 		}
 
 		/* convert encryption type to cdp enum */
-		dp_convert_enc_to_cdp_enc(ppdu_info);
+		dp_convert_enc_to_cdp_enc(ppdu_info->rx_user_status,
+					  ppdu_info->user_id, RX_SIDE);
 		dp_mon_rx_stats_update_rssi_dbm_params(mon_pdev, ppdu_info);
 
 		if (qdf_unlikely(mon_pdev->dp_peer_based_pktlog)) {

@@ -1440,6 +1440,8 @@ dp_tx_mon_update_radiotap(struct dp_pdev *pdev,
 			TXMON_PPDU_COM(ppdu_info, rate) = rate;
 		}
 
+		dp_convert_enc_to_cdp_enc(ppdu_info->hal_txmon.rx_user_status,
+					  usr_idx, TX_SIDE);
 		dp_tx_mon_send_per_usr_mpdu(pdev, ppdu_info, usr_idx, mac_id);
 	}
 }

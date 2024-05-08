@@ -5208,15 +5208,17 @@ dp_mon_pdev_filter_init(struct dp_mon_pdev *mon_pdev)
  * Return: void
  */
 static inline void
-dp_convert_enc_to_cdp_enc(struct hal_rx_ppdu_info *ppdu_info)
+dp_convert_enc_to_cdp_enc(struct mon_rx_user_status *rx_user_status,
+			  uint8_t user_idx, uint8_t direction)
 {
 	uint8_t idx;
 
-	if (!ppdu_info)
-		return;
+	idx = rx_user_status[user_idx].enc_type;
+	rx_user_status[user_idx].enc_type = encrypt_map[idx];
 
-	idx = ppdu_info->rx_user_status[ppdu_info->user_id].enc_type;
-	ppdu_info->rx_user_status[ppdu_info->user_id].enc_type =
-							encrypt_map[idx];
+	QDF_TRACE(QDF_MODULE_ID_MON,
+		  QDF_TRACE_LEVEL_DEBUG,
+		  "User: %d TLV enc_type = %d map enc_type = %d direction = %d",
+		  user_idx, idx, encrypt_map[idx], direction);
 }
 #endif /* _DP_MON_H_ */
