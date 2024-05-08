@@ -2599,6 +2599,10 @@ struct cdp_sawf_ops {
 				uint8_t svc_id, uint8_t direction,
 				uint8_t start_or_stop, uint8_t *peer_mac,
 				uint16_t peer_id, uint16_t flow_count);
+	QDF_STATUS
+	(*txrx_get_peer_sawf_admctrl_stats)(struct cdp_soc_t *soc, uint8_t *mac,
+					    void *data,
+					    enum cdp_peer_type peer_type);
 #endif
 #ifdef WLAN_FEATURE_11BE_MLO_3_LINK_TX
 	uint16_t

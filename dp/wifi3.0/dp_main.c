@@ -13071,6 +13071,9 @@ static struct cdp_sawf_ops dp_ops_sawf = {
 	.peer_config_ul = dp_sawf_peer_config_ul,
 	.swaf_peer_sla_configuration = dp_swaf_peer_sla_configuration,
 	.sawf_peer_flow_count = dp_sawf_peer_flow_count,
+#ifdef SAWF_ADMISSION_CONTROL
+	.txrx_get_peer_sawf_admctrl_stats = dp_sawf_get_peer_admctrl_stats,
+#endif
 #endif
 #ifdef WLAN_FEATURE_11BE_MLO_3_LINK_TX
 	.get_peer_msduq = dp_sawf_get_peer_msduq,
