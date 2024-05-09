@@ -345,6 +345,7 @@ struct wlan_srng_cfg {
  * @tx_capt_rbm_id: Return Buffer Manager ID to be used for Tx packet capture
  * @sawf_enabled:  Is SAWF enabled
  * @sawf_msduq_reclaim_enabled: SAWF MSDUQ reclaim feature enable/disable
+ * @sawf_msduq_reclaim_timer_val: SAWF MSDUQ Reclaim timer value in sec
  * @sawf_mcast_enabled : SAWF for multicast enable/disable
  * @sawf_stats: SAWF Statistics
  * @mpdu_retry_threshold_1: MPDU retry threshold 1 to increment tx bad count
@@ -572,6 +573,7 @@ struct wlan_cfg_dp_soc_ctxt {
 #ifdef CONFIG_SAWF
 	bool sawf_enabled;
 	bool sawf_msduq_reclaim_enabled;
+	uint8_t sawf_msduq_reclaim_timer_val;
 	bool sawf_mcast_enabled;
 #endif
 #ifdef CONFIG_SAWF_STATS
@@ -2664,6 +2666,16 @@ wlan_cfg_get_sawf_config(struct wlan_cfg_dp_soc_ctxt *cfg);
 void
 wlan_cfg_set_sawf_msduq_reclaim_config(struct wlan_cfg_dp_soc_ctxt *cfg,
 				       bool val);
+/**
+ * wlan_cfg_get_sawf_msduq_reclaim_timer_val() - Get SAWF MSDUQ Reclaim timer
+ * value
+ * @cfg: config context
+ *
+ * Return: SAWF MSDUQ Reclaim timer value in milli seconds.
+ *
+ */
+int
+wlan_cfg_get_sawf_msduq_reclaim_timer_val(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
  * wlan_cfg_get_sawf_msduq_reclaim_config() - Get SAWF MSDUQ reclaim config
