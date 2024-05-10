@@ -617,22 +617,38 @@ static inline void wlan_ipa_ast_notify_cb(void *priv, void *data)
 }
 #endif
 
+#if !defined(QCA_LL_TX_FLOW_CONTROL_V2) && !defined(QCA_IPA_LL_TX_FLOW_CONTROL)
+static inline
+void wlan_ipa_setup_sys_params(qdf_ipa_sys_connect_params_t *sys_in,
+			       struct wlan_ipa_priv *ipa_ctx)
+{
+	int i;
+
+	for (i = 0; i < WLAN_IPA_MAX_IFACE; i++)
+		qdf_mem_copy(sys_in + i,
+			     &ipa_ctx->sys_pipe[i].ipa_sys_params,
+			     sizeof(qdf_ipa_sys_connect_params_t));
+}
+#else
+static inline
+void wlan_ipa_setup_sys_params(qdf_ipa_sys_connect_params_t *sys_in,
+			       struct wlan_ipa_priv *ipa_ctx)
+{
+}
+#endif
+
 static inline QDF_STATUS
 wlan_ipa_wdi_setup(struct wlan_ipa_priv *ipa_ctx,
 		   qdf_device_t osdev)
 {
 	qdf_ipa_sys_connect_params_t *sys_in = NULL;
-	int i;
 	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
 
 	sys_in = qdf_mem_malloc(sizeof(*sys_in) * WLAN_IPA_MAX_IFACE);
 	if (!sys_in)
 		return QDF_STATUS_E_NOMEM;
 
-	for (i = 0; i < WLAN_IPA_MAX_IFACE; i++)
-		qdf_mem_copy(sys_in + i,
-			     &ipa_ctx->sys_pipe[i].ipa_sys_params,
-			     sizeof(qdf_ipa_sys_connect_params_t));
+	wlan_ipa_setup_sys_params(sys_in, ipa_ctx);
 
 	qdf_status = cdp_ipa_setup(ipa_ctx->dp_soc, IPA_DEF_PDEV_ID,
 				   wlan_ipa_i2w_cb, wlan_ipa_w2i_cb,
@@ -1233,11 +1249,13 @@ static int wlan_ipa_send_sta_eapol_to_nw(qdf_nbuf_t skb,
 {
 	struct ethhdr *eh;
 	struct wlan_objmgr_vdev *vdev = NULL;
-	struct wlan_objmgr_psoc *psoc = ipa_ctx->psoc;
+	struct wlan_objmgr_psoc *psoc = NULL;
 	uint8_t pdev_id;
 
 	if (!ipa_ctx)
 		return -EINVAL;
+
+	psoc = ipa_ctx->psoc;
 
 	eh = (struct ethhdr *)qdf_nbuf_data(skb);
 

@@ -548,7 +548,7 @@ dp_ipa_setup_tx_params_pmac_id(struct dp_soc *soc,
 
 	uint8_t pmac_id = 0;
 
-	if (soc->pdev_count > 1)
+	if ((soc->pdev_count > 1) && (soc->pdev_count < MAX_PDEV_CNT))
 		pmac_id = soc->pdev_list[soc->pdev_count - 1]->lmac_id;
 
 	QDF_IPA_WDI_SETUP_INFO_RX_PMAC_ID(tx, pmac_id);
@@ -560,7 +560,7 @@ dp_ipa_setup_tx_smmu_params_pmac_id(struct dp_soc *soc,
 {
 	uint8_t pmac_id = 0;
 
-	if (soc->pdev_count > 1)
+	if ((soc->pdev_count > 1) && (soc->pdev_count < MAX_PDEV_CNT))
 		pmac_id = soc->pdev_list[soc->pdev_count - 1]->lmac_id;
 
 	QDF_IPA_WDI_SETUP_INFO_SMMU_RX_PMAC_ID(tx_smmu, pmac_id);

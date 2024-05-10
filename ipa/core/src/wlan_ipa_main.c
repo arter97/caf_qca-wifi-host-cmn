@@ -481,7 +481,7 @@ void ipa_set_ap_ibss_fwd(struct wlan_objmgr_pdev *pdev, uint8_t session_id,
 void ipa_uc_force_pipe_shutdown(struct wlan_objmgr_pdev *pdev)
 {
 	struct wlan_ipa_priv *ipa_obj;
-	struct wlan_objmgr_psoc *psoc = wlan_pdev_get_psoc(pdev);
+	struct wlan_objmgr_psoc *psoc;
 
 	if (!pdev) {
 		ipa_debug("objmgr pdev is null!");
@@ -495,6 +495,13 @@ void ipa_uc_force_pipe_shutdown(struct wlan_objmgr_pdev *pdev)
 
 	if (!ipa_cb_is_ready())
 		return;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+
+	if (!psoc) {
+		ipa_debug("objmgr psoc is null!");
+		return;
+	}
 
 	ipa_obj = ipa_psoc_get_priv_obj(psoc);
 	if (!ipa_obj) {
@@ -824,10 +831,16 @@ void ipa_uc_ssr_cleanup(struct wlan_objmgr_pdev *pdev)
 void ipa_fw_rejuvenate_send_msg(struct wlan_objmgr_pdev *pdev)
 {
 	struct wlan_ipa_priv *ipa_obj;
-	struct wlan_objmgr_psoc *psoc = wlan_pdev_get_psoc(pdev);
+	struct wlan_objmgr_psoc *psoc;
 
 	if (!pdev) {
 		ipa_debug("objmgr pdev is null!");
+		return;
+	}
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		ipa_debug("objmgr psoc is null!");
 		return;
 	}
 
@@ -1051,6 +1064,11 @@ void ipa_event_wq(struct wlan_objmgr_psoc *psoc, uint8_t *peer_mac_addr,
 	struct wlan_objmgr_pdev *pdev = psoc->soc_objmgr.wlan_pdev_list[0];
 	QDF_STATUS ret;
 
+	if (!ipa_obj) {
+		qdf_err("IPA_object is NULL !!");
+		return;
+	}
+
 	ipa_ctx = qdf_mem_malloc(sizeof(struct wlan_ipa_evt_wq_args));
 	if (!ipa_ctx) {
 		qdf_err("Memory alloc failed for IPA_CTX !!");
@@ -1133,6 +1151,9 @@ QDF_STATUS wlan_psoc_ipa_evt_wq_attach(struct wlan_objmgr_psoc *psoc)
 	struct wlan_ipa_priv *ipa_obj =
 		wlan_objmgr_psoc_get_comp_private_obj(psoc, WLAN_UMAC_COMP_IPA);
 
+	if (!ipa_obj)
+		return QDF_STATUS_E_FAILURE;
+
 	ipa_obj->ipa_evt_wq = qdf_mem_malloc(sizeof(struct wlan_ipa_evt_wq));
 
 	if (!ipa_obj->ipa_evt_wq)
@@ -1174,7 +1195,8 @@ void wlan_psoc_ipa_evt_wq_detach(struct wlan_objmgr_psoc *psoc)
 	struct wlan_ipa_priv *ipa_obj =
 		wlan_objmgr_psoc_get_comp_private_obj(psoc, WLAN_UMAC_COMP_IPA);
 
-	if (!(ipa_obj->ipa_evt_wq && ipa_obj->ipa_evt_wq->work_queue))
+	if (!ipa_obj || !(ipa_obj->ipa_evt_wq &&
+			  ipa_obj->ipa_evt_wq->work_queue))
 		return;
 
 	qdf_flush_workqueue(0, ipa_obj->ipa_evt_wq->work_queue);
