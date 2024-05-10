@@ -1318,6 +1318,8 @@ dp_rx_mon_process_ppdu_info(struct dp_pdev *pdev,
 	if (!ppdu_info)
 		return;
 
+	ppdu_info->rx_status.ppdu_id = ppdu_info->com_info.last_ppdu_id;
+
 	for (user = 0; user < ppdu_info->com_info.num_users; user++) {
 		uint16_t mpdu_count;
 		uint16_t mpdu_idx;
@@ -1332,6 +1334,7 @@ dp_rx_mon_process_ppdu_info(struct dp_pdev *pdev,
 		mpdu_count  = ppdu_info->mpdu_count[user];
 		ppdu_info->rx_status.rx_user_status =
 					&ppdu_info->rx_user_status[user];
+
 		for (mpdu_idx = 0; mpdu_idx < mpdu_count; mpdu_idx++) {
 			mpdu = qdf_nbuf_queue_remove(&ppdu_info->mpdu_q[user]);
 
