@@ -2149,6 +2149,7 @@ wlan_ptqm_peer_migration_set(struct wlan_mlo_peer_context *ml_peer)
 		wlan_ptqm_notify_end(ml_peer, active_req_ctx,
 				     PRIMARY_LINK_PEER_MIGRATION_FAIL);
 		wlan_ptqm_peer_req_context_free(active_req_ctx);
+		ptqm_peer_ctx->active_req_ctx = NULL;
 	}
 
 	return;
