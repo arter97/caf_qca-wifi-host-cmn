@@ -4575,6 +4575,15 @@ static void wlan_ipa_mcc_work_handler(void *data)
 }
 #endif
 
+#ifndef IPA_OPT_WIFI_DP_CTRL
+static inline int wlan_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
+				ipa_wdi_hdl_t hdl, u32 fltr_hdl,
+				uint16_t code)
+{
+	return 0;
+}
+#endif
+
 #ifdef IPA_OPT_WIFI_DP
 #ifdef IPA_OPT_WIFI_DP_CTRL
 /**
@@ -4620,6 +4629,43 @@ static inline QDF_STATUS __wlan_ipa_reg_flt_cbs(
 
 	return status;
 }
+
+#ifdef IPA_WDI_OPT_DPATH_CTRL_VER_V2
+/**
+ * wlan_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst() - notify IPA
+ * with filter delete response for optional wifi ctrl datapath
+ * @hdl: ipa hdl
+ * @fltr_hdl : filter hdl
+ * @code: filter delete status code
+ *
+ * Return: 0 on success, negative on failure
+ */
+static inline int wlan_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
+					ipa_wdi_hdl_t hdl, u32 fltr_hdl,
+					uint16_t code)
+{
+	return qdf_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(hdl,
+								  fltr_hdl,
+								  code);
+}
+#else
+static inline int wlan_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
+					ipa_wdi_hdl_t hdl, u32 fltr_hdl,
+					uint16_t code)
+{
+	if (code == WLAN_IPA_WDI_OPT_DPATH_RESP_ERR_FAILURE ||
+	    code == WLAN_IPA_WDI_OPT_DPATH_RESP_ERR_INTERNAL ||
+	    code == WLAN_IPA_WDI_OPT_DPATH_RESP_ERR_TIMEOUT)
+		return qdf_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
+								hdl,
+								fltr_hdl,
+								false);
+	return qdf_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
+							hdl,
+							fltr_hdl,
+							true);
+}
+#endif
 #else
 /**
  * __wlan_ipa_reg_flt_cbs() - register cb functions with IPA
@@ -4749,7 +4795,7 @@ void wlan_ipa_ctrl_flt_db_deinit(struct wlan_ipa_priv *ipa_obj)
 			ipa_debug("opt_dp_ctrl: handle deleted on SSR event - %d",
 				  dp_flt_params->flt_addr_params[i].flt_hdl);
 			dp_flt_params->flt_addr_params[i].ipa_flt_in_use = 0;
-			qdf_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
+			wlan_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
 				ipa_obj->hdl,
 				dp_flt_params->flt_addr_params[i].flt_hdl,
 				WLAN_IPA_WDI_OPT_DPATH_RESP_SUCCESS_SSR);
@@ -5305,7 +5351,7 @@ static void wlan_ipa_uc_op_cb(struct op_msg_type *op_msg,
 		ipa_info("opt_dp_ctrl: IPA notify filter del response: %d, hdl: %d",
 			 msg->rsvd_snd, msg->ctrl_del_hdl);
 		qdf_mutex_acquire(&ipa_ctx->ipa_lock);
-		qdf_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
+		wlan_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
 							ipa_ctx->hdl,
 							msg->ctrl_del_hdl,
 							msg->rsvd_snd);
