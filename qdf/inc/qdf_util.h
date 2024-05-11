@@ -34,6 +34,7 @@
 #endif
 
 typedef __qdf_wait_queue_head_t qdf_wait_queue_head_t;
+typedef __qdf_siphash_aligned_key_t qdf_siphash_aligned_key_t;
 
 /**
  * qdf_unlikely - Compiler-dependent macro denoting code unlikely to execute
@@ -981,5 +982,19 @@ static inline int qdf_get_smp_processor_id(void)
 static inline bool qdf_in_atomic(void)
 {
 	return __qdf_in_atomic();
+}
+
+/**
+ * qdf_siphash() - Return siphash
+ * @data: pointer to the data for which siphash has to be generated
+ * @len: length of data in the buffer for which siphash has to be generated
+ * @key: key to be used for generating siphash
+ *
+ * Return: 64-bit hash
+ */
+static inline uint64_t qdf_siphash(const void *data, size_t len,
+				   const qdf_siphash_aligned_key_t *key)
+{
+	return __qdf_siphash(data, len, key);
 }
 #endif /*_QDF_UTIL_H*/
