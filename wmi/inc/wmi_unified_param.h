@@ -5986,6 +5986,10 @@ typedef enum {
 		   PDEV_PARAM_PWR_REDUCTION_IN_QUARTER_DB),
 	PDEV_PARAM(pdev_param_scan_mode,
 		   PDEV_PARAM_SCAN_MODE),
+	PDEV_PARAM(pdev_param_dstall_consecutive_tx_no_ack_interval,
+		   PDEV_PARAM_DSTALL_CONSECUTIVE_TX_NO_ACK_INTERVAL),
+	PDEV_PARAM(pdev_param_dstall_consecutive_tx_no_ack_threshold,
+		   PDEV_PARAM_DSTALL_CONSECUTIVE_TX_NO_ACK_THRESHOLD),
 	pdev_param_max,
 } wmi_conv_pdev_params_id;
 
