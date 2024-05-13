@@ -69,7 +69,7 @@ dp_tx_mon_status_free_packet_buf(struct dp_pdev *pdev,
 			uint32_t cookie_2;
 
 			mon_buf_tx_tlv = ((uint8_t *)tx_tlv +
-					  HAL_RX_TLV64_HDR_SIZE);
+					  HAL_RX_TLV_HDR_SIZE);
 			hal_txmon_populate_packet_info(pdev->soc->hal_soc,
 						       mon_buf_tx_tlv,
 						       &packet_info);
