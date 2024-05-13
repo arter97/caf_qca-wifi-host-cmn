@@ -2141,10 +2141,12 @@ struct mlo_prb_resp_tmpl_ml_info {
  * @prb_rsp_template_frm: pointer to template probe response template
  * @prb_rsp_template_len: length of probe response template
  * @cu_ml_info: Impacted link critical update information
+ * @go_ignore_non_p2p_probe_req: go ignore non-p2p probe req
  */
 struct wmi_probe_resp_params {
 	uint8_t *prb_rsp_template_frm;
 	uint32_t prb_rsp_template_len;
+	bool go_ignore_non_p2p_probe_req;
 #ifdef WLAN_FEATURE_11BE_MLO
 	struct mlo_prb_resp_tmpl_ml_info cu_ml_info;
 #endif

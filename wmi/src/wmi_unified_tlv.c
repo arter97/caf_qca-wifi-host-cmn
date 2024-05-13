@@ -6300,6 +6300,8 @@ static QDF_STATUS send_probe_rsp_tmpl_send_cmd_tlv(wmi_unified_t wmi_handle,
 		       WMITLV_TAG_STRUC_wmi_prb_tmpl_cmd_fixed_param,
 		       WMITLV_GET_STRUCT_TLVLEN(wmi_prb_tmpl_cmd_fixed_param));
 	cmd->vdev_id = vdev_id;
+	cmd->flags = probe_rsp_info->go_ignore_non_p2p_probe_req;
+
 	cmd->buf_len = tmpl_len;
 	buf_ptr += sizeof(wmi_prb_tmpl_cmd_fixed_param);
 
