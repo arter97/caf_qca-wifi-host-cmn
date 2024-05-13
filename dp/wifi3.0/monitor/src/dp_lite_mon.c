@@ -1882,6 +1882,7 @@ dp_lite_mon_rx_mpdu_process(struct dp_pdev *pdev,
 			    uint8_t user)
 {
 	struct dp_pdev_be *be_pdev;
+	struct dp_soc *soc;
 	struct dp_mon_pdev_be *be_mon_pdev;
 	struct hal_rx_mon_mpdu_info *mpdu_meta;
 	struct dp_lite_mon_rx_config *lite_mon_rx_config;
@@ -1908,6 +1909,7 @@ dp_lite_mon_rx_mpdu_process(struct dp_pdev *pdev,
 		return QDF_STATUS_E_INVAL;
 	}
 
+	soc = pdev->soc;
 	lite_mon_rx_config = be_mon_pdev->lite_mon_rx_config;
 	if (qdf_unlikely(!lite_mon_rx_config)) {
 		dp_mon_debug("lite mon rx config is NULL");
@@ -2008,6 +2010,22 @@ dp_lite_mon_rx_mpdu_process(struct dp_pdev *pdev,
 	lite_mon_vdev = config->lite_mon_vdev;
 	qdf_spin_unlock_bh(&lite_mon_rx_config->lite_mon_rx_lock);
 
+	if (mpdu_meta->full_pkt) {
+		void *hdr_desc;
+		struct ieee80211_frame *wh;
+		/* hdr_desc points to 80211 hdr */
+		hdr_desc = qdf_nbuf_get_frag_addr(mon_mpdu, 0);
+
+		wh = (struct ieee80211_frame *)hdr_desc;
+
+		/* linearize mgmt frames */
+		if ((wh->i_fc[0] & IEEE80211_FC0_TYPE_MASK) == IEEE80211_FC0_TYPE_MGT) {
+			if (qdf_unlikely(wlan_cfg_get_rxmon_mgmt_linearization(soc->wlan_cfg_ctx))) {
+				if (qdf_nbuf_linearize(mon_mpdu) == -ENOMEM)
+					return QDF_STATUS_E_FAILURE;
+			}
+		}
+	}
 	/* If output vap is set send frame to stack else send WDI event */
 	if (lite_mon_vdev && lite_mon_vdev->osif_vdev &&
 	    lite_mon_vdev->monitor_vdev &&
