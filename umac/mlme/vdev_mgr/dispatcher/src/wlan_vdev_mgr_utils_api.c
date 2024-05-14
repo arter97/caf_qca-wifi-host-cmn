@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -674,3 +675,58 @@ void wlan_util_vdev_get_param(struct wlan_objmgr_vdev *vdev,
 }
 
 qdf_export_symbol(wlan_util_vdev_get_param);
+
+#ifndef MOBILE_DFS_SUPPORT
+int wlan_util_vdev_mgr_get_cac_timeout_for_vdev(struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_channel *des_chan = NULL;
+	struct wlan_channel *bss_chan = NULL;
+	bool continue_current_cac = 0;
+	int dfs_cac_timeout = 0;
+
+	des_chan = wlan_vdev_mlme_get_des_chan(vdev);
+	if (!des_chan)
+		return 0;
+
+	bss_chan = wlan_vdev_mlme_get_bss_chan(vdev);
+	if (!bss_chan)
+		return 0;
+
+	if (!utils_dfs_is_cac_required(wlan_vdev_get_pdev(vdev), des_chan,
+				       bss_chan, &continue_current_cac))
+		return 0;
+
+	dfs_cac_timeout = dfs_mlme_get_cac_timeout_for_freq(
+				wlan_vdev_get_pdev(vdev), des_chan->ch_freq,
+				des_chan->ch_cfreq2, des_chan->ch_flags);
+	/* Seconds to milliseconds */
+	return SECONDS_TO_MS(dfs_cac_timeout);
+}
+#else
+int wlan_util_vdev_mgr_get_cac_timeout_for_vdev(struct wlan_objmgr_vdev *vdev)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme) {
+		mlme_err("vdev_mlme is null");
+		return 0;
+	}
+
+	return vdev_mlme->mgmt.ap.cac_duration_ms;
+}
+
+void wlan_util_vdev_mgr_set_cac_timeout_for_vdev(struct wlan_objmgr_vdev *vdev,
+						 uint32_t new_chan_cac_ms)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme) {
+		mlme_err("vdev_mlme is null");
+		return;
+	}
+
+	vdev_mlme->mgmt.ap.cac_duration_ms = new_chan_cac_ms;
+}
+#endif /* MOBILE_DFS_SUPPORT */
