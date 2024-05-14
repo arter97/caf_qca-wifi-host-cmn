@@ -2617,8 +2617,9 @@ bool __qdf_nbuf_data_is_ipv4_mcast_pkt(uint8_t *data)
 		 * Check first word of the IPV4 address and if it is
 		 * equal to 0xE then it represents multicast IP.
 		 */
-		if ((*dst_addr & QDF_NBUF_TRAC_IPV4_ADDR_BCAST_MASK) ==
-				QDF_NBUF_TRAC_IPV4_ADDR_MCAST_MASK)
+		if ((*dst_addr &
+		     QDF_SWAP_U32(QDF_NBUF_TRAC_IPV4_ADDR_BCAST_MASK)) ==
+		     QDF_SWAP_U32(QDF_NBUF_TRAC_IPV4_ADDR_MCAST_MASK))
 			return true;
 		else
 			return false;
@@ -2636,10 +2637,10 @@ bool __qdf_nbuf_data_is_ipv6_mcast_pkt(uint8_t *data)
 
 		/*
 		 * Check first byte of the IP address and if it
-		 * 0xFF00 then it is a IPV6 mcast packet.
+		 * 0xFF then it is a IPV6 mcast packet.
 		 */
-		if (*dst_addr ==
-		     QDF_SWAP_U16(QDF_NBUF_TRAC_IPV6_DEST_ADDR))
+		if ((*dst_addr & QDF_SWAP_U16(QDF_NBUF_TRAC_IPV6_DEST_ADDR)) ==
+		    QDF_SWAP_U16(QDF_NBUF_TRAC_IPV6_DEST_ADDR))
 			return true;
 		else
 			return false;
