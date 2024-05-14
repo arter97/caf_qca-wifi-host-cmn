@@ -1820,6 +1820,9 @@ void (*peer_send_wds_disconnect)(struct cdp_ctrl_objmgr_psoc *psoc,
 #ifdef CONFIG_SAWF_DEF_QUEUES
 	int (*disable_sawf_svc)(uint8_t svc_id);
 #endif
+#if defined(IPA_OFFLOAD) && defined(QCA_IPA_LL_TX_FLOW_CONTROL)
+	uint8_t (*get_mlo_chip_id)(struct cdp_ctrl_objmgr_psoc *psoc);
+#endif
 	void (*dp_print_fisa_stats)(enum cdp_fisa_stats_id stats_id);
 #if defined(IPA_OFFLOAD) && defined(IPA_OFFLOAD_LOW_MEM)
 	uint16_t (*pdev_get_num_buff)(struct cdp_ctrl_objmgr_psoc *psoc,

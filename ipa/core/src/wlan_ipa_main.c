@@ -853,35 +853,6 @@ void ipa_fw_rejuvenate_send_msg(struct wlan_objmgr_pdev *pdev)
 	return wlan_ipa_fw_rejuvenate_send_msg(ipa_obj);
 }
 
-#ifdef IPA_OPT_WIFI_DP
-uint32_t get_ipa_config(struct wlan_objmgr_psoc *psoc)
-{
-	uint32_t val = cfg_get(psoc, CFG_DP_IPA_OFFLOAD_CONFIG);
-
-	if (val == INTRL_MODE_DISABLE) {
-		val = 0;
-	} else {
-		if (val == IPA_OFFLOAD_CFG)
-			ipa_err("Invalid IPA Config 0x%x", val);
-
-		if (val != INTRL_MODE_RTP_STREAM_FILTER)
-			val = INTRL_MODE_ENABLE;
-	}
-	return val;
-}
-#else
-uint32_t get_ipa_config(struct wlan_objmgr_psoc *psoc)
-{
-	uint32_t val = cfg_get(psoc, CFG_DP_IPA_OFFLOAD_CONFIG);
-
-	if (val & WLAN_IPA_OPT_WIFI_DP) {
-		val &= ~WLAN_IPA_OPT_WIFI_DP;
-		ipa_info("Resetting IPAConfig val to 0x%x", val);
-	}
-	return val;
-}
-#endif
-
 void ipa_component_config_update(struct wlan_objmgr_psoc *psoc)
 {
 	QDF_STATUS status;
@@ -1133,7 +1104,8 @@ void wlan_ipa_obj_ipa_evt_wq_handler(void *ctx)
 
 		if (ipa_ctx->event == WLAN_IPA_AP_DISCONNECT)
 			ipa_cleanup_dev_iface(ipa_ctx->pdev_obj,
-					      ipa_ctx->net_dev);
+					      ipa_ctx->net_dev,
+					      ipa_ctx->vdev_id);
 
 		wlan_objmgr_vdev_release_ref(ipa_ctx->vdev, WLAN_IPA_ID);
 		qdf_mem_free(ipa_ctx);

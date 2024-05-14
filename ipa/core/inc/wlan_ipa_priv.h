@@ -239,11 +239,11 @@ struct llc_snap_hdr {
 /**
  * struct wlan_ipa_tx_hdr - header type which IPA should handle to TX packet
  * @eth:      ether II header
- * @llc_snap: LLC snap header
+ * @llc_snapp: LLC snap header
  */
 struct wlan_ipa_tx_hdr {
 	qdf_ether_header_t eth;
-	struct llc_snap_hdr llc_snap;
+	struct llc_snap_hdr llc_snapp;
 } qdf_packed;
 
 #if defined(QCA_WIFI_QCA6290) || defined(QCA_WIFI_QCA6390) || \

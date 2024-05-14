@@ -29,6 +29,7 @@
 #include "qdf_platform.h"
 #include "qdf_module.h"
 #include "wlan_ipa_core.h"
+#include "cfg_ucfg_api.h"
 
 /* This is as per IPA capbility */
 #define MAX_INSTANCES_SUPPORTED 2
@@ -429,3 +430,41 @@ bool wlan_ipa_is_vlan_enabled(void)
 }
 
 qdf_export_symbol(wlan_ipa_is_vlan_enabled);
+
+bool wlan_ipa_config_is_opt_wifi_dp_enabled(void)
+{
+	return ipa_config_is_opt_wifi_dp_enabled();
+}
+
+qdf_export_symbol(wlan_ipa_config_is_opt_wifi_dp_enabled);
+
+#ifdef IPA_OPT_WIFI_DP
+uint32_t get_ipa_config(struct wlan_objmgr_psoc *psoc)
+{
+	uint32_t val = cfg_get(psoc, CFG_DP_IPA_OFFLOAD_CONFIG);
+
+	if (val == INTRL_MODE_DISABLE) {
+		val = 0;
+	} else {
+		if (val == IPA_OFFLOAD_CFG)
+			ipa_err("Invalid IPA Config 0x%x", val);
+
+		if (val != INTRL_MODE_RTP_STREAM_FILTER)
+			val = INTRL_MODE_ENABLE;
+	}
+	return val;
+}
+#else
+uint32_t get_ipa_config(struct wlan_objmgr_psoc *psoc)
+{
+	uint32_t val = cfg_get(psoc, CFG_DP_IPA_OFFLOAD_CONFIG);
+
+	if (val & WLAN_IPA_OPT_WIFI_DP) {
+		val &= ~WLAN_IPA_OPT_WIFI_DP;
+		ipa_info("Resetting IPAConfig val to 0x%x", val);
+	}
+	return val;
+}
+#endif
+
+qdf_export_symbol(get_ipa_config);

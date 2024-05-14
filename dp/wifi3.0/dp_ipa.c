@@ -3739,7 +3739,7 @@ QDF_STATUS dp_ipa_enable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	qdf_atomic_set(&soc->ipa_pipes_enabled, 1);
 	DP_IPA_EP_SET_TX_DB_PA(soc, ipa_res);
 
-	if (!ipa_config_is_opt_wifi_dp_enabled()) {
+	if (!wlan_ipa_config_is_opt_wifi_dp_enabled()) {
 		qdf_atomic_set(&soc->ipa_map_allowed, 1);
 		dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, true,
 						       __func__, __LINE__,
@@ -3799,7 +3799,7 @@ QDF_STATUS dp_ipa_disable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 
 	qdf_atomic_set(&soc->ipa_pipes_enabled, 0);
 
-	if (!ipa_config_is_opt_wifi_dp_enabled()) {
+	if (!wlan_ipa_config_is_opt_wifi_dp_enabled()) {
 		qdf_atomic_set(&soc->ipa_map_allowed, 0);
 		dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, false,
 						       __func__, __LINE__, 0);
@@ -3851,7 +3851,7 @@ bool dp_ipa_rx_wdsext_iface(struct cdp_soc_t *soc_hdl, uint8_t peer_id,
 
 	if (qdf_likely(txrx_peer)) {
 		if (dp_rx_deliver_to_stack_ext(dp_soc, txrx_peer->vdev,
-					       txrx_peer, skb)
+					       txrx_peer, skb))
 			status =  true;
 		dp_txrx_peer_unref_delete(txrx_ref_handle, DP_MOD_ID_IPA);
 	}

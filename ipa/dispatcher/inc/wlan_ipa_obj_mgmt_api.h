@@ -122,6 +122,21 @@ qdf_ipa_wdi_hdl_t wlan_ipa_get_hdl(void *soc, uint8_t pdev_id);
  *         false - ipa vlan support is not enabled
  */
 bool wlan_ipa_is_vlan_enabled(void);
+
+/**
+ * wlan_ipa_config_is_opt_wifi_dp_enabled() - Is IPA optional wifi dp enabled?
+ *
+ * Return: true if IPA opt wifi dp is enabled in IPA config
+ */
+bool wlan_ipa_config_is_opt_wifi_dp_enabled(void);
+
+/**
+ * get_ipa_config() - API to get IPAConfig INI
+ * @psoc : psoc handle
+ *
+ * Return: IPA config value
+ */
+uint32_t get_ipa_config(struct wlan_objmgr_psoc *psoc);
 #else
 
 static inline QDF_STATUS ipa_init(void)
@@ -144,7 +159,7 @@ static inline void ipa_disable_register_cb(void)
 {
 }
 
-static inline bool ipa_config_is_opt_wifi_dp_enabled(void)
+static inline bool wlan_ipa_config_is_opt_wifi_dp_enabled(void)
 {
 	return false;
 }

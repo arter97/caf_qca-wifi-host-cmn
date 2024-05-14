@@ -33,6 +33,7 @@
 #ifdef IPA_OPT_WIFI_DP
 #include "init_deinit_lmac.h"
 #include "cdp_txrx_cmn_struct.h"
+#include "wlan_ipa_obj_mgmt_api.h"
 #endif
 #if defined(QCA_LL_TX_FLOW_CONTROL_V2) || !defined(QCA_IPA_LL_TX_FLOW_CONTROL)
 #include <cdp_txrx_flow_ctrl_v2.h>
@@ -4688,7 +4689,7 @@ QDF_STATUS wlan_ipa_opt_dp_init(struct wlan_ipa_priv *ipa_ctx)
 
 	/* Register call backs for opt wifi dp */
 	if (ipa_ctx->opt_wifi_datapath) {
-		if (ipa_config_is_opt_wifi_dp_enabled()) {
+		if (wlan_ipa_config_is_opt_wifi_dp_enabled()) {
 			status = wlan_ipa_reg_flt_cbs(ipa_ctx);
 			ipa_debug("opt_dp: Register flt cb. status %d", status);
 			qdf_wake_lock_create(&ipa_ctx->opt_dp_wake_lock,
@@ -4768,7 +4769,7 @@ void wlan_ipa_opt_dp_deinit(struct wlan_ipa_priv *ipa_ctx)
 	if (ipa_ctx->uc_loaded)
 		wlan_ipa_destroy_opt_wifi_flt_cb_event(ipa_ctx);
 
-	if (ipa_ctx->opt_wifi_datapath && ipa_config_is_opt_wifi_dp_enabled()) {
+	if (ipa_ctx->opt_wifi_datapath && wlan_ipa_config_is_opt_wifi_dp_enabled()) {
 		qdf_wake_lock_destroy(&ipa_ctx->opt_dp_wake_lock);
 		qdf_event_destroy(&ipa_ctx->ipa_opt_dp_ctrl_clk_evt);
 	}

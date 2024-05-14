@@ -5087,7 +5087,7 @@ int wlan_cfg_num_nss_tcl_data_rings(struct wlan_cfg_dp_soc_ctxt *cfg)
 #if defined(IPA_OFFLOAD) && defined(TX_MULTI_TCL)
 int wlan_cfg_num_tcl_data_rings(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
-	if (!cfg->ipa_enabled || ipa_config_is_opt_wifi_dp_enabled())
+	if (!cfg->ipa_enabled || wlan_ipa_config_is_opt_wifi_dp_enabled())
 		return cfg->num_tcl_data_rings;
 
 	return 1;

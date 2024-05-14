@@ -2980,10 +2980,11 @@ static void dp_rxdma_ring_cleanup(struct dp_soc *soc, struct dp_pdev *pdev)
 
 	if ((pdev->pdev_id == 0) &&
 	    soc->features.dmac_cmn_src_rxbuf_ring_enabled) {
-		for (i = 0; i < MAX_RX_MAC_RINGS; i++)
+		for (i = 0; i < MAX_RX_MAC_RINGS; i++) {
 			dp_ssr_dump_srng_unregister("rx_mac_buf_ring", i);
 			dp_srng_deinit(soc, &pdev->rx_mac_buf_ring[i],
 				       RXDMA_BUF, 1);
+		}
 	}
 	dp_reap_timer_deinit(soc);
 }
@@ -5244,7 +5245,7 @@ static void dp_mlo_link_peer_flush(struct dp_soc *soc, struct dp_peer *peer)
 {
 	int cnt = 0;
 	struct dp_peer *link_peer = NULL;
-	struct dp_mld_link_peers link_peers_info = {NULL};
+	struct dp_mld_link_peers link_peers_info = {0};
 
 	if (!IS_MLO_DP_MLD_PEER(peer))
 		return;

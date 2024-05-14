@@ -126,13 +126,6 @@ ipa_psoc_get_priv_obj(struct wlan_objmgr_psoc *psoc)
 
 	return ipa_obj;
 }
-/**
- * get_ipa_config() - API to get IPAConfig INI
- * @psoc : psoc handle
- *
- * Return: IPA config value
- */
-uint32_t get_ipa_config(struct wlan_objmgr_psoc *psoc);
 
 /**
  * ipa_priv_obj_get_psoc() - API to get psoc from IPA object

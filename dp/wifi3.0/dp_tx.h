@@ -1006,7 +1006,7 @@ static inline void dp_tx_get_queue(struct dp_vdev *vdev,
 	if (soc->wlan_cfg_ctx->ipa_enabled)
 		if ((queue->ring_id == IPA_TCL_DATA_RING_IDX) ||
 		    ((queue->ring_id == IPA_TX_ALT_RING_IDX) &&
-		     wlan_cfg_is_ipa_two_tx_pipes_enabled(soc->wlan_cfg_ctx))
+		     wlan_cfg_is_ipa_two_tx_pipes_enabled(soc->wlan_cfg_ctx)))
 			queue->ring_id = 0;
 
 	queue->desc_pool_id = queue->ring_id;
@@ -1072,7 +1072,7 @@ static inline void dp_tx_get_queue(struct dp_vdev *vdev,
 	/* get flow id */
 	queue->desc_pool_id = DP_TX_GET_DESC_POOL_ID(vdev);
 	if (vdev->pdev->soc->wlan_cfg_ctx->ipa_enabled &&
-	    !ipa_config_is_opt_wifi_dp_enabled())
+	    !wlan_ipa_config_is_opt_wifi_dp_enabled())
 		queue->ring_id = DP_TX_GET_RING_ID(vdev);
 	else
 		queue->ring_id = (qdf_nbuf_get_queue_mapping(nbuf) %
