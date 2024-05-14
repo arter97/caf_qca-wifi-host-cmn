@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -52,6 +52,9 @@
  * @WLAN_IF_MGR_EV_AP_CSA_COMPLETE: Event to handle csa complete
  * @WLAN_IF_MGR_EV_STA_CSA_COMPLETE: Event to handle STA/P2P_CLI CSA completion
  * @WLAN_IF_MGR_EV_CONNECT_ACTIVE:Event to handle connect active request
+ * @WLAN_IF_MGR_EV_NAN_PRE_ENABLE: nan pre enable
+ * @WLAN_IF_MGR_EV_NAN_POST_ENABLE: nan post enable
+ * @WLAN_IF_MGR_EV_NAN_POST_DISABLE: nan post disable
  * @WLAN_IF_MGR_EV_MAX: Max event
  */
 enum wlan_if_mgr_evt {
@@ -76,7 +79,10 @@ enum wlan_if_mgr_evt {
 	WLAN_IF_MGR_EV_AP_CSA_COMPLETE = 18,
 	WLAN_IF_MGR_EV_STA_CSA_COMPLETE = 19,
 	WLAN_IF_MGR_EV_CONNECT_ACTIVE = 20,
-	WLAN_IF_MGR_EV_MAX = 21,
+	WLAN_IF_MGR_EV_NAN_PRE_ENABLE = 21,
+	WLAN_IF_MGR_EV_NAN_POST_ENABLE = 22,
+	WLAN_IF_MGR_EV_NAN_POST_DISABLE = 23,
+	WLAN_IF_MGR_EV_MAX,
 };
 
 /**
