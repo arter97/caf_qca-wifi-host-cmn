@@ -18078,6 +18078,7 @@ static QDF_STATUS extract_dfs_radar_detection_event_tlv(
 
 	radar_event = param_tlv->fixed_param;
 
+	qdf_mem_zero(radar_found, sizeof(struct radar_found_info));
 	radar_found->pdev_id = convert_target_pdev_id_to_host_pdev_id(
 						wmi_handle,
 						radar_event->pdev_id);
@@ -18085,7 +18086,6 @@ static QDF_STATUS extract_dfs_radar_detection_event_tlv(
 	if (radar_found->pdev_id == WMI_HOST_PDEV_ID_INVALID)
 		return QDF_STATUS_E_FAILURE;
 
-	qdf_mem_zero(radar_found, sizeof(struct radar_found_info));
 	radar_found->detection_mode = radar_event->detection_mode;
 	radar_found->chan_freq = radar_event->chan_freq;
 	radar_found->chan_width = radar_event->chan_width;
