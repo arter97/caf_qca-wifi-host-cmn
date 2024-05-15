@@ -3452,6 +3452,20 @@ QDF_STATUS qdf_nbuf_get_ipv4_flow_info(qdf_nbuf_t buf,
 }
 
 /**
+ * qdf_nbuf_get_ipv6_flow_info() - get ipv6 flow info
+ * @buf: Network buffer
+ * @flow_info: pointer to qdf_flow_info
+ *
+ * Return: QDF_STATUS
+ */
+static inline
+QDF_STATUS qdf_nbuf_get_ipv6_flow_info(qdf_nbuf_t buf,
+				       struct qdf_flow_info *flow_info)
+{
+	return __qdf_nbuf_get_ipv6_flow_info(buf, flow_info);
+}
+
+/**
  * qdf_nbuf_flow_dissect_flow_keys() - extract the flow_keys struct and return
  * @buf: Network buffer
  * @flow: list of flow keys
