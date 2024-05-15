@@ -375,6 +375,19 @@ void mlo_get_ml_vdev_list(struct wlan_objmgr_vdev *vdev,
 			  struct wlan_objmgr_vdev **wlan_vdev_list);
 
 /**
+ * mlo_get_partner_vdev_list() - get partner vdev list
+ * @vdev: vdev pointer
+ * @vdev_count: vdev count
+ * @wlan_vdev_list: vdev list
+ *
+ * Caller should release ref of the vdevs in wlan_vdev_list
+ * Return: None
+ */
+void mlo_get_partner_vdev_list(struct wlan_objmgr_vdev *vdev,
+			       uint16_t *vdev_count,
+			       struct wlan_objmgr_vdev **wlan_vdev_list);
+
+/**
  * mlo_mlme_handle_sta_csa_param() - process saved mlo sta csa param
  * @vdev: vdev pointer
  * @csa_param: saved csa_param
