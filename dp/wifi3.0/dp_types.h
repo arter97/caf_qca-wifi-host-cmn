@@ -423,6 +423,30 @@ enum dp_peer_type {
 	DP_PEER_TYPE_MLO,
 };
 
+/*
+ * dp_be_intrabss_params
+ *
+ * @dest_soc: dest soc to forward the packet to
+ * @tx_vdev_id: vdev id retrieved from dest peer
+ */
+struct dp_be_intrabss_params {
+	struct dp_soc *dest_soc;
+	uint8_t tx_vdev_id;
+};
+
+/**
+ * struct dp_be_intrabss_in_params - Input parameters
+ *
+ * @da_peer_id: Destination peer id
+ * @dest_chip_id: Destination chip id
+ * @dest_chip_pmac_id: Destination chips pmac id
+ */
+struct dp_be_intrabss_in_params {
+	uint16_t da_peer_id;
+	uint8_t dest_chip_id;
+	uint8_t dest_chip_pmac_id;
+};
+
 #define DP_PDEV_ITERATE_VDEV_LIST(_pdev, _vdev) \
 	TAILQ_FOREACH((_vdev), &(_pdev)->vdev_list, vdev_list_elem)
 
@@ -2474,6 +2498,9 @@ enum dp_context_type {
  * @txrx_srng_init: Init txrx srng
  * @dp_get_vdev_stats_for_unmap_peer: Get vdev stats pointer for unmap peer
  * @dp_get_interface_stats: Get interface stats
+ * @dp_rx_intrabss_mlo_mcbc_fwd: Intrabss MLO multicast broadcast forwarding
+ * @dp_rx_intrabss_get_mcbc_params: Get intrabss multicast soc and vdev id param
+ * @dp_rx_intrabss_get_params: Get Intrabss parameters to forward the packets
  * @ppeds_handle_attached:
  * @txrx_soc_ppeds_interrupt_stop:
  * @txrx_soc_ppeds_interrupt_start:
@@ -2695,7 +2722,21 @@ struct dp_arch_ops {
 				     uint16_t peer_id);
 	void (*dp_partner_chips_unmap)(struct dp_soc *soc,
 				       uint16_t peer_id);
-
+	bool (*dp_rx_intrabss_mlo_mcbc_fwd)(struct dp_be_intrabss_params params,
+					    qdf_nbuf_t nbuf_copy,
+					    uint8_t link_id, uint16_t len,
+					    struct dp_txrx_peer *ta_txrx_peer,
+					    struct cdp_tid_rx_stats *tid_stats);
+	bool (*dp_rx_intrabss_get_mcbc_params)
+					(struct dp_soc *soc,
+					 struct dp_vdev *vdev,
+					 struct dp_be_intrabss_params *params);
+	bool (*dp_rx_intrabss_get_params)
+				(struct dp_soc *soc,
+				 struct dp_vdev *vdev,
+				 struct dp_txrx_peer *ta_peer,
+				 struct dp_be_intrabss_in_params params_in,
+				 struct dp_be_intrabss_params *params_out);
 #ifdef IPA_OFFLOAD
 	int8_t (*ipa_get_bank_id)(struct dp_soc *soc);
 	void (*ipa_get_wdi_ver)(uint8_t *wdi_ver);

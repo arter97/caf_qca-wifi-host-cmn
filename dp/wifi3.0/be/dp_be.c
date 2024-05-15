@@ -3911,6 +3911,10 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_tx_compute_hw_delay = dp_tx_compute_tx_delay_be;
 	arch_ops->dp_rx_wbm_err_reap_desc = dp_rx_wbm_err_reap_desc_be;
 	arch_ops->dp_rx_null_q_desc_handle = dp_rx_null_q_desc_handle_be;
+	arch_ops->dp_rx_intrabss_mlo_mcbc_fwd = dp_rx_intrabss_mlo_mcbc_fwd_be;
+	arch_ops->dp_rx_intrabss_get_params = dp_rx_intrabss_get_params_be;
+	arch_ops->dp_rx_intrabss_get_mcbc_params =
+					dp_rx_intrabss_get_mcbc_params_be;
 #endif
 	arch_ops->txrx_get_context_size = dp_get_context_size_be;
 #ifdef WIFI_MONITOR_SUPPORT

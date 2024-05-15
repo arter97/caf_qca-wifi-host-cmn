@@ -27,17 +27,6 @@
 #include "hal_be_rx.h"
 #include "hal_be_rx_tlv.h"
 
-/*
- * dp_be_intrabss_params
- *
- * @dest_soc: dest soc to forward the packet to
- * @tx_vdev_id: vdev id retrieved from dest peer
- */
-struct dp_be_intrabss_params {
-	struct dp_soc *dest_soc;
-	uint8_t tx_vdev_id;
-};
-
 #ifndef QCA_HOST_MODE_WIFI_DISABLED
 
 /**
@@ -734,6 +723,50 @@ dp_rx_wbm_err_reap_desc_be(struct dp_intr *int_ctx, struct dp_soc *soc,
 			   hal_ring_handle_t hal_ring_hdl, uint32_t quota,
 			   uint32_t *rx_bufs_used);
 
+/**
+ * dp_rx_intrabss_get_params_be() - Function to get destination soc and vdev id
+ *                                  parameters to forward the intrabss traffic
+ * @soc: pointer to soc structure
+ * @vdev: DP vdev handle
+ * @ta_peer: transmitter DP peer handle
+ * @params_in: Input parameters peer id , chip id, pmac id and module id
+ * @params_out: Output parameters having destination soc and vdev id
+ *
+ * Return: bool: false in case of error, else true
+ */
+bool dp_rx_intrabss_get_params_be(struct dp_soc *soc, struct dp_vdev *vdev,
+				  struct dp_txrx_peer *ta_peer,
+				  struct dp_be_intrabss_in_params params_in,
+				  struct dp_be_intrabss_params *params_out);
+
+/*
+ * dp_rx_intrabss_get_mcbc_params_be - Get intrabss multicast soc and vdev id
+ * @soc: Handle to DP Soc structure
+ * @vdev: DP vdev handle
+ * @params: parameters having destination soc and vdev id
+ *
+ * Return: bool: false in case of error, else true
+ */
+bool dp_rx_intrabss_get_mcbc_params_be(struct dp_soc *soc, struct dp_vdev *vdev,
+				       struct dp_be_intrabss_params *params);
+
+/**
+ * dp_rx_intrabss_mlo_mcbc_fwd_be() - Function to forward the multicast and
+ *                                    broadcast packets
+ * @params: parameters having destination soc and vdev id
+ * @nbuf_copy: nbuf that has to be intrabss forwarded
+ * @link_id: link id on which the packet is received
+ * @len: Length
+ * @ta_txrx_peer: source txrx_peer entry
+ * @tid_stats: tid_stats structure
+ *
+ * Return: bool: false in case of error, else true
+ */
+bool dp_rx_intrabss_mlo_mcbc_fwd_be(struct dp_be_intrabss_params params,
+				    qdf_nbuf_t nbuf_copy, uint8_t link_id,
+				    uint16_t len,
+				    struct dp_txrx_peer *ta_txrx_peer,
+				    struct cdp_tid_rx_stats *tid_stats);
 /**
  * dp_rx_null_q_desc_handle_be() - Function to handle NULL Queue
  *                                 descriptor violation on either a

@@ -121,6 +121,17 @@ struct dp_ipa_uc_rx_hdr {
 #define DP_IPA_HDL_SECOND	1
 #define DP_IPA_HDL_THIRD	2
 #define IPA_DEF_PDEV_ID 0
+
+/* Nbuf CB values used by IPA component, where driver gets the required info
+ * BCMC_OFFSET: rx_msdu_desc_info->da_is_mcbc stored in skb->cb[1] & 0x2
+ * CHIP_ID_OFFSET: rx_msdu_desc_info->dest_chip_id stored in skb->cb[7]
+ * PAMC_ID_OFFSET: rx_msdu_desc_info->dest_chip_pmac_id in skb->cb[8]
+ */
+#define DP_IPA_NBUF_CB_DA_IS_BCMC_OFFSET	1
+#define DP_IPA_NBUF_CB_DEST_CHIP_ID_OFFSET	7
+#define DP_IPA_NBUF_CB_DEST_CHIP_PMAC_ID_OFFSET	8
+#define DP_IPA_NBUF_CB_BCMC_MASK	0x2
+
 /**
  * wlan_ipa_get_hdl() - Get ipa handle from IPA component
  * @psoc: control psoc object
