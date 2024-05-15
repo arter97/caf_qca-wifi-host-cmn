@@ -1268,6 +1268,70 @@ QDF_STATUS __qdf_nbuf_get_ipv4_flow_info(const struct sk_buff *skb,
 }
 
 /**
+ * __qdf_nbuf_get_ipv6_flow_info() - get ipv6 flow info
+ * @skb: Pointer to network buffer
+ * @flow_info: pointer to qdf_flow_info
+ *
+ * Return: QDF_STATUS
+ */
+static inline
+QDF_STATUS __qdf_nbuf_get_ipv6_flow_info(const struct sk_buff *skb,
+					 struct qdf_flow_info *flow_info)
+{
+	struct ipv6hdr *ipv6h;
+	unsigned char offset;
+	unsigned int nexthdr;
+
+	if (skb->protocol == htons(ETH_P_IPV6)) {
+		ipv6h = (struct ipv6hdr *)skb_network_header(skb);
+
+		memcpy(&flow_info->src_ip.ipv6_addr, &ipv6h->saddr,
+		       sizeof(flow_info->src_ip.ipv6_addr));
+		memcpy(&flow_info->dst_ip.ipv6_addr, &ipv6h->daddr,
+		       sizeof(flow_info->dst_ip.ipv6_addr));
+
+		nexthdr = ipv6h->nexthdr;
+		offset = sizeof(struct ipv6hdr);
+
+		while (nexthdr != NEXTHDR_NONE) {
+			switch (nexthdr) {
+			case NEXTHDR_HOP:
+			case NEXTHDR_ROUTING:
+			case NEXTHDR_DEST:
+				nexthdr = ((struct ipv6_opt_hdr *)(skb_network_header(skb) +
+						offset))->nexthdr;
+				offset += (((struct ipv6_opt_hdr *)(skb_network_header(skb) +
+						offset))->hdrlen + 1) << 3;
+				break;
+			case IPPROTO_TCP:
+				if ((offset + sizeof(struct tcphdr)) > skb->len)
+					return QDF_STATUS_E_INVAL;
+
+				flow_info->src_port = ntohs(*(uint16_t *)
+					(skb_network_header(skb) + offset));
+				flow_info->dst_port = ntohs(*(uint16_t *)
+					(skb_network_header(skb) + offset + 2));
+				flow_info->proto = IPPROTO_TCP;
+				return QDF_STATUS_SUCCESS;
+			case IPPROTO_UDP:
+				if ((offset + sizeof(struct udphdr)) > skb->len)
+					return QDF_STATUS_E_INVAL;
+
+				flow_info->src_port = ntohs(*(uint16_t *)
+					(skb_network_header(skb) + offset));
+				flow_info->dst_port = ntohs(*(uint16_t *)
+					(skb_network_header(skb) + offset + 2));
+				flow_info->proto = IPPROTO_UDP;
+				return QDF_STATUS_SUCCESS;
+			default:
+				return QDF_STATUS_E_NOSUPPORT;
+			}
+		}
+	}
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+/**
  * __qdf_nbuf_flow_dissect_flow_keys() - extract the flow_keys struct and return
  * @skb: Pointer to network buffer
  * @flow: list of flow keys
