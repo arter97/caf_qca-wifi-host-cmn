@@ -1787,6 +1787,21 @@ static inline bool wlan_vdev_mlme_is_mlo_ap(struct wlan_objmgr_vdev *vdev)
 		wlan_vdev_mlme_is_mlo_vdev(vdev);
 }
 
+/**
+ * wlan_vdev_is_mlo_ap_with_multi_vdev() - whether it is mlo ap with vdev count
+ * more than 1
+ * @vdev: VDEV object
+ *
+ * Return: True if it is mlo ap and multi vdev, otherwise false.
+ */
+
+static inline
+bool wlan_vdev_is_mlo_ap_with_multi_vdev(struct wlan_objmgr_vdev *vdev)
+{
+	return wlan_vdev_mlme_is_mlo_ap(vdev) &&
+		(vdev->mlo_dev_ctx->wlan_vdev_count > 1);
+}
+
 #ifdef WLAN_FEATURE_MULTI_LINK_SAP
 /**
  * wlan_vdev_mlme_is_mlo_ap_sync_disabled() - check if vdev up sync between
@@ -2047,6 +2062,12 @@ static inline bool wlan_vdev_mlme_is_mlo_ap(struct wlan_objmgr_vdev *vdev)
 
 static inline bool wlan_vdev_mlme_is_mlo_ap_sync_disabled(
 				struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
+
+static inline
+bool wlan_vdev_is_mlo_ap_with_multi_vdev(struct wlan_objmgr_vdev *vdev)
 {
 	return false;
 }

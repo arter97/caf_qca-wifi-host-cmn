@@ -422,8 +422,9 @@ target_if_sap_suspend_param_send(struct wlan_objmgr_vdev *vdev,
 		mlme_err("Failed to get WMI handle!");
 		return QDF_STATUS_E_INVAL;
 	}
-	if (wlan_vdev_mlme_is_mlo_ap(vdev))
+	if (wlan_vdev_is_mlo_ap_with_multi_vdev(vdev))
 		param->vdev_id = 0xFF;
+
 	status = wmi_unified_sap_suspend_cmd_send(wmi_handle, param);
 
 	return status;
