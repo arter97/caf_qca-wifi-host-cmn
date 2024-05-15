@@ -214,11 +214,13 @@ enum stats_type_e {
  * @STATS_INFO_AGGREGATE:   Indicate aggregation flag for driver
  * @STATS_INFO_RESOLVE_STA: Indicate Host driver to resolve STA internaly
  * @STATS_INFO_ASYNC_REQ:   Indicate the request for non-blocking stats
+ * @STATS_INFO_MLD_REQ:     Indicate the request for a mld node
  */
 enum stats_info_attr {
 	STATS_INFO_AGGREGATE = 1,
 	STATS_INFO_RESOLVE_STA = 2,
 	STATS_INFO_ASYNC_REQ = 4,
+	STATS_INFO_MLD_REQ = 8,
 };
 
 enum stats_if_wme_ac {
