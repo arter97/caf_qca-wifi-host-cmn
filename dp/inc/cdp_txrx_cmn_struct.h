@@ -1332,6 +1332,7 @@ struct cdp_soc_t {
  * @CDP_CONFIG_IN_TWT: In TWT session or not
  * @CDP_CONFIG_MLD_PEER_VDEV: Change MLD peer's vdev
  * @CDP_CONFIG_PEER_FREQ: Set peer frequency
+ * @CDP_CONFIG_PEER_DMS: Dms capability of peer
  */
 enum cdp_peer_param_type {
 	CDP_CONFIG_NAWDS,
@@ -1340,6 +1341,7 @@ enum cdp_peer_param_type {
 	CDP_CONFIG_IN_TWT,
 	CDP_CONFIG_MLD_PEER_VDEV,
 	CDP_CONFIG_PEER_FREQ,
+	CDP_CONFIG_PEER_DMS,
 };
 
 /**
@@ -1423,6 +1425,7 @@ enum cdp_pdev_param_type {
  *
  * @cdp_peer_param_nawds: Enable nawds mode
  * @cdp_peer_param_isolation: Enable isolation
+ * @cdp_peer_param_dms: Enable dms
  * @cdp_peer_param_in_twt: in TWT session or not
  * @cdp_peer_param_nac: Enable nac
  * @cdp_peer_param_freq: Peer frequency
@@ -1527,6 +1530,7 @@ typedef union cdp_config_param_t {
 	/* peer params */
 	bool cdp_peer_param_nawds;
 	bool cdp_peer_param_isolation;
+	bool cdp_peer_param_dms;
 	uint8_t cdp_peer_param_nac;
 	bool cdp_peer_param_in_twt;
 	uint32_t cdp_peer_param_freq;

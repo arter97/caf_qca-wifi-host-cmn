@@ -8457,6 +8457,9 @@ static QDF_STATUS dp_set_peer_param(struct cdp_soc_t *cdp_soc,  uint8_t vdev_id,
 		status =  dp_set_peer_freq(cdp_soc, vdev_id,
 					   peer_mac, param, val);
 		break;
+	case CDP_CONFIG_PEER_DMS:
+		txrx_peer->is_dms = val.cdp_peer_param_dms;
+		break;
 	default:
 		break;
 	}
@@ -12933,6 +12936,7 @@ static struct cdp_me_ops dp_ops_me = {
 	.tx_me_alloc_descriptor = dp_tx_me_alloc_descriptor,
 	.tx_me_free_descriptor = dp_tx_me_free_descriptor,
 	.tx_me_convert_ucast = dp_tx_me_send_convert_ucast,
+	.is_peer_dms_capable = dp_peer_check_dms_capable_by_mac,
 #endif
 #endif
 };

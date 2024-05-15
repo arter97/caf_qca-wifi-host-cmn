@@ -1031,6 +1031,9 @@ struct cdp_me_ops {
 					qdf_nbuf_t wbuf, u_int8_t newmac[][6],
 					uint8_t newmaccnt, uint8_t tid,
 					bool is_igmp, bool is_dms_pkt);
+
+	bool (*is_peer_dms_capable)(struct cdp_soc_t *soc, uint8_t vdev_id,
+				    uint8_t *mac_addr);
 };
 
 /**

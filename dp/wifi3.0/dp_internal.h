@@ -3338,6 +3338,8 @@ uint16_t dp_tx_me_send_convert_ucast(struct cdp_soc_t *soc, uint8_t vdev_id,
 void dp_tx_me_alloc_descriptor(struct cdp_soc_t *soc, uint8_t pdev_id);
 
 void dp_tx_me_free_descriptor(struct cdp_soc_t *soc, uint8_t pdev_id);
+bool dp_peer_check_dms_capable_by_mac(struct cdp_soc_t *soc, uint8_t vdev_id,
+				      uint8_t *mac_addr);
 
 /**
  * dp_h2t_ext_stats_msg_send(): function to construct HTT message to pass to FW
