@@ -389,7 +389,7 @@ hal_txmon_parse_tx_fes_status_end(hal_soc_handle_t hal_soc_hdl, void *tx_tlv,
 			  r2r_to_follow) = tx_fes_end->r2r_end_status_to_follow;
 
 	/*  update phy timestamp to ppdu timestamp */
-	hal_txmon_get_frame_timestamp(hal_soc_hdl, WIFITX_FES_STATUS_PROT_E,
+	hal_txmon_get_frame_timestamp(hal_soc_hdl, WIFITX_FES_STATUS_END_E,
 				      tx_tlv, ppdu_info);
 }
 

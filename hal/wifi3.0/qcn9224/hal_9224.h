@@ -1988,6 +1988,17 @@ void hal_txmon_get_frame_timestamp_qcn9224(uint32_t tlv_tag, void *tx_tlv,
 			 START_OF_FRAME_TIMESTAMP_31_16));
 		break;
 	}
+
+	case WIFITX_FES_STATUS_PROT_E:
+	{
+		hal_tx_fes_status_prot_t *fes_prot =
+			(hal_tx_fes_status_prot_t *)tx_tlv;
+
+		TXMON_HAL_STATUS(tx_ppdu_info, ppdu_timestamp) =
+			(fes_prot->start_of_frame_timestamp_15_0 |
+			fes_prot->start_of_frame_timestamp_31_16 << 15);
+		break;
+	}
 	}
 }
 #endif
