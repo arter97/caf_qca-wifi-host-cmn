@@ -1371,7 +1371,8 @@ static void util_scan_update_esp_data(struct wlan_esp_ie *esp_information,
 	esp_ie = (struct wlan_esp_ie *)
 		util_scan_entry_esp_info(scan_entry);
 
-	total_elements  = esp_ie->esp_len;
+	// Ignore ESP_ID_EXTN element
+	total_elements  = esp_ie->esp_len - 1;
 	data = (uint8_t *)esp_ie + 3;
 	do_div(total_elements, ESP_INFORMATION_LIST_LENGTH);
 
@@ -1381,7 +1382,7 @@ static void util_scan_update_esp_data(struct wlan_esp_ie *esp_information,
 	}
 
 	for (i = 0; i < total_elements &&
-	     data < ((uint8_t *)esp_ie + esp_ie->esp_len + 3); i++) {
+	     data < ((uint8_t *)esp_ie + esp_ie->esp_len); i++) {
 		esp_info = (struct wlan_esp_info *)data;
 		if (esp_info->access_category == ESP_AC_BK) {
 			qdf_mem_copy(&esp_information->esp_info_AC_BK,
@@ -2837,8 +2838,10 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 					   subie_len,
 					   mbssid_info.split_prof_continue,
 					   mbssid_info.prof_residue);
-				if (mbssid_info.split_prof_continue)
+				if (mbssid_info.split_prof_continue) {
 					qdf_mem_free(split_prof_start);
+					split_prof_start = NULL;
+				}
 
 				qdf_mem_free(new_ie);
 				return QDF_STATUS_E_INVAL;
@@ -2860,6 +2863,7 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 					   subelement[ID_POS],
 					   subelement[TAG_LEN_POS]);
 				qdf_mem_free(split_prof_start);
+				split_prof_start = NULL;
 				qdf_mem_free(new_ie);
 				return QDF_STATUS_E_INVAL;
 			} else if (retval == INVALID_NONTX_PROF) {
@@ -2979,12 +2983,15 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 					split_prof_end = NULL;
 				}
 				continue;
+			}
 
 			new_frame_len = frame_len - ielen + new_ie_len;
 
 			if (new_frame_len < 0) {
-				if (mbssid_info.split_prof_continue)
+				if (mbssid_info.split_prof_continue) {
 					qdf_mem_free(split_prof_start);
+					split_prof_start = NULL;
+				}
 				qdf_mem_free(new_ie);
 				scm_err("Invalid frame:Stop MBSSIE parsing");
 				scm_err("Frame_len: %zu,ielen:%u,new_ie_len:%u",
@@ -2994,8 +3001,10 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 
 			new_frame = qdf_mem_malloc(new_frame_len);
 			if (!new_frame) {
-				if (mbssid_info.split_prof_continue)
+				if (mbssid_info.split_prof_continue) {
 					qdf_mem_free(split_prof_start);
+					split_prof_start = NULL;
+				}
 				qdf_mem_free(new_ie);
 				scm_err_rl("Malloc for new_frame failed");
 				scm_err_rl("split_prof_continue: %d",
@@ -3047,7 +3056,7 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 				break;
 			}
 			/* scan entry makes its own copy so free the frame*/
-			if (mbssid_info.split_prof_continue)
+			if (mbssid_info.split_prof_continue) {
 				qdf_mem_free(split_prof_start);
 				split_prof_start = NULL;
 				split_prof_end = NULL;
@@ -3058,6 +3067,9 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 		pos = next_elem;
 	}
 	qdf_mem_free(new_ie);
+
+	if (split_prof_start)
+		qdf_mem_free(split_prof_start);
 
 	return QDF_STATUS_SUCCESS;
 }
