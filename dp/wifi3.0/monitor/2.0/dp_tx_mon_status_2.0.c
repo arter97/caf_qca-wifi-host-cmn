@@ -1437,6 +1437,11 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 							      freq);
 		break;
 	}
+	case HAL_MON_TX_FES_STATUS_ACK_BA:
+	{
+		/* No action for FES Status ACK BA */
+		break;
+	}
 	default:
 	{
 		/* return or break in default case */

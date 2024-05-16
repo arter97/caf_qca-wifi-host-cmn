@@ -455,9 +455,14 @@ struct response_end_status_compact_6432 {
 	uint32_t reserved_7                     : 32;
 };
 
-#define TX_FES_STATUS_PROT_MASK	0x2
+#define TX_FES_STATUS_PROT_MASK	0x3
 typedef struct tx_fes_status_prot_compact_6432 hal_tx_fes_status_prot_t;
 struct tx_fes_status_prot_compact_6432 {
+	/* DWORD - 0 */
+	uint32_t success                        :  1,
+		 reserved_0                     : 31;
+	/* DWORD - 1 */
+	uint32_t reserved_1                     : 32;
 	/* DWORD - 2 */
 	uint32_t start_of_frame_timestamp_15_0  : 16,
 		 start_of_frame_timestamp_31_16 : 16;

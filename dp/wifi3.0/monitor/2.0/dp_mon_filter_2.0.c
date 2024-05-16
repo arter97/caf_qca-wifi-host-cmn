@@ -1428,6 +1428,7 @@ dp_tx_mon_filter_set_upstream_tlvs(struct htt_tx_ring_tlv_filter *filter)
 	filter->utlvs.tx_fes_status_prot = 1;
 	filter->utlvs.tx_fes_status_start_ppdu = 1;
 	filter->utlvs.tx_fes_status_user_ppdu = 1;
+	filter->utlvs.tx_fes_status_ack_or_ba = 1;
 	filter->utlvs.coex_tx_status = 1;
 	filter->utlvs.rx_frame_bitmap_ack = 1;
 	filter->utlvs.rx_frame_1k_bitmap_ack = 1;
