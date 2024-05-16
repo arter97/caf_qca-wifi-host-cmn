@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -646,6 +646,8 @@ static QDF_STATUS vdev_mgr_stop_param_update(
 	}
 
 	param->vdev_id = wlan_vdev_get_id(vdev);
+	param->is_mlo_link_switch =
+		wlan_vdev_mlme_is_mlo_link_switch_in_progress(vdev);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -705,14 +707,67 @@ static QDF_STATUS vdev_mgr_up_param_update(
 
 	mbss = &mlme_obj->mgmt.mbss_11ax;
 	wlan_vdev_mgr_get_param_bssid(vdev, bssid);
-	if (qdf_mem_cmp(bssid, mbss->non_trans_bssid, QDF_MAC_ADDR_SIZE))
-		return QDF_STATUS_SUCCESS;
+
+	if (wlan_vdev_mlme_get_opmode(vdev) != QDF_SAP_MODE) {
+		mlme_debug("trans BSSID " QDF_MAC_ADDR_FMT " non-trans BSSID " QDF_MAC_ADDR_FMT " profile_num %d, profile_idx %d",
+			   QDF_MAC_ADDR_REF(mbss->trans_bssid),
+			   QDF_MAC_ADDR_REF(mbss->non_trans_bssid),
+			  mbss->profile_idx, mbss->profile_num);
+		if ((qdf_mem_cmp(bssid, mbss->trans_bssid, QDF_MAC_ADDR_SIZE)) &&
+		    (qdf_mem_cmp(bssid, mbss->non_trans_bssid, QDF_MAC_ADDR_SIZE)))
+			return QDF_STATUS_SUCCESS;
+	}
 
 	param->profile_idx = mbss->profile_idx;
 	param->profile_num = mbss->profile_num;
 	qdf_mem_copy(param->trans_bssid, mbss->trans_bssid, QDF_MAC_ADDR_SIZE);
 
 	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS vdev_mgr_configure_fd_for_sap(struct vdev_mlme_obj *mlme_obj)
+{
+	struct config_fils_params fils_param = {0};
+	struct vdev_mlme_mbss_11ax *mbss;
+	bool is_non_tx_vdev, is_6g_sap_fd_enabled;
+
+	if (!mlme_obj->vdev->vdev_mlme.des_chan ||
+	    !WLAN_REG_IS_6GHZ_CHAN_FREQ(
+		mlme_obj->vdev->vdev_mlme.des_chan->ch_freq))
+		return QDF_STATUS_SUCCESS;
+	/*
+	 * In case of a non-tx vdev, 'profile_num' must be greater
+	 * than 0 indicating one or more non-tx vdev and 'profile_idx'
+	 * must be in the range [1, 2^n] where n is the max bssid
+	 * indicator
+	 */
+	mbss = &mlme_obj->mgmt.mbss_11ax;
+	is_non_tx_vdev = mbss && mbss->profile_idx && mbss->profile_num;
+	if (is_non_tx_vdev)
+		return QDF_STATUS_SUCCESS;
+
+	is_6g_sap_fd_enabled = wlan_vdev_mlme_feat_ext_cap_get(mlme_obj->vdev,
+						WLAN_VDEV_FEXT_FILS_DISC_6G_SAP);
+	mlme_debug("SAP FD enabled %d", is_6g_sap_fd_enabled);
+
+	fils_param.vdev_id = wlan_vdev_get_id(mlme_obj->vdev);
+
+	/* If FD is disabled during runtime, disable the FD in FW */
+	if (wlan_mlme_is_fd_disabled_in_6ghz_band(mlme_obj->vdev))
+		goto send_cmd;
+
+	if (is_6g_sap_fd_enabled) {
+		fils_param.fd_period = DEFAULT_FILS_DISCOVERY_PERIOD;
+	} else if (wlan_vdev_mlme_feat_ext2_cap_get(mlme_obj->vdev,
+					WLAN_VDEV_FEXT2_20TU_PRB_RESP)) {
+		fils_param.send_prb_rsp_frame = true;
+		fils_param.fd_period = DEFAULT_PROBE_RESP_PERIOD;
+	} else {
+		mlme_debug("SAP FD and 20TU Prb both are disabled");
+	}
+
+send_cmd:
+	return tgt_vdev_mgr_fils_enable_send(mlme_obj, &fils_param);
 }
 
 QDF_STATUS vdev_mgr_up_send(struct vdev_mlme_obj *mlme_obj)
@@ -723,9 +778,6 @@ QDF_STATUS vdev_mgr_up_send(struct vdev_mlme_obj *mlme_obj)
 	struct beacon_tmpl_params bcn_tmpl_param = {0};
 	enum QDF_OPMODE opmode;
 	struct wlan_objmgr_vdev *vdev;
-	struct config_fils_params fils_param = {0};
-	uint8_t is_6g_sap_fd_enabled;
-	bool is_non_tx_vdev;
 
 	if (!mlme_obj) {
 		mlme_err("VDEV_MLME is NULL");
@@ -762,39 +814,8 @@ QDF_STATUS vdev_mgr_up_send(struct vdev_mlme_obj *mlme_obj)
 	mlme_obj->mgmt.ap.max_chan_switch_time = 0;
 	mlme_obj->mgmt.ap.last_bcn_ts_ms = 0;
 
-	is_6g_sap_fd_enabled = wlan_vdev_mlme_feat_ext_cap_get(vdev,
-					WLAN_VDEV_FEXT_FILS_DISC_6G_SAP);
-	mlme_debug("SAP FD enabled %d", is_6g_sap_fd_enabled);
-
-	/*
-	 * In case of a non-tx vdev, 'profile_num' must be greater
-	 * than 0 indicating one or more non-tx vdev and 'profile_idx'
-	 * must be in the range [1, 2^n] where n is the max bssid
-	 * indicator
-	 */
-	is_non_tx_vdev = param.profile_num && param.profile_idx;
-
-	if (opmode == QDF_SAP_MODE && mlme_obj->vdev->vdev_mlme.des_chan &&
-	    WLAN_REG_IS_6GHZ_CHAN_FREQ(
-			mlme_obj->vdev->vdev_mlme.des_chan->ch_freq) &&
-		!is_non_tx_vdev) {
-		fils_param.vdev_id = wlan_vdev_get_id(mlme_obj->vdev);
-		if (is_6g_sap_fd_enabled) {
-			fils_param.fd_period = DEFAULT_FILS_DISCOVERY_PERIOD;
-		} else {
-			if (wlan_vdev_mlme_feat_ext2_cap_get(vdev,
-					WLAN_VDEV_FEXT2_20TU_PRB_RESP)) {
-				fils_param.send_prb_rsp_frame = true;
-				fils_param.fd_period =
-					DEFAULT_PROBE_RESP_PERIOD;
-			} else {
-				mlme_err("SAP FD and 20TU Prb both are disabled");
-			}
-		}
-		status = tgt_vdev_mgr_fils_enable_send(mlme_obj,
-						       &fils_param);
-	}
-
+	if (opmode == QDF_SAP_MODE)
+		status = vdev_mgr_configure_fd_for_sap(mlme_obj);
 	return status;
 }
 

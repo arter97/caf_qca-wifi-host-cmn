@@ -4804,7 +4804,7 @@ static QDF_STATUS dp_vdev_attach_wifi3(struct cdp_soc_t *cdp_soc,
 	} else if (dp_soc_get_con_mode(soc) == QDF_GLOBAL_MISSION_MODE &&
 		   soc->intr_mode == DP_INTR_MSI &&
 		   wlan_op_mode_monitor == vdev->opmode &&
-		   !wlan_cfg_get_local_pkt_capture(soc->wlan_cfg_ctx)) {
+		   !dp_mon_mode_local_pkt_capture(soc)) {
 		/* Timer to reap status ring in mission mode */
 		dp_monitor_vdev_timer_start(soc);
 	}
@@ -9163,6 +9163,10 @@ dp_set_psoc_param(struct cdp_soc_t *cdp_soc,
 	case CDP_CONFIG_DP_DEBUG_LOG:
 		soc->dp_debug_log_en = val.cdp_psoc_param_dp_debug_log;
 		break;
+	case CDP_MONITOR_FLAG:
+		soc->mon_flags = val.cdp_monitor_flag;
+		dp_info("monior interface flags: 0x%x", soc->mon_flags);
+		break;
 	default:
 		break;
 	}
@@ -12689,6 +12693,42 @@ static struct cdp_sawf_ops dp_ops_sawf = {
 #ifdef DP_TX_TRACKING
 
 #define DP_TX_COMP_MAX_LATENCY_MS 60000
+
+static bool dp_check_pending_tx(struct dp_soc *soc)
+{
+	hal_soc_handle_t hal_soc = soc->hal_soc;
+	uint32_t hp, tp, i;
+
+	for (i = 0; i < soc->num_tcl_data_rings; i++) {
+		if (dp_ipa_is_ring_ipa_tx(soc, i))
+			continue;
+
+		hal_get_sw_hptp(hal_soc, soc->tcl_data_ring[i].hal_srng,
+				&tp, &hp);
+
+		if (hp != tp) {
+			dp_info_rl("Pending transactions in TCL DATA Ring[%d] hp=0x%x, tp=0x%x",
+				   i, hp, tp);
+			return true;
+		}
+
+		if (wlan_cfg_get_wbm_ring_num_for_index(soc->wlan_cfg_ctx, i) ==
+		    INVALID_WBM_RING_NUM)
+			continue;
+
+		hal_get_sw_hptp(hal_soc, soc->tx_comp_ring[i].hal_srng,
+				&tp, &hp);
+
+		if (hp != tp) {
+			dp_info_rl("Pending transactions in TX comp Ring[%d] hp=0x%x, tp=0x%x",
+				   i, hp, tp);
+			return true;
+		}
+	}
+
+	return false;
+}
+
 /**
  * dp_tx_comp_delay_check() - calculate time latency for tx completion per pkt
  * @tx_desc: tx descriptor
@@ -12741,6 +12781,9 @@ void dp_find_missing_tx_comp(struct dp_soc *soc)
 	uint16_t num_desc_per_page;
 	struct dp_tx_desc_s *tx_desc = NULL;
 	struct dp_tx_desc_pool_s *tx_desc_pool = NULL;
+
+	if (dp_check_pending_tx(soc))
+		return;
 
 	for (i = 0; i < MAX_TXDESC_POOLS; i++) {
 		tx_desc_pool = &soc->tx_desc[i];

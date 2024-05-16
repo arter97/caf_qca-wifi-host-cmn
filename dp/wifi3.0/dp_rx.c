@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -102,7 +102,7 @@ QDF_STATUS dp_rx_desc_sanity(struct dp_soc *soc, hal_soc_handle_t hal_soc,
 
 fail:
 	DP_STATS_INC(soc, rx.err.invalid_cookie, 1);
-	dp_err("Ring Desc:");
+	dp_err_rl("Sanity failed for ring Desc:");
 	hal_srng_dump_ring_desc(hal_soc, hal_ring_hdl,
 				ring_desc);
 	return QDF_STATUS_E_NULL_VALUE;
@@ -2836,7 +2836,9 @@ void dp_rx_deliver_to_stack_no_peer(struct dp_soc *soc, qdf_nbuf_t nbuf)
 	uint32_t pkt_len = 0;
 	uint8_t *rx_tlv_hdr;
 	uint32_t frame_mask = FRAME_MASK_IPV4_ARP | FRAME_MASK_IPV4_DHCP |
-				FRAME_MASK_IPV4_EAPOL | FRAME_MASK_IPV6_DHCP;
+			      FRAME_MASK_IPV4_EAPOL | FRAME_MASK_IPV6_DHCP |
+			      FRAME_MASK_DNS_QUERY | FRAME_MASK_DNS_RESP;
+
 	bool is_special_frame = false;
 	struct dp_peer *peer = NULL;
 

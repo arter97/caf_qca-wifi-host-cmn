@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -284,18 +284,18 @@ void dp_mon_filter_h2t_setup(struct dp_soc *soc, struct dp_pdev *pdev,
 }
 
 /**
- * dp_mon_is_lpc_mode() - Check if it's local packets capturing mode
+ * dp_mon_skip_filter_config() - Check if filter config need to be skipped
  * @soc: DP soc context
  *
  * Return: true if yes, false if not
  */
 static inline
-bool dp_mon_is_lpc_mode(struct dp_soc *soc)
+bool dp_mon_skip_filter_config(struct dp_soc *soc)
 {
 	if (soc->cdp_soc.ol_ops->get_con_mode &&
 	    soc->cdp_soc.ol_ops->get_con_mode() ==
 	    QDF_GLOBAL_MISSION_MODE &&
-	    wlan_cfg_get_local_pkt_capture(soc->wlan_cfg_ctx))
+	    !(QDF_MONITOR_FLAG_OTHER_BSS & soc->mon_flags))
 		return true;
 	else
 		return false;
@@ -313,7 +313,7 @@ dp_mon_ht2_rx_ring_cfg(struct dp_soc *soc,
 	uint32_t target_type = hal_get_target_type(soc->hal_soc);
 
 	if (srng_type == DP_MON_FILTER_SRNG_TYPE_RXDMA_BUF &&
-	    dp_mon_is_lpc_mode(soc)) {
+	    dp_mon_skip_filter_config(soc)) {
 		dp_mon_filter_info("skip rxdma_buf filter cfg for lpc mode");
 		return QDF_STATUS_SUCCESS;
 	}
@@ -997,6 +997,7 @@ static void dp_mon_reset_local_pkt_capture_rx_filter(struct dp_pdev *pdev)
 
 	filter.valid = true;
 	mon_pdev->filter[mode][srng_type] = filter;
+	dp_mon_pdev_filter_init(mon_pdev);
 }
 
 QDF_STATUS dp_mon_start_local_pkt_capture(struct cdp_soc_t *cdp_soc,

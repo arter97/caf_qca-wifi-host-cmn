@@ -868,6 +868,12 @@ struct hal_srng {
 
 	/* srng specific delayed write stats */
 	struct hal_reg_write_srng_stats wstats;
+
+	union {
+		uint32_t updated_hp;
+		uint32_t updated_tp;
+	};
+	uint32_t force_cnt;
 #endif
 #ifdef WLAN_DP_SRNG_USAGE_WM_TRACKING
 	struct hal_srng_high_wm_info high_wm;

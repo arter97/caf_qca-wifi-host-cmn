@@ -316,6 +316,24 @@ static void mlo_free_copied_conn_req(struct wlan_mlo_sta *sta_ctx)
 }
 
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+int mlo_mgr_get_per_link_chan_info(struct wlan_objmgr_vdev *vdev, int link_id,
+				   struct wlan_channel *chan_info)
+{
+	struct mlo_link_info *ml_link_info;
+
+	ml_link_info = mlo_mgr_get_ap_link_by_link_id(vdev->mlo_dev_ctx,
+						      link_id);
+	if (!ml_link_info) {
+		mlo_debug("ml_link_info null for link_id: %d", link_id);
+		return -EINVAL;
+	}
+
+	qdf_mem_copy(chan_info, ml_link_info->link_chan_info,
+		     sizeof(*chan_info));
+
+	return 0;
+}
+
 static QDF_STATUS
 mlo_validate_connect_req(struct wlan_objmgr_vdev *vdev,
 			 struct wlan_mlo_dev_context *mlo_dev_ctx,
@@ -891,26 +909,21 @@ mlo_prepare_and_send_connect(struct wlan_objmgr_vdev *vdev,
  * mlo_send_link_connect- Create/Issue the connection on secondary link
  *
  * @vdev: vdev pointer
- * @mlo_dev_ctx: ml dev context
- * @assoc_rsp: assoc response
- * @ml_parnter_info: ml partner link info
+ * @resp: Connection resp of assoc VDEV
  *
  * Return: none
  */
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
-static void
-mlo_send_link_connect(struct wlan_objmgr_vdev *vdev,
-		      struct wlan_mlo_dev_context *mlo_dev_ctx,
-		      struct element_info *assoc_rsp,
-		      struct mlo_partner_info *ml_parnter_info)
+static void mlo_send_link_connect(struct wlan_objmgr_vdev *vdev,
+				  struct wlan_cm_connect_resp *resp)
 {
 	/* Create the secondary interface, Send keys if the last link */
-	QDF_STATUS status;
 	uint8_t i, partner_idx = 0;
 	struct wlan_ssid ssid = {0};
 	struct wlan_objmgr_vdev *wlan_vdev_list[WLAN_UMAC_MLO_MAX_VDEVS];
 	uint16_t vdev_count = 0;
-	struct qdf_mac_addr mld_addr;
+	struct wlan_mlo_dev_context *mlo_dev_ctx = vdev->mlo_dev_ctx;
+	struct mlo_partner_info *ml_parnter_info = &resp->ml_parnter_info;
 
 	mlo_debug("Sending link connect on partner interface");
 	wlan_vdev_mlme_get_ssid(
@@ -923,10 +936,6 @@ mlo_send_link_connect(struct wlan_objmgr_vdev *vdev,
 	}
 
 	if(wlan_vdev_mlme_is_mlo_link_vdev(vdev))
-		return;
-
-	status = wlan_vdev_get_bss_peer_mld_mac(vdev, &mld_addr);
-	if (QDF_IS_STATUS_ERROR(status))
 		return;
 
 	mlo_sta_get_vdev_list(vdev, &vdev_count, wlan_vdev_list);
@@ -947,22 +956,21 @@ mlo_send_link_connect(struct wlan_objmgr_vdev *vdev,
 				wlan_vdev_list[i],
 				*ml_parnter_info,
 				ml_parnter_info->partner_link_info[partner_idx],
-				ssid, &mld_addr);
+				ssid, &resp->mld_addr);
 		mlo_update_connected_links(wlan_vdev_list[i], 1);
 		partner_idx++;
 		mlo_release_vdev_ref(wlan_vdev_list[i]);
 	}
 }
 #else
-static void
-mlo_send_link_connect(struct wlan_objmgr_vdev *vdev,
-		      struct wlan_mlo_dev_context *mlo_dev_ctx,
-		      struct element_info *assoc_rsp,
-		      struct mlo_partner_info *ml_parnter_info)
+static void mlo_send_link_connect(struct wlan_objmgr_vdev *vdev,
+				  struct wlan_cm_connect_resp *resp)
 {
 	struct wlan_ssid ssid = {0};
 	uint8_t i = 0;
 	uint8_t j = 0;
+	struct wlan_mlo_dev_context *mlo_dev_ctx = vdev->mlo_dev_ctx;
+	struct mlo_partner_info *ml_parnter_info = &resp->ml_parnter_info;
 
 	if (!ml_parnter_info->num_partner_links) {
 		mlo_err("No partner info in connect resp");
@@ -1315,9 +1323,7 @@ void mlo_sta_link_connect_notify(struct wlan_objmgr_vdev *vdev,
 			mlo_update_connected_links_bmap(mlo_dev_ctx,
 							rsp->ml_parnter_info);
 		}
-		mlo_send_link_connect(vdev, mlo_dev_ctx,
-				      &rsp->connect_ies.assoc_rsp,
-				      &rsp->ml_parnter_info);
+		mlo_send_link_connect(vdev, rsp);
 	}
 }
 
@@ -2005,9 +2011,16 @@ QDF_STATUS mlo_sta_handle_csa_standby_link(
 	struct mlo_link_info *link_info;
 	struct mlo_link_bss_params params = {0};
 	struct wlan_objmgr_psoc *psoc;
+	struct wlan_objmgr_pdev *pdev;
 
 	if (!mlo_dev_ctx) {
 		mlo_err("invalid mlo_dev_ctx");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	pdev = wlan_vdev_get_pdev(vdev);
+	if (!pdev) {
+		mlo_err("null pdev");
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
@@ -2031,7 +2044,7 @@ QDF_STATUS mlo_sta_handle_csa_standby_link(
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
-	mlo_mgr_update_csa_link_info(mlo_dev_ctx, csa_param, link_id);
+	mlo_mgr_update_csa_link_info(pdev, mlo_dev_ctx, csa_param, link_id);
 
 	params.link_id = link_info->link_id;
 	params.chan = qdf_mem_malloc(sizeof(struct wlan_channel));

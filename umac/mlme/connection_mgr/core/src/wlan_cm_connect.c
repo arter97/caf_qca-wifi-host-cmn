@@ -50,6 +50,7 @@
 #ifdef CONNECTIVITY_DIAG_EVENT
 #include "wlan_connectivity_logging.h"
 #endif
+#include "wlan_mlme_api.h"
 
 void
 cm_fill_failure_resp_from_cm_id(struct cnx_mgr *cm_ctx,
@@ -247,6 +248,17 @@ static QDF_STATUS cm_ser_connect_req(struct wlan_objmgr_pdev *pdev,
 	enum wlan_serialization_status ser_cmd_status;
 	QDF_STATUS status;
 	uint8_t vdev_id = wlan_vdev_get_id(cm_ctx->vdev);
+
+	if (cm_is_link_switch_connect_req(cm_req)) {
+		/*
+		 * For link switch, connect serialization is not required as
+		 * link switch is already serialized.
+		 */
+		return cm_sm_deliver_event_sync(cm_ctx,
+						WLAN_CM_SM_EV_CONNECT_ACTIVE,
+						sizeof(wlan_cm_id),
+						&cm_req->cm_id);
+	}
 
 	status = wlan_objmgr_vdev_try_get_ref(cm_ctx->vdev, WLAN_MLME_CM_ID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -1012,8 +1024,11 @@ static bool cm_is_retry_with_same_candidate(struct cnx_mgr *cm_ctx,
 	is_mlo_vdev = wlan_vdev_mlme_is_mlo_vdev(cm_ctx->vdev);
 	mlo_link_num = wlan_mlme_get_sta_mlo_conn_max_num(psoc);
 
-	/* Try once again for the invalid PMKID case without PMKID */
-	if (resp->status_code == STATUS_INVALID_PMKID)
+	/* Try once again for the invalid PMKID case without PMKID or
+	 * Association request rejected temporarily; try again later
+	*/
+	if (resp->status_code == STATUS_INVALID_PMKID ||
+	    resp->status_code == STATUS_ASSOC_REJECTED_TEMPORARILY)
 		goto use_same_candidate;
 
 	sae_connection = key_mgmt & (1 << WLAN_CRYPTO_KEY_MGMT_SAE |
@@ -1435,10 +1450,77 @@ static QDF_STATUS cm_update_mlo_filter(struct wlan_objmgr_pdev *pdev,
 
 	return QDF_STATUS_SUCCESS;
 }
+
+static QDF_STATUS cm_remove_mbssid_links_without_scan_entry(
+						qdf_list_t *candidate_list)
+{
+	struct scan_cache_node *scan_node = NULL;
+	struct scan_cache_entry *partner_entry = NULL, *scan_entry = NULL;
+	qdf_list_node_t *cur_node = NULL, *next_node = NULL;
+	struct partner_link_info *partner_info;
+	struct qdf_mac_addr *mld_addr;
+	uint8_t i = 0;
+
+	if (qdf_list_peek_front(candidate_list,
+				&cur_node) != QDF_STATUS_SUCCESS) {
+		mlme_err("Failed to dequeue");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	while (cur_node) {
+		qdf_list_peek_next(candidate_list, cur_node, &next_node);
+		scan_node = qdf_container_of(cur_node, struct scan_cache_node,
+					     node);
+		scan_entry = scan_node->entry;
+		mld_addr = util_scan_entry_mldaddr(scan_entry);
+
+		if (!scan_entry->mbssid_info.profile_num || !mld_addr)
+			goto next_entry;
+
+		/*
+		 *  Mark the links of an MBSSID partner as invalid if there
+		 *  is no scan entry for the link at the time of the candidate
+		 *  selection.
+		 *
+		 *  For MBSSID candidates, ML-probe request would not be sent,
+		 *  during join phase, therefore the scan entry would not be
+		 *  created anytime before the association.
+		 *
+		 */
+		for (i = 0; i < scan_entry->ml_info.num_links; i++) {
+			if (!scan_entry->ml_info.link_info[i].is_valid_link)
+				continue;
+
+			partner_info = &scan_entry->ml_info.link_info[i];
+			partner_entry = cm_get_entry(candidate_list,
+						     &partner_info->link_addr);
+
+			if (!partner_entry ||
+			    !qdf_is_macaddr_equal(mld_addr,
+						  &partner_entry->ml_info.mld_mac_addr)) {
+				scan_entry->ml_info.link_info[i].is_valid_link = false;
+				mlme_debug("Scan entry is not present for link idx %d, drop the link",
+					   scan_entry->ml_info.link_info[i].link_id);
+			}
+		}
+next_entry:
+		cur_node = next_node;
+		next_node = NULL;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
 #else
 static QDF_STATUS cm_update_mlo_filter(struct wlan_objmgr_pdev *pdev,
 				       struct cm_connect_req *cm_req,
 				       struct scan_filter *filter)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS cm_remove_mbssid_links_without_scan_entry(
+						qdf_list_t *candidate_list)
 {
 	return QDF_STATUS_SUCCESS;
 }
@@ -1496,6 +1578,10 @@ cm_connect_fetch_candidates(struct wlan_objmgr_pdev *pdev,
 			   CM_PREFIX_REF(vdev_id, cm_req->cm_id), num_bss);
 	}
 	*num_bss_found = num_bss;
+
+	if (num_bss && !wlan_vdev_mlme_is_mlo_link_vdev(cm_ctx->vdev))
+		cm_remove_mbssid_links_without_scan_entry(candidate_list);
+
 	op_mode = wlan_vdev_mlme_get_opmode(cm_ctx->vdev);
 	if (num_bss && op_mode == QDF_STA_MODE &&
 	    !cm_req->req.is_non_assoc_link)
@@ -1862,17 +1948,7 @@ QDF_STATUS cm_connect_start(struct cnx_mgr *cm_ctx,
 		return QDF_STATUS_SUCCESS;
 	}
 
-	if (cm_is_link_switch_connect_req(cm_req)) {
-		/* The error handling has to be different here.not corresponds
-		 * to connect req serialization now.
-		 */
-		status = cm_sm_deliver_event_sync(cm_ctx,
-						  WLAN_CM_SM_EV_CONNECT_ACTIVE,
-						  sizeof(wlan_cm_id),
-						  &cm_req->cm_id);
-	} else {
-		status = cm_ser_connect_req(pdev, cm_ctx, cm_req);
-	}
+	status = cm_ser_connect_req(pdev, cm_ctx, cm_req);
 
 	if (QDF_IS_STATUS_ERROR(status)) {
 		reason = CM_SER_FAILURE;
@@ -2704,8 +2780,6 @@ static void cm_update_partner_link_scan_db(struct cnx_mgr *cm_ctx,
 		 * ageing out.
 		 */
 		if (!qdf_is_macaddr_equal(&bss->bssid, &cur_bss->bssid) &&
-		    bss->ml_info.num_links &&
-		    cur_bss->ml_info.num_links &&
 		    qdf_is_macaddr_equal(&bss->ml_info.mld_mac_addr,
 					 &cur_bss->ml_info.mld_mac_addr)) {
 			mlme_debug(CM_PREFIX_FMT "Inform Partner bssid: " QDF_MAC_ADDR_FMT " to kernel",
@@ -2952,26 +3026,33 @@ static void cm_update_link_channel_info(struct wlan_objmgr_vdev *vdev,
 	uint8_t link_id;
 	struct wlan_objmgr_pdev *pdev;
 	struct scan_cache_entry *cache_entry;
-	struct wlan_channel channel;
+	struct wlan_channel channel = {0};
 
 	pdev = wlan_vdev_get_pdev(vdev);
-
 	cache_entry = wlan_scan_get_scan_entry_by_mac_freq(pdev, mac_addr,
 							   freq);
 	if (!cache_entry) {
 		mlme_debug("not found the mac_addr from scan entry");
 		return;
 	}
-	link_id = wlan_vdev_get_link_id(vdev);
 
+	link_id = wlan_vdev_get_link_id(vdev);
 	channel.ch_freq = cache_entry->channel.chan_freq;
 	channel.ch_ieee = wlan_reg_freq_to_chan(pdev, channel.ch_freq);
 	channel.ch_phymode = cache_entry->phy_mode;
 	channel.ch_cfreq1 = cache_entry->channel.cfreq0;
 	channel.ch_cfreq2 = cache_entry->channel.cfreq1;
+	channel.ch_width =
+		wlan_mlme_get_ch_width_from_phymode(cache_entry->phy_mode);
+	/*
+	 * Supplicant needs non zero center_freq1 in case of 20 MHz connection
+	 * also as a response of get_channel request. In case of 20 MHz channel
+	 * width central frequency is same as channel frequency
+	 */
+	if (channel.ch_width == CH_WIDTH_20MHZ)
+		channel.ch_cfreq1 = channel.ch_freq;
 
 	util_scan_free_cache_entry(cache_entry);
-
 	mlo_mgr_update_ap_channel_info(vdev, link_id, (uint8_t *)mac_addr,
 				       channel);
 }

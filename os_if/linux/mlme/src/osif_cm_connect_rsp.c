@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015, 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -462,7 +462,10 @@ osif_get_chan_bss_from_kernel(struct wlan_objmgr_vdev *vdev,
 					    rsp_link_info->link_addr.bytes,
 					    rsp->ssid.ssid, rsp->ssid.length);
 	if (!partner_bss) {
-		osif_err("could not fetch partner bss from kernel");
+		osif_err("could not fetch partner bss from kernel vdev id %d freq %d ssid:" QDF_SSID_FMT " and BSSID " QDF_MAC_ADDR_FMT,
+			 wlan_vdev_get_id(vdev), rsp_link_info->chan_freq,
+			 QDF_SSID_REF(rsp->ssid.length, rsp->ssid.ssid),
+			 QDF_MAC_ADDR_REF(rsp->bssid.bytes));
 		return NULL;
 	}
 
@@ -488,11 +491,14 @@ void osif_populate_connect_response_for_link(struct wlan_objmgr_vdev *vdev,
 					     uint8_t *link_addr,
 					     struct cfg80211_bss *bss)
 {
-	osif_debug("Link_id :%d", link_id);
-	conn_rsp_params->valid_links |=  BIT(link_id);
-	conn_rsp_params->links[link_id].bssid = bss->bssid;
-	conn_rsp_params->links[link_id].bss = bss;
-	conn_rsp_params->links[link_id].addr = link_addr;
+	if (bss) {
+		osif_debug("Link_id :%d", link_id);
+		conn_rsp_params->valid_links |=  BIT(link_id);
+		conn_rsp_params->links[link_id].bssid = bss->bssid;
+		conn_rsp_params->links[link_id].bss = bss;
+		conn_rsp_params->links[link_id].addr = link_addr;
+	}
+
 	mlo_mgr_osif_update_connect_info(vdev, link_id);
 }
 
@@ -543,8 +549,6 @@ osif_populate_partner_links_mlo_params(struct wlan_objmgr_vdev *vdev,
 
 		bss = osif_get_chan_bss_from_kernel(vdev, rsp_partner_info,
 						    rsp);
-		if (!bss)
-			continue;
 
 		osif_populate_connect_response_for_link(vdev, conn_rsp_params,
 							link_id,

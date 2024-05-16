@@ -107,47 +107,6 @@ util_gen_link_assoc_rsp(uint8_t *frame, qdf_size_t frame_len, bool isreassoc,
 			qdf_size_t *link_frame_len);
 
 /**
- * util_gen_link_probe_rsp_from_assoc_rsp() - Generate link specific
- * probe response from assoc response.
- * @frame: Pointer to original association response. This should not contain the
- * 802.11 header, and must start from the fixed fields in the association
- * response. This is required due to some caller semantics built into the end to
- * end design.
- * @frame_len: Length of original association response
- * @link_id: Link ID for secondary links
- * @link_addr: Secondary link's MAC address
- * @link_frame: Generated secondary link specific association response. Note
- * that this will start from the 802.11 header (unlike the original association
- * response). This should be ignored in the case of failure.
- * @link_frame_maxsize: Maximum size of generated secondary link specific
- * association response
- * @link_frame_len: Pointer to location where populated length of generated
- * secondary link specific association response should be written. This should
- * be ignored in the case of failure.
- * @bcn_prb_ptr: Pointer to probe response of the current link on which assoc
- * response is received, This should not contain the 802.11 header, and must
- * start from the fixed fields in the probe response.
- * @bcn_prb_len: Length of probe response of @bcn_prb_ptr.
- *
- * Generate a link specific logically equivalent probe response for the
- * secondary link from the original association response containing a Multi-Link
- * element.
- * Currently, only two link MLO is supported.
- *
- * Return: QDF_STATUS_SUCCESS in the case of success, QDF_STATUS value giving
- * the reason for error in the case of failure.
- */
-QDF_STATUS
-util_gen_link_probe_rsp_from_assoc_rsp(uint8_t *frame, qdf_size_t frame_len,
-				       uint8_t link_id,
-				       struct qdf_mac_addr link_addr,
-				       uint8_t *link_frame,
-				       qdf_size_t link_frame_maxsize,
-				       qdf_size_t *link_frame_len,
-				       uint8_t *bcn_prb_ptr,
-				       qdf_size_t bcn_prb_len);
-
-/**
  * util_gen_link_probe_rsp() - Generate link specific probe response
  * @frame: Pointer to original probe response. This should not contain the
  * 802.11 header, and must start from the fixed fields in the probe
@@ -635,19 +594,6 @@ util_gen_link_assoc_rsp(uint8_t *frame, qdf_size_t frame_len, bool isreassoc,
 			uint8_t *link_frame,
 			qdf_size_t link_frame_maxsize,
 			qdf_size_t *link_frame_len)
-{
-	return QDF_STATUS_E_NOSUPPORT;
-}
-
-static inline QDF_STATUS
-util_gen_link_probe_rsp_from_assoc_rsp(uint8_t *frame, qdf_size_t frame_len,
-				       uint8_t link_id,
-				       struct qdf_mac_addr link_addr,
-				       uint8_t *link_frame,
-				       qdf_size_t link_frame_maxsize,
-				       qdf_size_t *link_frame_len,
-				       uint8_t *bcn_prb_ptr,
-				       qdf_size_t bcn_prb_len)
 {
 	return QDF_STATUS_E_NOSUPPORT;
 }

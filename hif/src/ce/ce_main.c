@@ -2273,9 +2273,16 @@ uint32_t hif_ce_count_max = CE_COUNT_MAX;
 #define CE_DESC_HISTORY_BUFF_CNT  CE_COUNT_MAX
 #define IS_CE_DEBUG_ONLY_FOR_CRIT_CE  0
 #else
+
+#ifdef QCA_WIFI_SUPPORT_SRNG
+/* Enable CE-1 history only on targets not using CE-1 for datapath */
+#define CE_DESC_HISTORY_BUFF_CNT  4
+#define IS_CE_DEBUG_ONLY_FOR_CRIT_CE (BIT(1) | BIT(2) | BIT(3) | BIT(7))
+#else
 /* CE2, CE3, CE7 */
 #define CE_DESC_HISTORY_BUFF_CNT  3
 #define IS_CE_DEBUG_ONLY_FOR_CRIT_CE (BIT(2) | BIT(3) | BIT(7))
+#endif /* QCA_WIFI_SUPPORT_SRNG */
 #endif
 bool hif_ce_only_for_crit = IS_CE_DEBUG_ONLY_FOR_CRIT_CE;
 struct hif_ce_desc_event
@@ -2319,7 +2326,7 @@ static struct hif_ce_desc_event *
 		  ce_id, IS_CE_DEBUG_ONLY_FOR_CRIT_CE,
 		  ce_hist->ce_id_hist_map[ce_id]);
 	if (IS_CE_DEBUG_ONLY_FOR_CRIT_CE &&
-	    (ce_id == CE_ID_2 || ce_id == CE_ID_3 || ce_id == CE_ID_7)) {
+	    (IS_CE_DEBUG_ONLY_FOR_CRIT_CE & BIT(ce_id))) {
 		uint8_t idx = ce_hist->ce_id_hist_map[ce_id];
 
 		hif_ce_desc_history[ce_id] = hif_ce_desc_history_buff[idx];
@@ -2347,9 +2354,7 @@ alloc_mem_ce_debug_history(struct hif_softc *scn, unsigned int ce_id,
 
 	/* For perf build, return directly for non ce2/ce3 */
 	if (IS_CE_DEBUG_ONLY_FOR_CRIT_CE &&
-	    ce_id != CE_ID_2 &&
-	    ce_id != CE_ID_3 &&
-	    ce_id != CE_ID_7) {
+	    !(IS_CE_DEBUG_ONLY_FOR_CRIT_CE & BIT(ce_id))) {
 		ce_hist->enable[ce_id] = false;
 		ce_hist->data_enable[ce_id] = false;
 		return QDF_STATUS_SUCCESS;

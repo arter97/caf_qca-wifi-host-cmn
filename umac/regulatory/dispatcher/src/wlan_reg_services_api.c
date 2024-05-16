@@ -769,6 +769,16 @@ QDF_STATUS wlan_reg_get_phybitmap(struct wlan_objmgr_pdev *pdev,
 	return reg_get_phybitmap(pdev, phybitmap);
 }
 
+#ifdef WLAN_FEATURE_11BE
+bool wlan_reg_phybitmap_support_11be(struct wlan_objmgr_pdev *pdev)
+{
+	enum reg_phymode cur_max_phymode;
+
+	cur_max_phymode = reg_get_max_phymode(pdev, REG_PHYMODE_MAX - 1, 0);
+	return (cur_max_phymode == REG_PHYMODE_11BE);
+}
+#endif
+
 bool wlan_reg_is_11d_scan_inprogress(struct wlan_objmgr_psoc *psoc)
 {
 	return reg_is_11d_scan_inprogress(psoc);
@@ -1488,7 +1498,7 @@ wlan_reg_get_5g_bonded_channel_and_state_for_pwrmode(
 
 qdf_export_symbol(wlan_reg_get_5g_bonded_channel_and_state_for_pwrmode);
 
-#if defined(WLAN_FEATURE_11BE) && defined(CONFIG_REG_CLIENT)
+#if defined(CONFIG_REG_CLIENT)
 enum channel_state
 wlan_reg_get_bonded_channel_state_for_pwrmode(struct wlan_objmgr_pdev *pdev,
 					      qdf_freq_t freq,
