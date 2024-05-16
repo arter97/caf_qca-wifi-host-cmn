@@ -6128,7 +6128,8 @@ dp_ch_band_lmac_id_mapping_init(struct dp_pdev *pdev)
 	}
 }
 
-#ifdef FEATURE_ML_MONITOR_MODE_SUPPORT
+#if defined(FEATURE_ML_MONITOR_MODE_SUPPORT) || \
+	defined(FEATURE_ML_LOCAL_PKT_CAPTURE)
 static inline void
 dp_init_mon_chan_band(struct dp_mon_pdev *mon_pdev)
 {
