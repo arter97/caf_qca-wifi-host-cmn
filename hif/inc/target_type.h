@@ -119,6 +119,11 @@ extern "C" {
 #define TARGET_TYPE_WCN7750	40
 #endif
 
+/* Marina */
+#ifndef TARGET_TYPE_QCA5424
+#define TARGET_TYPE_QCA5424   41
+#endif
+
 #ifdef __cplusplus
 }
 #endif
