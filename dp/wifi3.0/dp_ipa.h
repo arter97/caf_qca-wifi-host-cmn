@@ -93,7 +93,15 @@ struct dp_ipa_uc_rx_hdr {
 #define DP_IPA_UC_WLAN_TX_HDR_LEN      sizeof(struct dp_ipa_uc_tx_hdr)
 #define DP_IPA_UC_WLAN_TX_VLAN_HDR_LEN sizeof(struct dp_ipa_uc_tx_vlan_hdr)
 #define DP_IPA_UC_WLAN_RX_HDR_LEN      sizeof(struct dp_ipa_uc_rx_hdr)
-#if defined(QCA_WIFI_QCA6490)
+
+#if defined(QCA_WIFI_KIWI_V2)
+/* GSI FW is able to selectively parse TLV fields instead of parsing the
+ * whole contiguous fields. This means we can indicate header length with
+ * below format.
+ * 2 dwords (rx_mdsu_end[11:10]) + 1 dword (rx_mpdu_start[11]) + <L2 header>.
+ */
+#define DP_IPA_UC_WLAN_RX_HDR_LEN_AST 26
+#elif defined(QCA_WIFI_QCA6490)
 /* 36 <bytes of rx_msdu_end_tlv> + 16 <bytes of attn tlv> +
  * 52 <bytes of rx_mpdu_start_tlv> + <L2 Header>
  */
@@ -105,7 +113,7 @@ struct dp_ipa_uc_rx_hdr {
 #define DP_IPA_UC_WLAN_RX_HDR_LEN_AST  110
 #endif
 
-#define DP_IPA_UC_WLAN_RX_HDR_LEN_AST_VLAN 114
+#define DP_IPA_UC_WLAN_RX_HDR_LEN_AST_VLAN (DP_IPA_UC_WLAN_RX_HDR_LEN_AST + 4)
 #define DP_IPA_UC_WLAN_HDR_DES_MAC_OFFSET	0
 
 #define DP_IPA_HDL_INVALID	0xFF
