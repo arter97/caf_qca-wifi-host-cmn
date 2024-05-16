@@ -1343,7 +1343,7 @@ QDF_STATUS dp_wbm_get_rx_desc_from_hal_desc_be(struct dp_soc *soc,
 					       struct dp_rx_desc **r_rx_desc)
 {
 	/* SW do cookie conversion */
-	uint32_t cookie = HAL_RX_WBM_COMP_BUF_COOKIE_GET(ring_desc);
+	uint32_t cookie = HAL_RX_BUF_COOKIE_GET(ring_desc);
 
 	*r_rx_desc = (struct dp_rx_desc *)
 			dp_cc_desc_find(soc, cookie);
