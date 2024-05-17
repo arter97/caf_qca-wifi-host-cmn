@@ -648,6 +648,16 @@ struct cdp_mscs_params {
 #endif
 
 /**
+ * enum cdp_peer_event - Peer events
+ * @CDP_PEER_EVENT_MAP: Peer map event
+ * @CDP_PEER_EVENT_UNMAP: Peer unmap event
+ */
+enum cdp_peer_event {
+	CDP_PEER_EVENT_MAP,
+	CDP_PEER_EVENT_UNMAP,
+};
+
+/**
  * struct cdp_ds_vp_params - Direct Switch related params
  * @dev: Net device
  * @peer_id: peer id

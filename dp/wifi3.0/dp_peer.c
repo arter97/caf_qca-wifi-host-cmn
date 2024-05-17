@@ -2731,6 +2731,30 @@ static inline struct dp_peer *dp_peer_find_add_id(struct dp_soc *soc,
 	return NULL;
 }
 
+#ifdef WLAN_DP_FEATURE_STC
+static inline QDF_STATUS
+__dp_peer_event_notify(struct dp_soc *soc, enum cdp_peer_event event,
+		       uint16_t peer_id, uint8_t vdev_id,
+		       uint8_t *peer_mac_addr)
+{
+	if (!soc->cdp_soc.ol_ops->dp_peer_event_notify)
+		return QDF_STATUS_SUCCESS;
+
+	return soc->cdp_soc.ol_ops->dp_peer_event_notify(dp_soc_to_cdp_soc_t(soc),
+							 event, peer_id,
+							 vdev_id,
+							 peer_mac_addr);
+}
+#else
+static inline QDF_STATUS
+__dp_peer_event_notify(struct dp_soc *soc, enum cdp_peer_event event,
+		       uint16_t peer_id, uint8_t vdev_id,
+		       uint8_t *peer_mac_addr)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 #ifdef WLAN_FEATURE_11BE_MLO
 #ifdef DP_USE_REDUCED_PEER_ID_FIELD_WIDTH
 uint16_t dp_gen_ml_peer_id(struct dp_soc *soc, uint16_t peer_id)
@@ -2836,6 +2860,9 @@ dp_rx_mlo_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 						   DP_NON_QOS_TID,
 						   peer->rx_tid[DP_NON_QOS_TID].hw_qdesc_paddr);
 		}
+
+		__dp_peer_event_notify(soc, CDP_PEER_EVENT_MAP, peer->peer_id,
+				       peer->vdev->vdev_id, peer->mac_addr.raw);
 	}
 
 	if (!primary_soc)
@@ -3014,6 +3041,8 @@ dp_rx_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 			}
 		}
 
+		__dp_peer_event_notify(soc, CDP_PEER_EVENT_MAP, peer->peer_id,
+				       peer->vdev->vdev_id, peer->mac_addr.raw);
 		err = dp_peer_map_ast(soc, peer, peer_mac_addr, hw_peer_id,
 				      vdev_id, ast_hash, is_wds);
 	}
@@ -3155,6 +3184,8 @@ dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 
 	dp_update_vdev_stats_on_peer_unmap(vdev, peer);
 
+	__dp_peer_event_notify(soc, CDP_PEER_EVENT_UNMAP, peer->peer_id,
+			       peer->vdev->vdev_id, peer->mac_addr.raw);
 	dp_peer_update_state(soc, peer, DP_PEER_STATE_INACTIVE);
 	dp_peer_unref_delete(peer, DP_MOD_ID_HTT);
 	/*
@@ -4123,6 +4154,7 @@ void dp_get_info_by_peer_mac(struct cdp_soc_t *soc_hdl,
 			     struct cdp_peer_output_param *param)
 {
 	param->vdev_id = vdev_id;
+	param->peer_id = 0xFFFF;
 	dp_get_peer_details(soc_hdl, vdev_id, peer_mac, param, false);
 }
 #endif

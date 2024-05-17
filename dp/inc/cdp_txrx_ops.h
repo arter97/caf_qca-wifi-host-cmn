@@ -1823,6 +1823,12 @@ void (*peer_send_wds_disconnect)(struct cdp_ctrl_objmgr_psoc *psoc,
 				      uint8_t pdev_id,
 				      enum qdf_buff_type_tx_rx buff_type);
 #endif
+#ifdef WLAN_DP_FEATURE_STC
+	QDF_STATUS (*dp_peer_event_notify)(ol_txrx_soc_handle soc,
+					   enum cdp_peer_event event,
+					   uint16_t peer_id, uint8_t vdev_id,
+					   uint8_t *peer_mac_addr);
+#endif
 };
 
 #ifdef DP_PEER_EXTENDED_API
