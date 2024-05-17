@@ -3551,6 +3551,12 @@ QDF_STATUS dp_peer_delay_stats_ctx_alloc(struct dp_soc *soc,
 			struct cdp_delay_rx_stats *rx_delay =
 			&txrx_peer->delay_stats->delay_tid_stats[tid][ctx_id].rx_delay;
 
+			tx_delay->max_window_size =
+				wlan_cfg_get_dp_stats_max_window_size(
+							soc->wlan_cfg_ctx);
+			tx_delay->max_pkt_per_window_size =
+				wlan_cfg_get_dp_stats_max_pkt_per_window_size(
+							soc->wlan_cfg_ctx);
 			dp_hist_init(&tx_delay->tx_swq_delay,
 				     CDP_HIST_TYPE_SW_ENQEUE_DELAY);
 			dp_hist_init(&tx_delay->hwtx_delay,

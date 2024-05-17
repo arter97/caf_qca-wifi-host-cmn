@@ -1222,6 +1222,8 @@ struct cdp_tid_stats_intf {
  * @hw_delay_win_avg: average Wifi HW delay for each window
  * @cur_win_num_pkts: number of packets processed in current window
  * @curr_win_idx: current windows index
+ * @max_window_size: Size of Max window size
+ * @max_pkt_per_window_size: Size of Max packets per window size
  */
 struct cdp_delay_tx_stats {
 	struct cdp_hist_stats    tx_swq_delay;
@@ -1239,6 +1241,9 @@ struct cdp_delay_tx_stats {
 	uint32_t cur_win_num_pkts;
 	uint32_t curr_win_idx;
 #endif
+
+	uint32_t max_window_size;
+	uint32_t max_pkt_per_window_size;
 };
 
 /**

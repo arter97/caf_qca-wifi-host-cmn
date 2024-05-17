@@ -292,6 +292,9 @@ struct wlan_srng_cfg {
  * @reo_rings_mapping:
  * @rx_rings_mapping: DP RX rings mapping mask
  * @pext_stats_enabled: Flag to enable and disabled peer extended stats
+ * @dp_stats_max_window_size: Size of Max window size for non-SAWF stats
+ * @dp_stats_max_pkt_per_window_size: Size of Max packets per window size of
+ * non-SAWF stats
  * @is_rx_buff_pool_enabled: flag to enable/disable emergency RX buffer
  *                           pool support
  * @is_rx_refill_buff_pool_enabled: flag to enable/disable RX refill buffer
@@ -510,6 +513,10 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint32_t reo_rings_mapping;
 	uint32_t rx_rings_mapping;
 	bool pext_stats_enabled;
+#if (defined(QCA_PEER_EXT_STATS) && defined(WLAN_CONFIG_TX_DELAY))
+	uint32_t dp_stats_max_window_size;
+	uint32_t dp_stats_max_pkt_per_window_size;
+#endif
 	bool is_rx_buff_pool_enabled;
 	bool is_rx_refill_buff_pool_enabled;
 	bool enable_dp_buf_page_frag_alloc;
@@ -2205,6 +2212,28 @@ uint32_t wlan_cfg_get_rx_rings_mapping(struct wlan_cfg_dp_soc_ctxt *cfg);
 void
 wlan_cfg_set_peer_ext_stats(struct wlan_cfg_dp_soc_ctxt *cfg,
 			    bool val);
+
+/**
+ * wlan_cfg_get_dp_stats_max_window_size() - Get non-SAWF DP stats maximum
+ * window size
+ *
+ * @cfg: soc configuration context
+ *
+ * Return: Maximum window size
+ */
+uint32_t
+wlan_cfg_get_dp_stats_max_window_size(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_get_dp_stats_max_pkt_per_window_size() - Get non-SAWF DP stats
+ * maximum packets per window size
+ *
+ * @cfg: soc configuration context
+ *
+ * Return: Size of maximum packets per window
+ */
+uint32_t
+wlan_cfg_get_dp_stats_max_pkt_per_window_size(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
  * wlan_cfg_set_peer_jitter_stats() - set peer jitter stats

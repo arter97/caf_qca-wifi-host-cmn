@@ -3636,6 +3636,53 @@ void wlan_cfg_fill_interrupt_mask(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
 }
 #endif
 
+#if (defined(QCA_PEER_EXT_STATS) && defined(WLAN_CONFIG_TX_DELAY))
+/**
+ * wlan_soc_dp_stats_max_window_attach() - Updates maximum window size value
+ * @psoc: object manager psoc
+ * @wlan_cfg_ctx: dp soc cfg ctx
+ *
+ * Return: None
+ */
+static void
+wlan_soc_dp_stats_max_window_attach(struct cdp_ctrl_objmgr_psoc *psoc,
+				    struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
+{
+	wlan_cfg_ctx->dp_stats_max_window_size =
+			cfg_get(psoc, CFG_DP_STATS_MAX_WINDOW_SIZE);
+}
+
+/**
+ * wlan_soc_dp_stats_max_pkt_per_window_attach() - Updates maximum packet size
+ * value per window
+ * @psoc: object manager psoc
+ * @wlan_cfg_ctx: dp soc cfg ctx
+ *
+ * Return: None
+ */
+static void
+wlan_soc_dp_stats_max_pkt_per_window_attach(
+				struct cdp_ctrl_objmgr_psoc *psoc,
+				struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
+{
+	wlan_cfg_ctx->dp_stats_max_pkt_per_window_size =
+			cfg_get(psoc, CFG_DP_STATS_MAX_PKT_PER_WINDOW_SIZE);
+}
+#else
+static void
+wlan_soc_dp_stats_max_window_attach(struct cdp_ctrl_objmgr_psoc *psoc,
+				    struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
+{
+}
+
+static void
+wlan_soc_dp_stats_max_pkt_per_window_attach(
+				struct cdp_ctrl_objmgr_psoc *psoc,
+				struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
+{
+}
+#endif
+
 #ifdef IPA_OFFLOAD
 
 #define WLAN_CFG_IPA_ENABLE_MASK BIT(0)
@@ -4288,6 +4335,8 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	/* TODO: add INI item for RX RINGS MAPPING in RHINE */
 	wlan_cfg_ctx->rx_rings_mapping = 0x7;
 	wlan_cfg_ctx->pext_stats_enabled = cfg_get(psoc, CFG_DP_PEER_EXT_STATS);
+	wlan_soc_dp_stats_max_window_attach(psoc, wlan_cfg_ctx);
+	wlan_soc_dp_stats_max_pkt_per_window_attach(psoc, wlan_cfg_ctx);
 	wlan_cfg_ctx->is_rx_buff_pool_enabled =
 			cfg_get(psoc, CFG_DP_RX_BUFF_POOL_ENABLE);
 	wlan_cfg_ctx->is_rx_refill_buff_pool_enabled =
@@ -4546,6 +4595,8 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 		cfg_get(psoc, CFG_DP_RXDMA_MONITOR_RX_DROP_THRESHOLD);
 	wlan_cfg_ctx->reo_rings_mapping = cfg_get(psoc, CFG_DP_REO_RINGS_MAP);
 	wlan_cfg_ctx->pext_stats_enabled = cfg_get(psoc, CFG_DP_PEER_EXT_STATS);
+	wlan_soc_dp_stats_max_window_attach(psoc, wlan_cfg_ctx);
+	wlan_soc_dp_stats_max_pkt_per_window_attach(psoc, wlan_cfg_ctx);
 	wlan_cfg_ctx->jitter_stats_enabled =
 			cfg_get(psoc, CFG_DP_PEER_JITTER_STATS);
 	wlan_cfg_ctx->peer_link_stats_enabled =
@@ -5601,6 +5652,32 @@ wlan_cfg_get_rx_rings_mapping(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return cfg->rx_rings_mapping;
 }
+
+#if (defined(QCA_PEER_EXT_STATS) && defined(WLAN_CONFIG_TX_DELAY))
+uint32_t
+wlan_cfg_get_dp_stats_max_window_size(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->dp_stats_max_window_size;
+}
+
+uint32_t
+wlan_cfg_get_dp_stats_max_pkt_per_window_size(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->dp_stats_max_pkt_per_window_size;
+}
+#else
+uint32_t
+wlan_cfg_get_dp_stats_max_window_size(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return 0;
+}
+
+uint32_t
+wlan_cfg_get_dp_stats_max_pkt_per_window_size(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return 0;
+}
+#endif
 
 #ifdef DP_UMAC_HW_RESET_SUPPORT
 uint32_t
