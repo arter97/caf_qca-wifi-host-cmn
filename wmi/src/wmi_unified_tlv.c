@@ -24005,6 +24005,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 				WMI_SERVICE_NAN_PAIRING_PEER_CREATE_BY_HOST;
 	wmi_service[wmi_service_sta_sap_ndp_concurrency_support] =
 				WMI_SERVICE_STA_SAP_NDP_CONCURRENCY_SUPPORT;
+	wmi_service[wmi_service_sta_p2p_ndp_conc] =
+				WMI_SERVICE_STA_P2P_NDP_CONCURRENCY_SUPPORT;
 #endif
 	wmi_service[wmi_service_therm_throt_pout_reduction] =
 			WMI_SERVICE_THERM_THROT_POUT_REDUCTION;

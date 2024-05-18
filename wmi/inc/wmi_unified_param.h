@@ -6732,6 +6732,7 @@ typedef enum {
 #ifdef WLAN_FEATURE_NAN
 	wmi_service_nan_pairing_peer_create,
 	wmi_service_sta_sap_ndp_concurrency_support,
+	wmi_service_sta_p2p_ndp_conc,
 #endif
 	wmi_service_therm_throt_pout_reduction,
 #ifdef WLAN_CHIPSET_STATS
