@@ -1214,38 +1214,37 @@ hal_txmon_parse_eht_sig_non_mumimo_user_info(void *tx_tlv, uint32_t user_id,
 					     struct hal_tx_ppdu_info *ppdu_info)
 {
 	struct hal_eht_sig_non_mu_mimo_user_info *user_info;
-	uint32_t idx = TXMON_HAL_STATUS(ppdu_info, num_eht_user_info_valid);
 
 	user_info = (struct hal_eht_sig_non_mu_mimo_user_info *)tx_tlv;
 
-	TXMON_HAL_STATUS(ppdu_info, eht_user_info[idx]) |=
+	TXMON_HAL_USER(ppdu_info, user_id, eht_user_info) |=
 		QDF_MON_STATUS_EHT_USER_STA_ID_KNOWN |
 		QDF_MON_STATUS_EHT_USER_MCS_KNOWN |
 		QDF_MON_STATUS_EHT_USER_CODING_KNOWN |
 		QDF_MON_STATUS_EHT_USER_NSS_KNOWN |
 		QDF_MON_STATUS_EHT_USER_BEAMFORMING_KNOWN;
 
-	TXMON_HAL_STATUS(ppdu_info, eht_user_info[idx]) |=
+	TXMON_HAL_USER(ppdu_info, user_id, eht_user_info) |=
 				(user_info->sta_id <<
 				 QDF_MON_STATUS_EHT_USER_STA_ID_SHIFT);
 
-	TXMON_HAL_STATUS(ppdu_info, eht_user_info[idx]) |=
+	TXMON_HAL_USER(ppdu_info, user_id, eht_user_info) |=
 				(user_info->mcs <<
 				 QDF_MON_STATUS_EHT_USER_MCS_SHIFT);
 
 	TXMON_HAL_STATUS(ppdu_info, mcs) = user_info->mcs;
 
-	TXMON_HAL_STATUS(ppdu_info, eht_user_info[idx]) |=
+	TXMON_HAL_USER(ppdu_info, user_id, eht_user_info) |=
 				(user_info->nss <<
 				 QDF_MON_STATUS_EHT_USER_NSS_SHIFT);
 
 	TXMON_HAL_STATUS(ppdu_info, nss) = user_info->nss + 1;
 
-	TXMON_HAL_STATUS(ppdu_info, eht_user_info[idx]) |=
+	TXMON_HAL_USER(ppdu_info, user_id, eht_user_info) |=
 				(user_info->beamformed <<
 				 QDF_MON_STATUS_EHT_USER_BEAMFORMING_SHIFT);
 
-	TXMON_HAL_STATUS(ppdu_info, eht_user_info[idx]) |=
+	TXMON_HAL_USER(ppdu_info, user_id, eht_user_info) |=
 				(user_info->coding <<
 				 QDF_MON_STATUS_EHT_USER_CODING_SHIFT);
 
@@ -1268,31 +1267,30 @@ hal_txmon_parse_eht_sig_mumimo_user_info(void *tx_tlv, uint32_t user_id,
 					 struct hal_tx_ppdu_info *ppdu_info)
 {
 	struct hal_eht_sig_mu_mimo_user_info *user_info;
-	uint32_t idx = TXMON_HAL_STATUS(ppdu_info, num_eht_user_info_valid);
 
 	user_info = (struct hal_eht_sig_mu_mimo_user_info *)tx_tlv;
 
-	TXMON_HAL_STATUS(ppdu_info, eht_user_info[idx]) |=
+	TXMON_HAL_USER(ppdu_info, user_id, eht_user_info) |=
 		QDF_MON_STATUS_EHT_USER_STA_ID_KNOWN |
 		QDF_MON_STATUS_EHT_USER_MCS_KNOWN |
 		QDF_MON_STATUS_EHT_USER_CODING_KNOWN |
 		QDF_MON_STATUS_EHT_USER_SPATIAL_CONFIG_KNOWN;
 
-	TXMON_HAL_STATUS(ppdu_info, eht_user_info[idx]) |=
+	TXMON_HAL_USER(ppdu_info, user_id, eht_user_info) |=
 				(user_info->sta_id <<
 				 QDF_MON_STATUS_EHT_USER_STA_ID_SHIFT);
 
-	TXMON_HAL_STATUS(ppdu_info, eht_user_info[idx]) |=
+	TXMON_HAL_USER(ppdu_info, user_id, eht_user_info) |=
 				(user_info->mcs <<
 				 QDF_MON_STATUS_EHT_USER_MCS_SHIFT);
 
 	TXMON_HAL_STATUS(ppdu_info, mcs) = user_info->mcs;
 
-	TXMON_HAL_STATUS(ppdu_info, eht_user_info[idx]) |=
+	TXMON_HAL_USER(ppdu_info, user_id, eht_user_info) |=
 				(user_info->coding <<
 				 QDF_MON_STATUS_EHT_USER_CODING_SHIFT);
 
-	TXMON_HAL_STATUS(ppdu_info, eht_user_info[idx]) |=
+	TXMON_HAL_USER(ppdu_info, user_id, eht_user_info) |=
 				(user_info->spatial_coding <<
 				 QDF_MON_STATUS_EHT_USER_SPATIAL_CONFIG_SHIFT);
 	/*  TODO: CRC */

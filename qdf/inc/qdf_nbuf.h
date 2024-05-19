@@ -521,7 +521,6 @@ struct mon_rx_status {
 	uint32_t eht_known;
 	uint32_t eht_data[9];
 	uint32_t eht_all_user_num;
-	uint32_t eht_user_info[EHT_USER_INFO_LEN];
 #ifdef QCA_UNDECODED_METADATA_SUPPORT
 	uint32_t phyrx_abort:1,
 		 phyrx_abort_reason:8,

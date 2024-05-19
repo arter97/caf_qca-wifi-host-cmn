@@ -1935,7 +1935,7 @@ hal_rx_parse_eht_sig_mumimo_all_user_info(struct hal_soc *hal_soc, void *tlv,
 
 	user_info = (struct hal_eht_sig_mu_mimo_user_info *)tlv;
 
-	eht_user_info = &ppdu_info->rx_status.eht_user_info[user_idx];
+	eht_user_info = &ppdu_info->rx_user_status[user_idx].eht_user_info;
 
 	hal_rx_parse_eht_mumimo_user_info(eht_user_info, user_info);
 
@@ -2016,7 +2016,7 @@ hal_rx_parse_eht_sig_non_mumimo_all_user_info(struct hal_soc *hal_soc,
 
 	user_info = (struct hal_eht_sig_non_mu_mimo_user_info *)tlv;
 
-	eht_user_info = &ppdu_info->rx_status.eht_user_info[user_idx];
+	eht_user_info = &ppdu_info->rx_user_status[user_idx].eht_user_info;
 
 	hal_rx_parse_eht_non_mumimo_user_info(eht_user_info, user_info);
 
