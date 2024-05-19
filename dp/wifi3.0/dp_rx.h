@@ -3648,6 +3648,9 @@ dp_rx_ring_record_entry(struct dp_soc *soc, uint8_t ring_num,
 }
 #endif
 
+bool dp_rx_intrabss_wds_ext_ap_bridge_check(struct dp_txrx_peer *ta_peer,
+					    struct dp_txrx_peer *da_peer,
+					    bool is_mcast_pkt);
 #ifdef QCA_SUPPORT_WDS_EXTENDED
 /**
  * dp_rx_is_list_ready() - Make different lists for 4-address

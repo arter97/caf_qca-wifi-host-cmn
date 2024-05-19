@@ -1555,35 +1555,6 @@ dp_rx_intrabss_fwd_mlo_allow(struct dp_txrx_peer *ta_peer,
 #endif
 
 #ifdef INTRA_BSS_FWD_OFFLOAD
-#ifdef QCA_SUPPORT_WDS_EXTENDED
-static bool
-dp_rx_intrabss_wds_ext_ap_bridge_check_be(struct dp_txrx_peer *ta_peer,
-					  struct dp_txrx_peer *da_peer)
-{
-	if (!ta_peer->vdev->wds_ext_enabled ||
-	    ta_peer->vdev->wds_ext_ap_bridge)
-		return false;
-
-	/* either ta peer or da peer is wds ext capable,
-	 * perform wds ext ap bridging.
-	 */
-	if ((ta_peer && qdf_atomic_test_bit(WDS_EXT_PEER_INIT_BIT,
-					    &ta_peer->wds_ext.init)) ||
-	    (da_peer && qdf_atomic_test_bit(WDS_EXT_PEER_INIT_BIT,
-					    &da_peer->wds_ext.init)))
-		return true;
-
-	return false;
-}
-#else
-static bool
-dp_rx_intrabss_wds_ext_ap_bridge_check_be(struct dp_txrx_peer *ta_peer,
-					  struct dp_txrx_peer *da_peer)
-{
-	return false;
-}
-#endif
-
 /**
  * dp_rx_intrabss_ucast_check_be() - Check if intrabss is allowed
  *				     for unicast frame
@@ -1642,9 +1613,10 @@ dp_rx_intrabss_ucast_check_be(qdf_nbuf_t nbuf,
 			return false;
 		}
 
-		if (dp_rx_intrabss_wds_ext_ap_bridge_check_be(
+		if (dp_rx_intrabss_wds_ext_ap_bridge_check(
 							ta_peer,
-							da_peer->txrx_peer)) {
+							da_peer->txrx_peer,
+							false)) {
 			dp_peer_unref_delete(da_peer, DP_MOD_ID_RX);
 			return false;
 		}
