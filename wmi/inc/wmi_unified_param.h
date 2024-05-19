@@ -6518,6 +6518,9 @@ typedef enum {
 #endif
 	wmi_service_multiple_reorder_queue_setup_support,
 	wmi_service_p2p_device_update_mac_addr_support,
+#ifdef WLAN_CHIPSET_STATS
+	wmi_service_chipset_logging_support,
+#endif
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF

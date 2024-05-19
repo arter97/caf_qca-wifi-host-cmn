@@ -65,6 +65,11 @@
 #include <cdp_txrx_misc.h>
 #endif
 
+#ifdef WLAN_CHIPSET_STATS
+#include <wlan_cp_stats_chipset_stats.h>
+#include <wlan_cp_stats_ucfg_api.h>
+#endif
+
 /*
  * The following commit was introduced in v5.17:
  * cead18552660 ("exit: Rename complete_and_exit to kthread_complete_and_exit")
@@ -118,6 +123,8 @@
 #define HOST_LOG_PER_PKT_STATS           0x002
 #define HOST_LOG_FW_FLUSH_COMPLETE       0x003
 #define HOST_LOG_DRIVER_CONNECTIVITY_MSG 0x004
+#define HOST_LOG_CHIPSET_STATS           0x005
+#define FW_LOG_CHIPSET_STATS            0x006
 
 #define DIAG_TYPE_LOGS                 1
 #define PTT_MSG_DIAG_CMDS_TYPE    0x5050
@@ -848,6 +855,28 @@ wlan_logging_send_connectivity_event(void)
 }
 #endif
 
+#ifdef WLAN_CHIPSET_STATS
+static int wlan_logging_cstats_send_host_buf_to_usr(void)
+{
+	return ucfg_cp_stats_cstats_send_buffer_to_user(CSTATS_HOST_TYPE);
+}
+
+static int wlan_logging_cstats_send_fw_buf_to_usr(void)
+{
+	return ucfg_cp_stats_cstats_send_buffer_to_user(CSTATS_FW_TYPE);
+}
+#else
+static int wlan_logging_cstats_send_host_buf_to_usr(void)
+{
+	return 0;
+}
+
+static int wlan_logging_cstats_send_fw_buf_to_usr(void)
+{
+	return 0;
+}
+#endif
+
 /**
  * wlan_logging_thread() - The WLAN Logger thread
  * @Arg - pointer to the HDD context
@@ -910,6 +939,32 @@ static int wlan_logging_thread(void *Arg)
 			ret = pktlog_send_per_pkt_stats_to_user();
 			if (-ENOMEM == ret)
 				msleep(200);
+		}
+
+		if (test_bit(HOST_LOG_CHIPSET_STATS,
+			     &gwlan_logging.eventFlag) &&
+		    gwlan_logging.is_flush_complete) {
+			test_and_clear_bit(HOST_LOG_CHIPSET_STATS,
+					   &gwlan_logging.eventFlag);
+			ret = wlan_logging_cstats_send_host_buf_to_usr();
+			if (-ENOMEM == ret) {
+				QDF_TRACE_ERROR(QDF_MODULE_ID_QDF,
+						"No memory to flush stats");
+				msleep(200);
+			}
+		}
+
+		if (test_bit(FW_LOG_CHIPSET_STATS,
+			     &gwlan_logging.eventFlag) &&
+		    gwlan_logging.is_flush_complete) {
+			test_and_clear_bit(FW_LOG_CHIPSET_STATS,
+					   &gwlan_logging.eventFlag);
+			ret = wlan_logging_cstats_send_fw_buf_to_usr();
+			if (-ENOMEM == ret) {
+				QDF_TRACE_ERROR(QDF_MODULE_ID_QDF,
+						"No memory to flush stats");
+				msleep(200);
+			}
 		}
 
 		if (test_and_clear_bit(HOST_LOG_FW_FLUSH_COMPLETE,
@@ -1225,6 +1280,9 @@ int wlan_logging_sock_init_svc(void)
 	clear_bit(HOST_LOG_PER_PKT_STATS, &gwlan_logging.eventFlag);
 	clear_bit(HOST_LOG_FW_FLUSH_COMPLETE, &gwlan_logging.eventFlag);
 	clear_bit(HOST_LOG_DRIVER_CONNECTIVITY_MSG, &gwlan_logging.eventFlag);
+	clear_bit(HOST_LOG_CHIPSET_STATS, &gwlan_logging.eventFlag);
+	clear_bit(FW_LOG_CHIPSET_STATS, &gwlan_logging.eventFlag);
+
 	init_completion(&gwlan_logging.shutdown_comp);
 	gwlan_logging.thread = kthread_create(wlan_logging_thread, NULL,
 					      "wlan_logging_thread");
@@ -1293,6 +1351,8 @@ int wlan_logging_sock_deinit_svc(void)
 	clear_bit(HOST_LOG_PER_PKT_STATS, &gwlan_logging.eventFlag);
 	clear_bit(HOST_LOG_FW_FLUSH_COMPLETE, &gwlan_logging.eventFlag);
 	clear_bit(HOST_LOG_DRIVER_CONNECTIVITY_MSG, &gwlan_logging.eventFlag);
+	clear_bit(HOST_LOG_CHIPSET_STATS, &gwlan_logging.eventFlag);
+	clear_bit(FW_LOG_CHIPSET_STATS, &gwlan_logging.eventFlag);
 	wake_up_interruptible(&gwlan_logging.wait_queue);
 	wait_for_completion(&gwlan_logging.shutdown_comp);
 
@@ -1802,4 +1862,11 @@ void wlan_register_txrx_packetdump(uint8_t pdev_id)
 	csr_packetdump_timer_start();
 }
 #endif /* CONNECTIVITY_PKTLOG */
+#ifdef WLAN_CHIPSET_STATS
+void wlan_set_chipset_stats_bit(void)
+{
+	set_bit(HOST_LOG_CHIPSET_STATS, &gwlan_logging.eventFlag);
+	set_bit(FW_LOG_CHIPSET_STATS, &gwlan_logging.eventFlag);
+}
+#endif /* WLAN_CHIPSET_STATS */
 #endif /* WLAN_LOGGING_SOCK_SVC_ENABLE */

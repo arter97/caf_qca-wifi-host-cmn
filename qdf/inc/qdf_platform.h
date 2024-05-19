@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -75,6 +75,18 @@ bool qdf_is_fw_down(void);
 typedef int (*qdf_wmi_recv_qmi_cb)(void *cb_ctx, void *buf, int len);
 
 /**
+ * typedef qdf_qmi_ind_cb() - callback to receive QMI Indication
+ * @cb_ctx: QMI indication callback context
+ * @type: Indication type
+ * @event: Indication Event
+ * @event_len: QMI indication event buffer len
+ *
+ * Return: 0 if success otherwise -EINVAL
+ */
+typedef int (*qdf_qmi_ind_cb)(void *cb_ctx, uint16_t type,
+			      void *event, int event_len);
+
+/**
  * typedef qdf_wmi_send_over_qmi_callback() - callback to send WMI over QMI
  * @buf: WMI buffer
  * @len: WMI buffer len
@@ -89,6 +101,16 @@ typedef QDF_STATUS (*qdf_wmi_send_over_qmi_callback)(void *buf, uint32_t len,
 						     wmi_rx_cb);
 
 /**
+ * typedef qdf_send_ind_over_qmi_callback() - callback to receive QMI Indication
+ * @cb_ctx: QMI Indication recv callback context
+ * @qmi_ind_cb: QMI Indication receive callback
+ *
+ * Return: QDF_STATUS_SUCCESS if success otherwise QDF error code
+ */
+typedef QDF_STATUS (*qdf_send_ind_over_qmi_callback)(void *cb_ctx,
+						     qdf_qmi_ind_cb qmi_ind_cb);
+
+/**
  * qdf_register_wmi_send_recv_qmi_callback() - Register WMI over QMI callback
  * @wmi_send_recv_qmi_cb: callback to send recv WMI data over QMI
  *
@@ -96,6 +118,14 @@ typedef QDF_STATUS (*qdf_wmi_send_over_qmi_callback)(void *buf, uint32_t len,
  */
 void qdf_register_wmi_send_recv_qmi_callback(qdf_wmi_send_over_qmi_callback
 					     wmi_send_recv_qmi_cb);
+
+/**
+ * qdf_register_qmi_indication_callback() - Register QMI Indication callback
+ * @qmi_ind_cb: callback to receive QMI Indications
+ *
+ * Return: none
+ */
+void qdf_register_qmi_indication_callback(qdf_send_ind_over_qmi_callback qmi_ind_cb);
 
 /**
  * qdf_wmi_send_recv_qmi() - API to send receive WMI data over QMI
@@ -108,6 +138,15 @@ void qdf_register_wmi_send_recv_qmi_callback(qdf_wmi_send_over_qmi_callback
  */
 QDF_STATUS qdf_wmi_send_recv_qmi(void *buf, uint32_t len, void *cb_ctx,
 				 qdf_wmi_recv_qmi_cb wmi_rx_cb);
+
+/**
+ * qdf_reg_qmi_indication() - API to receive QMI Indication data
+ * @cb_ctx: QMI Indication recv callback context
+ * @qmi_ind_cb: QMI Indication event receive callback
+ *
+ * Return: QDF STATUS of operation
+ */
+QDF_STATUS qdf_reg_qmi_indication(void *cb_ctx, qdf_qmi_ind_cb qmi_ind_cb);
 
 /**
  * typedef qdf_is_driver_unloading_callback() - callback to get driver

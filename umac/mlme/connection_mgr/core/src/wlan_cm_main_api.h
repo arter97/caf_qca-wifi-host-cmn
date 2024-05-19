@@ -32,6 +32,7 @@
 #ifdef WLAN_CM_USE_SPINLOCK
 #include <scheduler_api.h>
 #endif
+#include <wlan_cp_stats_chipset_stats.h>
 
 #define CONNECT_REQ_PREFIX          0x0C000000
 #define DISCONNECT_REQ_PREFIX       0x0D000000
@@ -1643,5 +1644,25 @@ cm_bss_mlo_type(struct wlan_objmgr_psoc *psoc,
 void cm_bearer_switch_resp(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id,
 			   wlan_cm_id cm_id, QDF_STATUS status);
 #endif
-
+#ifdef WLAN_CHIPSET_STATS
+/**
+ * cm_cp_stats_cstats_log_connecting_event : Chipset stats connecting event
+ * @vdev: pointer to vdev object
+ * @req: pointer to wlan_cm_vdev_connect_req object
+ * @cm_req: pointer to cm_req object
+ *
+ * Return: void
+ */
+void
+cm_cp_stats_cstats_log_connecting_event(struct wlan_objmgr_vdev *vdev,
+					struct wlan_cm_vdev_connect_req *req,
+					struct cm_req *cm_req);
+#else
+static inline void
+cm_cp_stats_cstats_log_connecting_event(struct wlan_objmgr_vdev *vdev,
+					struct wlan_cm_vdev_connect_req *req,
+					struct cm_req *cm_req)
+{
+}
+#endif /* WLAN_CHIPSET_STATS */
 #endif /* __WLAN_CM_MAIN_API_H__ */

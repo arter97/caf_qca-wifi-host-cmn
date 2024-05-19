@@ -2963,11 +2963,11 @@ next:
 }
 
 /**
- * cm_update_candidate_list_for_vendor() - update candidate list
+ * cm_mlo_generate_candidate_list() - generate candidate list
  * @candidate_list: candidate list
  *
  * For any candidate list this api generates all possible unique
- * candidates
+ * candidates from mlo candidates
  * Input candidate list
  * c1 6 GHz + 2 GHz + 5 GHz
  * c2 2 GHz + 5 GHz + 6 GHz
@@ -2989,7 +2989,7 @@ next:
  *
  * Return none
  */
-static void cm_update_candidate_list_for_vendor(qdf_list_t *candidate_list)
+static void cm_mlo_generate_candidate_list(qdf_list_t *candidate_list)
 {
 	struct scan_cache_entry *tmp_scan_entry = NULL;
 	struct scan_cache_node *scan_entry = NULL, *scan_node = NULL;
@@ -3031,9 +3031,9 @@ static void cm_update_candidate_list_for_vendor(qdf_list_t *candidate_list)
 			link = scan_node->entry->ml_info.link_info;
 			for (j = i; j < num_link; j++)
 				link[j].is_valid_link = false;
-			qdf_list_insert_before(candidate_list,
-					       &scan_node->node,
-					       &scan_entry->node);
+			qdf_list_insert_after(candidate_list,
+					      &scan_node->node,
+					      &scan_entry->node);
 
 			if (i == 1) {
 				tmp_scan_entry = util_scan_copy_cache_entry(
@@ -3059,9 +3059,9 @@ static void cm_update_candidate_list_for_vendor(qdf_list_t *candidate_list)
 				link[0] = tmp;
 				for (j = i; j < num_link; j++)
 					link[j].is_valid_link = false;
-				qdf_list_insert_before(candidate_list,
-						       &scan_node->node,
-						       &scan_entry->node);
+				qdf_list_insert_after(candidate_list,
+						      &scan_node->node,
+						      &scan_entry->node);
 			}
 		}
 next:
@@ -3075,6 +3075,7 @@ static void cm_eliminate_common_candidate(qdf_list_t *candidate_list)
 	struct scan_cache_node *scan_entry = NULL;
 	qdf_list_node_t *cur_node = NULL, *next_node = NULL;
 	uint32_t size = 0;
+	QDF_STATUS status;
 
 	size = qdf_list_size(candidate_list);
 
@@ -3093,8 +3094,17 @@ static void cm_eliminate_common_candidate(qdf_list_t *candidate_list)
 		cm_find_and_remove_dup_candidate(scan_entry,
 						 next_node, candidate_list);
 
-		/* find next again as next entry might have deleted */
-		qdf_list_peek_next(candidate_list, cur_node, &next_node);
+		/*
+		 * Find next again as next entry might have deleted.
+		 * If reach end of list, next_node won't be updated, may still
+		 * be freed node, but it's next is itself, qdf_list_peek_next
+		 * will return QDF_STATUS_E_EMPTY, need break loop, or double
+		 * free will happen.
+		 */
+		status = qdf_list_peek_next(candidate_list, cur_node,
+					    &next_node);
+		if (QDF_IS_STATUS_ERROR(status))
+			break;
 
 		cur_node = next_node;
 		next_node = NULL;
@@ -3131,6 +3141,21 @@ static void cm_validate_partner_links(struct wlan_objmgr_psoc *psoc,
 			continue;
 		}
 
+		if (partner_info->link_id == entry->ml_info.self_link_id) {
+			mlme_err(QDF_MAC_ADDR_FMT " dup link id %d",
+				 QDF_MAC_ADDR_REF(partner_info->link_addr.bytes),
+				 partner_info->link_id);
+			partner_info->is_valid_link = false;
+		}
+
+		if (qdf_is_macaddr_equal(&partner_info->link_addr,
+					 &entry->bssid)) {
+			mlme_err(QDF_MAC_ADDR_FMT " link id %d dup mac",
+				 QDF_MAC_ADDR_REF(partner_info->link_addr.bytes),
+				 partner_info->link_id);
+			partner_info->is_valid_link = false;
+		}
+
 		/*
 		 * If partner link is not found in the current candidate list
 		 * don't treat it as failure, it can be removed post ML
@@ -3156,7 +3181,7 @@ static void cm_validate_partner_links(struct wlan_objmgr_psoc *psoc,
 }
 #else
 
-static void cm_update_candidate_list_for_vendor(qdf_list_t *candidate_list)
+static void cm_mlo_generate_candidate_list(qdf_list_t *candidate_list)
 {
 }
 
@@ -3216,8 +3241,7 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 			config->bw_above_20_5ghz, config->vdev_nss_24g,
 			config->vdev_nss_5g);
 
-	if (score_config->vendor_roam_score_algorithm)
-		cm_update_candidate_list_for_vendor(scan_list);
+	cm_mlo_generate_candidate_list(scan_list);
 
 	/* calculate score for each AP */
 	if (qdf_list_peek_front(scan_list, &cur_node) != QDF_STATUS_SUCCESS) {
@@ -3359,11 +3383,9 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 		qdf_mem_free(force_connect_candidate);
 	}
 
-	if (score_config->vendor_roam_score_algorithm) {
-		cm_eliminate_common_candidate(scan_list);
-		/* print all vendor candidates*/
-		cm_print_candidate_list(scan_list);
-	}
+	cm_eliminate_common_candidate(scan_list);
+	/* print all vendor candidates*/
+	cm_print_candidate_list(scan_list);
 }
 
 #ifdef CONFIG_BAND_6GHZ
