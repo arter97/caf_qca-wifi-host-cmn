@@ -1647,35 +1647,39 @@ void dp_vdev_peer_stats_update_protocol_cnt_tx(struct dp_vdev *vdev_hdl,
 #endif
 
 #ifdef WLAN_SUPPORT_LAPB
-#ifdef WLAN_DP_FEATURE_SW_LATENCY_MGR
-#error LAPB and SWLM features are not validated together
-#endif
-int
-dp_tx_attempt_coalescing(struct dp_soc *soc, struct dp_vdev *vdev,
-			 struct dp_tx_desc_s *tx_desc,
-			 uint8_t tid,
-			 struct dp_tx_msdu_info_s *msdu_info,
-			 uint8_t ring_id)
+static inline
+bool dp_is_lapb_ring_id(struct dp_soc *soc, int8_t ring_id)
 {
 	struct wlan_lapb *lapb = &soc->lapb;
+
+	if (!lapb->is_init || lapb->ring_id != ring_id)
+		return false;
+
+	return true;
+}
+
+static inline int
+dp_tx_attempt_coalescing_lapb(struct dp_soc *soc, struct dp_vdev *vdev,
+			      struct dp_tx_desc_s *tx_desc,
+			      uint8_t tid,
+			      struct dp_tx_msdu_info_s *msdu_info,
+			      uint8_t ring_id)
+{
 	int coalesce = 0;
 
-	if (!lapb->is_init)
-		return coalesce;
-
 	soc->lapb.ops->wlan_dp_lapb_handle_frame(soc, tx_desc->nbuf,
-							 &coalesce, msdu_info);
+						 &coalesce, msdu_info);
 	return coalesce;
 }
 #endif
 
 #ifdef WLAN_DP_FEATURE_SW_LATENCY_MGR
-int
-dp_tx_attempt_coalescing(struct dp_soc *soc, struct dp_vdev *vdev,
-			 struct dp_tx_desc_s *tx_desc,
-			 uint8_t tid,
-			 struct dp_tx_msdu_info_s *msdu_info,
-			 uint8_t ring_id)
+static inline int
+dp_tx_attempt_coalescing_swlm(struct dp_soc *soc, struct dp_vdev *vdev,
+			      struct dp_tx_desc_s *tx_desc,
+			      uint8_t tid,
+			      struct dp_tx_msdu_info_s *msdu_info,
+			      uint8_t ring_id)
 {
 	struct dp_swlm *swlm = &soc->swlm;
 	union swlm_data swlm_query_data;
@@ -1708,6 +1712,47 @@ dp_tx_attempt_coalescing(struct dp_soc *soc, struct dp_vdev *vdev,
 	}
 
 	return ret;
+}
+#endif
+
+#if defined(WLAN_SUPPORT_LAPB) && defined(WLAN_DP_FEATURE_SW_LATENCY_MGR)
+int
+dp_tx_attempt_coalescing(struct dp_soc *soc, struct dp_vdev *vdev,
+			 struct dp_tx_desc_s *tx_desc,
+			 uint8_t tid,
+			 struct dp_tx_msdu_info_s *msdu_info,
+			 uint8_t ring_id)
+{
+	if (qdf_unlikely(dp_is_lapb_rind_id(soc, ring_id)))
+		return dp_tx_attempt_coalescing_lapb(soc, vdev, tx_desc, tid,
+						     msdu_info, ring_id);
+
+	return dp_tx_attempt_coalescing_swlm(soc, vdev, tx_desc, tid,
+					     msdu_info, ring_id);
+}
+#elif defined(WLAN_SUPPORT_LAPB)
+int
+dp_tx_attempt_coalescing(struct dp_soc *soc, struct dp_vdev *vdev,
+			 struct dp_tx_desc_s *tx_desc,
+			 uint8_t tid,
+			 struct dp_tx_msdu_info_s *msdu_info,
+			 uint8_t ring_id)
+{
+	if (qdf_unlikely(dp_is_lapb_rind_id(soc, ring_id)))
+		return dp_tx_attempt_coalescing_lapb(soc, vdev, tx_desc, tid,
+						     msdu_info, ring_id);
+	return 0;
+}
+#elif defined(WLAN_DP_FEATURE_SW_LATENCY_MGR)
+int
+dp_tx_attempt_coalescing(struct dp_soc *soc, struct dp_vdev *vdev,
+			 struct dp_tx_desc_s *tx_desc,
+			 uint8_t tid,
+			 struct dp_tx_msdu_info_s *msdu_info,
+			 uint8_t ring_id)
+{
+	return dp_tx_attempt_coalescing_swlm(soc, vdev, tx_desc, tid,
+					     msdu_info, ring_id);
 }
 #endif
 
