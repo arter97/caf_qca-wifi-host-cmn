@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -266,10 +266,15 @@ QDF_STATUS htc_connect_service(HTC_HANDLE HTCHandle,
 
 			/* check response status */
 			if (rsp_msg_status != HTC_SERVICE_SUCCESS) {
-				AR_DEBUG_PRINTF(ATH_DEBUG_ERR,
-						(" Target failed service 0x%X connect request (status:%d)\n",
-						 rsp_msg_serv_id,
-						 rsp_msg_status));
+				if (pConnectReq->service_id !=
+					WMI_CONTROL_SVC_WMAC1 &&
+					pConnectReq->service_id !=
+					WMI_CONTROL_SVC_WMAC2) {
+					AR_DEBUG_PRINTF(ATH_DEBUG_ERR,
+							("Target failed service 0x%X connect request(status:%d)\n",
+							 rsp_msg_serv_id,
+							 rsp_msg_status));
+				}
 				status = QDF_STATUS_E_PROTO;
 /* TODO: restore the ifdef when FW supports services 301 and 302
  * (HTT_MSG_DATA[23]_MSG_SVC)

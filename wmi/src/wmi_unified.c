@@ -3654,8 +3654,14 @@ static QDF_STATUS wmi_connect_pdev_htc_service(struct wmi_soc *soc,
 	status = htc_connect_service(soc->htc_handle, &connect, &response);
 
 	if (QDF_IS_STATUS_ERROR(status)) {
-		wmi_err("Failed to connect to WMI CONTROL service status:%d",
-			 status);
+		if (connect.service_id !=
+				WMI_CONTROL_SVC_WMAC1 &&
+				connect.service_id !=
+				WMI_CONTROL_SVC_WMAC2) {
+			wmi_err(
+				"Failed to connect to WMI CONTROL service status:%d",
+				status);
+		}
 		return status;
 	}
 
