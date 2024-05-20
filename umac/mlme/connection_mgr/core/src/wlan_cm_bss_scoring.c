@@ -941,7 +941,9 @@ cm_calculate_bandwidth(struct scan_cache_entry *entry,
 		bw_above_20 = phy_config->bw_above_20_5ghz;
 	}
 
-	if (IS_WLAN_PHYMODE_160MHZ(entry->phy_mode))
+	if (IS_WLAN_PHYMODE_320MHZ(entry->phy_mode))
+		ch_width = CH_WIDTH_320MHZ;
+	else if (IS_WLAN_PHYMODE_160MHZ(entry->phy_mode))
 		ch_width = CH_WIDTH_160MHZ;
 	else if (IS_WLAN_PHYMODE_80MHZ(entry->phy_mode))
 		ch_width = CH_WIDTH_80MHZ;
@@ -1027,6 +1029,8 @@ static uint16_t cm_get_etp_he_ntone(enum phy_ch_width ch_width)
 		n_sd = 980, n_seg = 2;
 	else if (ch_width == CH_WIDTH_160MHZ)
 		n_sd = 1960;
+	else if (ch_width == CH_WIDTH_320MHZ)
+		n_sd = 3920;
 
 	return (n_sd * n_seg);
 }
@@ -1174,6 +1178,9 @@ calculate_bit_per_tone(int32_t rssi, enum phy_ch_width ch_width)
 	int32_t bit_per_tone;
 	int32_t lut_in_idx;
 
+	if (ch_width > CH_WIDTH_160MHZ)
+		ch_width = CH_WIDTH_160MHZ;
+
 	noise_floor_db_boost = TWO_IN_DB * ch_width;
 	noise_floor_dbm = WLAN_NOISE_FLOOR_DBM_DEFAULT + noise_floor_db_boost +
 			SNR_MARGIN_DB;
@@ -1214,7 +1221,8 @@ cm_calculate_etp(struct wlan_objmgr_psoc *psoc,
 	struct htcap_cmn_ie *htcap;
 
 	htcap = (struct htcap_cmn_ie *)util_scan_entry_htcap(entry);
-	if (ch_width > CH_WIDTH_160MHZ)
+	if (ch_width >= CH_WIDTH_INVALID || ch_width == CH_WIDTH_5MHZ ||
+	    ch_width == CH_WIDTH_10MHZ)
 		return CM_AVOID_CANDIDATE_MIN_SCORE;
 
 	if (is_he)
