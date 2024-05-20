@@ -2768,6 +2768,19 @@ uint16_t dp_gen_ml_peer_id(struct dp_soc *soc, uint16_t peer_id)
 }
 #endif
 
+#ifdef WLAN_MLO_MULTI_CHIP
+static void dp_rx_mlo_update_ast_idx(struct dp_vdev *vdev, uint16_t hw_peer_id,
+				     uint16_t ast_hash)
+{ }
+#else
+static void dp_rx_mlo_update_ast_idx(struct dp_vdev *vdev, uint16_t hw_peer_id,
+				     uint16_t ast_hash)
+{
+	vdev->bss_ast_hash = ast_hash;
+	vdev->bss_ast_idx = hw_peer_id;
+}
+#endif
+
 QDF_STATUS
 dp_rx_mlo_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 			   uint8_t *peer_mac_addr,
@@ -2818,10 +2831,9 @@ dp_rx_mlo_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 				peer->txrx_peer->bss_peer = 1;
 		}
 
-		if (peer->vdev->opmode == wlan_op_mode_sta) {
-			peer->vdev->bss_ast_hash = ast_hash;
-			peer->vdev->bss_ast_idx = hw_peer_id;
-		}
+		if (peer->vdev->opmode == wlan_op_mode_sta)
+			dp_rx_mlo_update_ast_idx(peer->vdev, ast_hash,
+						 hw_peer_id);
 
 		/* Add ast entry incase self ast entry is
 		 * deleted due to DP CP sync issue
