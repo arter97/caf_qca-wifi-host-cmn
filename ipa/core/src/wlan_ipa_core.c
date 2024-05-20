@@ -60,6 +60,7 @@
 #define WLAN_IPA_MSG_LIST_SIZE_MAX 8
 #define WLAN_IPA_FLAG_MSG_USES_LIST 0x1
 #define WLAN_IPA_FLAG_MSG_USES_LIST_FLT_DEL 0x2
+#define WLAN_IPA_FLT_DEL_WAIT_TIMEOUT_MS 200
 
 static struct wlan_ipa_priv *gp_ipa;
 static void wlan_ipa_set_pending_tx_timer(struct wlan_ipa_priv *ipa_ctx);
@@ -2080,7 +2081,7 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
 QDF_STATUS
 wlan_ipa_uc_disable_pipes(struct wlan_ipa_priv *ipa_ctx, bool force_disable)
 {
-	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
+	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS, status;
 	int wait_count = 0;
 	int return_code;
 
@@ -2095,11 +2096,18 @@ wlan_ipa_uc_disable_pipes(struct wlan_ipa_priv *ipa_ctx, bool force_disable)
 		  ipa_ctx->opt_dp_ctrl_ssr);
 
 	if (ipa_ctx->opt_wifi_datapath_ctrl &&
-	    ipa_ctx->opt_dp_ctrl_wlan_shutdown && !ipa_ctx->opt_dp_ctrl_ssr) {
+	    ipa_ctx->opt_dp_ctrl_wlan_shutdown && !ipa_ctx->opt_dp_ctrl_ssr &&
+	    !ipa_ctx->opt_dp_ctrl_flt_cleaned) {
+		qdf_event_reset(&ipa_ctx->ipa_ctrl_flt_rm_shutdown_evt);
 		return_code = wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
 					ipa_ctx, NULL,
 					WLAN_IPA_CTRL_FLT_DEL_SRC_SHUTDOWN);
-		ipa_err("return code of flt del by shutdown %d", return_code);
+		status = qdf_wait_single_event(
+				&ipa_ctx->ipa_ctrl_flt_rm_shutdown_evt,
+				WLAN_IPA_FLT_DEL_WAIT_TIMEOUT_MS);
+		ipa_ctx->opt_dp_ctrl_flt_cleaned = true;
+		ipa_err("opt_dp_ctrl, return code of flt del by shutdown %d, status - %d",
+			return_code, status);
 	}
 
 	if (ipa_ctx->opt_dp_active) {
@@ -4718,6 +4726,7 @@ void wlan_ipa_destroy_opt_wifi_flt_cb_event(struct wlan_ipa_priv *ipa_ctx)
 
 	qdf_event_destroy(&ipa_ctx->ipa_flt_evnt);
 	qdf_event_destroy(&ipa_ctx->ipa_ctrl_flt_evnt);
+	qdf_event_destroy(&ipa_ctx->ipa_ctrl_flt_rm_shutdown_evt);
 }
 
 /**
@@ -4734,7 +4743,6 @@ void wlan_ipa_ctrl_flt_db_deinit(struct wlan_ipa_priv *ipa_obj)
 	int i;
 
 	dp_flt_params = &ipa_obj->dp_tx_super_rule_flt_param;
-	ipa_debug("opt_dp_ctrl: clean filter DB on SSR event");
 	for (i = 0; i < TX_SUPER_RULE_SETUP_NUM; i++) {
 		if (dp_flt_params->flt_addr_params[i].ipa_flt_in_use) {
 			ipa_debug("opt_dp_ctrl: handle deleted on SSR event - %d",
@@ -4851,6 +4859,7 @@ QDF_STATUS wlan_ipa_setup(struct wlan_ipa_priv *ipa_ctx,
 	ipa_ctx->opt_dp_ctrl_ssr = false;
 	ipa_ctx->opt_dp_ctrl_wlan_shutdown = false;
 	ipa_ctx->opt_wifi_datapath_ctrl = false;
+	ipa_ctx->opt_dp_ctrl_flt_cleaned = false;
 	qdf_nbuf_queue_init(&ipa_ctx->pm_queue_head);
 	qdf_list_create(&ipa_ctx->pending_event, 1000);
 	qdf_mutex_create(&ipa_ctx->event_lock);
@@ -5449,6 +5458,7 @@ static void __wlan_ipa_uc_fw_op_event_handler(void *data)
 	} else if (uc_op_work->flag & WLAN_IPA_FLAG_MSG_USES_LIST_FLT_DEL) {
 		ipa_debug("filter delete notification");
 		notify_msg = wlan_fw_event_msg_list_dequeue(uc_op_work);
+		qdf_event_set(&ipa_ctx->ipa_ctrl_flt_rm_shutdown_evt);
 		while (notify_msg) {
 			msg = qdf_mem_malloc(sizeof(*msg));
 			if (!msg) {
@@ -6621,9 +6631,12 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb_wrapper(
 	struct wlan_ipa_priv *ipa_obj = (struct wlan_ipa_priv *)ipa_ctx;
 
 	if (ipa_obj->opt_dp_ctrl_ssr ||
-	    ipa_obj->opt_dp_ctrl_wlan_shutdown)
+	    ipa_obj->opt_dp_ctrl_wlan_shutdown) {
+		ipa_debug("opt_dp_ctrl, flt del requested while ssr or shutdown");
 		return WLAN_IPA_WDI_OPT_DPATH_RESP_SUCCESS;
+	}
 
+	ipa_debug("opt_dp_ctrl, flt del requested from ipa");
 	return wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
 						ipa_ctx, in,
 						WLAN_IPA_CTRL_FLT_DEL_SRC_IPA);
@@ -6653,7 +6666,7 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
 	if (!rem_flt) {
 		delete_all = true;
 		num_flts = IPA_WDI_MAX_TX_FILTER;
-		ipa_debug("opt_dp_ctrl: delete all active filter on IPA request");
+		ipa_debug("opt_dp_ctrl: delete all active filter request");
 	} else {
 		num_flts = rem_flt->num_tuples;
 		ipa_debug("opt_dp_ctrl: num of filters to be removed %d:",
@@ -6914,8 +6927,10 @@ void wlan_ipa_wdi_opt_dpath_ctrl_notify_flt_delete(struct filter_response
 		}
 
 		if (dp_flt_params->flt_addr_params[j].req_src ==
-				WLAN_IPA_CTRL_FLT_DEL_SRC_SHUTDOWN)
+				WLAN_IPA_CTRL_FLT_DEL_SRC_SHUTDOWN) {
+			ipa_debug("opt_dp_ctrl, flt delete due to shutdown");
 			code = WLAN_IPA_WDI_OPT_DPATH_RESP_SUCCESS_SHUTDOWN;
+		}
 
 		uc_op_work->flag |= WLAN_IPA_FLAG_MSG_USES_LIST_FLT_DEL;
 		status = wlan_fw_event_msg_list_enqueue_flt_hdl(

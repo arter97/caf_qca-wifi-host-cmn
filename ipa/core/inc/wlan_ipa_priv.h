@@ -942,6 +942,8 @@ struct wlan_ipa_priv {
 	qdf_ipa_wdi_hdl_t hdl;
 	bool opt_dp_ctrl_wlan_shutdown;
 	bool opt_dp_ctrl_ssr;
+	bool opt_dp_ctrl_flt_cleaned;
+	qdf_event_t ipa_ctrl_flt_rm_shutdown_evt;
 #ifdef IPA_OPT_WIFI_DP
 	struct wifi_dp_flt_setup dp_cce_super_rule_flt_param;
 	struct wifi_dp_tx_flt_setup dp_tx_super_rule_flt_param;
