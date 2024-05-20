@@ -2049,6 +2049,7 @@ end:
 }
 
 #ifndef IPA_OPT_WIFI_DP_CTRL
+static inline
 int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
 			   void *ipa_ctx,
 			   struct ipa_wdi_opt_dpath_flt_rem_cb_params *in,
