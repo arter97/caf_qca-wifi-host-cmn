@@ -301,6 +301,27 @@ bool dp_mon_skip_filter_config(struct dp_soc *soc)
 		return false;
 }
 
+/**
+ * dp_update_num_mac_rings() - Update number of MAC rings based on connection
+ *                             mode and DBS check
+ * @soc: DP soc context
+ * @mon_mac_rings: Pointer to variable for number of mac rings
+ *
+ * Return: None
+ */
+static void
+dp_update_num_mac_rings(struct dp_soc *soc, int *mon_mac_rings)
+{
+	if (soc->cdp_soc.ol_ops->get_con_mode &&
+	    soc->cdp_soc.ol_ops->get_con_mode() ==
+	    QDF_GLOBAL_MISSION_MODE &&
+	    (QDF_MONITOR_FLAG_OTHER_BSS & soc->mon_flags)) {
+		*mon_mac_rings = 1;
+	} else {
+		dp_update_num_mac_rings_for_dbs(soc, mon_mac_rings);
+	}
+}
+
 QDF_STATUS
 dp_mon_ht2_rx_ring_cfg(struct dp_soc *soc,
 		       struct dp_pdev *pdev,
@@ -322,7 +343,7 @@ dp_mon_ht2_rx_ring_cfg(struct dp_soc *soc,
 	 * Overwrite the max_mac_rings for the status rings.
 	 */
 	if (srng_type == DP_MON_FILTER_SRNG_TYPE_RXDMA_MONITOR_STATUS)
-		dp_update_num_mac_rings_for_dbs(soc, &max_mac_rings);
+		dp_update_num_mac_rings(soc, &max_mac_rings);
 
 	dp_mon_filter_info("%pK: srng type %d Max_mac_rings %d ",
 			   soc, srng_type, max_mac_rings);
