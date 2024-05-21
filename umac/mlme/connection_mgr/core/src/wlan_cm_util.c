@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015, 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -1650,6 +1650,46 @@ wlan_cm_id cm_get_cm_id_by_scan_id(struct cnx_mgr *cm_ctx,
 	cm_req_lock_release(cm_ctx);
 
 	return CM_ID_INVALID;
+}
+
+struct scan_cache_entry *
+cm_get_curr_candidate_entry(struct wlan_objmgr_vdev *vdev, wlan_cm_id cm_id)
+{
+	qdf_list_node_t *cur_node = NULL, *next_node = NULL;
+	struct cm_req *cm_req;
+	uint32_t prefix = CM_ID_GET_PREFIX(cm_id);
+	struct cnx_mgr *cm_ctx;
+	struct scan_cache_entry *cur_entry, *entry = NULL;
+
+	if (prefix != CONNECT_REQ_PREFIX)
+		return NULL;
+
+	cm_ctx = cm_get_cm_ctx(vdev);
+	if (!cm_ctx)
+		return NULL;
+
+	cm_req_lock_acquire(cm_ctx);
+	qdf_list_peek_front(&cm_ctx->req_list, &cur_node);
+	while (cur_node) {
+		qdf_list_peek_next(&cm_ctx->req_list, cur_node, &next_node);
+		cm_req = qdf_container_of(cur_node, struct cm_req, node);
+
+		if (cm_req->cm_id != cm_id) {
+			cur_node = next_node;
+			next_node = NULL;
+			continue;
+		}
+
+		if (!cm_req->connect_req.cur_candidate)
+			break;
+
+		cur_entry = cm_req->connect_req.cur_candidate->entry;
+		entry = util_scan_copy_cache_entry(cur_entry);
+		break;
+	}
+	cm_req_lock_release(cm_ctx);
+
+	return entry;
 }
 
 #ifdef WLAN_POLICY_MGR_ENABLE
