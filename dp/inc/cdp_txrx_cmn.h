@@ -184,6 +184,7 @@ typedef void (*ipa_uc_op_cb_type)(uint8_t *op_msg,
  * @tx_cc_ctx: main context for HW cookie conversion
  * @spcl_tx_desc: flow pool
  * @spcl_tx_cc_ctx: special context for HW cookie conversion
+ * @tx_ext_desc: extension desc pointer
  * @rx_fst_ref_cnt: ref cnt for tx descriptors
  * @global_descriptor_in_use: global descriptors in usage
  * @tx_cookie_ctx_alloc_cnt: Tx cookie context alloc count
@@ -192,6 +193,8 @@ typedef void (*ipa_uc_op_cb_type)(uint8_t *op_msg,
  * @spcl_tx_cookie_ctx_alloc_cnt: Special tx cookie context alloc count
  * @spcl_tx_desc_pool_alloc_cnt: Special tx desc pool alloc count
  * @spcl_tx_desc_pool_init_cnt: special tx desc pool init cnt
+ * @tx_ext_desc_pool_alloc_cnt: extension tx desc pool alloc cnt
+ * @tx_ext_desc_pool_init_cnt: extension tx desc pool init cnt
  */
 struct dp_global_context {
 	struct dp_rx_fst *fst_ctx;
@@ -199,6 +202,7 @@ struct dp_global_context {
 	struct dp_hw_cookie_conversion_t *tx_cc_ctx[4];
 	struct dp_tx_desc_pool_s *spcl_tx_desc[2][4];
 	struct dp_hw_cookie_conversion_t *spcl_tx_cc_ctx[4];
+	struct dp_tx_ext_desc_pool_s *tx_ext_desc[4];
 	qdf_atomic_t rx_fst_ref_cnt;
 	qdf_atomic_t global_descriptor_in_use;
 	int tx_cookie_ctx_alloc_cnt;
@@ -207,6 +211,8 @@ struct dp_global_context {
 	int spcl_tx_cookie_ctx_alloc_cnt;
 	int spcl_tx_desc_pool_alloc_cnt[2];
 	int spcl_tx_desc_pool_init_cnt[2];
+	int tx_ext_desc_pool_alloc_cnt;
+	int tx_ext_desc_pool_init_cnt;
 };
 
 /**

@@ -164,6 +164,26 @@ static void dp_tx_desc_pool_free_mem(struct dp_soc *soc, int8_t pool_id,
 		dp_global->tx_desc[soc->arch_id][pool_id] = NULL;
 	}
 }
+
+static void dp_tx_ext_desc_pool_alloc_mem(struct dp_soc *soc, int8_t pool_id)
+{
+	struct dp_global_context *dp_global = NULL;
+
+	dp_global = wlan_objmgr_get_global_ctx();
+
+	dp_global->tx_ext_desc[pool_id] =
+		qdf_mem_malloc(sizeof(struct dp_tx_ext_desc_pool_s));
+}
+
+static void dp_tx_ext_desc_pool_free_mem(struct dp_soc *soc, int8_t pool_id)
+{
+	struct dp_global_context *dp_global = NULL;
+
+	dp_global = wlan_objmgr_get_global_ctx();
+
+	qdf_mem_free(dp_global->tx_ext_desc[pool_id]);
+	dp_global->tx_ext_desc[pool_id] = NULL;
+}
 #else
 static void dp_tx_desc_pool_alloc_mem(struct dp_soc *soc, int8_t pool_id,
 				      bool spcl_tx_desc)
@@ -172,6 +192,14 @@ static void dp_tx_desc_pool_alloc_mem(struct dp_soc *soc, int8_t pool_id,
 
 static void dp_tx_desc_pool_free_mem(struct dp_soc *soc, int8_t pool_id,
 				     bool spcl_tx_desc)
+{
+}
+
+static void dp_tx_ext_desc_pool_alloc_mem(struct dp_soc *soc, int8_t pool_id)
+{
+}
+
+static void dp_tx_ext_desc_pool_free_mem(struct dp_soc *soc, int8_t pool_id)
 {
 }
 #endif
@@ -391,7 +419,8 @@ dp_tx_ext_desc_pool_alloc_by_id(struct dp_soc *soc, uint32_t num_elem,
 	struct dp_tx_ext_desc_pool_s *dp_tx_ext_desc_pool;
 	uint16_t link_elem_size = sizeof(struct dp_tx_ext_desc_elem_s);
 
-	dp_tx_ext_desc_pool = &((soc)->tx_ext_desc[pool_id]);
+	dp_tx_ext_desc_pool_alloc_mem(soc, pool_id);
+	dp_tx_ext_desc_pool = dp_get_tx_ext_desc_pool(soc, pool_id);
 	memctx = qdf_get_dma_mem_context(dp_tx_ext_desc_pool, memctx);
 
 	/* Coherent tx extension descriptor alloc */
@@ -431,29 +460,6 @@ free_ext_desc:
 	return status;
 }
 
-QDF_STATUS dp_tx_ext_desc_pool_alloc(struct dp_soc *soc, uint8_t num_pool,
-				     uint32_t num_elem)
-{
-	QDF_STATUS status;
-	uint8_t pool_id, count;
-
-	for (pool_id = 0; pool_id < num_pool; pool_id++) {
-		status = dp_tx_ext_desc_pool_alloc_by_id(soc, num_elem, pool_id);
-		if (QDF_IS_STATUS_ERROR(status)) {
-			dp_err("failed to allocate tx ext desc pool %d", pool_id);
-			goto free_ext_desc_pool;
-		}
-	}
-
-	return QDF_STATUS_SUCCESS;
-
-free_ext_desc_pool:
-	for (count = 0; count < pool_id; count++)
-		dp_tx_ext_desc_pool_free_by_id(soc, count);
-
-	return status;
-}
-
 QDF_STATUS dp_tx_ext_desc_pool_init_by_id(struct dp_soc *soc, uint32_t num_elem,
 					  uint8_t pool_id)
 {
@@ -465,12 +471,12 @@ QDF_STATUS dp_tx_ext_desc_pool_init_by_id(struct dp_soc *soc, uint32_t num_elem,
 	QDF_STATUS status;
 
 	/* link tx descriptors into a freelist */
-	dp_tx_ext_desc_pool = &((soc)->tx_ext_desc[pool_id]);
-	soc->tx_ext_desc[pool_id].elem_size =
+	dp_tx_ext_desc_pool = dp_get_tx_ext_desc_pool(soc, pool_id);
+	dp_tx_ext_desc_pool->elem_size =
 		HAL_TX_EXT_DESC_WITH_META_DATA;
-	soc->tx_ext_desc[pool_id].link_elem_size =
+	dp_tx_ext_desc_pool->link_elem_size =
 		sizeof(struct dp_tx_ext_desc_elem_s);
-	soc->tx_ext_desc[pool_id].elem_count = num_elem;
+	dp_tx_ext_desc_pool->elem_count = num_elem;
 
 	dp_tx_ext_desc_pool->freelist = (struct dp_tx_ext_desc_elem_s *)
 		*dp_tx_ext_desc_pool->desc_link_pages.cacheable_pages;
@@ -529,6 +535,140 @@ fail:
 	return status;
 }
 
+void dp_tx_ext_desc_pool_free_by_id(struct dp_soc *soc, uint8_t pool_id)
+{
+	struct dp_tx_ext_desc_pool_s *dp_tx_ext_desc_pool;
+	qdf_dma_context_t memctx = 0;
+
+	dp_tx_ext_desc_pool = dp_get_tx_ext_desc_pool(soc, pool_id);
+	memctx = qdf_get_dma_mem_context(dp_tx_ext_desc_pool, memctx);
+
+	dp_desc_multi_pages_mem_free(soc, QDF_DP_TX_EXT_DESC_LINK_TYPE,
+				     &dp_tx_ext_desc_pool->desc_link_pages,
+				     0, true);
+
+	dp_desc_multi_pages_mem_free(soc, QDF_DP_TX_EXT_DESC_TYPE,
+				     &dp_tx_ext_desc_pool->desc_pages,
+				     memctx, false);
+	dp_tx_ext_desc_pool_free_mem(soc, pool_id);
+}
+
+void dp_tx_ext_desc_pool_deinit_by_id(struct dp_soc *soc, uint8_t pool_id)
+{
+	struct dp_tx_ext_desc_pool_s *dp_tx_ext_desc_pool;
+
+	dp_tx_ext_desc_pool = dp_get_tx_ext_desc_pool(soc, pool_id);
+	qdf_spinlock_destroy(&dp_tx_ext_desc_pool->lock);
+}
+
+#ifdef QCA_SUPPORT_DP_GLOBAL_CTX
+QDF_STATUS dp_tx_ext_desc_pool_alloc(struct dp_soc *soc, uint8_t num_pool,
+				     uint32_t num_elem)
+{
+	QDF_STATUS status;
+	uint8_t pool_id, count;
+	struct dp_global_context *dp_global;
+
+	dp_global = wlan_objmgr_get_global_ctx();
+
+	if (dp_global->tx_ext_desc_pool_alloc_cnt == 0) {
+		for (pool_id = 0; pool_id < num_pool; pool_id++) {
+			status = dp_tx_ext_desc_pool_alloc_by_id
+						(soc, num_elem, pool_id);
+			if (QDF_IS_STATUS_ERROR(status)) {
+				dp_err("failed to allocate tx ext desc pool %d", pool_id);
+				goto free_ext_desc_pool;
+			}
+		}
+	}
+
+	dp_global->tx_ext_desc_pool_alloc_cnt++;
+	return QDF_STATUS_SUCCESS;
+
+free_ext_desc_pool:
+	for (count = 0; count < pool_id; count++)
+		dp_tx_ext_desc_pool_free_by_id(soc, count);
+
+	return status;
+}
+
+QDF_STATUS dp_tx_ext_desc_pool_init(struct dp_soc *soc, uint8_t num_pool,
+				    uint32_t num_elem)
+{
+	uint8_t pool_id;
+	QDF_STATUS status;
+	struct dp_global_context *dp_global;
+
+	dp_global = wlan_objmgr_get_global_ctx();
+
+	if (dp_global->tx_ext_desc_pool_init_cnt == 0) {
+		for (pool_id = 0; pool_id < num_pool; pool_id++) {
+			status = dp_tx_ext_desc_pool_init_by_id(soc, num_elem,
+								pool_id);
+			if (QDF_IS_STATUS_ERROR(status)) {
+				dp_err("failed to init ext desc pool %d", pool_id);
+				goto fail;
+			}
+		}
+	}
+
+	dp_global->tx_ext_desc_pool_init_cnt++;
+	return QDF_STATUS_SUCCESS;
+fail:
+	return status;
+}
+
+void dp_tx_ext_desc_pool_free(struct dp_soc *soc, uint8_t num_pool)
+{
+	uint8_t pool_id;
+	struct dp_global_context *dp_global;
+
+	dp_global = wlan_objmgr_get_global_ctx();
+	dp_global->tx_ext_desc_pool_alloc_cnt--;
+
+	if (dp_global->tx_ext_desc_pool_alloc_cnt == 0) {
+		for (pool_id = 0; pool_id < num_pool; pool_id++)
+			dp_tx_ext_desc_pool_free_by_id(soc, pool_id);
+	}
+}
+
+void dp_tx_ext_desc_pool_deinit(struct dp_soc *soc, uint8_t num_pool)
+{
+	uint8_t pool_id;
+	struct dp_global_context *dp_global;
+
+	dp_global = wlan_objmgr_get_global_ctx();
+	dp_global->tx_ext_desc_pool_init_cnt--;
+
+	if (dp_global->tx_ext_desc_pool_init_cnt == 0) {
+		for (pool_id = 0; pool_id < num_pool; pool_id++)
+			dp_tx_ext_desc_pool_deinit_by_id(soc, pool_id);
+	}
+}
+#else
+QDF_STATUS dp_tx_ext_desc_pool_alloc(struct dp_soc *soc, uint8_t num_pool,
+				     uint32_t num_elem)
+{
+	QDF_STATUS status;
+	uint8_t pool_id, count;
+
+	for (pool_id = 0; pool_id < num_pool; pool_id++) {
+		status = dp_tx_ext_desc_pool_alloc_by_id(soc, num_elem, pool_id);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			dp_err("failed to allocate tx ext desc pool %d", pool_id);
+			goto free_ext_desc_pool;
+		}
+	}
+
+	return QDF_STATUS_SUCCESS;
+
+free_ext_desc_pool:
+	for (count = 0; count < pool_id; count++)
+		dp_tx_ext_desc_pool_free_by_id(soc, count);
+
+	return status;
+}
+
 QDF_STATUS dp_tx_ext_desc_pool_init(struct dp_soc *soc, uint8_t num_pool,
 				    uint32_t num_elem)
 {
@@ -548,37 +688,12 @@ fail:
 	return status;
 }
 
-void dp_tx_ext_desc_pool_free_by_id(struct dp_soc *soc, uint8_t pool_id)
-{
-	struct dp_tx_ext_desc_pool_s *dp_tx_ext_desc_pool;
-	qdf_dma_context_t memctx = 0;
-
-	dp_tx_ext_desc_pool = &((soc)->tx_ext_desc[pool_id]);
-	memctx = qdf_get_dma_mem_context(dp_tx_ext_desc_pool, memctx);
-
-	dp_desc_multi_pages_mem_free(soc, QDF_DP_TX_EXT_DESC_LINK_TYPE,
-				     &dp_tx_ext_desc_pool->desc_link_pages,
-				     0, true);
-
-	dp_desc_multi_pages_mem_free(soc, QDF_DP_TX_EXT_DESC_TYPE,
-				     &dp_tx_ext_desc_pool->desc_pages,
-				     memctx, false);
-}
-
 void dp_tx_ext_desc_pool_free(struct dp_soc *soc, uint8_t num_pool)
 {
 	uint8_t pool_id;
 
 	for (pool_id = 0; pool_id < num_pool; pool_id++)
 		dp_tx_ext_desc_pool_free_by_id(soc, pool_id);
-}
-
-void dp_tx_ext_desc_pool_deinit_by_id(struct dp_soc *soc, uint8_t pool_id)
-{
-	struct dp_tx_ext_desc_pool_s *dp_tx_ext_desc_pool;
-
-	dp_tx_ext_desc_pool = &((soc)->tx_ext_desc[pool_id]);
-	qdf_spinlock_destroy(&dp_tx_ext_desc_pool->lock);
 }
 
 void dp_tx_ext_desc_pool_deinit(struct dp_soc *soc, uint8_t num_pool)
@@ -588,6 +703,7 @@ void dp_tx_ext_desc_pool_deinit(struct dp_soc *soc, uint8_t num_pool)
 	for (pool_id = 0; pool_id < num_pool; pool_id++)
 		dp_tx_ext_desc_pool_deinit_by_id(soc, pool_id);
 }
+#endif
 
 #if defined(FEATURE_TSO)
 QDF_STATUS dp_tx_tso_desc_pool_alloc_by_id(struct dp_soc *soc, uint32_t num_elem,
