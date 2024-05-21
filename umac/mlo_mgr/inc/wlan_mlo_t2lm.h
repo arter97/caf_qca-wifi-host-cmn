@@ -340,6 +340,14 @@ void ttlm_lock_create(struct wlan_mlo_peer_context *ml_peer);
 void ttlm_timer_init(struct wlan_mlo_peer_context *ml_peer);
 
 /**
+ * ttlm_timer_deinit() - Deinitialize TTLM request timer
+ * @ml_peer: ML peer
+ *
+ * Return: void
+ */
+void ttlm_timer_deinit(struct wlan_mlo_peer_context *ml_peer);
+
+/**
  * ttlm_req_timeout_cb() - Callback which will be invoked on TTLM req timeout
  * @user_data: ML peer context
  *

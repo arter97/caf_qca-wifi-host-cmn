@@ -80,6 +80,15 @@ void ttlm_timer_init(struct wlan_mlo_peer_context *ml_peer)
 			  ttlm_req_timeout_cb, ml_peer);
 }
 
+void ttlm_timer_deinit(struct wlan_mlo_peer_context *ml_peer)
+{
+	if (QDF_TIMER_STATE_RUNNING ==
+		qdf_mc_timer_get_current_state(&ml_peer->ttlm_request_timer))
+		qdf_mc_timer_stop(&ml_peer->ttlm_request_timer);
+
+	qdf_mc_timer_destroy(&ml_peer->ttlm_request_timer);
+}
+
 void ttlm_req_timeout_cb(void *user_data)
 {
 	struct wlan_mlo_peer_context *ml_peer = user_data;
@@ -1387,6 +1396,7 @@ QDF_STATUS ttlm_sm_create(struct wlan_mlo_peer_context *ml_peer)
 
 QDF_STATUS ttlm_sm_destroy(struct wlan_mlo_peer_context *ml_peer)
 {
+	ttlm_timer_deinit(ml_peer);
 	ttlm_lock_destroy(ml_peer);
 	wlan_sm_delete(ml_peer->ttlm_sm.sm_hdl);
 
