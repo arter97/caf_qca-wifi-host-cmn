@@ -1697,7 +1697,6 @@ QDF_STATUS util_validate_sta_prof_ie(const uint8_t *sta_prof_ie,
 	return QDF_STATUS_SUCCESS;
 }
 
-#ifdef CONN_MGR_ADV_FEATURE
 /**
  * util_add_mlie_for_prb_rsp_gen - Add the basic variant Multi-Link element
  * when generating link specific probe response.
@@ -1819,18 +1818,6 @@ util_add_mlie_for_prb_rsp_gen(const uint8_t *reportingsta_ie,
 
 	return QDF_STATUS_SUCCESS;
 }
-#else
-static QDF_STATUS
-util_add_mlie_for_prb_rsp_gen(const uint8_t *reportingsta_ie,
-			      qdf_size_t reportingsta_ie_len,
-			      uint8_t **plink_frame_currpos,
-			      qdf_size_t *plink_frame_currlen,
-			      qdf_size_t link_frame_maxsize,
-			      uint8_t linkid)
-{
-	return QDF_STATUS_SUCCESS;
-}
-#endif
 
 /**
  * util_find_bvmlie_persta_prof_for_linkid() - get per sta profile per link id
