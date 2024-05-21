@@ -7109,6 +7109,7 @@ void dp_mon_feature_ops_deregister(struct dp_soc *soc)
 	mon_ops->rx_enable_mpdu_logging = NULL;
 	mon_ops->rx_enable_fpmo = NULL;
 	mon_ops->mon_neighbour_peers_detach = NULL;
+	mon_ops->rx_config_packet_type_subtype = NULL;
 	mon_ops->mon_vdev_set_monitor_mode_buf_rings = NULL;
 	mon_ops->mon_vdev_set_monitor_mode_rings = NULL;
 #ifdef QCA_ENHANCED_STATS_SUPPORT

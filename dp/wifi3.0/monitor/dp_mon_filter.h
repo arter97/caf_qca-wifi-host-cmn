@@ -64,6 +64,54 @@
 #define DP_MON_FILTER_MD_CTRL_MASK                    0x0000ffff
 #define DP_MON_FILTER_MD_CTRL_LSB                     0
 
+#define DP_MON_FILTER_FP_PACKET_MGMT_OFFSET                  0x00000014
+#define DP_MON_FILTER_FP_PACKET_MGMT_MASK                    0xffff0000
+#define DP_MON_FILTER_FP_PACKET_MGMT_LSB                     16
+
+#define DP_MON_FILTER_MO_PACKET_MGMT_OFFSET                  0x00000018
+#define DP_MON_FILTER_MO_PACKET_MGMT_MASK                    0x0000ffff
+#define DP_MON_FILTER_MO_PACKET_MGMT_LSB                     0
+
+#define DP_MON_FILTER_FP_PACKET_CTRL_OFFSET                  0x00000018
+#define DP_MON_FILTER_FP_PACKET_CTRL_MASK                    0xffff0000
+#define DP_MON_FILTER_FP_PACKET_CTRL_LSB                     16
+
+#define DP_MON_FILTER_MO_PACKET_CTRL_OFFSET                  0x0000001c
+#define DP_MON_FILTER_MO_PACKET_CTRL_MASK                    0x0000ffff
+#define DP_MON_FILTER_MO_PACKET_CTRL_LSB                     0
+
+#define DP_MON_FILTER_FP_PACKET_DATA_OFFSET                  0x0000001c
+#define DP_MON_FILTER_FP_PACKET_DATA_MASK                    0xffff0000
+#define DP_MON_FILTER_FP_PACKET_DATA_LSB                     16
+
+#define DP_MON_FILTER_MO_PACKET_DATA_OFFSET                  0x00000020
+#define DP_MON_FILTER_MO_PACKET_DATA_MASK                    0x0000ffff
+#define DP_MON_FILTER_MO_PACKET_DATA_LSB                     0
+
+#define DP_MON_FILTER_MD_PACKET_DATA_OFFSET                  0x00000020
+#define DP_MON_FILTER_MD_PACKET_DATA_MASK                    0xffff0000
+#define DP_MON_FILTER_MD_PACKET_DATA_LSB                     16
+
+#define DP_MON_FILTER_MD_PACKET_MGMT_OFFSET                  0x00000024
+#define DP_MON_FILTER_MD_PACKET_MGMT_MASK                    0x0000ffff
+#define DP_MON_FILTER_MD_PACKET_MGMT_LSB                     0
+
+#define DP_MON_FILTER_MD_PACKET_CTRL_OFFSET                  0x00000024
+#define DP_MON_FILTER_MD_PACKET_CTRL_MASK                    0xffff0000
+#define DP_MON_FILTER_MD_PACKET_CTRL_LSB                     16
+
+#define DP_MON_FILTER_FPMO_PACKET_DATA_OFFSET                  0x00000028
+#define DP_MON_FILTER_FPMO_PACKET_DATA_MASK                    0x0000ffff
+#define DP_MON_FILTER_FPMO_PACKET_DATA_LSB                     0
+
+#define DP_MON_FILTER_FPMO_PACKET_MGMT_OFFSET                  0x00000028
+#define DP_MON_FILTER_FPMO_PACKET_MGMT_MASK                    0xffff0000
+#define DP_MON_FILTER_FPMO_PACKET_MGMT_LSB                     16
+
+#define DP_MON_FILTER_FPMO_PACKET_CTRL_OFFSET                  0x0000002c
+#define DP_MON_FILTER_FPMO_PACKET_CTRL_MASK                    0x0000ffff
+#define DP_MON_FILTER_FPMO_PACKET_CTRL_LSB                     0
+
 #define DP_MON_FILTER_GET(src, field) \
 	((*((uint32_t *)((uint8_t *)(src) + DP_MON_ ## field ## _OFFSET)) & \
 	(DP_MON_ ## field ## _MASK)) >> DP_MON_ ## field ## _LSB) \

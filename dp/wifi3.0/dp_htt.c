@@ -1975,6 +1975,13 @@ int htt_h2t_rx_ring_cfg(struct htt_soc *htt_soc, int pdev_id,
 	/* "response_required" field should be set if a HTT response message is
 	 * required after setting up the ring.
 	 */
+
+	/* word 22, 23, 24, 25, 26, 27*/
+	msg_word += 2;
+	*msg_word = 0;
+	dp_mon_rx_config_packet_type_subtype(soc->dp_soc, msg_word,
+					     htt_tlv_filter, htt_ring_id);
+
 	pkt = htt_htc_pkt_alloc(soc);
 	if (!pkt) {
 		dp_err("pkt alloc failed, ring_type %d ring_id %d htt_ring_id %d",

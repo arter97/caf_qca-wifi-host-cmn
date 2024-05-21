@@ -618,6 +618,11 @@ struct htt_tx_ring_tlv_filter {
  * @enable_fp: enable/disable FP packet
  * @enable_md: enable/disable MD packet
  * @enable_mo: enable/disable MO packet
+ * @enable_fp_packet: enable/disable FP packet config
+ * @enable_md_packet: enable/disable MD packet config
+ * @enable_mo_packet: enable/disable MO packet config
+ * @enable_fpmo_packet: enable/disable FPMO packet config
+ * @offset_valid: Flag to indicate if below offsets are valid
  * @fp_mgmt_filter:
  * @mo_mgmt_filter:
  * @fp_ctrl_filter:
@@ -627,7 +632,18 @@ struct htt_tx_ring_tlv_filter {
  * @md_data_filter:
  * @md_mgmt_filter:
  * @md_ctrl_filter:
- * @offset_valid: Flag to indicate if below offsets are valid
+ * @fp_packet_mgmt_filter:
+ * @mo_packet_mgmt_filter:
+ * @fp_packet_ctrl_filter:
+ * @mo_packet_ctrl_filter:
+ * @fp_packet_data_filter:
+ * @mo_packet_data_filter:
+ * @md_packet_data_filter:
+ * @md_packet_mgmt_filter:
+ * @md_packet_ctrl_filter:
+ * @fpmo_packet_data_filter:
+ * @fpmo_packet_mgmt_filter:
+ * @fpmo_packet_ctrl_filter:
  * @rx_packet_offset: Offset of packet payload
  * @rx_header_offset: Offset of rx_header tlv
  * @rx_mpdu_end_offset: Offset of rx_mpdu_end tlv
@@ -680,7 +696,12 @@ struct htt_rx_ring_tlv_filter {
 		header_per_msdu:1,
 		enable_fp:1,
 		enable_md:1,
-		enable_mo:1;
+		enable_mo:1,
+		enable_fp_packet:1,
+		enable_md_packet:1,
+		enable_mo_packet:1,
+		enable_fpmo_packet:1,
+		offset_valid:1;
 	u_int32_t fp_mgmt_filter:16,
 		mo_mgmt_filter:16;
 	u_int32_t fp_ctrl_filter:16,
@@ -689,8 +710,27 @@ struct htt_rx_ring_tlv_filter {
 		mo_data_filter:16;
 	u_int16_t md_data_filter;
 	u_int16_t md_mgmt_filter;
+
 	u_int16_t md_ctrl_filter;
-	bool offset_valid;
+	u_int16_t fp_packet_mgmt_filter;
+
+	u_int16_t mo_packet_mgmt_filter;
+	u_int16_t fp_packet_ctrl_filter;
+
+	u_int16_t mo_packet_ctrl_filter;
+	u_int16_t fp_packet_data_filter;
+
+	u_int16_t mo_packet_data_filter;
+	u_int16_t md_packet_data_filter;
+
+	u_int16_t md_packet_mgmt_filter;
+	u_int16_t md_packet_ctrl_filter;
+
+	u_int16_t fpmo_packet_data_filter;
+	u_int16_t fpmo_packet_mgmt_filter;
+
+	u_int16_t fpmo_packet_ctrl_filter;
+
 	uint16_t rx_packet_offset;
 	uint16_t rx_header_offset;
 	uint16_t rx_mpdu_end_offset;

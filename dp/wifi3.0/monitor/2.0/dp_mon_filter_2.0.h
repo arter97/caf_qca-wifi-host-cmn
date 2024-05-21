@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -85,6 +85,17 @@ void
 dp_rx_mon_enable_fpmo(uint32_t *msg_word,
 		      struct htt_rx_ring_tlv_filter *tlv_filter);
 
+/**
+ * dp_rx_mon_config_packet_type_subtype() - Setup rx monitor packet
+ * type/subtype filters for data packet
+ * @msg_word: msg word
+ * @tlv_filter: rx ring filter configuration
+ * @htt_ring_id: htt ring id
+ */
+void
+dp_rx_mon_config_packet_type_subtype(uint32_t *msg_word,
+				     struct htt_rx_ring_tlv_filter *tlv_filter,
+				     uint32_t htt_ring_id);
 #ifdef QCA_ENHANCED_STATS_SUPPORT
 /**
  * dp_mon_filter_setup_enhanced_stats_2_0() - Setup the enhanced stats filter

@@ -1479,6 +1479,7 @@ dp_mon_register_feature_ops_1_0(struct dp_soc *soc)
 	mon_ops->rx_pkt_tlv_offset = NULL;
 	mon_ops->rx_enable_mpdu_logging = NULL;
 	mon_ops->rx_enable_fpmo = NULL;
+	mon_ops->rx_config_packet_type_subtype = NULL;
 	mon_ops->mon_neighbour_peers_detach = dp_neighbour_peers_detach;
 	mon_ops->mon_vdev_set_monitor_mode_buf_rings =
 				dp_vdev_set_monitor_mode_buf_rings;
