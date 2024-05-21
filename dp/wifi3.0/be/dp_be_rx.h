@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -967,6 +967,7 @@ static inline uint8_t dp_rx_copy_desc_info_in_nbuf_cb(struct dp_soc *soc,
 	uint32_t mpdu_desc_info = 0;
 	uint32_t msdu_desc_info = 0;
 	uint32_t peer_mdata = 0;
+	bool is_frag = qdf_nbuf_is_frag(nbuf);
 
 	/* get REO mpdu & msdu desc info */
 	hal_rx_get_mpdu_msdu_desc_info_be(ring_desc,
@@ -979,7 +980,8 @@ static inline uint8_t dp_rx_copy_desc_info_in_nbuf_cb(struct dp_soc *soc,
 					      peer_mdata,
 					      msdu_desc_info);
 
-		return 0;
+	qdf_nbuf_set_is_frag(nbuf, is_frag);
+	return 0;
 }
 
 static inline uint8_t hal_rx_get_l3_pad_bytes_be(qdf_nbuf_t nbuf,
