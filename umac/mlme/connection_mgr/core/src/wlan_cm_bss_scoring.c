@@ -1699,15 +1699,8 @@ static inline int cm_calculate_emlsr_score(struct weight_cfg *weight_config)
 	return weight_config->emlsr_weightage * mlo_boost_pct[MLSR];
 }
 
-/**
- * cm_get_entry() - Get bss scan entry by link mac address
- * @scan_list: Scan entry list of bss candidates after filtering
- * @link_addr: link mac address
- *
- * Return: Pointer to bss scan entry
- */
-static struct scan_cache_entry *cm_get_entry(qdf_list_t *scan_list,
-					     struct qdf_mac_addr *link_addr)
+struct scan_cache_entry *cm_get_entry(qdf_list_t *scan_list,
+				      struct qdf_mac_addr *link_addr)
 {
 	qdf_list_node_t *cur_node = NULL, *next_node = NULL;
 	struct scan_cache_node *curr_entry = NULL;

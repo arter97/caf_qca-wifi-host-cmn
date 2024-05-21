@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -505,6 +505,19 @@ void wlan_cm_set_candidate_custom_sort_cb(
  */
 struct reduced_neighbor_report *wlan_cm_get_rnr(struct wlan_objmgr_vdev *vdev,
 						wlan_cm_id cm_id);
+
+/**
+ * wlan_cm_get_curr_candidate_entry() - Get current candidate from cnx mgr
+ * @vdev: VDEV object manager
+ * @cm_id: cnx mgr ID
+ *
+ * Get the current candidate for connection from cnx mgr.
+ *
+ * Return: Scan entry
+ */
+struct scan_cache_entry *
+wlan_cm_get_curr_candidate_entry(struct wlan_objmgr_vdev *vdev,
+				 wlan_cm_id cm_id);
 
 /**
  * wlan_cm_disc_cont_after_rso_stop() - Continue disconnect after RSO stop
