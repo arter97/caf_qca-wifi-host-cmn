@@ -8899,9 +8899,8 @@ dp_set_vdev_param(struct cdp_soc_t *cdp_soc, uint8_t vdev_id,
  * @param: parameter type for vdev
  * @val: value
  *
- * If TDLS connection is from secondary vdev, then copy osif_vdev from
- * primary vdev to support RX, update TX bank register info for primary
- * vdev as well.
+ * If TDLS connection is from secondary vdev, then update TX bank register
+ * info for primary vdev as well.
  * If TDLS connection is from primary vdev, same as before.
  *
  * Return: None
@@ -8956,11 +8955,9 @@ dp_update_mlo_vdev_for_tdls(struct cdp_soc_t *cdp_soc, uint8_t vdev_id,
 
 	/* If current vdev is not same as primary vdev */
 	if (pri_vdev && pri_vdev != vdev) {
-		dp_info("primary vdev [%d] %pK different with vdev [%d] %pK",
+		dp_info("primary vdev [%d] %pK different from vdev [%d] %pK",
 			pri_vdev->vdev_id, pri_vdev,
 			vdev->vdev_id, vdev);
-		/* update osif_vdev to support RX for vdev */
-		vdev->osif_vdev = pri_vdev->osif_vdev;
 		dp_set_vdev_param(cdp_soc, pri_vdev->vdev_id,
 				  CDP_UPDATE_TDLS_FLAGS, val);
 	}
