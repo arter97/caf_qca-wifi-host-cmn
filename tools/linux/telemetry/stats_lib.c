@@ -2963,7 +2963,9 @@ static int32_t send_request_per_object(struct stats_command *user_cmd,
 		return -EINVAL;
 	}
 
-	mldev_mode = get_mldev_mode(obj_list->ifname);
+	/* MLD mode is not required for non-recursive requests */
+	if (!user_cmd->recursive)
+		mldev_mode = get_mldev_mode(obj_list->ifname);
 	/**
 	 * Based on user request find the requested subtree in root_obj.
 	 **/
