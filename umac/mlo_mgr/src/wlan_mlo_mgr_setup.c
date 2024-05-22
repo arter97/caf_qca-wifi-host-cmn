@@ -1081,7 +1081,12 @@ static void mlo_send_teardown_req(struct wlan_objmgr_psoc *psoc,
 			}
 
 			if (!setup_info->trigger_umac_reset) {
-				if (psoc == wlan_pdev_get_psoc(temp_pdev)) {
+				/*
+				 * Set umac_reset for link_idx psoc that matches the current soc
+				 * or first chip that is going for teardown in WSI bypass.
+				 */
+				if (psoc == wlan_pdev_get_psoc(temp_pdev) ||
+				    wlan_mlo_is_wsi_remap_in_progress(grp_id)) {
 					umac_reset = 1;
 					setup_info->trigger_umac_reset = 1;
 				}
