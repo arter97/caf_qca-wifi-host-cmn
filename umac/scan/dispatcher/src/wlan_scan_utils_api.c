@@ -2263,6 +2263,15 @@ util_get_ml_bv_partner_link_info(struct wlan_objmgr_pdev *pdev,
 
 	/* TODO: loop through all the STA info fields */
 
+	/*
+	 * Per-STA Profile subelement format of the Basic Multi-Link element
+	 *
+	 * |---------------|--------|-------------|----------|-------------|
+	 * | Subelement ID | Length | STA control | STA info | STA profile |
+	 * |---------------|--------|-------------|----------|-------------|
+	 * Octets:  1         1           2         variable     variable
+	 */
+
 	/* Sub element ID 0 represents Per-STA Profile */
 	if (ml_ie[offset] == 0) {
 		perstaprof_len = ml_ie[offset + 1];
@@ -2287,12 +2296,13 @@ util_get_ml_bv_partner_link_info(struct wlan_objmgr_pdev *pdev,
 
 		/*
 		 * offset points to the beginning of the STA Info field which
-		 * holds the length of the variable field.
+		 * indicates the number of octets in the STA Info field,
+		 * including one octet for the STA Info Length subfield.
 		 */
 		perstaprof_stainfo_len = ml_ie[offset];
 
 		/* Skip STA Info Length field */
-		offset += WLAN_ML_BV_LINFO_PERSTAPROF_STAINFO_LENGTH_SIZE;
+		offset += perstaprof_stainfo_len;
 
 		if (offset >= ml_ie_len) {
 			scm_err_rl("incorrect offset value %d", offset);
@@ -2303,7 +2313,7 @@ util_get_ml_bv_partner_link_info(struct wlan_objmgr_pdev *pdev,
 		 * To point to the ie_list offset move past the STA Info
 		 * field.
 		 */
-		ielist_offset = &ml_ie[offset + perstaprof_stainfo_len];
+		ielist_offset = &ml_ie[offset];
 
 		/*
 		 * Ensure that the STA Control Field + STA Info Field
@@ -2311,7 +2321,6 @@ util_get_ml_bv_partner_link_info(struct wlan_objmgr_pdev *pdev,
 		 * the pointer to avoid underflow during subtraction.
 		 */
 		if ((perstaprof_stainfo_len +
-		     WLAN_ML_BV_LINFO_PERSTAPROF_STAINFO_LENGTH_SIZE +
 		     WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_SIZE) <
 							perstaprof_len) {
 			if (!(ielist_offset <= end_ptr))
@@ -2319,7 +2328,6 @@ util_get_ml_bv_partner_link_info(struct wlan_objmgr_pdev *pdev,
 			else
 				ielist_len = perstaprof_len -
 					(WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_SIZE +
-					 WLAN_ML_BV_LINFO_PERSTAPROF_STAINFO_LENGTH_SIZE +
 					 perstaprof_stainfo_len);
 		} else {
 			scm_debug("No STA profile IE list found");
