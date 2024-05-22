@@ -1805,7 +1805,13 @@ dp_monitor_update_mac_vdev_map(struct dp_vdev *vdev)
 	mon_mac->mon_chan_band = vdev->monitor_vdev->mon_chan_band;
 	mon_mac->mon_chan_freq = vdev->monitor_vdev->mon_chan_freq;
 	mon_mac->mon_chan_num = vdev->monitor_vdev->mon_chan_num;
-	pdev->ch_band_lmac_id_mapping[mon_mac->mon_chan_band] = vdev->lmac_id;
+
+	if (mon_mac->mon_chan_band < REG_BAND_UNKNOWN)
+		pdev->ch_band_lmac_id_mapping[mon_mac->mon_chan_band] =
+			vdev->lmac_id;
+	else
+		dp_err("Band Unknown: %d", mon_mac->mon_chan_band);
+
 	vdev->monitor_vdev->mac_id = vdev->lmac_id;
 
 	dp_info("mac_id %d vdev_id %d ch_num: %d freq: %d band %d",
