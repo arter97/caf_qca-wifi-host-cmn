@@ -720,33 +720,6 @@ uint8_t wlan_crypto_is_htallowed(struct wlan_objmgr_vdev *vdev,
 qdf_export_symbol(wlan_crypto_is_htallowed);
 
 /**
- * wlan_crypto_store_def_keyix - store default keyix
- * @vdev: vdev
- * @object: Peer object
- * @arg: Argument passed by caller
- *
- * This function gets called from wlan_crypto_setkey
- *
- * Return: None
- */
-static void wlan_crypto_store_def_keyix(struct wlan_objmgr_vdev *vdev,
-					void *object, void *arg)
-{
-	struct wlan_objmgr_peer *peer = object;
-	struct wlan_crypto_comp_priv *crypto_priv;
-	struct wlan_crypto_params *crypto_params;
-
-	uint16_t kid = *(uint16_t *)arg;
-
-	crypto_params = wlan_crypto_peer_get_comp_params(peer, &crypto_priv);
-	if (!crypto_priv) {
-		crypto_err("crypto_priv NULL");
-		return;
-	}
-	crypto_priv->crypto_key.def_tx_keyid = kid;
-}
-
-/**
  * wlan_crypto_setkey - called by ucfg to setkey
  * @vdev: vdev
  * @req_key: req_key with cipher type, key macaddress
@@ -1130,14 +1103,6 @@ QDF_STATUS wlan_crypto_setkey(struct wlan_objmgr_vdev *vdev,
 					req_key->macaddr,
 					req_key->keyix,
 					!isbcast);
-		/*Iterate through the peer list on this vdev
-		 *and store the keyix in the peer's crypto_priv
-		 */
-		wlan_objmgr_iterate_peerobj_list(vdev,
-						 wlan_crypto_store_def_keyix,
-						 (void *)&req_key->keyix,
-						 WLAN_CRYPTO_ID);
-
 		}
 err:
 	if (peer)
