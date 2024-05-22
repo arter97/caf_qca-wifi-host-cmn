@@ -2707,7 +2707,7 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 				break;
 			}
 			/* scan entry makes its own copy so free the frame*/
-			if (mbssid_info.split_prof_continue)
+			if (mbssid_info.split_prof_continue) {
 				qdf_mem_free(split_prof_start);
 				split_prof_start = NULL;
 				split_prof_end = NULL;
