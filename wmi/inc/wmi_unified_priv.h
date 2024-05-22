@@ -675,6 +675,9 @@ QDF_STATUS
 QDF_STATUS (*send_vdev_set_param_cmd)(wmi_unified_t wmi_handle,
 				struct vdev_set_params *param);
 
+QDF_STATUS (*send_twt_vdev_config_cmd)(wmi_unified_t wmi_handle,
+				       struct twt_vdev_config_params *param);
+
 QDF_STATUS
 (*send_multiple_vdev_param_cmd)(wmi_unified_t wmi_handle,
 				struct set_multiple_pdev_vdev_param *params);

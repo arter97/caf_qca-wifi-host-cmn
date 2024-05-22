@@ -508,6 +508,17 @@ wmi_unified_dbglog_cmd_send(wmi_unified_t wmi_handle,
 qdf_export_symbol(wmi_unified_dbglog_cmd_send);
 
 QDF_STATUS
+wmi_unified_twt_vdev_config_send(wmi_unified_t wmi_handle,
+				 struct twt_vdev_config_params *param)
+{
+	if (wmi_handle->ops->send_twt_vdev_config_cmd)
+		return wmi_handle->ops->send_twt_vdev_config_cmd(wmi_handle,
+				param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
 wmi_unified_vdev_set_param_send(wmi_unified_t wmi_handle,
 				struct vdev_set_params *param)
 {

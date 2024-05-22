@@ -3282,6 +3282,48 @@ send_dbglog_cmd_tlv(wmi_unified_t wmi_handle,
 }
 
 /**
+ * send_twt_vdev_config_cmd_tlv() - WMI twt vdev config parameter function
+ * @wmi_handle: handle to WMI.
+ * @param: pointer to hold twt config parameter
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+static QDF_STATUS
+send_twt_vdev_config_cmd_tlv(wmi_unified_t wmi_handle,
+			     struct twt_vdev_config_params *param)
+{
+	QDF_STATUS ret;
+	wmi_twt_vdev_config_cmd_fixed_param *cmd;
+	wmi_buf_t buf;
+	uint16_t len = sizeof(*cmd);
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf)
+		return QDF_STATUS_E_NOMEM;
+
+	cmd = (wmi_twt_vdev_config_cmd_fixed_param *)wmi_buf_data(buf);
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		       WMITLV_TAG_STRUC_wmi_twt_vdev_config_cmd_fixed_param,
+		       WMITLV_GET_STRUCT_TLVLEN(
+				       wmi_twt_vdev_config_cmd_fixed_param));
+
+	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(
+			  wmi_handle,
+			  param->pdev_id);
+	cmd->vdev_id = param->vdev_id;
+	cmd->twt_support = param->twt_value;
+	wmi_nofl_debug("Set pdev %d vdev %d to %u",
+		       cmd->pdev_id, cmd->vdev_id, cmd->twt_support);
+	wmi_mtrace(WMI_TWT_VDEV_CONFIG_CMDID, cmd->vdev_id, 0);
+	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
+				   WMI_TWT_VDEV_CONFIG_CMDID);
+	if (QDF_IS_STATUS_ERROR(ret))
+		wmi_buf_free(buf);
+
+	return ret;
+}
+
+/**
  * send_vdev_set_param_cmd_tlv() - WMI vdev set parameter function
  * @wmi_handle: handle to WMI.
  * @param: pointer to hold vdev set parameter
@@ -22347,6 +22389,7 @@ struct wmi_ops tlv_ops =  {
 	.send_crash_inject_cmd = send_crash_inject_cmd_tlv,
 	.send_dbglog_cmd = send_dbglog_cmd_tlv,
 	.send_vdev_set_param_cmd = send_vdev_set_param_cmd_tlv,
+	.send_twt_vdev_config_cmd = send_twt_vdev_config_cmd_tlv,
 	.send_vdev_set_mu_snif_cmd = send_vdev_set_mu_snif_cmd_tlv,
 	.send_packet_log_enable_cmd = send_packet_log_enable_cmd_tlv,
 	.send_peer_based_pktlog_cmd = send_peer_based_pktlog_cmd,

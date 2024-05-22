@@ -746,6 +746,18 @@ struct vdev_start_params {
 };
 
 /**
+ * struct twt_vdev_config_params - twt vdev config cmd parameter
+ * @pdev_id: pdev id
+ * @vdev_id: vdev id
+ * @twt_value: twt value
+ */
+struct twt_vdev_config_params {
+	uint32_t pdev_id;
+	uint32_t vdev_id;
+	uint32_t twt_value;
+};
+
+/**
  * struct vdev_set_params - vdev set cmd parameter
  * @vdev_id: vdev id
  * @param_id: parameter id
