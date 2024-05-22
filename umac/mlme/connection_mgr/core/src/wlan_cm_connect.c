@@ -1333,6 +1333,12 @@ static QDF_STATUS cm_update_mlo_filter(struct wlan_objmgr_pdev *pdev,
 	if (cm_req->req.is_non_assoc_link) {
 		filter->band_bitmap =  filter->band_bitmap |
 				       CFG_MLO_ASSOC_LINK_BAND_MAX;
+		/* Only select entry which matches MLD address filter for
+		 * link VDEV connect, to avoid assoc/link VDEV selecting
+		 * candidates with different MLD address.
+		 */
+		filter->match_mld_addr = true;
+		qdf_copy_macaddr(&filter->mld_addr, &cm_req->req.mld_addr);
 	}
 	mlme_debug("band bitmap: 0x%x", filter->band_bitmap);
 
