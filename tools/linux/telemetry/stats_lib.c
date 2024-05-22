@@ -628,7 +628,7 @@ static int32_t prepare_request(struct nl_msg *nlmsg, struct stats_command *cmd)
 	uint8_t info = 0;
 
 	if (!cmd->recursive)
-		info |= STATS_INFO_AGGREGATE;
+		info |= STATS_INFO_AGGREGATE | STATS_INFO_RESOLVE_STA;
 
 	if (nla_put_u8(nlmsg, QCA_WLAN_VENDOR_ATTR_TELEMETRIC_LEVEL,
 		       cmd->lvl)) {
@@ -2245,36 +2245,37 @@ static uint32_t get_mldev_mode(char *ifname)
 	return mldev_mode;
 }
 
-static int32_t build_child_sta_list(char *ifname,
-				    struct object_list *parent_obj)
+static uint32_t get_vap_opmode(char *ifname)
 {
-	struct cfg80211_data buffer;
-	uint32_t len = 0;
-	uint32_t opmode = 0;
-	uint8_t *buf = NULL;
+	struct cfg80211_data buffer = {0};
+	uint32_t opmode = IEEE80211_M_ANY;
+	uint16_t cmd = QCA_NL80211_VENDOR_SUBCMD_WIFI_PARAMS;
 	int32_t msg = 0;
-	uint16_t cmd = 0;
 
 	buffer.data = &opmode;
-	buffer.length = sizeof(uint32_t);
-	buffer.parse_data = 0;
-	buffer.callback = NULL;
-	buffer.parse_data = 0;
-	cmd = QCA_NL80211_VENDOR_SUBCMD_WIFI_PARAMS;
+	buffer.length = sizeof(opmode);
 	msg = wifi_cfg80211_send_getparam_command(&g_sock_ctx.cfg80211_ctxt,
 						  cmd,
 						  IEEE80211_PARAM_GET_OPMODE,
 						  ifname, (char *)&buffer,
 						  sizeof(uint32_t));
-	if (msg < 0) {
-		STATS_ERR("Couldn't send NL command; %d\n", msg);
-		return -EIO;
-	}
+	if (msg < 0)
+		STATS_ERR("Couldn't send NL command on %s; %d\n", ifname, msg);
 
-	if (opmode != IEEE80211_M_HOSTAP)
+	return opmode;
+}
+
+static int32_t build_child_sta_list(char *ifname,
+				    struct object_list *parent_obj)
+{
+	struct cfg80211_data buffer = {0};
+	uint32_t len = 0;
+	uint8_t *buf = NULL;
+	uint16_t cmd = 0;
+
+	if (get_vap_opmode(ifname) != IEEE80211_M_HOSTAP)
 		return 0;
 
-	memset(&buffer, 0, sizeof(buffer));
 	len = sizeof(struct ieee80211req_sta_info) * EXPECTED_MAX_STAS_PERVAP;
 
 	buf = (uint8_t *)malloc(len);
@@ -2523,7 +2524,8 @@ static void get_first_active_vap_ifname(struct interface_list *if_list,
 
 	for (inx = 0; inx < if_list->v_count; inx++) {
 		ifname = if_list->vap[inx].name;
-		if (is_interface_active(ifname, STATS_OBJ_VAP)) {
+		if (is_interface_active(ifname, STATS_OBJ_VAP) &&
+		    (get_vap_opmode(ifname) == IEEE80211_M_HOSTAP)) {
 			strlcpy(v_ifname, ifname, IFNAME_LEN);
 			break;
 		}
