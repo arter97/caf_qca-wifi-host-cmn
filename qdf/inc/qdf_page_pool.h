@@ -16,37 +16,36 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <qdf_page_pool.h>
+#if  !defined(_QDF_PAGE_POOL_H)
+#define _QDF_PAGE_POOL_H
 
-__qdf_page_pool_t __qdf_page_pool_create(qdf_device_t osdev, size_t pool_size,
-					 size_t pp_page_size)
+#include <i_qdf_page_pool.h>
+
+typedef __qdf_page_pool_t qdf_page_pool_t;
+
+/**
+ * qdf_page_pool_create() - Create page_pool
+ *
+ * @osdev: Device handle
+ * @pool_size: Pool Size
+ * @pp_page_size: Page pool page size
+ *
+ * Return: Page Pool Reference
+ */
+static inline qdf_page_pool_t
+qdf_page_pool_create(qdf_device_t osdev, size_t pool_size, size_t pp_page_size)
 {
-	struct page_pool_params pp_params = {0};
-	struct page_pool *pp;
-	int ret;
-
-	pp_params.order = get_order(pp_page_size);
-	pp_params.flags = PP_FLAG_DMA_MAP | PP_FLAG_DMA_SYNC_DEV,
-	pp_params.nid = NUMA_NO_NODE,
-	pp_params.dev = osdev->dev,
-	pp_params.dma_dir = DMA_FROM_DEVICE,
-	pp_params.offset = 0,
-	pp_params.max_len = pp_page_size;
-
-	if (pp_params.order > 1)
-		pp_params.flags |= PP_FLAG_PAGE_FRAG;
-
-	pp = page_pool_create(&pp_params);
-	if (IS_ERR(pp)) {
-		ret = PTR_ERR(pp);
-		qdf_rl_nofl_err("Failed to create page pool: %d", ret);
-		return NULL;
-	}
-
-	return pp;
+	return __qdf_page_pool_create(osdev, pool_size, pp_page_size);
 }
 
-void __qdf_page_pool_destroy(__qdf_page_pool_t pp)
+/**
+ * qdf_page_pool_destroy() - Destroy page_pool
+ * @pp: Page Pool Reference
+ *
+ * Return: None
+ */
+static inline void qdf_page_pool_destroy(qdf_page_pool_t pp)
 {
-	return page_pool_destroy(pp);
+	return __qdf_page_pool_destroy(pp);
 }
+#endif /* _QDF_PAGE_POOL_H */
