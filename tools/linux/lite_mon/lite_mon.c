@@ -259,6 +259,20 @@ static void lite_mon_set_default_filter(struct lite_mon_config *mon_config,
 }
 
 /*
+ * lite_mon_set_default_level: set default level in mon_config structre
+ * @mon_config: mon_config structre filled by user
+ * return void
+ */
+static void lite_mon_set_default_level(struct lite_mon_config *mon_config)
+{
+	struct lite_mon_filter_config *filter_config =
+					&mon_config->data.filter_config;
+
+	if (filter_config->level == LITE_MON_LEVEL_INVALID)
+		filter_config->level = LITE_MON_LEVEL_MSDU;
+}
+
+/*
  * lite_mon_set_defaults: set default value of mon_config structre
  * @mon_config: mon_config structre to be filled
  * @filter_input: value to detect if filter input was given by user
@@ -271,6 +285,7 @@ static void lite_mon_set_defaults(struct lite_mon_config *mon_config,
 	case LITE_MON_SET_FILTER:
 		lite_mon_set_default_filter(mon_config, filter_input);
 		lite_mon_set_default_len(mon_config);
+		lite_mon_set_default_level(mon_config);
 		break;
 	default:
 		/* Default settings for other cmdtypes can be added here */
