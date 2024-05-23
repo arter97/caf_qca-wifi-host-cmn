@@ -2537,7 +2537,37 @@ qdf_nbuf_t
 qdf_nbuf_page_frag_alloc_debug(qdf_device_t osdev, qdf_size_t size, int reserve,
 			       int align, qdf_frag_cache_t *pf_cache,
 			       const char *func, uint32_t line);
+/**
+ * qdf_nbuf_page_pool_alloc() - Allocates nbuf from Kernel page pool
+ * @d: Device handler
+ * @s: Buffer size
+ * @r: Headroom size for the buffer
+ * @a: size of the required alignment
+ * @pp: Page Pool reference
+ * @o: buffer offset within the page
+ *
+ * Return: nbuf
+ */
+#define qdf_nbuf_page_pool_alloc(d, s, r, a, pp, o) \
+	qdf_nbuf_page_pool_alloc_debug(d, s, r, a, pp, o,  __func__, __LINE__)
 
+/**
+ * qdf_nbuf_page_pool_alloc_debug() - Allocates nbuf from Kernel page pool
+ * @osdev: Device handler
+ * @size: Buffer size
+ * @reserve: Headroom size for the buffer
+ * @align: size of the required alignment
+ * @pp: Page Pool reference
+ * @offset: buffer offset within the page
+ * @func: function name
+ * @line: line number
+ *
+ * Return: nbuf
+ */
+qdf_nbuf_t
+qdf_nbuf_page_pool_alloc_debug(qdf_device_t osdev, qdf_size_t size, int reserve,
+			       int align, qdf_page_pool_t pp, uint32_t *offset,
+			       const char *func, uint32_t line);
 /**
  * qdf_nbuf_ssr_register_region() - Register nbuf history with SSR dump
  *
@@ -2730,6 +2760,30 @@ qdf_nbuf_page_frag_alloc_fl(qdf_device_t osdev, qdf_size_t size, int reserve,
 {
 	return __qdf_nbuf_page_frag_alloc(osdev, size, reserve, align, pf_cache,
 					  func, line);
+}
+
+/**
+ * qdf_nbuf_page_pool_alloc() - Allocates nbuf from Kernel page pool
+ * @osdev: Device handler
+ * @size: Buffer size
+ * @reserve: Headroom size for the buffer
+ * @align: size of the required alignment
+ * @pp: Page Pool reference
+ * @offset: buffer offset within the page
+ *
+ * Return: nbuf
+ */
+#define qdf_nbuf_page_pool_alloc(osdev, size, reserve, align, pp, offset) \
+	qdf_nbuf_page_pool_alloc_fl(osdev, size, reserve, align, pp, offset, \
+			  __func__, __LINE__)
+
+static inline qdf_nbuf_t
+qdf_nbuf_page_pool_alloc_fl(qdf_device_t osdev, qdf_size_t size, int reserve,
+			    int align, qdf_page_pool_t pp, uint32_t *offset,
+			    const char *func, uint32_t line)
+{
+	return __qdf_nbuf_page_pool_alloc(osdev, size, reserve, align, pp,
+					  offset, func, line);
 }
 #endif /* NBUF_MEMORY_DEBUG */
 

@@ -18,6 +18,18 @@
 
 #include <qdf_page_pool.h>
 
+struct page *__qdf_page_pool_alloc_frag(__qdf_page_pool_t pp, uint32_t *offset,
+					size_t size)
+{
+	return page_pool_dev_alloc_frag(pp, offset, size);
+}
+
+void __qdf_page_pool_put_page(__qdf_page_pool_t pp, struct page *page,
+			      bool direct_recycle)
+{
+	return page_pool_put_full_page(pp, page, direct_recycle);
+}
+
 __qdf_page_pool_t __qdf_page_pool_create(qdf_device_t osdev, size_t pool_size,
 					 size_t pp_page_size)
 {

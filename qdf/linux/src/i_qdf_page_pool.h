@@ -35,6 +35,30 @@
 typedef struct page_pool *__qdf_page_pool_t;
 
 /**
+ * __qdf_page_pool_alloc_frag() - Allocate frag buffer from page pool
+ *
+ * @pp: Page Pool Reference
+ * @offset: Buffer offset reference within the page
+ * @size: Buffer size
+ *
+ * Return: Allocated page reference
+ */
+struct page *__qdf_page_pool_alloc_frag(__qdf_page_pool_t pp, uint32_t *offset,
+					size_t size);
+
+/**
+ * __qdf_page_pool_put_page() - Decrement frag reference count of page pool page
+ *
+ * @pp: Page Pool eference
+ * @page: Page reference
+ * @direct_recycle: Direct recycle to lockless cache in page pool
+ *
+ * Return: None
+ */
+void __qdf_page_pool_put_page(__qdf_page_pool_t pp, struct page *page,
+			      bool direct_recycle);
+
+/**
  * __qdf_page_pool_create() - Create page_pool
  *
  * @osdev: Device handle
@@ -57,6 +81,36 @@ void __qdf_page_pool_destroy(__qdf_page_pool_t pp);
 #else
 
 typedef void *__qdf_page_pool_t;
+
+/**
+ * __qdf_page_pool_alloc_frag() - Allocate frag buffer from page pool
+ *
+ * @pp: Page Pool Reference
+ * @offset: Buffer offset reference within the page
+ * @size: Buffer size
+ *
+ * Return: Allocated page reference
+ */
+static inline struct page *
+__qdf_page_pool_alloc_frag(__qdf_page_pool_t pp, uint32_t *offset, size_t size)
+{
+	return NULL;
+}
+
+/**
+ * __qdf_page_pool_put_page() - Decrement frag reference count of page pool page
+ *
+ * @pp: Page Pool eference
+ * @page: Page reference
+ * @direct_recycle: Direct recycle to lockless cache in page pool
+ *
+ * Return: None
+ */
+static inline void
+__qdf_page_pool_put_page(__qdf_page_pool_t pp, struct page *page,
+			 bool direct_recycle)
+{
+}
 
 /**
  * __qdf_page_pool_create() - Create page_pool

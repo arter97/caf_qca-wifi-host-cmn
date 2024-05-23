@@ -36,6 +36,8 @@
 typedef __qdf_wait_queue_head_t qdf_wait_queue_head_t;
 typedef __qdf_siphash_aligned_key_t qdf_siphash_aligned_key_t;
 
+typedef __qdf_page_t qdf_page_t;
+
 /**
  * qdf_unlikely - Compiler-dependent macro denoting code unlikely to execute
  * @_expr: expression to be checked

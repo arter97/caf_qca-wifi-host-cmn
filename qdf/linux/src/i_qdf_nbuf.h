@@ -40,6 +40,7 @@
 #include <qdf_util.h>
 #include <qdf_nbuf_frag.h>
 #include "qdf_time.h"
+#include <qdf_page_pool.h>
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0))
 /* Since commit
@@ -452,6 +453,32 @@ __qdf_nbuf_page_frag_alloc(__qdf_device_t osdev, size_t size, int reserve,
 			   int align, __qdf_frag_cache_t *pf_cache,
 			   const char *func, uint32_t line);
 
+/**
+ * __qdf_nbuf_page_pool_alloc() - Allocate nbuf from @pp kernel page pool
+ *
+ * @osdev: Device handle
+ * @size: Netbuf requested size
+ * @reserve: headroom to start with
+ * @align: Align
+ * @pp: Page pool reference
+ * @offset: Offset within the page pool page where buffer is allocated
+ * @func: Function name of the call site
+ * @line: line number of the call site
+ *
+ * This allocates a nbuf, aligns if needed and reserves some space in the front,
+ * since the reserve is done after alignment the reserve value if being
+ * unaligned will result in an unaligned address.
+ *
+ * It will call kernel page pool APIs for allocation of skb->head, prefer
+ * this API for buffers that are allocated and freed only once i.e., for
+ * reusable buffers.
+ *
+ * Return: nbuf or %NULL if no memory
+ */
+__qdf_nbuf_t
+__qdf_nbuf_page_pool_alloc(qdf_device_t osdev, size_t size, int reserve,
+			   int align, __qdf_page_pool_t pp, uint32_t *offset,
+			   const char *func, uint32_t line);
 /**
  * __qdf_nbuf_clone() - clone the nbuf (copy is readonly)
  * @nbuf: Pointer to network buffer

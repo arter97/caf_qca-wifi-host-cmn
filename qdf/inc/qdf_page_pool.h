@@ -20,8 +20,40 @@
 #define _QDF_PAGE_POOL_H
 
 #include <i_qdf_page_pool.h>
+#include <qdf_util.h>
 
 typedef __qdf_page_pool_t qdf_page_pool_t;
+
+/**
+ * qdf_page_pool_alloc_frag() - Allocate frag buffer from page pool
+ *
+ * @pp: Page Pool Reference
+ * @offset: Buffer offset reference within the page
+ * @size: Buffer size
+ *
+ * Return: Allocated page reference
+ */
+static inline qdf_page_t
+qdf_page_pool_alloc_frag(qdf_page_pool_t pp, uint32_t *offset, size_t size)
+{
+	return __qdf_page_pool_alloc_frag(pp, offset, size);
+}
+
+/**
+ * qdf_page_pool_put_page() - Decrement frag reference count of page pool page
+ *
+ * @pp: Page Pool eference
+ * @page: Page reference
+ * @direct_recycle: Direct recycle to lockless cache in page pool
+ *
+ * Return: None
+ */
+static inline void
+qdf_page_pool_put_page(qdf_page_pool_t pp, qdf_page_t page,
+		       bool direct_recycle)
+{
+	return __qdf_page_pool_put_page(pp, page, direct_recycle);
+}
 
 /**
  * qdf_page_pool_create() - Create page_pool

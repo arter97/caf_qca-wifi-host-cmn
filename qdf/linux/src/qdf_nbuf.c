@@ -44,6 +44,7 @@
 #include <qdf_crypto.h>
 #include <linux/igmp.h>
 #include <net/mld.h>
+#include <qdf_page_pool.h>
 
 #if defined(FEATURE_TSO)
 #include <net/ipv6.h>
@@ -783,6 +784,55 @@ skb_alloc:
 }
 
 qdf_export_symbol(__qdf_nbuf_page_frag_alloc);
+
+#ifdef DP_FEATURE_RX_BUFFER_RECYCLE
+struct sk_buff *
+__qdf_nbuf_page_pool_alloc(qdf_device_t osdev, size_t size, int reserve,
+			   int align, __qdf_page_pool_t pp, uint32_t *offset,
+			   const char *func, uint32_t line)
+{
+	struct sk_buff *skb;
+	struct page *page;
+
+	if (align)
+		size += (align - 1);
+
+	size = SKB_DATA_ALIGN(size) +
+		SKB_DATA_ALIGN(sizeof(struct skb_shared_info));
+
+	*offset = 0;
+
+	page = qdf_page_pool_alloc_frag(pp, offset, size);
+	if (!page) {
+		qdf_rl_nofl_err("failed to alloc page pool buffer %zuB @ %s:%d",
+				size, func, line);
+		return NULL;
+	}
+
+	skb = napi_build_skb(page_address(page) + *offset, size);
+	if (!skb) {
+		qdf_page_pool_put_page(pp, page, false);
+		qdf_rl_nofl_err("failed to build skb %zuB @ %s:%d",
+				size, func, line);
+		return NULL;
+	}
+
+	skb_mark_for_recycle(skb);
+	qdf_nbuf_set_defaults(skb, align, reserve);
+
+	return skb;
+}
+#else
+struct sk_buff *
+__qdf_nbuf_page_pool_alloc(qdf_device_t osdev, size_t size, int reserve,
+			   int align, __qdf_page_pool_t pp, uint32_t *offset,
+			   const char *func, uint32_t line)
+{
+	return NULL;
+}
+#endif
+
+qdf_export_symbol(__qdf_nbuf_page_pool_alloc);
 
 #ifdef QCA_DP_TX_NBUF_LIST_FREE
 void
@@ -3986,6 +4036,33 @@ qdf_nbuf_dev_kfree_list_debug(__qdf_nbuf_queue_head_t *nbuf_queue_head,
 }
 
 qdf_export_symbol(qdf_nbuf_dev_kfree_list_debug);
+
+qdf_nbuf_t
+qdf_nbuf_page_pool_alloc_debug(qdf_device_t osdev, qdf_size_t size, int reserve,
+			       int align, qdf_page_pool_t pp, uint32_t *offset,
+			       const char *func, uint32_t line)
+{
+	qdf_nbuf_t nbuf;
+
+	if (is_initial_mem_debug_disabled)
+		return __qdf_nbuf_page_pool_alloc(osdev, size, reserve, align,
+						  pp, offset, func, line);
+
+	nbuf = __qdf_nbuf_page_pool_alloc(osdev, size, reserve, align,
+					  pp, offset, func, line);
+
+	/* Store SKB in internal QDF tracking table */
+	if (qdf_likely(nbuf)) {
+		qdf_net_buf_debug_add_node(nbuf, size, func, line);
+		qdf_nbuf_history_add(nbuf, func, line, QDF_NBUF_ALLOC);
+	} else {
+		qdf_nbuf_history_add(nbuf, func, line, QDF_NBUF_ALLOC_FAILURE);
+	}
+
+	return nbuf;
+}
+
+qdf_export_symbol(qdf_nbuf_page_pool_alloc_debug);
 #endif /* NBUF_MEMORY_DEBUG */
 
 #if defined(QCA_DP_NBUF_FAST_PPEDS)
