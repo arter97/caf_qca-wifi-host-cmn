@@ -2098,36 +2098,10 @@ dp_rx_deliver_to_stack_ext(struct dp_soc *soc, struct dp_vdev *vdev,
 	return true;
 }
 
-bool dp_rx_intrabss_wds_ext_ap_bridge_check(struct dp_txrx_peer *ta_peer,
-					    struct dp_txrx_peer *da_peer,
-					    bool is_mcast_pkt)
-{
-	if (!ta_peer->vdev->wds_ext_enabled)
-		return false;
-
-	if (!is_mcast_pkt && ta_peer->vdev->wds_ext_ap_bridge)
-		return false;
-
-	/* either ta peer or da peer is wds ext capable,
-	 * perform wds ext ap bridging.
-	 */
-	if ((ta_peer && dp_peer_is_wds_ext_peer(ta_peer)) ||
-	    (da_peer && dp_peer_is_wds_ext_peer(da_peer)))
-		return true;
-
-	return false;
-}
 #else
 static inline bool
 dp_rx_deliver_to_stack_ext(struct dp_soc *soc, struct dp_vdev *vdev,
 			   struct dp_txrx_peer *txrx_peer, qdf_nbuf_t nbuf_head)
-{
-	return false;
-}
-
-bool dp_rx_intrabss_wds_ext_ap_bridge_check(struct dp_txrx_peer *ta_peer,
-					    struct dp_txrx_peer *da_peer,
-					    bool is_mcast_pkt)
 {
 	return false;
 }

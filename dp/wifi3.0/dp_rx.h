@@ -735,6 +735,37 @@ void *dp_rx_cookie_2_va_mon_status(struct dp_soc *soc, uint32_t cookie)
 
 #ifndef QCA_HOST_MODE_WIFI_DISABLED
 
+#ifdef QCA_SUPPORT_WDS_EXTENDED
+static inline bool
+dp_rx_intrabss_wds_ext_ap_bridge_check(struct dp_txrx_peer *ta_peer,
+				       struct dp_txrx_peer *da_peer,
+				       bool is_mcast_pkt)
+{
+	if (!ta_peer->vdev->wds_ext_enabled)
+		return false;
+
+	if (!is_mcast_pkt && ta_peer->vdev->wds_ext_ap_bridge)
+		return false;
+
+	/* either ta peer or da peer is wds ext capable,
+	 * perform wds ext ap bridging.
+	 */
+	if ((ta_peer && dp_peer_is_wds_ext_peer(ta_peer)) ||
+	    (da_peer && dp_peer_is_wds_ext_peer(da_peer)))
+		return true;
+
+	return false;
+}
+#else
+static inline bool
+dp_rx_intrabss_wds_ext_ap_bridge_check(struct dp_txrx_peer *ta_peer,
+				       struct dp_txrx_peer *da_peer,
+				       bool is_mcast_pkt)
+{
+	return false;
+}
+#endif
+
 static inline bool dp_rx_check_ap_bridge(struct dp_vdev *vdev)
 {
 	return vdev->ap_bridge_enabled;
@@ -3648,9 +3679,6 @@ dp_rx_ring_record_entry(struct dp_soc *soc, uint8_t ring_num,
 }
 #endif
 
-bool dp_rx_intrabss_wds_ext_ap_bridge_check(struct dp_txrx_peer *ta_peer,
-					    struct dp_txrx_peer *da_peer,
-					    bool is_mcast_pkt);
 #ifdef QCA_SUPPORT_WDS_EXTENDED
 /**
  * dp_rx_is_list_ready() - Make different lists for 4-address
