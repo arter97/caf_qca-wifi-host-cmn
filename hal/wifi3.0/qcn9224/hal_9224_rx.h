@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -40,6 +40,8 @@
 #if (defined(WLAN_SA_API_ENABLE)) && (defined(QCA_WIFI_QCA9574))
 #include "phyrx_other_receive_info_evm_details.h"
 #endif /* WLAN_SA_API_ENABLE && QCA_WIFI_QCA9574 */
+
+#include "phyrx_other_receive_info_all_sigb_details.h"
 
 #define HAL_RX_MSDU0_BUFFER_ADDR_LSB(link_desc_va)	\
 	(uint8_t *)(link_desc_va) +			\

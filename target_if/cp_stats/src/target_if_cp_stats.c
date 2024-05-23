@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -606,6 +606,67 @@ static void target_if_register_telemetry_cp_stats_txops(
 				struct wlan_lmac_if_cp_stats_tx_ops *tx_ops)
 { }
 #endif
+#ifdef WLAN_CHIPSET_STATS
+QDF_STATUS
+target_if_cp_stats_is_service_cstats_enabled(struct wlan_objmgr_psoc *psoc,
+					     bool *is_fw_support_cstats)
+{
+	struct wmi_unified *wmi_handle;
+
+	if (!psoc) {
+		cp_stats_err("psoc is NULL!");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
+	if (!wmi_handle) {
+		cp_stats_err("wmi_handle is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	*is_fw_support_cstats =
+		wmi_service_enabled(wmi_handle,
+				    wmi_service_chipset_logging_support);
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS
+target_if_cp_stats_enable_cstats(struct wlan_objmgr_psoc *psoc,
+				 uint32_t param_val, uint8_t mac_id)
+{
+	struct wmi_unified *wmi_handle;
+	struct pdev_params params = {0};
+
+	wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
+	if (!wmi_handle) {
+		cp_stats_err("wmi_handle is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	params.param_id = WMI_PDEV_PARAM_ENABLE_CHIPSET_LOGGING;
+	params.param_value = param_val;
+
+	return wmi_unified_pdev_param_send(wmi_handle, &params, mac_id);
+}
+
+/**
+ * target_if_register_cstats_enable_txops() - Register cstats enable in txops
+ *
+ * @ops: pointer to wlan_lmac_if_cp_stats_tx_ops
+ *
+ * Return: void
+ */
+static void
+target_if_register_cstats_enable_txops(struct wlan_lmac_if_cp_stats_tx_ops *ops)
+{
+	ops->send_cstats_enable = target_if_cp_stats_enable_cstats;
+}
+#else
+static void
+target_if_register_cstats_enable_txops(struct wlan_lmac_if_cp_stats_tx_ops *ops)
+{
+}
+#endif
 
 QDF_STATUS
 target_if_cp_stats_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
@@ -622,6 +683,9 @@ target_if_cp_stats_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 		cp_stats_err("lmac tx ops is NULL!");
 		return QDF_STATUS_E_FAILURE;
 	}
+
+	target_if_register_cstats_enable_txops(cp_stats_tx_ops);
+
 	target_if_register_infra_cp_stats_txops(cp_stats_tx_ops);
 	target_if_register_telemetry_cp_stats_txops(cp_stats_tx_ops);
 

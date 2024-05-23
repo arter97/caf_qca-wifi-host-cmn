@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -1609,16 +1609,6 @@ ucfg_scan_set_global_config(struct wlan_objmgr_psoc *psoc,
 		status = QDF_STATUS_E_INVAL;
 		break;
 	}
-
-	return status;
-}
-
-QDF_STATUS ucfg_scan_update_mlme_by_bssinfo(struct wlan_objmgr_pdev *pdev,
-		struct bss_info *bss_info, struct mlme_info *mlme)
-{
-	QDF_STATUS status;
-
-	status = scm_scan_update_mlme_by_bssinfo(pdev, bss_info, mlme);
 
 	return status;
 }

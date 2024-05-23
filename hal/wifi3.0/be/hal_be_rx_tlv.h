@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -2583,5 +2583,20 @@ hal_rx_msdu_end_sa_sw_peer_id_get_be(uint8_t *buf)
 	hal_rx_msdu_end_t *msdu_end = &pkt_tlvs->msdu_end_tlv.rx_msdu_end;
 
 	return HAL_RX_MSDU_END_SA_SW_PEER_ID_GET(msdu_end);
+}
+
+/**
+ * hal_rx_parse_eht_sig_hdr_be()
+ *				    - process eht sig header
+ * @hal_soc: HAL soc handle
+ * @tlv: pointer to EHT SIG TLV buffer
+ * @ppdu_info_handle: pointer to ppdu_info
+ *
+ * Return: None
+ */
+static inline
+void hal_rx_parse_eht_sig_hdr_be(struct hal_soc *hal_soc, uint8_t *tlv,
+				 void *ppdu_info_handle)
+{
 }
 #endif /* _HAL_BE_RX_TLV_H_ */

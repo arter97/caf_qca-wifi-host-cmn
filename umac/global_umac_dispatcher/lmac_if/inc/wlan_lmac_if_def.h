@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -157,6 +157,7 @@ typedef struct big_data_stats_event stats_big_data_stats_event;
  *                           command to FW
  * @send_req_big_data_stats: Function pointer to send big data stats
  * @send_req_telemetry_cp_stats: API to send stats request to wmi
+ * @send_cstats_enable: Sends Pdev set param command to enable chipset stats
  */
 struct wlan_lmac_if_cp_stats_tx_ops {
 	QDF_STATUS (*cp_stats_attach)(struct wlan_objmgr_psoc *psoc);
@@ -188,6 +189,10 @@ struct wlan_lmac_if_cp_stats_tx_ops {
 	QDF_STATUS (*send_req_telemetry_cp_stats)(
 					struct wlan_objmgr_pdev *pdev,
 					struct infra_cp_stats_cmd_info *req);
+#endif
+#ifdef WLAN_CHIPSET_STATS
+	QDF_STATUS (*send_cstats_enable)(struct wlan_objmgr_psoc *psoc,
+					 uint32_t param_val, uint8_t mac_id);
 #endif
 };
 

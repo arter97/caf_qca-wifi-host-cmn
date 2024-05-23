@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -54,6 +54,9 @@ qdf_declare_param(qdf_log_flush_timer_period, uint);
 #include "i_host_diag_core_event.h"
 #endif
 
+#ifdef WLAN_CHIPSET_STATS
+#include "wlan_cp_stats_chipset_stats.h"
+#endif
 /* Global qdf print id */
 
 /* Preprocessor definitions and constants */
@@ -1615,6 +1618,26 @@ static bool qdf_log_icmp_pkt(uint8_t vdev_id, struct sk_buff *skb,
 	return false;
 }
 
+#ifdef WLAN_CHIPSET_STATS
+static void
+qdf_log_pkt_cstats(uint8_t *sa, uint8_t *da, enum qdf_proto_type pkt_type,
+		   enum qdf_proto_subtype subtype, enum qdf_proto_dir dir,
+		   enum qdf_dp_tx_rx_status status, uint8_t vdev_id,
+		   enum QDF_OPMODE op_mode)
+{
+	wlan_cp_stats_cstats_pkt_log(sa, da, pkt_type, subtype, dir,
+				     status, vdev_id, op_mode);
+}
+#else
+static void
+qdf_log_pkt_cstats(uint8_t *sa, uint8_t *da, enum qdf_proto_type pkt_type,
+		   enum qdf_proto_subtype subtype, enum qdf_proto_dir dir,
+		   enum qdf_dp_tx_rx_status status, uint8_t vdev_id,
+		   enum QDF_OPMODE op_mode)
+{
+}
+#endif
+
 #ifdef CONNECTIVITY_DIAG_EVENT
 enum diag_tx_status wlan_get_diag_tx_status(enum qdf_dp_tx_rx_status tx_status)
 {
@@ -1881,6 +1904,10 @@ static bool qdf_log_eapol_pkt(uint8_t vdev_id, struct sk_buff *skb,
 					       QDF_RX, 0, op_mode,
 					       vdev_id, skb->data,
 					       qdf_nbuf_rx_get_band(skb));
+		qdf_log_pkt_cstats(skb->data + QDF_NBUF_SRC_MAC_OFFSET,
+				   skb->data + QDF_NBUF_DEST_MAC_OFFSET,
+				   QDF_PROTO_TYPE_EAPOL, subtype, dir,
+				   QDF_TX_RX_STATUS_INVALID, vdev_id, op_mode);
 	}
 
 	if (dp_eap_trace) {
@@ -1966,6 +1993,10 @@ static bool qdf_log_dhcp_pkt(uint8_t vdev_id, struct sk_buff *skb,
 		qdf_fill_wlan_connectivity_log(QDF_PROTO_TYPE_DHCP, subtype,
 					       QDF_RX, 0, op_mode, vdev_id, 0,
 					       qdf_nbuf_rx_get_band(skb));
+		qdf_log_pkt_cstats(skb->data + QDF_NBUF_SRC_MAC_OFFSET,
+				   skb->data + QDF_NBUF_DEST_MAC_OFFSET,
+				   QDF_PROTO_TYPE_DHCP, subtype, dir,
+				   QDF_TX_RX_STATUS_INVALID, vdev_id, op_mode);
 	}
 
 	if (dp_dhcp_trace) {
@@ -2494,6 +2525,11 @@ void qdf_dp_trace_ptr(qdf_nbuf_t nbuf, enum QDF_DP_TRACE_ID code,
 					       QDF_NBUF_CB_TX_VDEV_CTX(nbuf),
 					       nbuf->data,
 					       qdf_nbuf_tx_get_band(nbuf));
+		qdf_log_pkt_cstats(nbuf->data + QDF_NBUF_SRC_MAC_OFFSET,
+				   nbuf->data + QDF_NBUF_DEST_MAC_OFFSET,
+				   pkt_type, subtype, QDF_TX,
+				   qdf_tx_status, QDF_NBUF_CB_TX_VDEV_CTX(nbuf),
+				   op_mode);
 	}
 
 	if (qdf_dp_enable_check(nbuf, code, QDF_TX) == false)

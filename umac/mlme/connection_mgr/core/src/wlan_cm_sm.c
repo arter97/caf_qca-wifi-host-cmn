@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015,2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -110,8 +110,6 @@ static bool cm_state_init_event(void *ctx, uint16_t event,
 					 data_len, data);
 		break;
 	case WLAN_CM_SM_EV_CONNECT_FAILURE:
-		cm_connect_complete(cm_ctx, data);
-
 		if (cm_is_link_switch_connect_resp(data)) {
 			/*
 			 * If non-link switch connect fails, kernel will be
@@ -130,10 +128,9 @@ static bool cm_state_init_event(void *ctx, uint16_t event,
 			cm_sm_transition_to(cm_ctx,
 					    WLAN_CM_SS_IDLE_DUE_TO_LINK_SWITCH);
 		}
+		cm_connect_complete(cm_ctx, data);
 		break;
 	case WLAN_CM_SM_EV_DISCONNECT_DONE:
-		cm_disconnect_complete(cm_ctx, data);
-
 		if (cm_is_link_switch_disconnect_resp(data)) {
 			/*
 			 * Change the substate of CM incase the disconnect
@@ -144,6 +141,7 @@ static bool cm_state_init_event(void *ctx, uint16_t event,
 			cm_sm_transition_to(cm_ctx,
 					    WLAN_CM_SS_IDLE_DUE_TO_LINK_SWITCH);
 		}
+		cm_disconnect_complete(cm_ctx, data);
 		break;
 	case WLAN_CM_SM_EV_DISCONNECT_REQ:
 		status = cm_handle_discon_req_in_non_connected_state(cm_ctx, data,
