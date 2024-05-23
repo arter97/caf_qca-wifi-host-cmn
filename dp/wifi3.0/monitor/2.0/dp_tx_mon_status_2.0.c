@@ -376,15 +376,9 @@ dp_tx_mon_generate_cts2self_frm(struct dp_pdev *pdev,
 	wh_min->i_dur[1] = (duration_le & 0xFF00) >> 8;
 	wh_min->i_dur[0] = (duration_le & 0xFF);
 
-	if (window_flag == INITIATOR_WINDOW) {
-		qdf_mem_copy(wh_min->i_addr1,
-			     TXMON_STATUS_INFO(tx_status_info, addr1),
-			     QDF_MAC_ADDR_SIZE);
-	} else {
-		qdf_mem_copy(wh_min->i_addr1,
-			     TXMON_STATUS_INFO(tx_status_info, addr2),
-			     QDF_MAC_ADDR_SIZE);
-	}
+	qdf_mem_copy(wh_min->i_addr1,
+		     TXMON_STATUS_INFO(tx_status_info, addr2),
+		     QDF_MAC_ADDR_SIZE);
 
 	qdf_nbuf_set_pktlen(mpdu_nbuf, sizeof(*wh_min));
 	dp_tx_mon_enqueue_mpdu_nbuf(pdev, tx_ppdu_info, 0, mpdu_nbuf);
