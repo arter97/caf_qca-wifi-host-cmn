@@ -312,6 +312,13 @@ enum qcn_attribute_id {
 #define WLAN_RNR_TBTT_OFFSET_INVALID             255
 #define WLAN_TPE_IE_MIN_LEN                      2
 #define WLAN_MAX_NUM_TPE_IE                      8
+/* Number of max TX power elements supported plus size of Transmit Power
+ * Information element.
+ * For 320 MHz, the maximum number of subchannels is 16.
+ * And 2 extra octets for (1) Transmit Power Information Field and
+ * (2) Extension Transmit PSD Information Field
+ */
+#define WLAN_TPE_IE_MAX_LEN                      18
 
 /* BSS Parameters subield of RNR IE */
 
@@ -332,11 +339,6 @@ enum qcn_attribute_id {
 
 /* Wide band channel switch IE length */
 #define WLAN_WIDE_BW_CHAN_SWITCH_IE_LEN          3
-
-/* Number of max TX power elements supported plus size of Transmit Power
- * Information element.
- */
-#define WLAN_TPE_IE_MAX_LEN                      9
 
 #ifdef WLAN_FEATURE_11BE
 /* Bandwidth indication element IE maximum length */

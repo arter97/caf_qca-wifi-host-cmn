@@ -1005,7 +1005,7 @@ util_scan_parse_chan_switch_wrapper_ie(struct scan_cache_entry *scan_params,
 			scan_params->ie_list.widebw = (uint8_t *)sub_ie;
 			break;
 		case WLAN_ELEMID_VHT_TX_PWR_ENVLP:
-			if (sub_ie->ie_len > WLAN_TPE_IE_MAX_LEN)
+			if (sub_ie->ie_len < WLAN_TPE_IE_MIN_LEN)
 				return QDF_STATUS_E_INVAL;
 			scan_params->ie_list.txpwrenvlp = (uint8_t *)sub_ie;
 			break;
