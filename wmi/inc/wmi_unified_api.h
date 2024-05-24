@@ -5374,6 +5374,9 @@ wmi_extract_vendor_pdev_event(wmi_unified_t wmi_hdl,
 QDF_STATUS
 wmi_unified_sap_suspend_cmd_send(wmi_unified_t wmi_handle,
 				 struct vdev_suspend_params *param);
+#ifdef FEATURE_MGMT_RX_OVER_SRNG
+void wmi_rx_buf_srng(struct wmi_unified *wmi_handle, wmi_buf_t buf);
+#endif
 
 /**
  * wmi_unified_send_sta_vdev_report_ap_oper_bw_cmd() - WMI to send STA VDEV associated AP's
