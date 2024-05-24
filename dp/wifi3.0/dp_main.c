@@ -6218,21 +6218,27 @@ QDF_STATUS dp_peer_mlo_setup(
 				mld_peer->vdev, vdev_id,
 				qdf_atomic_read(&mld_peer->vdev->ref_cnt));
 
-			params.old_vdev_id = mld_peer->vdev->vdev_id;
-			params.old_pdev_id = mld_peer->vdev->pdev->pdev_id;
-			params.old_chip_id =
+			if (peer->vdev->opmode != wlan_op_mode_sta) {
+				params.old_vdev_id = mld_peer->vdev->vdev_id;
+				params.old_pdev_id =
+						mld_peer->vdev->pdev->pdev_id;
+				params.old_chip_id =
 				dp_get_chip_id(mld_peer->vdev->pdev->soc);
-			dp_mld_peer_change_vdev(soc, mld_peer, vdev_id);
 
-			params.vdev_id = peer->vdev->vdev_id;
-			params.peer_mac = mld_peer->mac_addr.raw;
-			params.chip_id = dp_get_chip_id(soc);
-			params.pdev_id = peer->vdev->pdev->pdev_id;
+				dp_mld_peer_change_vdev(soc, mld_peer, vdev_id);
 
-			dp_wdi_event_handler(
+				params.vdev_id = peer->vdev->vdev_id;
+				params.peer_mac = mld_peer->mac_addr.raw;
+				params.chip_id = dp_get_chip_id(soc);
+				params.pdev_id = peer->vdev->pdev->pdev_id;
+
+				dp_wdi_event_handler(
 					WDI_EVENT_PEER_PRIMARY_UMAC_UPDATE,
 					soc, (void *)&params, peer->peer_id,
 					WDI_NO_VAL, params.pdev_id);
+			} else {
+				dp_mld_peer_change_vdev(soc, mld_peer, vdev_id);
+			}
 		}
 
 		/* associate mld and link peer */
