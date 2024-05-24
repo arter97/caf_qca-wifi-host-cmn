@@ -4135,6 +4135,24 @@ wlan_soc_sawf_reclaim_timer_val_attach(
 	wlan_cfg_ctx->sawf_msduq_reclaim_timer_val =
 				cfg_get(psoc, CFG_DP_SAWF_RECLAIM_TIMER_VAL);
 }
+
+/*
+ * wlan_soc_sawf_msduq_tid_skid_cfg_attach() - Update MSDUQ TID skid
+ * enable/disable value
+ * @psoc: object manager psoc
+ * @wlan_cfg_ctx: dp soc cfg ctx
+ *
+ * Return: None
+ */
+static void
+wlan_soc_sawf_msduq_tid_skid_cfg_attach(
+				struct cdp_ctrl_objmgr_psoc *psoc,
+				struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
+{
+	wlan_cfg_ctx->sawf_msduq_tid_skid_enabled =
+			cfg_get(psoc, CFG_DP_SAWF_MSDUQ_TID_SKID_ENABLE);
+}
+
 #else
 static void
 wlan_soc_sawf_mcast_attach(struct cdp_ctrl_objmgr_psoc *psoc,
@@ -4146,6 +4164,13 @@ static void
 wlan_soc_sawf_reclaim_timer_val_attach(
 		struct cdp_ctrl_objmgr_psoc *psoc,
 		struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
+{
+}
+
+static void
+wlan_soc_sawf_msduq_tid_skid_cfg_attach(
+				struct cdp_ctrl_objmgr_psoc *psoc,
+				struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
 {
 }
 #endif
@@ -4405,6 +4430,7 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	wlan_soc_ast_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_sawf_mcast_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_sawf_reclaim_timer_val_attach(psoc, wlan_cfg_ctx);
+	wlan_soc_sawf_msduq_tid_skid_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_direct_link_cfg_attach(psoc, wlan_cfg_ctx);
 
 	return wlan_cfg_ctx;
@@ -4688,6 +4714,7 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	wlan_soc_ast_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_sawf_mcast_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_sawf_reclaim_timer_val_attach(psoc, wlan_cfg_ctx);
+	wlan_soc_sawf_msduq_tid_skid_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_direct_link_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_cfg_ctx->rxmon_mgmt_linearization =
 		cfg_get(psoc, CFG_DP_RXMON_MGMT_LINEARIZATION);
@@ -6215,6 +6242,12 @@ bool wlan_cfg_get_sawf_mc_config(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return cfg->sawf_mcast_enabled;
 }
+
+bool wlan_cfg_get_sawf_msduq_tid_skid_config(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->sawf_msduq_tid_skid_enabled;
+}
+
 #else
 bool wlan_cfg_get_sawf_config(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
@@ -6229,6 +6262,7 @@ void wlan_cfg_set_sawf_msduq_reclaim_config(struct wlan_cfg_dp_soc_ctxt *cfg,
 					    bool val)
 {
 }
+
 bool wlan_cfg_get_sawf_msduq_reclaim_config(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return false;
@@ -6241,6 +6275,11 @@ wlan_cfg_get_sawf_msduq_reclaim_timer_val(struct wlan_cfg_dp_soc_ctxt *cfg)
 }
 
 bool wlan_cfg_get_sawf_mc_config(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return false;
+}
+
+bool wlan_cfg_get_sawf_msduq_tid_skid_config(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return false;
 }

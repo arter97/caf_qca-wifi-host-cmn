@@ -350,6 +350,7 @@ struct wlan_srng_cfg {
  * @sawf_msduq_reclaim_enabled: SAWF MSDUQ reclaim feature enable/disable
  * @sawf_msduq_reclaim_timer_val: SAWF MSDUQ Reclaim timer value in sec
  * @sawf_mcast_enabled : SAWF for multicast enable/disable
+ * @sawf_msduq_tid_skid_enabled: SAWF MSDUQ low/high TID Skid enable/disable
  * @sawf_stats: SAWF Statistics
  * @mpdu_retry_threshold_1: MPDU retry threshold 1 to increment tx bad count
  * @mpdu_retry_threshold_2: MPDU retry threshold 2 to increment tx bad count
@@ -582,6 +583,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	bool sawf_msduq_reclaim_enabled;
 	uint8_t sawf_msduq_reclaim_timer_val;
 	bool sawf_mcast_enabled;
+	bool sawf_msduq_tid_skid_enabled;
 #endif
 #ifdef CONFIG_SAWF_STATS
 	uint8_t sawf_stats;
@@ -2723,6 +2725,16 @@ wlan_cfg_get_sawf_msduq_reclaim_config(struct wlan_cfg_dp_soc_ctxt *cfg);
  * Return: true or false
  */
 bool wlan_cfg_get_sawf_mc_config(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_get_sawf_msduq_tid_skid_config() - Get SAWF MSDUQ low/high TID skid
+ * config enable/disable
+ * @cfg: config context
+ *
+ * Return: true or false
+ */
+bool
+wlan_cfg_get_sawf_msduq_tid_skid_config(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
  * wlan_cfg_set_sawf_stats_config() - Set SAWF stats config
