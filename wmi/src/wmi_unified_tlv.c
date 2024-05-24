@@ -10132,6 +10132,23 @@ void wmi_copy_epm_support(wmi_resource_config *resource_cfg,
 }
 #endif
 
+#ifdef FEATURE_MGMT_RX_OVER_SRNG
+static inline
+void wmi_copy_mgmt_rx_srng_support(wmi_resource_config *resource_cfg,
+				   target_resource_config *tgt_res_cfg)
+{
+	if (tgt_res_cfg->mgmt_rx_srng_support)
+		WMI_RSRC_CFG_FLAGS2_IS_MGMT_SRNG_ENABLED_SET(
+			resource_cfg->flags2, 1);
+}
+#else
+static inline
+void wmi_copy_mgmt_rx_srng_support(wmi_resource_config *resource_cfg,
+				   target_resource_config *tgt_res_cfg)
+{
+}
+#endif
+
 static
 void wmi_copy_resource_config(wmi_unified_t wmi_handle,
 			      wmi_resource_config *resource_cfg,
@@ -10460,6 +10477,7 @@ void wmi_copy_resource_config(wmi_unified_t wmi_handle,
 
 	wmi_copy_latency_flowq_support(resource_cfg, tgt_res_cfg);
 	wmi_copy_full_bw_nol_cfg(resource_cfg, tgt_res_cfg);
+	wmi_copy_mgmt_rx_srng_support(resource_cfg, tgt_res_cfg);
 
 }
 
@@ -23841,7 +23859,9 @@ static void populate_tlv_events_id(WMI_EVT_ID *event_ids)
 #endif /* WLAN_VENDOR_EXTN*/
 	event_ids[wmi_p2p_cli_dfs_ap_bmiss_detected_eventid] =
 				WMI_P2P_CLI_DFS_AP_BMISS_DETECTED_EVENTID;
-
+#ifdef FEATURE_MGMT_RX_OVER_SRNG
+	event_ids[wmi_mgmt_srng_reap_eventid] = WMI_MGMT_SRNG_REAP_EVENTID;
+#endif
 }
 
 #ifdef WLAN_FEATURE_LINK_LAYER_STATS
@@ -24494,6 +24514,10 @@ static void populate_tlv_service(uint32_t *wmi_service)
 #endif
 	wmi_service[wmi_service_ap_assisted_dfs_chan_p2p_session] =
 				WMI_SERVICE_AP_ASSISTED_DFS_CHAN_P2P_SESSION;
+#ifdef FEATURE_MGMT_RX_OVER_SRNG
+	wmi_service[wmi_service_mgmt_rx_srng_support] =
+				WMI_SERVICE_MGMT_SRNG_SUPPORT;
+#endif
 }
 
 /**

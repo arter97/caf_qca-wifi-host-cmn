@@ -5595,6 +5595,9 @@ typedef enum {
 #endif
 	wmi_sched_mode_probe_resp_event_id,
 	wmi_p2p_cli_dfs_ap_bmiss_detected_eventid,
+#ifdef FEATURE_MGMT_RX_OVER_SRNG
+	wmi_mgmt_srng_reap_eventid,
+#endif
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -5992,6 +5995,8 @@ typedef enum {
 		   PDEV_PARAM_DSTALL_CONSECUTIVE_TX_NO_ACK_INTERVAL),
 	PDEV_PARAM(pdev_param_dstall_consecutive_tx_no_ack_threshold,
 		   PDEV_PARAM_DSTALL_CONSECUTIVE_TX_NO_ACK_THRESHOLD),
+	PDEV_PARAM(pdev_param_mgmt_srng_reap_event_threshold,
+		   PDEV_PARAM_MGMT_SRNG_REAP_EVENT_THRESHOLD),
 	pdev_param_max,
 } wmi_conv_pdev_params_id;
 
@@ -6756,6 +6761,9 @@ typedef enum {
 	wmi_service_mlo_sap_emlsr_support,
 #endif
 	wmi_service_ap_assisted_dfs_chan_p2p_session,
+#ifdef FEATURE_MGMT_RX_OVER_SRNG
+	wmi_service_mgmt_rx_srng_support,
+#endif
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -7144,6 +7152,7 @@ struct target_feature_set {
  * @is_smem_mailbox_supported: Is smem mailbox functionality supported
  * @is_epm_supported: Is epm functionality supported
  * @con_mode_monitor: Device is in Full monitor mode
+ * @mgmt_rx_srng_support: Is mgmt rx over srng supported
  */
 typedef struct {
 	uint32_t num_vdevs;
@@ -7286,6 +7295,9 @@ typedef struct {
 	bool is_epm_supported;
 #endif
 	bool con_mode_monitor;
+#ifdef FEATURE_MGMT_RX_OVER_SRNG
+	bool mgmt_rx_srng_support;
+#endif
 } target_resource_config;
 
 /**
