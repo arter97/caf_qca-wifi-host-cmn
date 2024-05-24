@@ -2321,7 +2321,7 @@ static uint32_t util_gen_new_ie(uint8_t *ie, uint32_t ielen,
 
 	if (extn_elem && extn_elem[TAG_LEN_POS] >= VALID_ELEM_LEAST_LEN) {
 		if (((extn_elem + extn_elem[1] + MIN_IE_LEN) - sub_copy)
-		    < subie_len)
+		    <= subie_len)
 			util_parse_noninheritance_list(extn_elem, &elem_list,
 						       &extn_elem_list, &ninh);
 	}
@@ -2584,6 +2584,9 @@ static bool util_scan_is_split_prof_found(uint8_t *next_elem,
 					  uint8_t *ie, uint32_t ielen)
 {
 	uint8_t *next_mbssid_elem;
+
+	if ((next_elem + MIN_IE_LEN + VALID_ELEM_LEAST_LEN) > (ie + ielen))
+		return false;
 
 	if (next_elem[0] == WLAN_ELEMID_MULTIPLE_BSSID) {
 		if ((next_elem[TAG_LEN_POS] >= VALID_ELEM_LEAST_LEN) &&
