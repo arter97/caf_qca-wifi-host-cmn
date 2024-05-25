@@ -3196,7 +3196,7 @@ dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 
 	dp_update_vdev_stats_on_peer_unmap(vdev, peer);
 
-	__dp_peer_event_notify(soc, CDP_PEER_EVENT_UNMAP, peer->peer_id,
+	__dp_peer_event_notify(soc, CDP_PEER_EVENT_UNMAP, peer_id,
 			       peer->vdev->vdev_id, peer->mac_addr.raw);
 	dp_peer_update_state(soc, peer, DP_PEER_STATE_INACTIVE);
 	dp_peer_unref_delete(peer, DP_MOD_ID_HTT);
