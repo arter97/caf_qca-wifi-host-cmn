@@ -1550,6 +1550,7 @@ enum _ol_ath_param_t {
 #ifdef UMAC_SUPPORT_ACS
 	OL_ATH_PARAM_ACS_ADJ_CHAN_INTERFERENCE_BLOCKING = 555,
 #endif /* UMAC_SUPPORT_ACS */
+	OL_ATH_PARAM_START_AID = 556,
 };
 
 #ifdef CONFIG_SUPPORT_VENCMDTABLE
@@ -4075,6 +4076,10 @@ struct vendor_commands radio_vendor_cmds[] = {
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_CBS_TOTAL_DWELL_TIME, SET_PARAM, 1},
 	{"g_cbs_total_dwell_time",
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_CBS_TOTAL_DWELL_TIME, GET_PARAM, 0},
+	{"set_start_aid",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_START_AID, SET_PARAM, 1},
+	{"get_start_aid",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_START_AID, GET_PARAM, 0},
 };
 #endif
 
