@@ -1537,7 +1537,7 @@ hal_txmon_status_parse_tlv_generic_be(hal_soc_handle_t hal_soc_hdl,
 	tx_status_info = (ppdu_info->is_data ? data_status_info :
 			  prot_status_info);
 
-	user_id = (tlv_user_id > ppdu_info->num_users ? 0 : tlv_user_id);
+	user_id = (tlv_user_id >= ppdu_info->num_users ? 0 : tlv_user_id);
 	hal_tx_record_tlv_info(ppdu_info, tlv_tag);
 
 	switch (tlv_tag) {
