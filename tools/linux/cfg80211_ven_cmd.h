@@ -1504,6 +1504,7 @@ enum _ol_ath_param_t {
 #ifdef QCA_PROCESS_UPLINK_CSA
 	OL_ATH_PARAM_PROCESS_UPLINK_CSA = 547,
 #endif
+	OL_ATH_PARAM_START_AID = 548,
 };
 
 #ifdef CONFIG_SUPPORT_VENCMDTABLE
@@ -3961,6 +3962,10 @@ struct vendor_commands radio_vendor_cmds[] = {
 	{"g_process_uplink_csa_en",
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_PROCESS_UPLINK_CSA, GET_PARAM, 0},
 #endif
+	{"set_start_aid",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_START_AID, SET_PARAM, 1},
+	{"get_start_aid",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_START_AID, GET_PARAM, 0},
 };
 #endif
 
