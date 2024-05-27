@@ -1816,6 +1816,7 @@ static void fill_advance_data_tx_stats(struct advance_data_tx_stats *tx,
 	tx->non_ampdu_cnt = cdp_tx->non_ampdu_cnt;
 	tx->failed_retry_count = cdp_tx->failed_retry_count;
 	tx->retry_count = cdp_tx->retry_count;
+	tx->total_msdu_retries = cdp_tx->total_msdu_retries;
 	tx->multiple_retry_count = cdp_tx->multiple_retry_count;
 	tx->release_src_not_tqm = cdp_tx->release_src_not_tqm;
 	tx->inval_link_id = cdp_tx->inval_link_id_pkt_cnt;
