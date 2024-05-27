@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -447,6 +447,7 @@ typedef struct hal_ring_handle *hal_ring_handle_t;
  * @work_scheduled_time: work scheduled time (qdf_log_timestamp)
  * @dequeue_time: dequeue time (qdf_log_timestamp)
  * @cpu_id: record cpuid when schedule work
+ * @ring_id: saved srng id
  */
 struct hal_reg_write_q_elem {
 	struct hal_srng *srng;
@@ -458,6 +459,7 @@ struct hal_reg_write_q_elem {
 	qdf_time_t work_scheduled_time;
 	qdf_time_t dequeue_time;
 	int cpu_id;
+	qdf_atomic_t ring_id;
 };
 
 /**

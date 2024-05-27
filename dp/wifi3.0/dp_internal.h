@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -2193,16 +2193,18 @@ uint8_t *dp_peer_get_peer_mac_addr(void *peer);
  * @soc - datapath soc handle
  * @vdev_id - vdev id
  * @peer_mac - peer mac addr
+ * @slowpath - call from slowpath or not
  *
  * Get local peer state
  *
  * Return: peer status
  */
 int dp_get_peer_state(struct cdp_soc_t *soc, uint8_t vdev_id,
-		      uint8_t *peer_mac);
+		      uint8_t *peer_mac, bool slowpath);
 void dp_local_peer_id_pool_init(struct dp_pdev *pdev);
 void dp_local_peer_id_alloc(struct dp_pdev *pdev, struct dp_peer *peer);
 void dp_local_peer_id_free(struct dp_pdev *pdev, struct dp_peer *peer);
+
 /**
  * dp_set_peer_as_tdls_peer() - set tdls peer flag to peer
  * @soc_hdl: datapath soc handle
