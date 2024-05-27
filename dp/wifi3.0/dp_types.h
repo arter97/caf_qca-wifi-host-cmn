@@ -4871,6 +4871,7 @@ typedef void *dp_txrx_ref_handle;
  * @total_mpdu_retries: total number of mpdu retries
  * @failed_retry_count: packets failed due to retry above 802.11 retry limit
  * @retry_count: packets successfully send after one or more retry
+ * @total_msdu_retries: total number of msdu packets retransmittions
  * @multiple_retry_count: packets successfully sent after more than one retry
  * @no_ack_count: no ack pkt count for different protocols
  * @tx_success_twt: Successful Tx Packets in TWT session
@@ -4926,6 +4927,7 @@ struct dp_peer_per_pkt_tx_stats {
 	uint32_t total_mpdu_retries;
 	uint32_t failed_retry_count;
 	uint32_t retry_count;
+	uint32_t total_msdu_retries;
 	uint32_t multiple_retry_count;
 	uint32_t no_ack_count[QDF_PROTO_SUBTYPE_MAX];
 	struct cdp_pkt_info tx_success_twt;

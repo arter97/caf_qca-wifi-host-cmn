@@ -2102,6 +2102,7 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		_tgtobj->tx.inval_link_id_pkt_cnt += \
 					_srcobj->tx.inval_link_id_pkt_cnt; \
 		_tgtobj->tx.retry_count += _srcobj->tx.retry_count; \
+		_tgtobj->tx.total_msdu_retries += _srcobj->tx.total_msdu_retries; \
 		_tgtobj->tx.multiple_retry_count += \
 					_srcobj->tx.multiple_retry_count; \
 		_tgtobj->tx.tx_success_twt.num += \

@@ -5764,6 +5764,10 @@ dp_tx_update_peer_stats(struct dp_tx_desc_s *tx_desc,
 		DP_PEER_PER_PKT_STATS_INCC(txrx_peer, tx.retry_count, 1,
 					   ts->transmit_cnt > 1, link_id);
 
+		DP_PEER_PER_PKT_STATS_INCC(txrx_peer, tx.total_msdu_retries,
+					   ts->transmit_cnt - 1,
+					   ts->transmit_cnt > 1, link_id);
+
 		DP_PEER_PER_PKT_STATS_INCC(txrx_peer, tx.multiple_retry_count,
 					   1, ts->transmit_cnt > 2, link_id);
 

@@ -1557,6 +1557,7 @@ struct protocol_trace_count {
  * @total_mpdu_retries: total number of mpdu retries
  * @failed_retry_count: packets failed due to retry above 802.11 retry limit
  * @retry_count: packets successfully send after one or more retry
+ * @total_msdu_retries: total number of msdu packets retransmittions
  * @multiple_retry_count: packets successfully sent after more than one retry
  * @last_tx_rate_used:
  * @tx_ppdus: ppdus in tx
@@ -1692,6 +1693,7 @@ struct cdp_tx_stats {
 	uint32_t total_mpdu_retries;
 	uint32_t failed_retry_count;
 	uint32_t retry_count;
+	uint32_t total_msdu_retries;
 	uint32_t multiple_retry_count;
 	uint32_t last_tx_rate_used;
 	uint32_t tx_ppdus;
