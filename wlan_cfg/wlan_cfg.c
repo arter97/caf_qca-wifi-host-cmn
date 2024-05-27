@@ -138,9 +138,21 @@ struct dp_int_mask_assignment {
  * NEAR-FULL IRQ mask should be updated, if any change is made to
  * the below TX mask.
  */
+#ifdef IPA_WDI3_TX_TWO_PIPES
 static const uint8_t tx_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
 	[0] = WLAN_CFG_TX_RING_MASK_0, [1] = WLAN_CFG_TX_RING_MASK_4,
 	[2] = WLAN_CFG_TX_RING_MASK_2};
+#else /* !IPA_WDI3_TX_TWO_PIPES */
+#if defined(QCA_WIFI_KIWI_V2) || defined(QCA_WIFI_WCN7750)
+static const uint8_t tx_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
+	[0] = WLAN_CFG_TX_RING_MASK_0, [1] = WLAN_CFG_TX_RING_MASK_4,
+	[2] = WLAN_CFG_TX_RING_MASK_2, [3] = WLAN_CFG_TX_RING_MASK_5};
+#else /* !QCA_WIFI_KIWI_V2 */
+static const uint8_t tx_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
+	[0] = WLAN_CFG_TX_RING_MASK_0, [1] = WLAN_CFG_TX_RING_MASK_4,
+	[2] = WLAN_CFG_TX_RING_MASK_2, [3] = WLAN_CFG_TX_RING_MASK_6};
+#endif /* QCA_WIFI_KIWI_V2 */
+#endif /* IPA_WDI3_TX_TWO_PIPES*/
 #else /* !IPA_OFFLOAD */
 #if defined(QCA_WIFI_KIWI_V2) || defined(QCA_WIFI_WCN7750)
 static const uint8_t tx_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
