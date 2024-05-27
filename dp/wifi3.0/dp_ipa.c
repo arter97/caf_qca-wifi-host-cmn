@@ -250,10 +250,14 @@ QDF_STATUS dp_ipa_handle_rx_buf_smmu_mapping(struct dp_soc *soc,
 #ifdef IPA_OPT_WIFI_DP_CTRL
 QDF_STATUS
 dp_rx_add_to_ipa_desc_free_list(struct dp_soc *soc,
-				struct dp_rx_desc *rx_desc)
+				struct dp_rx_desc *rx_desc,
+				uint8_t is_ctrl_refill)
 {
 	uint16_t num_entries;
 	struct dp_ipa_rx_desc_list *free_list;
+
+	if (is_ctrl_refill)
+		qdf_nbuf_free(rx_desc->nbuf);
 
 	free_list = &soc->ipa_rx_desc_freelist;
 	num_entries = free_list->list_size;
@@ -4127,7 +4131,7 @@ smmu_unmap_rx_nbuf:
 
 release_rx_desc:
 	dp_info("opt_dp_ctrl: release rx descriptor and add to freelist");
-	if (dp_rx_add_to_ipa_desc_free_list(soc, rx_desc) !=
+	if (dp_rx_add_to_ipa_desc_free_list(soc, rx_desc, 0) !=
 						QDF_STATUS_SUCCESS) {
 		dp_rx_add_to_free_desc_list(&pdev->free_list_head,
 					    &pdev->free_list_tail, rx_desc);
@@ -4142,6 +4146,13 @@ vdev_ref_release:
 tx_nbuf_free:
 	qdf_nbuf_free(nbuf);
 	return QDF_STATUS_E_FAILURE;
+}
+
+bool dp_ipa_get_opt_dp_ctrl_refill_cap(struct cdp_soc_t *soc_hdl)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+
+	return soc->features.dp_ipa_opt_dp_ctrl_refill;
 }
 
 /*
@@ -4183,6 +4194,11 @@ QDF_STATUS dp_ipa_tx_opt_dp_ctrl_pkt(struct cdp_soc_t *soc_hdl,
 				     qdf_nbuf_t nbuf)
 {
 	return QDF_STATUS_SUCCESS;
+}
+
+bool dp_ipa_get_opt_dp_ctrl_refill_cap(struct cdp_soc_t *soc_hdl)
+{
+	return false;
 }
 #endif
 #endif /* IPA_OPT_WIFI_DP */

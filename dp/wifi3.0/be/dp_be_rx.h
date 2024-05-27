@@ -850,6 +850,22 @@ dp_rx_set_link_id_be(qdf_nbuf_t nbuf, uint32_t peer_mdata)
 	QDF_NBUF_CB_RX_LOGICAL_LINK_ID(nbuf) = logical_link_id;
 }
 
+#ifdef IPA_OPT_WIFI_DP_CTRL
+static inline void
+dp_rx_set_refill_opt_dp_ctrl(uint8_t *is_ctrl_refill,
+			     uint32_t peer_mdata)
+{
+	*is_ctrl_refill =
+		HTT_RX_PEER_META_DATA_V1A_QDATA_REFILL_GET(peer_mdata);
+}
+#else
+static inline void
+dp_rx_set_refill_opt_dp_ctrl(uint8_t *is_ctrl_refill,
+			     uint32_t peer_mdata)
+{
+}
+#endif
+
 static inline uint16_t
 dp_rx_get_peer_id_be(qdf_nbuf_t nbuf)
 {
@@ -867,7 +883,8 @@ dp_rx_set_mpdu_msdu_desc_info_in_nbuf(qdf_nbuf_t nbuf,
 static inline uint8_t dp_rx_copy_desc_info_in_nbuf_cb(struct dp_soc *soc,
 						      hal_ring_desc_t ring_desc,
 						      qdf_nbuf_t nbuf,
-						      uint8_t reo_ring_num)
+						      uint8_t reo_ring_num,
+						      uint8_t *is_ctrl_refill)
 {
 	struct hal_rx_mpdu_desc_info mpdu_desc_info;
 	struct hal_rx_msdu_desc_info msdu_desc_info;
@@ -900,6 +917,7 @@ static inline uint8_t dp_rx_copy_desc_info_in_nbuf_cb(struct dp_soc *soc,
 		dp_rx_peer_metadata_vdev_id_get_be(soc, peer_mdata);
 	dp_rx_set_msdu_lmac_id(nbuf, peer_mdata);
 	dp_rx_set_link_id_be(nbuf, peer_mdata);
+	dp_rx_set_refill_opt_dp_ctrl(is_ctrl_refill, peer_mdata);
 
 	/* to indicate whether this msdu is rx offload */
 	pkt_capture_offload =
@@ -995,7 +1013,8 @@ dp_rx_set_mpdu_msdu_desc_info_in_nbuf(qdf_nbuf_t nbuf,
 static inline uint8_t dp_rx_copy_desc_info_in_nbuf_cb(struct dp_soc *soc,
 						      hal_ring_desc_t ring_desc,
 						      qdf_nbuf_t nbuf,
-						      uint8_t reo_ring_num)
+						      uint8_t reo_ring_num,
+						      uint8_t *is_ctrl_refill)
 {
 	uint32_t mpdu_desc_info = 0;
 	uint32_t msdu_desc_info = 0;

@@ -12792,6 +12792,9 @@ static struct cdp_cmn_ops dp_ops_cmn = {
 	.txrx_peer_flush_ast_table = dp_wds_flush_ast_table_wifi3,
 	.txrx_peer_map_attach = dp_peer_map_attach_wifi3,
 	.set_soc_param = dp_soc_set_param,
+#ifdef IPA_OPT_WIFI_DP_CTRL
+	.txrx_get_opt_dp_ctrl_refill_cap = dp_ipa_get_opt_dp_ctrl_refill_cap,
+#endif
 	.txrx_get_os_rx_handles_from_vdev =
 					dp_get_os_rx_handles_from_vdev_wifi3,
 #ifndef WLAN_SOFTUMAC_SUPPORT
@@ -15044,6 +15047,7 @@ uint16_t dp_ipa_rx_desc_list_init(struct dp_pdev *pdev)
 
 	rx_desc_pool = &soc->rx_desc_buf[mac_id];
 	free_list = &soc->ipa_rx_desc_freelist;
+	soc->features.dp_ipa_opt_dp_ctrl_refill = true;
 	num_desc = MAX_IPA_RX_FREE_DESC - free_list->list_size;
 	dp_info("opt_dp_ctrl: num of desc required: %u", num_desc);
 	count = dp_rx_get_free_desc_list(soc, mac_id, rx_desc_pool,

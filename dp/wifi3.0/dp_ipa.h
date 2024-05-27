@@ -411,6 +411,13 @@ QDF_STATUS dp_ipa_tx_super_rule_setup(struct cdp_soc_t *soc_hdl,
 QDF_STATUS dp_ipa_tx_opt_dp_ctrl_pkt(struct cdp_soc_t *soc_hdl,
 				     uint8_t vdev_id,
 				     qdf_nbuf_t nbuf);
+/**
+ * dp_ipa_get_opt_dp_ctrl_refill_cap() - refill cap for opt_dp_ctrl
+ * @soc_hdl: handle to the soc
+ *
+ * Return: bool
+ */
+bool dp_ipa_get_opt_dp_ctrl_refill_cap(struct cdp_soc_t *soc_hdl);
 
 int dp_ipa_pcie_link_up(struct cdp_soc_t *soc_hdl);
 void dp_ipa_pcie_link_down(struct cdp_soc_t *soc_hdl);
@@ -506,13 +513,15 @@ QDF_STATUS dp_ipa_handle_rx_buf_smmu_mapping(struct dp_soc *soc,
  * from free desc list for ipa to be used in opt dp ctrl.
  * @soc: core txrx main context
  * @rx_desc: free desc from rx desc pool
+ * @is_ctrl_refill: refill desc from fw
  *
  * Return: QDF_STATUS
  *
  */
 QDF_STATUS
 dp_rx_add_to_ipa_desc_free_list(struct dp_soc *soc,
-				struct dp_rx_desc *rx_desc);
+				struct dp_rx_desc *rx_desc,
+				uint8_t is_ctrl_refill);
 
 /**
  * dp_ipa_tx_pkt_opt_dp_ctrl() - Handle opt_dp_ctrl tx pkt
@@ -525,7 +534,8 @@ void dp_ipa_tx_pkt_opt_dp_ctrl(struct dp_soc *soc, uint8_t vdev_id,
 #else
 static inline QDF_STATUS
 dp_rx_add_to_ipa_desc_free_list(struct dp_soc *soc,
-				struct dp_rx_desc *rx_desc)
+				struct dp_rx_desc *rx_desc,
+				uint8_t is_ctrl_refill)
 {
 	return QDF_STATUS_E_FAILURE;
 }
@@ -831,7 +841,8 @@ dp_ipa_is_ring_ipa_tx(struct dp_soc *soc, uint8_t ring_id)
 
 static inline QDF_STATUS
 dp_rx_add_to_ipa_desc_free_list(struct dp_soc *soc,
-				struct dp_rx_desc *rx_desc)
+				struct dp_rx_desc *rx_desc,
+				uint8_t is_ctrl_refill)
 {
 	return QDF_STATUS_E_FAILURE;
 }

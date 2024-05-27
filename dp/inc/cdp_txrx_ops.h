@@ -684,6 +684,10 @@ struct cdp_cmn_ops {
 	QDF_STATUS (*set_vdev_pcp_tid_map)(struct cdp_soc_t *soc,
 					   uint8_t vdev_id,
 					   uint8_t pcp, uint8_t tid);
+#ifdef IPA_OPT_WIFI_DP_CTRL
+	 bool (*txrx_get_opt_dp_ctrl_refill_cap)(ol_txrx_soc_handle soc);
+#endif
+
 #ifdef DP_RX_UDP_OVER_PEER_ROAM
 	QDF_STATUS (*txrx_update_roaming_peer)(struct cdp_soc_t *soc,
 					       uint8_t vdev_id,

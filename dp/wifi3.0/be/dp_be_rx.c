@@ -405,6 +405,7 @@ uint32_t dp_rx_process_be(struct dp_intr *int_ctx,
 	uint32_t l3_pad;
 	uint8_t link_id = 0;
 	uint16_t buf_size;
+	uint8_t is_ctrl_refill = 0;
 
 	DP_HIST_INIT();
 
@@ -559,7 +560,10 @@ more_data:
 		pkt_capture_offload =
 			dp_rx_copy_desc_info_in_nbuf_cb(soc, ring_desc,
 							rx_desc->nbuf,
-							reo_ring_num);
+							reo_ring_num,
+							&is_ctrl_refill);
+		if (is_ctrl_refill)
+			goto refill_opt_dp_ctrl;
 
 		if (qdf_unlikely(qdf_nbuf_is_rx_chfrag_cont(rx_desc->nbuf))) {
 			/* In dp_rx_sg_create() until the last buffer,
@@ -610,8 +614,13 @@ more_data:
 								soc, rx_desc,
 								reo_ring_num);
 			if (qdf_likely(old_rx_desc)) {
-				if (dp_rx_add_to_ipa_desc_free_list(soc,
-								    old_rx_desc)
+				/** For opt_dp_ctrl if this buffer is refilled
+				 * from FW, the execution will not reach here
+				 */
+				if (dp_rx_add_to_ipa_desc_free_list(
+							soc,
+							old_rx_desc,
+							is_ctrl_refill)
 							!= QDF_STATUS_SUCCESS) {
 					rx_bufs_reaped[rx_desc->chip_id][rx_desc->pool_id]++;
 					dp_rx_add_to_free_desc_list
@@ -640,14 +649,16 @@ more_data:
 		 * move unmap after scattered msdu waiting break logic
 		 * in case double skb unmap happened.
 		 */
-		dp_rx_nbuf_unmap(soc, rx_desc, reo_ring_num);
 		DP_RX_PROCESS_NBUF(soc, nbuf_head, nbuf_tail, ebuf_head,
 				   ebuf_tail, rx_desc);
 
+refill_opt_dp_ctrl:
+		dp_rx_nbuf_unmap(soc, rx_desc, reo_ring_num);
 		quota -= 1;
 		num_pending -= 1;
 
-		if (dp_rx_add_to_ipa_desc_free_list(soc, rx_desc) !=
+		if (dp_rx_add_to_ipa_desc_free_list(soc, rx_desc,
+						    is_ctrl_refill) !=
 						QDF_STATUS_SUCCESS) {
 			rx_bufs_reaped[rx_desc->chip_id][rx_desc->pool_id]++;
 			dp_rx_add_to_free_desc_list

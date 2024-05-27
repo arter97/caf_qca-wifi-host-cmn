@@ -2837,6 +2837,7 @@ struct dp_arch_ops {
  * @wds_ext_ast_override_enable:
  * @multi_rx_reorder_q_setup_support: multi rx reorder q setup at a time support
  * @fw_support_ml_monitor: FW support ML monitor mode
+ * @dp_ipa_opt_dp_ctrl_refill: opt_dp_ctrl refill support
  */
 struct dp_soc_features {
 	uint8_t pn_in_reo_dest:1,
@@ -2846,6 +2847,9 @@ struct dp_soc_features {
 	bool wds_ext_ast_override_enable;
 	bool multi_rx_reorder_q_setup_support;
 	bool fw_support_ml_monitor;
+#ifdef IPA_OPT_WIFI_DP_CTRL
+	bool dp_ipa_opt_dp_ctrl_refill;
+#endif
 };
 
 enum sysfs_printing_mode {

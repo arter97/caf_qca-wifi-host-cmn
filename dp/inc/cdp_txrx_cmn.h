@@ -365,6 +365,30 @@ static inline void cdp_flow_pool_unmap(ol_txrx_soc_handle soc,
 }
 #endif
 
+#ifdef IPA_OPT_WIFI_DP_CTRL
+static inline bool
+cdp_get_opt_dp_ctrl_refill_cap(ol_txrx_soc_handle soc)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance:");
+		QDF_BUG(0);
+		return false;
+	}
+
+	if (!soc->ops->cmn_drv_ops ||
+	    !soc->ops->cmn_drv_ops->txrx_get_opt_dp_ctrl_refill_cap)
+		return false;
+
+	return soc->ops->cmn_drv_ops->txrx_get_opt_dp_ctrl_refill_cap(soc);
+}
+#else
+static inline bool
+cdp_get_opt_dp_ctrl_refill_cap(ol_txrx_soc_handle soc)
+{
+	return 0;
+}
+#endif
+
 static inline QDF_STATUS
 cdp_vdev_detach(ol_txrx_soc_handle soc, uint8_t vdev_id,
 		ol_txrx_vdev_delete_cb callback, void *cb_context)
