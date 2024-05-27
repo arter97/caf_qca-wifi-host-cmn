@@ -54,12 +54,21 @@ void monitor_osif_deliver_rx_capture_undecoded_metadata(osif_dev *osifp,
 }
 #endif
 
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+void *monitor_osif_get_vdev_by_name(struct ieee80211com *ic, char *name)
+#else
 void *monitor_osif_get_vdev_by_name(char *name)
+#endif
 {
 	struct net_device *dev;
 	osif_dev *osifp = NULL;
 	char dev_name[IFNAME_SIZE];
 	void *data = NULL;
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+	struct osif_mldev *mldev = NULL;
+	uint8_t link_id;
+	osif_dev *link_vif = NULL;
+#endif
 
 	if (strlcpy(dev_name, name, IFNAME_SIZE) >= IFNAME_SIZE)
 		return NULL;
@@ -72,9 +81,60 @@ void *monitor_osif_get_vdev_by_name(char *name)
 	if (dev != NULL) {
 #endif
 		osifp = ath_netdev_priv(dev);
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+		if (!osifp) {
+			qdf_err("No osifp found for dev %s", dev->name);
+			qdf_net_if_release_dev((struct qdf_net_if *)dev);
+			return NULL;
+		}
+
+		if (osifp->dev_type == OSIF_NETDEV_TYPE_MLO) {
+			mldev = (struct osif_mldev *)osifp;
+			for (link_id = 0; link_id < IEEE80211_MLD_MAX_NUM_LINKS; link_id++) {
+				link_vif = mldev->link_vifs[link_id];
+				if (link_vif && link_vif->os_if->iv_ic == ic) {
+					osifp = mldev->link_vifs[link_id];
+					break;
+				}
+			}
+			if (link_id == IEEE80211_MLD_MAX_NUM_LINKS) {
+				qdf_net_if_release_dev((struct qdf_net_if *)dev);
+				return NULL;
+			}
+		}
+#endif
+
 		data = (void *)osifp->ctrl_vdev;
 		qdf_net_if_release_dev((struct qdf_net_if *)dev);
 	}
 
 	return data;
 }
+
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+bool monitor_osif_is_mld_ifname(char *name)
+{
+	char dev_name[IFNAME_SIZE];
+	struct net_device *dev;
+	osif_dev *osifp = NULL;
+
+	if (strlcpy(dev_name, name, IFNAME_SIZE) >= IFNAME_SIZE)
+		return false;
+
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 23))
+	dev = (struct net_device *)qdf_net_if_get_dev_by_name(dev_name);
+#else
+	dev = dev_get_by_name(dev_name);
+#endif
+	if (dev) {
+		osifp = ath_netdev_priv(dev);
+		if (osifp && osifp->dev_type == OSIF_NETDEV_TYPE_MLO) {
+			qdf_net_if_release_dev((struct qdf_net_if *)dev);
+			return true;
+		}
+		qdf_net_if_release_dev((struct qdf_net_if *)dev);
+	}
+
+	return false;
+}
+#endif

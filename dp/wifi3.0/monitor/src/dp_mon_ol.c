@@ -66,7 +66,12 @@ void monitor_osif_deliver_rx_capture_undecoded_metadata(osif_dev *osifp,
 int wlan_cfg80211_lite_monitor_config(struct wiphy *wiphy,
 				      struct wireless_dev *wdev,
 				      struct wlan_cfg8011_genric_params *params);
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+void *monitor_osif_get_vdev_by_name(struct ieee80211com *ic, char *name);
+bool monitor_osif_is_mld_ifname(char *name);
+#else
 void *monitor_osif_get_vdev_by_name(char *name);
+#endif
 
 #ifdef QCA_SUPPORT_LITE_MONITOR
 static int ol_ath_set_rx_monitor_filter_mon_2_0(struct ieee80211com *ic,
@@ -1397,7 +1402,16 @@ int wlan_set_lite_monitor_config(void *vscn,
 		config->level = mon_config->data.filter_config.level;
 		ifname = mon_config->data.filter_config.interface_name;
 		if (strlen(ifname)) {
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+			if (monitor_osif_is_mld_ifname(ifname)) {
+				dp_mon_err("Output interface should not be mld interface");
+				retval = -EINVAL;
+				goto fail;
+			}
+			vdev = monitor_osif_get_vdev_by_name(ic, ifname);
+#else
 			vdev = monitor_osif_get_vdev_by_name(ifname);
+#endif
 			if (vdev) {
 				status = wlan_objmgr_vdev_try_get_ref(vdev, WLAN_LITE_MON_ID);
 				if (QDF_IS_STATUS_ERROR(status)) {
@@ -1608,7 +1622,12 @@ int wlan_set_lite_monitor_peer_config(void *vscn,
 		goto fail;
 	}
 
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+	vdev = monitor_osif_get_vdev_by_name(ic, ifname);
+#else
 	vdev = monitor_osif_get_vdev_by_name(ifname);
+#endif
+
 	if (vdev) {
 		status = wlan_objmgr_vdev_try_get_ref(vdev, WLAN_LITE_MON_ID);
 		if (QDF_IS_STATUS_ERROR(status)) {
