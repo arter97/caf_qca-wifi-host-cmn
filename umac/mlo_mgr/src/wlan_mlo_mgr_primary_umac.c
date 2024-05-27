@@ -1798,6 +1798,7 @@ struct ptqm_migrate_peer_req_context {
  * @user_data: Opaque user data
  * @link_disable: Link disable flag
  * @force_mig: Force migration
+ * @ptqm_link_lock: Spin lock
  */
 struct ptqm_migrate_link_req_context {
 	struct wlan_objmgr_vdev *vdev;
@@ -1816,6 +1817,7 @@ struct ptqm_migrate_link_req_context {
 	uint8_t module_id;
 	struct ptqm_link_migration_rsp_params rsp_params;
 	bool force_mig;
+	qdf_spinlock_t ptqm_link_lock;
 };
 
 /*
@@ -2437,6 +2439,8 @@ wlan_ptqm_peer_migration_end_link_cb
 
 	link_req_ctx = (struct ptqm_migrate_link_req_context *)user_data;
 
+	qdf_spin_lock_bh(&link_req_ctx->ptqm_link_lock);
+
 	vdev = link_req_ctx->vdev;
 
 	vdev_id = wlan_vdev_get_id(vdev);
@@ -2461,9 +2465,14 @@ wlan_ptqm_peer_migration_end_link_cb
 					     WLAN_MLO_MGR_ID);
 		wlan_ptqm_notify_link_req_end(link_req_ctx);
 		wlan_ptqm_migrate_list_destroy(&link_req_ctx->migration_list);
+		qdf_spin_unlock_bh(&link_req_ctx->ptqm_link_lock);
+		qdf_spinlock_destroy(&link_req_ctx->ptqm_link_lock);
 		qdf_mem_free(link_req_ctx);
 		wlan_ptqm_set_mlo_link_context(ml_dev, vdev_id, NULL);
+		return;
 	}
+
+	qdf_spin_unlock_bh(&link_req_ctx->ptqm_link_lock);
 }
 
 static void
@@ -2480,6 +2489,8 @@ wlan_ptqm_schedule_link_migrate_req
 	vdev_id = wlan_vdev_get_id(vdev);
 
 	ml_dev = vdev->mlo_dev_ctx;
+
+	qdf_spin_lock_bh(&link_req_ctx->ptqm_link_lock);
 
 	migration_list = &link_req_ctx->migration_list;
 
@@ -2527,9 +2538,14 @@ wlan_ptqm_schedule_link_migrate_req
 					     WLAN_MLO_MGR_ID);
 		wlan_ptqm_notify_link_req_end(link_req_ctx);
 		wlan_ptqm_migrate_list_destroy(&link_req_ctx->migration_list);
+		qdf_spin_unlock_bh(&link_req_ctx->ptqm_link_lock);
+		qdf_spinlock_destroy(&link_req_ctx->ptqm_link_lock);
 		qdf_mem_free(link_req_ctx);
 		wlan_ptqm_set_mlo_link_context(ml_dev, vdev_id, NULL);
+		return;
 	}
+
+	qdf_spin_unlock_bh(&link_req_ctx->ptqm_link_lock);
 }
 
 static QDF_STATUS
@@ -2740,6 +2756,8 @@ wlan_ptqm_link_migrate_req_add(struct wlan_objmgr_vdev *vdev,
 	link_req_ctx->link_disable = params->link_disable;
 	link_req_ctx->force_mig = params->force_mig;
 
+	qdf_spinlock_create(&link_req_ctx->ptqm_link_lock);
+
 	mld_get_link_rssi(&link_req_ctx->rssi_data);
 
 	migrate_list = &link_req_ctx->migration_list;
@@ -2748,6 +2766,7 @@ wlan_ptqm_link_migrate_req_add(struct wlan_objmgr_vdev *vdev,
 					     &link_req_ctx->rssi_data);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		mlo_err("Unable to initialize peer migrate list");
+		qdf_spinlock_destroy(&link_req_ctx->ptqm_link_lock);
 		qdf_mem_free(link_req_ctx);
 		wlan_ptqm_set_mlo_link_context(dev_ctx, vdev_id, NULL);
 		wlan_objmgr_vdev_release_ref(vdev, WLAN_MLO_MGR_ID);
@@ -2769,6 +2788,7 @@ wlan_ptqm_link_migrate_req_add(struct wlan_objmgr_vdev *vdev,
 		wlan_ptqm_notify_link_req_end(link_req_ctx);
 		wlan_ptqm_migrate_list_destroy(migrate_list);
 		wlan_objmgr_vdev_release_ref(vdev, WLAN_MLO_MGR_ID);
+		qdf_spinlock_destroy(&link_req_ctx->ptqm_link_lock);
 		qdf_mem_free(link_req_ctx);
 		wlan_ptqm_set_mlo_link_context(dev_ctx, vdev_id, NULL);
 		return QDF_STATUS_SUCCESS;
