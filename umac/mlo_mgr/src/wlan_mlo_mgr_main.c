@@ -1009,6 +1009,11 @@ static inline void mlo_epcs_ctx_init(struct wlan_mlo_dev_context *ml_dev)
  */
 static inline void mlo_ptqm_migration_init(struct wlan_mlo_dev_context *ml_dev)
 {
+	uint8_t idx;
+
+	for (idx = 0; idx < WLAN_UMAC_MLO_MAX_VDEVS; idx++)
+		ml_dev->link_ptqm_migrate_ctx[idx] = NULL;
+
 	qdf_timer_init(NULL, &ml_dev->ptqm_migrate_timer,
 		       mlo_mlme_ptqm_migrate_timer_cb, (void *)(ml_dev),
 		       QDF_TIMER_TYPE_WAKE_APPS);
