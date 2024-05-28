@@ -788,10 +788,18 @@ void dp_hmwds_ast_add_notify(struct dp_peer *peer,
 			     QDF_STATUS err,
 			     bool is_peer_map)
 {
-	struct dp_vdev *dp_vdev = peer->vdev;
-	struct dp_pdev *dp_pdev = dp_vdev->pdev;
+	struct dp_vdev *dp_vdev;
+	struct dp_pdev *dp_pdev;
 	struct cdp_peer_hmwds_ast_add_status add_status;
 
+	if (!peer->vdev)
+		return;
+
+	dp_vdev = peer->vdev;
+	if (!dp_vdev->pdev)
+		return;
+
+	dp_pdev = dp_vdev->pdev;
 	/* Ignore ast types other than HM */
 	if ((type != CDP_TXRX_AST_TYPE_WDS_HM) &&
 	    (type != CDP_TXRX_AST_TYPE_WDS_HM_SEC))
