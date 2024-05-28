@@ -393,7 +393,7 @@ QDF_STATUS dp_rx_flow_send_htt_operation_cmd(struct dp_pdev *pdev,
 	struct dp_htt_rx_flow_fst_operation fst_op;
 	struct wlan_cfg_dp_soc_ctxt *cfg = pdev->soc->wlan_cfg_ctx;
 
-	qdf_mem_set(&fst_op, 0, sizeof(struct dp_htt_rx_flow_fst_operation));
+	qdf_mem_set(&fst_op, sizeof(struct dp_htt_rx_flow_fst_operation), 0);
 
 	if (qdf_unlikely(wlan_cfg_is_rx_flow_search_table_per_pdev(cfg))) {
 		/* Firmware pdev ID starts from 1 */
@@ -796,7 +796,7 @@ QDF_STATUS dp_rx_fst_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 		return QDF_STATUS_E_NOMEM;
 	}
 
-	qdf_mem_set(fst, 0, sizeof(struct dp_rx_fst));
+	qdf_mem_set(fst, sizeof(struct dp_rx_fst), 0);
 
 	fst->ring_id = 1;
 
@@ -836,8 +836,8 @@ QDF_STATUS dp_rx_fst_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 		return QDF_STATUS_E_NOMEM;
 	}
 
-	qdf_mem_set((uint8_t *)fst->base, 0,
-		    (sizeof(struct dp_rx_fse) * fst->max_entries));
+	qdf_mem_set((uint8_t *)fst->base,
+		    (sizeof(struct dp_rx_fse) * fst->max_entries), 0);
 
 	fst->hal_rx_fst = hal_rx_fst_attach(
 				soc->hal_soc,
@@ -948,7 +948,7 @@ QDF_STATUS dp_rx_flow_send_fst_fw_setup(struct dp_soc *soc,
 	if (qdf_unlikely(!wlan_cfg_is_rx_flow_tag_enabled(cfg)))
 		return QDF_STATUS_SUCCESS;
 
-	qdf_mem_set(&fst_setup, 0, sizeof(struct dp_htt_rx_flow_fst_setup));
+	qdf_mem_set(&fst_setup, sizeof(struct dp_htt_rx_flow_fst_setup), 0);
 
 	if (qdf_unlikely(wlan_cfg_is_rx_flow_search_table_per_pdev(cfg))) {
 		/* Firmware pdev ID starts from 1 */
