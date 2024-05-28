@@ -126,7 +126,8 @@ static ssize_t ath_procfs_diag_read_legacy(struct file *file,
 	     (tgt_info->target_type == TARGET_TYPE_QCN7605) ||
 	     (tgt_info->target_type == TARGET_TYPE_KIWI) ||
 	     (tgt_info->target_type == TARGET_TYPE_MANGO) ||
-	     (tgt_info->target_type == TARGET_TYPE_PEACH))) ||
+	     (tgt_info->target_type == TARGET_TYPE_PEACH) ||
+	     (tgt_info->target_type == TARGET_TYPE_QCC2072))) ||
 	    (scn->bus_type ==  QDF_BUS_TYPE_IPCI &&
 	     (tgt_info->target_type == TARGET_TYPE_QCA6750 ||
 	      tgt_info->target_type == TARGET_TYPE_WCN7750)) ||
@@ -215,7 +216,8 @@ static ssize_t ath_procfs_diag_write_legacy(struct file *file,
 	      (tgt_info->target_type == TARGET_TYPE_QCN7605) ||
 	      (tgt_info->target_type == TARGET_TYPE_KIWI) ||
 	      (tgt_info->target_type == TARGET_TYPE_MANGO) ||
-	      (tgt_info->target_type == TARGET_TYPE_PEACH))) ||
+	      (tgt_info->target_type == TARGET_TYPE_PEACH) ||
+	      (tgt_info->target_type == TARGET_TYPE_QCC2072))) ||
 	    (scn->bus_type ==  QDF_BUS_TYPE_IPCI &&
 	     ((tgt_info->target_type == TARGET_TYPE_QCA6750) ||
 	     (tgt_info->target_type == TARGET_TYPE_WCN7750))) ||

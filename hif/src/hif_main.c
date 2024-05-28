@@ -415,6 +415,11 @@ static const struct qwlan_hw qwlan_hw_list[] = {
 		.name = "WCN7750_V1",
 	},
 	{
+		.id = QCC2072_V1,
+		.subid = 0,
+		.name = "QCC2072_V1",
+	},
+	{
 		.id = WCN6450_V1,
 		.subid = 0,
 		.name = "WCN6450_V1",
@@ -1418,7 +1423,7 @@ static inline int hif_get_num_active_grp_tasklets(struct hif_softc *scn)
 	defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_QCN9224) || \
 	defined(QCA_WIFI_QCN6432) || defined(QCA_WIFI_QCA5424) || \
 	defined(QCA_WIFI_QCA9574)) || defined(QCA_WIFI_QCA5332) || \
-	defined(QCA_WIFI_WCN7750)
+	defined(QCA_WIFI_WCN7750) || defined(QCA_WIFI_QCC2072)
 /**
  * hif_get_num_pending_work() - get the number of entries in
  *		the workqueue pending to be completed.
@@ -1982,7 +1987,8 @@ static QDF_STATUS hif_hal_detach(struct hif_softc *scn)
 	defined(QCA_WIFI_QCA6750) || defined(QCA_WIFI_QCA5018) || \
 	defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_QCN9224) || \
 	defined(QCA_WIFI_QCA9574)) || defined(QCA_WIFI_QCA5332) || \
-	defined(QCA_WIFI_WCN7750) || defined(QCA_WIFI_QCA5424)
+	defined(QCA_WIFI_WCN7750) || defined(QCA_WIFI_QCA5424) || \
+	defined(QCA_WIFI_QCC2072)
 static QDF_STATUS hif_hal_attach(struct hif_softc *scn)
 {
 	if (ce_srng_based(scn)) {
@@ -2418,6 +2424,12 @@ int hif_get_device_type(uint32_t device_id,
 		*hif_type = HIF_TYPE_WCN7750;
 		*target_type = TARGET_TYPE_WCN7750;
 		hif_info(" *********** WCN7750 *************");
+		break;
+
+	case QCC2072_DEVICE_ID:
+		*hif_type = HIF_TYPE_QCC2072;
+		*target_type = TARGET_TYPE_QCC2072;
+		hif_info(" *********** QCC2072 *************");
 		break;
 
 	case KIWI_DEVICE_ID:

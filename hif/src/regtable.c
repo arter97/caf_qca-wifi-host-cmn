@@ -251,6 +251,14 @@ void hif_target_register_tbl_attach(struct hif_softc *scn, u32 target_type)
 		break;
 #endif /* WCN7750_HEADERS_DEF */
 
+#if defined(QCC2072_HEADERS_DEF)
+	case TARGET_TYPE_QCC2072:
+		scn->targetdef = QCC2072_TARGETdef;
+		scn->target_ce_def = QCC2072_CE_TARGETdef;
+		hif_info("TARGET_TYPE_QCC2072");
+		break;
+#endif /* QCC2072_HEADERS_DEF */
+
 	default:
 		break;
 	}
@@ -433,6 +441,13 @@ void hif_register_tbl_attach(struct hif_softc *scn, u32 hif_type)
 		hif_info("HIF_TYPE_WCN7750");
 		break;
 #endif /* WCN7750_HEADERS_DEF */
+
+#if defined(QCC2072_HEADERS_DEF)
+	case HIF_TYPE_QCC2072:
+		scn->hostdef = QCC2072_HOSTdef;
+		hif_info("HIF_TYPE_QCC2072");
+		break;
+#endif /* QCC2072_HEADERS_DEF */
 
 	default:
 		break;

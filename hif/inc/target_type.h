@@ -124,6 +124,11 @@ extern "C" {
 #define TARGET_TYPE_QCA5424   41
 #endif
 
+/* Cologne */
+#ifndef TARGET_TYPE_QCC2072
+#define TARGET_TYPE_QCC2072 42
+#endif
+
 #ifdef __cplusplus
 }
 #endif

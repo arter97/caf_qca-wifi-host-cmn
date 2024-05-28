@@ -50,6 +50,7 @@
 #define WCN6750_V1                      0x40140110
 #define WCN6750_V2                      0x40140120
 #define WCN7750_V1                      0x40260100
+#define QCC2072_V1                      0x40290100
 #define WCN6450_V1			0x40200100
 #define WCN3990_TALOS                   0x40670000
 #define WCN3990_MOOREA                  0x40090000
