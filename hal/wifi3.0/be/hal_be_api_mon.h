@@ -3345,6 +3345,7 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 		case TARGET_TYPE_QCA6490:
 		case TARGET_TYPE_QCA6750:
 		case TARGET_TYPE_WCN7750:
+		case TARGET_TYPE_QCC2072:
 			ppdu_info->rx_status.nss = 0;
 			break;
 		default:
