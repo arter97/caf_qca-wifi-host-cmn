@@ -3252,7 +3252,7 @@ dp_tx_send_msdu_single(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 
 	if (!paddr) {
 		/* Handle failure */
-		dp_err("qdf_nbuf_map failed");
+		dp_err_rl("qdf_nbuf_map failed");
 		DP_STATS_INC(vdev,
 			     tx_i[msdu_info->xmit_type].dropped.dma_error, 1);
 		drop_code = TX_DMA_MAP_ERR;
