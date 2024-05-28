@@ -1077,7 +1077,12 @@ void wlan_ipa_wdi_opt_dpath_ctrl_notify_flt_install(struct filter_response
  */
 void wlan_ipa_wdi_opt_dpath_ctrl_notify_flt_delete(struct filter_response
 						   *flt_resp_params);
-#endif
+#endif /* IPA_OPT_WIFI_DP_CTRL */
+#else /* !IPA_OPT_WIFI_DP */
+static inline int wlan_ipa_wdi_opt_dpath_flt_rsrv_rel_cb(void *ipa_ctx)
+{
+	return 0;
+}
 #endif /* IPA_OPT_WIFI_DP */
 
 #ifdef IPA_WDI3_TX_TWO_PIPES
