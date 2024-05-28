@@ -24040,6 +24040,10 @@ static void populate_tlv_service(uint32_t *wmi_service)
 				WMI_SERVICE_SUPPORT_AP_SUSPEND_RESUME;
 	wmi_service[wmi_service_epm] =
 				WMI_SERVICE_EPM;
+#ifdef WLAN_FEATURE_MULTI_LINK_SAP
+	wmi_service[wmi_service_mlo_sap_emlsr_support] =
+				WMI_SERVICE_MLO_SAP_EMLSR_SUPPORT;
+#endif
 }
 
 /**
