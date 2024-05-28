@@ -139,6 +139,9 @@ struct ol_ath_radiostats {
 	uint8_t     obss_rx_util;
 	uint8_t     non_wifi_util;
 	uint32_t    tgt_asserts;
+	uint64_t    recovery_start_ts;
+	uint64_t    recovery_complete_ts;
+	uint64_t    avg_recovery_time;
 	int16_t     chan_nf;
 	int16_t     chan_nf_sec80;
 	uint64_t    wmi_tx_mgmt;
