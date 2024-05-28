@@ -98,7 +98,8 @@
 					  WLAN_CFG_RX_RING_MASK_6 |	\
 					  WLAN_CFG_RX_RING_MASK_7)
 
-#if defined(QCA_WIFI_KIWI_V2) || defined(QCA_WIFI_WCN7750)
+#if defined(QCA_WIFI_KIWI_V2) || defined(QCA_WIFI_WCN7750) || \
+	defined(QCA_WIFI_QCC2072)
 #define WLAN_CFG_TX_RING_NEAR_FULL_IRQ_MASK (WLAN_CFG_TX_RING_MASK_0 | \
 					     WLAN_CFG_TX_RING_MASK_4 | \
 					     WLAN_CFG_TX_RING_MASK_2 | \

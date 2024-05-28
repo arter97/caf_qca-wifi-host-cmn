@@ -144,6 +144,7 @@ static inline int cdp_get_arch_type_from_devid(uint16_t devid)
 	case QCN6432_DEVICE_ID:
 	case WCN7750_DEVICE_ID:
 	case QCA5424_DEVICE_ID:
+	case QCC2072_DEVICE_ID:
 		return CDP_ARCH_TYPE_BE;
 	case RHINE_DP:
 		return CDP_ARCH_TYPE_RH;
@@ -197,6 +198,7 @@ ol_txrx_soc_handle cdp_soc_attach(u_int16_t devid,
 	case PEACH_DEVICE_ID:
 	case QCA5332_DEVICE_ID:
 	case WCN7750_DEVICE_ID:
+	case QCC2072_DEVICE_ID:
 		return dp_soc_attach_wifi3(psoc, &params);
 	break;
 	default:

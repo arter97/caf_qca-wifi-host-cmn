@@ -154,7 +154,8 @@ static const uint8_t tx_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
 #endif /* QCA_WIFI_KIWI_V2 */
 #endif /* IPA_WDI3_TX_TWO_PIPES*/
 #else /* !IPA_OFFLOAD */
-#if defined(QCA_WIFI_KIWI_V2) || defined(QCA_WIFI_WCN7750)
+#if defined(QCA_WIFI_KIWI_V2) || defined(QCA_WIFI_WCN7750) || \
+	defined(QCA_WIFI_QCC2072)
 static const uint8_t tx_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
 	[0] = WLAN_CFG_TX_RING_MASK_0, [1] = WLAN_CFG_TX_RING_MASK_4,
 	[2] = WLAN_CFG_TX_RING_MASK_2, [3] = WLAN_CFG_TX_RING_MASK_5,

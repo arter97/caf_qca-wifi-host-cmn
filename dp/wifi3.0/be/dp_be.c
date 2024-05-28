@@ -59,7 +59,8 @@ static struct wlan_cfg_tcl_wbm_ring_num_map g_tcl_wbm_map_array[MAX_TCL_DATA_RIN
 	{.tcl_ring_num = 0, .wbm_ring_num = 0, .wbm_rbm_id = HAL_BE_WBM_SW0_BM_ID, .for_ipa = 0},
 	{1, 4, HAL_BE_WBM_SW4_BM_ID, 0},
 	{2, 2, HAL_BE_WBM_SW2_BM_ID, 0},
-#if defined(QCA_WIFI_KIWI_V2) || defined(QCA_WIFI_WCN7750)
+#if defined(QCA_WIFI_KIWI_V2) || defined(QCA_WIFI_WCN7750) || \
+	defined(QCA_WIFI_QCC2072)
 	{3, 5, HAL_BE_WBM_SW5_BM_ID, 0},
 	{4, 6, HAL_BE_WBM_SW6_BM_ID, 0}
 #else

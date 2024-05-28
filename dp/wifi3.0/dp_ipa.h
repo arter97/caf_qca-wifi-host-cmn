@@ -20,7 +20,7 @@
 
 #include "wlan_ipa_public_struct.h"
 #if defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_KIWI_V2) || \
-    defined(QCA_WIFI_WCN7750)
+    defined(QCA_WIFI_WCN7750) || defined(QCA_WIFI_QCC2072)
 /* Index into soc->tcl_data_ring[] */
 #define IPA_TCL_DATA_RING_IDX	4
 #else
@@ -46,7 +46,7 @@
 
 #ifdef IPA_WDI3_TX_TWO_PIPES
 #if defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_KIWI_V2) || \
-    defined(QCA_WIFI_WCN7750)
+    defined(QCA_WIFI_WCN7750) || defined(QCA_WIFI_QCC2072)
 /* Index into soc->tcl_data_ring[] and soc->tx_comp_ring[] */
 #define IPA_TX_ALT_RING_IDX 3
 #define IPA_TX_ALT_COMP_RING_IDX IPA_TX_ALT_RING_IDX

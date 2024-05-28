@@ -5707,6 +5707,7 @@ QDF_STATUS dp_mon_soc_cfg_init(struct dp_soc *soc)
 	case TARGET_TYPE_PEACH:
 	case TARGET_TYPE_WCN6450:
 	case TARGET_TYPE_WCN7750:
+	case TARGET_TYPE_QCC2072:
 		/* do nothing */
 		break;
 	case TARGET_TYPE_QCA8074:
@@ -5782,6 +5783,7 @@ static void dp_mon_pdev_per_target_config(struct dp_pdev *pdev)
 		break;
 	case TARGET_TYPE_PEACH:
 	case TARGET_TYPE_WCN7750:
+	case TARGET_TYPE_QCC2072:
 	default:
 		mon_pdev->is_tlv_hdr_64_bit = false;
 		mon_pdev->tlv_hdr_size = HAL_RX_TLV32_HDR_SIZE;
@@ -6139,6 +6141,7 @@ dp_ch_band_lmac_id_mapping_init(struct dp_pdev *pdev)
 	case TARGET_TYPE_QCA6750:
 	case TARGET_TYPE_WCN6450:
 	case TARGET_TYPE_WCN7750:
+	case TARGET_TYPE_QCC2072:
 		pdev->ch_band_lmac_id_mapping[REG_BAND_2G] = DP_MAC0_LMAC_ID;
 		pdev->ch_band_lmac_id_mapping[REG_BAND_5G] = DP_MAC0_LMAC_ID;
 		pdev->ch_band_lmac_id_mapping[REG_BAND_6G] = DP_MAC0_LMAC_ID;
@@ -6728,6 +6731,7 @@ void dp_mon_ops_register(struct dp_soc *soc)
 	case TARGET_TYPE_QCN6122:
 	case TARGET_TYPE_WCN6450:
 	case TARGET_TYPE_WCN7750:
+	case TARGET_TYPE_QCC2072:
 		dp_mon_ops_register_1_0(mon_soc);
 		dp_mon_ops_register_cmn_2_0(mon_soc);
 		dp_mon_ops_register_tx_2_0(mon_soc);
@@ -6796,6 +6800,7 @@ void dp_mon_cdp_ops_register(struct dp_soc *soc)
 	case TARGET_TYPE_QCN6122:
 	case TARGET_TYPE_WCN6450:
 	case TARGET_TYPE_WCN7750:
+	case TARGET_TYPE_QCC2072:
 		dp_mon_cdp_ops_register_1_0(ops);
 #if defined(WLAN_CFR_ENABLE) && defined(WLAN_ENH_CFR_ENABLE)
 		dp_cfr_filter_register_1_0(ops);

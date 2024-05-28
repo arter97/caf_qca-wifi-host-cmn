@@ -838,7 +838,7 @@ free_nbuf:
 
 #if defined(QCA_WIFI_QCA6390) || defined(QCA_WIFI_QCA6490) || \
     defined(QCA_WIFI_QCA6750) || defined(QCA_WIFI_KIWI) || \
-    defined(QCA_WIFI_WCN7750)
+    defined(QCA_WIFI_WCN7750) || defined(QCA_WIFI_QCC2072)
 bool
 dp_rx_null_q_handle_invalid_peer_id_exception(struct dp_soc *soc,
 					      uint8_t pool_id,

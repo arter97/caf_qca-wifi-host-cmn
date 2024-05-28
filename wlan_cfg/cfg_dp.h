@@ -117,7 +117,7 @@
 #define WLAN_CFG_PER_PDEV_LMAC_RING 0
 #define WLAN_LRO_ENABLE 0
 #if defined(QCA_WIFI_QCA6750) || defined(QCA_WIFI_WCN6450) || \
-    defined(QCA_WIFI_WCN7750)
+    defined(QCA_WIFI_WCN7750) || defined(QCA_WIFI_QCC2072)
 #define WLAN_CFG_MAC_PER_TARGET 1
 #else
 #define WLAN_CFG_MAC_PER_TARGET 2
@@ -355,7 +355,7 @@
 #define WLAN_CFG_RX_RELEASE_RING_SIZE_MIN 8
 #if defined(QCA_WIFI_QCA6390) || defined(QCA_WIFI_QCA6490) || \
     defined(QCA_WIFI_QCA6750) || defined(QCA_WIFI_KIWI) || \
-    defined(QCA_WIFI_WCN7750)
+    defined(QCA_WIFI_WCN7750) || defined(QCA_WIFI_QCC2072)
 #define WLAN_CFG_RX_RELEASE_RING_SIZE_MAX 1024
 #else
 #define WLAN_CFG_RX_RELEASE_RING_SIZE_MAX 32768
