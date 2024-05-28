@@ -1421,7 +1421,7 @@ void *dp_srng_aligned_mem_alloc_consistent(struct dp_soc *soc,
 					       &srng->base_paddr_aligned,
 					       DP_RING_BASE_ALIGN);
 	if (mem)
-		qdf_mem_set(srng->base_vaddr_unaligned, 0, srng->alloc_size);
+		qdf_mem_set(srng->base_vaddr_unaligned, srng->alloc_size, 0);
 
 	return mem;
 }
