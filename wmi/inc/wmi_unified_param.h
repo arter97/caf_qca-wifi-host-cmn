@@ -6745,6 +6745,9 @@ typedef enum {
 #endif
 	wmi_service_support_ap_suspend_resume,
 	wmi_service_epm,
+#ifdef WLAN_FEATURE_MULTI_LINK_SAP
+	wmi_service_mlo_sap_emlsr_support,
+#endif
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
