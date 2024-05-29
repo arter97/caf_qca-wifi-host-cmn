@@ -633,7 +633,8 @@ QDF_STATUS osif_update_mlo_partner_info(
 		}
 
 		status = util_get_bvmlie_persta_partner_info(ml_ie, ml_ie_len,
-							     &partner_info);
+							     &partner_info,
+							     WLAN_FC0_STYPE_INVALID);
 		if (QDF_IS_STATUS_ERROR(status)) {
 			osif_err("Unable to find per-sta profile in ML IE");
 			return status;
