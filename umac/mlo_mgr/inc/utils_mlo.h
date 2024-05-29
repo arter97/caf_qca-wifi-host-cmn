@@ -522,6 +522,7 @@ util_get_bvmlie_ext_mld_cap_op_info(uint8_t *mlie_seq, qdf_size_t mlie_seqlen,
  * this structure will be reported as 0, if no Link Info is found, or no per-STA
  * profile is found, or if none of the per-STA profiles includes a MAC address
  * in the STA Info field (assuming no errors are encountered).
+ * @subtype: Frame Subtype
  *
  * Get partner link information and NSTR capability information in the
  * per-STA profiles present in a Basic variant Multi-Link element.
@@ -536,7 +537,8 @@ util_get_bvmlie_ext_mld_cap_op_info(uint8_t *mlie_seq, qdf_size_t mlie_seqlen,
 QDF_STATUS
 util_get_bvmlie_persta_partner_info(uint8_t *mlieseq,
 				    qdf_size_t mlieseqlen,
-				    struct mlo_partner_info *partner_info);
+				    struct mlo_partner_info *partner_info,
+				    uint8_t subtype);
 
 /**
  * util_get_prvmlie_mldid - Get the MLD ID from a given Probe Request
@@ -743,7 +745,8 @@ util_get_bvmlie_primary_linkid(uint8_t *mlieseq, qdf_size_t mlieseqlen,
 static inline QDF_STATUS
 util_get_bvmlie_persta_partner_info(uint8_t *mlieseq,
 				    qdf_size_t mlieseqlen,
-				    struct mlo_partner_info *partner_info)
+				    struct mlo_partner_info *partner_info,
+				    uint8_t subtype)
 {
 	return QDF_STATUS_E_NOSUPPORT;
 }
