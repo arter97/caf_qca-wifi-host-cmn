@@ -694,6 +694,7 @@ struct mlnawds_config {
  * @ap_link_addr: Associated link BSSID
  * @link_chan_info: Associated link channel info
  * @is_link_active: link state
+ * @link_status_code: wlan status code for link
  */
 struct mlo_link_info {
 	struct qdf_mac_addr link_addr;
@@ -713,6 +714,7 @@ struct mlo_link_info {
 	struct wlan_channel *link_chan_info;
 #endif
 	bool is_link_active;
+	enum wlan_status_code link_status_code;
 };
 
 /**
