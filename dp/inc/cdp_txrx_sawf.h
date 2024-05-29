@@ -101,7 +101,8 @@ cdp_sawf_peer_get_map_conf(ol_txrx_soc_handle soc,
 }
 
 static inline QDF_STATUS
-cdp_sawf_peer_get_msduq_info(ol_txrx_soc_handle soc, uint8_t *mac)
+cdp_sawf_peer_get_msduq_info(ol_txrx_soc_handle soc, char *mac, uint8_t svc_id,
+			     uint8_t debug_level)
 {
 	if (!soc || !soc->ops) {
 		dp_cdp_debug("Invalid Instance");
@@ -114,7 +115,8 @@ cdp_sawf_peer_get_msduq_info(ol_txrx_soc_handle soc, uint8_t *mac)
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	return soc->ops->sawf_ops->sawf_get_peer_msduq_info(soc, mac);
+	return soc->ops->sawf_ops->sawf_get_peer_msduq_info(soc, mac, svc_id,
+							    debug_level);
 }
 
 #ifdef CONFIG_SAWF
