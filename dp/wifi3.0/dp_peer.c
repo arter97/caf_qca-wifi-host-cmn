@@ -2832,8 +2832,8 @@ dp_rx_mlo_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 		}
 
 		if (peer->vdev->opmode == wlan_op_mode_sta)
-			dp_rx_mlo_update_ast_idx(peer->vdev, ast_hash,
-						 hw_peer_id);
+			dp_rx_mlo_update_ast_idx(peer->vdev, hw_peer_id,
+						 ast_hash);
 
 		/* Add ast entry incase self ast entry is
 		 * deleted due to DP CP sync issue
