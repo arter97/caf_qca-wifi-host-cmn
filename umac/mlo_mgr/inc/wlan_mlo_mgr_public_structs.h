@@ -1483,6 +1483,8 @@ struct mlo_mlme_ext_ops {
  * @mlo_mgr_osif_update_bss_info: Callback to update each link connection info.
  * @mlo_mgr_osif_update_mac_addr: Callback to notify MAC addr update complete
  *                                from old link id to new link id for the vdev.
+ * @mlo_roam_osif_update_mac_addr: Callback to notify MAC addr update during
+				   roam sync for the vdev.
  * @mlo_mgr_osif_link_switch_notification: Notify OSIF on start of link switch
  */
 struct mlo_osif_ext_ops {
@@ -1494,6 +1496,9 @@ struct mlo_osif_ext_ops {
 	QDF_STATUS (*mlo_mgr_osif_update_mac_addr)(int32_t ieee_old_link_id,
 						   int32_t ieee_new_link_id,
 						   uint8_t vdev_id);
+	QDF_STATUS (*mlo_roam_osif_update_mac_addr)(struct wlan_objmgr_vdev *vdev,
+						    struct qdf_mac_addr *old_self_mac,
+						    struct qdf_mac_addr *new_self_mac);
 
 	QDF_STATUS
 	(*mlo_mgr_osif_link_switch_notification)(struct wlan_objmgr_vdev *vdev,
