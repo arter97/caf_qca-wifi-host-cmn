@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -824,18 +824,19 @@ dp_mon_rx_stats_update_rssi_dbm_params(struct dp_mon_pdev *mon_pdev,
  * @pdev: Datapath PDEV handle
  * @ppdu_info: Structure for rx ppdu info
  * @nbuf: Qdf nbuf abstraction for linux skb
+ * @tlv_status: TLV status
  *
  * Return: 0 on success, 1 on failure
  */
 int
 dp_rx_handle_local_pkt_capture(struct dp_pdev *pdev,
 			      struct hal_rx_ppdu_info *ppdu_info,
-			      qdf_nbuf_t nbuf);
+			      qdf_nbuf_t nbuf, uint32_t tlv_status);
 #else
 static inline int
 dp_rx_handle_local_pkt_capture(struct dp_pdev *pdev,
 			      struct hal_rx_ppdu_info *ppdu_info,
-			      qdf_nbuf_t nbuf)
+			      qdf_nbuf_t nbuf, uint32_t tlv_status)
 {
 	return 0;
 }

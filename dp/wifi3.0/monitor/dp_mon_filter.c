@@ -1021,6 +1021,25 @@ static void dp_mon_reset_local_pkt_capture_rx_filter(struct dp_pdev *pdev)
 	dp_mon_pdev_filter_init(mon_pdev);
 }
 
+static inline void
+dp_mon_init_local_pkt_capture_queue(struct dp_mon_pdev *mon_pdev)
+{
+	qdf_spin_lock_bh(&mon_pdev->lpc_lock);
+	qdf_nbuf_queue_init(&mon_pdev->msdu_queue);
+	qdf_nbuf_queue_init(&mon_pdev->mpdu_queue);
+	mon_pdev->first_mpdu = true;
+	qdf_spin_unlock_bh(&mon_pdev->lpc_lock);
+}
+
+static inline void
+dp_mon_free_local_pkt_capture_queue(struct dp_mon_pdev *mon_pdev)
+{
+	qdf_spin_lock_bh(&mon_pdev->lpc_lock);
+	qdf_nbuf_queue_free(&mon_pdev->msdu_queue);
+	qdf_nbuf_queue_free(&mon_pdev->mpdu_queue);
+	qdf_spin_unlock_bh(&mon_pdev->lpc_lock);
+}
+
 QDF_STATUS dp_mon_start_local_pkt_capture(struct cdp_soc_t *cdp_soc,
 					  uint8_t pdev_id,
 					  struct cdp_monitor_filter *filter)
@@ -1070,6 +1089,7 @@ QDF_STATUS dp_mon_start_local_pkt_capture(struct cdp_soc_t *cdp_soc,
 
 	dp_mon_filter_debug("local pkt capture tx filter set");
 
+	dp_mon_init_local_pkt_capture_queue(mon_pdev);
 	dp_mon_set_local_pkt_capture_running(mon_pdev, true);
 	return status;
 }
@@ -1096,6 +1116,7 @@ QDF_STATUS dp_mon_stop_local_pkt_capture(struct cdp_soc_t *cdp_soc,
 		return QDF_STATUS_SUCCESS;
 	}
 
+	dp_mon_set_local_pkt_capture_running(mon_pdev, false);
 	qdf_spin_lock_bh(&mon_pdev->mon_lock);
 	dp_mon_reset_local_pkt_capture_rx_filter(pdev);
 	status = dp_mon_filter_update(pdev);
@@ -1112,7 +1133,8 @@ QDF_STATUS dp_mon_stop_local_pkt_capture(struct cdp_soc_t *cdp_soc,
 	qdf_spin_unlock_bh(&mon_pdev->mon_lock);
 	dp_mon_filter_debug("local pkt capture stopped");
 
-	dp_mon_set_local_pkt_capture_running(mon_pdev, false);
+	dp_mon_free_local_pkt_capture_queue(mon_pdev);
+
 	return QDF_STATUS_SUCCESS;
 }
 
