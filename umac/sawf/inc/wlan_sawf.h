@@ -66,6 +66,7 @@
 	qdf_trace_hex_dump(QDF_MODULE_ID_SAWF, \
 			QDF_TRACE_LEVEL_DEBUG, ptr, size)
 
+#define SAWF_SVC_CLASS_INVALID 0
 #define SAWF_SVC_CLASS_MIN 1
 #define SAWF_SVC_CLASS_MAX 128
 #define WLAN_MAX_SVC_CLASS_NAME 64
