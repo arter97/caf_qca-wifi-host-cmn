@@ -1104,6 +1104,16 @@ struct dp_mon_mac {
 	uint32_t mon_last_buf_cookie;
 	qdf_nbuf_queue_t rx_status_q;
 	struct hal_rx_ppdu_info ppdu_info;
+#ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
+	/* Maintain MSDU list on PPDU */
+	qdf_nbuf_queue_t msdu_queue;
+	/* Maintain MPDU list of PPDU */
+	qdf_nbuf_queue_t mpdu_queue;
+	/* To  check if 1st MPDU of PPDU */
+	bool first_mpdu;
+	/* LPC lock */
+	qdf_spinlock_t lpc_lock;
+#endif
 };
 
 struct  dp_mon_pdev {

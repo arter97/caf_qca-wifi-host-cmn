@@ -3903,8 +3903,7 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 		ppdu_info->ppdu_msdu_info[ppdu_info->fcs_ok_cnt].first_msdu_payload =
 			rx_tlv;
 		ppdu_info->ppdu_msdu_info[ppdu_info->fcs_ok_cnt].payload_len = tlv_len;
-		if (!ppdu_info->msdu_info.first_msdu_payload)
-			ppdu_info->msdu_info.first_msdu_payload = rx_tlv;
+		ppdu_info->msdu_info.first_msdu_payload = rx_tlv;
 		ppdu_info->msdu_info.payload_len = tlv_len;
 		ppdu_info->user_id = user_id;
 		ppdu_info->hdr_len = tlv_len;

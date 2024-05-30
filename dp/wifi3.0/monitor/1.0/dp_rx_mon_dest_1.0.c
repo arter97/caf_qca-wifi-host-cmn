@@ -1494,6 +1494,30 @@ dp_rx_pdev_mon_cmn_desc_pool_init(struct dp_pdev *pdev, int mac_id)
 	dp_rx_pdev_mon_dest_desc_pool_init(pdev, mac_for_pdev);
 }
 
+#ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
+static inline void
+dp_rx_lpc_lock_create(struct dp_mon_mac *mon_mac)
+{
+	qdf_spinlock_create(&mon_mac->lpc_lock);
+}
+
+static inline void
+dp_rx_lpc_lock_destroy(struct dp_mon_mac *mon_mac)
+{
+	qdf_spinlock_destroy(&mon_mac->lpc_lock);
+}
+#else
+static inline void
+dp_rx_lpc_lock_create(struct dp_mon_mac *mon_mac)
+{
+}
+
+static inline void
+dp_rx_lpc_lock_destroy(struct dp_mon_mac *mon_mac)
+{
+}
+#endif
+
 #if defined(FEATURE_ML_MONITOR_MODE_SUPPORT) || \
 	defined(FEATURE_ML_LOCAL_PKT_CAPTURE)
 void
@@ -1504,6 +1528,7 @@ dp_rx_pdev_mon_desc_pool_deinit(struct dp_pdev *pdev)
 	for (mac_id = 0; mac_id < NUM_RXDMA_STATUS_RINGS_PER_PDEV; mac_id++) {
 		dp_rx_pdev_mon_cmn_desc_pool_deinit(pdev, mac_id);
 		qdf_spinlock_destroy(&pdev->monitor_pdev->mon_mac[mac_id].mon_lock);
+		dp_rx_lpc_lock_destroy(&pdev->monitor_pdev->mon_mac[mac_id]);
 	}
 }
 
@@ -1515,6 +1540,7 @@ dp_rx_pdev_mon_desc_pool_init(struct dp_pdev *pdev)
 	for (mac_id = 0; mac_id < NUM_RXDMA_STATUS_RINGS_PER_PDEV; mac_id++) {
 		dp_rx_pdev_mon_cmn_desc_pool_init(pdev, mac_id);
 		qdf_spinlock_create(&pdev->monitor_pdev->mon_mac[mac_id].mon_lock);
+		dp_rx_lpc_lock_create(&pdev->monitor_pdev->mon_mac[mac_id]);
 	}
 }
 #else
@@ -1526,6 +1552,7 @@ dp_rx_pdev_mon_desc_pool_deinit(struct dp_pdev *pdev)
 	for (mac_id = 0; mac_id < NUM_RXDMA_STATUS_RINGS_PER_PDEV; mac_id++)
 		dp_rx_pdev_mon_cmn_desc_pool_deinit(pdev, mac_id);
 	qdf_spinlock_destroy(&pdev->monitor_pdev->mon_mac.mon_lock);
+	dp_rx_lpc_lock_destroy(&pdev->monitor_pdev->mon_mac);
 }
 
 void
@@ -1536,6 +1563,7 @@ dp_rx_pdev_mon_desc_pool_init(struct dp_pdev *pdev)
 	for (mac_id = 0; mac_id < NUM_RXDMA_STATUS_RINGS_PER_PDEV; mac_id++)
 		dp_rx_pdev_mon_cmn_desc_pool_init(pdev, mac_id);
 	qdf_spinlock_create(&pdev->monitor_pdev->mon_mac.mon_lock);
+	dp_rx_lpc_lock_create(&pdev->monitor_pdev->mon_mac);
 }
 #endif
 
