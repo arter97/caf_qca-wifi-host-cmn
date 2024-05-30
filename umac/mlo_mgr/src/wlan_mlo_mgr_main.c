@@ -1108,6 +1108,9 @@ static QDF_STATUS mlo_dev_ctx_init(struct wlan_objmgr_vdev *vdev)
 	struct mlo_mgr_context *g_mlo_ctx = wlan_objmgr_get_mlo_ctx();
 	uint8_t id = 0;
 	struct wlan_objmgr_psoc *psoc = NULL;
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+	uint8_t idx;
+#endif
 
 	if (wlan_vdev_mlme_is_mlo_bridge_vdev(vdev)) {
 		status = mlo_add_to_bridge_vdev_list(vdev);
@@ -1224,6 +1227,9 @@ static QDF_STATUS mlo_dev_ctx_init(struct wlan_objmgr_vdev *vdev)
 					     psoc, WLAN_MD_CP_MLO_BRG_STA,
 					     "wlan_mlo_bridge_sta");
 			qdf_mem_free(ml_dev->bridge_sta_ctx);
+
+			for (idx = 0; idx < MLO_MAX_BRIDGE_LINKS_PER_MLD; idx++)
+				ml_dev->br_pdev_list[idx] = NULL;
 #endif
 		} else if (wlan_vdev_mlme_get_opmode(vdev) == QDF_SAP_MODE) {
 			wlan_minidump_remove(ml_dev->ap_ctx,
