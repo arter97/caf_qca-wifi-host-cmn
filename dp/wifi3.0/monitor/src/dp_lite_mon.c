@@ -1813,7 +1813,6 @@ dp_lite_mon_add_meta_header_to_headroom(struct dp_pdev_be *be_pdev,
 		if (is_data_pkt &&
 		    wlan_cfg_is_rx_mon_protocol_flow_tag_enabled(soc->wlan_cfg_ctx)) {
 			hp = qdf_nbuf_head(mpdu_nbuf);
-			hp += sizeof(uint16_t); /* skip test mask */
 			msdu_count = *((uint16_t *)hp);
 			if (msdu_count && (msdu_count <= DP_RX_MON_MAX_MSDU)) {
 				tlv_id = DP_RX_MON_TLV_PF_ID;
