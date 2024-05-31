@@ -291,6 +291,7 @@ void dp_mon_filter_h2t_setup(struct dp_soc *soc, struct dp_pdev *pdev,
  *
  * Return: true if yes, false if not
  */
+#ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
 static inline
 bool dp_mon_skip_filter_config(struct dp_soc *soc)
 {
@@ -302,6 +303,13 @@ bool dp_mon_skip_filter_config(struct dp_soc *soc)
 	else
 		return false;
 }
+#else
+static inline
+bool dp_mon_skip_filter_config(struct dp_soc *soc)
+{
+	return false;
+}
+#endif
 
 /**
  * dp_update_num_mac_rings() - Update number of MAC rings based on connection
