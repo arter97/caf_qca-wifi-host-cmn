@@ -1222,7 +1222,7 @@ static void dp_ipa_setup_iface_session_id(qdf_ipa_wdi_reg_intf_in_params_t *in,
 }
 #elif defined(IPA_WDS_EASYMESH_FEATURE)
 static void dp_ipa_setup_iface_session_id(qdf_ipa_wdi_reg_intf_in_params_t *in,
-					  uint8_t session_id)
+					  uint8_t session_id, bool is_tx1_used)
 {
 	bool is_2g_iface = session_id & IPA_SESSION_ID_SHIFT;
 
