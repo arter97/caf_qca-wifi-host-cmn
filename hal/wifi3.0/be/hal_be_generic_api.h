@@ -2145,6 +2145,10 @@ hal_txmon_status_parse_tlv_generic_be(hal_soc_handle_t hal_soc_hdl,
 	}
 	case WIFIRX_FRAME_BITMAP_ACK_E:
 	{
+		uint16_t ba_bitmap_sz;
+		uint64_t *ba_bitmap_tmp = NULL;
+		uint8_t offset = 0;
+
 		/* user tlv */
 		status = HAL_MON_RX_FRAME_BITMAP_ACK;
 		SHOW_DEFINED(WIFIRX_FRAME_BITMAP_ACK_E);
@@ -2204,16 +2208,26 @@ hal_txmon_status_parse_tlv_generic_be(hal_soc_handle_t hal_soc_hdl,
 							   RX_FRAME_BITMAP_ACK,
 							   BA_BITMAP_SIZE);
 
-		/* ba bitmap */
-		qdf_mem_copy(TXMON_HAL_USER(ppdu_info, user_id, ba_bitmap),
-			     &HAL_SET_FLD_OFFSET_64(tx_tlv,
-						    RX_FRAME_BITMAP_ACK,
-						    BA_TS_BITMAP_31_0, 0), 32);
+		ba_bitmap_sz = TXMON_HAL_USER(ppdu_info, user_id, ba_bitmap_sz);
 
+		/* ba bitmap */
+		offset = HAL_TX_LSB(RX_FRAME_BITMAP_ACK, BA_TS_BITMAP_31_0)
+									   >> 3;
+		ba_bitmap_tmp = &HAL_SET_FLD_OFFSET_64(tx_tlv,
+						       RX_FRAME_BITMAP_ACK,
+						       BA_TS_BITMAP_31_0,
+						       offset);
+
+		qdf_mem_copy(TXMON_HAL_USER(ppdu_info, user_id, ba_bitmap),
+			     ba_bitmap_tmp, 4 << ba_bitmap_sz);
 		break;
 	}
 	case WIFIRX_FRAME_1K_BITMAP_ACK_E:
 	{
+		uint16_t ba_bitmap_sz;
+		uint64_t *ba_bitmap_tmp = NULL;
+		uint8_t offset = 0;
+
 		/* user tlv */
 		status = HAL_MON_RX_FRAME_BITMAP_BLOCK_ACK_1K;
 		SHOW_DEFINED(WIFIRX_FRAME_1K_BITMAP_ACK_E);
@@ -2255,14 +2269,19 @@ hal_txmon_status_parse_tlv_generic_be(hal_soc_handle_t hal_soc_hdl,
 				HAL_TX_DESC_GET_64(tx_tlv,
 						   RX_FRAME_1K_BITMAP_ACK,
 						   BA_TS_CTRL);
-		/* memcpy  ba bitmap */
-		qdf_mem_copy(TXMON_HAL_USER(ppdu_info, user_id, ba_bitmap),
-			     &HAL_SET_FLD_OFFSET_64(tx_tlv,
-						    RX_FRAME_1K_BITMAP_ACK,
-						    BA_TS_BITMAP_31_0, 0),
-			     4 << TXMON_HAL_USER(ppdu_info,
-						 user_id, ba_bitmap_sz));
 
+		ba_bitmap_sz = TXMON_HAL_USER(ppdu_info, user_id, ba_bitmap_sz);
+
+		/* memcpy  ba bitmap */
+		offset = HAL_TX_LSB(RX_FRAME_1K_BITMAP_ACK, BA_TS_BITMAP_31_0)
+									   >> 3;
+		ba_bitmap_tmp = &HAL_SET_FLD_OFFSET_64(tx_tlv,
+						       RX_FRAME_1K_BITMAP_ACK,
+						       BA_TS_BITMAP_31_0,
+						       offset);
+
+		qdf_mem_copy(TXMON_HAL_USER(ppdu_info, user_id, ba_bitmap),
+			     ba_bitmap_tmp, 4 << ba_bitmap_sz);
 		break;
 	}
 	case WIFIRESPONSE_START_STATUS_E:

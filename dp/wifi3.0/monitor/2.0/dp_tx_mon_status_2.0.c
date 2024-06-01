@@ -702,8 +702,14 @@ dp_tx_mon_generate_4addr_qos_null_frm(struct dp_pdev *pdev,
 	TXMON_PPDU_HAL(tx_ppdu_info, is_used) = 1;
 }
 
+#define TXMON_BA_PER_STA_TID_INF_SZ	2
+#define TXMON_BA_START_SQ_CTRL_SZ	2
 #define TXMON_BA_CTRL_SZ		2
-#define TXMON_BA_INFO_SZ(bitmap_sz)	((4 * (bitmap_sz)) + 6)
+#define TXMON_BA_INFO_SZ(bitmap_sz)	\
+		((TXMON_BA_START_SQ_CTRL_SZ) + (4 << (bitmap_sz)))
+#define TXMON_MU_BA_INFO_SZ(bitmap_sz)	\
+		((TXMON_BA_START_SQ_CTRL_SZ) + (TXMON_BA_PER_STA_TID_INF_SZ) +\
+		 (4 << (bitmap_sz)))
 #define TXMON_MU_BA_ACK_FRAME_SZ(bitmap_sz)		\
 		(sizeof(struct ieee80211_ctlframe_addr2) +\
 		 TXMON_BA_CTRL_SZ + (bitmap_sz))
@@ -712,69 +718,70 @@ dp_tx_mon_generate_4addr_qos_null_frm(struct dp_pdev *pdev,
 		(sizeof(struct ieee80211_ctlframe_addr2) +\
 		 TXMON_BA_CTRL_SZ + TXMON_BA_INFO_SZ(bitmap_sz))
 
-/**
- * dp_tx_mon_generate_mu_block_ack_frm() - API to generate MU block ack frame
- * @pdev: pdev Handle
- * @tx_ppdu_info: pointer to tx ppdu info structure
- * @window_flag: frame generated window
- * @mac_id: LMAC ID
- *
- * Return: void
- */
-static void
-dp_tx_mon_generate_mu_block_ack_frm(struct dp_pdev *pdev,
-				    struct dp_tx_ppdu_info *tx_ppdu_info,
-				    uint8_t window_flag,
-				    uint8_t mac_id)
+static uint8_t *
+dp_init_mu_ba_per_tid_info(struct dp_tx_ppdu_info *tx_ppdu_info, uint8_t *frm,
+			   uint8_t user_id)
 {
-	/* allocate and populate MU block ack frame */
-	/* enqueue 802.11 payload to per user mpdu_q */
-	struct dp_mon_pdev *mon_pdev;
-	struct dp_mon_pdev_be *mon_pdev_be;
-	struct dp_pdev_tx_monitor_be *tx_mon_be;
-	struct hal_tx_status_info *tx_status_info;
+	*((uint16_t *)frm) =
+		qdf_cpu_to_le16((TXMON_PPDU_USR(tx_ppdu_info, user_id, tid) <<
+				 DP_IEEE80211_BAR_CTL_TID_S) |
+				(TXMON_PPDU_USR(tx_ppdu_info, user_id,
+						aid) & 0x7FF));
+	frm += 2;
+	*((uint16_t *)frm) = qdf_cpu_to_le16(
+			TXMON_PPDU_USR(tx_ppdu_info, user_id, start_seq));
+	frm += 2;
+	qdf_mem_copy(frm,
+		     TXMON_PPDU_USR(tx_ppdu_info, user_id, ba_bitmap),
+				    4 <<
+				    TXMON_PPDU_USR(tx_ppdu_info,
+						   user_id, ba_bitmap_sz));
+	frm += 4 << TXMON_PPDU_USR(tx_ppdu_info, user_id, ba_bitmap_sz);
+
+	return frm;
+}
+
+static uint8_t *
+dp_skip_ba_tail_to_per_user_info(struct dp_tx_ppdu_info *tx_ppdu_info,
+				 qdf_nbuf_t mpdu_nbuf, uint8_t user_id)
+{
 	struct ieee80211_ctlframe_addr2 *wh_addr2 = NULL;
-	qdf_nbuf_t mpdu_nbuf = NULL;
-	uint16_t ba_control = 0;
 	uint8_t *frm = NULL;
-	uint32_t ba_sz = 0;
-	uint8_t num_users = TXMON_PPDU_HAL(tx_ppdu_info, num_users);
-	uint8_t i = 0;
+	uint8_t i;
+
+	wh_addr2 = (struct ieee80211_ctlframe_addr2 *)qdf_nbuf_data(mpdu_nbuf);
+	frm = (uint8_t *)&wh_addr2[1];
+
+	/* skip BA control */
+	frm += 2;
+
+	for (i = 0; i < user_id; i++) {
+		frm += 2; // skip TID info
+		frm += 2; // skip BA SSC
+
+		/* skip BA bitmap */
+		frm += 4 << TXMON_PPDU_USR(tx_ppdu_info, i, ba_bitmap_sz);
+	}
+
+	return frm;
+}
+
+static void
+dp_set_common_ba_section(struct dp_tx_ppdu_info *tx_ppdu_info,
+			 struct dp_mon_pdev_be *mon_pdev_be,
+			 qdf_nbuf_t mpdu_nbuf, uint8_t window_flag,
+			 uint8_t mac_id)
+{
+	struct ieee80211_ctlframe_addr2 *wh_addr2 = NULL;
 	uint8_t frm_ctl;
-
-	/* sanity check */
-	if (qdf_unlikely(!pdev))
-		return;
-
-	mon_pdev = pdev->monitor_pdev;
-	if (qdf_unlikely(!mon_pdev))
-		return;
-
-	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
-	if (qdf_unlikely(!mon_pdev_be))
-		return;
+	struct hal_tx_status_info *tx_status_info;
+	struct dp_pdev_tx_monitor_be *tx_mon_be;
+	uint8_t num_users = TXMON_PPDU_HAL(tx_ppdu_info, num_users);
+	uint8_t *frm = NULL;
+	uint16_t ba_control = 0;
 
 	tx_mon_be = dp_mon_pdev_get_tx_mon(mon_pdev_be, mac_id);
 	tx_status_info = &tx_mon_be->data_status_info;
-	for (i = 0; i < num_users; i++)
-		ba_sz += (4 << TXMON_BA_INFO_SZ(TXMON_PPDU_USR(tx_ppdu_info,
-							       i,
-							       ba_bitmap_sz)));
-
-	/*
-	 * for multi sta block ack, do we need to increase the size
-	 * or copy info on subsequent frame offset
-	 *
-	 * for radiotap we allocate new skb,
-	 * so we don't need reserver skb header
-	 */
-	mpdu_nbuf = qdf_nbuf_alloc(pdev->soc->osdev,
-				   TXMON_MU_BA_ACK_FRAME_SZ(ba_sz), 0, 4,
-				   FALSE);
-	if (!mpdu_nbuf) {
-		/* TODO: update status and break */
-		return;
-	}
 
 	wh_addr2 = (struct ieee80211_ctlframe_addr2 *)qdf_nbuf_data(mpdu_nbuf);
 	qdf_mem_zero(wh_addr2, DP_BA_ACK_FRAME_SIZE);
@@ -812,28 +819,76 @@ dp_tx_mon_generate_mu_block_ack_frm(struct dp_pdev *pdev,
 	/* BA control */
 	ba_control = 0x0016;
 	*((uint16_t *)frm) = qdf_cpu_to_le16(ba_control);
-	frm += 2;
+}
 
-	for (i = 0; i < num_users; i++) {
-		*((uint16_t *)frm) =
-			qdf_cpu_to_le16((TXMON_PPDU_USR(tx_ppdu_info, i, tid) <<
-					 DP_IEEE80211_BAR_CTL_TID_S) |
-					(TXMON_PPDU_USR(tx_ppdu_info, i,
-							aid) & 0x7FF));
-		frm += 2;
-		*((uint16_t *)frm) = qdf_cpu_to_le16(
-				TXMON_PPDU_USR(tx_ppdu_info, i, start_seq));
-		frm += 2;
-		qdf_mem_copy(frm,
-			     TXMON_PPDU_USR(tx_ppdu_info, i, ba_bitmap),
-					    4 <<
-					    TXMON_PPDU_USR(tx_ppdu_info,
-							   i, ba_bitmap_sz));
-		frm += 4 << TXMON_PPDU_USR(tx_ppdu_info, i, ba_bitmap_sz);
+/**
+ * dp_tx_mon_generate_mu_block_ack_frm() - API to generate MU block ack frame
+ * @pdev: pdev Handle
+ * @tx_ppdu_info: pointer to tx ppdu info structure
+ * @window_flag: frame generated window
+ * @mac_id: LMAC ID
+ *
+ * Return: void
+ */
+static void
+dp_tx_mon_generate_mu_block_ack_frm(struct dp_pdev *pdev,
+				    struct dp_tx_ppdu_info *tx_ppdu_info,
+				    uint8_t window_flag,
+				    uint8_t mac_id)
+{
+	/* allocate and populate MU block ack frame */
+	/* enqueue 802.11 payload to per user mpdu_q */
+	struct dp_mon_pdev *mon_pdev;
+	struct dp_mon_pdev_be *mon_pdev_be;
+	qdf_nbuf_t mpdu_nbuf = NULL;
+	uint32_t ba_sz = 0;
+	uint8_t num_users = TXMON_PPDU_HAL(tx_ppdu_info, num_users);
+	uint8_t i = 0;
+	uint8_t user_id = 0;
+	uint8_t *per_usr_start = NULL;
+	uint8_t *frm = NULL;
+
+	/* sanity check */
+	if (qdf_unlikely(!pdev))
+		return;
+
+	mon_pdev = pdev->monitor_pdev;
+	if (qdf_unlikely(!mon_pdev))
+		return;
+
+	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
+	if (qdf_unlikely(!mon_pdev_be))
+		return;
+
+	/* Only the last user should proceed with the rest of this function */
+	user_id = TXMON_PPDU_HAL(tx_ppdu_info, cur_usr_idx);
+	if (user_id != num_users - 1)
+		return;
+
+	for (i = 0; i < num_users; i++)
+		ba_sz += TXMON_MU_BA_INFO_SZ(TXMON_PPDU_USR(tx_ppdu_info, i,
+							    ba_bitmap_sz));
+
+	mpdu_nbuf = qdf_nbuf_alloc(pdev->soc->osdev,
+				   TXMON_MU_BA_ACK_FRAME_SZ(ba_sz),
+				   0, 4, FALSE);
+	if (!mpdu_nbuf) {
+		/* TODO: update status and break */
+		return;
 	}
+	dp_set_common_ba_section(tx_ppdu_info, mon_pdev_be, mpdu_nbuf,
+				 window_flag, mac_id);
 
-	qdf_nbuf_set_pktlen(mpdu_nbuf,
-			    (frm - (uint8_t *)qdf_nbuf_data(mpdu_nbuf)));
+	per_usr_start = dp_skip_ba_tail_to_per_user_info(tx_ppdu_info,
+							 mpdu_nbuf, 0);
+	frm = per_usr_start;
+	frm += ba_sz;
+	qdf_nbuf_set_pktlen(mpdu_nbuf, (frm -
+					(uint8_t *)qdf_nbuf_data(mpdu_nbuf)));
+
+	for (i = 0; i < num_users; i++)
+		per_usr_start = dp_init_mu_ba_per_tid_info(tx_ppdu_info,
+							   per_usr_start, i);
 
 	/* always enqueue to first active user */
 	dp_tx_mon_enqueue_mpdu_nbuf(pdev, tx_ppdu_info, 0, mpdu_nbuf);
@@ -1337,11 +1392,11 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 		 */
 		tx_status_info = &tx_mon_be->data_status_info;
 
-		if (TXMON_PPDU_HAL(tx_data_ppdu_info, num_users))
+		if (TXMON_PPDU_HAL(tx_data_ppdu_info, num_users) == 1)
 			dp_tx_mon_generate_block_ack_frm(pdev,
 							 tx_data_ppdu_info,
 							 INITIATOR_WINDOW,
-							  mac_id);
+							 mac_id);
 		else
 			dp_tx_mon_generate_mu_block_ack_frm(pdev,
 							    tx_data_ppdu_info,
