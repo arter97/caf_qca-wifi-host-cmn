@@ -1016,10 +1016,13 @@ static bool dp_is_mlo_3_link_peer(struct dp_peer *peer)
 	uint8_t i = 0;
 	uint8_t num_links = 0;
 
-	if (!IS_MLO_DP_LINK_PEER(peer))
+	if (IS_MLO_DP_LINK_PEER(peer))
+		mld_peer = DP_GET_MLD_PEER_FROM_PEER(peer);
+	else if (IS_MLO_DP_MLD_PEER(peer))
+		mld_peer = peer;
+	else
 		return false;
 
-	mld_peer = peer->mld_peer;
 	if (!mld_peer) {
 		dp_sawf_err("mld peer is null for MLO capable peer");
 		return false;
