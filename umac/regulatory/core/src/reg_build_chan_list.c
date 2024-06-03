@@ -5087,7 +5087,7 @@ reg_process_afc_expiry_event(struct afc_regulatory_info *afc_info)
  * Return:
  * AFC_BW_320 if the chip supports 11BE, else return AFC_BW_160.
  */
-static uint16_t
+uint16_t
 reg_find_afc_max_bw_from_chip_cap(struct wlan_objmgr_pdev *pdev)
 {
 	struct wlan_objmgr_psoc *psoc;
@@ -5105,12 +5105,6 @@ reg_find_afc_max_bw_from_chip_cap(struct wlan_objmgr_pdev *pdev)
 	if (reg_ops->is_chip_11be && reg_ops->is_chip_11be(psoc, phy_id))
 		return AFC_BW_320;
 
-	return AFC_BW_160;
-}
-#else
-static inline uint16_t
-reg_find_afc_max_bw_from_chip_cap(struct wlan_objmgr_pdev *pdev)
-{
 	return AFC_BW_160;
 }
 #endif
