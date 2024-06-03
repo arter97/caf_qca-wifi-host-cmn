@@ -3470,6 +3470,18 @@ enum CDP_PEER_MPDU_DESC {
 	PEER_MPDU_DESC_MAX,
 };
 
+/*
+ * List of protocols supported for TX packet Capture classification
+ */
+enum CDP_TX_PKT_CAP_PACKET_TYPE {
+	CDP_TX_PKT_CAP_TYPE_ARP = 1,
+	CDP_TX_PKT_CAP_TYPE_EAPOL,
+	CDP_TX_PKT_CAP_TYPE_DHCP,
+	CDP_TX_PKT_CAP_TYPE_DNS,
+	CDP_TX_PKT_CAP_TYPE_ICMP,
+	CDP_TX_PKT_CAP_TYPE_MAX,
+};
+
 /**
  * struct cdp_tid_q_len - Structure to hold consolidated queue length
  * @defer_msdu_len: Deferred MSDU queue length
@@ -3510,6 +3522,26 @@ struct cdp_peer_tx_capture_stats {
  * @retries_ctl_mgmt_q_len: Control management retries queue length
  * @htt_frame_type: HTT frame type
  * @len_stats: Consolidated msdu, ppdu and pending queue length
+ * @ppdu_id: current ppdu id
+ * @mode: tx monitor core framework current mode
+ * @ppdu_drop_cnt: ppdu drop counter
+ * @mpdu_drop_cnt: mpdu drop counter
+ * @tlv_drop_cnt: tlv drop counter
+ * @pkt_buf_recv: tx monitor packet buffer received
+ * @pkt_buf_free: tx monitor packet buffer free
+ * @pkt_buf_processed: tx monitor packet buffer processed
+ * @pkt_buf_to_stack: tx monitor packet buffer send to stack
+ * @status_buf_recv: tx monitor status buffer received
+ * @status_buf_free: tx monitor status buffer free
+ * @totat_tx_mon_replenish_cnt: tx monitor replenish count
+ * @total_tx_mon_reap_cnt: tx monitor reap count
+ * @tx_mon_stuck: tx monitor stuck count
+ * @total_tx_mon_stuck: tx monitor stuck count
+ * @ppdu_info_drop_th: count ppdu info been dropped due threshold reached
+ * @ppdu_info_drop_flush: count ppdu info been dropped due to flush detected
+ * @ppdu_info_drop_trunc: count ppdu info been dropped due to truncated
+ * @ppdu_drop_sw_filter: count ppdu drop in sw filter
+ * @dp_tx_pkt_cap_stats: stats corresponding to packet classification
  */
 struct cdp_pdev_tx_capture_stats {
 	uint64_t peer_mismatch;
@@ -3525,5 +3557,27 @@ struct cdp_pdev_tx_capture_stats {
 					   [CDP_TXCAP_MAX_SUBTYPE];
 	uint32_t htt_frame_type[CDP_TX_CAP_HTT_MAX_FTYPE];
 	struct cdp_tid_q_len len_stats;
+	uint32_t ppdu_id;
+	uint32_t mode;
+	uint64_t ppdu_drop_cnt;
+	uint64_t mpdu_drop_cnt;
+	uint64_t tlv_drop_cnt;
+	uint64_t pkt_buf_recv;
+	uint64_t pkt_buf_free;
+	uint64_t pkt_buf_processed;
+	uint64_t pkt_buf_to_stack;
+	uint64_t status_buf_recv;
+	uint64_t status_buf_free;
+	uint64_t totat_tx_mon_replenish_cnt;
+	uint64_t total_tx_mon_reap_cnt;
+	uint8_t tx_mon_stuck;
+	uint32_t total_tx_mon_stuck;
+	uint64_t ppdu_info_drop_th;
+	uint64_t ppdu_info_drop_flush;
+	uint64_t ppdu_info_drop_trunc;
+	uint64_t ppdu_drop_sw_filter;
+#ifdef WLAN_TX_PKT_CAPTURE_ENH_BE
+	uint32_t dp_tx_pkt_cap_stats[CDP_TX_PKT_CAP_TYPE_MAX];
+#endif
 };
 #endif

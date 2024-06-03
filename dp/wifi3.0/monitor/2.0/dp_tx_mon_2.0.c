@@ -662,6 +662,78 @@ void dp_print_pdev_tx_monitor_stats_2_0(struct dp_pdev *pdev)
 		       stats.ppdu_drop_sw_filter);
 }
 
+QDF_STATUS
+dp_get_pdev_tx_capture_stats_2_0(struct dp_pdev *pdev,
+				 struct cdp_pdev_tx_capture_stats *stats)
+{
+	struct dp_mon_pdev *mon_pdev;
+	struct dp_mon_pdev_be *mon_pdev_be;
+	struct dp_pdev_tx_monitor_be *tx_mon_be;
+
+	if (!pdev) {
+		dp_mon_err("Pdev is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	mon_pdev = pdev->monitor_pdev;
+	if (!mon_pdev) {
+		dp_mon_debug("Monitor Pdev is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
+	if (!mon_pdev_be) {
+		dp_mon_debug("Unable to fetch monitor pdev for Be");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	tx_mon_be = dp_mon_pdev_get_tx_mon(mon_pdev_be, 0);
+	if (!tx_mon_be) {
+		dp_mon_debug("Unable to fetch tx monitor for Be");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	/* TX monitor stats needed for beryllium */
+
+	stats->ppdu_id = tx_mon_be->be_ppdu_id;
+	stats->mode = tx_mon_be->mode;
+	stats->ppdu_drop_cnt = tx_mon_be->stats.ppdu_drop_cnt;
+	stats->mpdu_drop_cnt = tx_mon_be->stats.mpdu_drop_cnt;
+	stats->tlv_drop_cnt = tx_mon_be->stats.tlv_drop_cnt;
+	stats->pkt_buf_recv = tx_mon_be->stats.pkt_buf_recv;
+	stats->pkt_buf_free = tx_mon_be->stats.pkt_buf_free;
+	stats->pkt_buf_processed = tx_mon_be->stats.pkt_buf_processed;
+	stats->pkt_buf_to_stack = tx_mon_be->stats.pkt_buf_to_stack;
+	stats->status_buf_recv = tx_mon_be->stats.status_buf_recv;
+	stats->status_buf_free = tx_mon_be->stats.status_buf_free;
+	stats->totat_tx_mon_replenish_cnt =
+				tx_mon_be->stats.totat_tx_mon_replenish_cnt;
+	stats->total_tx_mon_reap_cnt =
+				tx_mon_be->stats.total_tx_mon_reap_cnt;
+	stats->tx_mon_stuck = tx_mon_be->stats.tx_mon_stuck;
+	stats->total_tx_mon_stuck =
+				tx_mon_be->stats.total_tx_mon_stuck;
+	stats->ppdu_info_drop_th = tx_mon_be->stats.ppdu_info_drop_th;
+	stats->ppdu_info_drop_flush =
+				tx_mon_be->stats.ppdu_info_drop_flush;
+	stats->ppdu_info_drop_trunc =
+				tx_mon_be->stats.ppdu_info_drop_trunc;
+	stats->ppdu_drop_sw_filter =
+				tx_mon_be->stats.ppdu_drop_sw_filter;
+	stats->dp_tx_pkt_cap_stats[CDP_TX_PKT_CAP_TYPE_ARP] =
+			tx_mon_be->dp_tx_pkt_cap_stats[CDP_TX_PKT_TYPE_ARP];
+	stats->dp_tx_pkt_cap_stats[CDP_TX_PKT_CAP_TYPE_EAPOL] =
+			tx_mon_be->dp_tx_pkt_cap_stats[CDP_TX_PKT_TYPE_EAPOL];
+	stats->dp_tx_pkt_cap_stats[CDP_TX_PKT_CAP_TYPE_DHCP] =
+			tx_mon_be->dp_tx_pkt_cap_stats[CDP_TX_PKT_TYPE_DHCP];
+	stats->dp_tx_pkt_cap_stats[CDP_TX_PKT_CAP_TYPE_ICMP] =
+			tx_mon_be->dp_tx_pkt_cap_stats[CDP_TX_PKT_TYPE_ICMP];
+	stats->dp_tx_pkt_cap_stats[CDP_TX_PKT_CAP_TYPE_DNS] =
+			tx_mon_be->dp_tx_pkt_cap_stats[CDP_TX_PKT_TYPE_DNS];
+
+	return QDF_STATUS_SUCCESS;
+}
+
 #ifdef QCA_SUPPORT_LITE_MONITOR
 static void dp_lite_mon_free_tx_peers(struct dp_pdev *pdev)
 {

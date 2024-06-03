@@ -1334,6 +1334,8 @@ dp_mon_register_feature_ops_2_0(struct dp_soc *soc)
 					dp_print_pdev_tx_monitor_stats_2_0;
 	mon_ops->mon_config_enh_tx_capture = dp_config_enh_tx_monitor_2_0;
 	mon_ops->mon_tx_peer_filter = dp_peer_set_tx_capture_enabled_2_0;
+	mon_ops->mon_pdev_tx_capture_get_stats =
+					dp_get_pdev_tx_capture_stats_2_0;
 #endif
 #if (defined(WIFI_MONITOR_SUPPORT) && defined(WLAN_TX_MON_CORE_DEBUG))
 	mon_ops->mon_peer_tid_peer_id_update = NULL;
