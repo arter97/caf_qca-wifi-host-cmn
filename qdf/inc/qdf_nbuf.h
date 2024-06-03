@@ -641,8 +641,8 @@ struct mon_rx_user_status {
 		 frame_control_info_valid : 1,
 		 frame_control : 16,
 		 data_sequence_control_info_valid : 1,
-		 ba_bitmap_sz : 2,
 		 filter_category : 2;
+	uint16_t ba_bitmap_sz;
 	uint16_t tcp_msdu_count;
 	uint16_t udp_msdu_count;
 	uint16_t other_msdu_count;
@@ -679,7 +679,7 @@ struct mon_rx_user_status {
 	uint16_t retry_mpdu;
 	uint16_t start_seq;
 	uint16_t ba_control;
-	uint32_t ba_bitmap[8];
+	uint32_t ba_bitmap[32];
 	uint16_t aid;
 	uint8_t enc_type;
 	qdf_nbuf_queue_t mpdu_q;
