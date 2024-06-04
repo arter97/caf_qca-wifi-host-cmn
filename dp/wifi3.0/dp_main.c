@@ -1734,6 +1734,7 @@ configure_msi2:
 			   nf_msi_grp_num);
 }
 
+#ifdef WLAN_DP_PER_RING_TYPE_CONFIG
 #ifdef WLAN_FEATURE_LATENCY_SENSITIVE_REO
 static void
 dp_srng_reo_intr_timer_thres_set(struct dp_soc *soc,
@@ -1764,7 +1765,6 @@ dp_srng_reo_intr_timer_thres_set(struct dp_soc *soc,
 }
 #endif
 
-#ifdef WLAN_DP_PER_RING_TYPE_CONFIG
 /**
  * dp_srng_configure_interrupt_thresholds() - Retrieve interrupt
  * threshold values from the wlan_srng_cfg table for each ring type
