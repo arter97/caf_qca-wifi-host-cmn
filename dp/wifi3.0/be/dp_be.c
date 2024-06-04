@@ -1231,7 +1231,7 @@ static void dp_get_rx_hash_key_be(struct dp_soc *soc,
 }
 
 #ifdef WLAN_DP_MLO_DEV_CTX
-static inline void
+static inline QDF_STATUS
 dp_attach_vdev_list_in_mlo_dev_ctxt(struct dp_soc_be *be_soc,
 				    struct dp_vdev *vdev,
 				    struct dp_mlo_dev_ctxt *mlo_dev_ctxt)
@@ -1241,7 +1241,7 @@ dp_attach_vdev_list_in_mlo_dev_ctxt(struct dp_soc_be *be_soc,
 	qdf_spin_lock_bh(&mlo_dev_ctxt->vdev_list_lock);
 	if (vdev->is_bridge_vdev) {
 		if (mlo_dev_ctxt->bridge_vdev[be_soc->mlo_chip_id][pdev_id]
-		    != CDP_INVALID_VDEV_ID)
+		    != CDP_INVALID_VDEV_ID) {
 			dp_alert("bridge vdevId in MLO dev ctx is not Invalid"
 				 "chip_id: %u, pdev_id: %u,"
 				 "existing vdev_id: %u, new vdev_id : %u",
@@ -1249,12 +1249,19 @@ dp_attach_vdev_list_in_mlo_dev_ctxt(struct dp_soc_be *be_soc,
 				 mlo_dev_ctxt->bridge_vdev[be_soc->mlo_chip_id][pdev_id],
 				 vdev->vdev_id);
 
+			/* ignore vdev attach req if the vdev is present */
+			if (mlo_dev_ctxt->bridge_vdev[be_soc->mlo_chip_id][pdev_id]
+							== vdev->vdev_id) {
+				qdf_spin_unlock_bh(&mlo_dev_ctxt->vdev_list_lock);
+				return QDF_STATUS_E_INVAL;
+			}
+		}
 		mlo_dev_ctxt->bridge_vdev[be_soc->mlo_chip_id][pdev_id] =
 								vdev->vdev_id;
 		mlo_dev_ctxt->is_bridge_vdev_present = 1;
 	} else {
 		if (mlo_dev_ctxt->vdev_list[be_soc->mlo_chip_id][pdev_id]
-		    != CDP_INVALID_VDEV_ID)
+		    != CDP_INVALID_VDEV_ID) {
 			dp_alert("vdevId in MLO dev ctx is not Invalid"
 				 "chip_id: %u, pdev_id: %u,"
 				 "existing vdev_id: %u, new vdev_id : %u",
@@ -1262,11 +1269,19 @@ dp_attach_vdev_list_in_mlo_dev_ctxt(struct dp_soc_be *be_soc,
 				 mlo_dev_ctxt->vdev_list[be_soc->mlo_chip_id][pdev_id],
 				 vdev->vdev_id);
 
+			/* ignore vdev attach req if the vdev is present */
+			if (mlo_dev_ctxt->vdev_list[be_soc->mlo_chip_id][pdev_id]
+							== vdev->vdev_id) {
+				qdf_spin_unlock_bh(&mlo_dev_ctxt->vdev_list_lock);
+				return QDF_STATUS_E_INVAL;
+			}
+		}
 		mlo_dev_ctxt->vdev_list[be_soc->mlo_chip_id][pdev_id] =
 								vdev->vdev_id;
 	}
 	mlo_dev_ctxt->vdev_count++;
 	qdf_spin_unlock_bh(&mlo_dev_ctxt->vdev_list_lock);
+	return QDF_STATUS_SUCCESS;
 }
 
 static inline QDF_STATUS
@@ -1321,9 +1336,9 @@ static void dp_get_rx_hash_key_be(struct dp_soc *soc,
  * @mlo_dev_ctxt: mlo device context pointer, and it will not be null, which is
  * checked by dp_mlo_dev_ctxt_vdev_attach()
  *
- * Return: None
+ * Return: QDF_STATUS
  */
-static inline void
+static inline QDF_STATUS
 dp_attach_vdev_list_in_mlo_dev_ctxt(struct dp_soc_be *be_soc,
 				    struct dp_vdev *vdev,
 				    struct dp_mlo_dev_ctxt *mlo_dev_ctxt)
@@ -1345,6 +1360,7 @@ dp_attach_vdev_list_in_mlo_dev_ctxt(struct dp_soc_be *be_soc,
 		"mld_addr: " QDF_MAC_ADDR_FMT "",
 		vdev->vdev_id, i, j, mlo_dev_ctxt->vdev_count,
 		QDF_MAC_ADDR_REF(mlo_dev_ctxt->mld_mac_addr.raw));
+	return QDF_STATUS_SUCCESS;
 }
 
 /**
@@ -3508,6 +3524,7 @@ QDF_STATUS dp_mlo_dev_ctxt_vdev_attach(struct cdp_soc_t *soc_hdl,
 	struct dp_vdev_be *be_vdev = NULL;
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	QDF_STATUS ret;
 
 	vdev = dp_vdev_get_ref_by_id(soc, vdev_id, DP_MOD_ID_CDP);
 	if (!vdev)
@@ -3525,7 +3542,13 @@ QDF_STATUS dp_mlo_dev_ctxt_vdev_attach(struct cdp_soc_t *soc_hdl,
 		return QDF_STATUS_E_INVAL;
 	}
 
-	dp_attach_vdev_list_in_mlo_dev_ctxt(be_soc, vdev, mlo_dev_ctxt);
+	ret = dp_attach_vdev_list_in_mlo_dev_ctxt(be_soc, vdev, mlo_dev_ctxt);
+	if (QDF_STATUS_E_INVAL == ret) {
+		dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
+		dp_mlo_dev_ctxt_unref_delete(mlo_dev_ctxt, DP_MOD_ID_MLO_DEV);
+		return QDF_STATUS_SUCCESS;
+	}
+
 	be_vdev->mlo_dev_ctxt = mlo_dev_ctxt;
 
 	/* ref for holding MLO ctxt in be_vdev */
