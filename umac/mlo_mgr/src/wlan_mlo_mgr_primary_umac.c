@@ -1799,6 +1799,7 @@ struct ptqm_migrate_peer_req_context {
  * @link_disable: Link disable flag
  * @force_mig: Force migration
  * @ptqm_link_lock: Spin lock
+ * @link_req_ctx_idx: idx of current link ptqm context ml dev context
  */
 struct ptqm_migrate_link_req_context {
 	struct wlan_objmgr_vdev *vdev;
@@ -1818,6 +1819,7 @@ struct ptqm_migrate_link_req_context {
 	struct ptqm_link_migration_rsp_params rsp_params;
 	bool force_mig;
 	qdf_spinlock_t ptqm_link_lock;
+	uint8_t link_req_ctx_idx;
 };
 
 /*
@@ -2365,6 +2367,8 @@ wlan_ptqm_set_mlo_link_context(struct wlan_mlo_dev_context *dev_ctx,
 	}
 
 	if (set_idx != WLAN_UMAC_MLO_MAX_VDEVS) {
+		if (ctx)
+			ctx->link_req_ctx_idx = set_idx;
 		dev_ctx->link_ptqm_migrate_ctx[set_idx] = ctx;
 		return QDF_STATUS_SUCCESS;
 	}
@@ -2519,14 +2523,33 @@ wlan_ptqm_schedule_link_migrate_req
 	struct peer_ptqm_migrate_list_entry *peer_entry, *next_entry;
 	uint8_t vdev_id;
 	QDF_STATUS status;
+	uint8_t link_req_ctx_idx;
 
 	vdev_id = wlan_vdev_get_id(vdev);
 
 	ml_dev = vdev->mlo_dev_ctx;
 
-	qdf_spin_lock_bh(&link_req_ctx->ptqm_link_lock);
+	link_req_ctx_idx = link_req_ctx->link_req_ctx_idx;
 
 	migration_list = &link_req_ctx->migration_list;
+
+	/*
+	 * Iterate through the peer list and set pending bitmask
+	 * before starting peer migration
+	 */
+	qdf_spin_lock_bh(&link_req_ctx->ptqm_link_lock);
+
+	peer_entry = mlo_ptqm_list_peek_head(&migration_list->peer_list);
+	while (peer_entry) {
+		qdf_set_bit(peer_entry->mlo_peer_id,
+			    link_req_ctx->mlo_peer_id_pending_bmap);
+
+		next_entry = mlo_get_next_peer_ctx(&migration_list->peer_list,
+						   peer_entry);
+		peer_entry = next_entry;
+	}
+
+	qdf_spin_unlock_bh(&link_req_ctx->ptqm_link_lock);
 
 	peer_entry = mlo_ptqm_list_peek_head(&migration_list->peer_list);
 	while (peer_entry) {
@@ -2547,9 +2570,6 @@ wlan_ptqm_schedule_link_migrate_req
 		mlo_info("ml_peer %u dst %u", peer_entry->mlo_peer_id,
 			 peer_entry->new_hw_link_id);
 
-		qdf_set_bit(peer_entry->mlo_peer_id,
-			    link_req_ctx->mlo_peer_id_pending_bmap);
-
 		status = wlan_ptqm_peer_migrate_req_add_internal
 			(vdev, peer_entry->peer->mlo_peer_ctx, &params, true);
 		if (QDF_IS_STATUS_ERROR(status)) {
@@ -2558,6 +2578,16 @@ wlan_ptqm_schedule_link_migrate_req
 			qdf_clear_bit(peer_entry->mlo_peer_id,
 				      link_req_ctx->mlo_peer_id_pending_bmap);
 			link_req_ctx->rsp_params.fail_peer_count++;
+			if (qdf_bitmap_empty
+					(link_req_ctx->mlo_peer_id_pending_bmap,
+					 MAX_MLO_PEER_ID)) {
+				goto fail;
+			}
+		}
+
+		if (!ml_dev->link_ptqm_migrate_ctx[link_req_ctx_idx]) {
+			mlo_info("vdev_id %u link_req_ctx is NULL", vdev_id);
+			return;
 		}
 
 		next_entry = mlo_get_next_peer_ctx(&migration_list->peer_list,
@@ -2565,12 +2595,13 @@ wlan_ptqm_schedule_link_migrate_req
 		peer_entry = next_entry;
 	}
 
+	return;
+fail:
 	if (qdf_bitmap_empty(link_req_ctx->mlo_peer_id_pending_bmap,
 			     MAX_MLO_PEER_ID)) {
 		mlo_info("req completed for vdev %u", vdev_id);
 		wlan_ptqm_notify_link_req_end(link_req_ctx);
 		wlan_ptqm_migrate_list_destroy(&link_req_ctx->migration_list);
-		qdf_spin_unlock_bh(&link_req_ctx->ptqm_link_lock);
 		qdf_spinlock_destroy(&link_req_ctx->ptqm_link_lock);
 		wlan_ptqm_set_mlo_link_context(ml_dev, link_req_ctx->vdev,
 					       NULL);
@@ -2579,8 +2610,6 @@ wlan_ptqm_schedule_link_migrate_req
 		qdf_mem_free(link_req_ctx);
 		return;
 	}
-
-	qdf_spin_unlock_bh(&link_req_ctx->ptqm_link_lock);
 }
 
 static QDF_STATUS
