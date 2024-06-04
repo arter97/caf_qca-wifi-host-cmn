@@ -1108,11 +1108,26 @@ struct cdp_delay_stats {
 	uint32_t avg_delay;
 };
 
+#ifdef WLAN_FEATURE_UL_JITTER
+/**
+ * struct cdp_jitter_stats - jitter statistics
+ * @stats: jitter stats in us
+ * @curr_delay: current delay in us
+ * @prev_delay: previous delay in us
+ */
+struct cdp_jitter_stats {
+	struct cdp_delay_stats stats;
+	uint32_t curr_delay;
+	uint32_t prev_delay;
+};
+#endif
+
 /**
  * struct cdp_tid_tx_stats - per-TID statistics
  * @swq_delay: delay between wifi driver entry point and enqueue to HW in tx
  * @hwtx_delay: delay between wifi driver exit (enqueue to HW) and tx completion
  * @intfrm_delay: interframe delay
+ * @jitter_stats: jitter stats
  * @success_cnt: total successful transmit count
  * @comp_fail_cnt: firmware drop found in tx completion path
  * @swdrop_cnt: software drop in tx path
@@ -1123,6 +1138,9 @@ struct cdp_tid_tx_stats {
 	struct cdp_delay_stats swq_delay;
 	struct cdp_delay_stats hwtx_delay;
 	struct cdp_delay_stats intfrm_delay;
+#ifdef WLAN_FEATURE_UL_JITTER
+	struct cdp_jitter_stats jitter_stats;
+#endif
 	uint64_t success_cnt;
 	uint64_t comp_fail_cnt;
 	uint64_t swdrop_cnt[TX_MAX_DROP];

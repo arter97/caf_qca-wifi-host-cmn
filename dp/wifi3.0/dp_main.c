@@ -14464,6 +14464,66 @@ static uint16_t cdp_sw_enq_delay[CDP_DELAY_BUCKET_MAX] = {
 static uint16_t cdp_intfrm_delay[CDP_DELAY_BUCKET_MAX] = {
 	0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60};
 
+#ifdef WLAN_FEATURE_UL_JITTER
+/*
+ * cdp_delay_jitter_range
+ * Interframe delay jitter ranges in microseconds
+ */
+static uint16_t cdp_delay_jitter[CDP_DELAY_BUCKET_MAX] = {
+	0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 250, 500};
+
+/**
+ * dp_fill_jitter_buckets() - Fill jitter statistics bucket
+ * @tstats: tid tx stats
+ * @jitter: jitter value
+ *
+ * Return: pointer to cdp_delay_stats structure
+ */
+static struct cdp_delay_stats *
+dp_fill_jitter_buckets(struct cdp_tid_tx_stats *tstats, uint32_t jitter)
+{
+	uint8_t delay_index = 0;
+	struct cdp_delay_stats *stats = NULL;
+
+	if (!tstats)
+		return 0;
+
+	delay_index = dp_bucket_index(jitter, cdp_delay_jitter, false);
+	tstats->jitter_stats.stats.delay_bucket[delay_index]++;
+	stats = &tstats->jitter_stats.stats;
+
+	return stats;
+}
+
+/**
+ * dp_update_curr_delay() - Update curr delay to calculate jitter
+ * @tstats: tid tx stats
+ * @delay: delay value
+ * @delay_in_us: flag to indicate whether the delay in ms or us
+ *
+ * Return: None
+ */
+static void
+dp_update_curr_delay(struct cdp_tid_tx_stats *tstats, uint32_t delay,
+		     bool delay_in_us)
+{
+	if (!tstats)
+		return;
+
+	if (!delay_in_us)
+		tstats->jitter_stats.curr_delay = delay * 1000;
+	else
+		tstats->jitter_stats.curr_delay = delay;
+}
+
+#else
+static void
+dp_update_curr_delay(struct cdp_tid_tx_stats *tstats, uint32_t delay,
+		     bool delay_in_us)
+{
+}
+#endif
+
 /**
  * dp_fill_delay_buckets() - Fill delay statistics bucket for each
  *				type of delay
@@ -14510,6 +14570,7 @@ dp_fill_delay_buckets(struct cdp_tid_tx_stats *tstats,
 					      delay_in_us);
 		tstats->hwtx_delay.delay_bucket[delay_index]++;
 		stats = &tstats->hwtx_delay;
+		dp_update_curr_delay(tstats, delay, delay_in_us);
 		break;
 
 	/* Interframe tx delay ranges */
@@ -14587,6 +14648,29 @@ void dp_update_delay_stats(struct cdp_tid_tx_stats *tstats,
 			dstats->avg_delay = ((delay + dstats->avg_delay) >> 1);
 	}
 }
+
+#ifdef WLAN_FEATURE_UL_JITTER
+void dp_update_jitter_stats(struct cdp_tid_tx_stats *tstats, uint32_t jitter)
+{
+	struct cdp_delay_stats *jstats = NULL;
+
+	jstats = dp_fill_jitter_buckets(tstats, jitter);
+	if (qdf_unlikely(!jstats))
+		return;
+	if (jitter != 0) {
+		if (jitter < jstats->min_delay)
+			jstats->min_delay = jitter;
+
+		if (jitter > jstats->max_delay)
+			jstats->max_delay = jitter;
+
+		if (!jstats->avg_delay)
+			jstats->avg_delay = jitter;
+		else
+			jstats->avg_delay = ((jitter + jstats->avg_delay) >> 1);
+	}
+}
+#endif
 
 uint16_t dp_get_peer_mac_list(ol_txrx_soc_handle soc, uint8_t vdev_id,
 			      u_int8_t newmac[][QDF_MAC_ADDR_SIZE],

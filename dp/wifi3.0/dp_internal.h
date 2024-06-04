@@ -3495,6 +3495,18 @@ void dp_update_delay_stats(struct cdp_tid_tx_stats *tstats,
 			   uint8_t tid, uint8_t mode, uint8_t ring_id,
 			   bool delay_in_us);
 
+#ifdef WLAN_FEATURE_UL_JITTER
+/**
+ * dp_update_jitter_stats() - Update delay jitter statistics in structure
+ *				and fill min, max and avg delay
+ * @tstats: tid tx stats
+ * @jitter: jitter in us
+ *
+ * Return: none
+ */
+void dp_update_jitter_stats(struct cdp_tid_tx_stats *tstats, uint32_t jitter);
+#endif
+
 /**
  * dp_print_ring_stats(): Print tail and head pointer
  * @pdev: DP_PDEV handle

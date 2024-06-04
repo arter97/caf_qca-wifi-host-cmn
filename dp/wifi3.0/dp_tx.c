@@ -5348,6 +5348,36 @@ void dp_update_tx_delay_stats(struct dp_vdev *vdev, uint32_t delay, uint8_t tid,
 }
 #endif
 
+#ifdef WLAN_FEATURE_UL_JITTER
+/**
+ * dp_update_tx_delay_jitter_stats() - update the delay jitter stats
+ * @vdev: vdev handle
+ * @tid: tid value
+ * @ring_id: ring number
+ *
+ * Return: none
+ */
+static inline
+void dp_update_tx_delay_jitter_stats(struct dp_vdev *vdev,
+				     uint8_t tid, uint8_t ring_id)
+{
+	struct cdp_tid_tx_stats *tstats =
+		&vdev->stats.tid_tx_stats[ring_id][tid];
+	struct cdp_jitter_stats *stats = &tstats->jitter_stats;
+	uint32_t jitter;
+
+	jitter = qdf_abs(stats->curr_delay - stats->prev_delay);
+	stats->prev_delay = stats->curr_delay;
+	dp_update_jitter_stats(tstats, jitter);
+}
+#else
+static inline
+void dp_update_tx_delay_jitter_stats(struct dp_vdev *vdev,
+				     uint8_t tid, uint8_t ring_id)
+{
+}
+#endif
+
 void dp_tx_compute_delay(struct dp_vdev *vdev, struct dp_tx_desc_s *tx_desc,
 			 uint8_t tid, uint8_t ring_id)
 {
@@ -5363,7 +5393,6 @@ void dp_tx_compute_delay(struct dp_vdev *vdev, struct dp_tx_desc_s *tx_desc,
 		fwhw_transmit_delay_us =
 			qdf_ktime_to_us(qdf_ktime_real_get()) -
 			qdf_ktime_to_us(tx_desc->timestamp);
-
 		/*
 		 * Delay between packet enqueued to HW and Tx completion in us
 		 */
@@ -5714,8 +5743,10 @@ dp_tx_update_peer_stats(struct dp_tx_desc_s *tx_desc,
 	DP_PEER_STATS_FLAT_INC_PKT(txrx_peer, comp_pkt, 1, length);
 
 	if (qdf_unlikely(pdev->delay_stats_flag) ||
-	    qdf_unlikely(dp_is_vdev_tx_delay_stats_enabled(txrx_peer->vdev)))
+	    qdf_unlikely(dp_is_vdev_tx_delay_stats_enabled(txrx_peer->vdev))) {
 		dp_tx_compute_delay(txrx_peer->vdev, tx_desc, tid, ring_id);
+		dp_update_tx_delay_jitter_stats(txrx_peer->vdev, tid, ring_id);
+	}
 
 	if (ts->status < CDP_MAX_TX_TQM_STATUS) {
 		tid_stats->tqm_status_cnt[ts->status]++;

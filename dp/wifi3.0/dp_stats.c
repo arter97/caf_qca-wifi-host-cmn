@@ -377,6 +377,17 @@ const char *intfrm_delay_bucket[CDP_DELAY_BUCKET_MAX + 1] = {
 };
 #endif
 
+#ifdef WLAN_FEATURE_UL_JITTER
+const char *delay_jitter_bkt_str[CDP_DELAY_BUCKET_MAX + 1] = {
+	"0-10us", "10-20us",
+	"20-30us", "30-40us",
+	"40-50us", "50-60us",
+	"60-70us", "70-80us",
+	"80-90us", "90-100us",
+	"100-250us", "250-500 us", "500+ us"
+};
+#endif
+
 #define TID_COUNTER_STATS 1	/* Success/drop stats type */
 #define TID_DELAY_STATS 2	/* Delay stats type */
 #define TID_RX_ERROR_STATS 3	/* Rx Error stats type */
@@ -5024,6 +5035,22 @@ static inline const char *dp_str_fw_to_hw_delay_bkt(uint8_t index)
 }
 #endif
 
+#ifdef WLAN_FEATURE_UL_JITTER
+/**
+ * dp_str_delay_jitter_bkt() - Return string for concise logging of jitter
+ * @index: Index of jitter
+ *
+ * Return: char const pointer
+ */
+static inline const char *dp_str_delay_jitter_bkt(uint8_t index)
+{
+	if (index > CDP_DELAY_BUCKET_MAX)
+		return "Invalid";
+
+	return delay_jitter_bkt_str[index];
+}
+#endif
+
 #if defined(QCA_ENH_V3_STATS_SUPPORT) || defined(HW_TX_DELAY_STATS_ENABLE)
 /**
  * dp_accumulate_delay_stats() - Update delay stats members
@@ -5528,6 +5555,68 @@ static void dp_vdev_print_tx_delay_stats(struct dp_vdev *vdev)
 	}
 }
 
+#ifdef WLAN_FEATURE_UL_JITTER
+static void dp_vdev_print_tx_delay_jitter_stats(struct dp_vdev *vdev)
+{
+	struct cdp_delay_stats jitter_stats;
+	struct cdp_tid_tx_stats *per_ring;
+	uint8_t tid, index;
+	uint32_t count = 0;
+	uint8_t ring_id;
+	char *buf;
+	size_t pos, buf_len;
+	char jitter_str[DP_TX_DELAY_STATS_STR_LEN] = {"\0"};
+
+	buf_len = DP_TX_DELAY_STATS_STR_LEN;
+	if (!vdev)
+		return;
+
+	dp_info("vdev_id: %d Per TID HW Tx completion Jitter Stats:",
+		vdev->vdev_id);
+	buf = jitter_str;
+	dp_info("  Tid%32sPkts_per_jitter_bucket%60s | Min | Max | Avg |",
+		"", "");
+	pos = 0;
+	pos += qdf_scnprintf(buf + pos, buf_len - pos, "%6s", "");
+	for (index = 0; index < CDP_DELAY_BUCKET_MAX; index++) {
+		if (index < DP_SHORT_DELAY_BKT_COUNT)
+			pos += qdf_scnprintf(buf + pos, buf_len - pos, "%7s",
+					     dp_str_delay_jitter_bkt(index));
+		else
+			pos += qdf_scnprintf(buf + pos, buf_len - pos, "%9s",
+					     dp_str_delay_jitter_bkt(index));
+	}
+	dp_info("%s", jitter_str);
+	for (tid = 0; tid < CDP_MAX_DATA_TIDS; tid++) {
+		qdf_mem_zero(&jitter_stats, sizeof(jitter_stats));
+		for (ring_id = 0; ring_id < CDP_MAX_TX_COMP_RINGS; ring_id++) {
+			per_ring = &vdev->stats.tid_tx_stats[ring_id][tid];
+			dp_accumulate_delay_stats(&jitter_stats,
+						  &per_ring->jitter_stats.stats);
+		}
+		pos = 0;
+		pos += qdf_scnprintf(buf + pos, buf_len - pos, "%4u  ", tid);
+		for (index = 0; index < CDP_DELAY_BUCKET_MAX; index++) {
+			count = jitter_stats.delay_bucket[index];
+			if (index < DP_SHORT_DELAY_BKT_COUNT)
+				pos += qdf_scnprintf(buf + pos, buf_len - pos,
+						     "%6u|", count);
+			else
+				pos += qdf_scnprintf(buf + pos, buf_len - pos,
+						     "%8u|", count);
+		}
+		pos += qdf_scnprintf(buf + pos, buf_len - pos,
+			"%10u | %3u | %3u|", jitter_stats.min_delay,
+			jitter_stats.max_delay, jitter_stats.avg_delay);
+		dp_info("%s", jitter_str);
+	}
+}
+#else
+static void dp_vdev_print_tx_delay_jitter_stats(struct dp_vdev *vdev)
+{
+}
+#endif
+
 void dp_pdev_print_tx_delay_stats(struct dp_soc *soc)
 {
 	struct dp_pdev *pdev = dp_get_pdev_from_soc_pdev_id_wifi3(soc, 0);
@@ -5558,8 +5647,10 @@ void dp_pdev_print_tx_delay_stats(struct dp_soc *soc)
 
 	for (index = 0; index < num_vdev; index++) {
 		vdev = vdev_array[index];
-		if (qdf_unlikely(dp_is_vdev_tx_delay_stats_enabled(vdev)))
+		if (qdf_unlikely(dp_is_vdev_tx_delay_stats_enabled(vdev))) {
 			dp_vdev_print_tx_delay_stats(vdev);
+			dp_vdev_print_tx_delay_jitter_stats(vdev);
+		}
 		dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_GENERIC_STATS);
 	}
 	qdf_mem_free(vdev_array);
@@ -5575,6 +5666,19 @@ static void dp_reset_delay_stats(struct cdp_delay_stats *per_ring)
 {
 	qdf_mem_zero(per_ring, sizeof(struct cdp_delay_stats));
 }
+
+#ifdef WLAN_FEATURE_UL_JITTER
+/**
+ * dp_reset_jitter_stats() - reset jitter stats
+ * @per_ring: per ring structures from where stats need to be accumulated
+ *
+ * Return: void
+ */
+static void dp_reset_jitter_stats(struct cdp_jitter_stats *per_ring)
+{
+	qdf_mem_zero(per_ring, sizeof(struct cdp_jitter_stats));
+}
+#endif
 
 /**
  * dp_vdev_init_tx_delay_stats() - Clear tx delay stats
@@ -5598,6 +5702,35 @@ static void dp_vdev_init_tx_delay_stats(struct dp_vdev *vdev)
 		}
 	}
 }
+
+#ifdef WLAN_FEATURE_UL_JITTER
+/**
+ * dp_vdev_init_tx_jitter_stats() - Clear tx jitter stats
+ * @vdev: vdev handle
+ *
+ * Return: None
+ */
+static void dp_vdev_init_tx_jitter_stats(struct dp_vdev *vdev)
+{
+	struct cdp_tid_tx_stats *per_ring;
+	uint8_t tid;
+	uint8_t ring_id;
+
+	if (!vdev)
+		return;
+
+	for (tid = 0; tid < CDP_MAX_DATA_TIDS; tid++) {
+		for (ring_id = 0; ring_id < CDP_MAX_TX_COMP_RINGS; ring_id++) {
+			per_ring = &vdev->stats.tid_tx_stats[ring_id][tid];
+			dp_reset_jitter_stats(&per_ring->jitter_stats);
+		}
+	}
+}
+#else
+static void dp_vdev_init_tx_jitter_stats(struct dp_vdev *vdev)
+{
+}
+#endif
 
 void dp_pdev_clear_tx_delay_stats(struct dp_soc *soc)
 {
@@ -5631,6 +5764,7 @@ void dp_pdev_clear_tx_delay_stats(struct dp_soc *soc)
 	for (index = 0; index < num_vdev; index++) {
 		vdev = vdev_array[index];
 		dp_vdev_init_tx_delay_stats(vdev);
+		dp_vdev_init_tx_jitter_stats(vdev);
 		dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_GENERIC_STATS);
 	}
 	qdf_mem_free(vdev_array);
