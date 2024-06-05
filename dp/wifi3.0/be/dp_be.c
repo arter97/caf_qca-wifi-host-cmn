@@ -319,8 +319,8 @@ static void dp_initialize_arch_ops_be_fisa(struct dp_arch_ops *arch_ops)
 static inline
 void dp_cc_wbm_sw_en_cfg(struct hal_hw_cc_config *cc_cfg)
 {
-	cc_cfg->wbm2sw6_cc_en = 1;
-	cc_cfg->wbm2sw5_cc_en = 0;
+	cc_cfg->wbm2sw6_cc_en = 0;
+	cc_cfg->wbm2sw5_cc_en = 1;
 	cc_cfg->wbm2sw4_cc_en = 1;
 	cc_cfg->wbm2sw3_cc_en = 1;
 	cc_cfg->wbm2sw2_cc_en = 1;
