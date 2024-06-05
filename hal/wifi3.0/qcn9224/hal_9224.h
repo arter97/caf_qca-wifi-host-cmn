@@ -364,64 +364,54 @@ hal_rx_proc_phyrx_all_sigb_tlv_9224(void *rx_tlv_hdr, void *ppdu_info_hdl)
 }
 
 /**
- * hal_rx_proc_phyrx_other_receive_info_tlv_9224() - API to get tlv info
+ * hal_rx_ru_info_details_9224() - API to get RU info
  * @rx_tlv_hdr: RX TLV header
  * @ppdu_info_hdl: Handle to PPDU info to update
  *
  * Return: None
  */
 static inline
-void hal_rx_proc_phyrx_other_receive_info_tlv_9224(void *rx_tlv_hdr,
-						   void *ppdu_info_hdl)
+void hal_rx_ru_info_details_9224(void *rx_tlv_hdr, void *ppdu_info_hdl)
 {
-	uint32_t tlv_tag, tlv_len, pkt_type;
-	void *rx_tlv;
 	uint32_t ru_details_channel_0;
+	uint32_t ru_details_channel_1;
+	void *rx_tlv;
 	struct hal_rx_ppdu_info *ppdu_info =
 		(struct hal_rx_ppdu_info *)ppdu_info_hdl;
 
-	hal_rx_proc_phyrx_all_sigb_tlv_9224(rx_tlv_hdr, ppdu_info_hdl);
-
-	tlv_len = HAL_RX_GET_USER_TLV32_LEN(rx_tlv_hdr);
 	rx_tlv = (uint8_t *)rx_tlv_hdr + HAL_RX_TLV64_HDR_SIZE;
 
-	if (!tlv_len)
-		return;
+	ru_details_channel_0 =
+		HAL_RX_GET(rx_tlv, PHYRX_OTHER_RECEIVE_INFO_RU_DETAILS,
+			   RU_DETAILS_CHANNEL_0);
+	ru_details_channel_1 =
+		HAL_RX_GET_64(rx_tlv, PHYRX_OTHER_RECEIVE_INFO_RU_DETAILS,
+			      RU_DETAILS_CHANNEL_1);
 
-	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(rx_tlv);
-	rx_tlv = (uint8_t *)rx_tlv + HAL_RX_TLV64_HDR_SIZE;
+	qdf_mem_copy(ppdu_info->rx_status.he_RU, &ru_details_channel_0,
+		     sizeof(uint32_t));
+	qdf_mem_copy(&ppdu_info->rx_status.he_RU[4], &ru_details_channel_1,
+		     sizeof(uint32_t));
 
-	pkt_type = HAL_RX_GET_64(rx_tlv,
-				 PHYRX_OTHER_RECEIVE_INFO_ALL_SIGB_DETAILS,
-				 PKT_TYPE);
+	QDF_TRACE(QDF_MODULE_ID_DP_RX_MON_STATUS, QDF_TRACE_LEVEL_DEBUG,
+		  "RU_0: %x RU_1: %x BW: %d", ru_details_channel_0,
+		  ru_details_channel_1, ppdu_info->rx_status.bw);
 
-	switch (tlv_tag) {
-	case WIFIPHYRX_OTHER_RECEIVE_INFO_RU_DETAILS_E:
-	if (pkt_type ==
-		HAL_RX_PKT_TYPE_11AX) {
-		ru_details_channel_0 =
-			HAL_RX_GET(rx_tlv,
-				   PHYRX_OTHER_RECEIVE_INFO_RU_DETAILS,
-				   RU_DETAILS_CHANNEL_0);
-
-		qdf_mem_copy(ppdu_info->rx_status.he_RU,
-			     &ru_details_channel_0,
-			     sizeof(ppdu_info->rx_status.he_RU));
-
-		ppdu_info->rx_status.he_flags1 |=
-			QDF_MON_STATUS_CHANNEL_1_RU_KNOWN;
-		if (ppdu_info->rx_status.bw >= HAL_FULL_RX_BW_40) {
-			ppdu_info->rx_status.he_flags1 |=
-				QDF_MON_STATUS_CHANNEL_2_RU_KNOWN;
-		}
-	}
-
+	switch (ppdu_info->rx_status.bw) {
+	case HAL_FULL_RX_BW_160:
+		ppdu_info->rx_status.he_flags1 |= QDF_MON_STATUS_RU_3_KNOWN;
+		fallthrough;
+	case HAL_FULL_RX_BW_80:
+		ppdu_info->rx_status.he_flags1 |= QDF_MON_STATUS_RU_2_KNOWN;
+		fallthrough;
+	case HAL_FULL_RX_BW_40:
+		ppdu_info->rx_status.he_flags1 |= QDF_MON_STATUS_RU_1_KNOWN;
+		fallthrough;
+	case HAL_FULL_RX_BW_20:
+		ppdu_info->rx_status.he_flags1 |= QDF_MON_STATUS_RU_0_KNOWN;
 		break;
 	default:
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  "%s unhandled TLV type: %d, TLV len:%d",
-			  __func__, tlv_tag, tlv_len);
-	break;
+		break;
 	}
 }
 
@@ -2046,8 +2036,9 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_get_tlv = hal_rx_get_tlv_9224;
 	hal_soc->ops->hal_rx_parse_eht_sig_hdr =
 				hal_rx_parse_eht_sig_hdr_9224;
-	hal_soc->ops->hal_rx_proc_phyrx_other_receive_info_tlv =
-				hal_rx_proc_phyrx_other_receive_info_tlv_9224;
+	hal_soc->ops->hal_rx_ru_info_details = hal_rx_ru_info_details_9224;
+	hal_soc->ops->hal_rx_proc_phyrx_all_sigb_tlv =
+					hal_rx_proc_phyrx_all_sigb_tlv_9224;
 
 	hal_soc->ops->hal_rx_dump_msdu_end_tlv = hal_rx_dump_msdu_end_tlv_9224;
 	hal_soc->ops->hal_rx_dump_mpdu_start_tlv =

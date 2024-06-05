@@ -996,4 +996,7 @@ void hal_hw_txrx_default_ops_attach_be(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_phy_legacy_get_rssi =
 					hal_rx_phy_legacy_get_rssi_be;
 	hal_soc->ops->hal_rx_parse_eht_sig_hdr = hal_rx_parse_eht_sig_hdr_be;
+	hal_soc->ops->hal_rx_ru_info_details = hal_rx_ru_info_details_be;
+	hal_soc->ops->hal_rx_proc_phyrx_all_sigb_tlv =
+					hal_rx_proc_phyrx_all_sigb_tlv_be;
 }

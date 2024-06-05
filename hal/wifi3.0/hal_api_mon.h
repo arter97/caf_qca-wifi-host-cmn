@@ -1413,6 +1413,39 @@ hal_rx_proc_phyrx_other_receive_info_tlv(struct hal_soc *hal_soc,
 }
 
 /**
+ * hal_rx_ru_info_details()
+ *				    - process RU info details
+ * @hal_soc: HAL soc object
+ * @rx_tlv_hdr: pointer to TLV header
+ * @ppdu_info: pointer to ppdu_info
+ *
+ * Return: None
+ */
+static inline void
+hal_rx_ru_info_details(struct hal_soc *hal_soc, void *rx_tlv_hdr,
+		       struct hal_rx_ppdu_info *ppdu_info)
+{
+	hal_soc->ops->hal_rx_ru_info_details(rx_tlv_hdr, (void *)ppdu_info);
+}
+
+/**
+ * hal_rx_proc_phyrx_all_sigb_tlv()
+ *				    - process sigb details
+ * @hal_soc: HAL soc object
+ * @rx_tlv_hdr: pointer to TLV header
+ * @ppdu_info: pointer to ppdu_info
+ *
+ * Return: None
+ */
+static inline void
+hal_rx_proc_phyrx_all_sigb_tlv(struct hal_soc *hal_soc, void *rx_tlv_hdr,
+			       struct hal_rx_ppdu_info *ppdu_info)
+{
+	hal_soc->ops->hal_rx_proc_phyrx_all_sigb_tlv(rx_tlv_hdr,
+						     (void *)ppdu_info);
+}
+
+/**
  * hal_rx_status_get_tlv_info() - process receive info TLV
  * @rx_tlv_hdr: pointer to TLV header
  * @ppdu_info: pointer to ppdu_info

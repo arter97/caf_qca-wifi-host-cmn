@@ -1149,6 +1149,10 @@ struct hal_hw_txrx_ops {
 
 	void (*hal_rx_proc_phyrx_other_receive_info_tlv)(void *rx_tlv_hdr,
 							void *ppdu_info_handle);
+	void (*hal_rx_ru_info_details)(void *rx_tlv_hdr,
+				       void *ppdu_info_handle);
+	void (*hal_rx_proc_phyrx_all_sigb_tlv)(void *rx_tlv_hdr,
+					       void *ppdu_info_handle);
 	void (*hal_rx_dump_msdu_end_tlv)(void *pkt_tlvs, uint8_t dbg_level);
 	void (*hal_rx_dump_rx_attention_tlv)(void *pkt_tlvs, uint8_t dbg_level);
 	void (*hal_rx_dump_msdu_start_tlv)(void *pkt_tlvs, uint8_t dbg_level);

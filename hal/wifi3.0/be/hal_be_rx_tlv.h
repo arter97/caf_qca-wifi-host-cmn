@@ -2115,4 +2115,14 @@ void hal_rx_parse_eht_sig_hdr_be(struct hal_soc *hal_soc, uint8_t *tlv,
 				 void *ppdu_info_handle)
 {
 }
+
+static inline
+void hal_rx_ru_info_details_be(void *rx_tlv_hdr, void *ppdu_info_hdl)
+{
+}
+
+static inline
+void hal_rx_proc_phyrx_all_sigb_tlv_be(void *rx_tlv_hdr, void *ppdu_info_hdl)
+{
+}
 #endif /* _HAL_BE_RX_TLV_H_ */

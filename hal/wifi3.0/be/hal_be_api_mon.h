@@ -2293,17 +2293,22 @@ hal_rx_update_su_evm_info(void *rx_tlv,
 
 /**
  * hal_rx_mon_phyrx_other_receive_info_tlv() - API to get tlv info
+ * @hal_soc: hal soc handle
  * @rx_tlv_hdr: RX TLV header
  * @ppdu_info_hdl: Handle to PPDU info to update
  *
  * Return: None
  */
 static inline void
-hal_rx_mon_phyrx_other_receive_info_tlv(void *rx_tlv_hdr, void *ppdu_info_hdl)
+hal_rx_mon_phyrx_other_receive_info_tlv(struct hal_soc *hal_soc,
+					void *rx_tlv_hdr,
+					void *ppdu_info_hdl)
 {
 	uint32_t tlv_len, tlv_tag;
 	void *rx_tlv;
 	struct hal_rx_ppdu_info *ppdu_info  = ppdu_info_hdl;
+
+	hal_rx_proc_phyrx_all_sigb_tlv(hal_soc, rx_tlv_hdr, ppdu_info_hdl);
 
 	tlv_len = HAL_RX_GET_USER_TLV32_LEN(rx_tlv_hdr);
 	rx_tlv = (uint8_t *)rx_tlv_hdr + HAL_RX_TLV64_HDR_SIZE;
@@ -2316,10 +2321,12 @@ hal_rx_mon_phyrx_other_receive_info_tlv(void *rx_tlv_hdr, void *ppdu_info_hdl)
 
 	if (!tlv_len)
 		return;
+
 	switch (tlv_tag) {
 	case WIFIPHYRX_OTHER_RECEIVE_INFO_EVM_DETAILS_E:
 		/* Skip TLV length to get TLV content */
 		rx_tlv = (uint8_t *)rx_tlv + HAL_RX_TLV64_HDR_SIZE;
+
 		ppdu_info->evm_info.number_of_symbols = HAL_RX_GET(rx_tlv,
 			PHYRX_OTHER_RECEIVE_INFO,
 			EVM_DETAILS_NUMBER_OF_DATA_SYM);
@@ -2331,6 +2338,9 @@ hal_rx_mon_phyrx_other_receive_info_tlv(void *rx_tlv_hdr, void *ppdu_info_hdl)
 			EVM_DETAILS_NUMBER_OF_STREAMS);
 		hal_rx_update_su_evm_info(rx_tlv, ppdu_info_hdl);
 		break;
+	case WIFIPHYRX_OTHER_RECEIVE_INFO_RU_DETAILS_E:
+		hal_rx_ru_info_details(hal_soc, rx_tlv, ppdu_info);
+		break;
 	default:
 		qdf_debug("%s unhandled TLV type: %d, TLV len:%d",
 			  __func__, tlv_tag, tlv_len);
@@ -2340,14 +2350,16 @@ hal_rx_mon_phyrx_other_receive_info_tlv(void *rx_tlv_hdr, void *ppdu_info_hdl)
 #else
 /**
  * hal_rx_mon_phyrx_other_receive_info_tlv() - API to get tlv info
+ * @hal_soc: hal soc handle
  * @rx_tlv_hdr: RX TLV header
  * @ppdu_info_hdl: Handle to PPDU info to update
  *
  * Return: None
  */
 static inline
-void hal_rx_mon_phyrx_other_receive_info_tlv(void *rx_tlv_hdr,
-						   void *ppdu_info_hdl)
+void hal_rx_mon_phyrx_other_receive_info_tlv(struct hal_soc *hal_soc,
+					     void *rx_tlv_hdr,
+					     void *ppdu_info_hdl)
 {
 }
 #endif /* WLAN_SA_API_ENABLE */
@@ -3879,8 +3891,8 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 		break;
 	}
 	case WIFIPHYRX_OTHER_RECEIVE_INFO_E:
-		hal_rx_mon_phyrx_other_receive_info_tlv(rx_tlv_hdr,
-							 ppdu_info);
+		hal_rx_mon_phyrx_other_receive_info_tlv(hal, rx_tlv_hdr,
+							ppdu_info);
 		break;
 	case WIFIPHYRX_GENERIC_U_SIG_E:
 		hal_rx_parse_u_sig_hdr(hal, rx_tlv, ppdu_info);

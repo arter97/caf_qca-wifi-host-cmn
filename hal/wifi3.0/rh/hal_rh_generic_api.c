@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -826,6 +826,16 @@ static inline uint8_t hal_rx_get_phy_ppdu_id_size_rh(void)
 	return sizeof(uint32_t);
 }
 
+static inline
+void hal_rx_ru_info_details_rh(void *rx_tlv_hdr, void *ppdu_info_hdl)
+{
+}
+
+static inline
+void hal_rx_proc_phyrx_all_sigb_tlv_rh(void *rx_tlv_hdr, void *ppdu_info_hdl)
+{
+}
+
 /**
  * hal_hw_txrx_default_ops_attach_rh() - Attach the default hal ops for
  *		Rh arch chipsets.
@@ -927,4 +937,7 @@ void hal_hw_txrx_default_ops_attach_rh(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_get_idle_link_bm_id = hal_get_idle_link_bm_id_rh;
 	hal_soc->ops->hal_rx_get_phy_ppdu_id_size =
 					hal_rx_get_phy_ppdu_id_size_rh;
+	hal_soc->ops->hal_rx_ru_info_details = hal_rx_ru_info_details_rh;
+	hal_soc->ops->hal_rx_proc_phyrx_all_sigb_tlv =
+					hal_rx_proc_phyrx_all_sigb_tlv_rh;
 }
