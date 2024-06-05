@@ -1034,6 +1034,12 @@ static bool ttlm_subst_ap_btm_inprogress_event(void *ctx, uint16_t event,
 		if (QDF_IS_STATUS_ERROR(status))
 			event_handled = false;
 		break;
+	case WLAN_TTLM_SM_EV_RX_ACTION_RSP:
+		status = ttlm_handle_rx_action_rsp_in_sta_in_progress_state(ml_peer, data);
+		if (QDF_IS_STATUS_ERROR(status))
+			event_handled = false;
+		ttlm_sm_transition_to(ml_peer, WLAN_TTLM_S_NEGOTIATED);
+		break;
 	default:
 		event_handled = false;
 		break;
