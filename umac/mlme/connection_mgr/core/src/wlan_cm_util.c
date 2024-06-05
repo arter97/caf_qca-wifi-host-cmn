@@ -1684,6 +1684,36 @@ cm_get_active_connect_req_param(struct wlan_objmgr_vdev *vdev,
 		*req = cm_req->connect_req.req;
 		qdf_mem_zero(&req->assoc_ie, sizeof(struct element_info));
 		qdf_mem_zero(&req->scan_ie, sizeof(struct element_info));
+		if (cm_req->connect_req.req.assoc_ie.len) {
+			req->assoc_ie.ptr =
+			   qdf_mem_malloc(cm_req->connect_req.req.assoc_ie.len);
+			if (!req->assoc_ie.ptr) {
+				status = QDF_STATUS_E_NOMEM;
+				break;
+			}
+			qdf_mem_copy(req->assoc_ie.ptr,
+				     cm_req->connect_req.req.assoc_ie.ptr,
+				     cm_req->connect_req.req.assoc_ie.len);
+			req->assoc_ie.len =
+				cm_req->connect_req.req.assoc_ie.len;
+		}
+
+		if (cm_req->connect_req.req.scan_ie.len) {
+			req->scan_ie.ptr =
+			   qdf_mem_malloc(cm_req->connect_req.req.scan_ie.len);
+			if (!req->scan_ie.ptr) {
+				qdf_mem_free(req->assoc_ie.ptr);
+				qdf_mem_zero(&req->assoc_ie,
+					     sizeof(struct element_info));
+				status = QDF_STATUS_E_NOMEM;
+				break;
+			}
+			qdf_mem_copy(req->scan_ie.ptr,
+				     cm_req->connect_req.req.scan_ie.ptr,
+				     cm_req->connect_req.req.scan_ie.len);
+			req->scan_ie.len = cm_req->connect_req.req.scan_ie.len;
+		}
+
 		status = QDF_STATUS_SUCCESS;
 		break;
 	}
