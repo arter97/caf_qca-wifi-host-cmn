@@ -257,7 +257,7 @@ typedef __qdf_nbuf_queue_t qdf_nbuf_queue_t;
 #define RADIOTAP_TX_FLAGS_LEN (2 + 1)
 #define RADIOTAP_VHT_FLAGS_LEN (12 + 1)
 #define RADIOTAP_HE_FLAGS_LEN (12 + 1)
-#define RADIOTAP_HE_MU_FLAGS_LEN (8 + 1)
+#define RADIOTAP_HE_MU_FLAGS_LEN (12 + 1)
 #define RADIOTAP_HE_MU_OTHER_FLAGS_LEN (18 + 1)
 #define RADIOTAP_U_SIG_FLAGS_LEN (12 + 3)
 #define RADIOTAP_EHT_FLAGS_LEN (58 + 3)
