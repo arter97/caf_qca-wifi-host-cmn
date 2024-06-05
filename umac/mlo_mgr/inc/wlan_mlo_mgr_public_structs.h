@@ -1771,16 +1771,18 @@ struct mlo_link_disable_request_evt_params {
 	uint32_t link_id_bitmap;
 };
 
-#define MAX_INDEX_FOR_LINK_PRIORITY_BITMAP 3
+#define MAX_INDEX_FOR_LINK_PRIORITY_BITMAP 4
 /**
  * struct mlo_tlt_selection_evt_params - MLO tlt selection
  * request params
  * @mld_addr: mld address
- * @link_priority: Link priority bitmap
+ * @link_priority: link priority order based on hw chip id
+ * @link_bmap: Link priority bitmap
  */
 struct mlo_tlt_selection_evt_params {
 	struct qdf_mac_addr mld_addr;
 	uint8_t link_priority[MAX_INDEX_FOR_LINK_PRIORITY_BITMAP];
+	uint8_t link_bmap[2];
 };
 
 #define MAX_LINK_SWITCH_TLV 5
