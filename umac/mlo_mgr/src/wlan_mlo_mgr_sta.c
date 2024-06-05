@@ -834,6 +834,17 @@ mlo_send_link_connect(struct wlan_objmgr_vdev *vdev,
 	if (QDF_IS_STATUS_ERROR(status))
 		return;
 
+	copied_conn_req_lock_acquire(mlo_dev_ctx->sta_ctx);
+	if (!mlo_dev_ctx->sta_ctx->copied_conn_req) {
+		mlo_dev_ctx->sta_ctx->copied_conn_req =
+			qdf_mem_malloc(sizeof(struct wlan_cm_connect_req));
+		if (mlo_dev_ctx->sta_ctx->copied_conn_req) {
+			wlan_cm_get_active_connect_req_param(vdev,
+							     mlo_dev_ctx->sta_ctx->copied_conn_req);
+		}
+	}
+	copied_conn_req_lock_release(mlo_dev_ctx->sta_ctx);
+
 	mlo_sta_get_vdev_list(vdev, &vdev_count, wlan_vdev_list);
 	for (i = 0; i < vdev_count; i++) {
 		if (wlan_vdev_list[i] == vdev) {
