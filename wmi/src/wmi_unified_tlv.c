@@ -1205,6 +1205,7 @@ static QDF_STATUS send_vdev_stop_cmd_tlv(wmi_unified_t wmi,
 	wmi_buf_t buf;
 	int32_t len = sizeof(*cmd);
 	uint8_t *buf_ptr;
+	uint32_t vdev_id = params->vdev_id;
 
 	len += vdev_stop_mlo_params_size(params);
 
@@ -1227,7 +1228,7 @@ static QDF_STATUS send_vdev_stop_cmd_tlv(wmi_unified_t wmi,
 		wmi_buf_free(buf);
 		return QDF_STATUS_E_FAILURE;
 	}
-	wmi_debug("vdev id = %d", cmd->vdev_id);
+	wmi_debug("vdev id = %d", vdev_id);
 
 	return 0;
 }
