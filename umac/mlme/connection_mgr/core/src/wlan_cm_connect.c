@@ -2472,9 +2472,11 @@ QDF_STATUS cm_connect_active(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 	 * free vdev keys before setting crypto params for 1x/ owe roaming,
 	 * link vdev keys would be cleaned in osif
 	 */
-	if (!wlan_vdev_mlme_is_mlo_link_vdev(cm_ctx->vdev) &&
-	    !wlan_cm_check_mlo_roam_auth_status(cm_ctx->vdev))
-		wlan_crypto_free_vdev_key(cm_ctx->vdev);
+	if (!wlan_vdev_mlme_is_mlo_link_vdev(cm_ctx->vdev)) {
+		mlme_cm_osif_connect_active_notify(wlan_vdev_get_id(cm_ctx->vdev));
+		if (!wlan_cm_check_mlo_roam_auth_status(cm_ctx->vdev))
+			wlan_crypto_free_vdev_key(cm_ctx->vdev);
+	}
 	cm_fill_vdev_crypto_params(cm_ctx, req);
 	cm_store_wep_key(cm_ctx, &req->crypto, *cm_id);
 
