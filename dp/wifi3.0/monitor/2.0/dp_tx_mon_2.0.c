@@ -635,6 +635,7 @@ void dp_print_pdev_tx_monitor_stats_2_0(struct dp_pdev *pdev)
 	DP_PRINT_STATS("\t\treceived  : %llu", stats.pkt_buf_recv);
 	DP_PRINT_STATS("\t\tfree      : %llu", stats.pkt_buf_free);
 	DP_PRINT_STATS("\t\tprocessed : %llu", stats.pkt_buf_processed);
+	DP_PRINT_STATS("\t\tdrop      : %llu", stats.pkt_buf_drop);
 	DP_PRINT_STATS("\t\tto stack  : %llu", stats.pkt_buf_to_stack);
 	DP_PRINT_STATS("\tppdu info");
 	DP_PRINT_STATS("\t\tthreshold : %llu", stats.ppdu_info_drop_th);

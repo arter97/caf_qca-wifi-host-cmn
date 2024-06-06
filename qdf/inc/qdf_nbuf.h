@@ -604,6 +604,7 @@ struct mon_rx_status {
  * @rs_flags: Flags to indicate AMPDU or AMSDU aggregation
  * @mpdu_cnt_fcs_ok: mpdu count received with fcs ok
  * @mpdu_cnt_fcs_err: mpdu count received with fcs ok bitmap
+ * @is_mpdu_incomplete: Flag to indicate mpdu incomplete
  * @mpdu_fcs_ok_bitmap: mpdu with fcs ok bitmap
  * @mpdu_ok_byte_count: mpdu byte count with fcs ok
  * @mpdu_err_byte_count: mpdu byte count with fcs err
@@ -673,6 +674,7 @@ struct mon_rx_user_status {
 	uint8_t rs_flags;
 	uint16_t mpdu_cnt_fcs_ok;
 	uint8_t mpdu_cnt_fcs_err;
+	uint8_t is_mpdu_incomplete;
 	uint32_t mpdu_fcs_ok_bitmap[QDF_MON_STATUS_MPDU_FCS_BMAP_NWORDS];
 	uint32_t mpdu_ok_byte_count;
 	uint32_t mpdu_err_byte_count;

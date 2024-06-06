@@ -1723,12 +1723,14 @@ hal_txmon_status_parse_tlv_generic_be(hal_soc_handle_t hal_soc_hdl,
 	}
 	case WIFITX_MPDU_END_E:/* DOWNSTREAM */
 	{
+		status = HAL_MON_TX_MPDU_END;
 		/* no tlv content */
 		SHOW_DEFINED(WIFITX_MPDU_END_E);
 		break;
 	}
 	case WIFITX_MSDU_END_E:/* DOWNSTREAM */
 	{
+		status = HAL_MON_TX_MSDU_END;
 		/* no tlv content */
 		SHOW_DEFINED(WIFITX_MSDU_END_E);
 		break;

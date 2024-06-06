@@ -1223,6 +1223,24 @@ dp_tx_mon_generated_response_frm(struct dp_pdev *pdev,
 	return status;
 }
 
+static inline
+void dp_tx_mon_free_last_mpdu_q(struct dp_pdev_tx_monitor_be *tx_mon_be,
+				struct dp_tx_ppdu_info *tx_data_ppdu_info,
+				uint32_t usr_idx)
+{
+	qdf_nbuf_t mpdu_nbuf = NULL;
+	qdf_nbuf_queue_t *usr_mpdu_q = NULL;
+	uint32_t num_frag = 0;
+
+	usr_mpdu_q = &TXMON_PPDU_USR(tx_data_ppdu_info, usr_idx, mpdu_q);
+	mpdu_nbuf = qdf_nbuf_queue_remove_last(usr_mpdu_q);
+
+	num_frag = qdf_nbuf_get_nr_frags_in_fraglist(mpdu_nbuf);
+	tx_mon_be->stats.pkt_buf_drop += num_frag;
+
+	qdf_nbuf_free(mpdu_nbuf);
+}
+
 /**
  * dp_tx_mon_update_ppdu_info_status() - API to update frame as information
  * is stored only for that processing
@@ -1254,6 +1272,7 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 	struct hal_tx_status_info *tx_status_info;
 	struct dp_mon_mac *mon_mac;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	uint32_t usr_idx = TXMON_PPDU(tx_data_ppdu_info, cur_usr_idx);
 
 	/* sanity check */
 	if (qdf_unlikely(!pdev))
@@ -1333,8 +1352,20 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 	}
 	case HAL_MON_TX_MPDU_START:
 	{
+		if (qdf_unlikely(TXMON_PPDU_USR(tx_data_ppdu_info, usr_idx,
+						is_mpdu_incomplete)))
+			dp_tx_mon_free_last_mpdu_q(tx_mon_be,
+						   tx_data_ppdu_info, usr_idx);
+
 		dp_tx_mon_alloc_mpdu(pdev, tx_data_ppdu_info);
-		TXMON_PPDU_HAL(tx_data_ppdu_info, is_used) = 1;
+		TXMON_PPDU_USR(tx_data_ppdu_info, usr_idx,
+			       is_mpdu_incomplete) = 1;
+		break;
+	}
+	case HAL_MON_TX_MPDU_END:
+	{
+		TXMON_PPDU_USR(tx_data_ppdu_info, usr_idx,
+			       is_mpdu_incomplete) = 0;
 		break;
 	}
 	case HAL_MON_TX_MSDU_START:
@@ -1406,6 +1437,20 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 	}
 	case HAL_MON_TX_FES_STATUS_END:
 	{
+		uint32_t num_users = TXMON_PPDU_HAL(tx_data_ppdu_info,
+						    num_users);
+		uint32_t i = 0;
+
+		for (i = 0; i < num_users; i++) {
+			if (qdf_unlikely(TXMON_PPDU_USR(tx_data_ppdu_info, i,
+							is_mpdu_incomplete))) {
+				dp_tx_mon_free_last_mpdu_q(tx_mon_be,
+							   tx_data_ppdu_info,
+							   i);
+				TXMON_PPDU_USR(tx_data_ppdu_info, i,
+					       is_mpdu_incomplete) = 0;
+			}
+		}
 		break;
 	}
 	case HAL_MON_RESPONSE_END_STATUS_INFO:
