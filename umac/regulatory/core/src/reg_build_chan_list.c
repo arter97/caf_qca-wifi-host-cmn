@@ -1232,6 +1232,27 @@ static void reg_find_high_limit_chan_enum(
 
 #ifdef CONFIG_AFC_SUPPORT
 /**
+ * reg_is_indoor_sp_only() - Check if its Indoor with SP rules only
+ * @pdev_priv_obj: Regulatory pdev private object.
+ *
+ * Return: boolean. true if its Indoor with SP rules only else false
+ */
+static bool
+reg_is_indoor_sp_only(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
+{
+	uint8_t  *num_rules;
+
+	num_rules = pdev_priv_obj->reg_rules.num_of_6g_ap_reg_rules;
+
+	if ((pdev_priv_obj->reg_afc_dev_deployment_type == AFC_DEPLOYMENT_INDOOR)
+	    && (!num_rules[REG_INDOOR_AP] && !num_rules[REG_VERY_LOW_POWER_AP])
+		&& num_rules[REG_STANDARD_POWER_AP])
+		return true;
+
+	return false;
+}
+
+/**
  * reg_modify_chan_list_for_outdoor() - Set the channel flag for the
  * enabled SP channels as REGULATORY_CHAN_AFC_NOT_DONE.
  * @pdev_priv_obj: Regulatory pdev private object.
@@ -1245,7 +1266,8 @@ reg_modify_chan_list_for_outdoor(struct wlan_regulatory_pdev_priv_obj *pdev_priv
 	int i;
 
 	sp_chan_list =  pdev_priv_obj->mas_chan_list_6g_ap[REG_STANDARD_POWER_AP];
-	if (pdev_priv_obj->reg_afc_dev_deployment_type != AFC_DEPLOYMENT_OUTDOOR)
+	if (pdev_priv_obj->reg_afc_dev_deployment_type != AFC_DEPLOYMENT_OUTDOOR
+		&& !reg_is_indoor_sp_only(pdev_priv_obj))
 		return;
 
 	if (pdev_priv_obj->is_6g_afc_power_event_received)
@@ -1398,6 +1420,9 @@ void reg_set_ap_pwr_type(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
 		else if (num_rules[REG_VERY_LOW_POWER_AP])
 			pdev_priv_obj->reg_cur_6g_ap_pwr_type =
 				REG_VERY_LOW_POWER_AP;
+		else if (num_rules[REG_STANDARD_POWER_AP])
+			pdev_priv_obj->reg_cur_6g_ap_pwr_type =
+				REG_STANDARD_POWER_AP;
 		else
 			pdev_priv_obj->reg_cur_6g_ap_pwr_type =
 				REG_INDOOR_AP;
@@ -2273,8 +2298,9 @@ reg_intersect_6g_afc_chan_list(struct wlan_regulatory_pdev_priv_obj
 					(int16_t)afc_mas_chan_list[i].psd_eirp);
 			 afc_chan_list[i].chan_flags &=
 				 ~REGULATORY_CHAN_AFC_NOT_DONE;
-		} else if ((pdev_priv_obj->reg_afc_dev_deployment_type ==
-			    AFC_DEPLOYMENT_OUTDOOR) &&
+		} else if (((pdev_priv_obj->reg_afc_dev_deployment_type ==
+			    AFC_DEPLOYMENT_OUTDOOR) ||
+				reg_is_indoor_sp_only(pdev_priv_obj)) &&
 			   (sp_chan_list[i].chan_flags &
 			    REGULATORY_CHAN_AFC_NOT_DONE)) {
 			/* This is for the SP channels supported by
