@@ -786,6 +786,36 @@ struct wlan_link_force_context {
 		disallow_mode_link_bmap[MAX_DISALLOW_BMAP_COMB];
 };
 
+/**
+ * struct wlan_rejected_links_info - Data Structure to store
+ * rejected links info
+ * @num_rej_link_cnt: Number of rejected links
+ * @rejected_link_ids: Rejected Link Ids
+ */
+struct wlan_rejected_links_info {
+	uint8_t num_rej_link_cnt;
+	uint8_t rejected_link_ids[WLAN_UMAC_MLO_MAX_VDEVS];
+};
+
+/**
+ * struct wlan_mlo_link_reject_req - Data Structure for link reject
+ * request
+ * @vdev_id: Vdev id
+ * @rej_ieee_link_id: Rejected link id of the ML link
+ * @rej_ap_link_addr: Rejected AP link address
+ * @acc_ieee_link_id: Accepted Link id of the ML link.
+ * @acc_ap_link_addr: Accepted AP link address
+ * @link_reject_update_in_progress: Link reject update in progress.
+ */
+struct wlan_mlo_link_reject_req {
+	uint8_t vdev_id;
+	uint8_t rej_ieee_link_id;
+	struct qdf_mac_addr rej_ap_link_addr;
+	uint8_t acc_ieee_link_id;
+	struct qdf_mac_addr acc_ap_link_addr;
+	bool link_reject_update_in_progress;
+};
+
 #if defined(UMAC_SUPPORT_MLNAWDS) || defined(MESH_MODE_SUPPORT)
 /**
  * struct mlnawds_config - MLO NAWDS configuration
@@ -1497,6 +1527,8 @@ struct mlo_mlme_ext_ops {
  *                                from old link id to new link id for the vdev.
  * @mlo_roam_osif_update_mac_addr: Callback to notify MAC addr update during
 				   roam sync for the vdev.
+ * @mlo_mgr_osif_link_rej_update_mac_addr: Callback to notify MAC addr update
+ *                                for link rejection.
  * @mlo_mgr_osif_link_switch_notification: Notify OSIF on start of link switch
  */
 struct mlo_osif_ext_ops {
@@ -1511,6 +1543,9 @@ struct mlo_osif_ext_ops {
 	QDF_STATUS (*mlo_roam_osif_update_mac_addr)(struct wlan_objmgr_vdev *vdev,
 						    struct qdf_mac_addr *old_self_mac,
 						    struct qdf_mac_addr *new_self_mac);
+
+	QDF_STATUS (*mlo_mgr_osif_link_rej_update_mac_addr)(uint8_t ieee_rej_link_id,
+				     uint8_t ieee_acc_link_id, uint8_t vdev_id);
 
 	QDF_STATUS
 	(*mlo_mgr_osif_link_switch_notification)(struct wlan_objmgr_vdev *vdev,

@@ -167,11 +167,15 @@ struct mlo_link_switch_stats {
  * @last_req: Last link switch request received from FW
  * @lswitch_stats: History of the link switch stats
  *                 Includes both fail and success stats.
+ * @link_rej_req: Link reject request info
  */
 struct mlo_link_switch_context {
 	struct mlo_link_info links_info[WLAN_MAX_ML_BSS_LINKS];
 	struct wlan_mlo_link_switch_req last_req;
 	struct mlo_link_switch_stats lswitch_stats[MLO_LINK_SWITCH_CNF_STATUS_MAX];
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+	struct wlan_mlo_link_reject_req link_rej_req;
+#endif
 };
 
 /**
@@ -255,7 +259,81 @@ void mlo_mgr_update_ap_channel_info(struct wlan_objmgr_vdev *vdev,
  */
 struct mlo_link_info *mlo_mgr_get_ap_link(struct wlan_objmgr_vdev *vdev);
 
+/**
+ * mlo_mgr_link_rejection_handler() - Link rejection handler
+ * @vdev: Object Manager vdev
+ * @rejected_link_info: Rejected Link info
+ * @accepted_link_info: Accepted Link info
+ * @is_non_standby_link:Indicates if non standby link
+ *
+ * Handler for link rejection will add rejected link to DLM list
+ * and clear the information from mlo link ctx.and mlo dev ctx.
+ *
+ * Return: none
+ */
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+void
+mlo_mgr_link_rejection_handler(struct wlan_objmgr_vdev *vdev,
+			       struct mlo_link_info *rejected_link_info,
+			       struct mlo_link_info *accepted_link_info,
+			       bool is_non_standby_link);
+
+/**
+ * mlo_mgr_find_and_clear_rejected_links() - Find and clear rejected links
+ * @vdev: Object Manager vdev
+ * @partner_link_id: Partner link id
+ * @ml_partner_info: ML partner link info
+ *
+ * Handler to find and clear rejected partner links during association.
+ *
+ * Return: none
+ */
+void
+mlo_mgr_find_and_clear_rejected_links(struct wlan_objmgr_vdev *vdev,
+				      uint8_t partner_link_id,
+				      struct mlo_partner_info *ml_partner_info);
+
+/**
+ * mlo_mgr_check_if_all_partner_links_rejected() - Check if all partner
+ * links are rejected.
+ * @vdev: Object Manager vdev
+ * @resp: Connect response
+ *
+ * Handler to check if all partner links are rejected during association.
+ *
+ * Return: none
+ */
+void
+mlo_mgr_check_if_all_partner_links_rejected(struct wlan_objmgr_vdev *vdev,
+					    struct wlan_cm_connect_resp *resp);
+
+/**
+ * mlo_mgr_update_link_status_code() - Update AP link info status code
+ * @vdev: Object Manager vdev
+ * @link_id: AP link id
+ * @status_code: Link wlan status code
+ *
+ * Update AP link info link status code
+ * Return: void
+ */
+void mlo_mgr_update_link_status_code(struct wlan_objmgr_vdev *vdev,
+				     uint8_t link_id,
+				     enum wlan_status_code status_code);
+
+/**
+ * mlo_mgr_link_reject_set_mac_addr_resp() - Handle response of set MAC addr
+ * for VDEV under going link switch.
+ * @vdev: VDEV object manager
+ * @resp_status: Status of MAC address set request.
+ *
+ * The function will handle the response for set MAC address request sent to FW
+ * as part of link rejection.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlo_mgr_link_reject_set_mac_addr_resp(struct wlan_objmgr_vdev *vdev,
+						 uint8_t resp_status);
+
 /**
  * mlo_mgr_get_ap_link_by_link_id() - Get mlo link info from link id
  * @mlo_dev_ctx: mlo context
@@ -627,6 +705,13 @@ mlo_mgr_is_link_switch_supported(struct wlan_objmgr_vdev *vdev)
 }
 
 #else
+static inline QDF_STATUS
+mlo_mgr_link_reject_set_mac_addr_resp(struct wlan_objmgr_vdev *vdev,
+				      uint8_t resp_status)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
 static inline struct mlo_link_info
 *mlo_mgr_get_ap_link_by_link_id(struct wlan_mlo_dev_context *mlo_dev_ctx,
 				int link_id)
@@ -793,6 +878,34 @@ mlo_mgr_update_csa_link_info(struct wlan_mlo_dev_context *mlo_dev_ctx,
 			     uint8_t link_id)
 {
 	return false;
+}
+
+static inline void
+mlo_mgr_link_rejection_handler(struct wlan_objmgr_vdev *vdev,
+			       struct mlo_link_info *rejected_link_info,
+			       struct mlo_link_info *accepted_link_info,
+			       bool is_non_standby_link)
+{
+}
+
+static inline void
+mlo_mgr_find_and_clear_rejected_links(struct wlan_objmgr_vdev *vdev,
+				      uint8_t partner_link_id,
+				      struct mlo_partner_info *ml_partner_info)
+{
+}
+
+static inline void
+mlo_mgr_check_if_all_partner_links_rejected(struct wlan_objmgr_vdev *vdev,
+					    struct wlan_cm_connect_resp *resp)
+{
+}
+
+static inline
+void mlo_mgr_update_link_status_code(struct wlan_objmgr_vdev *vdev,
+				     uint8_t link_id,
+				     enum wlan_status_code status_code)
+{
 }
 #endif
 #endif
