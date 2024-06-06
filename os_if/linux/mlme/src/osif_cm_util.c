@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015, 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -662,6 +662,9 @@ static void osif_cm_perfd_reset_cpufreq_ctrl_cb(void)
 #endif
 
 static struct mlme_cm_ops cm_ops = {
+#ifdef CONN_MGR_ADV_FEATURE
+	.mlme_cm_connect_active_notify_cb = osif_cm_connect_active_notify,
+#endif
 	.mlme_cm_connect_complete_cb = osif_cm_connect_complete_cb,
 	.mlme_cm_failed_candidate_cb = osif_cm_failed_candidate_cb,
 	.mlme_cm_update_id_and_src_cb = osif_cm_update_id_and_src_cb,
@@ -747,6 +750,14 @@ QDF_STATUS osif_cm_osif_priv_deinit(struct wlan_objmgr_vdev *vdev)
 
 	return QDF_STATUS_SUCCESS;
 }
+
+#ifdef CONN_MGR_ADV_FEATURE
+void osif_cm_connect_active_notify(uint8_t vdev_id)
+{
+	if (osif_cm_legacy_ops && osif_cm_legacy_ops->connect_active_notify_cb)
+		osif_cm_legacy_ops->connect_active_notify_cb(vdev_id);
+}
+#endif
 
 QDF_STATUS osif_cm_connect_comp_ind(struct wlan_objmgr_vdev *vdev,
 				    struct wlan_cm_connect_resp *rsp,

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -408,6 +408,14 @@ QDF_STATUS mlme_cm_reassoc_req(struct wlan_objmgr_vdev *vdev,
 
 	return ret;
 }
+
+#ifdef CONN_MGR_ADV_FEATURE
+void mlme_cm_osif_connect_active_notify(uint8_t vdev_id)
+{
+	if (glbl_cm_ops && glbl_cm_ops->mlme_cm_connect_active_notify_cb)
+		glbl_cm_ops->mlme_cm_connect_active_notify_cb(vdev_id);
+}
+#endif
 
 QDF_STATUS mlme_cm_connect_complete_ind(struct wlan_objmgr_vdev *vdev,
 					struct wlan_cm_connect_resp *rsp)
