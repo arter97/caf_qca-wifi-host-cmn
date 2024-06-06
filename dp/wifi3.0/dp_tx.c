@@ -1723,7 +1723,7 @@ dp_tx_attempt_coalescing(struct dp_soc *soc, struct dp_vdev *vdev,
 			 struct dp_tx_msdu_info_s *msdu_info,
 			 uint8_t ring_id)
 {
-	if (qdf_unlikely(dp_is_lapb_rind_id(soc, ring_id)))
+	if (qdf_unlikely(dp_is_lapb_ring_id(soc, ring_id)))
 		return dp_tx_attempt_coalescing_lapb(soc, vdev, tx_desc, tid,
 						     msdu_info, ring_id);
 
@@ -1738,7 +1738,7 @@ dp_tx_attempt_coalescing(struct dp_soc *soc, struct dp_vdev *vdev,
 			 struct dp_tx_msdu_info_s *msdu_info,
 			 uint8_t ring_id)
 {
-	if (qdf_unlikely(dp_is_lapb_rind_id(soc, ring_id)))
+	if (qdf_unlikely(dp_is_lapb_ring_id(soc, ring_id)))
 		return dp_tx_attempt_coalescing_lapb(soc, vdev, tx_desc, tid,
 						     msdu_info, ring_id);
 	return 0;
