@@ -388,8 +388,9 @@ peer_assoc_update_assoc_link_info(uint8_t **buf_ptr,
 				   &ml_partner_link->self_mac);
 	wmi_copy_chan_info(&ml_partner_link->wmi_chan, &req->mlo_params.chan);
 
-	wmi_debug("Send Link info with link_id: %d vdev_id: %d AP link addr: "QDF_MAC_ADDR_FMT ", STA addr: "QDF_MAC_ADDR_FMT,
+	wmi_debug("Send Link info with link_id: %d vdev_id: %d freq %d AP link addr: "QDF_MAC_ADDR_FMT ", STA addr: "QDF_MAC_ADDR_FMT,
 		  ml_partner_link->ieee_link_id, ml_partner_link->vdev_id,
+		  req->mlo_params.chan.ch_freq,
 		  QDF_MAC_ADDR_REF(req->mlo_params.bssid.bytes),
 		  QDF_MAC_ADDR_REF(req->mlo_params.mac_addr.bytes));
 
@@ -436,9 +437,10 @@ uint8_t *peer_assoc_add_ml_partner_links(uint8_t *buf_ptr,
 		WMI_CHAR_ARRAY_TO_MAC_ADDR(partner_info[i].mac_addr.bytes,
 					   &ml_partner_link->self_mac);
 
-		wmi_debug("Send Link info with link_id: %d vdev_id: %d AP link addr: "QDF_MAC_ADDR_FMT ", STA addr: "QDF_MAC_ADDR_FMT,
+		wmi_debug("Send Link info with link_id: %d vdev_id: %d freq %d AP link addr: "QDF_MAC_ADDR_FMT ", STA addr: "QDF_MAC_ADDR_FMT,
 			  ml_partner_link->ieee_link_id,
 			  ml_partner_link->vdev_id,
+			  partner_info[i].chan.ch_freq,
 			  QDF_MAC_ADDR_REF(partner_info[i].bssid.bytes),
 			  QDF_MAC_ADDR_REF(partner_info[i].mac_addr.bytes));
 		wmi_copy_chan_info(&ml_partner_link->wmi_chan,
@@ -1803,10 +1805,16 @@ send_link_set_bss_params_cmd_tlv(wmi_unified_t wmi_handle,
 	uint8_t *buf_ptr;
 	wmi_mlo_link_bss_param *bss_param;
 		WMI_HOST_WLAN_PHY_MODE fw_phy_mode;
+	size_t len;
 
-	size_t len = sizeof(*cmd) +
-		     sizeof(wmi_mlo_link_bss_param) +
-		     WMI_TLV_HDR_SIZE;
+	if (!params->chan.ch_freq) {
+		wmi_err("invalid ch_freq 0 for link %d", params->link_id);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	len = sizeof(*cmd) +
+		sizeof(wmi_mlo_link_bss_param) +
+		WMI_TLV_HDR_SIZE;
 
 	buf = wmi_buf_alloc(wmi_handle, len);
 	if (!buf) {
