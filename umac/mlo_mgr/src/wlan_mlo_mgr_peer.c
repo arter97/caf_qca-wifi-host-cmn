@@ -566,7 +566,7 @@ void wlan_mlo_peer_get_del_hw_bitmap(struct wlan_objmgr_peer *peer,
 	for (i = 0; i < MAX_MLO_LINK_PEERS; i++) {
 		peer_entry = &ml_peer->peer_list[i];
 
-		if (!peer_entry->link_peer)
+		if (qdf_is_macaddr_zero(&peer_entry->link_addr))
 			continue;
 
 		if (peer_entry->link_peer == peer) {
