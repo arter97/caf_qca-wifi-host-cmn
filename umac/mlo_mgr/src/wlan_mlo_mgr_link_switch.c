@@ -1015,6 +1015,15 @@ void mlo_mgr_remove_link_switch_cmd(struct wlan_objmgr_vdev *vdev)
 	req = &vdev->mlo_dev_ctx->link_ctx->last_req;
 	mlo_mgr_link_switch_notify(vdev, req);
 
+	/* Force queue disconnect on failure */
+	if (cur_state != MLO_LINK_SWITCH_STATE_COMPLETE_SUCCESS &&
+	    cur_state >= MLO_LINK_SWITCH_STATE_DISCONNECT_CURR_LINK &&
+	    !wlan_cm_is_vdev_connected(vdev)) {
+		mlo_mgr_link_switch_defer_disconnect_req(vdev,
+							 CM_MLME_DISCONNECT,
+							 REASON_HOST_TRIGGERED_LINK_DELETE);
+	}
+
 	/* Handle any pending disconnect */
 	mlo_handle_pending_disconnect(vdev);
 

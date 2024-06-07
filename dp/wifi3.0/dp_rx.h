@@ -2744,8 +2744,11 @@ void dp_rx_buffers_lt_replenish_simple(struct dp_soc *soc, uint32_t mac_id,
 				       struct rx_desc_pool *rx_desc_pool,
 				       bool force_replenish)
 {
+	union dp_rx_desc_list_elem_t *desc_list = NULL;
+	union dp_rx_desc_list_elem_t *tail = NULL;
+
 	__dp_rx_buffers_replenish(soc, mac_id, rxdma_srng, rx_desc_pool,
-				  0, NULL, NULL, false, force_replenish,
+				  0, &desc_list, &tail, false, force_replenish,
 				  __func__);
 }
 
