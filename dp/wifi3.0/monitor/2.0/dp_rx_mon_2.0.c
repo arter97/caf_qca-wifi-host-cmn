@@ -912,6 +912,11 @@ dp_rx_mon_handle_mon_buf_addr(struct dp_pdev *pdev,
 		return num_buf_reaped;
 	}
 
+	if (qdf_unlikely(ppdu_info->is_drop_tlv)) {
+		qdf_frag_free(addr);
+		return num_buf_reaped;
+	}
+
 	nbuf = qdf_nbuf_queue_last(&ppdu_info->mpdu_q[user_id]);
 	if (qdf_unlikely(!nbuf)) {
 		dp_mon_debug("nbuf is NULL");
@@ -1957,11 +1962,14 @@ end:
  * dp_rx_mon_flush_status_buf_queue() - Flush status buffer queue
  *
  * @pdev: DP pdev handle
+ * @index: Index for status buffer to read
+ * @status_buf_count: Total status buffer count
  *
  *Return: void
  */
 static inline void
-dp_rx_mon_flush_status_buf_queue(struct dp_pdev *pdev)
+dp_rx_mon_flush_status_buf_queue(struct dp_pdev *pdev, uint16_t index,
+				 uint16_t status_buf_count)
 {
 	struct dp_soc *soc = pdev->soc;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
@@ -1970,13 +1978,12 @@ dp_rx_mon_flush_status_buf_queue(struct dp_pdev *pdev)
 	union dp_mon_desc_list_elem_t *desc_list = NULL;
 	union dp_mon_desc_list_elem_t *tail = NULL;
 	struct dp_mon_desc *mon_desc;
-	uint16_t idx;
+	uint16_t idx = index;
 	void *buf;
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
 	struct dp_mon_soc_be *mon_soc_be = dp_get_be_mon_soc_from_dp_mon_soc(mon_soc);
 	struct dp_mon_desc_pool *rx_mon_desc_pool = &mon_soc_be->rx_desc_mon;
 	uint16_t work_done = 0;
-	uint16_t status_buf_count;
 	uint16_t end_offset = 0;
 	uint8_t mac_id = 0;
 	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
@@ -1986,8 +1993,7 @@ dp_rx_mon_flush_status_buf_queue(struct dp_pdev *pdev)
 		return;
 	}
 
-	status_buf_count = mon_pdev_be->desc_count;
-	for (idx = 0; idx < status_buf_count; idx++) {
+	for (; idx < status_buf_count; idx++) {
 		mon_desc = mon_pdev_be->status[idx];
 		if (!mon_desc) {
 			qdf_assert_always(0);
@@ -2033,6 +2039,9 @@ dp_rx_mon_handle_flush_n_trucated_ppdu(struct dp_soc *soc,
 				       struct dp_pdev *pdev,
 				       struct dp_mon_desc *mon_desc)
 {
+	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	struct dp_mon_pdev_be *mon_pdev_be =
+				 dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
 	union dp_mon_desc_list_elem_t *desc_list = NULL;
 	union dp_mon_desc_list_elem_t *tail = NULL;
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
@@ -2044,7 +2053,7 @@ dp_rx_mon_handle_flush_n_trucated_ppdu(struct dp_soc *soc,
 	uint16_t end_offset = 0;
 
 	/* Flush status buffers in queue */
-	dp_rx_mon_flush_status_buf_queue(pdev);
+	dp_rx_mon_flush_status_buf_queue(pdev, 0, mon_pdev_be->desc_count);
 	buf = mon_desc->buf_addr;
 	end_offset = mon_desc->end_offset;
 	dp_mon_add_to_free_desc_list(&desc_list, &tail, mon_desc);
@@ -2205,7 +2214,7 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 
 	if (!ppdu_info) {
 		dp_mon_debug("ppdu_info malloc failed pdev: %pK", pdev);
-		dp_rx_mon_flush_status_buf_queue(pdev);
+		dp_rx_mon_flush_status_buf_queue(pdev, 0, mon_pdev_be->desc_count);
 		return NULL;
 	}
 
@@ -2266,6 +2275,10 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 		DP_STATS_INC(mon_soc, frag_free, 1);
 		mon_mac->rx_mon_stats.status_buf_count++;
 		dp_mon_record_index_update(mon_pdev_be);
+		if (qdf_unlikely(ppdu_info->is_drop_tlv)) {
+			idx++;
+			break;
+		}
 	}
 
 	dp_mon_rx_stats_update_rssi_dbm_params(mon_pdev, ppdu_info);
@@ -2285,7 +2298,14 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 				    pdev->timestamp.mlo_offset_lo_us +
 				    ((uint64_t)pdev->timestamp.mlo_offset_hi_us
 				    << 32);
-
+	/* if drop tlv found in the status buffer, free all allocated mpdu
+	 * and remaining status buffers
+	 */
+	if (qdf_unlikely(ppdu_info->is_drop_tlv)) {
+		dp_rx_mon_flush_status_buf_queue(pdev, idx, status_buf_count);
+		dp_rx_mon_free_ppdu_info(pdev, ppdu_info);
+		return NULL;
+	}
 	return ppdu_info;
 }
 
@@ -2315,7 +2335,7 @@ static QDF_STATUS dp_mon_pdev_flush_desc(struct dp_pdev *pdev)
 	if (mon_pdev_be->desc_count) {
 		mon_mac->rx_mon_stats.pending_desc_count +=
 						mon_pdev_be->desc_count;
-		dp_rx_mon_flush_status_buf_queue(pdev);
+		dp_rx_mon_flush_status_buf_queue(pdev, 0, mon_pdev_be->desc_count);
 	}
 
 	qdf_spin_unlock_bh(&mon_mac->mon_lock);
@@ -2611,6 +2631,30 @@ dp_rx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 
 		if (hal_mon_rx_desc.end_reason == HAL_MON_STATUS_BUFFER_FULL)
 			continue;
+
+		/* Get the next entry and check for drop descriptor, if
+		 * drop descriptor found flush all the status buffers of the
+		 * PPDU
+		 */
+		if (hal_mon_rx_desc.end_reason == HAL_MON_END_OF_PPDU &&
+		    rx_mon_dst_ring_desc) {
+			rx_mon_dst_ring_desc = (void *)hal_srng_dst_peek(hal_soc,
+								mon_dst_srng);
+			if (rx_mon_dst_ring_desc) {
+				hal_be_get_mon_dest_status(soc->hal_soc,
+							   rx_mon_dst_ring_desc,
+							   &hal_mon_rx_desc);
+				if (hal_mon_rx_desc.empty_descriptor == 1) {
+					dp_rx_mon_flush_status_buf_queue(pdev, 0,
+									 mon_pdev_be->desc_count);
+					dp_rx_mon_update_drop_cnt(mon_mac, &hal_mon_rx_desc);
+					rx_mon_dst_ring_desc =
+						hal_srng_dst_get_next(hal_soc,
+								      mon_dst_srng);
+					continue;
+				}
+			}
+		}
 
 		mon_mac->rx_mon_stats.status_ppdu_done++;
 

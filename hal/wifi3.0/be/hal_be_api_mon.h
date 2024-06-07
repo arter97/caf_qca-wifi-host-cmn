@@ -4048,6 +4048,7 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 	case WIFIMON_DROP_E:
 		hal_rx_update_ppdu_drop_cnt(rx_tlv, ppdu_info);
 		hal_rx_record_tlv_info(ppdu_info, tlv_tag);
+		ppdu_info->is_drop_tlv = true;
 		return HAL_TLV_STATUS_MON_DROP;
 	case 0:
 		hal_rx_record_tlv_info(ppdu_info, tlv_tag);

@@ -1291,6 +1291,7 @@ struct hal_rx_ppdu_info {
 	uint8_t fcs_err_cnt;
 	/* MPDU FCS passed */
 	bool is_fcs_passed;
+	bool is_drop_tlv;
 	/* first msdu payload for all mpdus in rx monitor status buffer */
 	struct hal_rx_msdu_payload_info ppdu_msdu_info[HAL_RX_MAX_MPDU_H_PER_STATUS_BUFFER];
 	/* evm info */
