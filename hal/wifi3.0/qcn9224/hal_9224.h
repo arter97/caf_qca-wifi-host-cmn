@@ -363,6 +363,12 @@ hal_rx_proc_phyrx_all_sigb_tlv_9224(void *rx_tlv_hdr, void *ppdu_info_hdl)
 	}
 }
 
+#define PHYRX_OTHER_RCV_INFO_RU_DETAILS_USER_ID_MASK 0x00FF
+#define PHYRX_OTHER_RCV_INFO_RU_DETAILS_USER_ID_SHFT 8
+#define DP_SUPPORTED_MU_SNIF_USERS 4
+#define DP_CHECK_IF_NOT_HEMU(ppdu_info) \
+			((ppdu_info)->rx_status.he_data1 & 0x2) != 2
+
 /**
  * hal_rx_ru_info_details_9224() - API to get RU info
  * @rx_tlv_hdr: RX TLV header
@@ -378,9 +384,13 @@ void hal_rx_ru_info_details_9224(void *rx_tlv_hdr, void *ppdu_info_hdl)
 	void *rx_tlv;
 	struct hal_rx_ppdu_info *ppdu_info =
 		(struct hal_rx_ppdu_info *)ppdu_info_hdl;
+	uint32_t sta_ids;
+	uint8_t i, sta_id;
+
+	if (DP_CHECK_IF_NOT_HEMU(ppdu_info))
+		return;
 
 	rx_tlv = (uint8_t *)rx_tlv_hdr + HAL_RX_TLV64_HDR_SIZE;
-
 	ru_details_channel_0 =
 		HAL_RX_GET(rx_tlv, PHYRX_OTHER_RECEIVE_INFO_RU_DETAILS,
 			   RU_DETAILS_CHANNEL_0);
@@ -396,6 +406,22 @@ void hal_rx_ru_info_details_9224(void *rx_tlv_hdr, void *ppdu_info_hdl)
 	QDF_TRACE(QDF_MODULE_ID_DP_RX_MON_STATUS, QDF_TRACE_LEVEL_DEBUG,
 		  "RU_0: %x RU_1: %x BW: %d", ru_details_channel_0,
 		  ru_details_channel_1, ppdu_info->rx_status.bw);
+
+	sta_ids =
+		HAL_RX_GET(rx_tlv, PHYRX_OTHER_RECEIVE_INFO_RU_DETAILS, SPARE);
+	QDF_TRACE(QDF_MODULE_ID_DP_RX_MON_STATUS, QDF_TRACE_LEVEL_DEBUG,
+		  "Sta_ids: %x", sta_ids);
+
+	for (i = 0; i < DP_SUPPORTED_MU_SNIF_USERS; i++) {
+		sta_id = (sta_ids >>
+			  (PHYRX_OTHER_RCV_INFO_RU_DETAILS_USER_ID_SHFT * i)) &
+			 PHYRX_OTHER_RCV_INFO_RU_DETAILS_USER_ID_MASK;
+		ppdu_info->rx_user_status[i].he_data4 |= sta_id <<
+						    QDF_MON_STATUS_STA_ID_SHIFT;
+
+		QDF_TRACE(QDF_MODULE_ID_DP_RX_MON_STATUS, QDF_TRACE_LEVEL_DEBUG,
+			  "Sta_id: %x", ppdu_info->rx_user_status[i].he_data4);
+	}
 
 	switch (ppdu_info->rx_status.bw) {
 	case HAL_FULL_RX_BW_160:
