@@ -252,6 +252,7 @@ void qca_sawf_3_link_peer_dl_flow_count(struct net_device *netdev, uint8_t *mac_
 	uint16_t peer_id = HTT_INVALID_PEER;
 	ol_txrx_soc_handle soc_txrx_handle;
 	osif_dev *osdev = NULL;
+	struct qdf_mac_addr macaddr = {0};
 
 	if (!netdev || !netdev->ieee80211_ptr)
 		return;
@@ -266,6 +267,8 @@ void qca_sawf_3_link_peer_dl_flow_count(struct net_device *netdev, uint8_t *mac_
 	if (!cfg_get(psoc, CFG_TGT_MLO_3_LINK_TX))
 		return;
 
+	qdf_mem_copy(macaddr.bytes, mac_addr, QDF_MAC_ADDR_SIZE);
+
 	soc_txrx_handle = wlan_psoc_get_dp_handle(psoc);
 
 	osdev = ath_netdev_priv(netdev);
@@ -277,8 +280,10 @@ void qca_sawf_3_link_peer_dl_flow_count(struct net_device *netdev, uint8_t *mac_
 		peer_id = osifp->peer_id;
 	}
 #endif
+	if (wlan_vdev_mlme_get_opmode(vdev) == QDF_STA_MODE)
+		wlan_vdev_get_bss_peer_mac(vdev, &macaddr);
 
-	cdp_sawf_3_link_peer_flow_count(soc_txrx_handle, mac_addr, peer_id,
+	cdp_sawf_3_link_peer_flow_count(soc_txrx_handle, macaddr.bytes, peer_id,
 					mark_metadata);
 }
 #else
