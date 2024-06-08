@@ -73,6 +73,8 @@ target_if_mlo_link_set_active_resp_handler(ol_scn_t scn, uint8_t *data,
 		target_if_err("Unable to extract mlo link set active resp");
 		return -EINVAL;
 	}
+	if (rx_ops->trace_link_set_active_cb)
+		rx_ops->trace_link_set_active_cb(psoc, NULL, &resp);
 
 	status = rx_ops->process_link_set_active_resp(psoc, &resp);
 
@@ -259,6 +261,23 @@ target_if_extract_mlo_link_removal_info_mgmt_rx(
 }
 
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+void
+target_if_mlo_register_trace_link_set_active_cb(
+		struct wlan_objmgr_psoc *psoc,
+		trace_link_set_active_cb_type trace_link_set_active_cb)
+{
+	struct wlan_lmac_if_mlo_rx_ops *mlo_rx_ops;
+
+	mlo_rx_ops = target_if_mlo_get_rx_ops(psoc);
+	if (!mlo_rx_ops) {
+		target_if_err("mlo_rx_ops null");
+		return;
+	}
+
+	mlo_rx_ops->trace_link_set_active_cb =
+		trace_link_set_active_cb;
+}
+
 static QDF_STATUS
 target_if_send_mlo_link_switch_cnf_cmd(struct wlan_objmgr_psoc *psoc,
 				       struct wlan_mlo_link_switch_cnf *params)
@@ -638,10 +657,16 @@ target_if_mlo_link_set_active(struct wlan_objmgr_psoc *psoc,
 {
 	QDF_STATUS ret;
 	struct wmi_unified *wmi_handle;
+	struct wlan_lmac_if_mlo_rx_ops *rx_ops;
 
 	if (!psoc) {
 		target_if_err("null psoc");
 		return QDF_STATUS_E_FAILURE;
+	}
+	rx_ops = target_if_mlo_get_rx_ops(psoc);
+	if (!rx_ops) {
+		target_if_err("rx_ops NULL");
+		return QDF_STATUS_E_INVAL;
 	}
 
 	wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
@@ -653,6 +678,8 @@ target_if_mlo_link_set_active(struct wlan_objmgr_psoc *psoc,
 	ret = wmi_send_mlo_link_set_active_cmd(wmi_handle, param);
 	if (QDF_IS_STATUS_ERROR(ret))
 		target_if_err("wmi mlo link set active send failed: %d", ret);
+	else if (rx_ops->trace_link_set_active_cb)
+		rx_ops->trace_link_set_active_cb(psoc, param, NULL);
 
 	return ret;
 }

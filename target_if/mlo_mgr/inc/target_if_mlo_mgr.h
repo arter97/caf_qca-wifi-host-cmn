@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -153,6 +153,21 @@ void target_if_mlo_register_vdev_tid_to_link_map_event(
  */
 void target_if_mlo_unregister_vdev_tid_to_link_map_event(
 		struct wmi_unified *wmi_handle);
+
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+/**
+ * target_if_mlo_register_trace_link_set_active_cb() - register/Unregister trace
+ * set link cmd/evt callback
+ * @psoc: psoc object
+ * @trace_link_set_active_cb: callback to trace set link cmd/evt
+ *
+ * Return: None
+ */
+void
+target_if_mlo_register_trace_link_set_active_cb(
+		struct wlan_objmgr_psoc *psoc,
+		trace_link_set_active_cb_type trace_link_set_active_cb);
+#endif
 #else
 static inline QDF_STATUS
 target_if_extract_mlo_link_removal_info_mgmt_rx(

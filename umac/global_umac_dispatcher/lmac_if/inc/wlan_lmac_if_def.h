@@ -1686,6 +1686,11 @@ struct wlan_lmac_if_mlo_tx_ops {
 				struct mlo_wsi_link_stats *param);
 };
 
+typedef void (*trace_link_set_active_cb_type)(
+			struct wlan_objmgr_psoc *psoc,
+			struct mlo_link_set_active_param *cmd,
+			struct mlo_link_set_active_resp *event);
+
 /**
  * struct wlan_lmac_if_mlo_rx_ops - defines southbound rx callbacks for mlo
  * @process_link_set_active_resp: function pointer to rx FW events
@@ -1698,6 +1703,7 @@ struct wlan_lmac_if_mlo_tx_ops {
  * switch request params from FW to host.
  * @mlo_link_state_switch_event_handler: Function pointer to handle link state
  * switch event
+ * @trace_link_set_active_cb: callback to trace the set link command and event
  */
 struct wlan_lmac_if_mlo_rx_ops {
 	QDF_STATUS
@@ -1728,6 +1734,7 @@ struct wlan_lmac_if_mlo_rx_ops {
 	(*mlo_link_state_switch_event_handler)(struct wlan_objmgr_psoc *psoc,
 					       struct mlo_link_switch_state_info *info);
 #endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
+	trace_link_set_active_cb_type trace_link_set_active_cb;
 };
 #endif
 
