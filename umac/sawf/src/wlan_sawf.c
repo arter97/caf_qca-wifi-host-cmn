@@ -33,6 +33,7 @@
 #include <wlan_objmgr_global_obj.h>
 #include <wlan_osif_priv.h>
 #include <cfg80211_external.h>
+#include <ol_if_athvar.h>
 #ifdef WLAN_FEATURE_11BE_MLO
 #include <wlan_mlo_mgr_peer.h>
 #include <wlan_mlo_mgr_setup.h>
@@ -530,31 +531,37 @@ static void wlan_sawf_send_breach_nl(struct wlan_objmgr_peer *peer,
 	uint16_t hw_link_id;
 	struct wlan_objmgr_vdev *vdev;
 	struct wlan_objmgr_pdev *pdev;
-	struct vdev_osif_priv *osif_vdev;
 	struct sk_buff *vendor_event;
+	struct ieee80211com *ic = NULL;
+	struct net_device *netdev = NULL;
 	uint8_t ac = 0;
 
 	vdev = wlan_peer_get_vdev(peer);
 	if (!vdev) {
-		sawf_info("Unable to find vdev");
+		sawf_err("Unable to find vdev");
 		return;
 	}
 
 	pdev = wlan_vdev_get_pdev(vdev);
 	if (!pdev) {
-		sawf_info("Unable to find pdev");
+		sawf_err("Unable to find pdev");
 		return;
 	}
 
-	osif_vdev  = wlan_vdev_get_ospriv(vdev);
-	if (!osif_vdev) {
-		sawf_info("Unable to find osif_vdev");
+	ic = wlan_vdev_get_ic(vdev);
+	if (!ic) {
+		sawf_err("ic is NULL");
+		return;
+	}
+
+	netdev = ic->ic_netdev;
+	if (!netdev) {
+		sawf_err("netdev is NULL");
 		return;
 	}
 
 	vendor_event =
-		wlan_cfg80211_vendor_event_alloc(
-				osif_vdev->wdev->wiphy, osif_vdev->wdev,
+		wlan_cfg80211_vendor_event_alloc(ic->ic_wiphy, netdev->ieee80211_ptr,
 				MAX_CFG80211_BUF_LEN,
 				QCA_NL80211_VENDOR_SUBCMD_SAWF_SLA_BREACH_INDEX,
 				GFP_ATOMIC);
@@ -1449,8 +1456,9 @@ void wlan_sawf_send_peer_msduq_event_nl(struct wlan_objmgr_peer *peer,
 {
 	struct wlan_objmgr_vdev *vdev;
 	struct wlan_objmgr_pdev *pdev;
-	struct vdev_osif_priv *osif_vdev;
 	struct sk_buff *vendor_event;
+	struct ieee80211com *ic = NULL;
+	struct net_device *netdev = NULL;
 
 	vdev = wlan_peer_get_vdev(peer);
 	if (!vdev) {
@@ -1464,15 +1472,20 @@ void wlan_sawf_send_peer_msduq_event_nl(struct wlan_objmgr_peer *peer,
 		return;
 	}
 
-	osif_vdev = wlan_vdev_get_ospriv(vdev);
-	if (!osif_vdev) {
-		sawf_err("Unable to find osif_vdev");
+	ic = wlan_vdev_get_ic(vdev);
+	if (!ic) {
+		sawf_err("ic is NULL");
+		return;
+	}
+
+	netdev = ic->ic_netdev;
+	if (!netdev) {
+		sawf_err("netdev is NULL");
 		return;
 	}
 
 	vendor_event =
-		wlan_cfg80211_vendor_event_alloc(
-				osif_vdev->wdev->wiphy, osif_vdev->wdev,
+		wlan_cfg80211_vendor_event_alloc(ic->ic_wiphy, netdev->ieee80211_ptr,
 				MAX_CFG80211_BUF_LEN,
 				QCA_NL80211_VENDOR_SUBCMD_SAWF_PEER_MSDUQ_EVENT_INDEX,
 				GFP_ATOMIC);
