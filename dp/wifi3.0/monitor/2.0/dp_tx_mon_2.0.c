@@ -1395,9 +1395,11 @@ dp_tx_mon_update_rx_status(struct mon_rx_status *rx_status,
 		rx_status->ofdm_flag = 0;
 		rx_status->cck_flag = 1;
 		dp_tx_mon_set_rate_b(rx_status);
+		rx_status->preamble_type = DOT11_B;
 		break;
 	default:
 		dp_tx_mon_set_rate_a(rx_status);
+		rx_status->preamble_type = DOT11_A;
 		break;
 	}
 }
@@ -1406,12 +1408,14 @@ dp_tx_mon_update_rx_status(struct mon_rx_status *rx_status,
  * dp_tx_mon_generate_cts_rx_frm - API to gen cts rx frm
  * @pdev: pdev Handle
  * @ppdu_info: pointer to dp_tx_ppdu_info
+ * @rx_ppdu_info: pointer to rx frame generated dp_tx_ppdu_info
  *
  * Return: NULL or nbuf
  */
 static qdf_nbuf_t
 dp_tx_mon_generate_cts_rx_frm(struct dp_pdev *pdev,
-			      struct dp_tx_ppdu_info *ppdu_info)
+			      struct dp_tx_ppdu_info *ppdu_info,
+			      struct dp_tx_ppdu_info *rx_ppdu_info)
 {
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be =
@@ -1422,7 +1426,6 @@ dp_tx_mon_generate_cts_rx_frm(struct dp_pdev *pdev,
 	qdf_nbuf_queue_t *usr_mpdu_q = NULL;
 	struct ieee80211_frame_min_one *wh_addr1 = NULL;
 	struct ieee80211_frame *wh = NULL;
-	struct mon_rx_status rx_status = {0};
 	uint16_t duration = 0;
 	uint8_t frm_ctl;
 	uint8_t sifs;
@@ -1492,11 +1495,23 @@ dp_tx_mon_generate_cts_rx_frm(struct dp_pdev *pdev,
 					 qdf_nbuf_len(rx_mpdu_nbuf));
 
 		/* construct rx_status */
-		rx_status.tsft = TXMON_PPDU_COM(ppdu_info, tsft) + sifs + CTS_INTERVAL;
-		rx_status.mcs = TXMON_PPDU_COM(ppdu_info, mcs);
-		dp_tx_mon_update_rx_status(&rx_status, ppdu_info);
+		TXMON_PPDU_COM(rx_ppdu_info, tsft) =
+			TXMON_PPDU_COM(ppdu_info, tsft) + sifs + CTS_INTERVAL;
+		TXMON_PPDU_COM(rx_ppdu_info, mcs) =
+			TXMON_PPDU_COM(ppdu_info, mcs);
+		TXMON_PPDU_COM(rx_ppdu_info, chan_noise_floor) =
+			DEFAULT_NOISE_FLOOR;
+		TXMON_PPDU_COM(rx_ppdu_info, frame_control) = frm_ctl;
+		TXMON_PPDU_COM(rx_ppdu_info, bw) =
+			TXMON_PPDU_COM(ppdu_info, bw);
+		TXMON_PPDU_COM(rx_ppdu_info, sgi) =
+			TXMON_PPDU_COM(ppdu_info, sgi);
+		rx_ppdu_info->frame_type = CDP_PPDU_FTYPE_CTRL;
+		rx_ppdu_info->ppdu_id = 0xDEAD;
 
-		qdf_nbuf_update_radiotap(&rx_status,
+		dp_tx_mon_update_rx_status(&rx_ppdu_info->hal_txmon.rx_status,
+					   ppdu_info);
+		qdf_nbuf_update_radiotap(&rx_ppdu_info->hal_txmon.rx_status,
 					 rtap_nbuf,
 					 qdf_nbuf_headroom(rtap_nbuf));
 
@@ -1510,12 +1525,14 @@ dp_tx_mon_generate_cts_rx_frm(struct dp_pdev *pdev,
  * dp_tx_mon_generate_ack_rx_frm - API to gen ack rx frm
  * @pdev: pdev Handle
  * @ppdu_info: pointer to dp_tx_ppdu_info
+ * @rx_ppdu_info: pointer to rx frame generated dp_tx_ppdu_info
  *
  * Return: NULL or nbuf
  */
 static qdf_nbuf_t
 dp_tx_mon_generate_ack_rx_frm(struct dp_pdev *pdev,
-			      struct dp_tx_ppdu_info *ppdu_info)
+			      struct dp_tx_ppdu_info *ppdu_info,
+			      struct dp_tx_ppdu_info *rx_ppdu_info)
 {
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be =
@@ -1526,7 +1543,6 @@ dp_tx_mon_generate_ack_rx_frm(struct dp_pdev *pdev,
 	qdf_nbuf_queue_t *usr_mpdu_q = NULL;
 	struct ieee80211_frame_min_one *wh_addr1 = NULL;
 	struct ieee80211_frame *wh = NULL;
-	struct mon_rx_status rx_status = {0};
 	uint8_t frm_ctl;
 	uint8_t sifs;
 
@@ -1589,13 +1605,26 @@ dp_tx_mon_generate_ack_rx_frm(struct dp_pdev *pdev,
 
 		/* construct rx_status */
 		sifs = WLAN_REG_IS_24GHZ_CH_FREQ(TXMON_PPDU_COM(ppdu_info, chan_freq)) ? 10 : 16;
-		rx_status.tsft = TXMON_PPDU_COM(ppdu_info, tsft) + sifs + ACK_INTERVAL;
-		rx_status.rssi_comb = TXMON_PPDU_HAL(ppdu_info, ack_rssi);
-		rx_status.chan_noise_floor = DEFAULT_NOISE_FLOOR;
-		rx_status.mcs = TXMON_PPDU_COM(ppdu_info, mcs);
-		dp_tx_mon_update_rx_status(&rx_status, ppdu_info);
+		TXMON_PPDU_COM(rx_ppdu_info, tsft) =
+			TXMON_PPDU_COM(ppdu_info, tsft) + sifs + ACK_INTERVAL;
+		TXMON_PPDU_COM(rx_ppdu_info, rssi_comb) =
+			TXMON_PPDU_HAL(ppdu_info, ack_rssi);
+		TXMON_PPDU_COM(rx_ppdu_info, chan_noise_floor) =
+			DEFAULT_NOISE_FLOOR;
+		TXMON_PPDU_COM(rx_ppdu_info, mcs) =
+			TXMON_PPDU_COM(ppdu_info, mcs);
+		TXMON_PPDU_COM(rx_ppdu_info, frame_control) = frm_ctl;
+		/* For ack frame, default bw 20MHz will be used */
+		TXMON_PPDU_COM(rx_ppdu_info, bw) = 0;
+		/* Default sgi is set as short for ack */
+		TXMON_PPDU_COM(rx_ppdu_info, sgi) = 1;
+		rx_ppdu_info->frame_type = CDP_PPDU_FTYPE_CTRL;
+		rx_ppdu_info->ppdu_id = 0xDEAD;
 
-		qdf_nbuf_update_radiotap(&rx_status,
+		dp_tx_mon_update_rx_status(&rx_ppdu_info->hal_txmon.rx_status,
+					   ppdu_info);
+
+		qdf_nbuf_update_radiotap(&rx_ppdu_info->hal_txmon.rx_status,
 					 rtap_nbuf,
 					 qdf_nbuf_headroom(rtap_nbuf));
 
@@ -1682,16 +1711,30 @@ dp_tx_mon_send_per_usr_mpdu(struct dp_pdev *pdev,
 	qdf_nbuf_t buf = NULL;
 	qdf_nbuf_t rx_nbuf = NULL;
 	uint8_t mpdu_count = 0;
+	struct dp_tx_ppdu_info *rx_ppdu_info = NULL;
 
 	usr_mpdu_q = &TXMON_PPDU_USR(ppdu_info, user_idx, mpdu_q);
 
-	if (user_idx == 0) {
+	if (user_idx == 0 &&
+	    (TXMON_PPDU_HAL(ppdu_info, ack_recvd) ||
+	     TXMON_PPDU_HAL(ppdu_info, cts_recvd))) {
+		uint32_t sz_ppdu_info = (sizeof(struct dp_tx_ppdu_info) +
+					 (sizeof(struct mon_rx_user_status)));
+
+		rx_ppdu_info =
+			(struct dp_tx_ppdu_info *)qdf_mem_malloc(sz_ppdu_info);
+
 		if (TXMON_PPDU_HAL(ppdu_info, ack_recvd))
 			rx_nbuf = dp_tx_mon_generate_ack_rx_frm(pdev,
-								ppdu_info);
+								ppdu_info,
+								rx_ppdu_info);
 		else if (TXMON_PPDU_HAL(ppdu_info, cts_recvd))
 			rx_nbuf = dp_tx_mon_generate_cts_rx_frm(pdev,
-								ppdu_info);
+								ppdu_info,
+								rx_ppdu_info);
+
+		if (!rx_nbuf && rx_ppdu_info)
+			qdf_mem_free(rx_ppdu_info);
 	}
 
 	while ((buf = qdf_nbuf_queue_remove(usr_mpdu_q)) != NULL) {
@@ -1719,6 +1762,9 @@ dp_tx_mon_send_per_usr_mpdu(struct dp_pdev *pdev,
 		dp_tx_mon_send_to_stack(pdev, rx_nbuf,
 					0, 0, mac_id);
 		rx_nbuf = NULL;
+
+		if (rx_ppdu_info)
+			qdf_mem_free(rx_ppdu_info);
 	}
 }
 
