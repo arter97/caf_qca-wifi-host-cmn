@@ -1555,7 +1555,7 @@ static uint8_t hal_rx_get_tlv_7750(void *rx_tlv)
  */
 static int8_t hal_rx_phy_legacy_get_rssi_7750(uint8_t *buf)
 {
-	return HAL_RX_GET_64(buf, PHYRX_RSSI_LEGACY, RSSI_COMB_PPDU);
+	return HAL_RX_GET(buf, PHYRX_RSSI_LEGACY, RSSI_COMB_PPDU);
 }
 
 /**
