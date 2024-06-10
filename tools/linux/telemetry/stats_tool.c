@@ -2853,7 +2853,7 @@ void print_debug_data_tx_stats(struct debug_data_tx_stats *tx)
 
 	STATS_PRINT("\tTx RSSI chain per BW:\n");
 	for (i = 0; i < STATS_IF_RSSI_CHAIN_MAX; i++)
-		STATS_PRINT("\t\t %u\n", tx->rssi_chain[i]);
+		STATS_PRINT("\t\t %d\n", tx->rssi_chain[i]);
 }
 
 void print_debug_data_rx_stats(struct debug_data_rx_stats *rx)
