@@ -130,9 +130,21 @@ do {                                            \
 /* Length of WBM release ring without the status words */
 #define HAL_TX_COMPLETION_DESC_BASE_LEN 12
 
-#define HAL_TX_COMP_RELEASE_SOURCE_TQM 0
-#define HAL_TX_COMP_RELEASE_SOURCE_REO 2
-#define HAL_TX_COMP_RELEASE_SOURCE_FW 3
+/**
+ * enum hal_tx_comp_rel_src - Indicates the release source module
+ * @HAL_TX_COMP_RELEASE_SOURCE_TQM    : TQM released this buffer or descriptor
+ * @HAL_TX_COMP_RELEASE_SOURCE_RXDMA  : RXDMA released this buffer or descriptor
+ * @HAL_TX_COMP_RELEASE_SOURCE_REO    : REO released this buffer or descriptor
+ * @HAL_TX_COMP_RELEASE_SOURCE_FW     : FW released this buffer or descriptor
+ * @HAL_TX_COMP_RELEASE_SOURCE_MAX    : count of number of enumerator
+ */
+enum hal_tx_comp_rel_src {
+	HAL_TX_COMP_RELEASE_SOURCE_TQM,
+	HAL_TX_COMP_RELEASE_SOURCE_RXDMA,
+	HAL_TX_COMP_RELEASE_SOURCE_REO,
+	HAL_TX_COMP_RELEASE_SOURCE_FW,
+	HAL_TX_COMP_RELEASE_SOURCE_MAX
+};
 
 /* Define a place-holder release reason for FW */
 #define HAL_TX_COMP_RELEASE_REASON_FW 99

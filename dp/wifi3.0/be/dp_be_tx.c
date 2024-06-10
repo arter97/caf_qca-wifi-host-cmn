@@ -306,6 +306,8 @@ void dp_tx_process_htt_completion_be(struct dp_soc *soc,
 	htt_handle = (struct htt_soc *)soc->htt_handle;
 	htt_wbm_event_record(htt_handle->htt_logger_handle, tx_status, status);
 
+	dp_update_fw_rsn_cnt(soc, ring_id, tx_status);
+
 	/*
 	 * There can be scenario where WBM consuming descriptor enqueued
 	 * from TQM2WBM first and TQM completion can happen before MEC
@@ -2420,6 +2422,7 @@ more_data:
 			break;
 
 		buffer_src = HAL_WBM2SW_RELEASE_SRC_GET(tx_comp_hal_desc);
+		dp_update_wbm_rsm_stats(soc, ring_id, buffer_src);
 		status = dp_tx_comp_get_params_from_hal_desc_be(
 							soc, tx_comp_hal_desc,
 							&tx_desc);
@@ -2460,12 +2463,15 @@ more_data:
 			if (qdf_unlikely(!tx_desc->pdev))
 				dp_tx_dump_tx_desc(tx_desc);
 		} else {
+			tx_desc->tx_status =
+				hal_tx_comp_get_tx_status(tx_comp_hal_desc);
+			dp_update_tqm_rsn_cnt(soc, ring_id, tx_desc->tx_status,
+					      buffer_src);
+
 			if (tx_desc->flags & DP_TX_DESC_FLAG_FASTPATH_SIMPLE ||
 			    tx_desc->flags & DP_TX_DESC_FLAG_PPEDS)
 				goto add_to_pool2;
 
-			tx_desc->tx_status =
-				hal_tx_comp_get_tx_status(tx_comp_hal_desc);
 			/*
 			 * If the fast completion mode is enabled extended
 			 * metadata from descriptor is not copied

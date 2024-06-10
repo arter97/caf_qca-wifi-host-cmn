@@ -551,6 +551,39 @@ static inline uint8_t dp_get_ext_tx_desc_pool_num(struct dp_soc *soc)
 }
 #endif
 
+#if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
+static inline void dp_update_fw_rsn_cnt(struct dp_soc *soc, uint8_t ring_id,
+					uint8_t tx_status)
+{
+}
+static inline void dp_update_wbm_rsm_stats(struct dp_soc *soc, uint8_t ring_id,
+					   uint8_t buffer_src)
+{
+}
+static inline void dp_update_tqm_rsn_cnt(struct dp_soc *soc, uint8_t ring_id,
+					 uint8_t reason, uint8_t buffer_src)
+{
+}
+#else
+static inline void dp_update_fw_rsn_cnt(struct dp_soc *soc, uint8_t ring_id,
+					uint8_t tx_status)
+{
+	DP_STATS_INC(soc, tx.fw_rel_status_cnt[ring_id][tx_status], 1);
+}
+static inline void dp_update_wbm_rsm_stats(struct dp_soc *soc, uint8_t ring_id,
+					   uint8_t buffer_src)
+{
+	DP_STATS_INC(soc, tx.rsm_cnt[ring_id][buffer_src], 1);
+}
+static inline void dp_update_tqm_rsn_cnt(struct dp_soc *soc, uint8_t ring_id,
+					 uint8_t reason, uint8_t buffer_src)
+{
+	if (buffer_src == HAL_TX_COMP_RELEASE_SOURCE_TQM)
+		DP_STATS_INC(soc, tx.tqm_rr_cnt[ring_id][reason], 1);
+}
+#endif
+
+
 #ifndef QCA_HOST_MODE_WIFI_DISABLED
 /**
  * dp_tso_soc_attach() - TSO Attach handler

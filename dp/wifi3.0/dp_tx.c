@@ -6976,7 +6976,6 @@ uint32_t dp_tx_comp_handler(struct dp_intr *int_ctx, struct dp_soc *soc,
 
 	num_entries = hal_srng_get_num_entries(soc->hal_soc, hal_ring_hdl);
 	dp_tx_nbuf_queue_head_init(&h);
-
 more_data:
 
 	hal_soc = soc->hal_soc;
@@ -7017,6 +7016,7 @@ more_data:
 			break;
 		buffer_src = hal_tx_comp_get_buffer_source(hal_soc,
 							   tx_comp_hal_desc);
+		dp_update_wbm_rsm_stats(soc, ring_id, buffer_src);
 
 		/* If this buffer was not released by TQM or FW, then it is not
 		 * Tx completion indication, assert */
@@ -7113,12 +7113,14 @@ more_data:
 				dp_tx_dump_tx_desc(tx_desc);
 			}
 		} else {
+			tx_desc->tx_status =
+				hal_tx_comp_get_tx_status(tx_comp_hal_desc);
+			dp_update_tqm_rsn_cnt(soc, ring_id, tx_desc->tx_status,
+					      buffer_src);
+
 			if (tx_desc->flags & DP_TX_DESC_FLAG_FASTPATH_SIMPLE ||
 			    tx_desc->flags & DP_TX_DESC_FLAG_PPEDS)
 				goto add_to_pool2;
-
-			tx_desc->tx_status =
-				hal_tx_comp_get_tx_status(tx_comp_hal_desc);
 			tx_desc->buffer_src = buffer_src;
 			/*
 			 * If the fast completion mode is enabled extended

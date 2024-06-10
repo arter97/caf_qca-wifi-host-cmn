@@ -109,6 +109,8 @@ void dp_tx_process_htt_completion_li(struct dp_soc *soc,
 	htt_handle = (struct htt_soc *)soc->htt_handle;
 	htt_wbm_event_record(htt_handle->htt_logger_handle, tx_status, status);
 
+	dp_update_fw_rsn_cnt(soc, ring_id, tx_status);
+
 	/*
 	 * There can be scenario where WBM consuming descriptor enqueued
 	 * from TQM2WBM first and TQM completion can happen before MEC

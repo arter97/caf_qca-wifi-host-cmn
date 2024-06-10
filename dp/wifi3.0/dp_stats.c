@@ -96,6 +96,51 @@
 	__QDF_TRACE_FL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_DP_STATS, ## params)
 #define dp_stats_debug(params...) QDF_TRACE_DEBUG(QDF_MODULE_ID_DP_STATS, params)
 
+#define MAX_SRC_STR 6
+#define MAX_TQM_REL_RSN_STR 27
+#define MAX_FW_REL_STR 24
+
+static const char tx_comp_rel_src[HAL_TX_COMP_RELEASE_SOURCE_MAX][MAX_SRC_STR] = {
+	"TQM  ",
+	"RXDMA",
+	"REO  ",
+	"FW   "
+};
+
+/*
+ * TQM release reason for WBM as per enum hal_tx_tqm_release_reason
+ */
+static const char tqm_rel_rsn[HAL_TX_TQM_RR_MAX][MAX_TQM_REL_RSN_STR] = {
+	"FRAME_ACKED             ",
+	"REM_CMD_REM             ",
+	"REM_CMD_TX              ",
+	"REM_CMD_NOTX            ",
+	"REM_CMD_AGED            ",
+	"FW_REASON1              ",
+	"FW_REASON2              ",
+	"FW_REASON3              ",
+	"REM_CMD_DISABLE_QUEUE   ",
+	"REM_CMD_TILL_NONMATCHING",
+	"DROP_THRESHOLD          ",
+	"LINK_DESC_UNAVAILABLE   ",
+	"DROP_OR_INVALID_MSDU    ",
+	"MULTICAST_DROP          ",
+	"VDEV_MISMATCH_DROP      "
+};
+
+/*
+ * FW release status for WBM as per enum htt_tx_fw2wbm_tx_status_t
+ */
+static const char fw_rel_status[HTT_TX_FW2WBM_TX_STATUS_MAX][MAX_FW_REL_STR] = {
+	"STATUS_OK             ",
+	"STATUS_DROP           ",
+	"STATUS_TTL            ",
+	"STATUS_REINJECT       ",
+	"STATUS_INSPECT        ",
+	"STATUS_MEC_NOTIFY     ",
+	"STATUS_VDEVID_MISMATCH"
+};
+
 #ifdef WLAN_FEATURE_11BE
 static const struct cdp_rate_debug dp_ppdu_rate_string[DOT11_MAX][MAX_MCS] = {
 	{
@@ -6473,6 +6518,44 @@ static void dp_print_assert_war_tx_stats(struct dp_soc *soc)
 }
 #endif
 
+#if !defined(WLAN_MAX_PDEVS) || (WLAN_MAX_PDEVS != 1)
+static void dp_print_tx_comp_stats(struct dp_soc *soc)
+{
+	uint8_t index;
+	DP_PRINT_STATS("Tx completion release source per ring:");
+	for (index = 0; index < HAL_TX_COMP_RELEASE_SOURCE_MAX; index++) {
+		DP_PRINT_STATS("%s: %u   %u   %u   %u", tx_comp_rel_src[index],
+				soc->stats.tx.rsm_cnt[0][index],
+				soc->stats.tx.rsm_cnt[1][index],
+				soc->stats.tx.rsm_cnt[2][index],
+				soc->stats.tx.rsm_cnt[3][index]
+				);
+	}
+	DP_PRINT_STATS("TQM release reason per ring:");
+	for (index = 0; index < HAL_TX_TQM_RR_MAX; index++) {
+		DP_PRINT_STATS(" %s: %u   %u   %u   %u", tqm_rel_rsn[index],
+				soc->stats.tx.tqm_rr_cnt[0][index],
+				soc->stats.tx.tqm_rr_cnt[1][index],
+				soc->stats.tx.tqm_rr_cnt[2][index],
+				soc->stats.tx.tqm_rr_cnt[3][index]
+				);
+	}
+	DP_PRINT_STATS("FW release status per ring:");
+	for (index = 0; index < HTT_TX_FW2WBM_TX_STATUS_MAX; index++) {
+		DP_PRINT_STATS(" %s: %u   %u   %u   %u", fw_rel_status[index],
+				soc->stats.tx.fw_rel_status_cnt[0][index],
+				soc->stats.tx.fw_rel_status_cnt[1][index],
+				soc->stats.tx.fw_rel_status_cnt[2][index],
+				soc->stats.tx.fw_rel_status_cnt[3][index]
+				);
+	}
+}
+#else
+static void dp_print_tx_comp_stats(struct dp_soc *soc)
+{
+}
+#endif
+
 void dp_print_soc_tx_stats(struct dp_soc *soc)
 {
 	uint8_t desc_pool_id;
@@ -6521,6 +6604,7 @@ void dp_print_soc_tx_stats(struct dp_soc *soc)
 		       soc->stats.tx.tx_comp_loop_pkt_limit_hit);
 	DP_PRINT_STATS("Tx comp HP out of sync2 = %d",
 		       soc->stats.tx.hp_oos2);
+	dp_print_tx_comp_stats(soc);
 	dp_print_tx_ppeds_stats(soc);
 	dp_print_assert_war_tx_stats(soc);
 }

@@ -1409,6 +1409,14 @@ struct dp_soc_stats {
 		/* invalid tso segment parameters */
 		uint32_t invld_tso_params;
 #endif
+#if !defined(WLAN_MAX_PDEVS) || (WLAN_MAX_PDEVS != 1)
+		/* Counters for Release Source Module count per ring */
+		uint32_t rsm_cnt[MAX_TCL_DATA_RINGS][HAL_TX_COMP_RELEASE_SOURCE_MAX];
+		/* Counters for TQM Release Reason count per ring */
+		uint32_t tqm_rr_cnt[MAX_TCL_DATA_RINGS][HAL_TX_TQM_RR_MAX];
+		/* Counters for FW Release status count per ring */
+		uint32_t fw_rel_status_cnt[MAX_TCL_DATA_RINGS][HTT_TX_FW2WBM_TX_STATUS_MAX];
+#endif
 	} tx;
 
 	/* SOC level RX stats */
