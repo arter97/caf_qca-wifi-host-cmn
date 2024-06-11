@@ -1818,6 +1818,16 @@ static inline void dp_soc_sawf_init(struct dp_soc *soc)
 static inline void dp_soc_sawf_deinit(struct dp_soc *soc)
 {
 }
+
+static inline bool dp_sawf_me_enabled(ol_txrx_soc_handle soc)
+{
+	return false;
+}
+
+static inline bool dp_sawf_q_valid_get(qdf_nbuf_t nbuf)
+{
+	return false;
+}
 #endif
 
 #ifdef HW_TX_DELAY_STATS_ENABLE

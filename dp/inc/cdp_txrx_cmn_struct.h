@@ -719,6 +719,8 @@ enum cdp_sec_type {
  * @sec_type: sec_type to be passed to HAL
  * @is_tx_sniffer: Indicates if the packet has to be sniffed
  * @is_intrabss_fwd:
+ * @is_dms_pkt: If the packet is dms supported or not
+ * @reserved: reserved bits for new field additions
  * @ppdu_cookie: 16-bit ppdu cookie that has to be replayed back in completions
  * @is_wds_extended:
  * @is_mlo_mcast: Indicates if mlo_mcast enable or not
@@ -732,7 +734,9 @@ struct cdp_tx_exception_metadata {
 	uint16_t tx_encap_type;
 	enum cdp_sec_type sec_type;
 	uint8_t is_tx_sniffer :1,
-		is_intrabss_fwd :1;
+		is_intrabss_fwd :1,
+		is_dms_pkt :1,
+		reserved :5;
 	uint16_t ppdu_cookie;
 #ifdef QCA_SUPPORT_WDS_EXTENDED
 	uint8_t is_wds_extended;

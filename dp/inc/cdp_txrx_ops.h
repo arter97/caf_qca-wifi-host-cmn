@@ -1038,6 +1038,23 @@ struct cdp_me_ops {
 
 	bool (*is_peer_dms_capable)(struct cdp_soc_t *soc, uint8_t vdev_id,
 				    uint8_t *mac_addr);
+#ifdef CONFIG_SAWF
+	void (*tx_me_add_sawf_metadata)(struct cdp_soc_t *soc, uint8_t vdev_id,
+					uint16_t peer_id, uint8_t *mac,
+					qdf_nbuf_t nbuf,
+					uint8_t is_mlo_non_bond);
+	uint8_t (*tx_me_update_group_flow)(struct cdp_soc_t *soc,
+					   uint8_t vdev_id,
+					   uint32_t *ip, uint16_t ip_version,
+					   int flowcount_delta,
+					   bool is_mlo_non_bond);
+#ifdef QCA_SUPPORT_WDS_EXTENDED
+	void (*tx_me_wds_ext_intf_clear)(struct cdp_soc_t *soc,
+					 struct net_device *dev,
+					 uint8_t vdev_id, uint8_t *mac,
+					 uint8_t is_mlo_non_bond);
+#endif /* QCA_SUPPORT_WDS_EXTENDED */
+#endif /* CONFIG_SAWF */
 };
 
 /**
@@ -2611,6 +2628,15 @@ struct cdp_sawf_ops {
 	(*txrx_get_peer_sawf_admctrl_stats)(struct cdp_soc_t *soc, uint8_t *mac,
 					    void *data,
 					    enum cdp_peer_type peer_type);
+
+	QDF_STATUS
+	(*sawf_get_peer_mark)(struct cdp_soc_t *hdl, uint8_t *peer_mac,
+			      uint32_t service_id, uint16_t peer_id,
+			      uint32_t *mark, uint8_t vdev_id);
+
+	uint8_t (*sawf_get_svc_id)(uint32_t mark);
+
+	bool (*sawf_get_me_status)(ol_txrx_soc_handle soc);
 #endif
 #ifdef WLAN_FEATURE_11BE_MLO_3_LINK_TX
 	uint16_t
