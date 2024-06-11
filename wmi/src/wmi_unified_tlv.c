@@ -71,6 +71,7 @@
 #ifdef FEATURE_SET
 #include "wlan_mlme_public_struct.h"
 #endif
+#include "cdp_txrx_cmn.h"
 
 /*
  * If FW supports WMI_SERVICE_SCAN_CONFIG_PER_CHANNEL,
@@ -10128,9 +10129,19 @@ void wmi_copy_epm_support(wmi_resource_config *resource_cfg,
 #endif
 
 static
-void wmi_copy_resource_config(wmi_resource_config *resource_cfg,
-				target_resource_config *tgt_res_cfg)
+void wmi_copy_resource_config(wmi_unified_t wmi_handle,
+			      wmi_resource_config *resource_cfg,
+			      target_resource_config *tgt_res_cfg)
 {
+	ol_txrx_soc_handle soc_txrx_handle;
+
+	soc_txrx_handle = (ol_txrx_soc_handle)wlan_psoc_get_dp_handle(
+			wmi_handle->soc->wmi_psoc);
+	if (!soc_txrx_handle) {
+		wmi_err("psoc handle is NULL");
+		return;
+	}
+
 	resource_cfg->num_vdevs = tgt_res_cfg->num_vdevs;
 	resource_cfg->num_peers = tgt_res_cfg->num_peers;
 	resource_cfg->num_offload_peers = tgt_res_cfg->num_offload_peers;
@@ -10430,6 +10441,11 @@ void wmi_copy_resource_config(wmi_resource_config *resource_cfg,
 		WMI_RSRC_CFG_FLAGS2_DISABLE_WDS_PEER_MAP_UNMAP_EVENT_SET
 			(resource_cfg->flags2,
 			 tgt_res_cfg->fw_ast_indication_disable);
+	}
+
+	if (cdp_get_opt_dp_ctrl_refill_cap(soc_txrx_handle)) {
+		WMI_RSRC_CFG_HOST_SERVICE_FLAG_OPT_DP_CTRL_REPLENISH_REFILL_RX_BUFFER_SUPPORT_SET(
+				resource_cfg->host_service_flags, 1);
 	}
 
 	wmi_copy_latency_flowq_support(resource_cfg, tgt_res_cfg);
@@ -12631,7 +12647,7 @@ static QDF_STATUS init_cmd_send_tlv(wmi_unified_t wmi_handle,
 	WMITLV_SET_HDR(&cmd->tlv_header,
 			WMITLV_TAG_STRUC_wmi_init_cmd_fixed_param,
 			WMITLV_GET_STRUCT_TLVLEN(wmi_init_cmd_fixed_param));
-	wmi_copy_resource_config(resource_cfg, param->res_cfg);
+	wmi_copy_resource_config(wmi_handle, resource_cfg, param->res_cfg);
 	WMITLV_SET_HDR(&resource_cfg->tlv_header,
 			WMITLV_TAG_STRUC_wmi_resource_config,
 			WMITLV_GET_STRUCT_TLVLEN(wmi_resource_config));
