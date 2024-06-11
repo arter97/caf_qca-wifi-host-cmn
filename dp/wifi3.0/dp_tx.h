@@ -894,9 +894,18 @@ uint32_t dp_tx_check_if_more_desc_available(
 					hal_ring_handle_t hal_ring_hdl,
 					hal_soc_handle_t hal_soc)
 {
-	if (num_processed < quota)
-		return hal_srng_dst_num_valid(hal_soc,
-					      hal_ring_hdl, 0);
+	uint32_t num_avail_for_reap = 0;
+
+	if (num_processed < quota) {
+		num_avail_for_reap = hal_srng_dst_num_valid(hal_soc,
+							    hal_ring_hdl, 1);
+		if (num_avail_for_reap > (quota - num_processed)) {
+			num_avail_for_reap = (quota - num_processed);
+			return num_avail_for_reap;
+		} else {
+			return num_avail_for_reap;
+		}
+	}
 	return 0;
 }
 #else
