@@ -521,6 +521,10 @@ target_if_update_wds_entry(struct cdp_ctrl_objmgr_psoc *soc, uint8_t vdev_id,
 	wmi_wds_param.vdev_id = vdev_id;
 	wmi_wds_param.flags = flags;
 
+	target_if_debug("dest " QDF_MAC_ADDR_FMT " peer " QDF_MAC_ADDR_FMT,
+			QDF_MAC_ADDR_REF(dest_mac),
+			QDF_MAC_ADDR_REF(peer_mac));
+
 	status = wmi_unified_update_wds_entry_cmd(pdev_wmi_handle,
 						  &wmi_wds_param);
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_WDS_ID);
