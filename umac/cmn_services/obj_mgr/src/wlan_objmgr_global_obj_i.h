@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2019, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -60,6 +60,8 @@ struct wlan_objmgr_debug_info;
  * @peer_destroy_handler_arg:  PEER destroy handler args array
  * @peer_status_handler:       PEER status handler array
  * @peer_status_handler_arg:   PEER status handler args array
+ * @peer_phymode_change_notify_handler: PEER phymode change handler array
+ * @peer_phymode_change_notify_handler_arg: PEER phymode change handler args array
  * @debug_info:                Objmgr debug information
  * @global_lock:               Global lock
  */
@@ -109,6 +111,9 @@ struct wlan_objmgr_global {
 	wlan_objmgr_peer_status_handler
 		peer_status_handler[WLAN_UMAC_MAX_COMPONENTS];
 	void *peer_status_handler_arg[WLAN_UMAC_MAX_COMPONENTS];
+	wlan_objmgr_peer_phymode_change_notify_handler
+		peer_phymode_change_notify_handler[WLAN_UMAC_MAX_COMPONENTS];
+	void *peer_phymode_change_notify_handler_arg[WLAN_UMAC_MAX_COMPONENTS];
 	struct wlan_objmgr_debug_info *debug_info;
 	qdf_spinlock_t	global_lock;
 };

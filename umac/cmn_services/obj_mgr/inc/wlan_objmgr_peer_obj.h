@@ -217,6 +217,18 @@ struct wlan_objmgr_peer {
 #endif
 };
 
+/**
+ * wlan_peer_set_phymode() - set phymode
+ * @peer: PEER object
+ * @phymode: phymode of peer
+ *
+ * API to set phymode
+ *
+ * Return: void
+ */
+void wlan_peer_set_phymode(struct wlan_objmgr_peer *peer,
+			   enum wlan_phymode phymode);
+
 /*
  * APIs to Create/Delete Global object APIs
  */
@@ -854,21 +866,6 @@ static inline enum wlan_peer_type wlan_peer_get_peer_type(
 				struct wlan_objmgr_peer *peer)
 {
 	return peer->peer_mlme.peer_type;
-}
-
-/**
- * wlan_peer_set_phymode() - set phymode
- * @peer: PEER object
- * @phymode: phymode of peer
- *
- * API to set phymode
- *
- * Return: void
- */
-static inline void wlan_peer_set_phymode(struct wlan_objmgr_peer *peer,
-					 enum wlan_phymode phymode)
-{
-	peer->peer_mlme.phymode = phymode;
 }
 
 /**

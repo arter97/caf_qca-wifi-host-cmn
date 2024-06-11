@@ -163,6 +163,24 @@ static inline void
 wlan_objmgr_peer_init_ref_id_debug(struct wlan_objmgr_peer *peer) {}
 #endif
 
+void
+wlan_peer_set_phymode(struct wlan_objmgr_peer *peer, enum wlan_phymode phymode)
+{
+	wlan_objmgr_peer_phymode_change_notify_handler notify_handler;
+	uint8_t id;
+	void *arg;
+
+	peer->peer_mlme.phymode = phymode;
+
+	for (id = 0; id < WLAN_UMAC_MAX_COMPONENTS; id++) {
+		notify_handler =
+			g_umac_glb_obj->peer_phymode_change_notify_handler[id];
+		arg = g_umac_glb_obj->peer_phymode_change_notify_handler_arg[id];
+		if (notify_handler)
+			notify_handler(peer, arg);
+	}
+}
+
 struct wlan_objmgr_peer *wlan_objmgr_peer_obj_create(
 			struct wlan_objmgr_vdev *vdev,
 			enum wlan_peer_type type,

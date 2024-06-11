@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2019, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -512,6 +512,43 @@ QDF_STATUS wlan_objmgr_register_peer_status_handler(
 QDF_STATUS wlan_objmgr_unregister_peer_status_handler(
 		enum wlan_umac_comp_id id,
 		wlan_objmgr_peer_status_handler handler,
+		void *args);
+
+/**
+ * wlan_objmgr_register_peer_phymode_change_notify_handler() - register peer
+ *							       phymode notify handler
+ * @id: component id
+ * @handler: function pointer of the component
+ * @args: args, if component wants certain args to be passed to handler
+ *
+ * API, allows other UMAC components to register handler
+ * The registered handler would be invoked on PEER phymode change
+ *
+ * Return: SUCCESS,
+ *         Failure (if registration fails, each failure has different error
+ *         code)
+ */
+QDF_STATUS wlan_objmgr_register_peer_phymode_change_notify_handler(
+		enum wlan_umac_comp_id id,
+		wlan_objmgr_peer_phymode_change_notify_handler handler,
+		void *args);
+
+/**
+ * wlan_objmgr_unregister_peer_phymode_change_notify_handler() - uregister peer
+ *								 phymode notify handler
+ * @id: component id
+ * @handler: function pointer of the component
+ * @args: args, if component wants certain args to be passed to handler
+ *
+ * API, allows other UMAC components to unregister handler
+ *
+ * Return: SUCCESS,
+ *         Failure (if handler is not present, each failure has different error
+ *         code)
+ */
+QDF_STATUS wlan_objmgr_unregister_peer_phymode_change_notify_handler(
+		enum wlan_umac_comp_id id,
+		wlan_objmgr_peer_phymode_change_notify_handler handler,
 		void *args);
 
 /*

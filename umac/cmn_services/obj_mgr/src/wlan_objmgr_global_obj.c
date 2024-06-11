@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -772,6 +772,56 @@ QDF_STATUS wlan_objmgr_unregister_peer_status_handler(
 	/* Reset handlers, and args to NULL */
 	g_umac_glb_obj->peer_status_handler[id] = NULL;
 	g_umac_glb_obj->peer_status_handler_arg[id] = NULL;
+
+	qdf_spin_unlock_bh(&g_umac_glb_obj->global_lock);
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS wlan_objmgr_register_peer_phymode_change_notify_handler(
+		enum wlan_umac_comp_id id,
+		wlan_objmgr_peer_phymode_change_notify_handler handler,
+		void *arg)
+{
+	/* If id is not within valid range, return */
+	if (id >= WLAN_UMAC_MAX_COMPONENTS) {
+		obj_mgr_err("Component %d is out of range", id);
+		return QDF_STATUS_MAXCOMP_FAIL;
+	}
+	qdf_spin_lock_bh(&g_umac_glb_obj->global_lock);
+	/* If there is a valid entry, return failure */
+	if (g_umac_glb_obj->peer_phymode_change_notify_handler[id]) {
+		qdf_spin_unlock_bh(&g_umac_glb_obj->global_lock);
+		obj_mgr_err("Callback for comp %d is already registered", id);
+		return QDF_STATUS_E_FAILURE;
+	}
+	/* Store handler and args in Global object table */
+	g_umac_glb_obj->peer_phymode_change_notify_handler[id] = handler;
+	g_umac_glb_obj->peer_phymode_change_notify_handler_arg[id] = arg;
+
+	qdf_spin_unlock_bh(&g_umac_glb_obj->global_lock);
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS wlan_objmgr_unregister_peer_phymode_change_notify_handler(
+		enum wlan_umac_comp_id id,
+		wlan_objmgr_peer_phymode_change_notify_handler handler,
+		void *arg)
+{
+	/* If id is not within valid range, return */
+	if (id >= WLAN_UMAC_MAX_COMPONENTS) {
+		obj_mgr_err("Component %d is out of range", id);
+		return QDF_STATUS_MAXCOMP_FAIL;
+	}
+	qdf_spin_lock_bh(&g_umac_glb_obj->global_lock);
+	/* If there is an invalid entry, return failure */
+	if (g_umac_glb_obj->peer_phymode_change_notify_handler[id] != handler) {
+		qdf_spin_unlock_bh(&g_umac_glb_obj->global_lock);
+		obj_mgr_err("Callback for comp %d is not registered", id);
+		return QDF_STATUS_E_FAILURE;
+	}
+	/* Reset handlers, and args to NULL */
+	g_umac_glb_obj->peer_phymode_change_notify_handler[id] = NULL;
+	g_umac_glb_obj->peer_phymode_change_notify_handler_arg[id] = NULL;
 
 	qdf_spin_unlock_bh(&g_umac_glb_obj->global_lock);
 	return QDF_STATUS_SUCCESS;
