@@ -593,14 +593,7 @@ ol_ath_ucfg_set_peer_pkt_capture_mon_2_0(void *vscn,
 	else
 		action = LITE_MON_PEER_REMOVE;
 
-	if (!peer_info->skip_node_check) {
-		ni = ieee80211_find_node(ic, peer_info->peer_mac, WLAN_MLME_SB_ID);
-		if (!ni && action == LITE_MON_PEER_ADD) {
-			qdf_info("Node doesn't exist");
-			return -EINVAL;
-		}
-	}
-
+	ni = ieee80211_find_node(ic, peer_info->peer_mac, WLAN_MLME_SB_ID);
 	if (ni) {
 		if (!ni->ni_vap) {
 			ieee80211_free_node(ni, WLAN_MLME_SB_ID);
