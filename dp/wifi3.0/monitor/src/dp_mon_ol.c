@@ -1593,6 +1593,7 @@ int wlan_set_lite_monitor_peer_config(void *vscn,
 	char *ifname = NULL;
 	int retval = 0;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	struct ieee80211_node *ni = NULL;
 
 	peer_config = qdf_mem_malloc(sizeof(struct cdp_lite_mon_peer_config));
 	if (!peer_config) {
@@ -1650,9 +1651,21 @@ int wlan_set_lite_monitor_peer_config(void *vscn,
 			}
 		}
 
-		qdf_mem_copy(peer_config->mac,
-			     mon_config->data.peer_config.mac_addr[i],
-			     QDF_MAC_ADDR_SIZE);
+#ifdef WLAN_FEATURE_11BE_MLO
+		ni = ieee80211_find_node_by_mld_mac_and_pdev(ic,
+							     mon_config->data.peer_config.mac_addr[i],
+							     WLAN_LITE_MON_ID);
+#endif
+		if (ni) {
+			qdf_mem_copy(peer_config->mac,
+				     ieee80211_node_get_macaddr(ni),
+				     QDF_MAC_ADDR_SIZE);
+			ieee80211_free_node(ni, WLAN_LITE_MON_ID);
+		} else {
+			qdf_mem_copy(peer_config->mac,
+				     mon_config->data.peer_config.mac_addr[i],
+				     QDF_MAC_ADDR_SIZE);
+		}
 
 		if (QDF_STATUS_SUCCESS ==
 		    cdp_set_lite_mon_peer_config(soc_txrx_handle,
