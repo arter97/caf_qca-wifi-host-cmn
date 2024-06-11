@@ -2442,20 +2442,27 @@ wlan_clear_peer_level_tid_to_link_mapping(struct wlan_objmgr_vdev *vdev)
 }
 #endif
 
-void wlan_mlo_t2lm_timer_expiry_handler(void *vdev)
+enum qdf_hrtimer_restart_status
+wlan_mlo_t2lm_timer_expiry_handler(qdf_hrtimer_data_t *arg)
 {
-	struct wlan_objmgr_vdev *vdev_ctx = (struct wlan_objmgr_vdev *)vdev;
-
-	struct wlan_t2lm_timer *t2lm_timer;
+	struct wlan_t2lm_timer *timer_ctx;
 	struct wlan_t2lm_context *t2lm_ctx;
+	struct wlan_objmgr_vdev *vdev;
 
-	if (!vdev_ctx || !vdev_ctx->mlo_dev_ctx)
-		return;
+	timer_ctx = container_of(arg, struct wlan_t2lm_timer, t2lm_timer);
 
-	t2lm_ctx = &vdev_ctx->mlo_dev_ctx->t2lm_ctx;
-	t2lm_timer = &vdev_ctx->mlo_dev_ctx->t2lm_ctx.t2lm_timer;
+	timer_ctx->timer_started = false;
+	timer_ctx->timer_interval = 0;
+	timer_ctx->timer_out_time = 0;
 
-	wlan_mlo_t2lm_timer_stop(vdev_ctx);
+	t2lm_ctx = timer_ctx->t2lm_ctx;
+
+	vdev = mlo_get_first_active_vdev_by_ml_dev_ctx(t2lm_ctx->mlo_dev_ctx);
+	if (!vdev) {
+		t2lm_err("null vdev");
+		mlo_t2lm_reset_established_and_upcoming_mapping(t2lm_ctx->mlo_dev_ctx);
+		return QDF_HRTIMER_NORESTART;
+	}
 
 	/* Since qdf_mutex_acquire cannot be called from interrupt context,
 	 * change needed to create a workqueue and offload the timer expiry
@@ -2465,23 +2472,26 @@ void wlan_mlo_t2lm_timer_expiry_handler(void *vdev)
 		wlan_mlo_t2lm_handle_expected_duration_expiry(t2lm_ctx, vdev);
 
 		/* Notify the registered caller about the link update*/
-		wlan_mlo_dev_t2lm_notify_link_update(vdev_ctx,
-					&t2lm_ctx->established_t2lm.t2lm);
+		wlan_mlo_dev_t2lm_notify_link_update(
+				vdev, &t2lm_ctx->established_t2lm.t2lm);
 		wlan_send_tid_to_link_mapping(
 				vdev, &t2lm_ctx->established_t2lm.t2lm);
 
-		wlan_handle_t2lm_timer(vdev_ctx);
+		wlan_handle_t2lm_timer(vdev);
 	} else if (t2lm_ctx->upcoming_t2lm.t2lm.mapping_switch_time_present) {
 		wlan_mlo_t2lm_handle_mapping_switch_time_expiry(t2lm_ctx, vdev);
 
 		/* Notify the registered caller about the link update*/
-		wlan_mlo_dev_t2lm_notify_link_update(vdev_ctx,
-					&t2lm_ctx->established_t2lm.t2lm);
+		wlan_mlo_dev_t2lm_notify_link_update(
+				vdev, &t2lm_ctx->established_t2lm.t2lm);
 		wlan_send_tid_to_link_mapping(
 				vdev, &t2lm_ctx->established_t2lm.t2lm);
-		wlan_handle_t2lm_timer(vdev_ctx);
+		wlan_handle_t2lm_timer(vdev);
 	}
 
+	mlo_release_vdev_ref(vdev);
+
+	return QDF_HRTIMER_NORESTART;
 }
 
 /**
@@ -2617,9 +2627,11 @@ wlan_mlo_t2lm_timer_init(struct wlan_objmgr_vdev *vdev)
 
 	t2lm_dev_lock_create(&vdev->mlo_dev_ctx->t2lm_ctx);
 	t2lm_dev_lock_acquire(&vdev->mlo_dev_ctx->t2lm_ctx);
-	qdf_timer_init(NULL, &t2lm_timer->t2lm_timer,
-		       wlan_mlo_t2lm_timer_expiry_handler,
-		       vdev, QDF_TIMER_TYPE_WAKE_APPS);
+	qdf_hrtimer_init(&t2lm_timer->t2lm_timer,
+			 wlan_mlo_t2lm_timer_expiry_handler,
+			 QDF_CLOCK_MONOTONIC,
+			 QDF_HRTIMER_MODE_REL,
+			 QDF_CONTEXT_TASKLET);
 
 	t2lm_timer->timer_started = false;
 	t2lm_timer->timer_interval = 0;
@@ -2672,15 +2684,29 @@ wlan_mlo_t2lm_timer_start(struct wlan_objmgr_vdev *vdev,
 		return QDF_STATUS_E_NULL_VALUE;
 
 	if (t2lm_timer->timer_started)
-		qdf_timer_stop(&t2lm_timer->t2lm_timer);
+		qdf_hrtimer_cancel(&t2lm_timer->t2lm_timer);
 
 	t2lm_debug("t2lm timer started with interval %d ms", interval);
 	t2lm_timer->timer_interval = interval;
 	t2lm_timer->timer_started = true;
 	t2lm_timer->timer_out_time = target_out_time;
-	qdf_timer_start(&t2lm_timer->t2lm_timer, t2lm_timer->timer_interval);
+
+	qdf_hrtimer_start(&t2lm_timer->t2lm_timer,
+			  qdf_time_ms_to_ktime(t2lm_timer->timer_interval),
+			  QDF_HRTIMER_MODE_REL);
 
 	return QDF_STATUS_SUCCESS;
+}
+
+void wlan_t2lm_timer_stop(struct wlan_t2lm_timer *t2lm_timer)
+{
+	if (!t2lm_timer->timer_started)
+		return;
+
+	qdf_hrtimer_cancel(&t2lm_timer->t2lm_timer);
+	t2lm_timer->timer_started = false;
+	t2lm_timer->timer_interval = 0;
+	t2lm_timer->timer_out_time = 0;
 }
 
 QDF_STATUS
@@ -2697,12 +2723,8 @@ wlan_mlo_t2lm_timer_stop(struct wlan_objmgr_vdev *vdev)
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
-	if (t2lm_timer->timer_started) {
-		qdf_timer_stop(&t2lm_timer->t2lm_timer);
-		t2lm_timer->timer_started = false;
-		t2lm_timer->timer_interval = 0;
-		t2lm_timer->timer_out_time = 0;
-	}
+	wlan_t2lm_timer_stop(t2lm_timer);
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -2963,7 +2985,7 @@ wlan_mlo_t2lm_timer_deinit(struct wlan_objmgr_vdev *vdev)
 	t2lm_timer->timer_started = false;
 	t2lm_timer->timer_interval = 0;
 	t2lm_dev_lock_release(&vdev->mlo_dev_ctx->t2lm_ctx);
-	qdf_timer_free(&t2lm_timer->t2lm_timer);
+	qdf_hrtimer_kill(&t2lm_timer->t2lm_timer);
 	t2lm_dev_lock_destroy(&vdev->mlo_dev_ctx->t2lm_ctx);
 	return QDF_STATUS_SUCCESS;
 }

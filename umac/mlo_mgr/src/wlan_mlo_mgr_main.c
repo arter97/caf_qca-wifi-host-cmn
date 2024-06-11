@@ -959,6 +959,24 @@ QDF_STATUS wlan_mlo_check_valid_config(struct wlan_mlo_dev_context *ml_dev,
 	return QDF_STATUS_SUCCESS;
 }
 
+void mlo_t2lm_reset_established_and_upcoming_mapping(
+		struct wlan_mlo_dev_context *ml_dev)
+{
+	struct wlan_t2lm_info *t2lm;
+
+	/* Reset establishd T2LM */
+	qdf_mem_zero(&ml_dev->t2lm_ctx.established_t2lm,
+		     sizeof(struct wlan_mlo_t2lm_ie));
+
+	t2lm = &ml_dev->t2lm_ctx.established_t2lm.t2lm;
+	t2lm->direction = WLAN_T2LM_BIDI_DIRECTION;
+	t2lm->default_link_mapping = 1;
+
+	/* Reset upcoming T2LM */
+	qdf_mem_zero(&ml_dev->t2lm_ctx.upcoming_t2lm,
+		     sizeof(struct wlan_mlo_t2lm_ie));
+}
+
 /**
  * mlo_t2lm_ctx_init() - API to initialize the t2lm context with the default
  * values.
@@ -979,6 +997,9 @@ static inline void mlo_t2lm_ctx_init(struct wlan_mlo_dev_context *ml_dev,
 	t2lm->direction = WLAN_T2LM_BIDI_DIRECTION;
 	t2lm->default_link_mapping = 1;
 	t2lm->link_mapping_size = 0;
+
+	ml_dev->t2lm_ctx.mlo_dev_ctx = ml_dev;
+	ml_dev->t2lm_ctx.t2lm_timer.t2lm_ctx = &ml_dev->t2lm_ctx;
 
 	wlan_mlo_t2lm_timer_init(vdev);
 	wlan_mlo_t2lm_register_link_update_notify_handler(ml_dev);

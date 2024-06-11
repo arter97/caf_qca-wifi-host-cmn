@@ -321,6 +321,43 @@ release:
 	return vdev;
 }
 
+struct wlan_objmgr_vdev *mlo_get_first_active_vdev_by_ml_dev_ctx(
+		struct wlan_mlo_dev_context *dev_ctx)
+{
+	struct wlan_objmgr_vdev *vdev = NULL;
+	struct wlan_objmgr_vdev *tmp_vdev = NULL;
+	QDF_STATUS status;
+	int i;
+
+	if (!dev_ctx) {
+		mlo_err("Invalid input");
+		return NULL;
+	}
+
+	mlo_dev_lock_acquire(dev_ctx);
+
+	for (i = 0; i < QDF_ARRAY_SIZE(dev_ctx->wlan_vdev_list); i++) {
+		tmp_vdev = dev_ctx->wlan_vdev_list[i];
+
+		if (tmp_vdev && wlan_vdev_mlme_is_mlo_vdev(tmp_vdev)) {
+			if (wlan_vdev_mlme_is_active(tmp_vdev) !=
+						 QDF_STATUS_SUCCESS)
+				continue;
+
+			status = wlan_objmgr_vdev_try_get_ref(tmp_vdev,
+							      WLAN_MLO_MGR_ID);
+			if (QDF_IS_STATUS_SUCCESS(status)) {
+				vdev = tmp_vdev;
+				break;
+			}
+		}
+	}
+
+	mlo_dev_lock_release(dev_ctx);
+
+	return vdev;
+}
+
 void mlo_peer_get_vdev_list(struct wlan_objmgr_peer *peer,
 			    uint16_t *vdev_count,
 			    struct wlan_objmgr_vdev **wlan_vdev_list)

@@ -709,4 +709,14 @@ void mlo_ap_ml_ptqm_peerid_free(struct wlan_mlo_dev_context *ml_dev,
 				uint16_t mlo_peer_id)
 { }
 #endif /* QCA_SUPPORT_PRIMARY_LINK_MIGRATE */
+
+/**
+ * mlo_get_first_active_vdev_by_ml_dev_ctx() - API to get the first active
+ * vdev using MLO dev context.
+ * @dev_ctx:  ML dev pointer
+ *
+ * Return: Returns first active vdev from ml dev context.
+ */
+struct wlan_objmgr_vdev *mlo_get_first_active_vdev_by_ml_dev_ctx(
+				struct wlan_mlo_dev_context *dev_ctx);
 #endif

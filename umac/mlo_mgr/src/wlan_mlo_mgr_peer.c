@@ -27,6 +27,7 @@
 #include "wlan_mlo_mgr_setup.h"
 #include "wlan_utility.h"
 #include "wlan_mlo_epcs.h"
+#include "wlan_mlo_mgr_sta.h"
 
 static void mlo_partner_peer_create_post(struct wlan_mlo_dev_context *ml_dev,
 					 struct wlan_objmgr_vdev *vdev_link,
@@ -848,6 +849,9 @@ static void mlo_peer_free(struct wlan_mlo_peer_context *ml_peer)
 
 	mlo_debug("ML Peer " QDF_MAC_ADDR_FMT " is freed",
 		  QDF_MAC_ADDR_REF(ml_peer->peer_mld_addr.bytes));
+
+	wlan_t2lm_timer_stop(&ml_dev->t2lm_ctx.t2lm_timer);
+	mlo_t2lm_reset_established_and_upcoming_mapping(ml_dev);
 	ttlm_sm_destroy(ml_peer);
 	mlo_peer_lock_destroy(ml_peer);
 	epcs_dev_peer_lock_destroy(&ml_peer->epcs_info);

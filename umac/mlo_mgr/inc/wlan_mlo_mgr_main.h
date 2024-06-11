@@ -1042,6 +1042,15 @@ QDF_STATUS mlo_mgr_is_mld_has_active_link(bool *is_active)
 }
 #endif
 
+/**
+ * mlo_t2lm_reset_established_and_upcoming_mapping() - API to initialize the
+ * established and upcoming mapping to default values.
+ * @ml_dev: Pointer to ML Dev context
+ *
+ * Return: None
+ */
+void mlo_t2lm_reset_established_and_upcoming_mapping(
+	struct wlan_mlo_dev_context *ml_dev);
 #else
 static inline QDF_STATUS wlan_mlo_mgr_init(void)
 {

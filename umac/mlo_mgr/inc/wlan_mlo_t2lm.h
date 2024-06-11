@@ -23,6 +23,7 @@
 
 #include <wlan_cmn_ieee80211.h>
 #include <wlan_mlo_mgr_public_structs.h>
+#include <qdf_hrtimer.h>
 #include <wlan_mlo_t2lm.h>
 #ifdef WMI_AP_SUPPORT
 #include <wlan_cmn.h>
@@ -673,9 +674,10 @@ struct wlan_mlo_t2lm_ie {
  * @timer_started: T2LM timer started or not
  * @timer_out_time: T2LM timer target out time
  * @t2lm_dev_lock: lock to access struct
+ * @t2lm_ctx: Pointer to T2LM context
  */
 struct wlan_t2lm_timer {
-	qdf_timer_t t2lm_timer;
+	qdf_hrtimer_data_t t2lm_timer;
 	uint32_t timer_interval;
 	uint32_t timer_out_time;
 	bool timer_started;
@@ -684,6 +686,7 @@ struct wlan_t2lm_timer {
 #else
 	qdf_mutex_t t2lm_dev_lock;
 #endif
+	struct wlan_t2lm_context *t2lm_ctx;
 };
 
 struct wlan_mlo_dev_context;
@@ -721,6 +724,7 @@ typedef QDF_STATUS (*wlan_mlo_t2lm_link_update_handler)(
  * @link_update_callback_index: Link update callback index. This callback is
  *                              invoked as part of mapping switch time and
  *                              expected duration expiry.
+ * @mlo_dev_ctx: Pointer to mlo_dev context
  */
 struct wlan_t2lm_context {
 	struct wlan_mlo_t2lm_ie established_t2lm;
@@ -740,6 +744,7 @@ struct wlan_t2lm_context {
 	uint64_t mst_end_tsf;
 #endif
 	int link_update_callback_index;
+	struct wlan_mlo_dev_context *mlo_dev_ctx;
 };
 
 #ifdef WLAN_FEATURE_11BE
@@ -1020,12 +1025,12 @@ wlan_mlo_t2lm_timer_stop(struct wlan_objmgr_vdev *vdev);
 
 /**
  * wlan_mlo_t2lm_timer_expiry_handler() - API to handle t2lm timer expiry
- * @vdev: Pointer to vdev structure
+ * @arg: Pointer to hrtimer data
  *
- * Return: none
+ * Return: QDF hrtimer restart status
  */
-void
-wlan_mlo_t2lm_timer_expiry_handler(void *vdev);
+enum qdf_hrtimer_restart_status
+wlan_mlo_t2lm_timer_expiry_handler(qdf_hrtimer_data_t *arg);
 
 /**
  * wlan_handle_t2lm_timer() - API to handle TID-to-link mapping timer
@@ -1102,6 +1107,15 @@ QDF_STATUS wlan_get_t2lm_mapping_status(struct wlan_objmgr_vdev *vdev,
 QDF_STATUS
 wlan_send_peer_level_tid_to_link_mapping(struct wlan_objmgr_vdev *vdev,
 					 struct wlan_objmgr_peer *peer);
+
+/**
+ * wlan_t2lm_timer_stop() - API to stop the T2LM timer
+ * @t2lm_timer: Pointer to T2LM timer structure
+ *
+ * Return: None
+ */
+void wlan_t2lm_timer_stop(struct wlan_t2lm_timer *t2lm_timer);
+
 #else
 static inline QDF_STATUS wlan_mlo_parse_t2lm_ie(
 	struct wlan_t2lm_onging_negotiation_info *t2lm, uint8_t *ie,
@@ -1183,8 +1197,8 @@ wlan_mlo_t2lm_timer_stop(struct wlan_objmgr_vdev *vdev)
 	return QDF_STATUS_E_NOSUPPORT;
 }
 
-static inline void
-wlan_mlo_t2lm_timer_expiry_handler(void *vdev)
+static inline
+void wlan_t2lm_timer_stop(struct wlan_t2lm_timer *t2lm_timer)
 {}
 
 static inline QDF_STATUS
