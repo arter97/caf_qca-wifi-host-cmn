@@ -893,6 +893,8 @@ static QDF_STATUS mlo_peer_attach_link_peer(
 	struct wlan_objmgr_pdev *pdev;
 	struct wlan_objmgr_vdev *vdev;
 	uint16_t i;
+	bool nawds_peer = false;
+	bool mesh_peer = false;
 
 	if (!link_peer)
 		return QDF_STATUS_E_FAILURE;
@@ -900,6 +902,9 @@ static QDF_STATUS mlo_peer_attach_link_peer(
 	vdev = wlan_peer_get_vdev(link_peer);
 	if (!vdev)
 		return QDF_STATUS_E_FAILURE;
+
+	nawds_peer = wlan_mlo_peer_is_nawds(ml_peer);
+	mesh_peer = wlan_mlo_peer_is_mesh(ml_peer);
 
 	mlo_peer_lock_acquire(ml_peer);
 
@@ -934,6 +939,7 @@ static QDF_STATUS mlo_peer_attach_link_peer(
 		peer_entry->hw_link_id = wlan_mlo_get_pdev_hw_link_id(pdev);
 
 		if ((wlan_vdev_mlme_get_opmode(vdev) == QDF_STA_MODE) ||
+		    nawds_peer || mesh_peer ||
 		    ((wlan_vdev_mlme_get_opmode(vdev) == QDF_SAP_MODE) &&
 		     !vdev->mlo_dev_ctx->ap_ctx->mlo_link_reject))
 			mlo_peer_assign_primary_umac(ml_peer, peer_entry);
@@ -1702,6 +1708,9 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 		}
 	}
 
+	mlo_peer_populate_nawds_params(ml_peer, ml_info);
+	mlo_peer_populate_mesh_params(ml_peer, ml_info);
+
 	/* Populate Link peer pointer, peer MAC address,
 	 * MLD address. HW link ID, update ref count
 	 */
@@ -1771,9 +1780,12 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 	 * Allocate Primary UMAC, for STA mode or SAP with link reject
 	 * do the allocation based on assoc resp
 	 */
-	if ((wlan_vdev_mlme_get_opmode(vdev) == QDF_SAP_MODE) &&
-	    !ml_dev->ap_ctx->mlo_link_reject)
+	if (((wlan_vdev_mlme_get_opmode(vdev) == QDF_SAP_MODE) &&
+	     !ml_dev->ap_ctx->mlo_link_reject) ||
+	     wlan_mlo_peer_is_nawds(ml_peer) ||
+	     wlan_mlo_peer_is_mesh(ml_peer))
 		mlo_peer_allocate_primary_umac(ml_dev, ml_peer, tmp_link_vdevs);
+
 	wlan_ptqm_peer_migrate_ctx_alloc(ml_peer);
 
 	if (wlan_vdev_mlme_get_opmode(vdev) == QDF_SAP_MODE)
@@ -1781,9 +1793,6 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 
 	/* Store AID, MLO Peer pointer in link peer, take link peer ref count */
 	mlo_peer_populate_link_peer(ml_peer, link_peer);
-
-	mlo_peer_populate_nawds_params(ml_peer, ml_info);
-	mlo_peer_populate_mesh_params(ml_peer, ml_info);
 
 	if ((wlan_vdev_mlme_get_opmode(vdev) == QDF_SAP_MODE) ||
 		((wlan_vdev_mlme_get_opmode(vdev) == QDF_STA_MODE) &&
