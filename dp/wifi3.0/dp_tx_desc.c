@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -176,6 +176,82 @@ static void dp_tx_desc_pool_free_mem(struct dp_soc *soc, int8_t pool_id,
 }
 #endif
 
+#ifdef QCA_DP_OPTIMIZED_TX_DESC
+static inline QDF_STATUS
+dp_tx_desc_pool_comp_alloc_mem(struct dp_soc *soc,
+			       struct dp_tx_desc_pool_s *tx_desc_pool)
+{
+	uint16_t quota = 0, scale = 0;
+
+	if (!tx_desc_pool)
+		return QDF_STATUS_NOT_INITIALIZED;
+
+	scale = wlan_cfg_get_napi_scale_factor(soc->wlan_cfg_ctx);
+
+	if (!scale)
+		scale = QCA_NAPI_DEF_SCALE_BIN_SHIFT;
+
+	quota = NAPI_BUDGET_TO_INTERNAL_BUDGET(QCA_NAPI_BUDGET, scale);
+
+	tx_desc_pool->comp =
+		qdf_mem_malloc(sizeof(struct hal_tx_desc_comp_s) *
+			       (quota));
+	if (!tx_desc_pool->comp)
+		return QDF_STATUS_E_NOMEM;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline void
+dp_tx_desc_pool_comp_free_mem(struct dp_tx_desc_pool_s *tx_desc_pool)
+{
+	if (tx_desc_pool && tx_desc_pool->comp) {
+		qdf_mem_free(tx_desc_pool->comp);
+		tx_desc_pool->comp = NULL;
+	}
+}
+
+static inline void
+dp_spcl_tx_desc_comp_attach(struct dp_soc *soc, uint8_t pool_id,
+			    struct dp_tx_desc_pool_s *spcl_tx_desc_pool)
+{
+	struct dp_tx_desc_pool_s *tx_desc_pool_reg = NULL;
+
+	tx_desc_pool_reg = dp_get_tx_desc_pool(soc, pool_id);
+	spcl_tx_desc_pool->comp = tx_desc_pool_reg->comp;
+}
+
+static inline void
+dp_spcl_tx_desc_comp_deattach(struct dp_tx_desc_pool_s *spcl_tx_desc_pool)
+{
+	spcl_tx_desc_pool->comp = NULL;
+}
+
+#else
+static inline QDF_STATUS
+dp_tx_desc_pool_comp_alloc_mem(struct dp_soc *soc,
+			       struct dp_tx_desc_pool_s *tx_desc_pool)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline void
+dp_tx_desc_pool_comp_free_mem(struct dp_tx_desc_pool_s *tx_desc_pool)
+{
+}
+
+static inline void
+dp_spcl_tx_desc_comp_attach(struct dp_soc *soc, uint8_t pool_id,
+			    struct dp_tx_desc_pool_s *spcl_tx_desc_pool)
+{
+}
+
+static inline void
+dp_spcl_tx_desc_comp_deattach(struct dp_tx_desc_pool_s *spcl_tx_desc_pool)
+{
+}
+#endif /* QCA_DP_OPTIMIZED_TX_DESC */
+
 QDF_STATUS dp_tx_desc_pool_alloc(struct dp_soc *soc, uint8_t pool_id,
 				 uint32_t num_elem, bool spcl_tx_desc)
 {
@@ -191,10 +267,16 @@ QDF_STATUS dp_tx_desc_pool_alloc(struct dp_soc *soc, uint8_t pool_id,
 		tx_desc_pool = dp_get_spcl_tx_desc_pool(soc, pool_id);
 		desc_type = QDF_DP_TX_SPCL_DESC_TYPE;
 		num_elem_t = num_elem;
+		dp_spcl_tx_desc_comp_attach(soc, pool_id, tx_desc_pool);
 	} else {
 		tx_desc_pool = dp_get_tx_desc_pool(soc, pool_id);
 		desc_type = QDF_DP_TX_DESC_TYPE;
 		num_elem_t = dp_get_updated_tx_desc(soc->ctrl_psoc, pool_id, num_elem);
+		status = dp_tx_desc_pool_comp_alloc_mem(soc, tx_desc_pool);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			dp_err("failed to allocate comp in Tx desc pool");
+			return QDF_STATUS_E_NOMEM;
+		}
 	}
 
 	tx_desc_pool->desc_pages.page_size = DP_BLOCKMEM_SIZE;
@@ -227,9 +309,11 @@ void dp_tx_desc_pool_free(struct dp_soc *soc, uint8_t pool_id,
 	if (spcl_tx_desc) {
 		tx_desc_pool = dp_get_spcl_tx_desc_pool(soc, pool_id);
 		desc_type = QDF_DP_TX_SPCL_DESC_TYPE;
+		dp_spcl_tx_desc_comp_deattach(tx_desc_pool);
 	} else {
 		tx_desc_pool = dp_get_tx_desc_pool(soc, pool_id);
 		desc_type = QDF_DP_TX_DESC_TYPE;
+		dp_tx_desc_pool_comp_free_mem(tx_desc_pool);
 	}
 
 	if (tx_desc_pool->desc_pages.num_pages)

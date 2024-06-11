@@ -45,6 +45,16 @@
 #define DP_TX_DESC_ID_OFFSET_MASK  0x00000F
 #define DP_TX_DESC_ID_OFFSET_OS    0
 #else
+#ifdef QCA_DP_OPTIMIZED_TX_DESC
+#define DP_TX_DESC_ID_SPCL_MASK    0x100000
+#define DP_TX_DESC_ID_SPCL_OS      20
+#define DP_TX_DESC_ID_POOL_MASK    0x018000
+#define DP_TX_DESC_ID_POOL_OS      15
+#define DP_TX_DESC_ID_PAGE_MASK    0x007FC0
+#define DP_TX_DESC_ID_PAGE_OS      6
+#define DP_TX_DESC_ID_OFFSET_MASK  0x00003F
+#define DP_TX_DESC_ID_OFFSET_OS    0
+#else
 #define DP_TX_DESC_ID_SPCL_MASK    0x100000
 #define DP_TX_DESC_ID_SPCL_OS      20
 #define DP_TX_DESC_ID_POOL_MASK    0x018000
@@ -53,6 +63,7 @@
 #define DP_TX_DESC_ID_PAGE_OS      5
 #define DP_TX_DESC_ID_OFFSET_MASK  0x00001F
 #define DP_TX_DESC_ID_OFFSET_OS    0
+#endif /* QCA_DP_OPTIMIZED_TX_DESC */
 #endif /* WLAN_SOFTUMAC_SUPPORT */
 
 #ifndef CONFIG_BERYLLIUM
@@ -1331,6 +1342,7 @@ static inline void dp_tx_ext_desc_free(struct dp_soc *soc,
 	struct dp_tx_ext_desc_elem_s *elem, uint8_t desc_pool_id)
 {
 	desc_pool_id = dp_tx_ext_desc_pool_override(desc_pool_id);
+	elem->flags = 0;
 	qdf_spin_lock_bh(&soc->tx_ext_desc[desc_pool_id].lock);
 	elem->next = soc->tx_ext_desc[desc_pool_id].freelist;
 	soc->tx_ext_desc[desc_pool_id].freelist = elem;

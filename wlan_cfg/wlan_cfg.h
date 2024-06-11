@@ -327,6 +327,7 @@ struct wlan_srng_cfg {
  * @pkt_capture_mode: Packet capture mode config
  * @rx_mon_buf_ring_size: Rx monitor buf ring size
  * @tx_mon_buf_ring_size: Tx monitor buf ring size
+ * @tx_mon_ring_fill_level: Tx monitor ring fill level
  * @rx_rel_wbm2sw_ring_id: Rx WBM2SW ring id
  * @tx_rings_grp_bitmap: bitmap of group intr contexts which have
  *                       non-zero tx ring mask
@@ -540,6 +541,7 @@ struct wlan_cfg_dp_soc_ctxt {
 #endif
 	uint32_t rx_mon_buf_ring_size;
 	uint32_t tx_mon_buf_ring_size;
+	uint32_t tx_mon_ring_fill_level;
 	uint8_t rx_rel_wbm2sw_ring_id;
 	uint32_t tx_rings_grp_bitmap;
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
@@ -2667,6 +2669,15 @@ bool wlan_cfg_get_txmon_sw_peer_filtering(struct wlan_cfg_dp_soc_ctxt *cfg);
 void wlan_cfg_set_txmon_disable_hw_filter(struct wlan_cfg_dp_soc_ctxt *cfg,
 					  bool txmon_disable_hw_filter);
 bool wlan_cfg_get_txmon_disable_hw_filter(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_get_dp_soc_tx_mon_ring_fill_level () - get txmon ring fill level
+ * @cfg:  Configuration Handle
+ *
+ * Return: txmon ring fill level
+ */
+uint32_t
+wlan_cfg_get_dp_soc_tx_mon_ring_fill_level(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 #ifdef WLAN_TX_PKT_CAPTURE_ENH
 /**

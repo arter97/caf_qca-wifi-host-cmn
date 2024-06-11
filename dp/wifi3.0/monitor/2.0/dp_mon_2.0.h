@@ -401,6 +401,7 @@ void dp_mon_pool_frag_unmap_and_free(struct dp_soc *dp_soc,
  *	       interrupt.
  * @tail: tail of descs list
  * @replenish_cnt_ref: pointer to update replenish_cnt
+ * @ring_type: Ring type
  *
  * Return: return success or failure
  */
@@ -410,7 +411,8 @@ QDF_STATUS dp_mon_buffers_replenish(struct dp_soc *dp_soc,
 				uint32_t num_req_buffers,
 				union dp_mon_desc_list_elem_t **desc_list,
 				union dp_mon_desc_list_elem_t **tail,
-				uint32_t *replenish_cnt_ref);
+				uint32_t *replenish_cnt_ref,
+				int ring_type);
 
 /**
  * dp_mon_filter_show_tx_filter_be() - Show the set filters

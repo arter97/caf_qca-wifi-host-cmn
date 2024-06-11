@@ -27,15 +27,6 @@
 #endif
 #include "qdf_ssr_driver_dump.h"
 
-/* mapping NAPI budget 0 to internal budget 0
- * NAPI budget 1 to internal budget [1,scaler -1]
- * NAPI budget 2 to internal budget [scaler, 2 * scaler - 1], etc
- */
-#define NAPI_BUDGET_TO_INTERNAL_BUDGET(n, s) \
-	(((n) << (s)) - 1)
-#define INTERNAL_BUDGET_TO_NAPI_BUDGET(n, s) \
-	(((n) + 1) >> (s))
-
 static struct hif_exec_context *hif_exec_tasklet_create(void);
 
 #ifdef WLAN_FEATURE_DP_EVENT_HISTORY

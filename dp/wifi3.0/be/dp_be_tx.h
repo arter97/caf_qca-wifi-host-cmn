@@ -427,4 +427,21 @@ bool dp_mlo_tx_pool_unmap_be(struct dp_soc *soc,
 void
 dp_tx_override_flow_pool_id_be(struct dp_vdev *vdev,
 			       struct dp_tx_queue *queue);
+/**
+ * dp_update_ppeds_tx_comp_stats() - Update PPeds Tx completion stats
+ * @soc: dp soc handle
+ * @txrx_peer: txrx peer handle
+ * @ts: Completion stats buffer
+ * @desc: Tx descriptor
+ * @ring_id: Ring id on which buffer is received
+ * @comp_index: Completion status position index
+ *
+ * Return: None
+ */
+void
+dp_update_ppeds_tx_comp_stats(struct dp_soc *soc,
+			      struct dp_txrx_peer *txrx_peer,
+			      struct hal_tx_completion_status *ts,
+			      struct dp_tx_desc_s *desc,
+			      uint8_t ring_id, uint16_t comp_index);
 #endif

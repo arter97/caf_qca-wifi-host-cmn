@@ -1042,11 +1042,10 @@ int htt_h2t_tx_ring_cfg(struct htt_soc *htt_soc, int pdev_id,
 	int target_pdev_id;
 	QDF_STATUS status;
 
-	htt_msg = qdf_nbuf_alloc(soc->osdev,
-				 HTT_MSG_BUF_SIZE(HTT_TX_MONITOR_CFG_SZ),
-
-	/* reserve room for the HTC header */
-	HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING, 4, TRUE);
+	htt_msg = qdf_nbuf_alloc_no_recycler(
+			HTT_MSG_BUF_SIZE(HTT_TX_MONITOR_CFG_SZ),
+			/* reserve room for the HTC header */
+			HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING, 4);
 	if (!htt_msg)
 		goto fail0;
 
@@ -1597,8 +1596,6 @@ void dp_mon_filter_reset_tx_mon_mode_2_0(struct dp_pdev *pdev)
 	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
 	mon_soc = soc->monitor_soc;
 	mon_soc_be = dp_get_be_mon_soc_from_dp_mon_soc(mon_soc);
-	mon_soc_be->tx_mon_ring_fill_level = DP_MON_RING_FILL_LEVEL_DEFAULT;
-
 	mon_pdev_be->filter_be[mode][srng_type] = filter;
 }
 #endif

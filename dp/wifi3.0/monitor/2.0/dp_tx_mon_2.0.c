@@ -290,7 +290,8 @@ dp_tx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 					 mon_desc_list.tx_mon_reap_cnt,
 					 &mon_desc_list.desc_list,
 					 &mon_desc_list.tail,
-					 &replenish_cnt);
+					 &replenish_cnt,
+					 TX_MONITOR_BUF);
 	}
 	qdf_spin_unlock_bh(&mon_mac->mon_lock);
 	dp_mon_debug("mac_id: %d, work_done:%d tx_monitor_reap_cnt:%d",
@@ -451,7 +452,8 @@ dp_tx_mon_buffers_alloc(struct dp_soc *soc, uint32_t size)
 	return dp_mon_buffers_replenish(soc, mon_buf_ring,
 					tx_mon_desc_pool,
 					size,
-					&desc_list, &tail, NULL);
+					&desc_list, &tail, NULL,
+					TX_MONITOR_BUF);
 }
 
 #ifdef WLAN_TX_PKT_CAPTURE_ENH_BE
@@ -687,10 +689,15 @@ dp_config_enh_tx_monitor_2_0(struct dp_pdev *pdev, uint8_t val)
 	struct dp_pdev_tx_monitor_be *tx_mon_be =
 			&mon_pdev_be->tx_monitor_be;
 	struct dp_soc *soc = pdev->soc;
+	struct dp_mon_soc *mon_soc = soc->monitor_soc;
+	struct dp_mon_soc_be *mon_soc_be =
+		dp_get_be_mon_soc_from_dp_mon_soc(mon_soc);
 	uint16_t num_of_buffers;
 	QDF_STATUS status;
 
 	soc_cfg_ctx = soc->wlan_cfg_ctx;
+	num_of_buffers = wlan_cfg_get_dp_soc_tx_mon_buf_ring_size(soc_cfg_ctx);
+
 	switch (val) {
 	case TX_MON_BE_DISABLE:
 	{
@@ -704,7 +711,8 @@ dp_config_enh_tx_monitor_2_0(struct dp_pdev *pdev, uint8_t val)
 	case TX_MON_BE_PKT_CAP_CUSTOM:
 	case TX_MON_BE_FULL_CAPTURE:
 	{
-		num_of_buffers = wlan_cfg_get_dp_soc_tx_mon_buf_ring_size(soc_cfg_ctx);
+		mon_soc_be->tx_mon_ring_fill_level = 0;
+
 		status = dp_vdev_set_monitor_mode_buf_rings_tx_2_0(pdev,
 								   num_of_buffers);
 		if (status != QDF_STATUS_SUCCESS) {
@@ -722,8 +730,9 @@ dp_config_enh_tx_monitor_2_0(struct dp_pdev *pdev, uint8_t val)
 	}
 	case TX_MON_BE_PEER_FILTER:
 	{
-		status = dp_vdev_set_monitor_mode_buf_rings_tx_2_0(pdev,
-								   DP_MON_RING_FILL_LEVEL_DEFAULT);
+		mon_soc_be->tx_mon_ring_fill_level = 0;
+		status =
+		dp_vdev_set_monitor_mode_buf_rings_tx_2_0(pdev, num_of_buffers);
 		if (status != QDF_STATUS_SUCCESS) {
 			dp_mon_err("Tx monitor buffer allocation failed");
 			return status;
@@ -1613,6 +1622,7 @@ dp_config_enh_tx_core_monitor_2_0(struct dp_pdev *pdev, uint8_t val)
 	}
 	case TX_MON_BE_FRM_WRK_FULL_CAPTURE:
 	{
+		mon_soc_be->tx_mon_ring_fill_level = 0;
 		num_of_buffers = wlan_cfg_get_dp_soc_tx_mon_buf_ring_size(soc_cfg_ctx);
 		status = dp_vdev_set_monitor_mode_buf_rings_tx_2_0(pdev,
 								   num_of_buffers);
@@ -1630,6 +1640,8 @@ dp_config_enh_tx_core_monitor_2_0(struct dp_pdev *pdev, uint8_t val)
 	}
 	case TX_MON_BE_FRM_WRK_128B_CAPTURE:
 	{
+		mon_soc_be->tx_mon_ring_fill_level =
+						DP_MON_RING_FILL_LEVEL_DEFAULT;
 		status = dp_vdev_set_monitor_mode_buf_rings_tx_2_0(pdev,
 								   DP_MON_RING_FILL_LEVEL_DEFAULT);
 		if (status != QDF_STATUS_SUCCESS) {

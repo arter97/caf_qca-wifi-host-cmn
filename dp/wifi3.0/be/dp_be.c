@@ -2932,6 +2932,31 @@ static void dp_mlo_mcast_reset_pri_mcast(struct dp_vdev_be *be_vdev,
 
 	be_ptnr_vdev->mcast_primary = false;
 }
+
+/**
+ * dp_txrx_get_vdev_mcast_param_be() - Target specific ops for getting vdev
+ * params related to multicast
+ * @soc: DP soc handle
+ * @vdev: pointer to vdev structure
+ * @val: buffer address
+ *
+ * Return: QDF_STATUS
+ */
+static
+QDF_STATUS dp_txrx_get_vdev_mcast_param_be(struct dp_soc *soc,
+					   struct dp_vdev *vdev,
+					   cdp_config_param_type *val)
+{
+	struct dp_vdev_be *be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
+
+	if (be_vdev->mcast_primary)
+		val->cdp_vdev_param_mcast_vdev = true;
+	else
+		val->cdp_vdev_param_mcast_vdev = false;
+
+	return QDF_STATUS_SUCCESS;
+}
+
 #endif
 
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP) && \
@@ -3065,29 +3090,6 @@ static void dp_txrx_reset_mlo_mcast_primary_vdev_param_be(
 				   HAL_TX_MCAST_CTRL_FW_EXCEPTION);
 }
 
-/**
- * dp_txrx_get_vdev_mcast_param_be() - Target specific ops for getting vdev
- *                                      params related to multicast
- * @soc: DP soc handle
- * @vdev: pointer to vdev structure
- * @val: buffer address
- *
- * Return: QDF_STATUS
- */
-static
-QDF_STATUS dp_txrx_get_vdev_mcast_param_be(struct dp_soc *soc,
-					   struct dp_vdev *vdev,
-					   cdp_config_param_type *val)
-{
-	struct dp_vdev_be *be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
-
-	if (be_vdev->mcast_primary)
-		val->cdp_vdev_param_mcast_vdev = true;
-	else
-		val->cdp_vdev_param_mcast_vdev = false;
-
-	return QDF_STATUS_SUCCESS;
-}
 #else
 
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MCAST_MLO_SAP)
@@ -3125,13 +3127,6 @@ static void dp_txrx_set_mlo_mcast_primary_vdev_param_be(
 					cdp_config_param_type val)
 {
 }
-#endif
-
-static void dp_txrx_reset_mlo_mcast_primary_vdev_param_be(
-					struct dp_vdev *vdev,
-					cdp_config_param_type val)
-{
-}
 
 static
 QDF_STATUS dp_txrx_get_vdev_mcast_param_be(struct dp_soc *soc,
@@ -3139,6 +3134,14 @@ QDF_STATUS dp_txrx_get_vdev_mcast_param_be(struct dp_soc *soc,
 					   cdp_config_param_type *val)
 {
 	return QDF_STATUS_SUCCESS;
+}
+
+#endif
+
+static void dp_txrx_reset_mlo_mcast_primary_vdev_param_be(
+					struct dp_vdev *vdev,
+					cdp_config_param_type val)
+{
 }
 
 static
@@ -3919,6 +3922,8 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_txrx_ppeds_clear_rings_stats = dp_ppeds_clear_rings_stats;
 	arch_ops->dp_tx_ppeds_cfg_astidx_cache_mapping =
 				dp_tx_ppeds_cfg_astidx_cache_mapping;
+	arch_ops->dp_tx_update_ppeds_tx_comp_stats =
+				dp_update_ppeds_tx_comp_stats;
 #ifdef DP_UMAC_HW_RESET_SUPPORT
 	arch_ops->txrx_soc_ppeds_interrupt_stop = dp_ppeds_interrupt_stop_be;
 	arch_ops->txrx_soc_ppeds_interrupt_start = dp_ppeds_interrupt_start_be;

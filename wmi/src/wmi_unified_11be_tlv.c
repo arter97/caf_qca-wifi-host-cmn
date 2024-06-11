@@ -599,12 +599,20 @@ populate_disallowed_mode_bmap(uint8_t *buf_ptr,
 {
 	uint8_t i;
 	wmi_disallowed_mlo_mode_bitmap_param *disallow_mode_bmap;
+	struct ml_link_disallow_mode_bitmap *disallow_mode_link_bmap;
 
 	if (!buf_ptr) {
 		wmi_err("Buffer pointer is NULL");
 		return NULL;
 	}
+	if (param->num_disallow_mode_comb >
+			QDF_ARRAY_SIZE(param->disallow_mode_link_bmap)) {
+		wmi_err("invalid num_disallow_mode_comb %d",
+			param->num_disallow_mode_comb);
+		return NULL;
+	}
 
+	disallow_mode_link_bmap = &param->disallow_mode_link_bmap[0];
 	disallow_mode_bmap =
 		(wmi_disallowed_mlo_mode_bitmap_param *)buf_ptr;
 	*tlv_len = WMITLV_GET_STRUCT_TLVLEN
@@ -613,22 +621,27 @@ populate_disallowed_mode_bmap(uint8_t *buf_ptr,
 	for (i = 0; i < param->num_disallow_mode_comb; i++) {
 		WMITLV_SET_HDR(&disallow_mode_bmap->tlv_header, 0, *tlv_len);
 		disallow_mode_bmap->disallowed_mode_bitmap =
-			param->disallow_mode_link_bmap->disallowed_mode;
+			disallow_mode_link_bmap->disallowed_mode;
 		disallow_mode_bmap->ieee_link_id_comb =
-			param->disallow_mode_link_bmap->ieee_link_id_comb;
-		WMI_MLO_IEEE_LINK_ID_COMB_SET_LINK_ID1(disallow_mode_bmap->ieee_link_id_comb,
-						       param->disallow_mode_link_bmap->ieee_link_id[0]);
-		WMI_MLO_IEEE_LINK_ID_COMB_SET_LINK_ID2(disallow_mode_bmap->ieee_link_id_comb,
-						       param->disallow_mode_link_bmap->ieee_link_id[1]);
-		WMI_MLO_IEEE_LINK_ID_COMB_SET_LINK_ID3(disallow_mode_bmap->ieee_link_id_comb,
-						       param->disallow_mode_link_bmap->ieee_link_id[2]);
-		WMI_MLO_IEEE_LINK_ID_COMB_SET_LINK_ID4(disallow_mode_bmap->ieee_link_id_comb,
-						       param->disallow_mode_link_bmap->ieee_link_id[3]);
+				disallow_mode_link_bmap->ieee_link_id_comb;
+		WMI_MLO_IEEE_LINK_ID_COMB_SET_LINK_ID1(
+				disallow_mode_bmap->ieee_link_id_comb,
+				disallow_mode_link_bmap->ieee_link_id[0]);
+		WMI_MLO_IEEE_LINK_ID_COMB_SET_LINK_ID2(
+				disallow_mode_bmap->ieee_link_id_comb,
+				disallow_mode_link_bmap->ieee_link_id[1]);
+		WMI_MLO_IEEE_LINK_ID_COMB_SET_LINK_ID3(
+				disallow_mode_bmap->ieee_link_id_comb,
+				disallow_mode_link_bmap->ieee_link_id[2]);
+		WMI_MLO_IEEE_LINK_ID_COMB_SET_LINK_ID4(
+				disallow_mode_bmap->ieee_link_id_comb,
+				disallow_mode_link_bmap->ieee_link_id[3]);
 
 		wmi_debug("entry[%d]: disallowed_mode %d ieee_link_id_comb 0x%x",
 			  i, disallow_mode_bmap->disallowed_mode_bitmap,
 			  disallow_mode_bmap->ieee_link_id_comb);
 		disallow_mode_bmap++;
+		disallow_mode_link_bmap++;
 	}
 	buf_ptr += sizeof(*disallow_mode_bmap) * param->num_disallow_mode_comb;
 

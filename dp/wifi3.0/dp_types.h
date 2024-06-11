@@ -705,6 +705,7 @@ struct dp_tx_ext_desc_pool_s {
 	qdf_dma_mem_context(memctx);
 };
 
+#ifdef QCA_DP_OPTIMIZED_TX_DESC
 /**
  * struct dp_tx_desc_s - Tx Descriptor
  * @next: Next in the chain of descriptors in freelist or in the completion list
@@ -744,6 +745,38 @@ struct dp_tx_desc_s {
 	uint32_t magic;
 	uint64_t timestamp_tick;
 #endif
+	uint16_t peer_id;
+	uint8_t vdev_id;
+	uint8_t tx_status:5,
+		buffer_src:3;
+	uint8_t frm_type:4,
+		pool_id:4;
+	uint8_t pkt_offset:6,
+		tx_encap_type:2;
+	uint32_t flags;
+	uint32_t id;
+	qdf_dma_addr_t dma_addr;
+	struct dp_pdev *pdev;
+	struct dp_tx_ext_desc_elem_s *msdu_ext_desc;
+	qdf_ktime_t timestamp;
+#ifdef WLAN_FEATURE_TX_LATENCY_STATS
+	qdf_ktime_t driver_egress_ts;
+	qdf_ktime_t driver_ingress_ts;
+#endif
+#ifdef WLAN_SOFTUMAC_SUPPORT
+	void *tcl_cmd_vaddr;
+	qdf_dma_addr_t tcl_cmd_paddr;
+#endif
+};
+#else /* QCA_DP_OPTIMIZED_TX_DESC */
+struct dp_tx_desc_s {
+	struct dp_tx_desc_s *next;
+	qdf_nbuf_t nbuf;
+	uint16_t length;
+#ifdef DP_TX_TRACKING
+	uint32_t magic;
+	uint64_t timestamp_tick;
+#endif
 	uint32_t flags;
 	uint32_t id;
 	qdf_dma_addr_t dma_addr;
@@ -769,6 +802,7 @@ struct dp_tx_desc_s {
 	qdf_dma_addr_t tcl_cmd_paddr;
 #endif
 };
+#endif /* QCA_DP_OPTIMIZED_TX_DESC */
 
 #ifdef QCA_AC_BASED_FLOW_CONTROL
 /**
@@ -879,6 +913,7 @@ struct dp_tx_tso_num_seg_pool_s {
  * @elem_count:
  * @num_free: Number of free descriptors
  * @lock: Lock for descriptor allocation/free from/to the pool
+ * @comp: Tx completion status structure
  */
 struct dp_tx_desc_pool_s {
 	uint16_t elem_size;
@@ -910,6 +945,9 @@ struct dp_tx_desc_pool_s {
 	uint16_t elem_count;
 	uint32_t num_free;
 	qdf_spinlock_t lock;
+#endif
+#ifdef QCA_DP_OPTIMIZED_TX_DESC
+	struct hal_tx_desc_comp_s *comp;
 #endif
 };
 
@@ -2419,6 +2457,7 @@ enum dp_context_type {
  * @dp_tx_ppeds_cfg_astidx_cache_mapping:
  * @dp_txrx_ppeds_rings_stats: Printing the util stats of ring
  * @dp_txrx_ppeds_clear_rings_stats: Clearing the ring util stats
+ * @dp_tx_update_ppeds_tx_comp_stats: Update ppeds Tx completion stats
  * @txrx_soc_ppeds_start:
  * @txrx_soc_ppeds_stop:
  * @dp_register_ppeds_interrupts:
@@ -2669,6 +2708,12 @@ struct dp_arch_ops {
 						     bool peer_map);
 	void (*dp_txrx_ppeds_rings_stats)(struct dp_soc *soc);
 	void (*dp_txrx_ppeds_clear_rings_stats)(struct dp_soc *soc);
+	void (*dp_tx_update_ppeds_tx_comp_stats)(struct dp_soc *soc,
+						 struct dp_txrx_peer *txrx_peer,
+						 struct hal_tx_completion_status *ts,
+						 struct dp_tx_desc_s *desc,
+						 uint8_t ring_id,
+						 uint16_t comp_index);
 #endif
 	bool (*ppeds_handle_attached)(struct dp_soc *soc);
 	QDF_STATUS (*txrx_soc_ppeds_start)(struct dp_soc *soc);

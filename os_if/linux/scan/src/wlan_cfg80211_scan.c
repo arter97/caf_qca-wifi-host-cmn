@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -44,6 +44,7 @@
 #ifdef FEATURE_WLAN_DIAG_SUPPORT
 #include "host_diag_core_event.h"
 #endif
+#include "utils_mlo.h"
 
 const struct nla_policy cfg80211_scan_policy[
 			QCA_WLAN_VENDOR_ATTR_SCAN_MAX + 1] = {
@@ -2089,16 +2090,82 @@ wlan_fill_per_chain_rssi(struct cfg80211_inform_bss *data,
 }
 #endif
 
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+static QDF_STATUS
+check_persta_info_in_probe_resp(struct wlan_cfg80211_inform_bss *bss)
+{
+	int type, subtype;
+	QDF_STATUS qdf_status;
+	uint8_t *ml_ie = NULL;
+	qdf_size_t ml_ie_len = 0;
+	struct mlo_partner_info partner_info = {0};
+	uint8_t *probe_resp_ies_ptr;
+	qdf_size_t probe_resp_ies_len;
+
+	if (!bss) {
+		osif_err("BSS is null");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	type = qdf_le16_to_cpu(bss->mgmt->frame_control) & IEEE80211_FC0_TYPE_MASK;
+	subtype = qdf_le16_to_cpu(bss->mgmt->frame_control) & IEEE80211_FC0_SUBTYPE_MASK;
+
+	if ((type == IEEE80211_FC0_TYPE_MGT) &&
+	    (subtype == IEEE80211_FC0_SUBTYPE_PROBE_RESP)) {
+		probe_resp_ies_ptr = bss->mgmt->u.probe_resp.variable;
+		probe_resp_ies_len = bss->frame_len - WLAN_MAC_HDR_LEN_3A - WLAN_PROBE_RESP_IES_OFFSET;
+		qdf_status = util_find_mlie(probe_resp_ies_ptr, probe_resp_ies_len,
+					    &ml_ie, (qdf_size_t *)&ml_ie_len);
+		if (QDF_IS_STATUS_SUCCESS(qdf_status) && ml_ie) {
+			qdf_status = util_get_bvmlie_persta_partner_info(ml_ie,
+									 ml_ie_len,
+									 &partner_info);
+			if (QDF_IS_STATUS_SUCCESS(qdf_status)) {
+				if (partner_info.num_partner_links > 0)
+					return QDF_STATUS_E_FAILURE;
+			}
+		}
+	}
+	return QDF_STATUS_SUCCESS;
+}
+#else
+static QDF_STATUS
+check_persta_info_in_probe_resp(struct wlan_cfg80211_inform_bss *bss)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 struct cfg80211_bss *
 wlan_cfg80211_inform_bss_frame_data(struct wiphy *wiphy,
 		struct wlan_cfg80211_inform_bss *bss)
 {
 	struct cfg80211_inform_bss data  = {0};
+	QDF_STATUS qdf_status;
 
 	if (!bss) {
 		osif_err("bss is null");
 		return NULL;
 	}
+
+	/* In 6.6 kernel, cfg80211_parse_ml_sta_data API parses per-sta
+	 * profile from ML probe and generates a new probe response for
+	 * partner link. Observed missing MLIE in partner probe response
+	 * and corrupted RNR info.
+	 *
+	 * For WDS STA, parsing ML probe is not yet supported in driver.
+	 * Since MLIE is not present in the probe response, the information
+	 * provided by kernel to supplicant leads to SLO association.
+	 *
+	 * So add the following WAR skip sending ML probe in case of WDS
+	 * STA to kernel.
+	 */
+	qdf_status = check_persta_info_in_probe_resp(bss);
+	if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
+		osif_err("Skip sending ML Probe to kernel for STA");
+		return NULL;
+	}
+
 	wlan_fill_per_chain_rssi(&data, bss);
 
 	data.chan = bss->chan;

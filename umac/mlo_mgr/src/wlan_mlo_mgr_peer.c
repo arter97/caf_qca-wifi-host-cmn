@@ -2905,7 +2905,7 @@ wlan_mlo_ap_vdev_find_assoc_entry(struct wlan_objmgr_vdev *vdev,
 
 	assoc_list = &mld_ctx->ap_ctx->assoc_list;
 	if (qdf_list_empty(&assoc_list->peer_list)) {
-		mlo_info("list is empty");
+		mlo_debug("list is empty");
 		return NULL;
 	}
 	qdf_spin_lock_bh(&assoc_list->list_lock);

@@ -64,8 +64,7 @@
 #define WLAN_IPA_CLIENT_MAX_IFACE           MAX_IPA_IFACE
 #define WLAN_IPA_MAX_SYSBAM_PIPE            4
 
-#if defined(IPA_WDS_EASYMESH_FEATURE) || defined(QCA_WIFI_QCN9224) || \
-	(defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1))
+#if defined(IPA_WDS_EASYMESH_FEATURE) || defined(QCA_WIFI_QCN9224)
 #define WLAN_IPA_MAX_SESSION                MAX_IPA_IFACE //7
 #else
 #define WLAN_IPA_MAX_SESSION                5
@@ -565,17 +564,47 @@ struct uc_rm_work_struct {
 };
 
 /**
+ * struct msg_elem
+ * @vdev_id: vdev id
+ * @nbuf: nbuf
+ * @op_code: IPA Operation type
+ */
+struct msg_elem {
+	uint8_t vdev_id;
+	qdf_nbuf_t nbuf;
+	uint8_t op_code;
+};
+
+/**
+ * struct op_msg_list
+ * @hp: hp of list
+ * @tp: tp of list
+ * @entries: list of messages
+ * @list_size: max list size
+ */
+struct op_msg_list {
+	uint16_t hp;
+	uint16_t tp;
+	struct msg_elem *entries;
+	uint16_t list_size;
+};
+
+/**
  * struct uc_op_work_struct
  * @work: uC OP work
  * @msg: OP message
  * @osdev: pointer to qdf net device, used by osif_psoc_sync_trans_start_wait
  * @ipa_priv_bp: back pointer to ipa_obj
+ * @msg_list: list of messages, to be used in case of parallel msgs
+ * @flag: flag to be set when msg list is required
  */
 struct uc_op_work_struct {
 	qdf_work_t work;
 	struct op_msg_type *msg;
 	qdf_device_t osdev;
 	struct wlan_ipa_priv *ipa_priv_bp;
+	struct op_msg_list *msg_list;
+	uint16_t flag;
 };
 
 /**
@@ -727,6 +756,8 @@ struct wlan_ipa_evt_wq {
  * @clk_vote_cnt: cnt of clock vote
  * @clk_unvote_req_cnt: cnt of clock unvote
  * @tput_del_cnt: cnt of filters deleted due to high tput
+ * @reinject_pkt_enq_fail_cnt: cnt of pkts failed to enqueue
+ * in WQ after reinjection
  */
 struct opt_dp_ctrl_stats {
 	int flt_add_req_cnt;
@@ -738,6 +769,7 @@ struct opt_dp_ctrl_stats {
 	int clk_vote_cnt;
 	int clk_unvote_req_cnt;
 	int tput_del_cnt;
+	int reinject_pkt_enq_fail_cnt;
 };
 
 /* IPA private context structure definition */

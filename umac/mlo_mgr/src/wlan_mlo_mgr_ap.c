@@ -88,6 +88,13 @@ bool mlo_ap_vdev_attach(struct wlan_objmgr_vdev *vdev,
 #else
 
 #if defined(WLAN_FEATURE_MULTI_LINK_SAP) && defined(WLAN_MCAST_MLO_SAP)
+/**
+ * wlan_mlme_mlo_set_mcast_vdev() - Set mcast flag for link VDEVs of MLD
+ * @vdev: vdev pointer
+ * @mcast_vdev: mcast flag
+ *
+ * Return: None.
+ */
 static void
 wlan_mlme_mlo_set_mcast_vdev(struct wlan_objmgr_vdev *vdev,
 			     bool mcast_vdev)
@@ -112,11 +119,42 @@ wlan_mlme_mlo_set_mcast_vdev(struct wlan_objmgr_vdev *vdev,
 	cdp_txrx_set_vdev_param(soc_txrx_handle, vdev_id,
 				CDP_SET_MCAST_VDEV, val);
 }
+
+/**
+ * wlan_mlme_mlo_get_mcast_vdev() - Get mcast flag of link VDEVs of MLD
+ * @vdev: vdev pointer
+ *
+ * Return: True if mcast set otherwise false.
+ */
+static bool
+wlan_mlme_mlo_get_mcast_vdev(struct wlan_objmgr_vdev *vdev)
+{
+	ol_txrx_soc_handle soc_txrx_handle;
+	struct wlan_objmgr_psoc *psoc;
+	uint8_t vdev_id;
+	cdp_config_param_type val = {0};
+
+	vdev_id = wlan_vdev_get_id(vdev);
+	psoc = wlan_vdev_get_psoc(vdev);
+	soc_txrx_handle = wlan_psoc_get_dp_handle(psoc);
+
+	cdp_txrx_get_vdev_param(soc_txrx_handle, vdev_id,
+				CDP_SET_MCAST_VDEV, &val);
+	mlo_debug("mcast vdev flag is %d for vdev_id %d",
+		  val.cdp_vdev_param_mcast_vdev, vdev_id);
+	return val.cdp_vdev_param_mcast_vdev;
+}
 #else
 static void
 wlan_mlme_mlo_set_mcast_vdev(struct wlan_objmgr_vdev *vdev,
 			     bool mcast_vdev)
 {
+}
+
+static bool
+wlan_mlme_mlo_get_mcast_vdev(struct wlan_objmgr_vdev *vdev)
+{
+	return true;
 }
 #endif
 
@@ -143,11 +181,17 @@ bool mlo_ap_vdev_attach(struct wlan_objmgr_vdev *vdev,
 	dev_ctx->ap_ctx->num_ml_vdevs = vdev_count;
 	mlo_dev_lock_release(dev_ctx);
 
-	/* set the flag only for first link */
-	if (dev_ctx->wlan_vdev_count == 1) {
-		mlo_debug("set mcast flag for vdev %d", wlan_vdev_get_id(vdev));
-		wlan_mlme_mlo_set_mcast_vdev(vdev, true);
-	}
+	/*
+	 * Need to always set the mcast flag for first link.
+	 * Consider below two cases:
+	 * for normal link start up, set the flag only for first link.
+	 * for ssr case, since the wlan_vdev_count will be max supported
+	 * link number when come here when attach first link. So do not
+	 * use the count as the condition to set the flag.
+	 */
+	if (!wlan_mlme_mlo_get_mcast_vdev(dev_ctx->wlan_vdev_list[0]))
+		wlan_mlme_mlo_set_mcast_vdev(dev_ctx->wlan_vdev_list[0], true);
+
 	return true;
 }
 #endif
