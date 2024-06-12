@@ -81,6 +81,15 @@ uint32_t qca_mlo_get_mark_metadata(struct qca_mlo_metadata_param *mlo_param)
 		return mlo_key;
 	}
 
+	/* If the netdev is vlan, it may not have ieee80211_ptr.
+	 * In that case fetch the ieee80211_ptr from its top most parent
+	 */
+	if (qdf_net_if_is_vlan_dev((struct qdf_net_if *)dest_dev)) {
+		dest_dev = vlan_dev_real_dev(dest_dev);
+		if (!dest_dev)
+			return mlo_key;
+	}
+
 	if (!dest_dev->ieee80211_ptr)
 		return mlo_key;
 
