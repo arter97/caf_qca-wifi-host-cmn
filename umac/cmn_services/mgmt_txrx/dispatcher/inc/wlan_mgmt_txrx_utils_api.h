@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -59,6 +59,16 @@
 	QDF_TRACE_INFO_NO_FL(QDF_MODULE_ID_MGMT_TXRX, params)
 #define mgmttxrx_nofl_debug(params...) \
 	QDF_TRACE_DEBUG_NO_FL(QDF_MODULE_ID_MGMT_TXRX, params)
+
+/**
+ * mgmt_txrx_frame_hex_dump() - Print the type and dump the rx tx frame
+ * @frame_data: The base address of the mgmt frame data to be logged.
+ * @frame_len: The size of the frame to be logged.
+ * @is_tx: is tx frame
+ *
+ * Return:  None
+ */
+void mgmt_txrx_frame_hex_dump(void *frame_data, int frame_len, bool is_tx);
 
 /**
  * enum mgmt_subtype - enum of mgmt. subtypes
