@@ -1755,7 +1755,9 @@ static void __wlan_ipa_w2i_cb(void *priv, qdf_ipa_dp_evt_type_t evt,
 			if (iface_context->device_mode == QDF_SAP_MODE &&
 			    !wlan_ipa_eapol_intrabss_fwd_check(ipa_ctx,
 					      iface_context->session_id, skb)) {
-				ipa_err_rl("EAPOL intrabss fwd drop DA:" QDF_MAC_ADDR_FMT,
+				ipa_err_rl("id %u EAPOL intrabss fwd drop DA: "
+					   QDF_MAC_ADDR_FMT,
+					   iface_context->session_id,
 					   QDF_MAC_ADDR_REF(qdf_nbuf_data(skb) +
 					   QDF_NBUF_DEST_MAC_OFFSET));
 				ipa_ctx->ipa_rx_internal_drop_count++;
