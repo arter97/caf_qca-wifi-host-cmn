@@ -1744,10 +1744,10 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 				mlo_err("VDEV is not in created state");
 				/* release ref which were taken before failure */
 				for (j = 0; j < i; j++) {
-					if (!link_vdevs[i])
+					if (!link_vdevs[j])
 						continue;
 
-					wlan_objmgr_vdev_release_ref(link_vdevs[i],
+					wlan_objmgr_vdev_release_ref(link_vdevs[j],
 								     WLAN_MLO_MGR_ID);
 				}
 				mlo_reset_link_peer(ml_peer, link_peer);
