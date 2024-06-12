@@ -1285,6 +1285,16 @@ QDF_STATUS dp_mon_pdev_tlv_logger_deinit(struct dp_pdev *pdev)
 
 #endif
 
+#ifdef QCA_MCOPY_SUPPORT
+QDF_STATUS dp_mcopy_check_deliver_2_0(struct dp_pdev *pdev,
+				      uint16_t peer_id,
+				      uint32_t ppdu_id,
+				      uint8_t first_msdu)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 /**
  * dp_mon_register_feature_ops_2_0() - register feature ops
  *
@@ -1351,7 +1361,7 @@ dp_mon_register_feature_ops_2_0(struct dp_soc *soc)
 #ifdef QCA_MCOPY_SUPPORT
 	mon_ops->mon_filter_setup_mcopy_mode = NULL;
 	mon_ops->mon_filter_reset_mcopy_mode = NULL;
-	mon_ops->mon_mcopy_check_deliver = NULL;
+	mon_ops->mon_mcopy_check_deliver = dp_mcopy_check_deliver_2_0;
 #endif
 #ifdef QCA_ENHANCED_STATS_SUPPORT
 	mon_ops->mon_filter_setup_enhanced_stats =
