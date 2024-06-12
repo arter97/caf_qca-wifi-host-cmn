@@ -1774,6 +1774,22 @@ struct rx_refill_buff_pool {
 	qdf_nbuf_t *buf_elem;
 };
 
+#ifdef DP_FEATURE_RX_BUFFER_RECYCLE
+#define DP_PAGE_POOL_MAX 4
+
+struct dp_rx_pp_params {
+	qdf_page_pool_t pp;
+	size_t pool_size;
+	size_t pp_size;
+};
+
+struct dp_rx_page_pool {
+	struct dp_rx_pp_params main_pool[DP_PAGE_POOL_MAX];
+	uint8_t active_pp_idx;
+	qdf_spinlock_t pp_lock;
+};
+#endif
+
 #ifdef DP_TX_HW_DESC_HISTORY
 #define DP_TX_HW_DESC_HIST_MAX 6144
 #define DP_TX_HW_DESC_HIST_PER_SLOT_MAX 2048
@@ -3651,6 +3667,10 @@ struct dp_soc {
 	/* monitor interface flags */
 	uint32_t mon_flags;
 	bool scan_radio_support;
+
+#ifdef DP_FEATURE_RX_BUFFER_RECYCLE
+	struct dp_rx_page_pool rx_pp[MAX_RXDESC_POOLS];
+#endif
 };
 
 #define MAX_RX_MAC_RINGS 2

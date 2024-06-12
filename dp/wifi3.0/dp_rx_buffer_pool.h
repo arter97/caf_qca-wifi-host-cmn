@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -222,4 +222,57 @@ dp_rx_buffer_pool_nbuf_map(struct dp_soc *soc,
 static inline void dp_rx_schedule_refill_thread(struct dp_soc *soc) { }
 
 #endif /* WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL */
+
+#ifdef DP_FEATURE_RX_BUFFER_RECYCLE
+/**
+ * dp_rx_page_pool_free() - Free RX Page Pools
+ *
+ * @soc: SoC handle
+ * @pool_id: Pool ID representing the RX desc pool
+ *
+ * Return: void
+ */
+void dp_rx_page_pool_free(struct dp_soc *soc, uint32_t pool_id);
+
+/**
+ * dp_rx_page_pool_alloc() - Allocate Page Pools for RX buffers
+ *
+ * @soc: SoC handle
+ * @pool_id: Pool ID representing the RX desc pool
+ * @pool_size: Size of the buffer pool, not to be confused with page pool size
+ *
+ * Return: QDF_STATUS_SUCCESS for successful page pool creation
+ *	   QDF_STATUS_E_FAILURE for failed page pool creation
+ */
+QDF_STATUS dp_rx_page_pool_alloc(struct dp_soc *soc, uint32_t pool_id,
+				 uint32_t pool_size);
+#else
+/**
+ * dp_rx_page_pool_free() - Free RX Page Pools
+ *
+ * @soc: SoC handle
+ * @pool_id: Pool ID representing the RX desc pool
+ *
+ * Return: void
+ */
+static inline void dp_rx_page_pool_free(struct dp_soc *soc, uint32_t pool_id)
+{
+}
+
+/**
+ * dp_rx_page_pool_alloc() - Allocate Page Pools for RX buffers
+ *
+ * @soc: SoC handle
+ * @pool_id: Pool ID representing the RX desc pool
+ * @pool_size: Size of the buffer pool, not to be confused with page pool size
+ *
+ * Return: QDF_STATUS_SUCCESS for successful page pool creation
+ *	   QDF_STATUS_E_FAILURE for failed page pool creation
+ */
+static inline QDF_STATUS
+dp_rx_page_pool_alloc(struct dp_soc *soc, uint32_t pool_id, uint32_t pool_size)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* DP_FEATURE_RX_BUFFER_RECYCLE */
 #endif /* _DP_RX_BUFFER_POOL_H_ */

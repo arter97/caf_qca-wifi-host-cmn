@@ -20,6 +20,10 @@
 #include "dp_rx_buffer_pool.h"
 #include "dp_ipa.h"
 
+#ifdef DP_FEATURE_RX_BUFFER_RECYCLE
+#include "qdf_page_pool.h"
+#endif
+
 #ifndef DP_RX_BUFFER_POOL_SIZE
 #define DP_RX_BUFFER_POOL_SIZE 128
 #endif
@@ -404,3 +408,102 @@ void dp_rx_buffer_pool_deinit(struct dp_soc *soc, u8 mac_id)
 	buff_pool->is_initialized = false;
 }
 #endif /* WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL */
+
+#ifdef DP_FEATURE_RX_BUFFER_RECYCLE
+
+#define DP_RX_PP_PAGE_SIZE		32768
+#define DP_RX_PP_POOL_SIZE_THRES	 4096
+
+void dp_rx_page_pool_free(struct dp_soc *soc, uint32_t pool_id)
+{
+	struct dp_rx_page_pool *rx_pp = &soc->rx_pp[pool_id];
+	struct dp_rx_pp_params *pp_params;
+	int i;
+
+	qdf_spin_lock_bh(&rx_pp->pp_lock);
+	for (i = 0; i < DP_PAGE_POOL_MAX; i++) {
+		pp_params = &rx_pp->main_pool[i];
+
+		if (!pp_params->pp)
+			continue;
+
+		qdf_page_pool_destroy(pp_params->pp);
+		pp_params->pp = NULL;
+	}
+	qdf_spin_unlock_bh(&rx_pp->pp_lock);
+
+	qdf_spinlock_destroy(&rx_pp->pp_lock);
+}
+
+QDF_STATUS dp_rx_page_pool_alloc(struct dp_soc *soc, uint32_t pool_id,
+				 uint32_t pool_size)
+{
+	struct dp_rx_page_pool *rx_pp = &soc->rx_pp[pool_id];
+	struct dp_rx_pp_params *pp_params;
+	size_t bufs_per_page;
+	qdf_page_pool_t pp;
+	size_t buf_size;
+	size_t rem_size;
+	size_t pp_size;
+	int pp_count;
+	int i;
+
+	if (pool_size > DP_RX_PP_POOL_SIZE_THRES) {
+		pp_count = pool_size / DP_RX_PP_POOL_SIZE_THRES;
+		rem_size = pool_size % DP_RX_PP_POOL_SIZE_THRES;
+
+		if (rem_size)
+			pp_count++;
+	} else {
+		pp_count = 1;
+		rem_size = pool_size;
+	}
+
+	if (pp_count > DP_PAGE_POOL_MAX) {
+		dp_err("Failed to allocate page pools, invalid pool count %d",
+		       pp_count);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	qdf_spinlock_create(&rx_pp->pp_lock);
+
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
+
+	if (RX_DATA_BUFFER_OPT_ALIGNMENT)
+		buf_size += RX_DATA_BUFFER_OPT_ALIGNMENT - 1;
+	buf_size += QDF_SHINFO_SIZE;
+	buf_size = QDF_NBUF_ALIGN(buf_size);
+
+	bufs_per_page = DP_RX_PP_PAGE_SIZE / buf_size;
+
+	for (i = 0; i < pp_count; i++) {
+		pp_params = &rx_pp->main_pool[i];
+		pool_size = DP_RX_PP_POOL_SIZE_THRES;
+
+		if (i == pp_count - 1 && rem_size)
+			pool_size = rem_size;
+
+		pp_size = pool_size / bufs_per_page;
+		if (pool_size % bufs_per_page)
+			pp_size++;
+
+		pp = qdf_page_pool_create(soc->osdev, pp_size,
+					  DP_RX_PP_PAGE_SIZE);
+		if (!pp)
+			goto out_pp_fail;
+
+		pp_params->pp = pp;
+		pp_params->pool_size = pool_size;
+		pp_params->pp_size = pp_size;
+
+		dp_info("Page pool idx %d pool_size %d pp_size %d", i,
+			pool_size, pp_size);
+	}
+
+	return QDF_STATUS_SUCCESS;
+
+out_pp_fail:
+	dp_rx_page_pool_free(soc, pool_id);
+	return QDF_STATUS_E_FAILURE;
+}
+#endif /* DP_FEATURE_RX_BUFFER_RECYCLE */
