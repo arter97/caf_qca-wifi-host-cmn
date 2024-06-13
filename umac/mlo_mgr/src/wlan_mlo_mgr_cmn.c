@@ -575,9 +575,12 @@ bool wlan_mlo_is_wsi_remap_in_progress(uint8_t grp_id)
 	if (!mlo_ctx)
 		return false;
 
+	if (!mlo_ctx->total_grp)
+		return false;
+
 	if (grp_id >= mlo_ctx->total_grp) {
-		mlo_err("Invalid grp id %d, total no of groups %d",
-			grp_id, mlo_ctx->total_grp);
+		mlo_debug("Invalid grp id %d, total no of groups %d",
+			  grp_id, mlo_ctx->total_grp);
 		return false;
 	}
 
