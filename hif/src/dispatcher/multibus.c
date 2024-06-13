@@ -715,7 +715,8 @@ int hif_enable_grp_irqs(struct hif_opaque_softc *scn)
 
 #ifdef FEATURE_IRQ_AFFINITY
 void hif_set_grp_intr_affinity(struct hif_opaque_softc *scn,
-			       uint32_t grp_intr_bitmask, bool perf)
+			       uint32_t grp_intr_bitmask,
+			       uint32_t cpumask, bool perf)
 {
 	struct hif_softc *hif_sc = HIF_GET_SOFTC(scn);
 
@@ -723,7 +724,7 @@ void hif_set_grp_intr_affinity(struct hif_opaque_softc *scn,
 		return;
 
 	hif_sc->bus_ops.hif_set_grp_intr_affinity(hif_sc, grp_intr_bitmask,
-						  perf);
+						  cpumask, perf);
 }
 #endif
 

@@ -3219,7 +3219,7 @@ const char *hif_pci_get_irq_name(int irq_no)
 
 #if defined(FEATURE_IRQ_AFFINITY) || defined(HIF_CPU_PERF_AFFINE_MASK)
 void hif_pci_irq_set_affinity_hint(struct hif_exec_context *hif_ext_group,
-				   bool perf)
+				   uint32_t cpumask, bool perf)
 {
 	int i, ret;
 	unsigned int cpus;
@@ -3227,9 +3227,26 @@ void hif_pci_irq_set_affinity_hint(struct hif_exec_context *hif_ext_group,
 	int package_id;
 	int cpu_cluster = perf ? hif_get_perf_cluster_bitmap() :
 				 BIT(CPU_CLUSTER_TYPE_LITTLE);
+	qdf_cpu_mask new_cpu_mask;
 
 	for (i = 0; i < hif_ext_group->numirq; i++)
 		qdf_cpumask_clear(&hif_ext_group->new_cpu_mask[i]);
+
+	if (perf && cpumask) {
+		qdf_cpumask_clear(&new_cpu_mask);
+		 qdf_for_each_online_cpu(cpus) {
+			if (BIT(cpus) & cpumask)
+				qdf_cpumask_set_cpu(i, &new_cpu_mask);
+		}
+
+		if (!qdf_cpumask_empty(&new_cpu_mask)) {
+			for (i = 0; i < hif_ext_group->numirq; i++)
+				qdf_cpumask_copy(&hif_ext_group->new_cpu_mask[i],
+						 &new_cpu_mask);
+			mask_set = true;
+			goto apply_affinity;
+		}
+	}
 
 	for (i = 0; i < hif_ext_group->numirq; i++) {
 		qdf_for_each_online_cpu(cpus) {
@@ -3242,6 +3259,8 @@ void hif_pci_irq_set_affinity_hint(struct hif_exec_context *hif_ext_group,
 			}
 		}
 	}
+
+apply_affinity:
 	for (i = 0; i < hif_ext_group->numirq; i++) {
 		if (mask_set) {
 			ret = hif_affinity_mgr_set_qrg_irq_affinity((struct hif_softc *)hif_ext_group->hif,
@@ -3359,7 +3378,7 @@ void hif_pci_config_irq_affinity(struct hif_softc *scn)
 	/* Set IRQ affinity for WLAN DP interrupts*/
 	for (i = 0; i < hif_state->hif_num_extgroup; i++) {
 		hif_ext_group = hif_state->hif_ext_group[i];
-		hif_pci_irq_set_affinity_hint(hif_ext_group, true);
+		hif_pci_irq_set_affinity_hint(hif_ext_group, 0, true);
 	}
 	/* Set IRQ affinity for CE interrupts*/
 	hif_pci_ce_irq_set_affinity_hint(scn);
@@ -3502,7 +3521,8 @@ int hif_pci_configure_grp_irq(struct hif_softc *scn,
 
 #ifdef FEATURE_IRQ_AFFINITY
 void hif_pci_set_grp_intr_affinity(struct hif_softc *scn,
-				   uint32_t grp_intr_bitmask, bool perf)
+				   uint32_t grp_intr_bitmask,
+				   uint32_t cpumask, bool perf)
 {
 	int i;
 	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
@@ -3513,7 +3533,7 @@ void hif_pci_set_grp_intr_affinity(struct hif_softc *scn,
 			continue;
 
 		hif_ext_group = hif_state->hif_ext_group[i];
-		hif_pci_irq_set_affinity_hint(hif_ext_group, perf);
+		hif_pci_irq_set_affinity_hint(hif_ext_group, cpumask, perf);
 		qdf_atomic_set(&hif_ext_group->force_napi_complete, -1);
 	}
 }

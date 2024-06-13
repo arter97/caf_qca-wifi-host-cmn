@@ -190,6 +190,7 @@ void hif_exec_kill(struct hif_opaque_softc *scn);
 /**
  * hif_pci_irq_set_affinity_hint() - API to set IRQ affinity
  * @hif_ext_group: hif_ext_group to extract the irq info
+ * @cpumask: cpu mask to which grp_intr should be affined
  * @perf: affine to perf cluster or non-perf cluster
  *
  * This function will set the IRQ affinity to gold cores
@@ -198,11 +199,11 @@ void hif_exec_kill(struct hif_opaque_softc *scn);
  * Return: none
  */
 void hif_pci_irq_set_affinity_hint(struct hif_exec_context *hif_ext_group,
-				   bool perf);
+				   uint32_t cpumask, bool perf);
 #else
 static inline
 void hif_pci_irq_set_affinity_hint(struct hif_exec_context *hif_ext_group,
-				   bool perf)
+				   uint32_t cpumask, bool perf)
 {
 }
 #endif

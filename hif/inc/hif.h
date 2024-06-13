@@ -2750,16 +2750,19 @@ static inline int hif_system_pm_state_check(struct hif_opaque_softc *hif)
  * @scn: hif handle
  * @grp_intr_bitmask: grp intrs for which perf affinity should be
  *  applied
+ * @cpumask: cpu mask to which grp intrs should be affined
  * @perf: affine to perf or non-perf cluster
  *
  * Return: None
  */
 void hif_set_grp_intr_affinity(struct hif_opaque_softc *scn,
-			       uint32_t grp_intr_bitmask, bool perf);
+			       uint32_t grp_intr_bitmask,
+			       uint32_t cpumask, bool perf);
 #else
 static inline
 void hif_set_grp_intr_affinity(struct hif_opaque_softc *scn,
-			       uint32_t grp_intr_bitmask, bool perf)
+			       uint32_t grp_intr_bitmask,
+			       uint32_t cpumask, bool perf)
 {
 }
 #endif
