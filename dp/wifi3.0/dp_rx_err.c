@@ -1840,6 +1840,8 @@ static int dp_rx_err_handle_msdu_buf(struct dp_soc *soc,
 
 	pdev = dp_get_pdev_for_lmac_id(soc, rx_desc->pool_id);
 	lmac_id = rx_desc->pool_id;
+	if (!pdev)
+		goto assert_return;
 	dp_rx_add_to_free_desc_list(&pdev->free_list_head,
 				    &pdev->free_list_tail,
 				    rx_desc);
