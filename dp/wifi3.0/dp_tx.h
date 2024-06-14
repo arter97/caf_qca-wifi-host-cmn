@@ -54,6 +54,9 @@
 /* invalid peer id for reinject*/
 #define DP_INVALID_PEER 0XFFFE
 
+#define DP_GET_HW_LINK_ID_FRM_PPDU_ID(PPDU_ID, LINK_ID_OFFSET, LINK_ID_BITS) \
+	(((PPDU_ID) >> (LINK_ID_OFFSET)) & ((1 << (LINK_ID_BITS)) - 1))
+
 void dp_tx_nawds_handler(struct dp_soc *soc, struct dp_vdev *vdev,
 			 struct dp_tx_msdu_info_s *msdu_info,
 			 qdf_nbuf_t nbuf, uint16_t sa_peer_id);

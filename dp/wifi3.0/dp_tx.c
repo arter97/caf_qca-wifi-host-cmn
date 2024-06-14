@@ -109,9 +109,6 @@
 	HTT_TCL_METADATA_TYPE_VDEV_BASED
 #endif
 
-#define DP_GET_HW_LINK_ID_FRM_PPDU_ID(PPDU_ID, LINK_ID_OFFSET, LINK_ID_BITS) \
-	(((PPDU_ID) >> (LINK_ID_OFFSET)) & ((1 << (LINK_ID_BITS)) - 1))
-
 QDF_COMPILE_TIME_ASSERT(max_fw2wbm_tx_status_check,
                         MAX_EAPOL_TX_COMP_STATUS == HTT_TX_FW2WBM_TX_STATUS_MAX);
 
@@ -6066,11 +6063,6 @@ dp_tx_comp_process_desc(struct dp_soc *soc,
 							   txrx_peer, ts,
 							   desc->nbuf,
 							   time_latency)) {
-			dp_send_completion_to_stack(soc,
-						    desc->pdev,
-						    ts->peer_id,
-						    ts->ppdu_id,
-						    desc->nbuf);
 			return;
 		}
 	}

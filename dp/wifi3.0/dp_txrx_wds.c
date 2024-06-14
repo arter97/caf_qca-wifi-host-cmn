@@ -847,6 +847,74 @@ void dp_hmwds_ast_add_notify(struct dp_peer *peer,
 	defined(QCA_TX_CAPTURE_SUPPORT) || \
 	defined(QCA_MCOPY_SUPPORT)
 #ifdef FEATURE_PERPKT_INFO
+/**
+ * dp_get_link_peer_frm_ppdu_id() - Get link peer from ppdu_id
+ * @soc: dp_soc handle
+ * @peer: dp_peer handle
+ * @ppdu_id: ppdu_id of the frame
+ * @mod_id: module_id for reference
+ *
+ * Return: link peer if MLO client, else return same peer
+ */
+#ifdef WLAN_FEATURE_11BE_MLO
+static inline
+struct dp_peer *dp_get_link_peer_frm_ppdu_id(struct dp_soc *soc,
+					     struct dp_peer *peer,
+					     uint32_t ppdu_id,
+					     enum dp_mod_id mod_id)
+{
+	if (!peer)
+		return NULL;
+
+	if (IS_MLO_DP_MLD_PEER(peer)) {
+		struct dp_soc *link_soc = NULL;
+		struct dp_pdev *link_pdev = NULL;
+		struct dp_mld_link_peers link_peers_info = {0};
+		struct dp_peer *link_peer = NULL, *resultant_peer = NULL;
+		uint8_t i = 0, link_id_offset, link_id_bits, hw_link_id = 0;
+
+		link_id_offset = soc->link_id_offset;
+		link_id_bits = soc->link_id_bits;
+		hw_link_id = (DP_GET_HW_LINK_ID_FRM_PPDU_ID(ppdu_id, link_id_offset,
+							   link_id_bits));
+
+		dp_get_link_peers_ref_from_mld_peer(soc, peer,
+						    &link_peers_info, mod_id);
+
+		for (i = 0; i < link_peers_info.num_links; i++) {
+			link_peer = link_peers_info.link_peers[i];
+			link_pdev = link_peer->vdev->pdev;
+			link_soc = link_pdev->soc;
+			if (hw_link_id == link_soc->arch_ops.get_hw_link_id(link_pdev)) {
+				/* Take reference over link_peer */
+				if (dp_peer_get_ref(link_soc, link_peer, mod_id) == QDF_STATUS_SUCCESS)
+					resultant_peer = link_peer;
+				break;
+			}
+		}
+
+		/* release link peers reference */
+		dp_release_link_peers_ref(&link_peers_info, mod_id);
+		return resultant_peer;
+	} else {
+		dp_peer_get_ref(soc, peer, mod_id);
+		return peer;
+	}
+}
+#else
+static inline
+struct dp_peer *dp_get_link_peer_frm_ppdu_id(struct dp_soc *soc,
+					     struct dp_peer *peer,
+					     uint32_t ppdu_id,
+					     enum dp_mod_id mod_id)
+{
+	if (peer)
+		dp_peer_get_ref(soc, peer, mod_id);
+
+	return peer;
+}
+#endif
+
 QDF_STATUS
 dp_get_completion_indication_for_stack(struct dp_soc *soc,
 				       struct dp_pdev *pdev,
@@ -861,7 +929,10 @@ dp_get_completion_indication_for_stack(struct dp_soc *soc,
 	uint8_t first_msdu = ts->first_msdu;
 	uint8_t last_msdu = ts->last_msdu;
 	uint32_t txcap_hdr_size = sizeof(struct tx_capture_hdr);
-	struct dp_peer *peer;
+	struct dp_vdev *link_vdev = NULL;
+	struct dp_pdev *link_pdev = pdev;
+	struct dp_soc *link_soc = soc;
+	struct dp_peer *peer = NULL, *link_peer = NULL;
 
 	if (qdf_unlikely(!dp_monitor_is_enable_tx_sniffer(pdev) &&
 			 !dp_monitor_is_enable_mcopy_mode(pdev) &&
@@ -900,23 +971,41 @@ dp_get_completion_indication_for_stack(struct dp_soc *soc,
 	}
 
 	ppdu_hdr = (struct tx_capture_hdr *)qdf_nbuf_data(netbuf);
-	qdf_mem_copy(ppdu_hdr->ta, txrx_peer->vdev->mac_addr.raw,
-		     QDF_MAC_ADDR_SIZE);
+	link_vdev = txrx_peer->vdev;
 
 	peer = dp_peer_get_ref_by_id(soc, peer_id, DP_MOD_ID_TX_COMP);
 	if (peer) {
-		qdf_mem_copy(ppdu_hdr->ra, peer->mac_addr.raw,
-			     QDF_MAC_ADDR_SIZE);
+		link_peer = dp_get_link_peer_frm_ppdu_id(soc, peer, ppdu_id,
+							 DP_MOD_ID_TX_COMP);
+
+		if (link_peer) {
+			peer_id = link_peer->peer_id;
+			link_vdev = link_peer->vdev;
+			link_pdev = link_vdev->pdev;
+			link_soc = link_pdev->soc;
+
+			qdf_mem_copy(ppdu_hdr->ra, link_peer->mac_addr.raw,
+				     QDF_MAC_ADDR_SIZE);
+
+			dp_peer_unref_delete(link_peer, DP_MOD_ID_TX_COMP);
+		}
+
 		dp_peer_unref_delete(peer, DP_MOD_ID_TX_COMP);
 	}
+
+	if (link_vdev)
+		qdf_mem_copy(ppdu_hdr->ta, link_vdev->mac_addr.raw, QDF_MAC_ADDR_SIZE);
+
 	ppdu_hdr->ppdu_id = ppdu_id;
 	ppdu_hdr->peer_id = peer_id;
 	ppdu_hdr->first_msdu = first_msdu;
 	ppdu_hdr->last_msdu = last_msdu;
-	if (qdf_unlikely(pdev->latency_capture_enable)) {
+	if (qdf_unlikely(link_pdev->latency_capture_enable)) {
 		ppdu_hdr->tsf = ts->tsf;
 		ppdu_hdr->time_latency = (uint32_t)time_latency;
 	}
+
+	dp_send_completion_to_stack(link_soc, link_pdev, peer_id, ppdu_id, netbuf);
 
 	return QDF_STATUS_SUCCESS;
 }
