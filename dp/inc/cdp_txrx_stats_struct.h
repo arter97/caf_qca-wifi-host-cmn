@@ -1483,6 +1483,132 @@ struct protocol_trace_count {
 };
 
 /**
+ * enum cdp_rx_proto_stats_update_level - Rx protocol stats update level
+ * @RX_RECV_FROM_HW: Packets received from Hardware
+ * @RX_SENT_TO_STACK: Packets sent to stack
+ * @RX_UPD_LEVEL_MAX: MAX enumeration
+ */
+enum cdp_rx_proto_stats_update_level {
+	RX_RECV_FROM_HW = 0,
+	RX_SENT_TO_STACK,
+	RX_UPD_LEVEL_MAX,
+};
+
+/**
+ * enum cdp_tx_proto_stats_update_level - Tx protocol stats update level
+ * @TX_RECV_FROM_STACK: Packets received from stack
+ * @TX_RECV_FROM_STACK_FP: Packets received from stack in fastpath
+ * @TX_ENQUEUE_HW: Packets enqueued to Hardware
+ * @TX_ENQUEUE_HW_FP: Packets enqueued to Hardware in Fastpath
+ * @TX_COMP: Packets received in Tx completion
+ * @TX_UPD_LEVEL_MAX: MAX enumeration
+ */
+enum cdp_tx_proto_stats_update_level {
+	TX_RECV_FROM_STACK = 0,
+	TX_RECV_FROM_STACK_FP,
+	TX_ENQUEUE_HW,
+	TX_ENQUEUE_HW_FP,
+	TX_COMP,
+	TX_UPD_LEVEL_MAX,
+};
+
+#ifdef QCA_DP_PROTOCOL_STATS
+/**
+ * enum cdp_pkt_l3_proto_type -  L3 Protocols supported by Protocol stats
+ * @CDP_PKT_TYPE_ARP: ARP packets
+ * @CDP_PKT_TYPE_IPV4: IPV4 packets
+ * @CDP_PKT_TYPE_IPV6: IPV6 packets
+ * @CDP_PKT_TYPE_EAPOL: EAPOL packets
+ * @CDP_PKT_TYPE_L3_NS: Protocol Not supported
+ * @CDP_PKT_TYPE_L3_MAX: MAX enumeration
+ */
+enum cdp_pkt_l3_proto_type {
+	CDP_PKT_TYPE_ARP = 0,
+	CDP_PKT_TYPE_IPV4,
+	CDP_PKT_TYPE_IPV6,
+	CDP_PKT_TYPE_EAPOL,
+	CDP_PKT_TYPE_L3_NS,
+	CDP_PKT_TYPE_L3_MAX,
+};
+
+/**
+ * enum cdp_pkt_l4_proto_type -  L4 Protocols supported by Protocol stats
+ * @CDP_PKT_TYPE_TCP: TCP packets
+ * @CDP_PKT_TYPE_UDP: UDP packets
+ * @CDP_PKT_TYPE_ICMP: ICMP packets
+ * @CDP_PKT_TYPE_ICMP_REQ: ICMP request packets
+ * @CDP_PKT_TYPE_ICMP_RSP: ICMP response packets
+ * @CDP_PKT_TYPE_IGMP: IGMP packets
+ * @CDP_PKT_TYPE_L4_NS: Protocol Not supported
+ * @CDP_PKT_TYPE_L4_MAX: MAX enumeration
+ */
+enum cdp_pkt_l4_proto_type {
+	CDP_PKT_TYPE_TCP = 0,
+	CDP_PKT_TYPE_UDP,
+	CDP_PKT_TYPE_ICMP,
+	CDP_PKT_TYPE_ICMP_REQ,
+	CDP_PKT_TYPE_ICMP_RSP,
+	CDP_PKT_TYPE_IGMP,
+	CDP_PKT_TYPE_L4_NS,
+	CDP_PKT_TYPE_L4_MAX,
+};
+
+/**
+ * enum cdp_pkt_l5_proto_type - L5 Protocols
+ * @CDP_PKT_TYPE_DHCP: DHCP packets
+ * @CDP_PKT_TYPE_DHCP_DIS: DHCP discover
+ * @CDP_PKT_TYPE_DHCP_REQ: DHCP Request
+ * @CDP_PKT_TYPE_DHCP_OFR: DHCP Offer
+ * @CDP_PKT_TYPE_DHCP_ACK: DHCP Ack
+ * @CDP_PKT_TYPE_DHCP_NS: DHCP Not supported
+ * @CDP_PKT_TYPE_DNS_QUERY: DNS Query
+ * @CDP_PKT_TYPE_DNS_RSP: DNS Response
+ * @CDP_PKT_TYPE_L5_NS: Protocol Not supported
+ * @CDP_PKT_TYPE_L5_MAX: MAX enumeration
+ */
+enum cdp_pkt_l5_proto_type {
+	CDP_PKT_TYPE_DHCP = 0,
+	CDP_PKT_TYPE_DHCP_DIS,
+	CDP_PKT_TYPE_DHCP_REQ,
+	CDP_PKT_TYPE_DHCP_OFR,
+	CDP_PKT_TYPE_DHCP_ACK,
+	CDP_PKT_TYPE_DHCP_NS,
+	CDP_PKT_TYPE_DNS_QUERY,
+	CDP_PKT_TYPE_DNS_RSP,
+	CDP_PKT_TYPE_L5_NS,
+	CDP_PKT_TYPE_L5_MAX,
+};
+
+/**
+ * struct cdp_proto_stats - DP Protocol stats
+ * @l3: L3 protocol stats
+ * @l4: L4 protocol stats
+ * @l5: L5 protocol stats
+ */
+struct cdp_proto_stats {
+	uint64_t l3[CDP_PKT_TYPE_L3_MAX];
+	uint64_t l4[CDP_PKT_TYPE_L4_MAX];
+	uint64_t l5[CDP_PKT_TYPE_L5_MAX];
+};
+
+/**
+ * struct cdp_rx_proto_stats - DP Protocol stats Updated in Rx path
+ * @rx_proto: DP Protocol stats Updated in Rx path
+ */
+struct cdp_rx_proto_stats {
+	struct cdp_proto_stats rx_proto[RX_UPD_LEVEL_MAX];
+};
+
+/**
+ * struct cdp_tx_proto_stats - DP Protocol stats Updated in Tx path
+ * @tx_proto: DP Protocol stats Updated in Tx path
+ */
+struct cdp_tx_proto_stats {
+	struct cdp_proto_stats tx_proto[TX_UPD_LEVEL_MAX];
+};
+#endif /* QCA_DP_PROTOCOL_STATS */
+
+/**
  * struct cdp_tx_stats - tx stats
  * @comp_pkt: Pkt Info for which completions were received
  * @ucast: Unicast Packet Count
@@ -1832,6 +1958,7 @@ struct cdp_tx_stats {
  * @rx_total: Total rx count
  * @duplicate_count: Duplicate packets count
  * @fragment_count: Fragment packet count
+ * @proto: Datapath protocol statistics
  */
 struct cdp_rx_stats {
 	struct cdp_pkt_info to_stack;
@@ -1933,6 +2060,9 @@ struct cdp_rx_stats {
 #endif
 	uint32_t duplicate_count;
 	uint32_t fragment_count;
+#ifdef QCA_DP_PROTOCOL_STATS
+	struct cdp_rx_proto_stats proto;
+#endif
 };
 
 /**

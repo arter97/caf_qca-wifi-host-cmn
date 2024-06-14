@@ -162,17 +162,7 @@ static inline uint8_t __qdf_nbuf_get_ip_offset(uint8_t *data)
 	return QDF_NBUF_TRAC_IP_OFFSET;
 }
 
-/**
- *  __qdf_nbuf_get_ether_type() - Get the ether type
- * @data: Pointer to network data buffer
- *
- * Get the ether type in case of 8021Q and 8021AD tag
- * is present in L2 header, e.g for the returned ether type
- * value, if IPV4 data ether type 0x0800, return 0x0008.
- *
- * Return ether type.
- */
-static inline uint16_t __qdf_nbuf_get_ether_type(uint8_t *data)
+uint16_t __qdf_nbuf_get_ether_type(uint8_t *data)
 {
 	uint16_t ether_type;
 
@@ -188,6 +178,8 @@ static inline uint16_t __qdf_nbuf_get_ether_type(uint8_t *data)
 
 	return ether_type;
 }
+
+qdf_export_symbol(__qdf_nbuf_get_ether_type);
 
 void qdf_nbuf_tx_desc_count_display(void)
 {
@@ -1492,6 +1484,8 @@ __qdf_nbuf_data_get_dhcp_subtype(uint8_t *data)
 	return subtype;
 }
 
+qdf_export_symbol(__qdf_nbuf_data_get_dhcp_subtype);
+
 #define EAPOL_WPA_KEY_INFO_KEY_TYPE BIT(3)
 #define EAPOL_WPA_KEY_INFO_ACK BIT(7)
 #define EAPOL_WPA_KEY_INFO_MIC BIT(8)
@@ -1821,6 +1815,8 @@ __qdf_nbuf_data_get_ipv4_proto(uint8_t *data)
 				QDF_NBUF_TRAC_IPV4_PROTO_TYPE_OFFSET));
 	return proto_type;
 }
+
+qdf_export_symbol(__qdf_nbuf_data_get_ipv4_proto);
 
 uint8_t
 __qdf_nbuf_data_get_ipv6_tc(uint8_t *data)
@@ -2362,6 +2358,8 @@ bool __qdf_nbuf_data_is_dns_query(uint8_t *data)
 	return false;
 }
 
+qdf_export_symbol(__qdf_nbuf_data_is_dns_query);
+
 bool __qdf_nbuf_data_is_dns_response(uint8_t *data)
 {
 	uint16_t op_code;
@@ -2380,6 +2378,8 @@ bool __qdf_nbuf_data_is_dns_response(uint8_t *data)
 	}
 	return false;
 }
+
+qdf_export_symbol(__qdf_nbuf_data_is_dns_response);
 
 bool __qdf_nbuf_data_is_tcp_fin(uint8_t *data)
 {
@@ -2488,6 +2488,8 @@ bool __qdf_nbuf_data_is_icmpv4_req(uint8_t *data)
 	return false;
 }
 
+qdf_export_symbol(__qdf_nbuf_data_is_icmpv4_req);
+
 bool __qdf_nbuf_data_is_icmpv4_rsp(uint8_t *data)
 {
 	uint8_t op_code;
@@ -2499,6 +2501,8 @@ bool __qdf_nbuf_data_is_icmpv4_rsp(uint8_t *data)
 		return true;
 	return false;
 }
+
+qdf_export_symbol(__qdf_nbuf_data_is_icmpv4_rsp);
 
 bool __qdf_nbuf_data_is_icmpv4_redirect(uint8_t *data)
 {

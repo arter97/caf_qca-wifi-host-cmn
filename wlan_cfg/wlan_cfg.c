@@ -4250,6 +4250,34 @@ wlan_soc_direct_link_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
 }
 #endif
 
+#ifdef QCA_DP_PROTOCOL_STATS
+static inline void
+wlan_soc_dp_proto_stats_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
+				   struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
+{
+	wlan_cfg_ctx->dp_proto_stats = cfg_get(psoc,
+					       CFG_DP_PROTOCOL_STATISTICS);
+}
+
+bool wlan_cfg_get_dp_proto_stats(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->dp_proto_stats;
+}
+#else
+static inline void
+wlan_soc_dp_proto_stats_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
+				   struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
+{
+}
+
+bool wlan_cfg_get_dp_proto_stats(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return false;
+}
+#endif
+
+qdf_export_symbol(wlan_cfg_get_dp_proto_stats);
+
 #ifdef WLAN_SOFTUMAC_SUPPORT
 struct wlan_cfg_dp_soc_ctxt *
 wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
@@ -4760,6 +4788,7 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	wlan_soc_direct_link_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_cfg_ctx->rxmon_mgmt_linearization =
 		cfg_get(psoc, CFG_DP_RXMON_MGMT_LINEARIZATION);
+	wlan_soc_dp_proto_stats_cfg_attach(psoc, wlan_cfg_ctx);
 
 	return wlan_cfg_ctx;
 }

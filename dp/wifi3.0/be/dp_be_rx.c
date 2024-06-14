@@ -346,6 +346,29 @@ dp_rx_war_store_msdu_done_fail_desc(struct dp_soc *soc,
 }
 #endif
 
+#ifdef QCA_DP_PROTOCOL_STATS
+static inline void
+dp_rx_update_protocol_stats_wrapper(struct dp_soc *soc,
+				    struct dp_txrx_peer *txrx_peer,
+				    uint8_t link_id, qdf_nbuf_t nbuf,
+				    uint8_t *rx_tlv_hdr, uint8_t level)
+{
+	if (qdf_unlikely(wlan_cfg_get_dp_proto_stats(soc->wlan_cfg_ctx)) &&
+	    !qdf_nbuf_is_raw_frame(nbuf)) {
+		dp_rx_update_protocol_stats(soc->hal_soc, txrx_peer, link_id,
+					    nbuf, rx_tlv_hdr, level);
+	}
+}
+#else
+static inline void
+dp_rx_update_protocol_stats_wrapper(struct dp_soc *soc,
+				    struct dp_txrx_peer *txrx_peer,
+				    uint8_t link_id, qdf_nbuf_t nbuf,
+				    uint8_t *rx_tlv_hdr, uint8_t level)
+{
+}
+#endif /* QCA_DP_PROTOCOL_STATS */
+
 uint32_t dp_rx_process_be(struct dp_intr *int_ctx,
 			  hal_ring_handle_t hal_ring_hdl, uint8_t reo_ring_num,
 			  uint32_t quota)
@@ -923,6 +946,11 @@ done:
 
 			qdf_nbuf_set_pktlen(nbuf, pkt_len);
 			dp_rx_skip_tlvs(soc, nbuf, l3_pad);
+
+			dp_rx_update_protocol_stats_wrapper(soc, txrx_peer,
+							    link_id, nbuf,
+							    rx_tlv_hdr,
+							    RX_RECV_FROM_HW);
 		}
 
 		dp_rx_send_pktlog(soc, rx_pdev, nbuf, QDF_TX_RX_STATUS_OK);
@@ -1079,6 +1107,9 @@ done:
 						      link_id);
 
 		tid_stats->delivered_to_stack++;
+		dp_rx_update_protocol_stats_wrapper(soc, txrx_peer,
+						    link_id, nbuf, rx_tlv_hdr,
+						    RX_SENT_TO_STACK);
 		nbuf = next;
 	}
 

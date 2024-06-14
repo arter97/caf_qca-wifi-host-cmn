@@ -393,6 +393,7 @@ struct wlan_srng_cfg {
  * @is_audio_shared_iommu_group: flag to indicate if iommu group is shared with
  *  audio
  * @rxmon_mgmt_linearization: Linearize paged rxmon mgmt frame
+ * @dp_proto_stats: flag to enable/disable Datapath Protocol stats.
  */
 struct wlan_cfg_dp_soc_ctxt {
 	int num_int_ctxts;
@@ -637,6 +638,9 @@ struct wlan_cfg_dp_soc_ctxt {
 	bool is_audio_shared_iommu_group;
 #endif
 	bool rxmon_mgmt_linearization;
+#ifdef QCA_DP_PROTOCOL_STATS
+	bool dp_proto_stats;
+#endif
 };
 
 /**
@@ -3082,4 +3086,13 @@ uint8_t wlan_cfg_get_rx_mon_wq_depth(struct wlan_cfg_dp_soc_ctxt *cfg);
  * Return: uint8_t
  */
 bool wlan_cfg_get_rxmon_mgmt_linearization(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_get_dp_proto_stats() - Get DP protocol stats
+ *
+ * @cfg: soc configuration context
+ *
+ * Return: bool
+ */
+bool wlan_cfg_get_dp_proto_stats(struct wlan_cfg_dp_soc_ctxt *cfg);
 #endif /*__WLAN_CFG_H*/

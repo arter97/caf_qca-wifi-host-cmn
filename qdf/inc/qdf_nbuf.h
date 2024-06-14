@@ -4529,6 +4529,20 @@ bool qdf_nbuf_is_ipv6_pkt(qdf_nbuf_t buf)
 	return __qdf_nbuf_data_is_ipv6_pkt(qdf_nbuf_data(buf));
 }
 
+#ifdef BIG_ENDIAN_HOST
+static inline
+uint16_t qdf_nbuf_get_ether_type(qdf_nbuf_t buf)
+{
+	return __qdf_nbuf_get_ethernet_type(qdf_nbuf_data(buf));
+}
+#else
+static inline
+uint16_t qdf_nbuf_get_ether_type(qdf_nbuf_t buf)
+{
+	return QDF_SWAP_U16(__qdf_nbuf_get_ether_type(qdf_nbuf_data(buf)));
+}
+#endif
+
 /**
  * qdf_nbuf_sock_is_ipv6_pkt() - check if it is a ipv6 sock
  * @buf: Network buffer

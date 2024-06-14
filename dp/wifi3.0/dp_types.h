@@ -5114,6 +5114,7 @@ struct dp_peer_extd_tx_stats {
  * @mcast_3addr_drop:
  * @rx_total: total rx count
  * @inval_link_id_pkt_cnt: Counter to capture Invalid Link Id
+ * @proto: Datapath protocol statistics per-peer
  */
 struct dp_peer_per_pkt_rx_stats {
 	struct cdp_pkt_info rcvd_reo[CDP_MAX_RX_RINGS];
@@ -5156,6 +5157,9 @@ struct dp_peer_per_pkt_rx_stats {
 	struct cdp_pkt_info rx_total;
 #endif
 	uint32_t inval_link_id_pkt_cnt;
+#ifdef QCA_DP_PROTOCOL_STATS
+	struct cdp_rx_proto_stats proto;
+#endif
 };
 
 /**
@@ -5821,4 +5825,20 @@ void dp_tx_comp_get_prefetched_params_from_hal_desc(
 					void *tx_comp_hal_desc,
 					struct dp_tx_desc_s **r_tx_desc);
 #endif
+
+/**
+ * dp_rx_update_protocol_stats() - Update Rx Protocol Statistics
+ * @hal_soc: hal soc handle
+ * @txrx_peer: DP txrx Peer handle
+ * @link_id: Link Id on which packet is received
+ * @nbuf: Network buffer
+ * @rx_tlv_hdr: Rx TLV Header
+ * @level: Rx update level for stats
+ *
+ * Return: None
+ */
+void dp_rx_update_protocol_stats(hal_soc_handle_t hal_soc,
+				 struct dp_txrx_peer *txrx_peer,
+				 uint8_t link_id, qdf_nbuf_t nbuf,
+				 uint8_t *rx_tlv_hdr, uint8_t level);
 #endif /* _DP_TYPES_H_ */

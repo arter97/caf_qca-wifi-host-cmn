@@ -699,6 +699,18 @@ bool __qdf_nbuf_data_is_ipv4_pkt(uint8_t *data);
 bool __qdf_nbuf_data_is_ipv6_pkt(uint8_t *data);
 
 /**
+ *  __qdf_nbuf_get_ether_type() - Get the ether type
+ * @data: Pointer to network data buffer
+ *
+ * Get the ether type in case of 8021Q and 8021AD tag
+ * is present in L2 header, e.g for the returned ether type
+ * value, if IPV4 data ether type 0x0800, return 0x0008.
+ *
+ * Return ether type.
+ */
+uint16_t __qdf_nbuf_get_ether_type(uint8_t *data);
+
+/**
  * __qdf_nbuf_data_is_ipv4_mcast_pkt() - check if it is IPV4 multicast packet.
  * @data: Pointer to IPV4 packet data buffer
  *
