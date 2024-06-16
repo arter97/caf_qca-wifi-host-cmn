@@ -855,6 +855,30 @@ static void wlan_dcs_frequency_control(struct wlan_objmgr_psoc *psoc,
 	}
 }
 
+void wlan_dcs_trigger_dcs(struct wlan_objmgr_psoc *psoc,
+			  uint8_t pdev_id, uint8_t vdev_id,
+			  enum wlan_host_dcs_type dcs_type)
+{
+	struct dcs_psoc_priv_obj *dcs_psoc_priv;
+	struct dcs_param param;
+
+	dcs_psoc_priv = wlan_objmgr_psoc_get_comp_private_obj(
+							psoc,
+							WLAN_UMAC_COMP_DCS);
+	if (!dcs_psoc_priv) {
+		dcs_err("dcs private psoc object is null");
+		return;
+	}
+
+	param.mac_id = pdev_id;
+	param.vdev_id = vdev_id;
+	param.interference_type = dcs_type;
+
+	dcs_info("vdev: %d start dcs callback handler", vdev_id);
+	dcs_psoc_priv->dcs_cbk.cbk(psoc, &param,
+				   dcs_psoc_priv->dcs_cbk.arg);
+}
+
 QDF_STATUS
 wlan_dcs_switch_chan(struct wlan_objmgr_vdev *vdev, qdf_freq_t tgt_freq,
 		     enum phy_ch_width tgt_width)

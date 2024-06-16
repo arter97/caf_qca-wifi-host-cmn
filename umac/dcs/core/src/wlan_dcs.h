@@ -419,6 +419,19 @@ static inline void wlan_dcs_pdev_obj_unlock(struct dcs_pdev_priv_obj *dcs_pdev)
 }
 
 /**
+ * wlan_dcs_trigger_dcs() - wrapper to trigger DCS
+ * @psoc: pointer to dcs psoc object
+ * @pdev_id: pdev id
+ * @vdev_id: vdev id
+ * @dcs_type: DCS type
+ *
+ * Return: void
+ */
+void
+wlan_dcs_trigger_dcs(struct wlan_objmgr_psoc *psoc, uint8_t pdev_id,
+		     uint8_t vdev_id, enum wlan_host_dcs_type dcs_type);
+
+/**
  * wlan_dcs_switch_chan() - switch channel for vdev
  * @vdev: vdev ptr
  * @tgt_freq: target frequency
