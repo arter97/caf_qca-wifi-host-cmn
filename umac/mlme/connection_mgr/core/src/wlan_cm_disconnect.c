@@ -408,9 +408,6 @@ QDF_STATUS cm_disconnect_active(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 	struct wlan_cm_vdev_discon_req *req;
 	struct cm_req *cm_req;
 	QDF_STATUS status = QDF_STATUS_E_NOSUPPORT;
-	enum wlan_reason_code reason_code;
-	enum wlan_cm_source source;
-	enum QDF_OPMODE op_mode;
 
 	cm_ctx->active_cm_id = *cm_id;
 	cm_req = cm_get_req_by_cm_id(cm_ctx, *cm_id);
@@ -428,21 +425,7 @@ QDF_STATUS cm_disconnect_active(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 		return QDF_STATUS_E_INVAL;
 	}
 
-	reason_code = cm_req->discon_req.req.reason_code;
-	source = cm_req->discon_req.req.source;
-	op_mode = wlan_vdev_mlme_get_opmode(cm_ctx->vdev);
-	mlme_debug(CM_PREFIX_FMT " source %d reason %d",
-		   CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev), *cm_id),
-		   source, reason_code);
-
-	/*
-	 * Don't send RSO stop for internal link cleanup, as it clears the
-	 * RCL in firmware.
-	 */
-	if (op_mode == QDF_STA_MODE &&
-	    !wlan_vdev_mlme_is_mlo_link_vdev(cm_ctx->vdev) &&
-	    source != CM_MLO_ROAM_INTERNAL_DISCONNECT &&
-	    reason_code != REASON_FW_TRIGGERED_ROAM_FAILURE)
+	if (wlan_vdev_mlme_get_opmode(cm_ctx->vdev) == QDF_STA_MODE)
 		status = mlme_cm_rso_stop_req(cm_ctx->vdev);
 
 	if (status != QDF_STATUS_E_NOSUPPORT)
