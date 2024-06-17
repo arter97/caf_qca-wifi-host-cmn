@@ -141,11 +141,31 @@ util_scan_entry_mldaddr(struct scan_cache_entry *scan_entry)
 
 	return mld_addr;
 }
+
+/**
+ * util_scan_entry_self_linkid() - Function to get self IEEE link id
+ * @scan_entry: scan entry
+ *
+ * API will return self IEEE link ID
+ *
+ * Return: Value of self IEEE link ID
+ */
+static inline uint8_t
+util_scan_entry_self_linkid(struct scan_cache_entry *scan_entry)
+{
+	return scan_entry->ml_info.self_link_id;
+}
 #else
 static inline struct qdf_mac_addr *
 util_scan_entry_mldaddr(struct scan_cache_entry *scan_entry)
 {
 	return NULL;
+}
+
+static inline uint8_t
+util_scan_entry_self_linkid(struct scan_cache_entry *scan_entry)
+{
+	return WLAN_INVALID_LINK_ID;
 }
 #endif
 
