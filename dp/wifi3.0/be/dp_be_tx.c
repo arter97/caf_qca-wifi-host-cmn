@@ -1589,7 +1589,7 @@ dp_get_peer_from_tx_exc_meta(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 {
 	struct dp_peer *peer = NULL;
 
-	if (tx_exc_metadata->is_wds_extended) {
+	if (tx_exc_metadata->is_wds_extended_mc_bc) {
 		peer = dp_peer_get_ref_by_id(soc, tx_exc_metadata->peer_id,
 					     DP_MOD_ID_TX);
 		if (peer) {

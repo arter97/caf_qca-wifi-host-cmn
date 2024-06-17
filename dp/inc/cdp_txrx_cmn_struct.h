@@ -722,7 +722,7 @@ enum cdp_sec_type {
  * @is_dms_pkt: If the packet is dms supported or not
  * @reserved: reserved bits for new field additions
  * @ppdu_cookie: 16-bit ppdu cookie that has to be replayed back in completions
- * @is_wds_extended:
+ * @is_wds_extended_mc_bc: Identifier for a MCAST/BCAST packet
  * @is_mlo_mcast: Indicates if mlo_mcast enable or not
  *
  * This structure holds the parameters needed in the exception path of tx
@@ -739,7 +739,7 @@ struct cdp_tx_exception_metadata {
 		reserved :5;
 	uint16_t ppdu_cookie;
 #ifdef QCA_SUPPORT_WDS_EXTENDED
-	uint8_t is_wds_extended;
+	uint8_t is_wds_extended_mc_bc;
 #endif
 #if defined(WLAN_MCAST_MLO) || defined(WLAN_MCAST_MLO_SAP)
 	uint8_t is_mlo_mcast;
