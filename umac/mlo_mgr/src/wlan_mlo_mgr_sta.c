@@ -883,6 +883,8 @@ mlo_prepare_and_send_connect(struct wlan_objmgr_vdev *vdev,
 
 	req.vdev_id = wlan_vdev_get_id(vdev);
 	req.ssid.length = ssid.length;
+	req.chan_freq = link_info.chan_freq;
+	req.link_id =  link_info.link_id;
 	qdf_mem_copy(&req.ssid.ssid, &ssid.ssid, ssid.length);
 	if (mld_addr)
 		qdf_copy_macaddr(&req.mld_addr, mld_addr);

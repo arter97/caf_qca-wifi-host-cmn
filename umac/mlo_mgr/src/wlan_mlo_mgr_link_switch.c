@@ -809,6 +809,8 @@ QDF_STATUS mlo_mgr_link_switch_start_connect(struct wlan_objmgr_vdev *vdev)
 	conn_req.source = CM_MLO_LINK_SWITCH_CONNECT;
 	wlan_vdev_set_link_id(vdev, req->new_ieee_link_id);
 
+	conn_req.chan_freq = req->new_primary_freq;
+	conn_req.link_id = req->new_ieee_link_id;
 	qdf_copy_macaddr(&conn_req.bssid, &mlo_link_info->ap_link_addr);
 	wlan_vdev_mlme_get_ssid(assoc_vdev, conn_req.ssid.ssid,
 				&conn_req.ssid.length);
@@ -1185,6 +1187,13 @@ mlo_mgr_link_switch_validate_request(struct wlan_objmgr_vdev *vdev,
 	if (wlan_vdev_get_link_id(vdev) != req->curr_ieee_link_id) {
 		mlo_err("VDEV %d link id wrong, curr link id %d",
 			vdev_id, wlan_vdev_get_link_id(vdev));
+		return status;
+	}
+
+	if (new_link_info->link_chan_info->ch_freq != req->new_primary_freq) {
+		mlo_err("Host freq(%d) FW req freq(%d)",
+			new_link_info->link_chan_info->ch_freq,
+			req->new_primary_freq);
 		return status;
 	}
 
