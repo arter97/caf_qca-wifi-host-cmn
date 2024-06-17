@@ -54,12 +54,14 @@ struct scan_dbs {
  * @frm_type: frame type
  * @rx_data: mgmt rx data
  * @psoc: psoc pointer
+ * @save_rnr_info: save the RNR entries into RNR db
  * @buf: rx frame
  */
 struct scan_bcn_probe_event {
 	uint32_t frm_type;
 	struct mgmt_rx_event_params *rx_data;
 	struct wlan_objmgr_psoc *psoc;
+	bool save_rnr_info;
 	qdf_nbuf_t buf;
 };
 
@@ -290,6 +292,12 @@ scm_filter_rnr_flag_pno(struct wlan_objmgr_vdev *vdev,
 			struct chan_list *chan_list);
 
 #else
+static inline struct channel_list_db *
+scm_get_rnr_channel_db(struct wlan_objmgr_psoc *psoc)
+{
+	return NULL;
+}
+
 static inline QDF_STATUS scm_channel_list_db_init(struct wlan_objmgr_psoc *psoc)
 {
 	return QDF_STATUS_SUCCESS;

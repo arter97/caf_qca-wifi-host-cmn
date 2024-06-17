@@ -593,14 +593,16 @@ enum mlo_link_force_reason {
 /**
  * enum set_link_source - set link source
  * @SET_LINK_FROM_CONCURRENCY: concurrent connection request
+ * @SET_LINK_FROM_EMLSR_DOWNGRADE: concurrent start and eMLSR downgrade
  * @SET_LINK_FROM_VENDOR_CMD: vendor command request
  * @SET_LINK_FROM_TDLS: tdls command request
  * @SET_LINK_SOURCE_MAX: max num of source
  */
 enum set_link_source {
-	SET_LINK_FROM_CONCURRENCY = 0,
-	SET_LINK_FROM_VENDOR_CMD = 1,
-	SET_LINK_FROM_TDLS = 2,
+	SET_LINK_FROM_CONCURRENCY,
+	SET_LINK_FROM_EMLSR_DOWNGRADE,
+	SET_LINK_FROM_VENDOR_CMD,
+	SET_LINK_FROM_TDLS,
 	SET_LINK_SOURCE_MAX,
 };
 
@@ -1386,12 +1388,15 @@ struct mlo_link_num_param {
  * force link bitmaps
  * @post_re_evaluate: run link state check again after command response event
  * handled
+ * @post_re_evaluate_loops: current re-evaluate count if this set link is
+ * from set link event respone handler
  */
 struct mlo_control_flags {
 	bool overwrite_force_active_bitmap;
 	bool overwrite_force_inactive_bitmap;
 	bool dynamic_force_link_num;
 	bool post_re_evaluate;
+	uint8_t post_re_evaluate_loops;
 };
 
 /* struct ml_link_force_cmd - force command for links

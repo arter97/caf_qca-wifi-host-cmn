@@ -86,6 +86,12 @@
 #define WLAN_IPA_UC_STA_ENABLE_MASK         BIT(6)
 #define WLAN_IPA_REAL_TIME_DEBUGGING        BIT(8)
 #define WLAN_IPA_OPT_WIFI_DP                BIT(9)
+/* With CONFIG_IPA_WDI3_TX_TWO_PIPES=y, this bitmask is added to support
+ * runtime IPA two tx pipes feature enablement.
+ */
+#define WLAN_IPA_TWO_TX_PIPES_ENABLE_MASK    BIT(10)
+#define WLAN_IPA_SET_PORT_IN_CCE_CONFIG_MASK BIT(11)
+#define WLAN_IPA_LOW_POWER_MODE_ENABLE_MASK  BIT(12)
 
 #ifdef QCA_IPA_LL_TX_FLOW_CONTROL
 #define WLAN_IPA_MAX_BANDWIDTH              4800
@@ -762,6 +768,7 @@ struct wlan_ipa_priv {
 	bool is_smmu_enabled;	/* IPA caps returned from ipa_wdi_init */
 	/* Flag to notify whether optional wifi dp feature is enabled or not */
 	bool opt_wifi_datapath;
+	bool opt_dp_active;
 	qdf_atomic_t stats_quota;
 	uint8_t curr_bw_level;
 	qdf_atomic_t deinit_in_prog;

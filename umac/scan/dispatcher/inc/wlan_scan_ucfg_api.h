@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -451,23 +451,6 @@ void ucfg_scan_filter_valid_channel(struct wlan_objmgr_pdev *pdev,
 QDF_STATUS
 ucfg_scan_db_iterate(struct wlan_objmgr_pdev *pdev,
 	scan_iterator_func func, void *arg);
-
-/**
- * ucfg_scan_update_mlme_by_bssinfo() - The Public API to update mlme
- * info in the scan entry
- * @pdev: pdev object
- * @bss_info: bssid info to find the matching scan entry
- * @mlme_info: mlme info to be updated.
- *
- * The Public API to update mlme info in the scan entry.
- * Post a msg to target_if queue
- *
- * Return: 0 for success or error code.
- */
-QDF_STATUS
-ucfg_scan_update_mlme_by_bssinfo(struct wlan_objmgr_pdev *pdev,
-	struct bss_info *bss_info,
-	struct mlme_info *mlme_info);
 
 /**
  * ucfg_scan_register_event_handler() - The Public API to register

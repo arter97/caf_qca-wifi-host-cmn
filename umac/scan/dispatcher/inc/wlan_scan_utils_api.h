@@ -1939,4 +1939,15 @@ util_scan_get_6g_oper_channel(uint8_t *he_op_ie)
 	return 0;
 }
 #endif
+/*
+ * util_is_bssid_non_tx() - Is the given BSSID a non-tx neighbor
+ * entry in the RNR db
+ * @psoc: psoc
+ * @bssid: bssid
+ * @freq: frequency corresponding to the bssid
+ *
+ * Return: Is bssid non tx
+ */
+bool util_is_bssid_non_tx(struct wlan_objmgr_psoc *psoc,
+			  struct qdf_mac_addr *bssid, qdf_freq_t freq);
 #endif

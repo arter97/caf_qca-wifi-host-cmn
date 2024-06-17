@@ -423,7 +423,11 @@ struct non_inheritance_ie {
 	bool non_inh_ie_found;
 };
 
+#define TBTT_BSS_PARAM_MBSSID_BIT      0x04
 #define TBTT_BSS_PARAM_TRANS_BSSID_BIT 0x08
+#define TBTT_BSS_PARAM_MBSSID_TX_MASK  (TBTT_BSS_PARAM_MBSSID_BIT |\
+					TBTT_BSS_PARAM_TRANS_BSSID_BIT)
+#define TBTT_BSS_PARAM_MBSSID_NONTX_MASK TBTT_BSS_PARAM_MBSSID_BIT
 /**
  * struct rnr_bss_info - Reduced Neighbor Report BSS information
  * @neighbor_ap_tbtt_offset: Neighbor AP TBTT offset
