@@ -225,6 +225,24 @@ static inline void dp_rx_schedule_refill_thread(struct dp_soc *soc) { }
 
 #ifdef DP_FEATURE_RX_BUFFER_RECYCLE
 /**
+ * dp_rx_page_pool_deinit() - Deinit page pool parameters for @pool_id
+ * @soc: SoC handle
+ * @pool_id: Pool ID representing the RX desc pool
+ *
+ * Return: void
+ */
+void dp_rx_page_pool_deinit(struct dp_soc *soc, uint32_t pool_id);
+
+/**
+ * dp_rx_page_pool_init() - Init page pool parameters for @pool_id
+ * @soc: SoC handle
+ * @pool_id: Pool ID representing the RX desc pool
+ *
+ * Return: void
+ */
+void dp_rx_page_pool_init(struct dp_soc *soc, uint32_t pool_id);
+
+/**
  * dp_rx_page_pool_free() - Free RX Page Pools
  *
  * @soc: SoC handle
@@ -247,6 +265,28 @@ void dp_rx_page_pool_free(struct dp_soc *soc, uint32_t pool_id);
 QDF_STATUS dp_rx_page_pool_alloc(struct dp_soc *soc, uint32_t pool_id,
 				 uint32_t pool_size);
 #else
+/**
+ * dp_rx_page_pool_deinit() - Deinit page pool parameters for @pool_id
+ * @soc: SoC handle
+ * @pool_id: Pool ID representing the RX desc pool
+ *
+ * Return: void
+ */
+static inline void dp_rx_page_pool_deinit(struct dp_soc *soc, uint32_t pool_id)
+{
+}
+
+/**
+ * dp_rx_page_pool_init() - Init page pool parameters for @pool_id
+ * @soc: SoC handle
+ * @pool_id: Pool ID representing the RX desc pool
+ *
+ * Return: void
+ */
+static inline void dp_rx_page_pool_init(struct dp_soc *soc, uint32_t pool_id)
+{
+}
+
 /**
  * dp_rx_page_pool_free() - Free RX Page Pools
  *

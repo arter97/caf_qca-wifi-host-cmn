@@ -415,6 +415,37 @@ void dp_rx_buffer_pool_deinit(struct dp_soc *soc, u8 mac_id)
 #define DP_RX_PP_POOL_SIZE_THRES	 4096
 #define DP_RX_PP_AUX_POOL_SIZE           2048
 
+void dp_rx_page_pool_deinit(struct dp_soc *soc, uint32_t pool_id)
+{
+	struct dp_rx_page_pool *rx_pp = &soc->rx_pp[pool_id];
+	struct dp_rx_pp_params *pp_params;
+	int i;
+
+	rx_pp->active_pp_idx = 0;
+
+	qdf_spin_lock(&rx_pp->pp_lock);
+	for (i = 0; i < DP_PAGE_POOL_MAX; i++) {
+		pp_params = &rx_pp->main_pool[i];
+
+		if (!pp_params->pp)
+			continue;
+
+		pp_params->pool_size = 0;
+		pp_params->pp_size = 0;
+	}
+
+	rx_pp->aux_pool.pool_size = 0;
+	rx_pp->aux_pool.pp_size = 0;
+	qdf_spin_unlock(&rx_pp->pp_lock);
+}
+
+void dp_rx_page_pool_init(struct dp_soc *soc, uint32_t pool_id)
+{
+	struct dp_rx_page_pool *rx_pp = &soc->rx_pp[pool_id];
+
+	rx_pp->active_pp_idx = 0;
+}
+
 void dp_rx_page_pool_free(struct dp_soc *soc, uint32_t pool_id)
 {
 	struct dp_rx_page_pool *rx_pp = &soc->rx_pp[pool_id];
