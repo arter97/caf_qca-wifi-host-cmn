@@ -1562,16 +1562,17 @@ hal_rx_flow_setup_fse_9224(uint8_t *rx_fst, uint32_t table_offset,
 }
 
 /**
- * hal_rx_peer_meta_data_get_9224() - get peer meta data from rx_pkt_tlvs
- * @buf: start of rx_tlv_hdr
+ * hal_rx_tlv_l3_type_get_9224() - API to get the l3 type from
+ *                               rx_msdu_start TLV
+ * @buf: pointer to the start of RX PKT TLV headers
  *
- * Return: peer meta data
+ * Return: uint32_t(l3 type)
  */
-static inline uint32_t hal_rx_peer_meta_data_get_9224(uint8_t *buf)
+static inline uint32_t hal_rx_tlv_l3_type_get_9224(uint8_t *buf)
 {
 	struct rx_pkt_tlvs *rx_pkt_tlvs = (struct rx_pkt_tlvs *)buf;
 
-	return HAL_RX_TLV_MSDU_PEER_META_DATA_GET(rx_pkt_tlvs);
+	return HAL_RX_TLV_L3_TYPE_GET(rx_pkt_tlvs);
 }
 
 /**
@@ -2120,8 +2121,6 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 					hal_rx_get_mpdu_mac_ad4_valid_be;
 	hal_soc->ops->hal_rx_mpdu_start_sw_peer_id_get =
 		hal_rx_mpdu_start_sw_peer_id_get_9224;
-	hal_soc->ops->hal_rx_tlv_peer_meta_data_get =
-		hal_rx_peer_meta_data_get_9224;
 	hal_soc->ops->hal_rx_mpdu_get_to_ds = hal_rx_mpdu_get_to_ds_be;
 	hal_soc->ops->hal_rx_mpdu_get_fr_ds = hal_rx_mpdu_get_fr_ds_be;
 	hal_soc->ops->hal_rx_get_mpdu_frame_control_valid =
@@ -2165,6 +2164,7 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 					hal_rx_msdu_get_flow_params_be;
 	hal_soc->ops->hal_rx_tlv_get_tcp_chksum = hal_rx_tlv_get_tcp_chksum_be;
 	hal_soc->ops->hal_rx_get_rx_sequence = hal_rx_get_rx_sequence_be;
+	hal_soc->ops->hal_rx_tlv_l3_type_get = hal_rx_tlv_l3_type_get_9224;
 
 #if defined(WLAN_CFR_ENABLE) && defined(WLAN_ENH_CFR_ENABLE)
 	hal_soc->ops->hal_rx_get_bb_info = hal_rx_get_bb_info_9224;

@@ -438,10 +438,17 @@ struct rx_mpdu_start_compact {
 #else /* !BE_NON_AP_COMPACT_TLV */
 
 #define MPDU_START_WMASK 0x074C
-#define MSDU_END_WMASK 0x13FC1
+#define MSDU_END_WMASK 0x137C9
 
 #ifndef BIG_ENDIAN_HOST
 struct rx_msdu_end_compact {
+	uint32_t ipv6_options_crc			: 32;
+	uint32_t da_offset				:  6,
+		 sa_offset				:  6,
+		 da_offset_valid			:  1,
+		 sa_offset_valid			:  1,
+		 reserved_5a				:  2,
+		 l3_type				: 16;
 	uint32_t sa_sw_peer_id				: 16,
 		 sa_idx_timeout				:  1,
 		 da_idx_timeout				:  1,
@@ -513,9 +520,6 @@ struct rx_msdu_end_compact {
 		 mesh_control_present			:  1,
 		 ldpc					:  1,
 		 ip4_protocol_ip6_next_header		:  8;
-	uint32_t vlan_ctag_ci				: 16,
-		 vlan_stag_ci				: 16;
-	uint32_t peer_meta_data				: 32;
 	uint32_t user_rssi				:  8,
 		 pkt_type				:  4,
 		 sgi					:  2,
@@ -607,6 +611,13 @@ struct rx_mpdu_start_compact {
 };
 #else
 struct rx_msdu_end_compact {
+	uint32_t ipv6_options_crc			: 32;
+	uint32_t l3_type				: 16;
+		 reserved_5a				:  2,
+		 sa_offset_valid			:  1,
+		 da_offset_valid			:  1,
+		 sa_offset				:  6,
+		 da_offset				:  6,
 	uint32_t ip_chksum_fail_copy			:  1,
 		 fr_ds					:  1,
 		 last_msdu				:  1,
@@ -678,9 +689,6 @@ struct rx_msdu_end_compact {
 		 ipv4_proto				:  1,
 		 decap_format				:  2,
 		 msdu_number				:  8;
-	uint32_t vlan_stag_ci				: 16,
-		 vlan_ctag_ci				: 16;
-	uint32_t peer_meta_data				: 32;
 	uint32_t msdu_done_copy				:  1,
 		 mimo_ss_bitmap				:  7,
 		 reception_type				:  3,

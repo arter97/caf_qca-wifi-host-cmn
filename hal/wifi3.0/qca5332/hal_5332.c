@@ -1113,19 +1113,6 @@ hal_rx_flow_setup_fse_5332(uint8_t *rx_fst, uint32_t table_offset,
 }
 
 /**
- * hal_rx_peer_meta_data_get_5332() - get peer meta data from rx_pkt_tlvs
- * @buf: start of rx_tlv_hdr
- *
- * Return: peer meta data
- */
-static inline uint32_t hal_rx_peer_meta_data_get_5332(uint8_t *buf)
-{
-	struct rx_pkt_tlvs *rx_pkt_tlvs = (struct rx_pkt_tlvs *)buf;
-
-	return HAL_RX_TLV_MSDU_PEER_META_DATA_GET(rx_pkt_tlvs);
-}
-
-/**
  * hal_rx_msdu_get_keyid_5332() - API to get the key id of the decrypted packet
  *                                from rx_msdu_end
  * @buf: pointer to the start of RX PKT TLV header
@@ -1618,8 +1605,6 @@ static void hal_hw_txrx_ops_attach_qca5332(struct hal_soc *hal_soc)
 					hal_rx_get_mpdu_mac_ad4_valid_be;
 	hal_soc->ops->hal_rx_mpdu_start_sw_peer_id_get =
 		hal_rx_mpdu_start_sw_peer_id_get_5332;
-	hal_soc->ops->hal_rx_tlv_peer_meta_data_get =
-		hal_rx_peer_meta_data_get_5332;
 #ifndef CONFIG_WORD_BASED_TLV
 	hal_soc->ops->hal_rx_mpdu_get_addr4 = hal_rx_mpdu_get_addr4_be;
 	hal_soc->ops->hal_rx_mpdu_info_ampdu_flag_get =
