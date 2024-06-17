@@ -3359,7 +3359,7 @@ static int32_t send_request_per_object(struct stats_command *user_cmd,
 	}
 
 	/* MLD mode is not required for non-recursive requests */
-	if (!user_cmd->recursive)
+	if (user_cmd->recursive)
 		mldev_mode = get_mldev_mode(obj_list->ifname,
 					    obj_list->link_id);
 	/**

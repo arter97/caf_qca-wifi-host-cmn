@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -41,6 +41,14 @@
 
 /* Maximum number of asynchronous requests that can be scheduled by driver */
 #define WLAN_STATS_ASYNC_LIST_SIZE 8
+
+static uint8_t get_monitor_version(struct wlan_objmgr_pdev *pdev)
+{
+	struct ieee80211com *ic = NULL;
+
+	ic = wlan_pdev_get_mlme_ext_obj(pdev);
+	return ic->ic_monitor_version;
+}
 
 /* Global structure for stats work*/
 static struct stats_work_context g_stats_ctx = {0};
@@ -5539,10 +5547,49 @@ static QDF_STATUS get_debug_pdev_data_mesh(struct unified_stats *stats,
 	return QDF_STATUS_SUCCESS;
 }
 
+static void get_debug_pdev_data_txcap_2_0(struct debug_pdev_data_txcap *data,
+					 struct cdp_pdev_tx_capture_stats *cap)
+{
+	data->stats_2_0.ppdu_id = cap->ppdu_id;
+	data->stats_2_0.mode = cap->mode;
+	data->stats_2_0.ppdu_drop_cnt = cap->ppdu_drop_cnt;
+	data->stats_2_0.mpdu_drop_cnt = cap->mpdu_drop_cnt;
+	data->stats_2_0.tlv_drop_cnt = cap->tlv_drop_cnt;
+	data->stats_2_0.pkt_buf_recv = cap->pkt_buf_recv;
+	data->stats_2_0.pkt_buf_free = cap->pkt_buf_free;
+	data->stats_2_0.pkt_buf_processed = cap->pkt_buf_processed;
+	data->stats_2_0.pkt_buf_to_stack = cap->pkt_buf_to_stack;
+	data->stats_2_0.status_buf_recv = cap->status_buf_recv;
+	data->stats_2_0.status_buf_free = cap->status_buf_free;
+	data->stats_2_0.totat_tx_mon_replenish_cnt =
+				cap->totat_tx_mon_replenish_cnt;
+	data->stats_2_0.total_tx_mon_reap_cnt =
+				cap->total_tx_mon_reap_cnt;
+	data->stats_2_0.tx_mon_stuck = cap->tx_mon_stuck;
+	data->stats_2_0.total_tx_mon_stuck = cap->total_tx_mon_stuck;
+	data->stats_2_0.ppdu_info_drop_th = cap->ppdu_info_drop_th;
+	data->stats_2_0.ppdu_info_drop_flush =
+				cap->ppdu_info_drop_flush;
+	data->stats_2_0.ppdu_info_drop_trunc =
+				cap->ppdu_info_drop_trunc;
+	data->stats_2_0.ppdu_drop_sw_filter = cap->ppdu_drop_sw_filter;
+	data->stats_2_0.dp_tx_pkt_cap_stats[STATS_IF_TX_PKT_TYPE_ARP] =
+		cap->dp_tx_pkt_cap_stats[TX_PKT_TYPE_ARP];
+	data->stats_2_0.dp_tx_pkt_cap_stats[STATS_IF_TX_PKT_TYPE_EAPOL] =
+		cap->dp_tx_pkt_cap_stats[TX_PKT_TYPE_EAPOL];
+	data->stats_2_0.dp_tx_pkt_cap_stats[STATS_IF_TX_PKT_TYPE_DHCP] =
+		cap->dp_tx_pkt_cap_stats[TX_PKT_TYPE_DHCP];
+	data->stats_2_0.dp_tx_pkt_cap_stats[STATS_IF_TX_PKT_TYPE_ICMP] =
+		cap->dp_tx_pkt_cap_stats[TX_PKT_TYPE_ICMP];
+	data->stats_2_0.dp_tx_pkt_cap_stats[STATS_IF_TX_PKT_TYPE_DNS] =
+		cap->dp_tx_pkt_cap_stats[TX_PKT_TYPE_DNS];
+}
+
 static QDF_STATUS
 get_debug_pdev_data_txcap(struct unified_stats *stats,
 			  struct cdp_pdev_stats *pdev_stats,
-			  struct cdp_pdev_tx_capture_stats *cap)
+			  struct cdp_pdev_tx_capture_stats *cap,
+			  uint8_t monitor_version)
 {
 	struct debug_pdev_data_txcap *data = NULL;
 	uint8_t inx, j;
@@ -5557,6 +5604,13 @@ get_debug_pdev_data_txcap(struct unified_stats *stats,
 		qdf_err("Allocation Failed!");
 		return QDF_STATUS_E_NOMEM;
 	}
+
+	if (monitor_version == STATS_IF_TX_MON_VER_2) {
+		get_debug_pdev_data_txcap_2_0(data, cap);
+		data->monitor_version = monitor_version;
+		goto done;
+	}
+
 	data->delayed_ba_not_recev = pdev_stats->cdp_delayed_ba_not_recev;
 	data->tx_ppdu_proc = pdev_stats->tx_ppdu_proc;
 	data->ack_ba_comes_twice = pdev_stats->ack_ba_comes_twice;
@@ -5595,6 +5649,7 @@ get_debug_pdev_data_txcap(struct unified_stats *stats,
 		}
 	}
 
+done:
 	stats->feat[INX_FEAT_TXCAP] = data;
 	stats->size[INX_FEAT_TXCAP] = sizeof(struct debug_pdev_data_txcap);
 
@@ -5962,6 +6017,7 @@ static QDF_STATUS get_debug_pdev_data(struct wlan_objmgr_psoc *psoc,
 	void *dp_soc = NULL;
 	uint8_t pdev_id;
 	bool stats_collected = false;
+	uint8_t monitor_version = 0;
 
 	if (!psoc || !pdev) {
 		qdf_err("Invalid pdev and psoc!");
@@ -6045,8 +6101,10 @@ static QDF_STATUS get_debug_pdev_data(struct wlan_objmgr_psoc *psoc,
 			goto get_failed;
 		}
 		ret = get_pdev_tx_capture_stats(dp_soc, pdev_id, cap);
+		monitor_version = get_monitor_version(pdev);
 		if (ret == QDF_STATUS_SUCCESS)
-			ret = get_debug_pdev_data_txcap(stats, pdev_stats, cap);
+			ret = get_debug_pdev_data_txcap(stats, pdev_stats, cap,
+							monitor_version);
 		if (ret != QDF_STATUS_SUCCESS)
 			qdf_err("Unable to fetch pdev Debug TXCAP Stats!");
 		else
