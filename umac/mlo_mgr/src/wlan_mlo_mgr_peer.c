@@ -938,7 +938,8 @@ static QDF_STATUS mlo_peer_attach_link_peer(
 		pdev = wlan_vdev_get_pdev(wlan_peer_get_vdev(link_peer));
 		peer_entry->hw_link_id = wlan_mlo_get_pdev_hw_link_id(pdev);
 
-		if ((wlan_vdev_mlme_get_opmode(vdev) == QDF_STA_MODE) ||
+		if (((wlan_vdev_mlme_get_opmode(vdev) == QDF_STA_MODE) &&
+		     !mlo_peer_is_assoc_peer(ml_peer, link_peer)) ||
 		    nawds_peer || mesh_peer ||
 		    ((wlan_vdev_mlme_get_opmode(vdev) == QDF_SAP_MODE) &&
 		     !vdev->mlo_dev_ctx->ap_ctx->mlo_link_reject))
