@@ -2447,6 +2447,8 @@ static void util_scan_update_ml_info(struct wlan_objmgr_pdev *pdev,
 	bool is_ml_ie_valid = true;
 	uint8_t *end_ptr = NULL;
 
+	scan_entry->ml_info.self_link_id = WLAN_INVALID_LINK_ID;
+
 	if (!scan_entry->ie_list.ehtcap && scan_entry->ie_list.multi_link_bv) {
 		scan_entry->ie_list.multi_link_bv = NULL;
 		return;
@@ -2492,8 +2494,8 @@ static void util_scan_update_ml_info(struct wlan_objmgr_pdev *pdev,
 	util_get_ml_bv_partner_link_info(scan_entry);
 }
 #else
-static void util_scan_update_ml_info(struct wlan_objmgr_pdev *pdev,
-				     struct scan_cache_entry *scan_entry)
+static inline void util_scan_update_ml_info(struct wlan_objmgr_pdev *pdev,
+					    struct scan_cache_entry *scan_entry)
 {
 }
 #endif

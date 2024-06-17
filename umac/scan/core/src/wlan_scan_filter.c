@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -719,6 +719,15 @@ static bool scm_mlo_filter_match(struct wlan_objmgr_pdev *pdev,
 				  QDF_MAC_ADDR_REF(filter->mld_addr.bytes));
 			return false;
 		}
+	}
+
+	if (filter->match_link_id && filter->link_id != WLAN_INVALID_LINK_ID &&
+	    filter->link_id != util_scan_entry_self_linkid(db_entry)) {
+		scm_debug(QDF_MAC_ADDR_FMT " link id %d mismatch filter link id %d",
+			  QDF_MAC_ADDR_REF(db_entry->bssid.bytes),
+			  util_scan_entry_self_linkid(db_entry),
+			  filter->link_id);
+		return false;
 	}
 
 	if (!db_entry->ie_list.multi_link_bv)
