@@ -3264,10 +3264,22 @@ reg_find_non_punctured_bw(uint16_t bw,  uint16_t in_punc_pattern)
  */
 bool reg_is_vlp_depriority_freq(struct wlan_objmgr_pdev *pdev,
 				qdf_freq_t freq);
+/**
+ * reg_is_ap_power_type_c2c() - Check if power type is C2C
+ * @ap_pwr_type: AP power type
+ *
+ * Return: True if power type is C2C else false.
+ */
+bool reg_is_ap_power_type_c2c(enum reg_6g_ap_type ap_pwr_type);
 #else
 static inline bool
 reg_is_vlp_depriority_freq(struct wlan_objmgr_pdev *pdev,
 			   qdf_freq_t freq)
+{
+	return false;
+}
+
+static inline bool reg_is_ap_power_type_c2c(enum reg_6g_ap_type ap_pwr_type)
 {
 	return false;
 }

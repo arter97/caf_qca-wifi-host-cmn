@@ -580,6 +580,7 @@ enum channel_state {
  * @REG_INDOOR_AP: Indoor AP
  * @REG_STANDARD_POWER_AP: Standard Power AP
  * @REG_VERY_LOW_POWER_AP: Very low power AP
+ * @REG_INDOOR_ENABLED_AP: Indoor Enabled AP
  * @REG_CURRENT_MAX_AP_TYPE: current maximum, used to determine array size
  * @REG_MAX_SUPP_AP_TYPE: Current maximum AP power typer supported in the IEEE
  * standard.
@@ -591,8 +592,11 @@ enum reg_6g_ap_type {
 	REG_INDOOR_AP = 0,
 	REG_STANDARD_POWER_AP = 1,
 	REG_VERY_LOW_POWER_AP = 2,
+#ifdef CONFIG_REG_CLIENT
+	REG_INDOOR_ENABLED_AP = 3,
+#endif
 	REG_CURRENT_MAX_AP_TYPE,
-	REG_MAX_SUPP_AP_TYPE = REG_VERY_LOW_POWER_AP,
+	REG_MAX_SUPP_AP_TYPE = REG_CURRENT_MAX_AP_TYPE - 1,
 	REG_INDOOR_SP_AP = 8,
 	REG_MAX_AP_TYPE = 9
 };
@@ -1059,6 +1063,10 @@ struct ap_cli_pwr_mode_info {
  * @REG_CLI_SUB_LPI: LPI subordinate client mode
  * @REG_CLI_SUB_SP: SP subordinate client mode
  * @REG_CLI_SUB_VLP: VLP subordinate client mode
+ * @REG_AP_C2C: C2C AP power mode
+ * @REG_CLI_DEF_C2C: C2C default client mode
+ * @REG_CLI_SUB_C2C: C2C subordinate client mode
+ * @REG_MAX_POWER_MODE: Max supported power mode
  * @REG_INVALID_PWR_MODE: Invalid power mode
  */
 enum supported_6g_pwr_types {
@@ -1073,10 +1081,22 @@ enum supported_6g_pwr_types {
 	REG_CLI_SUB_LPI      = 7,
 	REG_CLI_SUB_SP       = 8,
 	REG_CLI_SUB_VLP      = 9,
-	REG_INVALID_PWR_MODE = 10,
+#ifdef CONFIG_REG_CLIENT
+	REG_AP_C2C           = 10,
+	REG_CLI_DEF_C2C      = 11,
+	REG_CLI_SUB_C2C      = 12,
+#endif
+	REG_MAX_POWER_MODE,
+	REG_INVALID_PWR_MODE = REG_MAX_POWER_MODE,
+
 };
 
+#ifdef CONFIG_REG_CLIENT
+#define MAX_PWR_TYPES 13
+#else
 #define MAX_PWR_TYPES 10
+#endif
+
 /**
  * struct psd_val: Regulatory power information
  * @psd_flag: Boolean to indicate if PSD is supported or not
@@ -1268,6 +1288,9 @@ struct cur_fcc_rule {
  * @reg_rules_6g_client_ptr: list of ptr to 6G client reg rules
  * @fcc_rules_ptr: ptr to fcc rules
  * @num_fcc_rules: Number of fcc rules sent by firmware
+ * @is_c2c_supp: Flag to check if c2c is supported
+ * @addn_reg_rule_order: Order of additional reg rules
+ * @num_reg_meta_data: Number of regulatory meta data
  */
 struct cur_regulatory_info {
 	struct wlan_objmgr_psoc *psoc;
@@ -1306,6 +1329,11 @@ struct cur_regulatory_info {
 #ifdef CONFIG_REG_CLIENT
 	struct cur_fcc_rule *fcc_rules_ptr;
 	uint32_t num_fcc_rules;
+#ifdef CONFIG_BAND_6GHZ
+	enum supported_6g_pwr_types *addn_reg_rule_order;
+	uint32_t num_reg_meta_data;
+	bool is_c2c_supp;
+#endif
 #endif
 };
 
@@ -1671,6 +1699,7 @@ enum direction {
  * @reg_6g_thresh_priority_freq: All frequencies greater or equal will be given
  * priority during channel selection by upper layer
  * @max_bw_5g: Maximum 5g Bandwidth
+ * @is_c2c_supp: Flag to indicate C2C support
  */
 struct mas_chan_params {
 	enum dfs_reg dfs_region;
@@ -1699,6 +1728,9 @@ struct mas_chan_params {
 	bool rnr_tpe_usable;
 	bool unspecified_ap_usable;
 	qdf_freq_t reg_6g_thresh_priority_freq;
+#ifdef CONFIG_REG_CLIENT
+	bool is_c2c_supp;
+#endif
 #endif
 	uint16_t max_bw_5g;
 };

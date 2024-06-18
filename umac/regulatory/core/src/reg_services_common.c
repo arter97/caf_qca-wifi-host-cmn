@@ -1833,7 +1833,7 @@ static uint16_t reg_compute_chan_to_freq(struct wlan_objmgr_pdev *pdev,
 	 * power mode's master channel list.
 	 */
 	input_6g_pwr_mode = REG_AP_LPI;
-	while (input_6g_pwr_mode <= REG_CLI_SUB_VLP) {
+	while (input_6g_pwr_mode < REG_MAX_POWER_MODE) {
 		chan_list = reg_get_reg_maschan_lst_frm_6g_pwr_mode(
 							input_6g_pwr_mode,
 							pdev_priv_obj, 0);
@@ -2783,7 +2783,8 @@ static QDF_STATUS reg_get_max_psd(qdf_freq_t freq,
 				  uint8_t *tx_power)
 {
 	if (reg_ap == REG_INDOOR_AP ||
-	    reg_ap == REG_VERY_LOW_POWER_AP) {
+	    reg_ap == REG_VERY_LOW_POWER_AP ||
+	    reg_is_ap_power_type_c2c(reg_ap)) {
 		switch (reg_client) {
 		case REG_DEFAULT_CLIENT:
 			*tx_power = REG_PSD_MAX_TXPOWER_FOR_DEFAULT_CLIENT;
@@ -2820,7 +2821,8 @@ static QDF_STATUS reg_get_max_eirp(struct wlan_objmgr_pdev *pdev,
 				   uint8_t *tx_power)
 {
 	if (reg_ap == REG_INDOOR_AP ||
-	    reg_ap == REG_VERY_LOW_POWER_AP) {
+	    reg_ap == REG_VERY_LOW_POWER_AP ||
+	    reg_is_ap_power_type_c2c(reg_ap)) {
 		switch (reg_client) {
 		case REG_DEFAULT_CLIENT:
 			*tx_power = reg_get_channel_reg_power_for_freq(pdev,
@@ -9274,6 +9276,32 @@ bool reg_is_6g_ap_type_invalid(enum reg_6g_ap_type ap_pwr_type)
 		(ap_pwr_type > REG_MAX_SUPP_AP_TYPE));
 }
 
+#ifdef CONFIG_REG_CLIENT
+/**
+ * reg_conv_6g_ap_type_to_addn_supported_6g_pwr_types() - Convert additional
+ * AP power types to supported_6g_pwr_type
+ * @ap_pwr_type: AP power type
+ *
+ * Return: supported_6g_pwr_types enum.
+ */
+static enum supported_6g_pwr_types
+reg_conv_6g_ap_type_to_addn_supported_6g_pwr_types(
+			enum reg_6g_ap_type ap_pwr_type)
+{
+	if (ap_pwr_type == REG_INDOOR_ENABLED_AP)
+		return REG_AP_C2C;
+
+	return REG_INVALID_PWR_MODE;
+}
+#else
+static inline enum supported_6g_pwr_types
+reg_conv_6g_ap_type_to_addn_supported_6g_pwr_types(
+			enum reg_6g_ap_type ap_pwr_type)
+{
+	return REG_INVALID_PWR_MODE;
+}
+#endif
+
 enum supported_6g_pwr_types
 reg_conv_6g_ap_type_to_supported_6g_pwr_types(enum reg_6g_ap_type ap_pwr_type)
 {
@@ -9282,9 +9310,14 @@ reg_conv_6g_ap_type_to_supported_6g_pwr_types(enum reg_6g_ap_type ap_pwr_type)
 		[REG_STANDARD_POWER_AP] = REG_AP_SP,
 		[REG_VERY_LOW_POWER_AP] = REG_AP_VLP,
 	};
+	enum supported_6g_pwr_types additional_pwr_mode;
 
 	if (reg_is_6g_ap_type_invalid(ap_pwr_type))
 		return REG_INVALID_PWR_MODE;
+
+	additional_pwr_mode = reg_conv_6g_ap_type_to_addn_supported_6g_pwr_types(ap_pwr_type);
+	if (additional_pwr_mode != REG_INVALID_PWR_MODE)
+		return additional_pwr_mode;
 
 	return reg_enum_conv[ap_pwr_type];
 }
@@ -10365,7 +10398,7 @@ reg_display_super_chan_list(struct wlan_objmgr_pdev *pdev)
 			  "Best power mode = 0x%x\n",
 			  cur_chan_list.center_freq, chan_info->power_types,
 			  chan_info->best_power_mode);
-		for (j = REG_AP_LPI; j <= REG_CLI_SUB_VLP; j++) {
+		for (j = REG_AP_LPI; j < REG_MAX_POWER_MODE; j++) {
 			bool afc_not_done_bit;
 
 			afc_not_done_bit = chan_info->chan_flags_arr[j] &
