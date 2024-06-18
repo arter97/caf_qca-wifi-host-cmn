@@ -425,7 +425,8 @@ QDF_STATUS cm_disconnect_active(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 		return QDF_STATUS_E_INVAL;
 	}
 
-	if (wlan_vdev_mlme_get_opmode(cm_ctx->vdev) == QDF_STA_MODE)
+	if (wlan_vdev_mlme_get_opmode(cm_ctx->vdev) == QDF_STA_MODE &&
+	    cm_req->discon_req.req.source != CM_MLO_ROAM_INTERNAL_DISCONNECT)
 		status = mlme_cm_rso_stop_req(cm_ctx->vdev);
 
 	if (status != QDF_STATUS_E_NOSUPPORT)
