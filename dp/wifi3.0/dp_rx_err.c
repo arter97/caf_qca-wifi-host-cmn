@@ -935,8 +935,11 @@ int dp_rx_err_match_dhost(qdf_ether_header_t *eh, struct dp_vdev *vdev,
 			  bool is_ml)
 {
 	if (is_ml)
-		return (qdf_mem_cmp(eh->ether_dhost, &vdev->mld_mac_addr.raw[0],
-				    QDF_MAC_ADDR_SIZE) == 0);
+		return ((qdf_mem_cmp(eh->ether_dhost,
+				     &vdev->mld_mac_addr.raw[0],
+				     QDF_MAC_ADDR_SIZE) == 0) ||
+			(qdf_mem_cmp(eh->ether_dhost, &vdev->mac_addr.raw[0],
+				     QDF_MAC_ADDR_SIZE) == 0));
 	else
 		return (qdf_mem_cmp(eh->ether_dhost, &vdev->mac_addr.raw[0],
 				    QDF_MAC_ADDR_SIZE) == 0);
