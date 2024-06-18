@@ -219,6 +219,28 @@ QDF_STATUS cm_try_next_candidate(struct cnx_mgr *cm_ctx,
 QDF_STATUS
 cm_resume_connect_after_peer_create(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id);
 
+#if defined(CONN_MGR_ADV_FEATURE) && defined(WLAN_FEATURE_11BE_MLO)
+/**
+ * cm_bss_peer_create_resp_mlo_attach() - Create MLO peer and attach objmgr peer
+ * @vdev: VDEV object manager pointer
+ * @peer_mac: MAC addr pointer for BSS peer created
+ *
+ * Creates MLO peer for the peer with @peer_mac and adds the objmgr peer to
+ * the created MLO peer context and holds reference for the MLO peer.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS cm_bss_peer_create_resp_mlo_attach(struct wlan_objmgr_vdev *vdev,
+					      struct qdf_mac_addr *peer_mac);
+#else
+static inline QDF_STATUS
+cm_bss_peer_create_resp_mlo_attach(struct wlan_objmgr_vdev *vdev,
+				   struct qdf_mac_addr *peer_mac)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 /**
  * cm_bss_peer_create_rsp() - handle bss peer create response
  * @vdev: vdev
