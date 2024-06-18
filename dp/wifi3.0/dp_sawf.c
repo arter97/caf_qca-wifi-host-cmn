@@ -259,7 +259,8 @@ struct dp_peer_sawf *dp_peer_sawf_ctx_get(struct dp_peer *peer)
 }
 
 QDF_STATUS
-dp_sawf_get_peer_msduq_info(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr)
+dp_sawf_get_peer_msduq_info(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr,
+			    uint8_t svc_id, uint8_t debug_level)
 {
 	struct dp_soc *dp_soc;
 	struct dp_peer *peer;
@@ -268,6 +269,9 @@ dp_sawf_get_peer_msduq_info(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr)
 	uint8_t q_idx;
 	struct sawf_tx_stats tx_stats;
 	struct sawf_delay_stats delay_stats;
+	bool is_print_per_svc = false;
+
+	dp_sawf_debug("svc_id:%d, Debug level:%d", svc_id, debug_level);
 
 	dp_soc = cdp_soc_t_to_dp_soc(soc_hdl);
 
@@ -290,83 +294,110 @@ dp_sawf_get_peer_msduq_info(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr)
 		return QDF_STATUS_E_FAILURE;
 	}
 
+	if (svc_id >= DP_SAWF_SVC_CLASS_MIN && svc_id <= DP_SAWF_SVC_CLASS_MAX)
+		is_print_per_svc = true;
+
 	qdf_spin_lock_bh(&sawf_ctx->sawf_peer_lock);
 
-	dp_sawf_info("Peer : ", QDF_MAC_ADDR_FMT, QDF_MAC_ADDR_REF(mac_addr));
+	if (debug_level >= SAWF_MSDUQ_DBG_LVL_INFO) {
 
-	dp_sawf_nofl_err("------------------------------------");
-	dp_sawf_nofl_err("| Queue | TID | TID Queue | SVC ID |");
-	dp_sawf_nofl_err("------------------------------------");
+		dp_sawf_info("Peer: "QDF_MAC_ADDR_FMT"",
+			     QDF_MAC_ADDR_REF(mac_addr));
 
-	for (q_idx = 0; q_idx < DP_SAWF_Q_MAX; q_idx++) {
-		msduq = &sawf_ctx->msduq[q_idx];
-		if (msduq->q_state != SAWF_MSDUQ_IN_USE)
-			continue;
-		dp_sawf_nofl_err("|  %u   |  %u  |    %u      |   %u    |",
-				 q_idx + DP_SAWF_DEFAULT_Q_MAX,
-				 msduq->remapped_tid, msduq->htt_msduq,
-				 msduq->svc_id);
+		dp_sawf_nofl_err("------------------------------------");
+		dp_sawf_nofl_err("| Queue | TID | TID Queue | SVC ID |");
+		dp_sawf_nofl_err("------------------------------------");
+
+		for (q_idx = 0; q_idx < DP_SAWF_Q_MAX; q_idx++) {
+			msduq = &sawf_ctx->msduq[q_idx];
+			if (is_print_per_svc && msduq->svc_id != svc_id)
+				continue;
+			if (msduq->q_state != SAWF_MSDUQ_IN_USE)
+				continue;
+			dp_sawf_nofl_err("|  %u   |  %u  |    %u      |   %u    |",
+					 q_idx + DP_SAWF_DEFAULT_Q_MAX,
+					 msduq->remapped_tid, msduq->htt_msduq,
+					 msduq->svc_id);
+		}
+		dp_sawf_nofl_err("------------------------------------");
 	}
-	dp_sawf_nofl_err("------------------------------------");
 
+	if (debug_level >= SAWF_MSDUQ_DBG_LVL_DEBUG) {
+		dp_sawf_nofl_err("\n");
+		dp_sawf_nofl_err("------------------------------------------------------------------");
+		dp_sawf_nofl_err("| Queue_id | tgt_opaque_id |  map_done  |  ref_count  |   state   |");
+		dp_sawf_nofl_err("-------------------------------------------------------------------");
+
+		for (q_idx = 0; q_idx < DP_SAWF_Q_MAX; q_idx++) {
+			msduq = &sawf_ctx->msduq[q_idx];
+			if (is_print_per_svc && msduq->svc_id != svc_id)
+				continue;
+			if (msduq->q_state == SAWF_MSDUQ_UNUSED)
+				continue;
+			dp_sawf_nofl_err("|    %d    |       0x%x      |      %d      |     %d    |     %s    ",
+					  q_idx + DP_SAWF_DEFAULT_Q_MAX,
+					  msduq->tgt_opaque_id,
+					  msduq->map_done,
+					  qdf_atomic_read(&msduq->ref_count),
+					  dp_sawf_msduq_state_to_string(
+					  msduq->q_state));
+		}
+		dp_sawf_nofl_err("-------------------------------------------------------------------");
+	}
+
+	if (debug_level >= SAWF_MDSUQ_DBG_LVL_TRACE) {
 #ifdef SAWF_MSDUQ_DEBUG
-	dp_sawf_nofl_err("\n");
-	dp_sawf_nofl_err("SAWF HTT DE-ACTIVATE COUNTERS:");
-	dp_sawf_nofl_err("-------------------------------------");
-	dp_sawf_nofl_err("| Queue_id | recv_failure | timeout |");
-	dp_sawf_nofl_err("-------------------------------------");
+		dp_sawf_nofl_err("\n");
+		dp_sawf_nofl_err("SAWF HTT DE-ACTIVATE COUNTERS:");
+		dp_sawf_nofl_err("-------------------------------------");
+		dp_sawf_nofl_err("| Queue_id | recv_failure | timeout |");
+		dp_sawf_nofl_err("-------------------------------------");
 
-	for (q_idx = 0; q_idx < DP_SAWF_Q_MAX; q_idx++) {
-		msduq = &sawf_ctx->msduq[q_idx];
-		if (msduq->q_state == SAWF_MSDUQ_UNUSED)
-			continue;
-		dp_sawf_nofl_err("|     %d      |      %d      |      %d     |",
-				 q_idx + DP_SAWF_DEFAULT_Q_MAX,
-				 msduq->deactivate_stats.recv_failure,
-				 msduq->deactivate_stats.timeout);
-	}
-	dp_sawf_nofl_err("\n");
-	dp_sawf_nofl_err("SAWF HTT RE-ACTIVATE COUNTERS:");
-	dp_sawf_nofl_err("-------------------------------------");
-	dp_sawf_nofl_err("| Queue_id | recv_failure | timeout |");
-	dp_sawf_nofl_err("-------------------------------------");
+		for (q_idx = 0; q_idx < DP_SAWF_Q_MAX; q_idx++) {
+			msduq = &sawf_ctx->msduq[q_idx];
+			if (is_print_per_svc && msduq->svc_id != svc_id)
+				continue;
+			if ((msduq->q_state == SAWF_MSDUQ_UNUSED) ||
+			    (msduq->q_state == SAWF_MSDUQ_DEACTIVATED))
+				continue;
+			dp_sawf_nofl_err("|     %d      |      %d      |      %d     |",
+					 q_idx + DP_SAWF_DEFAULT_Q_MAX,
+					 msduq->deactivate_stats.recv_failure,
+					 msduq->deactivate_stats.timeout);
+		}
 
-	for (q_idx = 0; q_idx < DP_SAWF_Q_MAX; q_idx++) {
-		msduq = &sawf_ctx->msduq[q_idx];
-		if (msduq->q_state == SAWF_MSDUQ_UNUSED)
-			continue;
-		dp_sawf_nofl_err("|    %d    |     %d      |      %d     |",
-				 q_idx + DP_SAWF_DEFAULT_Q_MAX,
-				 msduq->reactivate_stats.recv_failure,
-				 msduq->reactivate_stats.timeout);
-	}
+		dp_sawf_nofl_err("\n");
+		dp_sawf_nofl_err("SAWF HTT RE-ACTIVATE COUNTERS:");
+		dp_sawf_nofl_err("-------------------------------------");
+		dp_sawf_nofl_err("| Queue_id | recv_failure | timeout |");
+		dp_sawf_nofl_err("-------------------------------------");
+
+		for (q_idx = 0; q_idx < DP_SAWF_Q_MAX; q_idx++) {
+			msduq = &sawf_ctx->msduq[q_idx];
+			if (is_print_per_svc && msduq->svc_id != svc_id)
+				continue;
+			if ((msduq->q_state == SAWF_MSDUQ_UNUSED) ||
+			    (msduq->q_state == SAWF_MSDUQ_DEACTIVATED))
+				continue;
+			dp_sawf_nofl_err("|    %d    |     %d      |      %d     |",
+					 q_idx + DP_SAWF_DEFAULT_Q_MAX,
+					 msduq->reactivate_stats.recv_failure,
+					 msduq->reactivate_stats.timeout);
+		}
+		dp_sawf_nofl_err("-------------------------------------");
 #endif
-	dp_sawf_nofl_err("\n");
-	dp_sawf_nofl_err("------------------------------------------------------------------");
-	dp_sawf_nofl_err("| Queue_id | tgt_opaque_id |  map_done  |  ref_count  |   state   |");
-	dp_sawf_nofl_err("-------------------------------------------------------------------");
 
-	for (q_idx = 0; q_idx < DP_SAWF_Q_MAX; q_idx++) {
-		msduq = &sawf_ctx->msduq[q_idx];
-		if (msduq->q_state == SAWF_MSDUQ_UNUSED)
-			continue;
-		dp_sawf_nofl_err("|    %d    |       0x%x      |      %d      |     %d    |     %s    ",
-				 q_idx + DP_SAWF_DEFAULT_Q_MAX,
-				 msduq->tgt_opaque_id,
-				 msduq->map_done,
-				 qdf_atomic_read(&msduq->ref_count),
-				 dp_sawf_msduq_state_to_string(
-				 msduq->q_state));
-	}
-
-	for (q_idx = 0; q_idx < DP_SAWF_Q_MAX; q_idx++) {
-		msduq = &sawf_ctx->msduq[q_idx];
-		if (msduq->q_state != SAWF_MSDUQ_IN_USE)
-			continue;
-		dp_sawf_get_peer_tx_stats(soc_hdl, msduq->svc_id, mac_addr,
-					  &tx_stats);
-		dp_sawf_get_peer_delay_stats(soc_hdl, msduq->svc_id, mac_addr,
-					     &delay_stats);
+		for (q_idx = 0; q_idx < DP_SAWF_Q_MAX; q_idx++) {
+			msduq = &sawf_ctx->msduq[q_idx];
+			if (is_print_per_svc && msduq->svc_id != svc_id)
+				continue;
+			if (msduq->q_state != SAWF_MSDUQ_IN_USE)
+				continue;
+			dp_sawf_get_peer_tx_stats(soc_hdl, msduq->svc_id,
+						  mac_addr, &tx_stats);
+			dp_sawf_get_peer_delay_stats(soc_hdl, msduq->svc_id,
+						     mac_addr, &delay_stats);
+		}
 	}
 
 	qdf_spin_unlock_bh(&sawf_ctx->sawf_peer_lock);

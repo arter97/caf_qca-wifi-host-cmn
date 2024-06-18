@@ -71,6 +71,9 @@
 #define dp_sawf_print_stats(params ...)\
 	dp_sawf_debug(params)
 
+#define DP_SAWF_SVC_CLASS_MIN 1
+#define DP_SAWF_SVC_CLASS_MAX 128
+
 #define MSDU_QUEUE_LATENCY_WIN_MIN_SAMPLES 20
 #define WLAN_TX_DELAY_UNITS_US 10
 #define WLAN_TX_DELAY_MASK 0x1FFFFFFF
@@ -154,6 +157,19 @@ static inline char *dp_sawf_msduq_state_to_string(enum msduq_state q_state)
 		return "UNKNOWN_STATE";
 	}
 }
+
+/**
+ * dp_msduq_report_level - Debug level from userspace to print MSDUQ info.
+ * SAWF_MSDUQ_DBG_LVL_INFO: Level to print Queue info
+ * SAWF_MSDUQ_DBG_LVL_DEBUG: Level to print advanced Queue info
+ * SAWF_MDSUQ_DBG_LVL_TRACE: Level to print advanced Queue info with
+ * reactivate/deactive counters and stats
+ */
+enum dp_msduq_report_level {
+	SAWF_MSDUQ_DBG_LVL_INFO = 1,
+	SAWF_MSDUQ_DBG_LVL_DEBUG,
+	SAWF_MDSUQ_DBG_LVL_TRACE,
+};
 
 /**
  * sawf_stats_level - sawf stats level
@@ -681,11 +697,14 @@ dp_swaf_peer_sla_configuration(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr,
  * dp_sawf_get_peer_msduq_info - get peer MSDU Queue information
  * @soc: soc handle
  * @mac_addr: mac address
+ * @svc_id: Service class ID
+ * @debug_level: Debug level
  *
  * Return: QDF_STATUS
  */
 QDF_STATUS
-dp_sawf_get_peer_msduq_info(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr);
+dp_sawf_get_peer_msduq_info(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr,
+			    uint8_t svc_id, uint8_t debug_level);
 
 /**
  * dp_sawf_reinject_handler - Re-inject handler
