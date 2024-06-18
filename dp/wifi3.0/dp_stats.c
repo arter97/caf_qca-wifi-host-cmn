@@ -8507,6 +8507,123 @@ dp_peer_ctrl_frames_stats_get(struct dp_soc *soc,
 }
 #endif /* WLAN_SOFTUMAC_SUPPORT */
 
+#ifdef QCA_DP_PROTOCOL_STATS
+#define DP_PRINT_PROTO_PER_RING_STATS(_label, _handle, _lvl, _proto, _type) \
+{ \
+	if (_proto == 3) \
+		DP_PRINT_STATS("\t%s = %u %u %u %u", _label, \
+			_handle->stats.tx.proto.tx_proto[0][_lvl].l3[_type],\
+			_handle->stats.tx.proto.tx_proto[1][_lvl].l3[_type],\
+			_handle->stats.tx.proto.tx_proto[2][_lvl].l3[_type],\
+			_handle->stats.tx.proto.tx_proto[3][_lvl].l3[_type]);\
+	if (_proto == 4) \
+		DP_PRINT_STATS("\t  %s = %u %u %u %u", _label, \
+			_handle->stats.tx.proto.tx_proto[0][_lvl].l4[_type],\
+			_handle->stats.tx.proto.tx_proto[1][_lvl].l4[_type],\
+			_handle->stats.tx.proto.tx_proto[2][_lvl].l4[_type],\
+			_handle->stats.tx.proto.tx_proto[3][_lvl].l4[_type]);\
+	if (_proto == 5) \
+		DP_PRINT_STATS("\t    %s = %u %u %u %u", _label, \
+			_handle->stats.tx.proto.tx_proto[0][_lvl].l5[_type],\
+			_handle->stats.tx.proto.tx_proto[1][_lvl].l5[_type],\
+			_handle->stats.tx.proto.tx_proto[2][_lvl].l5[_type],\
+			_handle->stats.tx.proto.tx_proto[3][_lvl].l5[_type]);\
+}
+
+static inline
+void dp_pdev_print_protocol_stats(struct dp_pdev *pdev, uint8_t lvl)
+{
+	DP_PRINT_PROTO_PER_RING_STATS("ARP ",
+				      pdev, lvl, 3, CDP_PKT_TYPE_ARP);
+	DP_PRINT_PROTO_PER_RING_STATS("EAPOL ",
+				      pdev, lvl, 3, CDP_PKT_TYPE_EAPOL);
+	DP_PRINT_PROTO_PER_RING_STATS("  EAPOL M1 ",
+				      pdev, lvl, 3, CDP_PKT_TYPE_EAPOL_M1);
+	DP_PRINT_PROTO_PER_RING_STATS("  EAPOL M2 ",
+				      pdev, lvl, 3, CDP_PKT_TYPE_EAPOL_M2);
+	DP_PRINT_PROTO_PER_RING_STATS("  EAPOL M3 ",
+				      pdev, lvl, 3, CDP_PKT_TYPE_EAPOL_M3);
+	DP_PRINT_PROTO_PER_RING_STATS("  EAPOL M4 ",
+				      pdev, lvl, 3, CDP_PKT_TYPE_EAPOL_M4);
+	DP_PRINT_PROTO_PER_RING_STATS("  EAPOL G1 ",
+				      pdev, lvl, 3, CDP_PKT_TYPE_EAPOL_G1);
+	DP_PRINT_PROTO_PER_RING_STATS("  EAPOL G2 ",
+				      pdev, lvl, 3, CDP_PKT_TYPE_EAPOL_G2);
+	DP_PRINT_PROTO_PER_RING_STATS("IPV6 ",
+				      pdev, lvl, 3, CDP_PKT_TYPE_IPV6);
+	DP_PRINT_PROTO_PER_RING_STATS("IPV4 ",
+				      pdev, lvl, 3, CDP_PKT_TYPE_IPV4);
+	DP_PRINT_PROTO_PER_RING_STATS("ICMP ",
+				      pdev, lvl, 4, CDP_PKT_TYPE_ICMP);
+	DP_PRINT_PROTO_PER_RING_STATS("ICMP Req ",
+				      pdev, lvl, 4, CDP_PKT_TYPE_ICMP_REQ);
+	DP_PRINT_PROTO_PER_RING_STATS("ICMP Res ",
+				      pdev, lvl, 4, CDP_PKT_TYPE_ICMP_RSP);
+	DP_PRINT_PROTO_PER_RING_STATS("IGMP ",
+				      pdev, lvl, 4, CDP_PKT_TYPE_IGMP);
+	DP_PRINT_PROTO_PER_RING_STATS("TCP ",
+				      pdev, lvl, 4, CDP_PKT_TYPE_TCP);
+	DP_PRINT_PROTO_PER_RING_STATS("UDP ",
+				      pdev, lvl, 4, CDP_PKT_TYPE_UDP);
+	DP_PRINT_PROTO_PER_RING_STATS("DHCP ",
+				      pdev, lvl, 5, CDP_PKT_TYPE_DHCP);
+	DP_PRINT_PROTO_PER_RING_STATS("DHCP Discover ",
+				      pdev, lvl, 5, CDP_PKT_TYPE_DHCP_DIS);
+	DP_PRINT_PROTO_PER_RING_STATS("DHCP Request ",
+				      pdev, lvl, 5, CDP_PKT_TYPE_DHCP_REQ);
+	DP_PRINT_PROTO_PER_RING_STATS("DHCP Offer ",
+				      pdev, lvl, 5, CDP_PKT_TYPE_DHCP_OFR);
+	DP_PRINT_PROTO_PER_RING_STATS("DHCP Ack ",
+				      pdev, lvl, 5, CDP_PKT_TYPE_DHCP_ACK);
+	DP_PRINT_PROTO_PER_RING_STATS("DHCP NS ",
+				      pdev, lvl, 5, CDP_PKT_TYPE_DHCP_NS);
+	DP_PRINT_PROTO_PER_RING_STATS("DNS Query ",
+				      pdev, lvl, 5, CDP_PKT_TYPE_DNS_QUERY);
+	DP_PRINT_PROTO_PER_RING_STATS("DNS Rsp ",
+				      pdev, lvl, 5, CDP_PKT_TYPE_DNS_RSP);
+	DP_PRINT_PROTO_PER_RING_STATS("L5 NS",
+				      pdev, lvl, 5, CDP_PKT_TYPE_L5_NS);
+	DP_PRINT_PROTO_PER_RING_STATS("L4 NS ",
+				      pdev, lvl, 4, CDP_PKT_TYPE_L4_NS);
+	DP_PRINT_PROTO_PER_RING_STATS("L3 NS",
+				      pdev, lvl, 3, CDP_PKT_TYPE_L3_NS);
+}
+
+static inline
+void dp_pdev_print_tx_protocol_stats(struct dp_pdev *pdev)
+{
+	if (wlan_cfg_get_dp_proto_stats(pdev->soc->wlan_cfg_ctx)) {
+		DP_PRINT_STATS("Tx Protocol stats:");
+		DP_PRINT_STATS("  Received from stack:");
+		dp_pdev_print_protocol_stats(pdev, TX_RECV_FROM_STACK);
+		DP_PRINT_STATS("  Received from stack in fast path:");
+		dp_pdev_print_protocol_stats(pdev, TX_RECV_FROM_STACK_FP);
+		DP_PRINT_STATS("  Received from stack as exception:");
+		dp_pdev_print_protocol_stats(pdev, TX_EXCEPTION);
+		DP_PRINT_STATS("  Enqueued to hardware: ");
+		dp_pdev_print_protocol_stats(pdev, TX_ENQUEUE_HW);
+		DP_PRINT_STATS("  Enqueued to hardware in fast path: ");
+		dp_pdev_print_protocol_stats(pdev, TX_ENQUEUE_HW_FP);
+		DP_PRINT_STATS("  Tx completions: ");
+		dp_pdev_print_protocol_stats(pdev, TX_COMP);
+	}
+
+}
+
+#else
+
+#define DP_PRINT_PROTO_PER_RING_STATS(_label, _handle, _lvl, _proto, _type)
+
+static inline
+void dp_pdev_print_protocol_stats(struct dp_pdev *pdev, uint8_t lvl)
+{
+}
+
+static inline
+void dp_pdev_print_tx_protocol_stats(struct dp_pdev *pdev)
+{
+}
+#endif/* QCA_DP_PROTOCOL_STATS */
 void
 dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 {
@@ -8744,6 +8861,8 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 		       pdev->stats.tx.rekey_tx_comp_failures[HTT_TX_FW2WBM_TX_STATUS_MEC_NOTIFY]);
 	DP_PRINT_STATS("	Fail reason:VDEVID MISMATCH = %d",
 		       pdev->stats.tx.rekey_tx_comp_failures[HTT_TX_FW2WBM_TX_STATUS_VDEVID_MISMATCH]);
+
+	dp_pdev_print_tx_protocol_stats(pdev);
 }
 
 #if defined(WLAN_FEATURE_11BE_MLO) && (defined(WLAN_MCAST_MLO) || \
@@ -9688,6 +9807,7 @@ void dp_update_pdev_stats(struct dp_pdev *tgtobj,
 		}
 	}
 
+	DP_UPDATE_TX_PROTOCOL_VDEV_STATS(tgtobj->stats, srcobj);
 	for (i = 0; i < MAX_BW; i++) {
 		tgtobj->stats.tx.bw[i] += srcobj->tx.bw[i];
 		tgtobj->stats.rx.bw[i] += srcobj->rx.bw[i];
@@ -11169,22 +11289,47 @@ void dp_print_per_link_stats(struct cdp_soc_t *soc_hdl, uint8_t vdev_id)
 
 #ifdef QCA_DP_PROTOCOL_STATS
 static inline uint8_t
+dp_get_eapol_subtype(qdf_nbuf_t nbuf)
+{
+	enum qdf_proto_subtype eapol_subtype;
+
+	eapol_subtype = qdf_nbuf_get_eapol_subtype(nbuf);
+
+	switch (eapol_subtype) {
+	case QDF_PROTO_EAPOL_M1:
+		return CDP_PKT_TYPE_EAPOL_M1;
+	case QDF_PROTO_EAPOL_M2:
+		return CDP_PKT_TYPE_EAPOL_M2;
+	case QDF_PROTO_EAPOL_M3:
+		return CDP_PKT_TYPE_EAPOL_M3;
+	case QDF_PROTO_EAPOL_M4:
+		return CDP_PKT_TYPE_EAPOL_M4;
+	case QDF_PROTO_EAPOL_G1:
+		return CDP_PKT_TYPE_EAPOL_G1;
+	case QDF_PROTO_EAPOL_G2:
+		return CDP_PKT_TYPE_EAPOL_G2;
+	default:
+		return 0;
+	}
+}
+
+static inline uint8_t
 dp_get_l5_protocol_subtype(qdf_nbuf_t nbuf)
 {
 	enum qdf_proto_subtype subtype = QDF_PROTO_INVALID;
 
 	subtype = qdf_nbuf_get_dhcp_subtype(nbuf);
 	switch (subtype) {
-	case QDF_DHCP_DISCOVER:
+	case QDF_PROTO_DHCP_DISCOVER:
 		return CDP_PKT_TYPE_DHCP_DIS;
 
-	case QDF_DHCP_REQUEST:
+	case QDF_PROTO_DHCP_REQUEST:
 		return CDP_PKT_TYPE_DHCP_REQ;
 
-	case QDF_DHCP_OFFER:
+	case QDF_PROTO_DHCP_OFFER:
 		return CDP_PKT_TYPE_DHCP_OFR;
 
-	case QDF_DHCP_ACK:
+	case QDF_PROTO_DHCP_ACK:
 		return CDP_PKT_TYPE_DHCP_ACK;
 
 	default:
@@ -11271,6 +11416,45 @@ dp_get_l3_protocol_type(hal_soc_handle_t hal_soc_hdl, qdf_nbuf_t nbuf,
 	}
 }
 
+void dp_tx_update_proto_stats(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
+			      uint8_t ring_id, uint8_t level)
+{
+	uint8_t field = 0;
+
+	if (!vdev->dp_proto_stats ||
+			qdf_unlikely(qdf_nbuf_is_nonlinear((nbuf))))
+		return;
+
+	field = dp_get_l3_protocol_type(NULL, nbuf, NULL, 0);
+
+	DP_TX_PROTO_STATS_INC(vdev, 3, ring_id, level, field, 1);
+
+	if (field == CDP_PKT_TYPE_IPV4) {
+		field = dp_get_l4_protocol_type(nbuf);
+		DP_TX_PROTO_STATS_INC(vdev, 4, ring_id, level, field, 1);
+
+		if (field == CDP_PKT_TYPE_ICMP) {
+			field = dp_get_l4_protocol_subtype(nbuf);
+			DP_TX_PROTO_STATS_INC(vdev, 4, ring_id, level, field, 1);
+		}
+		if (field == CDP_PKT_TYPE_UDP) {
+			field = dp_get_l5_protocol_type(nbuf);
+			DP_TX_PROTO_STATS_INC(vdev, 5, ring_id, level, field, 1);
+
+			if (field == CDP_PKT_TYPE_DHCP) {
+				field = dp_get_l5_protocol_subtype(nbuf);
+				DP_TX_PROTO_STATS_INC(vdev, 5, ring_id, level, field, 1);
+			}
+		}
+	}
+	if (field == CDP_PKT_TYPE_EAPOL) {
+		field = dp_get_eapol_subtype(nbuf);
+		DP_TX_PROTO_STATS_INC(vdev, 3, ring_id, level, field, 1);
+	}
+
+
+}
+
 void dp_rx_update_protocol_stats(hal_soc_handle_t hal_soc,
 				 struct dp_txrx_peer *txrx_peer,
 				 uint8_t link_id, qdf_nbuf_t nbuf,
@@ -11304,5 +11488,10 @@ void dp_rx_update_protocol_stats(hal_soc_handle_t hal_soc,
 			}
 		}
 	}
+}
+#else
+void dp_tx_update_proto_stats(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
+			      uint8_t ring_id, uint8_t level)
+{
 }
 #endif /* QCA_DP_PROTOCOL_STATS */

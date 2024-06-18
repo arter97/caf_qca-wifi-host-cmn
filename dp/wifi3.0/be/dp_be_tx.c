@@ -1748,6 +1748,9 @@ dp_tx_hw_enqueue_be(struct dp_soc *soc, struct dp_vdev *vdev,
 	/* Sync cached descriptor with HW */
 	hal_tx_desc_sync(hal_tx_desc_cached, hal_tx_desc, num_desc_bytes);
 
+	dp_tx_update_proto_stats(vdev, tx_desc->nbuf, ring_id,
+				 TX_ENQUEUE_HW);
+
 	coalesce = dp_tx_attempt_coalescing(soc, vdev, tx_desc, tid,
 					    msdu_info, ring_id);
 
@@ -2225,6 +2228,9 @@ qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	DP_STATS_INC(vdev, tx_i[xmit_type].rcvd_in_fast_xmit_flow, 1);
 	DP_STATS_INC(vdev, tx_i[xmit_type].rcvd_per_core[desc_pool_id], 1);
 
+	dp_tx_update_proto_stats(vdev, nbuf, desc_pool_id,
+				 TX_RECV_FROM_STACK_FP);
+
 	pdev = vdev->pdev;
 	if (dp_tx_limit_check(vdev, nbuf))
 		return nbuf;
@@ -2327,6 +2333,9 @@ qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 		goto ring_access_fail;
 	}
 
+	dp_tx_update_proto_stats(vdev, tx_desc->nbuf, desc_pool_id,
+				 TX_ENQUEUE_HW_FP);
+
 	tx_desc->flags |= DP_TX_DESC_FLAG_QUEUED_TX;
 
 	/* Sync cached descriptor with HW */
@@ -2364,6 +2373,33 @@ QDF_STATUS dp_tx_desc_pool_alloc_be(struct dp_soc *soc, uint32_t num_elem,
 void dp_tx_desc_pool_free_be(struct dp_soc *soc, uint8_t pool_id)
 {
 }
+
+#ifdef QCA_DP_PROTOCOL_STATS
+static inline void
+dp_tx_comp_proto_stats_update(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
+			      uint8_t ring_id)
+{
+	struct dp_vdev *vdev = NULL;
+
+	if (tx_desc->vdev_id != DP_INVALID_VDEV_ID) {
+		vdev = dp_vdev_get_ref_by_id(soc, tx_desc->vdev_id,
+				DP_MOD_ID_TX_COMP);
+
+		if (vdev) {
+			dp_tx_update_proto_stats(vdev, tx_desc->nbuf,
+					ring_id, TX_COMP);
+			dp_vdev_unref_delete(soc, vdev,
+					DP_MOD_ID_TX_COMP);
+		}
+	}
+}
+#else
+static inline void
+dp_tx_comp_proto_stats_update(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
+			      uint8_t ring_id)
+{
+}
+#endif
 
 uint32_t dp_tx_comp_handler_be(struct dp_intr *int_ctx, struct dp_soc *soc,
 			       hal_ring_handle_t hal_ring_hdl,
@@ -2438,6 +2474,7 @@ more_data:
 			QDF_BUG(0);
 			continue;
 		}
+		dp_tx_comp_proto_stats_update(soc, tx_desc, ring_id);
 		tx_desc->buffer_src = buffer_src;
 		tx_desc->peer_id = dp_tx_comp_get_peer_id_be(
 							  soc,

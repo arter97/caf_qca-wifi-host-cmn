@@ -1163,6 +1163,20 @@ void DP_PRINT_STATS(const char *fmt, ...);
 		_handle->stats._field += _delta; \
 }
 
+#ifdef QCA_DP_PROTOCOL_STATS
+#define DP_TX_PROTO_STATS_INC(_handle, _proto, _ring, _level, _field, _delta) \
+{ \
+	if (_proto == 3) \
+		_handle->stats.tx.proto.tx_proto[_ring][_level].l3[_field] += _delta; \
+	if (_proto == 4) \
+		_handle->stats.tx.proto.tx_proto[_ring][_level].l4[_field] += _delta; \
+	if (_proto == 5) \
+		_handle->stats.tx.proto.tx_proto[_ring][_level].l5[_field] += _delta; \
+}
+#else
+#define DP_TX_PROTO_STATS_INC(_handle, _proto, _ring, _level, _field, _delta)
+#endif /* QCA_DP_PROTOCOL_STATS */
+
 #define DP_PEER_LINK_STATS_INC(_handle, _field, _delta, _link) \
 { \
 	if (likely(_handle)) \
@@ -2004,7 +2018,30 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		} \
 	} \
 }
+
+#define DP_UPDATE_TX_PROTOCOL_VDEV_STATS(_tgtobj, _srcobj) \
+{\
+	uint8_t type, ring_id, level; \
+	for (level = 0; level < TX_UPD_LEVEL_MAX; level++) { \
+		for (ring_id = 0; ring_id < CDP_MAX_TX_DATA_RINGS; ring_id++) { \
+			for (type = 0; type < CDP_PKT_TYPE_L3_MAX; type++) { \
+				_tgtobj.tx.proto.tx_proto[ring_id][level].l3[type] += \
+				_srcobj->tx.proto.tx_proto[ring_id][level].l3[type]; \
+			} \
+			for (type = 0; type < CDP_PKT_TYPE_L4_MAX; type++) { \
+				_tgtobj.tx.proto.tx_proto[ring_id][level].l4[type] += \
+				_srcobj->tx.proto.tx_proto[ring_id][level].l4[type]; \
+			}		\
+			for (type = 0; type < CDP_PKT_TYPE_L5_MAX; type++) { \
+				_tgtobj.tx.proto.tx_proto[ring_id][level].l5[type] += \
+				_srcobj->tx.proto.tx_proto[ring_id][level].l5[type]; \
+			} \
+		} \
+	} \
+}
+
 #else
+#define DP_UPDATE_TX_PROTOCOL_VDEV_STATS(_tgtobj, _srcobj)
 #define DP_UPDATE_PROTOCOL_STATS(_tgtobj, _srcobj)
 #endif /* QCA_DP_PROTOCOL_STATS */
 

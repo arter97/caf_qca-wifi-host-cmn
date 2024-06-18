@@ -4625,6 +4625,7 @@ struct dp_vdev {
 	struct dp_tx_latency_config tx_latency_cfg;
 #endif
 	bool eapol_over_control_port_disable;
+	bool dp_proto_stats;
 };
 
 enum {
@@ -5842,6 +5843,18 @@ void dp_tx_comp_get_prefetched_params_from_hal_desc(
 					void *tx_comp_hal_desc,
 					struct dp_tx_desc_s **r_tx_desc);
 #endif
+/**
+ * dp_tx_update_proto_stats() - Update Tx Protocol Statistics
+ * @vdev: DP vdev handle
+ * @nbuf: Network buffer
+ * @ring_id: Hardware ring ID
+ * @level: Tx update level for stats
+ *
+ * Return: None
+ */
+
+void dp_tx_update_proto_stats(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
+			     uint8_t ring_id, uint8_t level);
 
 /**
  * dp_rx_update_protocol_stats() - Update Rx Protocol Statistics

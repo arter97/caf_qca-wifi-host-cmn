@@ -1501,6 +1501,7 @@ enum cdp_rx_proto_stats_update_level {
  * @TX_ENQUEUE_HW: Packets enqueued to Hardware
  * @TX_ENQUEUE_HW_FP: Packets enqueued to Hardware in Fastpath
  * @TX_COMP: Packets received in Tx completion
+ * @TX_EXCEPTION: Packets received from stack in exception path
  * @TX_UPD_LEVEL_MAX: MAX enumeration
  */
 enum cdp_tx_proto_stats_update_level {
@@ -1509,6 +1510,7 @@ enum cdp_tx_proto_stats_update_level {
 	TX_ENQUEUE_HW,
 	TX_ENQUEUE_HW_FP,
 	TX_COMP,
+	TX_EXCEPTION,
 	TX_UPD_LEVEL_MAX,
 };
 
@@ -1519,6 +1521,12 @@ enum cdp_tx_proto_stats_update_level {
  * @CDP_PKT_TYPE_IPV4: IPV4 packets
  * @CDP_PKT_TYPE_IPV6: IPV6 packets
  * @CDP_PKT_TYPE_EAPOL: EAPOL packets
+ * @CDP_PKT_TYPE_EAPOL_M1: EAPOL packets - subtype M1
+ * @CDP_PKT_TYPE_EAPOL_M2: EAPOL packets - subtype M2
+ * @CDP_PKT_TYPE_EAPOL_M3: EAPOL packets - subtype M3
+ * @CDP_PKT_TYPE_EAPOL_M4: EAPOL packets - subtype M4
+ * @CDP_PKT_TYPE_EAPOL_G1: EAPOL packets - subtype G1
+ * @CDP_PKT_TYPE_EAPOL_G2: EAPOL packets - subtype G2
  * @CDP_PKT_TYPE_L3_NS: Protocol Not supported
  * @CDP_PKT_TYPE_L3_MAX: MAX enumeration
  */
@@ -1527,6 +1535,12 @@ enum cdp_pkt_l3_proto_type {
 	CDP_PKT_TYPE_IPV4,
 	CDP_PKT_TYPE_IPV6,
 	CDP_PKT_TYPE_EAPOL,
+	CDP_PKT_TYPE_EAPOL_M1,
+	CDP_PKT_TYPE_EAPOL_M2,
+	CDP_PKT_TYPE_EAPOL_M3,
+	CDP_PKT_TYPE_EAPOL_M4,
+	CDP_PKT_TYPE_EAPOL_G1,
+	CDP_PKT_TYPE_EAPOL_G2,
 	CDP_PKT_TYPE_L3_NS,
 	CDP_PKT_TYPE_L3_MAX,
 };
@@ -1601,10 +1615,10 @@ struct cdp_rx_proto_stats {
 
 /**
  * struct cdp_tx_proto_stats - DP Protocol stats Updated in Tx path
- * @tx_proto: DP Protocol stats Updated in Tx path
+ * @tx_proto: DP Protocol stats Updated in Tx path per ring
  */
 struct cdp_tx_proto_stats {
-	struct cdp_proto_stats tx_proto[TX_UPD_LEVEL_MAX];
+	struct cdp_proto_stats tx_proto[CDP_MAX_TX_DATA_RINGS][TX_UPD_LEVEL_MAX];
 };
 #endif /* QCA_DP_PROTOCOL_STATS */
 
@@ -1729,6 +1743,7 @@ struct cdp_tx_proto_stats {
  * @fragment_count: Fragment packet count
  * @eapol_tx_comp_failures: Eapol Tx completion count
  * @rekey_tx_comp_failures: GroupRekey Tx completion count
+ * @proto: DP protocol stats
  */
 struct cdp_tx_stats {
 	struct cdp_pkt_info comp_pkt;
@@ -1861,6 +1876,9 @@ struct cdp_tx_stats {
 	uint32_t fragment_count;
 	uint32_t eapol_tx_comp_failures[MAX_EAPOL_TX_COMP_STATUS];
 	uint32_t rekey_tx_comp_failures[MAX_EAPOL_TX_COMP_STATUS];
+#ifdef QCA_DP_PROTOCOL_STATS
+	struct cdp_tx_proto_stats proto;
+#endif
 };
 
 /**
