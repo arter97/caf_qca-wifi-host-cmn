@@ -1030,6 +1030,7 @@ void print_advance_data_rx_stats(struct advance_data_rx_stats *rx)
 	STATS_32(stdout, "MSDU's Part of AMPDU", rx->ampdu_cnt);
 	STATS_32(stdout, "MSDU's With No MPDU Level Aggregation",
 		 rx->non_ampdu_cnt);
+	STATS_32(stdout, "Rx Retries", rx->rx_retries);
 	if (!g_ipa_mode) {
 		STATS_32(stdout, "MSDU's Part of AMSDU", rx->amsdu_cnt);
 		STATS_32(stdout, "MSDU's With No MSDU Level Aggregation",
@@ -1037,7 +1038,6 @@ void print_advance_data_rx_stats(struct advance_data_rx_stats *rx)
 		STATS_32(stdout, "Rx Multipass Packet Drop",
 			 rx->multipass_rx_pkt_drop);
 		STATS_32(stdout, "Rx BAR Reaceive Count", rx->bar_recv_cnt);
-		STATS_32(stdout, "Rx Retries", rx->rx_retries);
 		print_advance_data_be_stats(rx, "Rx");
 	}
 }
