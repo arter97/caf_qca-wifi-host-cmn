@@ -777,10 +777,12 @@ hal_txmon_populate_he_data_per_user(struct hal_txmon_user_desc_per_user *usr,
 	he_data3 |= (usr->ldpc_extra_symbol <<
 		     QDF_MON_STATUS_LDPC_EXTRA_SYMBOL_SHIFT);
 	/* RU offset and RU */
-	he_data2 |= QDF_MON_STATUS_RU_ALLOCATION_OFFSET_KNOWN;
-	he_data2 |= (get_ru_offset_from_start_index(usr->ru_size,
+	if (TXMON_HAL(ppdu_info, su_or_mu)) {
+		he_data2 |= QDF_MON_STATUS_RU_ALLOCATION_OFFSET_KNOWN;
+		he_data2 |= (get_ru_offset_from_start_index(usr->ru_size,
 						    usr->ru_start_index) <<
-		     QDF_MON_STATUS_RU_ALLOCATION_SHIFT);
+			     QDF_MON_STATUS_RU_ALLOCATION_SHIFT);
+	}
 	/* Data BW and RU allocation */
 	if (usr->ru_size < HAL_MAX_RU_INDEX) {
 		/* update bandwidth if it is full bandwidth */
@@ -1556,6 +1558,22 @@ hal_txmon_status_parse_tlv_generic_be(hal_soc_handle_t hal_soc_hdl,
 	{
 		hal_txmon_parse_tx_fes_status_end(hal_soc_hdl, tx_tlv,
 						  ppdu_info, tx_status_info);
+		if (ppdu_info->num_users == 1 &&
+		    TXMON_HAL_STATUS(ppdu_info, he_flags)) {
+			/* copy the he data to common he_data */
+			TXMON_HAL_STATUS(ppdu_info, he_data1) =
+				TXMON_HAL_USER(ppdu_info, user_id, he_data1);
+			TXMON_HAL_STATUS(ppdu_info, he_data2) =
+				TXMON_HAL_USER(ppdu_info, user_id, he_data2);
+			TXMON_HAL_STATUS(ppdu_info, he_data3) =
+				TXMON_HAL_USER(ppdu_info, user_id, he_data3);
+			TXMON_HAL_STATUS(ppdu_info, he_data4) =
+				TXMON_HAL_USER(ppdu_info, user_id, he_data4);
+			TXMON_HAL_STATUS(ppdu_info, he_data5) =
+				TXMON_HAL_USER(ppdu_info, user_id, he_data5);
+			TXMON_HAL_STATUS(ppdu_info, he_data6) =
+				TXMON_HAL_USER(ppdu_info, user_id, he_data6);
+		}
 
 		status = HAL_MON_TX_FES_STATUS_END;
 		SHOW_DEFINED(WIFITX_FES_STATUS_END_E);
@@ -2469,12 +2487,16 @@ hal_txmon_status_parse_tlv_generic_be(hal_soc_handle_t hal_soc_hdl,
 		uint8_t a_factor;
 		uint8_t pe_disambiguity;
 		uint8_t txbf;
+		uint8_t beam_change;
 		uint8_t txbw;
 		uint8_t txop;
 
 		status = HAL_MON_MACTX_HE_SIG_A_SU;
 		num_users = TXMON_HAL(ppdu_info, num_users);
 
+		beam_change = HAL_TX_DESC_GET_64(tx_tlv,
+						 MACTX_HE_SIG_A_SU_MACTX_HE_SIG_A_SU_INFO_DETAILS,
+						 BEAM_CHANGE);
 		mcs_of_sig_b = HAL_TX_DESC_GET_64(tx_tlv,
 						  MACTX_HE_SIG_A_SU_MACTX_HE_SIG_A_SU_INFO_DETAILS,
 						  TRANSMIT_MCS);
@@ -2551,7 +2573,7 @@ hal_txmon_status_parse_tlv_generic_be(hal_soc_handle_t hal_soc_hdl,
 		/* HE data 3 */
 		TXMON_HAL_USER(ppdu_info, user_id, he_data3) |=
 			bss_color_id |
-			(!!txbf << QDF_MON_STATUS_BEAM_CHANGE_SHIFT) |
+			(beam_change << QDF_MON_STATUS_BEAM_CHANGE_SHIFT) |
 			(coding << QDF_MON_STATUS_CODING_SHIFT) |
 			(stbc << QDF_MON_STATUS_STBC_SHIFT);
 
@@ -3132,6 +3154,8 @@ hal_txmon_status_parse_tlv_generic_be(hal_soc_handle_t hal_soc_hdl,
 		status = HAL_MON_MACTX_PHY_DESC;
 
 		num_users = TXMON_HAL(ppdu_info, num_users);
+		TXMON_HAL(ppdu_info, su_or_mu) =
+			HAL_TX_DESC_GET_64(tx_tlv, MACTX_PHY_DESC, SU_OR_MU);
 		pkt_type = HAL_TX_DESC_GET_64(tx_tlv, MACTX_PHY_DESC, PKT_TYPE);
 		is_stbc = HAL_TX_DESC_GET_64(tx_tlv, MACTX_PHY_DESC, STBC);
 		is_triggered = HAL_TX_DESC_GET_64(tx_tlv, MACTX_PHY_DESC,

@@ -1498,6 +1498,7 @@ struct hal_tx_status_info {
  * @cur_usr_idx: Current user index of the PPDU
  * @ack_recvd: boolean flag to indicate if ack is received
  * @cts_recvd: boolean flag to indicate if cts is received
+ * @su_or_mu: type of transmission used like su, mu, mu_su transmission.
  * @reserved: for future purpose
  * @prot_tlv_status: protection tlv status
  * @ack_rssi: rssi of received ack. Valid only if ack_recvd is set
@@ -1514,7 +1515,8 @@ struct hal_tx_ppdu_info {
 		 cur_usr_idx	:8,
 		 ack_recvd	:1,
 		 cts_recvd	:1,
-		 reserved	:12;
+		 su_or_mu	:2,
+		 reserved	:10;
 
 	uint32_t prot_tlv_status;
 	int8_t ack_rssi;
