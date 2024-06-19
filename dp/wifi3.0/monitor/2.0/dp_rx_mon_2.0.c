@@ -1515,6 +1515,7 @@ dp_rx_mon_handle_full_mon(struct dp_pdev *pdev,
 	struct hal_rx_mon_msdu_info *msdu_meta;
 	char *hdr_desc;
 	uint8_t num_frags, frag_iter, l2_hdr_offset;
+	uint16_t tot_num_frags, frag_idx;
 	struct ieee80211_frame *wh;
 	struct ieee80211_qoscntl *qos;
 	uint32_t hdr_frag_size, frag_page_offset, pad_byte_pholder;
@@ -1636,7 +1637,6 @@ dp_rx_mon_handle_full_mon(struct dp_pdev *pdev,
 
 	amsdu_pad = 0;
 	tot_msdu_len = 0;
-	tot_msdu_len = 0;
 
 	/*
 	 * Update protocol and flow tag for MSDU
@@ -1666,19 +1666,25 @@ dp_rx_mon_handle_full_mon(struct dp_pdev *pdev,
 
 	if (msdu_meta->first_buffer && msdu_meta->last_buffer) {
 		/* MSDU with single buffer */
-		amsdu_pad = frag_size & 0x3;
-		amsdu_pad = amsdu_pad ? (4 - amsdu_pad) : 0;
-		if (amsdu_pad && (amsdu_pad <= pad_byte_pholder)) {
-			char *frag_addr_temp;
+		if (is_amsdu) {
+		/* frag_size is data payload size, amsdu padding will
+		 * be calculated on complete AMSDU frame, so msdu_llc_len
+		 * needs to be added to data payload
+		 */
+			amsdu_pad = (frag_size + msdu_llc_len) & 0x3;
+			amsdu_pad = amsdu_pad ? (4 - amsdu_pad) : 0;
+			if (amsdu_pad && amsdu_pad <= pad_byte_pholder) {
+				char *frag_addr_temp;
 
-			qdf_nbuf_trim_add_frag_size(mpdu, 1, amsdu_pad, 0);
-			frag_addr_temp =
-				(char *)qdf_nbuf_get_frag_addr(mpdu, 1);
-			frag_addr_temp = (frag_addr_temp +
+				qdf_nbuf_trim_add_frag_size(mpdu, 1, amsdu_pad, 0);
+				frag_addr_temp =
+					(char *)qdf_nbuf_get_frag_addr(mpdu, 1);
+				frag_addr_temp = (frag_addr_temp +
 					  qdf_nbuf_get_frag_size_by_idx(mpdu, 1)) -
-				amsdu_pad;
-			qdf_mem_zero(frag_addr_temp, amsdu_pad);
-			amsdu_pad = 0;
+					  amsdu_pad;
+				qdf_mem_zero(frag_addr_temp, amsdu_pad);
+				amsdu_pad = 0;
+			}
 		}
 	} else {
 		tot_msdu_len = frag_size;
@@ -1686,6 +1692,9 @@ dp_rx_mon_handle_full_mon(struct dp_pdev *pdev,
 	}
 
 	pad_byte_pholder = 0;
+	/* Get total number of frags*/
+	tot_num_frags = qdf_nbuf_get_nr_frags_in_fraglist(mpdu);
+	frag_idx = 1;
 	for (msdu_cur = mpdu; msdu_cur;) {
 		/* frag_iter will start from 0 for second skb onwards */
 		if (msdu_cur == mpdu)
@@ -1696,6 +1705,7 @@ dp_rx_mon_handle_full_mon(struct dp_pdev *pdev,
 		num_frags = qdf_nbuf_get_nr_frags(msdu_cur);
 
 		for (; frag_iter < num_frags; frag_iter++) {
+			frag_idx++;
 			/* Construct destination address
 			 *  ----------------------------------------------------------
 			 * |            | L2_HDR_PAD   |   Decap HDR | Payload | Pad  |
@@ -1816,26 +1826,36 @@ dp_rx_mon_handle_full_mon(struct dp_pdev *pdev,
 
 			/* This flag is used to identify msdu boundary */
 			prev_msdu_end_received = true;
-			/* Check size of buffer if amsdu padding required */
-			amsdu_pad = tot_msdu_len & 0x3;
-			amsdu_pad = amsdu_pad ? (4 - amsdu_pad) : 0;
-
-			/* Create placeholder if current buffer can
-			 * accommodate padding.
+			/* Check size of buffer if amsdu padding required,
+			 * if it's last subframe, then padding is not required
 			 */
-			if (amsdu_pad && (amsdu_pad <= pad_byte_pholder)) {
-				char *frag_addr_temp;
+			if (is_amsdu && (frag_idx != (tot_num_frags - 1))) {
+				/* tot_msdu_len is total data payload size,
+				 * amsdu padding will be calculated on complete
+				 * AMSDU frame, so msdu_llc_len needs to be added
+				 * to data payload
+				 */
+				amsdu_pad = (tot_msdu_len + msdu_llc_len) & 0x3;
+				amsdu_pad = amsdu_pad ? (4 - amsdu_pad) : 0;
 
-				qdf_nbuf_trim_add_frag_size(msdu_cur,
-						frag_iter,
-						amsdu_pad, 0);
-				frag_addr_temp = (char *)qdf_nbuf_get_frag_addr(msdu_cur,
-						frag_iter);
-				frag_addr_temp = (frag_addr_temp +
-						qdf_nbuf_get_frag_size_by_idx(msdu_cur, frag_iter)) -
-					amsdu_pad;
-				qdf_mem_zero(frag_addr_temp, amsdu_pad);
-				amsdu_pad = 0;
+				/* Create placeholder if current buffer can
+				 * accommodate padding.
+				 */
+				if (amsdu_pad && amsdu_pad <= pad_byte_pholder) {
+					char *frag_addr_temp;
+
+					qdf_nbuf_trim_add_frag_size(msdu_cur,
+								    frag_iter,
+								    amsdu_pad,
+								    0);
+					frag_addr_temp = (char *)qdf_nbuf_get_frag_addr(msdu_cur,
+								frag_iter);
+					frag_addr_temp = (frag_addr_temp +
+							qdf_nbuf_get_frag_size_by_idx(msdu_cur, frag_iter)) -
+							amsdu_pad;
+					qdf_mem_zero(frag_addr_temp, amsdu_pad);
+					amsdu_pad = 0;
+				}
 			}
 
 			/* reset tot_msdu_len */
