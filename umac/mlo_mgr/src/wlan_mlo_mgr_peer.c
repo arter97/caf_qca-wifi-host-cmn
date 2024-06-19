@@ -2823,6 +2823,7 @@ QDF_STATUS wlan_mlo_peer_wsi_link_delete(struct wlan_mlo_peer_context *ml_peer)
 }
 #endif
 
+#define TIMEOUT_TO_REMOVE_MLD_MAC 3000
 void wlan_mlo_ap_vdev_add_assoc_entry(struct wlan_objmgr_vdev *vdev,
 				      struct qdf_mac_addr *mld_addr)
 {
@@ -2849,8 +2850,15 @@ void wlan_mlo_ap_vdev_add_assoc_entry(struct wlan_objmgr_vdev *vdev,
 	qdf_copy_macaddr((struct qdf_mac_addr *)&sta_entry->peer_mld_addr,
 			 (struct qdf_mac_addr *)&mld_addr[0]);
 
+	sta_entry->time = jiffies_to_msecs(jiffies);
+
 	qdf_spin_lock_bh(&assoc_list->list_lock);
 	qdf_list_insert_back(&assoc_list->peer_list, &sta_entry->mac_node);
+	if (!assoc_list->is_timer_started) {
+		qdf_timer_start(&assoc_list->rem_peer_mld_mac,
+				TIMEOUT_TO_REMOVE_MLD_MAC);
+		assoc_list->is_timer_started = 1;
+	}
 	qdf_spin_unlock_bh(&assoc_list->list_lock);
 }
 
@@ -2946,5 +2954,51 @@ wlan_mlo_ap_vdev_find_assoc_entry(struct wlan_objmgr_vdev *vdev,
 	qdf_spin_unlock_bh(&assoc_list->list_lock);
 
 	return NULL;
+}
+
+void wlan_mlo_ap_delete_assoc_list_entries(void *ctx)
+{
+	struct wlan_mlo_sta_assoc_pending_list *assoc_list =
+				(struct wlan_mlo_sta_assoc_pending_list *)ctx;
+	struct wlan_mlo_sta_entry *sta_entry = NULL;
+	qdf_time_t current_time;
+
+	if (!assoc_list) {
+		mlo_debug("assoc pending list is empty");
+		return;
+	}
+
+	if (qdf_list_empty(&assoc_list->peer_list)) {
+		mlo_debug("list is empty");
+		return;
+	}
+
+	qdf_spin_lock_bh(&assoc_list->list_lock);
+
+	sta_entry = wlan_mlo_assoc_list_peek_head(&assoc_list->peer_list);
+	current_time = jiffies_to_msecs(jiffies);
+
+	while (sta_entry) {
+		if (time_after(current_time, sta_entry->time + TIMEOUT_TO_REMOVE_MLD_MAC) ||
+			assoc_list->force_remove) {
+			qdf_list_remove_node(&assoc_list->peer_list, &sta_entry->mac_node);
+			qdf_mem_free(sta_entry);
+		} else {
+			qdf_timer_start(&assoc_list->rem_peer_mld_mac,
+					TIMEOUT_TO_REMOVE_MLD_MAC);
+			assoc_list->is_timer_started = 1;
+			qdf_spin_unlock_bh(&assoc_list->list_lock);
+			return;
+		}
+
+		sta_entry =
+		wlan_mlo_sta_get_next_sta_entry(&assoc_list->peer_list,
+						sta_entry);
+	}
+	if (qdf_list_empty(&assoc_list->peer_list) && assoc_list->is_timer_started) {
+		assoc_list->is_timer_started = 0;
+		qdf_timer_stop(&assoc_list->rem_peer_mld_mac);
+	}
+	qdf_spin_unlock_bh(&assoc_list->list_lock);
 }
 
