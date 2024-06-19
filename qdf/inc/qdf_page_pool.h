@@ -25,6 +25,30 @@
 typedef __qdf_page_pool_t qdf_page_pool_t;
 
 /**
+ * qdf_page_pool_full_bh() - Check page pool full condition
+ *
+ * @pp: Page Pool Reference
+ *
+ * Return: true/false
+ */
+static inline bool qdf_page_pool_full_bh(qdf_page_pool_t pp)
+{
+	return __qdf_page_pool_full_bh(pp);
+}
+
+/**
+ * qdf_page_pool_empty() - Check page pool empty condition
+ *
+ * @pp: Page Pool Reference
+ *
+ * Return: true/false
+ */
+static inline bool qdf_page_pool_empty(qdf_page_pool_t pp)
+{
+	return __qdf_page_pool_empty(pp);
+}
+
+/**
  * qdf_page_pool_alloc_frag() - Allocate frag buffer from page pool
  *
  * @pp: Page Pool Reference

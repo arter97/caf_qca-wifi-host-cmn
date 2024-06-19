@@ -17,6 +17,28 @@
  */
 
 #include <qdf_page_pool.h>
+#include <linux/ptr_ring.h>
+
+bool __qdf_page_pool_full_bh(__qdf_page_pool_t pp)
+{
+	int i;
+	int count;
+
+	if (!pp->alloc.count)
+		return ptr_ring_full_bh(&pp->ring);
+
+	for (i = 0; i < pp->ring.size; i++) {
+		if (pp->ring.queue[i])
+			count++;
+	}
+
+	return (pp->ring.size - count == pp->alloc.count);
+}
+
+bool __qdf_page_pool_empty(__qdf_page_pool_t pp)
+{
+	return !pp->alloc.count && ptr_ring_empty(&pp->ring);
+}
 
 struct page *__qdf_page_pool_alloc_frag(__qdf_page_pool_t pp, uint32_t *offset,
 					size_t size)

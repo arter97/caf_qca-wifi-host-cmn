@@ -35,6 +35,24 @@
 typedef struct page_pool *__qdf_page_pool_t;
 
 /**
+ * __qdf_page_pool_full_bh() - Check page pool full condition
+ *
+ * @pp: Page Pool Reference
+ *
+ * Return: true/false
+ */
+bool __qdf_page_pool_full_bh(__qdf_page_pool_t pp);
+
+/**
+ * __qdf_page_pool_empty() - Check page pool empty condition
+ *
+ * @pp: Page Pool Reference
+ *
+ * Return: true/false
+ */
+bool __qdf_page_pool_empty(__qdf_page_pool_t pp);
+
+/**
  * __qdf_page_pool_alloc_frag() - Allocate frag buffer from page pool
  *
  * @pp: Page Pool Reference
@@ -81,6 +99,30 @@ void __qdf_page_pool_destroy(__qdf_page_pool_t pp);
 #else
 
 typedef void *__qdf_page_pool_t;
+
+/**
+ * __qdf_page_pool_full_bh() - Check page pool full condition
+ *
+ * @pp: Page Pool Reference
+ *
+ * Return: true/false
+ */
+static inline bool __qdf_page_pool_full_bh(__qdf_page_pool_t pp)
+{
+	return false;
+}
+
+/**
+ * __qdf_page_pool_empty() - Check page pool empty condition
+ *
+ * @pp: Page Pool Reference
+ *
+ * Return: true/false
+ */
+static inline bool __qdf_page_pool_empty(__qdf_page_pool_t pp)
+{
+	return false;
+}
 
 /**
  * __qdf_page_pool_alloc_frag() - Allocate frag buffer from page pool
