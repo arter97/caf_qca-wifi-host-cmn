@@ -640,6 +640,7 @@ struct advance_data_tx_stats {
 	u_int32_t tx_rate;
 	uint32_t failed_retry_count;
 	uint32_t retry_count;
+	uint32_t total_msdu_retries;
 	uint32_t multiple_retry_count;
 	uint32_t mpdu_retries;
 	uint32_t total_mpdu_retries;

@@ -917,6 +917,7 @@ void print_advance_data_tx_stats(struct advance_data_tx_stats *tx)
 		 tx->retries_mpdu);
 	STATS_32(stdout, "Tx Failed Retry Count", tx->failed_retry_count);
 	STATS_32(stdout, "Tx Total Retry Count", tx->retry_count);
+	STATS_32(stdout, "Tx Total msdu packets Retries Count", tx->total_msdu_retries);
 	STATS_32(stdout, "Tx Multiple Retry Count", tx->multiple_retry_count);
 	STATS_32(stdout, "Tx mpdu_retries", tx->mpdu_retries);
 	STATS_32(stdout, "Tx total_mpdu_retries", tx->total_mpdu_retries);
