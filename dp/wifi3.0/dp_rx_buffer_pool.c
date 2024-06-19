@@ -413,6 +413,7 @@ void dp_rx_buffer_pool_deinit(struct dp_soc *soc, u8 mac_id)
 
 #define DP_RX_PP_PAGE_SIZE		32768
 #define DP_RX_PP_POOL_SIZE_THRES	 4096
+#define DP_RX_PP_AUX_POOL_SIZE           2048
 
 void dp_rx_page_pool_free(struct dp_soc *soc, uint32_t pool_id)
 {
@@ -429,6 +430,11 @@ void dp_rx_page_pool_free(struct dp_soc *soc, uint32_t pool_id)
 
 		qdf_page_pool_destroy(pp_params->pp);
 		pp_params->pp = NULL;
+	}
+
+	if (rx_pp->aux_pool.pp) {
+		qdf_page_pool_destroy(rx_pp->aux_pool.pp);
+		rx_pp->aux_pool.pp = NULL;
 	}
 	qdf_spin_unlock_bh(&rx_pp->pp_lock);
 
@@ -499,6 +505,17 @@ QDF_STATUS dp_rx_page_pool_alloc(struct dp_soc *soc, uint32_t pool_id,
 		dp_info("Page pool idx %d pool_size %d pp_size %d", i,
 			pool_size, pp_size);
 	}
+
+	rx_pp->aux_pool.pool_size = DP_RX_PP_AUX_POOL_SIZE;
+	rx_pp->aux_pool.pp_size = rx_pp->aux_pool.pool_size / bufs_per_page;
+	if (rx_pp->aux_pool.pool_size % bufs_per_page)
+		rx_pp->aux_pool.pp_size++;
+
+	rx_pp->aux_pool.pp =
+		qdf_page_pool_create(soc->osdev, rx_pp->aux_pool.pp_size,
+				     DP_RX_PP_PAGE_SIZE);
+	if (!rx_pp->aux_pool.pp)
+		goto out_pp_fail;
 
 	return QDF_STATUS_SUCCESS;
 

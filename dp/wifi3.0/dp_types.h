@@ -1785,6 +1785,7 @@ struct dp_rx_pp_params {
 
 struct dp_rx_page_pool {
 	struct dp_rx_pp_params main_pool[DP_PAGE_POOL_MAX];
+	struct dp_rx_pp_params aux_pool;
 	uint8_t active_pp_idx;
 	qdf_spinlock_t pp_lock;
 };
