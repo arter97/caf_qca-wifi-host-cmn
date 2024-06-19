@@ -724,9 +724,17 @@ dp_rx_mon_handle_mpdu_start(struct hal_rx_ppdu_info *ppdu_info)
 	mpdu_meta->decap_type = mpdu_info->decap_type;
 	ppdu_info->mpdu_info[ppdu_info->user_id].mpdu_start_received = true;
 
+	type = ppdu_info->fc_info.frame_control & IEEE80211_FC0_TYPE_MASK;
+	/* override filter category of connected client ctrl packets */
+	if (mpdu_meta->decap_type && ppdu_info->fc_info.fc_valid &&
+	    (type == IEEE80211_FC0_TYPE_CTL) &&
+	    (ppdu_info->rx_user_status[user_id].filter_category == DP_MPDU_FILTER_CATEGORY_MO)) {
+		ppdu_info->rx_user_status[user_id].filter_category =
+						DP_MPDU_FILTER_CATEGORY_FP;
+	}
+
 	/* Handle decap type for mgmt, ctrl and null data packets
 	 * of connected station */
-	type = ppdu_info->fc_info.frame_control & IEEE80211_FC0_TYPE_MASK;
 	if ((type == IEEE80211_FC0_TYPE_MGT || type == IEEE80211_FC0_TYPE_CTL ||
 	    ppdu_info->sw_frame_group_id == HAL_MPDU_SW_FRAME_GROUP_NULL_DATA) &&
 	    mpdu_meta->decap_type && ppdu_info->fc_info.fc_valid) {

@@ -4014,7 +4014,9 @@ dp_mon_filter_setup_rx_lite_mon(struct dp_mon_pdev_be *be_mon_pdev)
 	}
 
 	/* configure mo filters if enabled */
-	if (config->rx_config.mo_enabled) {
+	if (config->rx_config.mo_enabled ||
+	    (config->rx_config.fp_enabled &&
+	     rx_tlv_filter->tlv_filter.fp_ctrl_filter)) {
 		rx_tlv_filter->tlv_filter.enable_mo = 1;
 		rx_tlv_filter->tlv_filter.mo_mgmt_filter =
 			config->rx_config.mgmt_filter[DP_MON_FRM_FILTER_MODE_MO];
@@ -4022,6 +4024,10 @@ dp_mon_filter_setup_rx_lite_mon(struct dp_mon_pdev_be *be_mon_pdev)
 			config->rx_config.ctrl_filter[DP_MON_FRM_FILTER_MODE_MO];
 		rx_tlv_filter->tlv_filter.mo_data_filter =
 			config->rx_config.data_filter[DP_MON_FRM_FILTER_MODE_MO];
+
+		if (rx_tlv_filter->tlv_filter.fp_ctrl_filter)
+			rx_tlv_filter->tlv_filter.mo_ctrl_filter |=
+				rx_tlv_filter->tlv_filter.fp_ctrl_filter;
 
 		if ((rx_tlv_filter->tlv_filter.mo_mgmt_filter) &&
 		    (mgmt_len == CDP_LITE_MON_LEN_FULL))
