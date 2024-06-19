@@ -999,4 +999,16 @@ static inline uint64_t qdf_siphash(const void *data, size_t len,
 {
 	return __qdf_siphash(data, len, key);
 }
+
+/**
+ * qdf_virt_to_head_page: Get head page reference for the address
+ *
+ * @addr: virtual address
+ *
+ * Return: Page reference
+ */
+static inline qdf_page_t qdf_virt_to_head_page(void *addr)
+{
+	return __qdf_virt_to_head_page(addr);
+}
 #endif /*_QDF_UTIL_H*/

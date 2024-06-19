@@ -19,6 +19,11 @@
 #include <qdf_page_pool.h>
 #include <linux/ptr_ring.h>
 
+dma_addr_t __qdf_page_pool_get_dma_addr(struct page *page)
+{
+	return page_pool_get_dma_addr(page);
+}
+
 bool __qdf_page_pool_full_bh(__qdf_page_pool_t pp)
 {
 	int i;

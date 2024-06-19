@@ -25,6 +25,18 @@
 typedef __qdf_page_pool_t qdf_page_pool_t;
 
 /**
+ * qdf_page_pool_get_dma_addr: Get DMA address of the page pool page
+ *
+ * @page: Reference to the page
+ *
+ * Return: DMA address of the page
+ */
+static inline dma_addr_t qdf_page_pool_get_dma_addr(qdf_page_t page)
+{
+	return __qdf_page_pool_get_dma_addr(page);
+}
+
+/**
  * qdf_page_pool_full_bh() - Check page pool full condition
  *
  * @pp: Page Pool Reference

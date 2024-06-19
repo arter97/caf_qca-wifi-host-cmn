@@ -35,6 +35,15 @@
 typedef struct page_pool *__qdf_page_pool_t;
 
 /**
+ * __qdf_page_pool_get_dma_addr: Get DMA address of the page pool page
+ *
+ * @page: Reference to the page
+ *
+ * Return: DMA address of the page
+ */
+dma_addr_t __qdf_page_pool_get_dma_addr(struct page *page);
+
+/**
  * __qdf_page_pool_full_bh() - Check page pool full condition
  *
  * @pp: Page Pool Reference
@@ -99,6 +108,18 @@ void __qdf_page_pool_destroy(__qdf_page_pool_t pp);
 #else
 
 typedef void *__qdf_page_pool_t;
+
+/**
+ * __qdf_page_pool_get_dma_addr: Get DMA address of the page pool page
+ *
+ * @page: Reference to the page
+ *
+ * Return: DMA address of the page
+ */
+static inline dma_addr_t __qdf_page_pool_get_dma_addr(struct page *page)
+{
+	return 0;
+}
 
 /**
  * __qdf_page_pool_full_bh() - Check page pool full condition
