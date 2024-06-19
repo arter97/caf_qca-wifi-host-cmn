@@ -535,28 +535,39 @@ void cm_set_vdev_link_id(struct cnx_mgr *cm_ctx,
 	wlan_vdev_set_link_id(cm_ctx->vdev, link_id);
 }
 
+static inline
+bool cm_is_ml_connection(struct wlan_objmgr_vdev *vdev,
+			 struct cm_connect_req *req)
+{
+	struct qdf_mac_addr *mld_mac;
+	bool eht_capab;
+
+	wlan_psoc_mlme_get_11be_capab(wlan_vdev_get_psoc(vdev), &eht_capab);
+	mld_mac = (struct qdf_mac_addr *)wlan_vdev_mlme_get_mldaddr(vdev);
+
+	if (eht_capab && !qdf_is_macaddr_zero(mld_mac) &&
+	    req->cur_candidate->entry->ie_list.multi_link_bv &&
+	    wlan_cm_is_eht_allowed_for_current_security(wlan_vdev_get_psoc(vdev),
+							req->cur_candidate->entry,
+							true))
+		return true;
+
+	return false;
+}
+
 static QDF_STATUS cm_update_vdev_mlme_macaddr(struct cnx_mgr *cm_ctx,
 					      struct cm_connect_req *req)
 {
 	struct qdf_mac_addr *mac;
-	bool eht_capab;
 	struct wlan_objmgr_vdev *vdev = cm_ctx->vdev;
 	uint8_t vdev_id = wlan_vdev_get_id(vdev);
 
 	if (wlan_vdev_mlme_get_opmode(vdev) != QDF_STA_MODE)
 		return QDF_STATUS_SUCCESS;
 
-	wlan_psoc_mlme_get_11be_capab(wlan_vdev_get_psoc(vdev), &eht_capab);
-	if (!eht_capab)
-		return QDF_STATUS_SUCCESS;
-
 	mac = (struct qdf_mac_addr *)wlan_vdev_mlme_get_mldaddr(vdev);
 
-	if (req->cur_candidate->entry->ie_list.multi_link_bv &&
-	    !qdf_is_macaddr_zero(mac) &&
-	    wlan_cm_is_eht_allowed_for_current_security(wlan_vdev_get_psoc(vdev),
-							req->cur_candidate->entry,
-							true)) {
+	if (cm_is_ml_connection(vdev, req)) {
 		wlan_vdev_obj_lock(vdev);
 		/* Use link address for ML connection */
 		wlan_vdev_mlme_set_macaddr(vdev, vdev->vdev_mlme.linkaddr);
