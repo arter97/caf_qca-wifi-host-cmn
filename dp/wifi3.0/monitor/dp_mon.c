@@ -272,11 +272,6 @@ QDF_STATUS dp_reset_monitor_mode_unlock(struct cdp_soc_t *soc_hdl,
 #endif
 	}
 
-	for (mac_id = 0; mac_id < num_dst_rings; mac_id++) {
-		mon_mac = dp_get_mon_mac(pdev, mac_id);
-		mon_mac->mvdev = NULL;
-	}
-
 	/*
 	 * Lite monitor mode, smart monitor mode and monitor
 	 * mode uses this APIs to filter reset and mode disable
@@ -305,6 +300,11 @@ QDF_STATUS dp_reset_monitor_mode_unlock(struct cdp_soc_t *soc_hdl,
 	if (status != QDF_STATUS_SUCCESS) {
 		dp_rx_mon_dest_err("%pK: Failed to reset monitor filters",
 				   soc);
+	}
+
+	for (mac_id = 0; mac_id < num_dst_rings; mac_id++) {
+		mon_mac = dp_get_mon_mac(pdev, mac_id);
+		mon_mac->mvdev = NULL;
 	}
 
 	mon_pdev->monitor_configured = false;
