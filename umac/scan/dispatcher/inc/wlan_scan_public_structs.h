@@ -92,7 +92,7 @@ typedef uint32_t wlan_scan_id;
  * length + atleast 1 byte of datai
  * @BSS_INDEX_POS: Position of BSSID index field in Multiple BSSID index tag
  * @MIN_VENDOR_TAG_LEN: Minimum length of a vendor specific tag
- * @OUI_LEN: OUI + OUI Type + Min DATA
+ * @OUI_LEN: OUI + OUI Type
  * @ELEM_ID_EXTN_POS: Position of element ID extension in an extension element
  * @ELEM_ID_LIST_LEN_POS: Position of length field in list of element IDs
  * @ELEM_ID_LIST_POS: Position to the start of element ID list
@@ -114,7 +114,7 @@ typedef uint32_t wlan_scan_id;
 #define SPLIT_PROF_DATA_LEAST_LEN 3
 #define BSS_INDEX_POS 2
 #define MIN_VENDOR_TAG_LEN 7
-#define OUI_LEN 5
+#define OUI_LEN 4
 #define ELEM_ID_EXTN_POS 2
 #define ELEM_ID_LIST_LEN_POS 3
 #define ELEM_ID_LIST_POS 4
