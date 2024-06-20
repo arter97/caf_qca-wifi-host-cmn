@@ -27,6 +27,9 @@
 
 #ifndef _I_QDF_NBUF_M_H
 #define _I_QDF_NBUF_M_H
+
+#include "i_qdf_page_pool.h"
+
 /**
  * struct qdf_nbuf_cb - network buffer control block contents (skb->cb)
  *                    - data passed between layers of the driver.
@@ -771,6 +774,13 @@ __qdf_nbuf_unmap_nbytes_single(qdf_device_t osdev, struct sk_buff *buf,
 			       qdf_dma_dir_t dir, int nbytes)
 {
 	qdf_dma_addr_t paddr = QDF_NBUF_CB_PADDR(buf);
+
+	/* Sync the DMA buffer for CPU instead of unmap
+	 * for page pool buffers since these are recyclable.
+	 */
+	if (__qdf_is_pp_nbuf(buf))
+		return dma_sync_single_for_cpu(osdev->dev, paddr, nbytes,
+					       __qdf_dma_dir_to_os(dir));
 
 	if (qdf_likely(paddr)) {
 		__qdf_record_nbuf_nbytes(
