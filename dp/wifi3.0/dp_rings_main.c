@@ -2832,8 +2832,13 @@ dp_peer_setup_wifi3(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 
 	status = dp_peer_mlo_setup(soc, peer, vdev->vdev_id, setup_info);
 	if (QDF_IS_STATUS_ERROR(status)) {
-		dp_peer_err("peer mlo setup failed");
-		qdf_assert_always(0);
+		dp_peer_alert("peer mlo setup failed for link mac : "
+			      QDF_MAC_ADDR_FMT "MLD Mac : " QDF_MAC_ADDR_FMT,
+			      QDF_MAC_ADDR_REF(peer->mac_addr.raw),
+			      QDF_MAC_ADDR_REF(setup_info->mld_peer_mac));
+		status = QDF_STATUS_E_FAILURE;
+		dp_peer_mlo_setup_err_assert();
+		goto fail;
 	}
 
 	if (vdev_opmode != wlan_op_mode_monitor) {

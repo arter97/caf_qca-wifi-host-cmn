@@ -1611,6 +1611,10 @@ dp_link_peer_hash_find_by_chip_id(struct dp_soc *soc,
 
 	return NULL;
 }
+
+static inline void dp_peer_mlo_setup_err_assert(void)
+{
+}
 #else
 static inline uint8_t dp_get_chip_id(struct dp_soc *soc)
 {
@@ -1628,6 +1632,11 @@ dp_link_peer_hash_find_by_chip_id(struct dp_soc *soc,
 	return dp_peer_find_hash_find(soc, peer_mac_addr,
 				      mac_addr_is_aligned,
 				      vdev_id, mod_id);
+}
+
+static inline void dp_peer_mlo_setup_err_assert(void)
+{
+	qdf_assert_always(0);
 }
 #endif
 
@@ -2358,6 +2367,10 @@ void dp_mlo_peer_authorize(struct dp_soc *soc,
 static inline uint8_t dp_get_chip_id(struct dp_soc *soc)
 {
 	return 0;
+}
+
+static inline void dp_peer_mlo_setup_err_assert(void)
+{
 }
 
 static inline struct dp_peer *
