@@ -2699,22 +2699,38 @@ bool dp_rx_pkt_tracepoints_enabled(void)
 }
 
 #ifdef FEATURE_DIRECT_LINK
-static inline
-QDF_STATUS __dp_audio_smmu_map(struct dp_soc *soc, qdf_nbuf_t nbuf,
-			       qdf_size_t size)
+static inline QDF_STATUS
+__dp_audio_smmu_map_addr(struct dp_soc *soc, qdf_dma_addr_t addr,
+			 qdf_size_t size)
 {
 	int ret;
 
-	qdf_nbuf_set_rx_audio_smmu_map(nbuf, 1);
-
 	ret = pld_audio_smmu_map(soc->osdev->dev,
-				 qdf_mem_paddr_from_dmaaddr(soc->osdev,
-							    QDF_NBUF_CB_PADDR(nbuf)),
-				 QDF_NBUF_CB_PADDR(nbuf), size);
+				 qdf_mem_paddr_from_dmaaddr(soc->osdev, addr),
+				 addr, size);
 	if (ret)
 		return QDF_STATUS_E_FAILURE;
 
 	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+dp_audio_smmu_map_addr(struct dp_soc *soc, qdf_dma_addr_t addr, qdf_size_t size)
+{
+	if (!qdf_atomic_read(&soc->direct_link_active) ||
+	    soc->wlan_cfg_ctx->is_audio_shared_iommu_group)
+		return QDF_STATUS_SUCCESS;
+
+	return __dp_audio_smmu_map_addr(soc, addr, size);
+}
+
+static inline QDF_STATUS
+__dp_audio_smmu_map(struct dp_soc *soc, qdf_nbuf_t nbuf,
+		    qdf_size_t size)
+{
+	qdf_nbuf_set_rx_audio_smmu_map(nbuf, 1);
+
+	return __dp_audio_smmu_map_addr(soc, QDF_NBUF_CB_PADDR(nbuf), size);
 }
 
 /**
@@ -2742,10 +2758,28 @@ QDF_STATUS dp_audio_smmu_map(struct dp_soc *soc, qdf_nbuf_t nbuf,
 }
 
 static inline void
+__dp_audio_smmu_unmap_addr(struct dp_soc *soc, qdf_dma_addr_t addr,
+			   qdf_size_t size)
+{
+	return pld_audio_smmu_unmap(soc->osdev->dev, addr, size);
+}
+
+static inline void
+dp_audio_smmu_unmap_addr(struct dp_soc *soc, qdf_dma_addr_t addr,
+			 qdf_size_t size)
+{
+	if (!qdf_atomic_read(&soc->direct_link_active) ||
+	    soc->wlan_cfg_ctx->is_audio_shared_iommu_group)
+		return;
+
+	return __dp_audio_smmu_unmap_addr(soc, addr, size);
+}
+
+static inline void
 __dp_audio_smmu_unmap(struct dp_soc *soc, qdf_nbuf_t nbuf, qdf_size_t size)
 {
 	qdf_nbuf_set_rx_audio_smmu_map(nbuf, 0);
-	pld_audio_smmu_unmap(soc->osdev->dev, QDF_NBUF_CB_PADDR(nbuf), size);
+	__dp_audio_smmu_unmap_addr(soc, QDF_NBUF_CB_PADDR(nbuf), size);
 }
 
 /**
@@ -2796,6 +2830,18 @@ QDF_STATUS dp_rx_handle_buf_pool_audio_smmu_mapping(struct dp_soc *soc,
 						    uint8_t pdev_id,
 						    bool create);
 #else
+static inline QDF_STATUS
+dp_audio_smmu_map_addr(struct dp_soc *soc, qdf_dma_addr_t addr, qdf_size_t size)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline void
+dp_audio_smmu_unmap_addr(struct dp_soc *soc, qdf_dma_addr_t addr,
+			 qdf_size_t size)
+{
+}
+
 static inline
 QDF_STATUS dp_audio_smmu_map(struct dp_soc *soc, qdf_nbuf_t nbuf,
 			     qdf_size_t size)
