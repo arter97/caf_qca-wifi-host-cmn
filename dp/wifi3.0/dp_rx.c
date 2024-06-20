@@ -342,6 +342,11 @@ dp_pdev_nbuf_alloc_and_map_replenish(struct dp_soc *dp_soc,
 {
 	QDF_STATUS ret = QDF_STATUS_E_FAILURE;
 
+	ret = dp_rx_page_pool_nbuf_alloc_and_map(dp_soc, nbuf_frag_info_t,
+						 mac_id);
+	if (QDF_IS_STATUS_SUCCESS(ret))
+		return ret;
+
 	(nbuf_frag_info_t->virt_addr).nbuf =
 		dp_rx_buffer_pool_nbuf_alloc(dp_soc,
 					     mac_id,
@@ -3152,9 +3157,15 @@ dp_pdev_nbuf_alloc_and_map(struct dp_soc *dp_soc,
 			   struct dp_rx_nbuf_frag_info *nbuf_frag_info_t,
 			   struct dp_pdev *dp_pdev,
 			   struct rx_desc_pool *rx_desc_pool,
-			   bool dp_buf_page_frag_alloc_enable)
+			   bool dp_buf_page_frag_alloc_enable,
+			   uint32_t mac_id)
 {
 	QDF_STATUS ret = QDF_STATUS_E_FAILURE;
+
+	ret = dp_rx_page_pool_nbuf_alloc_and_map(dp_soc, nbuf_frag_info_t,
+						 mac_id);
+	if (QDF_IS_STATUS_SUCCESS(ret))
+		return ret;
 
 	dp_rx_nbuf_alloc_for_frag_info(dp_soc, nbuf_frag_info_t,
 				       rx_desc_pool,
@@ -3301,7 +3312,8 @@ dp_pdev_rx_buffers_attach(struct dp_soc *dp_soc, uint32_t mac_id,
 				ret = dp_pdev_nbuf_alloc_and_map(dp_soc,
 						&nf_info[nr_nbuf], dp_pdev,
 						rx_desc_pool,
-						dp_buf_page_frag_alloc_enable);
+						dp_buf_page_frag_alloc_enable,
+						mac_id);
 			if (QDF_IS_STATUS_ERROR(ret))
 				break;
 
@@ -3422,6 +3434,12 @@ dp_rx_pdev_desc_pool_alloc(struct dp_pdev *pdev)
 	if (status != QDF_STATUS_SUCCESS)
 		return status;
 
+	status = dp_rx_page_pool_alloc(soc, mac_for_pdev, rx_sw_desc_num);
+	if (!QDF_IS_STATUS_SUCCESS(status)) {
+		dp_info("Failed to allocate RX buffer page pools, use conventional method");
+		status =  QDF_STATUS_SUCCESS;
+	}
+
 	return status;
 }
 
@@ -3433,6 +3451,7 @@ void dp_rx_pdev_desc_pool_free(struct dp_pdev *pdev)
 
 	rx_desc_pool = &soc->rx_desc_buf[mac_for_pdev];
 
+	dp_rx_page_pool_free(soc, mac_for_pdev);
 	dp_rx_desc_pool_free(soc, rx_desc_pool);
 }
 
@@ -3446,6 +3465,7 @@ QDF_STATUS dp_rx_pdev_desc_pool_init(struct dp_pdev *pdev)
 	struct rx_desc_pool *rx_desc_pool;
 	uint32_t target_type = hal_get_target_type(soc->hal_soc);
 	uint16_t buf_size;
+	QDF_STATUS ret;
 
 	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 	rx_desc_pool = &soc->rx_desc_buf[mac_for_pdev];
@@ -3487,6 +3507,11 @@ QDF_STATUS dp_rx_pdev_desc_pool_init(struct dp_pdev *pdev)
 
 	dp_rx_desc_pool_init(soc, mac_for_pdev,
 			     rx_sw_desc_num, rx_desc_pool);
+
+	ret = dp_rx_page_pool_init(soc, mac_for_pdev);
+	if (!QDF_IS_STATUS_SUCCESS(ret))
+		dp_info("Failed to initialize RX buffer page pools, use conventional method");
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -3498,6 +3523,7 @@ void dp_rx_pdev_desc_pool_deinit(struct dp_pdev *pdev)
 
 	rx_desc_pool = &soc->rx_desc_buf[mac_for_pdev];
 
+	dp_rx_page_pool_deinit(soc, mac_for_pdev);
 	dp_rx_desc_pool_deinit(soc, rx_desc_pool, mac_for_pdev);
 }
 

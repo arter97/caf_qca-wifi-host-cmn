@@ -2941,6 +2941,7 @@ void dp_peer_cleanup(struct dp_vdev *vdev, struct dp_peer *peer);
  * @dp_pdev: struct dp_pdev *
  * @rx_desc_pool: Rx desc pool
  * @dp_buf_page_frag_alloc_enable: is frag alloc enable
+ * @mac_id: MAC ID
  *
  * Return: QDF_STATUS
  */
@@ -2949,7 +2950,8 @@ dp_pdev_nbuf_alloc_and_map(struct dp_soc *dp_soc,
 			   struct dp_rx_nbuf_frag_info *nbuf_frag_info_t,
 			   struct dp_pdev *dp_pdev,
 			   struct rx_desc_pool *rx_desc_pool,
-			   bool dp_buf_page_frag_alloc_enable);
+			   bool dp_buf_page_frag_alloc_enable,
+			   uint32_t mac_id);
 
 #ifdef DP_PEER_EXTENDED_API
 /**

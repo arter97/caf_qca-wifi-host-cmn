@@ -4030,7 +4030,7 @@ dp_ipa_rx_buf_alloc_opt_dp_ctrl(struct dp_soc *soc, qdf_nbuf_t nbuf,
 
 	dp_info("opt_dp_ctrl: allocate and map nbuf");
 	ret = dp_pdev_nbuf_alloc_and_map(soc, &nbuf_frag_info, pdev,
-					 rx_desc_pool, false);
+					 rx_desc_pool, false, 0);
 	if (QDF_IS_STATUS_ERROR(ret)) {
 		dp_err("opt_dp_ctrl: nbuf allocation failed");
 		return ret;

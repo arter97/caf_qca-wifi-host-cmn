@@ -515,11 +515,13 @@ void dp_rx_page_pool_deinit(struct dp_soc *soc, uint32_t pool_id)
 	qdf_spin_unlock(&rx_pp->pp_lock);
 }
 
-void dp_rx_page_pool_init(struct dp_soc *soc, uint32_t pool_id)
+QDF_STATUS dp_rx_page_pool_init(struct dp_soc *soc, uint32_t pool_id)
 {
 	struct dp_rx_page_pool *rx_pp = &soc->rx_pp[pool_id];
 
 	rx_pp->active_pp_idx = 0;
+
+	return QDF_STATUS_SUCCESS;
 }
 
 void dp_rx_page_pool_free(struct dp_soc *soc, uint32_t pool_id)

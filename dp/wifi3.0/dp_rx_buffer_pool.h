@@ -251,9 +251,9 @@ void dp_rx_page_pool_deinit(struct dp_soc *soc, uint32_t pool_id);
  * @soc: SoC handle
  * @pool_id: Pool ID representing the RX desc pool
  *
- * Return: void
+ * Return: QDF_STATUS
  */
-void dp_rx_page_pool_init(struct dp_soc *soc, uint32_t pool_id);
+QDF_STATUS dp_rx_page_pool_init(struct dp_soc *soc, uint32_t pool_id);
 
 /**
  * dp_rx_page_pool_free() - Free RX Page Pools
@@ -311,10 +311,12 @@ static inline void dp_rx_page_pool_deinit(struct dp_soc *soc, uint32_t pool_id)
  * @soc: SoC handle
  * @pool_id: Pool ID representing the RX desc pool
  *
- * Return: void
+ * Return: QDF_STATUS
  */
-static inline void dp_rx_page_pool_init(struct dp_soc *soc, uint32_t pool_id)
+static inline QDF_STATUS
+dp_rx_page_pool_init(struct dp_soc *soc, uint32_t pool_id)
 {
+	return QDF_STATUS_SUCCESS;
 }
 
 /**
