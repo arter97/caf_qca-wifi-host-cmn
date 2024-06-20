@@ -415,6 +415,82 @@ void dp_rx_buffer_pool_deinit(struct dp_soc *soc, u8 mac_id)
 #define DP_RX_PP_POOL_SIZE_THRES	 4096
 #define DP_RX_PP_AUX_POOL_SIZE           2048
 
+QDF_STATUS
+dp_rx_page_pool_nbuf_alloc_and_map(struct dp_soc *soc,
+				   struct dp_rx_nbuf_frag_info *nbuf_frag_info,
+				   uint32_t mac_id)
+{
+	struct rx_desc_pool *rx_desc_pool = &soc->rx_desc_buf[mac_id];
+	struct dp_rx_page_pool *rx_pp = &soc->rx_pp[mac_id];
+	struct dp_rx_pp_params *pp_params;
+	qdf_page_t page;
+	qdf_nbuf_t nbuf;
+	uint32_t offset;
+	QDF_STATUS ret;
+	int i;
+
+	qdf_spin_lock_bh(&rx_pp->pp_lock);
+
+	pp_params = &rx_pp->main_pool[rx_pp->active_pp_idx];
+	if (!qdf_page_pool_empty(pp_params->pp))
+		goto nbuf_alloc;
+
+	for (i = 0; i < DP_PAGE_POOL_MAX; i++) {
+		pp_params = &rx_pp->main_pool[i];
+
+		if (!pp_params->pp ||
+		    qdf_page_pool_empty(pp_params->pp))
+			continue;
+
+		rx_pp->active_pp_idx = i;
+		goto nbuf_alloc;
+	}
+
+	pp_params = &rx_pp->aux_pool;
+	if (qdf_page_pool_empty(pp_params->pp)) {
+		ret = QDF_STATUS_E_FAILURE;
+		goto out_fail;
+	}
+
+nbuf_alloc:
+	nbuf = qdf_nbuf_page_pool_alloc(soc->osdev, rx_desc_pool->buf_size,
+					RX_BUFFER_RESERVATION,
+					rx_desc_pool->buf_alignment,
+					pp_params->pp, &offset);
+	if (!nbuf) {
+		ret = QDF_STATUS_E_FAILURE;
+		goto out_fail;
+	}
+
+	page = qdf_virt_to_head_page(nbuf->data);
+	nbuf_frag_info->paddr = QDF_NBUF_CB_PADDR(nbuf) =
+		qdf_page_pool_get_dma_addr(page) + offset +
+		qdf_nbuf_headroom(nbuf);
+
+	(nbuf_frag_info->virt_addr).nbuf = nbuf;
+
+	ret = qdf_nbuf_track_map_single(soc->osdev, nbuf, QDF_DMA_FROM_DEVICE);
+	if (!QDF_IS_STATUS_SUCCESS(ret)) {
+		qdf_nbuf_free(nbuf);
+		goto out_fail;
+	}
+
+	dp_ipa_handle_rx_buf_smmu_mapping(soc, nbuf,
+					  rx_desc_pool->buf_size,
+					  true, __func__, __LINE__,
+					  DP_RX_IPA_SMMU_MAP_REPLENISH);
+
+	dp_audio_smmu_map(soc, nbuf, rx_desc_pool->buf_size);
+
+	qdf_spin_unlock_bh(&rx_pp->pp_lock);
+
+	return QDF_STATUS_SUCCESS;
+
+out_fail:
+	qdf_spin_unlock_bh(&rx_pp->pp_lock);
+	return ret;
+}
+
 void dp_rx_page_pool_deinit(struct dp_soc *soc, uint32_t pool_id)
 {
 	struct dp_rx_page_pool *rx_pp = &soc->rx_pp[pool_id];

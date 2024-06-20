@@ -225,6 +225,19 @@ static inline void dp_rx_schedule_refill_thread(struct dp_soc *soc) { }
 
 #ifdef DP_FEATURE_RX_BUFFER_RECYCLE
 /**
+ * dp_rx_page_pool_nbuf_alloc_and_map() - Allocate and map NBUF from page pool
+ *
+ * @soc: SoC handle
+ * @nbuf_frag_info: NBUF frag info reference
+ * @mac_id: Pool ID
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+dp_rx_page_pool_nbuf_alloc_and_map(struct dp_soc *soc,
+				   struct dp_rx_nbuf_frag_info *nbuf_frag_info,
+				   uint32_t mac_id);
+/**
  * dp_rx_page_pool_deinit() - Deinit page pool parameters for @pool_id
  * @soc: SoC handle
  * @pool_id: Pool ID representing the RX desc pool
@@ -265,6 +278,23 @@ void dp_rx_page_pool_free(struct dp_soc *soc, uint32_t pool_id);
 QDF_STATUS dp_rx_page_pool_alloc(struct dp_soc *soc, uint32_t pool_id,
 				 uint32_t pool_size);
 #else
+/**
+ * dp_rx_page_pool_nbuf_alloc_and_map() - Allocate and map NBUF from page pool
+ *
+ * @soc: SoC handle
+ * @nbuf_frag_info: NBUF frag info reference
+ * @mac_id: Pool ID
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS
+dp_rx_page_pool_nbuf_alloc_and_map(struct dp_soc *soc,
+				   struct dp_rx_nbuf_frag_info *nbuf_frag_info,
+				   uint8_t mac_id)
+{
+	return QDF_STATUS_E_FAILURE;
+}
+
 /**
  * dp_rx_page_pool_deinit() - Deinit page pool parameters for @pool_id
  * @soc: SoC handle
