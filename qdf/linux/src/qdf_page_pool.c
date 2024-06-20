@@ -19,6 +19,16 @@
 #include <qdf_page_pool.h>
 #include <linux/ptr_ring.h>
 
+bool __qdf_is_pp_nbuf(struct sk_buff *skb)
+{
+	return !!skb->pp_recycle;
+}
+
+struct page *__qdf_page_pool_alloc_page(qdf_page_pool_t pp)
+{
+	return page_pool_dev_alloc_pages(pp);
+}
+
 dma_addr_t __qdf_page_pool_get_dma_addr(struct page *page)
 {
 	return page_pool_get_dma_addr(page);

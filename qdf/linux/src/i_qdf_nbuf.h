@@ -84,7 +84,8 @@ typedef struct flow_keys __qdf_flow_keys_t;
 
 #define QDF_NBUF_CB_TX_MAX_OS_FRAGS 1
 
-#define QDF_SHINFO_SIZE    SKB_DATA_ALIGN(sizeof(struct skb_shared_info))
+#define QDF_NBUF_ALIGN     SKB_DATA_ALIGN
+#define QDF_SHINFO_SIZE    QDF_NBUF_ALIGN(sizeof(struct skb_shared_info))
 
 /* QDF_NBUF_CB_TX_MAX_EXTRA_FRAGS -
  * max tx fragments added by the driver

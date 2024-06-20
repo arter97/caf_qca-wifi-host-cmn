@@ -25,6 +25,18 @@
 typedef __qdf_page_pool_t qdf_page_pool_t;
 
 /**
+ * qdf_page_pool_alloc_page: Allocate full page from page pool
+ *
+ * @pp: Page Pool reference
+ *
+ * Return: Page reference
+ */
+static inline qdf_page_t qdf_page_pool_alloc_page(qdf_page_pool_t pp)
+{
+	return __qdf_page_pool_alloc_page(pp);
+}
+
+/**
  * qdf_page_pool_get_dma_addr: Get DMA address of the page pool page
  *
  * @page: Reference to the page

@@ -5713,6 +5713,18 @@ static inline qdf_size_t qdf_nbuf_get_allocsize(qdf_nbuf_t nbuf)
 	return __qdf_nbuf_get_allocsize(nbuf);
 }
 
+/**
+ * qdf_is_pp_nbuf: Check if SKB memory is from page pool
+ *
+ * @nbuf: nbuf reference
+ *
+ * Return: True/False
+ */
+static inline bool qdf_is_pp_nbuf(qdf_nbuf_t nbuf)
+{
+	return __qdf_is_pp_nbuf(nbuf);
+}
+
 #ifdef NBUF_FRAG_MEMORY_DEBUG
 
 #define qdf_nbuf_move_frag_page_offset(f, i, o) \

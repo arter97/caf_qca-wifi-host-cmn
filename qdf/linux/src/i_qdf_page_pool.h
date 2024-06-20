@@ -20,6 +20,7 @@
 #define _I_QDF_PAGE_POOL_H
 
 #include <linux/version.h>
+#include <linux/skbuff.h>
 #include "qdf_types.h"
 #include "i_qdf_trace.h"
 
@@ -33,6 +34,24 @@
 #endif
 
 typedef struct page_pool *__qdf_page_pool_t;
+
+/**
+ * __qdf_is_pp_nbuf: Check if SKB memory is from page pool
+ *
+ * @skb: SKB reference
+ *
+ * Return: True/False
+ */
+bool __qdf_is_pp_nbuf(struct sk_buff *skb);
+
+/**
+ * __qdf_page_pool_alloc_page: Allocate full page from page pool
+ *
+ * @pp: Page Pool reference
+ *
+ * Return: Page reference
+ */
+struct page *__qdf_page_pool_alloc_page(__qdf_page_pool_t pp);
 
 /**
  * __qdf_page_pool_get_dma_addr: Get DMA address of the page pool page
@@ -108,6 +127,30 @@ void __qdf_page_pool_destroy(__qdf_page_pool_t pp);
 #else
 
 typedef void *__qdf_page_pool_t;
+
+/**
+ * __qdf_is_pp_nbuf: Check if SKB memory is from page pool
+ *
+ * @skb: SKB reference
+ *
+ * Return: True/False
+ */
+static inline bool __qdf_is_pp_nbuf(struct sk_buff *skb)
+{
+	return false;
+}
+
+/**
+ * __qdf_page_pool_alloc_page: Allocate full page from page pool
+ *
+ * @pp: Page Pool reference
+ *
+ * Return: Page reference
+ */
+static inline struct page *__qdf_page_pool_alloc_page(__qdf_page_pool_t pp)
+{
+	return NULL;
+}
 
 /**
  * __qdf_page_pool_get_dma_addr: Get DMA address of the page pool page
