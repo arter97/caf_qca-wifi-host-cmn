@@ -1014,12 +1014,17 @@ static QDF_STATUS ml_activate_pend_disconn_req_cb(struct scheduler_msg *msg)
 
 	mlo_dev_ctx = vdev->mlo_dev_ctx;
 	sta_ctx = mlo_dev_ctx->sta_ctx;
+	if (!sta_ctx || !sta_ctx->disconn_req)
+		goto release_ref;
+
 	mlo_disconnect_req(vdev, sta_ctx->disconn_req->source,
 			   sta_ctx->disconn_req->reason_code,
 			   &sta_ctx->disconn_req->bssid, false);
 
 	qdf_mem_free(sta_ctx->disconn_req);
 	sta_ctx->disconn_req = NULL;
+
+release_ref:
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLO_MGR_ID);
 
 	return QDF_STATUS_SUCCESS;
