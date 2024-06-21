@@ -557,4 +557,14 @@ void wlan_cm_set_check_assoc_disallowed(struct wlan_objmgr_psoc *psoc,
 void wlan_cm_get_check_assoc_disallowed(struct wlan_objmgr_psoc *psoc,
 					bool *value);
 #endif
+
+/**
+ * cm_get_entry() - Get bss scan entry by link mac address
+ * @scan_list: Scan entry list of bss candidates after filtering
+ * @link_addr: link mac address
+ *
+ * Return: Pointer to bss scan entry
+ */
+struct scan_cache_entry *cm_get_entry(qdf_list_t *scan_list,
+				      struct qdf_mac_addr *link_addr);
 #endif
