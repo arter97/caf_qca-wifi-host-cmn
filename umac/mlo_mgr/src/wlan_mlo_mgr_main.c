@@ -141,8 +141,8 @@ mlo_wsi_link_info_setup_mlo_grps(struct mlo_mgr_context *mlo_mgr)
 				mlo_grp_info->psoc_order[j] =
 							MLO_WSI_PSOC_ID_MAX;
 			}
-			mlo_err("PSOC order %d, index %d",
-				mlo_grp_info->psoc_order[j], j);
+			mlo_debug("PSOC order %d, index %d",
+				  mlo_grp_info->psoc_order[j], j);
 		}
 	}
 }
