@@ -2659,6 +2659,7 @@ util_scan_gen_scan_entry(struct wlan_objmgr_pdev *pdev,
 		     sizeof(scan_entry->mbssid_info));
 
 	scan_entry->phy_mode = util_scan_get_phymode(pdev, scan_entry);
+	scan_entry->non_intersected_phymode = scan_entry->phy_mode;
 
 	scan_entry->nss = util_scan_scm_calc_nss_supported_by_ap(scan_entry);
 	scm_fill_adaptive_11r_cap(scan_entry);
