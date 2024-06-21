@@ -1338,3 +1338,18 @@ bool reg_ignore_default_country(struct wlan_regulatory_psoc_priv_obj *soc_reg,
 
 	return true;
 }
+
+#if defined(CONFIG_BAND_6GHZ) && defined(CONFIG_REG_CLIENT)
+bool reg_is_vlp_depriority_freq(struct wlan_objmgr_pdev *pdev,
+				qdf_freq_t freq)
+{
+	qdf_freq_t vlp_cutoff_freq;
+
+	vlp_cutoff_freq = wlan_reg_get_thresh_priority_freq(pdev);
+
+	if (wlan_reg_is_6ghz_chan_freq(freq) && freq <= vlp_cutoff_freq)
+		return true;
+
+	return false;
+}
+#endif
