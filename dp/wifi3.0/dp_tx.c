@@ -4772,12 +4772,11 @@ dp_ipa_tx_opt_dp_ctrl_reinject(struct dp_soc *soc, struct dp_vdev *vdev,
 	}
 	if (reinject_reason == HTT_TX_FW2WBM_REINJECT_REASON_OPT_DP_CTRL) {
 		dp_info("opt_dp_ctrl: tx pkt reinjected from fw");
+		dp_tx_nbuf_unmap(soc, tx_desc);
 		if (soc->arch_ops.dp_tx_ipa_opt_dp_ctrl)
 			soc->arch_ops.dp_tx_ipa_opt_dp_ctrl(soc,
 							    tx_desc->vdev_id,
 							    nbuf);
-		dp_tx_outstanding_dec(tx_desc->pdev);
-		dp_tx_nbuf_unmap(soc, tx_desc);
 		dp_tx_desc_release(soc, tx_desc, tx_desc->pool_id);
 		return true;
 	}
