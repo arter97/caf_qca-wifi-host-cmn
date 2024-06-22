@@ -9247,7 +9247,7 @@ void dp_print_tso_stats(struct dp_soc *soc,
 		pdev = soc->pdev_list[loop_pdev];
 		DP_PRINT_STATS("TSO Statistics\n");
 		DP_PRINT_STATS(
-			  "From stack: %d | Successful completions: %d | TSO Packets: %d | TSO Completions: %d",
+			  "From stack: %llu | Successful completions: %llu | TSO Packets: %llu | TSO Completions: %d",
 			  pdev->stats.tx_i.rcvd.num,
 			  pdev->stats.tx.tx_success.num,
 			  pdev->stats.tso_stats.num_tso_pkts.num,
