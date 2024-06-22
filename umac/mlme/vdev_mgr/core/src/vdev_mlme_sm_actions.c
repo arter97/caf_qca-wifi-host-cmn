@@ -452,6 +452,26 @@ static void mlme_multivdev_restart(struct pdev_mlme_obj *pdev_mlme)
 	}
 }
 
+static void mlme_print_vdev_state_history(struct wlan_objmgr_pdev *pdev,
+					  void *object, void *arg)
+{
+	struct wlan_objmgr_vdev *vdev = (struct wlan_objmgr_vdev *)object;
+	uint8_t psoc_id;
+
+	if (!vdev) {
+		qdf_err("null vdev");
+		return;
+	}
+
+	if (wlan_vdev_mlme_is_init_state(vdev) == QDF_STATUS_SUCCESS) {
+		return;
+	}
+
+	psoc_id = wlan_psoc_get_id(wlan_pdev_get_psoc(pdev));
+
+	wlan_mlme_print_vdev_sm_history(wlan_pdev_get_psoc(pdev), vdev, &psoc_id);
+}
+
 #define MULTIVDEV_RESTART_MAX_RETRY_CNT 200
 static os_timer_func(mlme_restart_req_timeout)
 {
@@ -482,7 +502,11 @@ static os_timer_func(mlme_restart_req_timeout)
 				QDF_MODULE_ID_CMN_MLME, QDF_TRACE_LEVEL_ERROR,
 				pdev_mlme->restart_pend_vdev_bmap,
 				sizeof(pdev_mlme->restart_pend_vdev_bmap));
-			wlan_mlme_print_all_sm_history();
+
+			wlan_objmgr_pdev_iterate_obj_list(pdev, WLAN_VDEV_OP,
+					mlme_print_vdev_state_history,
+					NULL, 0, WLAN_MLME_SB_ID);
+
 
 			/* Print Pdev's serialization history */
 			vdev = wlan_pdev_peek_active_first_vdev(pdev, WLAN_MLME_SB_ID);
