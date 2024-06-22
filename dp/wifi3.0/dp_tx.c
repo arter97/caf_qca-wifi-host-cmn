@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -6538,7 +6538,7 @@ void dp_tx_dump_tx_desc(struct dp_tx_desc_s *tx_desc)
 		dp_tx_comp_warn("tx_desc->flags: 0x%x", tx_desc->flags);
 		dp_tx_comp_warn("tx_desc->id: %u", tx_desc->id);
 		dp_tx_comp_warn("tx_desc->dma_addr: 0x%x",
-				tx_desc->dma_addr);
+				(unsigned int)tx_desc->dma_addr);
 		dp_tx_comp_warn("tx_desc->vdev_id: %u",
 				tx_desc->vdev_id);
 		dp_tx_comp_warn("tx_desc->tx_status: %u",
