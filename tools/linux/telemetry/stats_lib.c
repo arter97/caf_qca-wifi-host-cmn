@@ -2488,7 +2488,7 @@ static int get_mld_link_id(char *ifname, char *link_name)
 	if (fp == NULL)
 		return MLO_INVALID_LINK_ID;
 
-	fgets(link_id_str, IFNAMSIZ, fp);
+	fgets(link_id_str, sizeof(link_id_str), fp);
 	fclose(fp);
 
 	return atoi(link_id_str);
