@@ -975,6 +975,10 @@ QDF_STATUS __dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 	dp_verbose_debug("%pK: requested %d buffers for replenish",
 			 dp_soc, num_req_buffers);
 
+	if (dp_rx_buffers_is_skip_replenish(dp_soc, rx_desc_pool, desc_list,
+					    tail, &num_req_buffers, mac_id))
+		return QDF_STATUS_SUCCESS;
+
 	hal_srng_access_start(dp_soc->hal_soc, rxdma_srng);
 
 	num_entries_avail = hal_srng_src_num_avail(dp_soc->hal_soc,
@@ -992,9 +996,10 @@ QDF_STATUS __dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 	} else if (num_entries_avail < num_req_buffers) {
 		num_desc_to_free = num_req_buffers - num_entries_avail;
 		num_req_buffers = num_entries_avail;
-	} else if ((*desc_list) &&
+	} else if (((*desc_list) &&
 		   dp_rxdma_srng->num_entries - num_entries_avail <
-		   CRITICAL_BUFFER_THRESHOLD) {
+		   CRITICAL_BUFFER_THRESHOLD) &&
+		   dp_rx_buffers_is_critical_threshold(rx_desc_pool)) {
 		/* set extra buffers to CRITICAL_BUFFER_THRESHOLD only if
 		 * total buff requested after adding extra buffers is less
 		 * than or equal to num entries available, else set it to max
@@ -1136,6 +1141,7 @@ QDF_STATUS __dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 	 */
 	DP_STATS_INC_PKT(dp_pdev, replenish.pkts, count, 0);
 	DP_STATS_INC(dp_pdev, replenish.free_list, num_req_buffers - count);
+	dp_rx_desc_dec_in_use_count(rx_desc_pool, num_req_buffers, count);
 
 free_descs:
 	DP_STATS_INC(dp_pdev, buf_freelist, num_desc_to_free);
@@ -3504,6 +3510,7 @@ dp_rx_pdev_buffers_alloc(struct dp_pdev *pdev)
 	struct rx_desc_pool *rx_desc_pool;
 	uint32_t rxdma_entries;
 	uint32_t target_type = hal_get_target_type(soc->hal_soc);
+	uint32_t num_rx_buffers;
 
 	dp_rxdma_srng = &soc->rx_refill_buf_ring[mac_for_pdev];
 
@@ -3516,17 +3523,19 @@ dp_rx_pdev_buffers_alloc(struct dp_pdev *pdev)
 	 * used during low memory conditions
 	 */
 	dp_rx_buffer_pool_init(soc, mac_for_pdev);
+	num_rx_buffers = dp_rx_get_num_buffers_required(rx_desc_pool,
+							rxdma_entries);
 
 	if (target_type == TARGET_TYPE_QCN9160)
 		return dp_pdev_rx_buffers_attach(soc, mac_for_pdev,
 						 dp_rxdma_srng,
 						 rx_desc_pool,
-						 rxdma_entries - 1);
+						 num_rx_buffers);
 	else
 		return dp_pdev_rx_buffers_attach_simple(soc, mac_for_pdev,
 							dp_rxdma_srng,
 							rx_desc_pool,
-							rxdma_entries - 1);
+							num_rx_buffers);
 }
 
 void

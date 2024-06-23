@@ -864,6 +864,143 @@ static inline bool dp_rx_is_sw_cookie_valid(struct dp_soc *soc,
 }
 #endif
 
+#ifdef WLAN_DP_DYNAMIC_RESOURCE_MGMT
+/**
+ * dp_rx_desc_inc_in_use_count() - Increment in use count descriptors
+ *					from pool
+ * @rx_desc_pool: rx descriptor pool pointer
+ * @count: number of descriptors to be incremented
+ *
+ * Return: None
+ */
+static inline void
+dp_rx_desc_inc_in_use_count(struct rx_desc_pool *rx_desc_pool, uint32_t count)
+{
+	if (rx_desc_pool->desc_type == QDF_DP_RX_DESC_BUF_TYPE)
+		qdf_atomic_add(count, &rx_desc_pool->in_use_count);
+}
+
+/**
+ * dp_rx_desc_dec_in_use_count() - Decrement in use count descriptors
+ *					from pool
+ * @rx_desc_pool: rx descriptor pool pointer
+ * @num_req: Requested buffers to allocate
+ * @num_alloc: number of buffers allocated
+ *
+ * Return: None
+ */
+static inline void
+dp_rx_desc_dec_in_use_count(struct rx_desc_pool *rx_desc_pool,
+			    uint32_t num_req, uint32_t num_alloc)
+{
+	if (rx_desc_pool->desc_type == QDF_DP_RX_DESC_BUF_TYPE)
+		qdf_atomic_sub((num_req - num_alloc),
+			       &rx_desc_pool->in_use_count);
+}
+
+/**
+ * dp_rx_buffers_is_critical_threshold() - Check is critical threshold reached
+ *
+ * @rx_desc_pool: rx descriptor pool pointer
+ *
+ * Return: True if critical threshold reached
+ */
+static inline bool
+dp_rx_buffers_is_critical_threshold(struct rx_desc_pool *rx_desc_pool)
+{
+	uint64_t required_count, in_use_count;
+
+	if (rx_desc_pool->desc_type != QDF_DP_RX_DESC_BUF_TYPE)
+		return true;
+
+	required_count = qdf_atomic_read(&rx_desc_pool->required_count);
+	in_use_count = qdf_atomic_read(&rx_desc_pool->in_use_count);
+
+	if (required_count > in_use_count)
+		return ((required_count - in_use_count) > (required_count/3)) ? true : false;
+
+	return false;
+}
+
+/**
+ * dp_rx_get_num_buffers_required() - Get Required Rx buffers
+ *
+ * @rx_desc_pool: rx descriptor pool pointer
+ * @rxdma_entries: Rxdma ring entries
+ *
+ * Return: number of rx buffers for current connection mode
+ */
+static inline uint32_t
+dp_rx_get_num_buffers_required(struct rx_desc_pool *rx_desc_pool,
+			       uint32_t rxdma_entries)
+{
+	uint64_t required_count = qdf_atomic_read(&rx_desc_pool->required_count);
+
+	dp_info("required:%u, type:%u", required_count, rx_desc_pool->desc_type);
+	if ((rx_desc_pool->desc_type != QDF_DP_RX_DESC_BUF_TYPE) ||
+	    !required_count ||
+	    required_count == rxdma_entries)
+		return (rxdma_entries - 1);
+
+	return required_count;
+}
+
+/**
+ * dp_rx_buffers_is_skip_replenish() - Check if current replenish need to be
+ * skipped
+ * @soc: DP soc reference
+ * @rx_desc_pool: rx descriptor pool pointer
+ * @desc_list: Descriptor list reference
+ * @tail: Rx descriptor list tail reference
+ * @num_req_buffers: requested Rx buffers
+ * @mac_id: Mac id
+ *
+ * Return: True if replenish need to be skipped
+ */
+bool
+dp_rx_buffers_is_skip_replenish(struct dp_soc *soc,
+				struct rx_desc_pool *rx_desc_pool,
+				union dp_rx_desc_list_elem_t **desc_list,
+				union dp_rx_desc_list_elem_t **tail,
+				uint32_t *num_req_buffers,
+				uint32_t mac_id);
+#else
+static inline bool
+dp_rx_buffers_is_critical_threshold(struct rx_desc_pool *rx_desc_pool)
+{
+	return true;
+}
+
+static inline bool
+dp_rx_buffers_is_skip_replenish(struct dp_soc *soc,
+				struct rx_desc_pool *rx_desc_pool,
+				union dp_rx_desc_list_elem_t **desc_list,
+				union dp_rx_desc_list_elem_t **tail,
+				uint32_t *num_req_buffers,
+				uint32_t mac_id)
+{
+	return false;
+}
+
+static inline void
+dp_rx_desc_inc_in_use_count(struct rx_desc_pool *rx_desc_pool, uint32_t count)
+{
+}
+
+static inline void
+dp_rx_desc_dec_in_use_count(struct rx_desc_pool *rx_desc_pool,
+			    uint32_t num_req, uint32_t num_alloc)
+{
+}
+
+static inline uint32_t
+dp_rx_get_num_buffers_required(struct rx_desc_pool *rx_desc_pool,
+			       uint32_t rxdma_entries)
+{
+	return (rxdma_entries - 1);
+}
+#endif
+
 /**
  * dp_rx_desc_pool_is_allocated() - check if memory is allocated for the
  *					rx descriptor pool
