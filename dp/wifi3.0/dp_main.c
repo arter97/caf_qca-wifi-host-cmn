@@ -12953,6 +12953,11 @@ static struct cdp_ctrl_ops dp_ops_ctrl = {
 #ifdef WLAN_FEATURE_11BE_MLO
 	.txrx_get_pdev_mlo_timestamp_offset = dp_get_pdev_mlo_timestamp_offset,
 #endif
+#ifdef WLAN_DP_DYNAMIC_RESOURCE_MGMT
+	.txrx_set_req_buff_descs = dp_rx_set_req_buff_descs,
+	.txrx_get_num_buff_descs_info = dp_rx_get_num_buff_descs_info,
+	.txrx_buffers_replenish_on_demand = dp_rx_buffers_replenish_on_demand,
+#endif
 };
 
 static struct cdp_me_ops dp_ops_me = {

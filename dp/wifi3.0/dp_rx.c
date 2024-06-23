@@ -3766,3 +3766,73 @@ void dp_rx_get_per_ring_pkt_avg(struct cdp_soc_t *cdp_soc,
 	}
 }
 #endif
+
+#ifdef WLAN_DP_DYNAMIC_RESOURCE_MGMT
+QDF_STATUS
+dp_rx_set_req_buff_descs(struct cdp_soc_t *cdp_soc,
+			 uint64_t req_rx_buff_descs, uint32_t pdev_id)
+{
+	struct dp_soc *soc = (struct dp_soc *)cdp_soc;
+	struct rx_desc_pool *rx_desc_pool;
+
+	rx_desc_pool = &soc->rx_desc_buf[pdev_id];
+	if (!rx_desc_pool) {
+		dp_err("Rx descriptor pool not initialized");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	qdf_atomic_set(&rx_desc_pool->required_count, req_rx_buff_descs);
+	dp_info("Req RX buffer descriptors set to %u", req_rx_buff_descs);
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS
+dp_rx_get_num_buff_descs_info(struct cdp_soc_t *cdp_soc,
+			      uint64_t *req_rx_buff_descs,
+			      uint64_t *in_use_rx_buff_descs, uint32_t pdev_id)
+{
+	struct dp_soc *soc = (struct dp_soc *)cdp_soc;
+	struct rx_desc_pool *rx_desc_pool;
+
+	rx_desc_pool = &soc->rx_desc_buf[pdev_id];
+	if (!rx_desc_pool) {
+		dp_err("Rx descriptor pool not initialized pool_id:%u", pdev_id);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	*req_rx_buff_descs = qdf_atomic_read(&rx_desc_pool->required_count);
+	*in_use_rx_buff_descs = qdf_atomic_read(&rx_desc_pool->in_use_count);
+	return QDF_STATUS_SUCCESS;
+}
+
+uint32_t
+dp_rx_buffers_replenish_on_demand(struct cdp_soc_t *cdp_soc,
+				  uint32_t num_buffers, uint32_t pdev_id)
+{
+	struct dp_soc *soc = (struct dp_soc *)cdp_soc;
+	struct rx_desc_pool *rx_desc_pool;
+	union dp_rx_desc_list_elem_t *head = NULL;
+	union dp_rx_desc_list_elem_t *tail = NULL;
+	uint32_t num_alloc_desc;
+
+	rx_desc_pool = &soc->rx_desc_buf[pdev_id];
+	if (!rx_desc_pool) {
+		dp_err("Rx descriptor pool not initialized pool_id:%u", pdev_id);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	num_alloc_desc =  dp_rx_get_free_desc_list(soc, pdev_id, rx_desc_pool,
+						   num_buffers, &head, &tail);
+	if (!num_alloc_desc) {
+		dp_err("Failed to allocate DP rx descriptors");
+		return num_alloc_desc;
+	}
+
+	dp_rx_buffers_replenish_simple(soc, pdev_id,
+				       &soc->rx_refill_buf_ring[pdev_id],
+				       rx_desc_pool, num_alloc_desc,
+				       &head, &tail);
+
+	return num_alloc_desc;
+}
+#endif

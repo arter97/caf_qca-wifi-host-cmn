@@ -3815,4 +3815,66 @@ void dp_rx_calculate_per_ring_pkt_avg(struct cdp_soc_t *cdp_soc);
 void dp_rx_get_per_ring_pkt_avg(struct cdp_soc_t *cdp_soc,
 				uint32_t *pkt_avg, uint32_t *total_avg_pkts);
 #endif /* WLAN_DP_LOAD_BALANCE_SUPPORT */
+#ifdef WLAN_DP_DYNAMIC_RESOURCE_MGMT
+/**
+ * dp_rx_set_req_buff_descs - set required RX descriptors for connection
+ * @cdp_soc: DP soc reference
+ * @req_rx_buff_descs: required rx descriptors
+ * @pdev_id: pdev id
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+dp_rx_set_req_buff_descs(struct cdp_soc_t *cdp_soc,
+			 uint64_t req_rx_buff_descs, uint32_t pdev_id);
+
+/**
+ * dp_rx_get_num_buff_descs_info - Get Buffer descriptors info
+ * @cdp_soc: DP soc reference
+ * @req_rx_buff_descs: required rx descriptors
+ * @in_use_rx_buff_descs: rx descriptors in use
+ * @pdev_id: pdev id
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+dp_rx_get_num_buff_descs_info(struct cdp_soc_t *cdp_soc,
+			      uint64_t *req_rx_buff_descs,
+			      uint64_t *in_use_rx_buff_descs, uint32_t pdev_id);
+
+/**
+ * dp_rx_buffers_replenish_on_demand - Replenish Rx buffers on demand
+ * @cdp_soc: DP soc reference
+ * @num_buffers: Number of Rx buffers to replenish
+ * @pdev_id: pdev id
+ *
+ * Return: QDF_STATUS
+ */
+uint32_t
+dp_rx_buffers_replenish_on_demand(struct cdp_soc_t *cdp_soc,
+				  uint32_t num_buffers, uint32_t pdev_id);
+
+#else
+static inline QDF_STATUS
+dp_rx_set_req_buff_descs(struct cdp_soc_t *cdp_soc,
+			 uint64_t req_rx_buff_descs, uint32_t pdev_id)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline QDF_STATUS
+dp_rx_get_num_buff_descs_info(struct cdp_soc_t *cdp_soc,
+			      uint64_t *req_rx_buff_descs,
+			      uint64_t *in_use_rx_buff_descs, uint32_t pdev_id)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline uint32_t
+dp_rx_buffers_replenish_on_demand(struct cdp_soc_t *cdp_soc,
+				  uint32_t num_buffers, uint32_t pdev_id)
+{
+	return 0;
+}
+#endif
 #endif /* _DP_RX_H */

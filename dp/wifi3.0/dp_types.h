@@ -671,6 +671,8 @@ enum dp_ctxt_type {
  * @rx_mon_dest_frag_enable: Enable frag processing for mon dest buffer
  * @pf_cache: page frag cache
  * @desc_type: type of desc this pool serves
+ * @required_count: Required Rx descriptors for current connection
+ * @in_use_count: Rx descriptors are in use
  */
 struct rx_desc_pool {
 	uint32_t pool_size;
@@ -688,6 +690,10 @@ struct rx_desc_pool {
 	bool rx_mon_dest_frag_enable;
 	qdf_frag_cache_t pf_cache;
 	enum qdf_dp_desc_type desc_type;
+#ifdef WLAN_DP_DYNAMIC_RESOURCE_MGMT
+	qdf_atomic_t required_count;
+	qdf_atomic_t in_use_count;
+#endif
 };
 
 /**

@@ -1022,6 +1022,17 @@ struct cdp_ctrl_ops {
 #endif
 	uint64_t (*txrx_get_pdev_mlo_timestamp_offset)(struct cdp_soc_t *soc,
 						       uint8_t pdev_id);
+
+	QDF_STATUS (*txrx_set_req_buff_descs)(struct cdp_soc_t *soc,
+					      uint64_t req_rx_buff_descs,
+					      uint32_t pdev_id);
+	QDF_STATUS (*txrx_get_num_buff_descs_info)(struct cdp_soc_t *soc,
+						   uint64_t *req_rx_buff_descs,
+						   uint64_t *in_use_rx_buff_descs,
+						   uint32_t pdev_id);
+	uint32_t (*txrx_buffers_replenish_on_demand)(struct cdp_soc_t *soc,
+						     uint32_t num_buffers,
+						     uint32_t pedv_id);
 };
 
 struct cdp_me_ops {

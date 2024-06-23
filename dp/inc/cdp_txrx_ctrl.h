@@ -1557,4 +1557,88 @@ cdp_get_pdev_mlo_timestamp_offset(ol_txrx_soc_handle soc, uint8_t pdev_id)
 	return soc->ops->ctrl_ops->txrx_get_pdev_mlo_timestamp_offset
 			(soc, pdev_id);
 }
+
+/**
+ * cdp_set_req_buff_descs - set required RX descriptors for connection
+ * @soc: DP soc reference
+ * @req_rx_buff_descs: required rx descriptors
+ * @pdev_id: pdev id
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS
+cdp_set_req_buff_descs(struct cdp_soc_t *soc,
+		       uint64_t req_rx_buff_descs,
+		       uint32_t pdev_id)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance:");
+		QDF_BUG(0);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!soc->ops->ctrl_ops ||
+	    !soc->ops->ctrl_ops->txrx_set_req_buff_descs)
+		return QDF_STATUS_E_FAILURE;
+
+	return soc->ops->ctrl_ops->txrx_set_req_buff_descs(soc,
+						req_rx_buff_descs, pdev_id);
+}
+
+/**
+ * cdp_get_num_buff_descs_info - Get Buffer descriptors info
+ * @soc: DP soc reference
+ * @req_rx_buff_descs: required rx descriptors
+ * @in_use_rx_buff_descs: rx descriptors in use
+ * @pdev_id: pdev id
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS
+cdp_get_num_buff_descs_info(struct cdp_soc_t *soc,
+			    uint64_t *req_rx_buff_descs,
+			    uint64_t *in_use_rx_buff_descs,
+			    uint32_t pdev_id)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance:");
+		QDF_BUG(0);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!soc->ops->ctrl_ops ||
+	    !soc->ops->ctrl_ops->txrx_get_num_buff_descs_info)
+		return QDF_STATUS_E_FAILURE;
+
+	return soc->ops->ctrl_ops->txrx_get_num_buff_descs_info(soc,
+						req_rx_buff_descs,
+						in_use_rx_buff_descs, pdev_id);
+}
+
+/**
+ * cdp_buffers_replenish_on_demand - Replenish Rx buffers on demand
+ * @soc: DP soc reference
+ * @num_buffers: Number of Rx buffers to replenish
+ * @pdev_id: pdev id
+ *
+ * Return: QDF_STATUS
+ */
+static inline uint32_t
+cdp_buffers_replenish_on_demand(struct cdp_soc_t *soc,
+				uint32_t num_buffers,
+				uint32_t pdev_id)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance:");
+		QDF_BUG(0);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!soc->ops->ctrl_ops ||
+	    !soc->ops->ctrl_ops->txrx_buffers_replenish_on_demand)
+		return QDF_STATUS_E_FAILURE;
+
+	return soc->ops->ctrl_ops->txrx_buffers_replenish_on_demand(soc,
+						num_buffers, pdev_id);
+}
 #endif /* _CDP_TXRX_CTRL_H_ */
