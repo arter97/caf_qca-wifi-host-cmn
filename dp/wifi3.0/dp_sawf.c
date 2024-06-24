@@ -2043,13 +2043,13 @@ dp_swaf_peer_sla_configuration(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr,
 	peer = dp_peer_find_hash_find(dp_soc, mac_addr, 0,
 				      DP_VDEV_ALL, DP_MOD_ID_SAWF);
 	if (!peer) {
-		dp_sawf_err("Invalid peer");
+		dp_sawf_debug("Invalid peer");
 		return QDF_STATUS_E_INVAL;
 	}
 
 	txrx_peer = dp_get_txrx_peer(peer);
 	if (!txrx_peer) {
-		dp_sawf_err("txrx peer is NULL");
+		dp_sawf_debug("txrx peer is NULL");
 		goto fail;
 	}
 
