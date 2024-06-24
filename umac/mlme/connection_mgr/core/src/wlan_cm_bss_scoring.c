@@ -1405,7 +1405,7 @@ cm_calculate_etp_score(struct wlan_objmgr_psoc *psoc,
 				 entry->rssi_raw,
 				 phy_config,
 				 ml_flag);
-	if (bss_mlo_type == SLO)
+	if (bss_mlo_type == SLO || bss_mlo_type == MLO_TYPE_MAX)
 		return score;
 	wlan_mlme_get_mlo_prefer_percentage(psoc, &mlo_prefer_percentage);
 	if (mlo_prefer_percentage) {
@@ -1930,7 +1930,10 @@ enum MLO_TYPE cm_bss_mlo_type(struct wlan_objmgr_psoc *psoc,
 	bool is_hw_emlsr_cap = false;
 
 	mlo_link_num = cm_get_sta_mlo_conn_max_num(psoc);
-	if (!ml_ie || !entry->ml_info.num_links || mlo_link_num == 1)
+	if (!ml_ie)
+		return MLO_TYPE_MAX;
+
+	if (!entry->ml_info.num_links || mlo_link_num == 1)
 		return SLO;
 
 	is_hw_emlsr_cap = is_cm_hw_emlsr_capable(psoc);
@@ -2597,9 +2600,11 @@ static void cm_vendor_specific_boost(struct wlan_objmgr_psoc *psoc,
 	int per_link_boost;
 	int32_t score = entry->bss_score;
 
-	if (!entry->ie_list.multi_link_bv)
+	if (!entry->ie_list.multi_link_bv) {
+		mlme_debug(QDF_MAC_ADDR_FMT "entry with mlo type %d",
+			   QDF_MAC_ADDR_REF(entry->bssid.bytes), bss_mlo_type);
 		return;
-
+	}
 	switch (bss_mlo_type) {
 	case MLMR:
 		/* Add boost of 15% per link for MLMR candidate */
