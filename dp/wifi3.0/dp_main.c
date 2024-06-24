@@ -7045,12 +7045,12 @@ static QDF_STATUS dp_vdev_attach_wifi3(struct cdp_soc_t *cdp_soc,
 
 	vdev_context_size =
 		soc->arch_ops.txrx_get_context_size(DP_CONTEXT_TYPE_VDEV);
-	vdev = qdf_mem_malloc(vdev_context_size);
+	vdev = qdf_mem_common_alloc(vdev_context_size);
 
 	if (!pdev) {
 		dp_init_err("%pK: DP PDEV is Null for pdev id %d",
 			    cdp_soc, pdev_id);
-		qdf_mem_free(vdev);
+		qdf_mem_vfree(vdev);
 		goto fail0;
 	}
 
@@ -8746,7 +8746,7 @@ free_vdev:
 		vdev, QDF_MAC_ADDR_REF(vdev->mac_addr.raw));
 	wlan_minidump_remove(vdev, sizeof(*vdev), soc->ctrl_psoc,
 			     WLAN_MD_DP_VDEV, "dp_vdev");
-	qdf_mem_free(vdev);
+	qdf_mem_vfree(vdev);
 	vdev = NULL;
 
 	if (vdev_delete_cb)
