@@ -230,6 +230,64 @@ void ipa_uc_stat(struct wlan_objmgr_pdev *pdev)
 	return wlan_ipa_uc_stat(ipa_obj);
 }
 
+#ifdef IPA_OPT_WIFI_DP_CTRL
+void ipa_set_opt_dp_ctrl_flt(struct wlan_objmgr_pdev *pdev,
+			     struct ipa_wdi_opt_dpath_flt_add_cb_params *flt)
+{
+	struct wlan_ipa_priv *ipa_obj;
+	struct wlan_objmgr_psoc *psoc = wlan_pdev_get_psoc(pdev);
+
+	if (!ipa_config_is_enabled()) {
+		ipa_debug("ipa is disabled");
+		return;
+	}
+
+	if (!ipa_cb_is_ready())
+		return;
+
+	ipa_obj = ipa_psoc_get_priv_obj(psoc);
+	if (!ipa_obj) {
+		ipa_err("IPA object is NULL");
+		return;
+	}
+
+	wlan_ipa_wdi_opt_dpath_ctrl_flt_add_cb(ipa_obj, flt);
+}
+
+void ipa_set_opt_dp_ctrl_flt_rm(struct wlan_objmgr_pdev *pdev,
+				struct ipa_wdi_opt_dpath_flt_rem_cb_params *flt)
+{
+	struct wlan_ipa_priv *ipa_obj;
+	struct wlan_objmgr_psoc *psoc = wlan_pdev_get_psoc(pdev);
+
+	if (!ipa_config_is_enabled()) {
+		ipa_debug("ipa is disabled");
+		return;
+	}
+
+	if (!ipa_cb_is_ready())
+		return;
+
+	ipa_obj = ipa_psoc_get_priv_obj(psoc);
+	if (!ipa_obj) {
+		ipa_err("IPA object is NULL");
+		return;
+	}
+
+	wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb_wrapper(ipa_obj, flt);
+}
+#else
+void ipa_set_opt_dp_ctrl_flt(struct wlan_objmgr_pdev *pdev,
+			     struct ipa_wdi_opt_dpath_flt_add_cb_params *flt)
+{
+}
+
+void ipa_set_opt_dp_ctrl_flt_rm(struct wlan_objmgr_pdev *pdev,
+				struct ipa_wdi_opt_dpath_flt_rem_cb_params *flt)
+{
+}
+#endif
+
 void ipa_uc_rt_debug_host_dump(struct wlan_objmgr_pdev *pdev)
 {
 	struct wlan_ipa_priv *ipa_obj;

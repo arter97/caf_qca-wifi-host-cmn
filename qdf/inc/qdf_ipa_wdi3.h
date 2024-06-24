@@ -618,7 +618,9 @@ static inline int qdf_ipa_wdi_opt_dpath_disable_clk_req(
 {
 	return __qdf_ipa_wdi_opt_dpath_disable_clk_req(hdl);
 }
-#else
+
+#endif
+
 /**
  * qdf_ipa_wdi_register_flt_cb() - register cb functions with IPA
  * for optional wifi datapath
@@ -642,7 +644,6 @@ static inline int qdf_ipa_wdi_register_flt_cb(
 					     flt_add_cb, flt_rem_cb);
 }
 
-#endif
 
 /**
  * ipa_wdi_opt_dpath_notify_flt_rsvd_per_inst() - notify IPA with filter

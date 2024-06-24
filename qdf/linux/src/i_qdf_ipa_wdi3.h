@@ -559,7 +559,7 @@ static inline int __qdf_ipa_wdi_opt_dpath_disable_clk_req(
 {
 	return ipa_wdi_opt_dpath_disable_clk_per_inst(hdl);
 }
-#else
+#endif
 
 /**
  * __qdf_ipa_wdi_register_flt_cb() - register callbacks for optional wifi dp
@@ -586,7 +586,6 @@ static inline int __qdf_ipa_wdi_register_flt_cb(
 					flt_rsrv_rel_cb,
 					flt_add_cb, flt_rem_cb);
 }
-#endif
 
 /**
  * __qdf_ipa_wdi_opt_dpath_notify_flt_rsvd_per_inst() - notify response to

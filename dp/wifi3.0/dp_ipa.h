@@ -531,6 +531,15 @@ dp_rx_add_to_ipa_desc_free_list(struct dp_soc *soc,
  */
 void dp_ipa_tx_pkt_opt_dp_ctrl(struct dp_soc *soc, uint8_t vdev_id,
 			       qdf_nbuf_t nbuf);
+
+/**
+ * dp_ipa_opt_dp_ctrl_debug_enable() - get opt_dp_ctrl debug ini
+ * @soc_hdl: handle to the soc
+ *
+ * Return: true if ini enabled else false
+ *
+ */
+bool dp_ipa_opt_dp_ctrl_debug_enable(struct cdp_soc_t *soc_hdl);
 #else
 static inline QDF_STATUS
 dp_rx_add_to_ipa_desc_free_list(struct dp_soc *soc,

@@ -42,6 +42,7 @@
 #include "dp_txrx_wds.h"
 #endif
 #include <pld_common.h>
+#include "wlan_dp_ucfg_api.h"
 
 #define IPA_CLK_ENABLE_WAIT_TIME_MS 500
 
@@ -3954,6 +3955,15 @@ QDF_STATUS dp_ipa_tx_super_rule_setup(struct cdp_soc_t *soc_hdl,
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
 
 	return htt_h2t_tx_super_rule_setup(soc->htt_handle, flt_params);
+}
+
+bool dp_ipa_opt_dp_ctrl_debug_enable(struct cdp_soc_t *soc_hdl)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct wlan_objmgr_psoc *psoc =
+		(struct wlan_objmgr_psoc *)soc->ctrl_psoc;
+
+	return ucfg_dp_ipa_ctrl_debug_supported(psoc);
 }
 
 void dp_ipa_tx_pkt_opt_dp_ctrl(struct dp_soc *soc, uint8_t vdev_id,

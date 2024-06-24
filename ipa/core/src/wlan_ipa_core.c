@@ -4616,6 +4616,15 @@ static inline QDF_STATUS __wlan_ipa_reg_flt_cbs(
 	ipa_wdi_opt_dpath_ctrl_flt_rem_cb ctrl_flt_rem_cb = NULL;
 	ipa_wdi_opt_dpath_clk_status_cb clk_cb = NULL;
 
+	if (ipa_ctx->ipa_opt_dp_ctrl_debug) {
+		ipa_debug("opt_dp_ctrl, ipa debug enabled for unit testing");
+		qdf_ipa_wdi_register_flt_cb(hdl, flt_rsrv_cb,
+					    flt_rsrv_rel_cb,
+					    flt_add_cb,
+					    flt_rem_cb);
+		ipa_ctx->opt_wifi_datapath_ctrl = true;
+		return QDF_STATUS_SUCCESS;
+	}
 	if (ipa_ctx->fw_cap_opt_dp_ctrl) {
 		ctrl_flt_add_cb	= &wlan_ipa_wdi_opt_dpath_ctrl_flt_add_cb;
 		ctrl_flt_rem_cb =
@@ -4803,10 +4812,11 @@ void wlan_ipa_ctrl_flt_db_deinit(struct wlan_ipa_priv *ipa_obj)
 			ipa_debug("opt_dp_ctrl: handle deleted on SSR event - %d",
 				  dp_flt_params->flt_addr_params[i].flt_hdl);
 			dp_flt_params->flt_addr_params[i].ipa_flt_in_use = 0;
-			wlan_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
-				ipa_obj->hdl,
-				dp_flt_params->flt_addr_params[i].flt_hdl,
-				WLAN_IPA_WDI_OPT_DPATH_RESP_SUCCESS_SSR);
+			if (!ipa_obj->ipa_opt_dp_ctrl_debug)
+				wlan_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
+				  ipa_obj->hdl,
+				  dp_flt_params->flt_addr_params[i].flt_hdl,
+				  WLAN_IPA_WDI_OPT_DPATH_RESP_SUCCESS_SSR);
 		}
 	}
 }
@@ -4916,6 +4926,8 @@ QDF_STATUS wlan_ipa_setup(struct wlan_ipa_priv *ipa_ctx,
 	ipa_ctx->opt_dp_ctrl_wlan_shutdown = false;
 	ipa_ctx->opt_wifi_datapath_ctrl = false;
 	ipa_ctx->opt_dp_ctrl_flt_cleaned = false;
+	ipa_ctx->ipa_opt_dp_ctrl_debug =
+		cdp_ipa_opt_dp_ctrl_debug_enable(ipa_ctx->dp_soc);
 	qdf_nbuf_queue_init(&ipa_ctx->pm_queue_head);
 	qdf_list_create(&ipa_ctx->pending_event, 1000);
 	qdf_mutex_create(&ipa_ctx->event_lock);
@@ -5360,7 +5372,8 @@ static void wlan_ipa_uc_op_cb(struct op_msg_type *op_msg,
 		ipa_info("opt_dp_ctrl: IPA notify filter del response: %d, hdl: %d",
 			 msg->rsvd_snd, msg->ctrl_del_hdl);
 		qdf_mutex_acquire(&ipa_ctx->ipa_lock);
-		wlan_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
+		if (!ipa_ctx->ipa_opt_dp_ctrl_debug)
+			wlan_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
 							ipa_ctx->hdl,
 							msg->ctrl_del_hdl,
 							msg->rsvd_snd);

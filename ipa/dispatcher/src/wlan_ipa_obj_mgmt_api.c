@@ -359,6 +359,11 @@ QDF_STATUS ipa_opt_dpath_enable_clk_req(void *soc)
 		return QDF_STATUS_E_FAILURE;
 	}
 
+	if (ipa_obj->ipa_opt_dp_ctrl_debug) {
+		ipa_debug("opt_dp_ctrl, bypassing clock for unit testing");
+		return QDF_STATUS_SUCCESS;
+	}
+
 	clk_status = wlan_ipa_wdi_opt_dpath_enable_clk_req(ipa_obj);
 	if (clk_status == QDF_STATUS_SUCCESS) {
 		ipa_obj->ctrl_stats.clk_resp_cnt++;

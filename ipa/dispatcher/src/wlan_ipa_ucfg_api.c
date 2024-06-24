@@ -104,6 +104,24 @@ void ucfg_ipa_uc_stat(struct wlan_objmgr_pdev *pdev)
 
 qdf_export_symbol(ucfg_ipa_uc_stat);
 
+void ucfg_ipa_set_opt_dp_ctrl_flt(
+			struct wlan_objmgr_pdev *pdev,
+			struct ipa_wdi_opt_dpath_flt_add_cb_params *flt)
+{
+	return ipa_set_opt_dp_ctrl_flt(pdev, flt);
+}
+
+qdf_export_symbol(ucfg_ipa_set_opt_dp_ctrl_flt);
+
+void ucfg_ipa_set_opt_dp_ctrl_flt_rm(
+			struct wlan_objmgr_pdev *pdev,
+			struct ipa_wdi_opt_dpath_flt_rem_cb_params *flt)
+{
+	return ipa_set_opt_dp_ctrl_flt_rm(pdev, flt);
+}
+
+qdf_export_symbol(ucfg_ipa_set_opt_dp_ctrl_flt_rm);
+
 void ucfg_ipa_uc_rt_debug_host_dump(struct wlan_objmgr_pdev *pdev)
 {
 	return ipa_uc_rt_debug_host_dump(pdev);

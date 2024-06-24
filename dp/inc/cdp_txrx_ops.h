@@ -2333,6 +2333,7 @@ struct cdp_throttle_ops {
  * @ipa_rx_super_rule_setup: Setup cce super rules based on filter tuple
  * @ipa_tx_super_rule_setup: Setup tx super rules based on filter tuple
  * @ipa_tx_opt_dp_ctrl_pkt: handle opt_dp_ctrl tx pkt
+ * @ipa_opt_dp_ctrl_debug_enable: get opt_dp_ctrl debug ini value
  * @ipa_ast_create: Create/Update ast entry
  * @ipa_get_wdi_version: Get WDI version
  * @ipa_is_ring_ipa_rx: Check whether the given ring is ipa rx ring or not
@@ -2451,6 +2452,9 @@ struct cdp_ipa_ops {
 	QDF_STATUS (*ipa_tx_opt_dp_ctrl_pkt)(struct cdp_soc_t *soc_hdl,
 					     uint8_t vdev_id,
 					     qdf_nbuf_t nbuf);
+#ifdef IPA_OPT_WIFI_DP_CTRL
+	bool (*ipa_opt_dp_ctrl_debug_enable)(struct cdp_soc_t *soc_hdl);
+#endif
 #endif
 #ifdef IPA_WDS_EASYMESH_FEATURE
 	QDF_STATUS (*ipa_ast_create)(struct cdp_soc_t *soc_hdl,
