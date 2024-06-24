@@ -3173,7 +3173,8 @@ dp_ppdu_desc_user_deter_stats_update(struct dp_pdev *pdev,
 	if (qdf_unlikely(!mon_peer))
 		return;
 
-	if (ppdu_desc->txmode_type == TX_MODE_TYPE_UNKNOWN)
+	if (ppdu_desc->txmode_type == TX_MODE_TYPE_UNKNOWN ||
+	    ppdu_desc->txmode >= TX_MODE_UL_MAX)
 		return;
 
 	if (ppdu_desc->txmode_type == TX_MODE_TYPE_UL &&
