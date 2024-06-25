@@ -128,6 +128,11 @@ typedef struct ipa_wdi_init_in_params __qdf_ipa_wdi_init_in_params_t;
 #ifdef IPA_WDS_EASYMESH_FEATURE
 #define __QDF_IPA_WDI_INIT_IN_PARAMS_WDS_UPDATE(in_params)	\
 	(((struct ipa_wdi_init_in_params *)(in_params))->ast_update)
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)) && \
+	(LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)))
+#define __QDF_IPA_WDI_INIT_IN_PARAMS_RX_TLV_FORMAT(in_params)	\
+	(((struct ipa_wdi_init_in_params *)(in_params))->rx_tlv_format)
+#endif
 #endif
 
 /**
