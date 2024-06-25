@@ -23834,6 +23834,8 @@ static void populate_tlv_events_id(WMI_EVT_ID *event_ids)
 	event_ids[wmi_vendor_vdev_event_id] = WMI_VENDOR_VDEV_EVENTID;
 	event_ids[wmi_vendor_pdev_event_id] = WMI_VENDOR_PDEV_EVENTID;
 #endif /* WLAN_VENDOR_EXTN*/
+	event_ids[wmi_p2p_cli_dfs_ap_bmiss_detected_eventid] =
+				WMI_P2P_CLI_DFS_AP_BMISS_DETECTED_EVENTID;
 
 }
 
@@ -24485,6 +24487,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 	wmi_service[wmi_service_mlo_sap_emlsr_support] =
 				WMI_SERVICE_MLO_SAP_EMLSR_SUPPORT;
 #endif
+	wmi_service[wmi_service_ap_assisted_dfs_chan_p2p_session] =
+				WMI_SERVICE_AP_ASSISTED_DFS_CHAN_P2P_SESSION;
 }
 
 /**
