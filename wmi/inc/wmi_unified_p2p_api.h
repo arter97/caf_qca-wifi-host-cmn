@@ -118,6 +118,18 @@ wmi_unified_send_p2p_usd_req_cmd(wmi_unified_t wmi_handle,
 #endif /* FEATURE_WLAN_SUPPORT_USD */
 
 /**
+ * wmi_unified_p2p_send_ap_assist_dfs_group_params() - Send P2P assisted AP
+ * DFS group params.
+ * @wmi_handle: wmi handle
+ * @params: Params of assisted AP to send to FW to monitor
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS
+wmi_unified_p2p_send_ap_assist_dfs_group_params(wmi_unified_t wmi_handle,
+						struct p2p_ap_assist_dfs_group_params *params);
+
+/**
  * wmi_extract_p2p_ap_assist_dfs_group_bmiss() - Extract P2P assisted AP DFS
  * group bmiss event data
  * @wmi_handle: wmi handle

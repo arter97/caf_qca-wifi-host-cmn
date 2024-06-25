@@ -137,6 +137,16 @@ wmi_unified_send_p2p_usd_req_cmd(wmi_unified_t wmi_handle,
 #endif /* FEATURE_WLAN_SUPPORT_USD */
 
 QDF_STATUS
+wmi_unified_p2p_send_ap_assist_dfs_group_params(wmi_unified_t wmi_handle,
+						struct p2p_ap_assist_dfs_group_params *params)
+{
+	if (wmi_handle->ops->send_p2p_ap_assist_dfs_group_params)
+		return wmi_handle->ops->send_p2p_ap_assist_dfs_group_params(
+					wmi_handle, params);
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
 wmi_extract_p2p_ap_assist_dfs_group_bmiss(wmi_unified_t wmi_handle,
 					  void *ev_buf, uint8_t *data)
 {

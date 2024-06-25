@@ -234,6 +234,82 @@ static QDF_STATUS extract_mac_addr_rx_filter_evt_param_tlv(
 }
 
 static QDF_STATUS
+send_p2p_ap_assist_dfs_group_params_cmd_tlv(wmi_unified_t wmi_handle,
+					    struct p2p_ap_assist_dfs_group_params *params)
+{
+	wmi_p2p_go_dfs_ap_config_fixed_param *cmd;
+	uint32_t len;
+	bool is_valid_bssid = false, is_valid_non_tx_bssid = false;
+	wmi_buf_t wmi_buf;
+	QDF_STATUS status;
+	uint8_t *buf;
+	wmi_mac_addr *mac_buf;
+
+	if (!wmi_handle) {
+		wmi_err("WMA context is invalid!");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	len = sizeof(*cmd) + (WMI_TLV_HDR_SIZE * 2);
+
+	if (!qdf_is_macaddr_zero(&params->bssid)) {
+		is_valid_bssid = true;
+		len += sizeof(wmi_mac_addr);
+	}
+
+	if (!qdf_is_macaddr_zero(&params->non_tx_bssid)) {
+		is_valid_non_tx_bssid = true;
+		len += sizeof(wmi_mac_addr);
+	}
+
+	wmi_buf = wmi_buf_alloc(wmi_handle, len);
+	if (!wmi_buf) {
+		wmi_err("Failed allocate wmi buffer");
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	buf = wmi_buf_data(wmi_buf);
+	cmd = (wmi_p2p_go_dfs_ap_config_fixed_param *)buf;
+
+	buf += sizeof(*cmd);
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		       WMITLV_TAG_STRUC_wmi_p2p_go_dfs_ap_config_fixed_param,
+		       WMITLV_GET_STRUCT_TLVLEN(wmi_p2p_go_dfs_ap_config_fixed_param));
+
+	cmd->vdev_id = params->vdev_id;
+	cmd->set = is_valid_bssid;
+
+	WMITLV_SET_HDR(buf, WMITLV_TAG_ARRAY_FIXED_STRUC,
+		       (is_valid_bssid * sizeof(wmi_mac_addr)));
+
+	if (is_valid_bssid) {
+		mac_buf = (wmi_mac_addr *)(buf + WMI_TLV_HDR_SIZE);
+		WMI_CHAR_ARRAY_TO_MAC_ADDR(&params->bssid.bytes[0], mac_buf);
+	}
+
+	buf += WMI_TLV_HDR_SIZE + (is_valid_bssid * sizeof(wmi_mac_addr));
+
+	WMITLV_SET_HDR(buf, WMITLV_TAG_ARRAY_FIXED_STRUC,
+		       (is_valid_non_tx_bssid * sizeof(wmi_mac_addr)));
+
+	if (is_valid_non_tx_bssid) {
+		mac_buf = (wmi_mac_addr *)(buf + WMI_TLV_HDR_SIZE);
+		WMI_CHAR_ARRAY_TO_MAC_ADDR(&params->non_tx_bssid.bytes[0],
+					   mac_buf);
+	}
+
+	status = wmi_unified_cmd_send(wmi_handle, wmi_buf, len,
+				      WMI_P2P_GO_DFS_AP_CONFIG_CMDID);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		wmi_err("Failed to send P2P DFS assisted AP params");
+		wmi_buf_free(wmi_buf);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS
 extract_p2p_ap_assist_dfs_group_bmiss_param_tlv(wmi_unified_t wmi_handle,
 						void *ev_buf, uint8_t *data)
 {
@@ -675,6 +751,8 @@ void wmi_p2p_attach_tlv(wmi_unified_t wmi_handle)
 	ops->extract_p2p_noa_ev_param = extract_p2p_noa_ev_param_tlv;
 	ops->extract_mac_addr_rx_filter_evt_param =
 				extract_mac_addr_rx_filter_evt_param_tlv;
+	ops->send_p2p_ap_assist_dfs_group_params =
+				send_p2p_ap_assist_dfs_group_params_cmd_tlv;
 	ops->extract_p2p_ap_assist_dfs_group_bmiss =
 				extract_p2p_ap_assist_dfs_group_bmiss_param_tlv;
 	wmi_p2p_attach_usd_tlv(ops);

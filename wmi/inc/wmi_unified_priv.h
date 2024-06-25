@@ -2111,6 +2111,10 @@ QDF_STATUS
 					void *evt_buf,
 					struct p2p_set_mac_filter_evt *param);
 
+QDF_STATUS (*send_p2p_ap_assist_dfs_group_params)
+				(wmi_unified_t wmi_handle,
+				 struct p2p_ap_assist_dfs_group_params *params);
+
 QDF_STATUS
 (*extract_p2p_ap_assist_dfs_group_bmiss)(wmi_unified_t wmi_handle,
 					 void *ev_buf, uint8_t *data);

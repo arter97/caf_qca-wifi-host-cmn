@@ -649,6 +649,7 @@ struct wlan_lmac_if_scan_rx_ops {
 /* forward declarations for p2p tx ops */
 struct p2p_ps_config;
 struct p2p_lo_start;
+struct p2p_ap_assist_dfs_group_params;
 
 /**
  * struct wlan_lmac_if_p2p_tx_ops - structure of tx function pointers
@@ -668,6 +669,8 @@ struct p2p_lo_start;
  * ap assisted DFS P2P group bmiss event handler.
  * @reg_ap_assist_bmiss_ev_handler: Function pointer to register ap assisted
  * DFS P2P group bmiss event handler.
+ * @send_ap_assist_dfs_group_params: Send assisted AP params for P2P interface
+ * operating in DFS channel.
  * @reg_mcc_quota_ev_handler: function to register mcc_quota event handler
  */
 struct wlan_lmac_if_p2p_tx_ops {
@@ -698,6 +701,9 @@ struct wlan_lmac_if_p2p_tx_ops {
 				(struct wlan_objmgr_psoc *psoc);
 	QDF_STATUS (*reg_ap_assist_bmiss_ev_handler)
 				(struct wlan_objmgr_psoc *psoc);
+	QDF_STATUS (*send_ap_assist_dfs_group_params)
+				(struct wlan_objmgr_psoc *psoc,
+				 struct p2p_ap_assist_dfs_group_params *params);
 #ifdef WLAN_FEATURE_MCC_QUOTA
 	QDF_STATUS (*reg_mcc_quota_ev_handler)(struct wlan_objmgr_psoc *psoc,
 					       bool reg);
