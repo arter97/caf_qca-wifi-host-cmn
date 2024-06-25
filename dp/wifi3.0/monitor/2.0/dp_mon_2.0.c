@@ -1582,6 +1582,7 @@ struct cdp_mon_ops dp_ops_mon_2_0 = {
 	.stop_local_pkt_capture = NULL,
 	.is_local_pkt_capture_running = NULL,
 #endif /* WLAN_FEATURE_LOCAL_PKT_CAPTURE */
+	.txrx_set_mu_sniffer = dp_pdev_set_mu_sniffer,
 };
 
 #if defined(WLAN_PKT_CAPTURE_TX_2_0) || \

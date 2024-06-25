@@ -1309,6 +1309,7 @@ struct  dp_mon_pdev {
 #endif
 	/* Monitor FCS capture */
 	bool mon_fcs_cap;
+	uint8_t mu_sniffer_enabled;
 };
 
 struct  dp_mon_vdev {
@@ -5267,4 +5268,16 @@ dp_convert_enc_to_cdp_enc(struct mon_rx_user_status *rx_user_status,
 		  "User: %d TLV enc_type = %d map enc_type = %d direction = %d",
 		  user_idx, idx, encrypt_map[idx], direction);
 }
+
+/**
+ * dp_pdev_set_mu_sniffer() - enable mu_sniffer
+ * @soc_hdl: Datapath soc handle
+ * @pdev_id: id of datapath PDEV handle
+ * @mode: enable/disable value
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+dp_pdev_set_mu_sniffer(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
+		       uint32_t mode);
 #endif /* _DP_MON_H_ */

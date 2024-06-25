@@ -41,6 +41,13 @@
 #define F_MASK 0xFFFF
 #define TEST_MASK 0xCBF
 
+#define HE_DATA1_PPDU_FORMAT_MASK 3
+#define PREVENT_MU_BYPASS(mon_pdev, ppdu_info) \
+	!(((mon_pdev)->mu_sniffer_enabled) && \
+	  (((ppdu_info)->rx_status.he_data1 & HE_DATA1_PPDU_FORMAT_MASK) == \
+	   QDF_MON_STATUS_HE_TRIG_FORMAT_TYPE) && \
+	  (ppdu_info)->rx_status.ulofdma_flag)
+
 #ifdef MONITOR_TLV_RECORDING_ENABLE
 /**
  * dp_mon_record_index_update() - update the indexes of dp_mon_tlv_logger
@@ -1371,8 +1378,12 @@ dp_rx_mon_process_ppdu_info(struct dp_pdev *pdev,
 				}
 			} else {
 				if (mpdu_meta->full_pkt) {
-					if (qdf_unlikely(mpdu_meta->truncated)) {
-						dp_mon_free_parent_nbuf(pdev, mpdu);
+					if (qdf_unlikely(mpdu_meta->
+							 truncated) &&
+					    PREVENT_MU_BYPASS(mon_pdev,
+							      ppdu_info)) {
+						dp_mon_free_parent_nbuf(pdev,
+									mpdu);
 						continue;
 					}
 
@@ -1383,8 +1394,12 @@ dp_rx_mon_process_ppdu_info(struct dp_pdev *pdev,
 						continue;
 					}
 				} else {
-					dp_mon_free_parent_nbuf(pdev, mpdu);
-					continue;
+					if (PREVENT_MU_BYPASS(mon_pdev,
+							      ppdu_info)) {
+						dp_mon_free_parent_nbuf(pdev,
+									mpdu);
+						continue;
+					}
 				}
 
 				/* reset mpdu metadata and apply radiotap header over MPDU */
@@ -1542,7 +1557,8 @@ dp_rx_mon_handle_full_mon(struct dp_pdev *pdev,
 
 	if (!mpdu) {
 		dp_mon_debug("nbuf is NULL, return");
-		return QDF_STATUS_E_FAILURE;
+		if (PREVENT_MU_BYPASS(mon_pdev, ppdu_info))
+			return QDF_STATUS_E_FAILURE;
 	}
 
 	head_msdu = mpdu;
@@ -1558,7 +1574,8 @@ dp_rx_mon_handle_full_mon(struct dp_pdev *pdev,
 			if ((wh->i_fc[0] & QDF_IEEE80211_FC0_VERSION_MASK) !=
 			    QDF_IEEE80211_FC0_VERSION_0) {
 				DP_STATS_INC(pdev, dropped.mon_ver_err, 1);
-				return QDF_STATUS_E_FAILURE;
+				if (PREVENT_MU_BYPASS(mon_pdev, ppdu_info))
+					return QDF_STATUS_E_FAILURE;
 			}
 		}
 		if (qdf_nbuf_get_nr_frags(mpdu) >= 2) {
@@ -1591,7 +1608,8 @@ dp_rx_mon_handle_full_mon(struct dp_pdev *pdev,
 	num_frags = qdf_nbuf_get_nr_frags(mpdu);
 	if (qdf_unlikely(num_frags < DP_MON_MIN_FRAGS_FOR_RESTITCH)) {
 		dp_mon_debug("not enough frags(%d) for restitch", num_frags);
-		return QDF_STATUS_E_FAILURE;
+		if (PREVENT_MU_BYPASS(mon_pdev, ppdu_info))
+			return QDF_STATUS_E_FAILURE;
 	}
 
 	l2_hdr_offset = DP_RX_MON_NONRAW_L2_HDR_PAD_BYTE;

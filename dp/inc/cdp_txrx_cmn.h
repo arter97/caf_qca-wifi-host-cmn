@@ -1038,6 +1038,14 @@ cdp_set_monitor_filter(ol_txrx_soc_handle soc, uint8_t pdev_id,
 	return 0;
 }
 
+static inline int
+cdp_set_mu_sniffer(ol_txrx_soc_handle soc, uint8_t pdev_id, uint32_t mode)
+{
+	if (soc->ops->mon_ops->txrx_set_mu_sniffer)
+		return soc->ops->mon_ops->txrx_set_mu_sniffer(soc, pdev_id,
+							      mode);
+	return 0;
+}
 
 /******************************************************************************
  * Data Interface (B Interface)

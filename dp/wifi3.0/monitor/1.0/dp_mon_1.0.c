@@ -1601,6 +1601,7 @@ struct cdp_mon_ops dp_ops_mon_1_0 = {
 	.stop_local_pkt_capture = dp_mon_stop_local_pkt_capture,
 	.is_local_pkt_capture_running = dp_mon_get_is_local_pkt_capture_running,
 #endif /* WLAN_FEATURE_LOCAL_PKT_CAPTURE */
+	.txrx_set_mu_sniffer = NULL,
 };
 
 #ifdef QCA_MONITOR_OPS_PER_SOC_SUPPORT

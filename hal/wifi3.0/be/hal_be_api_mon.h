@@ -2659,7 +2659,8 @@ hal_rx_parse_receive_user_info(struct hal_soc *hal_soc, uint8_t *tlv,
 
 		if (ppdu_info->rx_status.reception_type ==
 		    HAL_RX_TYPE_MU_OFDMA) {
-			ppdu_info->rx_status.he_mu_flags = 1;
+			if (ppdu_info->rx_status.mu_dl_ul != HAL_RX_TYPE_UL)
+				ppdu_info->rx_status.he_mu_flags = 1;
 
 			/* HE-data1 */
 			mon_rx_user_status->he_data1 |=
