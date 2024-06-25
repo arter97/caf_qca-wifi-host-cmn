@@ -135,3 +135,19 @@ wmi_unified_send_p2p_usd_req_cmd(wmi_unified_t wmi_handle,
 	return QDF_STATUS_E_FAILURE;
 }
 #endif /* FEATURE_WLAN_SUPPORT_USD */
+
+QDF_STATUS
+wmi_extract_p2p_ap_assist_dfs_group_bmiss(wmi_unified_t wmi_handle,
+					  void *ev_buf, uint8_t *data)
+{
+	if (!wmi_handle) {
+		wmi_err("wmi handle is null");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (wmi_handle->ops->extract_p2p_ap_assist_dfs_group_bmiss)
+		return wmi_handle->ops->extract_p2p_ap_assist_dfs_group_bmiss(
+				wmi_handle, ev_buf, data);
+
+	return QDF_STATUS_E_FAILURE;
+}

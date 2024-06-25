@@ -116,4 +116,17 @@ QDF_STATUS
 wmi_unified_send_p2p_usd_req_cmd(wmi_unified_t wmi_handle,
 				 struct p2p_usd_attr_params *param);
 #endif /* FEATURE_WLAN_SUPPORT_USD */
+
+/**
+ * wmi_extract_p2p_ap_assist_dfs_group_bmiss() - Extract P2P assisted AP DFS
+ * group bmiss event data
+ * @wmi_handle: wmi handle
+ * @ev_buf: Pointer to event buffer
+ * @data: Pointer to save extracted data
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS
+wmi_extract_p2p_ap_assist_dfs_group_bmiss(wmi_unified_t wmi_handle,
+					  void *ev_buf, uint8_t *data);
 #endif /* _WMI_UNIFIED_P2P_API_H_ */

@@ -233,6 +233,29 @@ static QDF_STATUS extract_mac_addr_rx_filter_evt_param_tlv(
 	return QDF_STATUS_SUCCESS;
 }
 
+static QDF_STATUS
+extract_p2p_ap_assist_dfs_group_bmiss_param_tlv(wmi_unified_t wmi_handle,
+						void *ev_buf, uint8_t *data)
+{
+	WMI_P2P_CLI_DFS_AP_BMISS_DETECTED_EVENTID_param_tlvs *buf;
+	wmi_p2p_cli_dfs_ap_bmiss_fixed_param *event;
+
+	buf = (WMI_P2P_CLI_DFS_AP_BMISS_DETECTED_EVENTID_param_tlvs *)ev_buf;
+	if (!buf) {
+		wmi_err("Invalid event data");
+		return QDF_STATUS_E_INVAL;
+	}
+	event = buf->fixed_param;
+	if (!event) {
+		wmi_err("Invalid fixed param");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	*data = event->vdev_id;
+
+	return QDF_STATUS_SUCCESS;
+}
+
 #ifdef FEATURE_P2P_LISTEN_OFFLOAD
 /**
  * send_p2p_lo_start_cmd_tlv() - send p2p lo start request to fw
@@ -652,6 +675,8 @@ void wmi_p2p_attach_tlv(wmi_unified_t wmi_handle)
 	ops->extract_p2p_noa_ev_param = extract_p2p_noa_ev_param_tlv;
 	ops->extract_mac_addr_rx_filter_evt_param =
 				extract_mac_addr_rx_filter_evt_param_tlv;
+	ops->extract_p2p_ap_assist_dfs_group_bmiss =
+				extract_p2p_ap_assist_dfs_group_bmiss_param_tlv;
 	wmi_p2p_attach_usd_tlv(ops);
 	wmi_p2p_listen_offload_attach_tlv(wmi_handle);
 }
