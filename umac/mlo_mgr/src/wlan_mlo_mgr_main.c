@@ -116,7 +116,7 @@ mlo_wsi_link_info_setup_mlo_grps(struct mlo_mgr_context *mlo_mgr)
 				      &mlo_mgr->wsi_info->num_psoc,
 				      WLAN_MLO_MGR_ID);
 	if (!mlo_mgr->wsi_info->num_psoc)
-		mlo_info("Could not find active PSOCs");
+		mlo_debug("Could not find active PSOCs");
 
 	for (i = 0; i < MLO_WSI_MAX_MLO_GRPS; i++) {
 		mlo_grp_info =
