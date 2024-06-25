@@ -2397,6 +2397,8 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		_tgtobj->rx.avg_snr = _srcobj->rx.avg_snr; \
 		_tgtobj->rx.rx_snr_measured_time = \
 					_srcobj->rx.rx_snr_measured_time; \
+		_tgtobj->rx.retried_msdu_count += \
+					_srcobj->rx.retried_msdu_count; \
 		_tgtobj->rx.snr = _srcobj->rx.snr; \
 		_tgtobj->rx.last_snr = _srcobj->rx.last_snr; \
 		_tgtobj->rx.nss_info = _srcobj->rx.nss_info; \

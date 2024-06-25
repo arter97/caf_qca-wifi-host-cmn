@@ -10030,6 +10030,7 @@ void dp_update_pdev_stats(struct dp_pdev *tgtobj,
 	tgtobj->stats.rx.raw.bytes += srcobj->rx.raw.bytes;
 	tgtobj->stats.rx.intra_bss.pkts.num +=
 			srcobj->rx.intra_bss.pkts.num;
+	tgtobj->stats.rx.retried_msdu_count += srcobj->rx.retried_msdu_count;
 	tgtobj->stats.rx.intra_bss.pkts.bytes +=
 			srcobj->rx.intra_bss.pkts.bytes;
 	tgtobj->stats.rx.intra_bss.fail.num +=

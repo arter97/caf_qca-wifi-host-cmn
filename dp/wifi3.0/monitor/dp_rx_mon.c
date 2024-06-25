@@ -502,6 +502,8 @@ dp_rx_populate_cdp_indication_ppdu_user(struct dp_pdev *pdev,
 
 		cdp_rx_ppdu->num_mpdu += rx_user_status->mpdu_cnt_fcs_ok;
 		cdp_rx_ppdu->num_msdu += rx_stats_peruser->num_msdu;
+		rx_stats_peruser->retried_msdu_count =
+				rx_user_status->retried_msdu_count;
 		rx_stats_peruser->retries =
 			CDP_FC_IS_RETRY_SET(rx_stats_peruser->frame_control) ?
 			rx_stats_peruser->mpdu_cnt_fcs_ok : 0;
@@ -1007,6 +1009,8 @@ static void dp_rx_stats_update(struct dp_pdev *pdev,
 			ppdu_user->mpdu_err_byte_count;
 
 		DP_STATS_UPD(mon_peer, rx.snr, ppdu->rssi);
+		DP_STATS_INC(mon_peer, rx.retried_msdu_count,
+			     ppdu_user->retried_msdu_count);
 
 		if (qdf_unlikely(mon_peer->stats.rx.avg_snr == CDP_INVALID_SNR))
 			mon_peer->stats.rx.avg_snr =

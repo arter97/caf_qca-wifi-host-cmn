@@ -202,7 +202,7 @@ defined(QCA_SINGLE_WIFI_3_0)
 #define RX_MON_MPDU_START_WMASK_V2            0x007F8
 #define RX_MON_MPDU_END_WMASK_V2              0xFF
 #define RX_MON_MSDU_END_WMASK                 0x0AE1
-#define RX_MON_PPDU_END_USR_STATS_WMASK       0xB7F
+#define RX_MON_PPDU_END_USR_STATS_WMASK       0xF7F
 
 #define MAX_USR_INFO_STR_CNT	4
 
@@ -429,6 +429,9 @@ struct rx_ppdu_end_user_mon_data {
 		 ampdu_delim_ok_count_13_7         :  7;
 	uint32_t mpdu_err_byte_count               : 25,
 		 ampdu_delim_ok_count_20_14        :  7;
+	uint32_t non_consecutive_delimiter_err     : 16,
+		 retried_msdu_count                : 16;
+	uint32_t ht_control_null_field             : 32;
 	uint32_t sw_response_reference_ptr_ext     : 32;
 	uint32_t corrupted_due_to_fifo_delay       :  1,
 		 frame_control_info_null_valid     :  1,
@@ -658,6 +661,9 @@ struct rx_ppdu_end_user_mon_data {
 		 ampdu_delim_err_count             : 25;
 	uint32_t ampdu_delim_ok_count_20_14        :  7,
 		 mpdu_err_byte_count               : 25;
+	uint32_t retried_msdu_count                : 16,
+		 non_consecutive_delimiter_err     : 16;
+	uint32_t ht_control_null_field             : 32;
 	uint32_t sw_response_reference_ptr_ext     : 32;
 	uint32_t reserved_23a                      :  3,
 		 retried_mpdu_count                : 11,
@@ -932,6 +938,8 @@ hal_rx_populate_mu_user_info(hal_rx_mon_ppdu_end_user_t *rx_ppdu_end_user,
 		ppdu_info->rx_status.tcp_msdu_count;
 	mon_rx_user_status->udp_msdu_count =
 		ppdu_info->rx_status.udp_msdu_count;
+	mon_rx_user_status->retried_msdu_count =
+		rx_ppdu_end_user->retried_msdu_count;
 	mon_rx_user_status->other_msdu_count =
 		ppdu_info->rx_status.other_msdu_count;
 	mon_rx_user_status->frame_control = ppdu_info->rx_status.frame_control;

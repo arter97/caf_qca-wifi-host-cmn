@@ -614,6 +614,7 @@ struct mon_rx_status {
  * @ba_bitmap: 256 bit block ack bitmap
  * @aid: Association ID
  * @enc_type: ecnryption type
+ * @retried_msdu_count: retried msdu count
  * @mpdu_q: user mpdu_queue used for monitor
  */
 struct mon_rx_user_status {
@@ -684,6 +685,7 @@ struct mon_rx_user_status {
 	uint32_t ba_bitmap[32];
 	uint16_t aid;
 	uint8_t enc_type;
+	uint16_t retried_msdu_count;
 	qdf_nbuf_queue_t mpdu_q;
 };
 
