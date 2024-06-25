@@ -650,6 +650,29 @@ static inline void wlan_cfg80211_unregister_netdevice(struct net_device *dev)
 }
 #endif
 
+#ifdef CFG80211_RU_PUNC_CHANDEF
+static inline
+void wlan_cfg80211_ch_switch_notify(struct net_device *dev,
+				    struct cfg80211_chan_def *chandef,
+				    unsigned int link_id,
+				    uint16_t puncture_bitmap)
+{
+	chandef->punctured = puncture_bitmap;
+	cfg80211_ch_switch_notify(dev, chandef, link_id);
+}
+
+static inline
+void wlan_cfg80211_ch_switch_started_notify(struct net_device *dev,
+					    struct cfg80211_chan_def *chandef,
+					    unsigned int link_id,
+					    uint8_t count, bool quiet,
+					    uint16_t puncture_bitmap)
+{
+	chandef->punctured = puncture_bitmap;
+	cfg80211_ch_switch_started_notify(dev, chandef, link_id,
+					  count, quiet);
+}
+#else
 #ifdef CFG80211_SINGLE_NETDEV_MULTI_LINK_SUPPORT
 #if defined(CFG80211_RU_PUNCT_NOTIFY) || \
 	defined(CFG80211_PUNCTURING_SINGLE_NETDEV_API)
@@ -759,5 +782,5 @@ void wlan_cfg80211_ch_switch_started_notify(struct net_device *dev,
 	cfg80211_ch_switch_started_notify(dev, chandef, count);
 }
 #endif
-
+#endif
 #endif
