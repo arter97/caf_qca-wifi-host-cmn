@@ -63,7 +63,7 @@ ol_txrx_soc_attach(void *scn_handle, struct ol_if_ops *dp_ol_if_ops);
 
 #if defined(QCA_WIFI_QCA8074) || defined(QCA_WIFI_QCA6018) || \
 	defined(QCA_WIFI_QCA5018) || defined(QCA_WIFI_QCA9574) || \
-	defined(QCA_WIFI_QCA5332)
+	defined(QCA_WIFI_QCA5332) || defined(QCA_WIFI_QCA5424)
 
 /**
  * dp_soc_attach_wifi3() - Attach txrx SOC
@@ -143,6 +143,7 @@ static inline int cdp_get_arch_type_from_devid(uint16_t devid)
 	case PEACH_DEVICE_ID:
 	case QCN6432_DEVICE_ID:
 	case WCN7750_DEVICE_ID:
+	case QCA5424_DEVICE_ID:
 		return CDP_ARCH_TYPE_BE;
 	case RHINE_DP:
 		return CDP_ARCH_TYPE_RH;
@@ -179,6 +180,7 @@ ol_txrx_soc_handle cdp_soc_attach(u_int16_t devid,
 	case QCN6122_DEVICE_ID:
 	case QCN9160_DEVICE_ID:
 	case QCN6432_DEVICE_ID:
+	case QCA5424_DEVICE_ID:
 	case QCA6390_DEVICE_ID:
 	case QCA6490_DEVICE_ID:
 	case QCA6750_DEVICE_ID:

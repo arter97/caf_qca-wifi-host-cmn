@@ -3576,6 +3576,7 @@ static void dp_soc_cfg_init(struct dp_soc *soc)
 		soc->features.wds_ext_ast_override_enable = true;
 		break;
 	case TARGET_TYPE_QCA5332:
+	case TARGET_TYPE_QCA5424:
 	case TARGET_TYPE_QCN6432:
 		soc->umac_reset_supported = true;
 		soc->ast_override_support = 1;
@@ -4500,6 +4501,7 @@ void dp_soc_cfg_attach(struct dp_soc *soc)
 	case TARGET_TYPE_QCN9224:
 	case TARGET_TYPE_QCA5332:
 	case TARGET_TYPE_QCN6432:
+	case TARGET_TYPE_QCA5424:
 		wlan_cfg_set_tso_desc_attach_defer(soc->wlan_cfg_ctx, 1);
 		wlan_cfg_set_rxdma1_enable(soc->wlan_cfg_ctx);
 		break;
