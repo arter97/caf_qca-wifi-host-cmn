@@ -754,19 +754,21 @@ dp_sawf_peer_msduq_reconfigure(struct dp_soc *dpsoc, struct dp_peer *peer,
 			       HTT_MSDUQ_DEACTIVATE_E q_action)
 {
 	uint8_t current_q_state, new_q_state;
+	uint16_t peer_id;
 
+	peer_id = peer->peer_id;
 	current_q_state = msduq->q_state;
 
 	/* If tgt_opaque_id is not initialized HTT send needs to be stopped */
 	if (!msduq->map_done) {
-		dp_sawf_err("Uninitialized tgt_opaque_id");
+		dp_sawf_err("peer:%d | Uninitialized tgt_opaque_id", peer_id);
 		return;
 	}
 
 	if (q_action == HTT_MSDUQ_DEACTIVATE) {
 		if (current_q_state == SAWF_MSDUQ_IN_USE) {
-			dp_sawf_info("msduq:%d, Deactivate Queue - Send HTT to "
-				     "FW", q_id);
+			dp_sawf_info("peer:%d | msduq:%d, Deactivate Queue - Send HTT to "
+				     "FW", peer_id, q_id);
 			new_q_state = SAWF_MSDUQ_DEACTIVATE_PENDING;
 			dp_sawf_peer_msduq_q_state_update(msduq, q_id,
 							  new_q_state);
@@ -775,8 +777,8 @@ dp_sawf_peer_msduq_reconfigure(struct dp_soc *dpsoc, struct dp_peer *peer,
 		}
 	} else if (q_action == HTT_MSDUQ_REACTIVATE) {
 		if (current_q_state == SAWF_MSDUQ_DEACTIVATED) {
-			dp_sawf_info("msduq:%d, Reactivate Queue - Send HTT to "
-				     "FW", q_id);
+			dp_sawf_info("peer:%d | msduq:%d, Reactivate Queue - Send HTT to "
+				     "FW", peer_id, q_id);
 			new_q_state = SAWF_MSDUQ_REACTIVATE_PENDING;
 			dp_sawf_peer_msduq_q_state_update(msduq, q_id,
 							  new_q_state);
@@ -802,8 +804,8 @@ dp_sawf_peer_flow_count(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr,
 
 	qdf_spin_lock_bh(&dpsoc->sawf_flow_sync_lock);
 
-	dp_sawf_info("mac_addr: "QDF_MAC_ADDR_FMT" svc_id %u direction %u "
-		     "start_or_stop %u, flow_count %u",
+	dp_sawf_info("peer:%d | mac_addr: "QDF_MAC_ADDR_FMT" svc_id %u direction %u "
+		     "start_or_stop %u, flow_count %u", peer_id,
 		     QDF_MAC_ADDR_REF(mac_addr), svc_id, direction,
 		     start_or_stop, flow_count);
 
@@ -858,14 +860,16 @@ dp_sawf_peer_flow_count(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr,
 	}
 
 	if (match_found) {
-		dp_sawf_debug("Match Found, q_idx:%d  MSDUQ ref_count:%u",
-			      q_idx, qdf_atomic_read(&msduq->ref_count));
+		dp_sawf_debug("peer:%d | Match Found, q_idx:%d  MSDUQ ref_count:%u",
+			      peer_id, q_idx, qdf_atomic_read(&msduq->ref_count));
 		if (start_or_stop == SAWF_FLOW_START) {
 			if (wlan_cfg_get_sawf_msduq_reclaim_config(
 							dpsoc->wlan_cfg_ctx)) {
 				if (msduq->is_deactivation_needed) {
 					msduq->is_deactivation_needed = 0;
-					dp_sawf_debug("Reset Deactivation Flag");
+					dp_sawf_debug("peer:%d | "
+						      "Reset Deactivation Flag",
+						      peer_id);
 				}
 			}
 			/*
@@ -874,7 +878,8 @@ dp_sawf_peer_flow_count(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr,
 			 */
 			qdf_atomic_add(flow_count, &msduq->ref_count);
 			if (qdf_atomic_read(&msduq->ref_count) == 1) {
-				dp_sawf_debug("MSDUQ Ref_count: 0->1");
+				dp_sawf_debug("peer:%d | MSDUQ Ref_count: 0->1",
+					      peer_id);
 				dp_sawf_peer_msduq_event_notify(dpsoc, peer, q_idx,
 								svc_id,
 								SAWF_PEER_MSDUQ_ADD_EVENT);
@@ -899,21 +904,23 @@ dp_sawf_peer_flow_count(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr,
 						 */
 						if ((current_q_state == SAWF_MSDUQ_IN_USE) &&
 						    (start_or_stop == SAWF_FLOW_DEPRIORITIZE)) {
-							dp_sawf_info("Deactivate request via"
-								     " Flow Deprioritize");
+							dp_sawf_info("peer:%d | Deactivate request via"
+								     " Flow Deprioritize",
+								     peer_id);
 							dp_sawf_peer_msduq_reconfigure(
 								dpsoc, peer, msduq, q_idx,
 								HTT_MSDUQ_DEACTIVATE);
 						}
-						dp_sawf_debug("msduq:%d, q_state:%s", q_idx,
+						dp_sawf_debug("peer:%d | msduq:%d, q_state:%s",
+							      peer_id, q_idx,
 							      dp_sawf_msduq_state_to_string(
 										msduq->q_state));
 					}
 				}
 			}
 		}
-		dp_sawf_debug("MSDUQ Ref_count:%d",
-			      qdf_atomic_read(&msduq->ref_count));
+		dp_sawf_debug("peer:%d | MSDUQ Ref_count:%d",
+			      peer_id, qdf_atomic_read(&msduq->ref_count));
 	}
 
 	qdf_spin_unlock_bh(&dpsoc->sawf_flow_sync_lock);
@@ -1361,8 +1368,8 @@ dp_sawf_notify_deactivate_msduq(struct dp_soc *soc, struct dp_peer *peer,
 	host_q_id = q_id + DP_SAWF_DEFAULT_Q_MAX;
 	msduq_peer_id = dp_sawf_msduq_peer_id_set(peer_id, host_q_id);
 	DP_SAWF_METADATA_SET(result_params.mark_metadata, svc_id, msduq_peer_id);
-	dp_sawf_info("is_mlo:%d | peer_mac:%pM |msduq:%d |svc_id:%d |mark_metadata 0x%x",
-		     is_mlo, result_params.peer_mac, q_id, svc_id,
+	dp_sawf_info("peer:%d |is_mlo:%d | peer_mac:%pM |msduq:%d |svc_id:%d |mark_metadata 0x%x",
+		     peer_id, is_mlo, result_params.peer_mac, q_id, svc_id,
 		     result_params.mark_metadata);
 
 	if (soc->cdp_soc.ol_ops->notify_deactivate_msduq)
@@ -1431,22 +1438,27 @@ dp_sawf_peer_msduq_htt_resp_timeout(struct dp_soc *soc, struct dp_peer *peer,
 				    uint8_t *no_resp_q, bool *is_notify_needed)
 {
 	uint8_t current_q_state, new_q_state;
+	uint16_t peer_id;
 
+	peer_id = peer->peer_id;
 	current_q_state = msduq->q_state;
 
 	if ((current_q_state == SAWF_MSDUQ_DEACTIVATE_PENDING) ||
 	    (current_q_state == SAWF_MSDUQ_REACTIVATE_PENDING)) {
 		dp_sawf_debug("msduq:%d, q_state:%s, peer:%d", q_id,
 			      dp_sawf_msduq_state_to_string(current_q_state),
-			      peer->peer_id);
+			      peer_id);
 		if (!msduq->no_resp_ind) {
 			msduq->no_resp_ind = 1;
-			dp_sawf_debug("Set no_resp_ind Flag");
+			dp_sawf_debug("peer:%d | Set no_resp_ind Flag",
+				      peer_id);
 		} else {
 			msduq->no_resp_ind = 0;
-			dp_sawf_debug("Reset no_resp_ind Flag");
+			dp_sawf_debug("peer: %d | Reset no_resp_ind Flag",
+				      peer_id);
 			if (current_q_state == SAWF_MSDUQ_REACTIVATE_PENDING) {
-				dp_sawf_err("HTT Reactivate timeout");
+				dp_sawf_err("peer:%d | HTT Reactivate timeout",
+					    peer_id);
 				DP_SAWF_MSDUQ_STATS_INC(reactivate_stats, timeout);
 				/*
 				 * Record MSDUQ with no response for Reactivate,
@@ -1457,7 +1469,8 @@ dp_sawf_peer_msduq_htt_resp_timeout(struct dp_soc *soc, struct dp_peer *peer,
 				if (!(*is_notify_needed))
 					*is_notify_needed = true;
 			} else {
-				dp_sawf_err("HTT Deactivate timeout");
+				dp_sawf_err("peer:%d | HTT Deactivate timeout",
+					    peer_id);
 				DP_SAWF_MSDUQ_STATS_INC(deactivate_stats, timeout);
 				new_q_state = SAWF_MSDUQ_IN_USE;
 			}
@@ -1490,21 +1503,26 @@ dp_sawf_peer_msduq_timer_update(struct dp_soc *dpsoc, struct dp_peer *peer,
 				struct dp_sawf_msduq *msduq, uint8_t q_id)
 {
 	uint8_t current_q_state;
+	uint16_t peer_id;
 
+	peer_id = peer->peer_id;
 	current_q_state = msduq->q_state;
 
 	if (current_q_state == SAWF_MSDUQ_IN_USE) {
-		dp_sawf_trace("msduq:%d, q_state:%s, MSDUQ Ref_count:%d", q_id,
+		dp_sawf_trace("peer:%d | msduq:%d, q_state:%s, MSDUQ Ref_count:%d",
+			      peer_id, q_id,
 			      dp_sawf_msduq_state_to_string(current_q_state),
 			      qdf_atomic_read(&msduq->ref_count));
 		if (!qdf_atomic_read(&msduq->ref_count)) {
-			dp_sawf_debug("peer:%d, msduq:%d", peer->peer_id, q_id);
+			dp_sawf_debug("peer:%d, msduq:%d", peer_id, q_id);
 			if (!msduq->is_deactivation_needed) {
 				msduq->is_deactivation_needed = 1;
-				dp_sawf_debug("Set Deactivation Flag");
+				dp_sawf_debug("peer:%d | Set Deactivation Flag",
+					      peer_id);
 			} else {
 				msduq->is_deactivation_needed = 0;
-				dp_sawf_debug("Reset Deactivation Flag");
+				dp_sawf_debug("peer:%d | Reset Deactivation Flag",
+					      peer_id);
 				dp_sawf_peer_msduq_reconfigure(
 						dpsoc, peer, msduq, q_id,
 						HTT_MSDUQ_DEACTIVATE);
@@ -1816,7 +1834,7 @@ uint16_t dp_sawf_get_msduq(struct net_device *netdev, uint8_t *dest_mac,
 	is_tid_skid_enabled =
 		wlan_cfg_get_sawf_msduq_tid_skid_config(soc->wlan_cfg_ctx);
 
-	dp_sawf_trace("RX callback from NW Connection manager, peer_id:%d, "
+	dp_sawf_trace("RX callback from NW Connection manager, peer:%d, "
 		      "svc_id:%u, soc_id:%d", peer_id, service_id, soc_id);
 
 	qdf_spin_lock_bh(&sawf_ctx->sawf_peer_lock);
@@ -1831,7 +1849,7 @@ uint16_t dp_sawf_get_msduq(struct net_device *netdev, uint8_t *dest_mac,
 		     (msduq->q_state == SAWF_MSDUQ_REACTIVATE_PENDING))) {
 			q_id = q_id + DP_SAWF_DEFAULT_Q_MAX;
 			dp_sawf_debug("msduq:%d is returned to NW manager -> "
-				      "peer_id:%d, svc_id:%u, soc_id:%d, "
+				      "peer:%d, svc_id:%u, soc_id:%d, "
 				      "q_state:%s",
 				      (q_id - DP_SAWF_DEFAULT_Q_MAX), peer_id,
 				      service_id, soc_id,
@@ -1890,9 +1908,10 @@ uint16_t dp_sawf_get_msduq(struct net_device *netdev, uint8_t *dest_mac,
 
 		if (!is_lower_tid_checked) {
 			if (tid == 0) {
-				dp_sawf_debug("Lower TID Queues below TID %d "
+				dp_sawf_debug("peer:%d | Lower TID Queues below TID %d "
 					      "are unavailable, Moving to "
-					      "Higher TID Queues.", static_tid);
+					      "Higher TID Queues.", peer_id,
+					      static_tid);
 				is_lower_tid_checked = true;
 				tid = static_tid + 1;
 			} else {
