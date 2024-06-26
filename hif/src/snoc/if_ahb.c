@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -497,17 +497,20 @@ QDF_STATUS hif_ahb_enable_bus(struct hif_softc *ol_sc,
 
 	if (target_type == TARGET_TYPE_QCN6122 ||
 	    target_type == TARGET_TYPE_QCN9160 ||
+	    target_type == TARGET_TYPE_QCA5424 ||
 	    target_type == TARGET_TYPE_QCN6432) {
 		hif_ahb_get_bar_addr_pld(sc, dev);
 	}
 
 	/* 11BE SoC chipsets Need to call this function to get cmem addr */
 	if (target_type == TARGET_TYPE_QCA5332 ||
+	    target_type == TARGET_TYPE_QCA5424 ||
 	    target_type == TARGET_TYPE_QCN6432)
 		hif_ahb_get_soc_cmem_info_pld(sc, dev);
 
 	if (target_type == TARGET_TYPE_QCN6122 ||
 	    target_type == TARGET_TYPE_QCN9160 ||
+	    target_type == TARGET_TYPE_QCA5424 ||
 	    target_type == TARGET_TYPE_QCN6432) {
 		hif_update_irq_ops_with_pci(ol_sc);
 	} else {
@@ -834,6 +837,7 @@ void hif_display_ahb_irq_regs(struct hif_softc *scn)
 
 	if (tgt_info->target_type == TARGET_TYPE_QCN6122 ||
 	    tgt_info->target_type == TARGET_TYPE_QCN9160 ||
+	    tgt_info->target_type == TARGET_TYPE_QCA5424 ||
 	    tgt_info->target_type == TARGET_TYPE_QCN6432) {
 		return;
 	}

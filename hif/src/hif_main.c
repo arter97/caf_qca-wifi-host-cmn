@@ -42,7 +42,7 @@
 #include "mp_dev.h"
 #if defined(QCA_WIFI_QCA8074) || defined(QCA_WIFI_QCA6018) || \
 	defined(QCA_WIFI_QCA5018) || defined(QCA_WIFI_QCA9574) || \
-	defined(QCA_WIFI_QCA5332)
+	defined(QCA_WIFI_QCA5332) || defined(QCA_WIFI_QCA5424)
 #include "hal_api.h"
 #endif
 #include "hif_napi.h"
@@ -1416,7 +1416,7 @@ static inline int hif_get_num_active_grp_tasklets(struct hif_softc *scn)
 	defined(QCA_WIFI_QCN9000) || defined(QCA_WIFI_QCA6490) || \
 	defined(QCA_WIFI_QCA6750) || defined(QCA_WIFI_QCA5018) || \
 	defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_QCN9224) || \
-	defined(QCA_WIFI_QCN6432) || \
+	defined(QCA_WIFI_QCN6432) || defined(QCA_WIFI_QCA5424) || \
 	defined(QCA_WIFI_QCA9574)) || defined(QCA_WIFI_QCA5332) || \
 	defined(QCA_WIFI_WCN7750)
 /**
@@ -1982,7 +1982,7 @@ static QDF_STATUS hif_hal_detach(struct hif_softc *scn)
 	defined(QCA_WIFI_QCA6750) || defined(QCA_WIFI_QCA5018) || \
 	defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_QCN9224) || \
 	defined(QCA_WIFI_QCA9574)) || defined(QCA_WIFI_QCA5332) || \
-	defined(QCA_WIFI_WCN7750)
+	defined(QCA_WIFI_WCN7750) || defined(QCA_WIFI_QCA5424)
 static QDF_STATUS hif_hal_attach(struct hif_softc *scn)
 {
 	if (ce_srng_based(scn)) {
@@ -2375,6 +2375,12 @@ int hif_get_device_type(uint32_t device_id,
 		*hif_type = HIF_TYPE_QCN6432;
 		*target_type = TARGET_TYPE_QCN6432;
 		hif_info(" *********** QCN6432 *************");
+		break;
+
+	case QCA5424_DEVICE_ID:
+		*hif_type = HIF_TYPE_QCA5424;
+		*target_type = TARGET_TYPE_QCA5424;
+		hif_info(" *********** QCA5424 *************");
 		break;
 
 	case QCN7605_DEVICE_ID:
