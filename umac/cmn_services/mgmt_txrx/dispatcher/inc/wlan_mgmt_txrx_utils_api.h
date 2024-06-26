@@ -327,12 +327,14 @@ enum sa_query_action {
 
 /**
  * enum protected_dual_actioncode - protected dual action frames
+ * @PDPA_ACTION_VENDOR_SPECIFIC: PDPA action vendor specific frame
  * @PDPA_GAS_INIT_REQ: pdpa gas init request frame
  * @PDPA_GAS_INIT_RSP: pdpa gas init response frame
  * @PDPA_GAS_COMEBACK_REQ: pdpa gas comeback request frame
  * @PDPA_GAS_COMEBACK_RSP: pdpa gas comeback response frame
  */
 enum protected_dual_actioncode {
+	PDPA_ACTION_VENDOR_SPECIFIC = 9,
 	PDPA_GAS_INIT_REQ = 10,
 	PDPA_GAS_INIT_RSP = 11,
 	PDPA_GAS_COMEBACK_REQ = 12,
