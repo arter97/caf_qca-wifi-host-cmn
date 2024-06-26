@@ -188,10 +188,18 @@ QDF_STATUS cm_set_key(struct cnx_mgr *cm_ctx, bool unicast,
 		wep_key_idx = wlan_crypto_get_default_key_idx(cm_ctx->vdev,
 							      false);
 		crypto_key = wlan_crypto_get_key(cm_ctx->vdev, wep_key_idx);
+		if (!crypto_key) {
+			mlme_err("NULL crypto key at index=%d", wep_key_idx);
+			return QDF_STATUS_E_NULL_VALUE;
+		}
 		qdf_mem_copy(crypto_key->macaddr, bssid->bytes,
 			     QDF_MAC_ADDR_SIZE);
 	} else {
 		crypto_key = wlan_crypto_get_key(cm_ctx->vdev, key_idx);
+		if (!crypto_key) {
+			mlme_err("NULL crypto key at index=%d", key_idx);
+			return QDF_STATUS_E_NULL_VALUE;
+		}
 	}
 
 	return wlan_crypto_set_key_req(cm_ctx->vdev, crypto_key, (unicast ?
