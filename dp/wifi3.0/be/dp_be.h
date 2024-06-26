@@ -186,6 +186,7 @@ struct dp_spt_page_desc {
  * @page_desc_base: page Desc buffer base address.
  * @page_pool: DDR pages pool
  * @cc_lock: locks for page acquiring/free
+ * @desc_type: descriptor type for which memory allocated
  */
 struct dp_hw_cookie_conversion_t {
 	uint32_t cmem_offset;
@@ -193,6 +194,7 @@ struct dp_hw_cookie_conversion_t {
 	struct dp_spt_page_desc *page_desc_base;
 	struct qdf_mem_multi_page_t page_pool;
 	qdf_spinlock_t cc_lock;
+	enum qdf_dp_desc_type desc_type;
 };
 
 /**
