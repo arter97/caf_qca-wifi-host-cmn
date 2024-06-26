@@ -4233,6 +4233,22 @@ bool wlan_cfg_is_lapb_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
 }
 #endif
 
+#ifdef DP_FEATURE_RX_BUFFER_RECYCLE
+static inline void
+wlan_soc_rx_buffer_recycle_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
+				      struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
+{
+	wlan_cfg_ctx->dp_rx_buffer_recycle_enabled =
+			cfg_get(psoc, CFG_DP_RX_BUFFER_RECYCLE_ENABLE);
+}
+#else
+static inline void
+wlan_soc_rx_buffer_recycle_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
+				      struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
+{
+}
+#endif
+
 #ifdef FEATURE_DIRECT_LINK
 static inline void
 wlan_soc_direct_link_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
@@ -4498,6 +4514,7 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	wlan_soc_sawf_reclaim_timer_val_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_sawf_msduq_tid_skid_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_direct_link_cfg_attach(psoc, wlan_cfg_ctx);
+	wlan_soc_rx_buffer_recycle_cfg_attach(psoc, wlan_cfg_ctx);
 
 	return wlan_cfg_ctx;
 }
@@ -4787,6 +4804,7 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	wlan_soc_sawf_reclaim_timer_val_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_sawf_msduq_tid_skid_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_direct_link_cfg_attach(psoc, wlan_cfg_ctx);
+	wlan_soc_rx_buffer_recycle_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_cfg_ctx->rxmon_mgmt_linearization =
 		cfg_get(psoc, CFG_DP_RXMON_MGMT_LINEARIZATION);
 	wlan_soc_dp_proto_stats_cfg_attach(psoc, wlan_cfg_ctx);
@@ -6475,6 +6493,18 @@ int wlan_cfg_get_dp_soc_dpdk_cfg(struct cdp_ctrl_objmgr_psoc *psoc)
 int wlan_cfg_get_dp_soc_dpdk_cfg(struct cdp_ctrl_objmgr_psoc *psoc)
 {
 	return 0;
+}
+#endif
+
+#ifdef DP_FEATURE_RX_BUFFER_RECYCLE
+bool wlan_cfg_get_dp_rx_buffer_recycle(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->dp_rx_buffer_recycle_enabled;
+}
+#else
+bool wlan_cfg_get_dp_rx_buffer_recycle(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return false;
 }
 #endif
 

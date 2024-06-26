@@ -481,6 +481,9 @@ dp_rx_page_pool_nbuf_alloc_and_map(struct dp_soc *soc,
 	QDF_STATUS ret;
 	int i;
 
+	if (!wlan_cfg_get_dp_rx_buffer_recycle(soc->wlan_cfg_ctx))
+		return QDF_STATUS_E_FAILURE;
+
 	qdf_spin_lock_bh(&rx_pp->pp_lock);
 
 	pp_params = &rx_pp->main_pool[rx_pp->active_pp_idx];
@@ -549,6 +552,9 @@ void dp_rx_page_pool_deinit(struct dp_soc *soc, uint32_t pool_id)
 	struct dp_rx_pp_params *pp_params;
 	int i;
 
+	if (!wlan_cfg_get_dp_rx_buffer_recycle(soc->wlan_cfg_ctx))
+		return;
+
 	rx_pp->active_pp_idx = 0;
 
 	qdf_spin_lock(&rx_pp->pp_lock);
@@ -571,6 +577,9 @@ QDF_STATUS dp_rx_page_pool_init(struct dp_soc *soc, uint32_t pool_id)
 {
 	struct dp_rx_page_pool *rx_pp = &soc->rx_pp[pool_id];
 
+	if (!wlan_cfg_get_dp_rx_buffer_recycle(soc->wlan_cfg_ctx))
+		return QDF_STATUS_SUCCESS;
+
 	rx_pp->active_pp_idx = 0;
 
 	return QDF_STATUS_SUCCESS;
@@ -581,6 +590,9 @@ void dp_rx_page_pool_free(struct dp_soc *soc, uint32_t pool_id)
 	struct dp_rx_page_pool *rx_pp = &soc->rx_pp[pool_id];
 	struct dp_rx_pp_params *pp_params;
 	int i;
+
+	if (!wlan_cfg_get_dp_rx_buffer_recycle(soc->wlan_cfg_ctx))
+		return;
 
 	qdf_spin_lock_bh(&rx_pp->pp_lock);
 	for (i = 0; i < DP_PAGE_POOL_MAX; i++) {
@@ -653,6 +665,11 @@ QDF_STATUS dp_rx_page_pool_alloc(struct dp_soc *soc, uint32_t pool_id,
 	size_t pp_size;
 	int pp_count;
 	int i;
+
+	if (!wlan_cfg_get_dp_rx_buffer_recycle(soc->wlan_cfg_ctx)) {
+		dp_err("RX buffer recycle disabled from INI");
+		return QDF_STATUS_E_FAILURE;
+	}
 
 	if (pool_size > DP_RX_PP_POOL_SIZE_THRES) {
 		pp_count = pool_size / DP_RX_PP_POOL_SIZE_THRES;
