@@ -5508,7 +5508,8 @@ util_parse_pa_info_from_linkinfo(uint8_t *linkinfo,
 	linkinfo_currpos = linkinfo;
 	linkinfo_remlen = linkinfo_len;
 
-	while (linkinfo_remlen) {
+	while (linkinfo_remlen &&
+	       pa_info->num_links < QDF_ARRAY_SIZE(pa_info->link_info)) {
 		if (linkinfo_remlen <  sizeof(struct subelem_header)) {
 			mlo_err_rl("Remaining length in link info %zu octets is smaller than subelement header length %zu octets",
 				   linkinfo_remlen,
