@@ -844,7 +844,6 @@ void hif_uninit_rri_on_ddr(struct hif_softc *scn);
 static inline
 void hif_uninit_rri_on_ddr(struct hif_softc *scn) {}
 #endif
-void hif_cleanup_static_buf_to_target(struct hif_softc *scn);
 
 #ifdef FEATURE_RUNTIME_PM
 /**

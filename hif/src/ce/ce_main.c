@@ -5179,33 +5179,6 @@ void hif_ce_prepare_config(struct hif_softc *scn)
 }
 
 /**
- * hif_ce_open() - do ce specific allocations
- * @hif_sc: pointer to hif context
- *
- * return: 0 for success or QDF_STATUS_E_NOMEM
- */
-QDF_STATUS hif_ce_open(struct hif_softc *hif_sc)
-{
-	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(hif_sc);
-
-	qdf_spinlock_create(&hif_state->irq_reg_lock);
-	qdf_spinlock_create(&hif_state->keep_awake_lock);
-	return QDF_STATUS_SUCCESS;
-}
-
-/**
- * hif_ce_close() - do ce specific free
- * @hif_sc: pointer to hif context
- */
-void hif_ce_close(struct hif_softc *hif_sc)
-{
-	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(hif_sc);
-
-	qdf_spinlock_destroy(&hif_state->irq_reg_lock);
-	qdf_spinlock_destroy(&hif_state->keep_awake_lock);
-}
-
-/**
  * hif_unconfig_ce() - ensure resources from hif_config_ce are freed
  * @hif_sc: hif context
  *
@@ -5368,10 +5341,39 @@ static inline void hif_post_static_buf_to_target(struct hif_softc *scn)
 {
 }
 
-void hif_cleanup_static_buf_to_target(struct hif_softc *scn)
+static inline void hif_cleanup_static_buf_to_target(struct hif_softc *scn)
 {
 }
 #endif
+
+/**
+ * hif_ce_open() - do ce specific allocations
+ * @hif_sc: pointer to hif context
+ *
+ * return: 0 for success or QDF_STATUS_E_NOMEM
+ */
+QDF_STATUS hif_ce_open(struct hif_softc *hif_sc)
+{
+	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(hif_sc);
+
+	qdf_spinlock_create(&hif_state->irq_reg_lock);
+	qdf_spinlock_create(&hif_state->keep_awake_lock);
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * hif_ce_close() - do ce specific free
+ * @hif_sc: pointer to hif context
+ */
+void hif_ce_close(struct hif_softc *hif_sc)
+{
+	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(hif_sc);
+
+	hif_cleanup_static_buf_to_target(hif_sc);
+
+	qdf_spinlock_destroy(&hif_state->irq_reg_lock);
+	qdf_spinlock_destroy(&hif_state->keep_awake_lock);
+}
 
 static int hif_srng_sleep_state_adjust(struct hif_softc *scn, bool sleep_ok,
 				bool wait_for_it)
