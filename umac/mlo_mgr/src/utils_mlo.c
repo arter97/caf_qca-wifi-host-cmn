@@ -2917,6 +2917,27 @@ util_find_mlie(uint8_t *buf, qdf_size_t buflen, uint8_t **mlieseq,
 	return QDF_STATUS_SUCCESS;
 }
 
+static inline QDF_STATUS
+util_validate_bv_mlie_min_seq_len(qdf_size_t mlieseqlen)
+{
+	qdf_size_t parsed_len = sizeof(struct wlan_ie_multilink);
+
+	if (mlieseqlen < parsed_len + WLAN_ML_BV_CINFO_LENGTH_SIZE) {
+		mlo_err_rl("ML seq payload of len %zu doesn't accommodate the mandatory BV ML IE Common info len field",
+			   mlieseqlen);
+		return QDF_STATUS_E_PROTO;
+	}
+	parsed_len += WLAN_ML_BV_CINFO_LENGTH_SIZE;
+
+	if (mlieseqlen < parsed_len + QDF_MAC_ADDR_SIZE) {
+		mlo_err_rl("ML seq payload of len %zu doesn't accommodate the mandatory MLD addr",
+			   mlieseqlen);
+		return QDF_STATUS_E_PROTO;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
 QDF_STATUS
 util_get_mlie_common_info_len(uint8_t *mlieseq, qdf_size_t mlieseqlen,
 			      uint8_t *commoninfo_len)
@@ -2997,6 +3018,9 @@ util_get_bvmlie_bssparamchangecnt(uint8_t *mlieseq, qdf_size_t mlieseqlen,
 
 	presencebitmap = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_PBM_IDX,
 				      WLAN_ML_CTRL_PBM_BITS);
+
+	if (QDF_IS_STATUS_ERROR(util_validate_bv_mlie_min_seq_len(mlieseqlen)))
+		return QDF_STATUS_E_INVAL;
 
 	commoninfo = mlieseq + sizeof(struct wlan_ie_multilink);
 	commoninfolen = *(mlieseq + sizeof(struct wlan_ie_multilink));
@@ -3386,6 +3410,9 @@ util_get_bvmlie_mldcap(uint8_t *mlieseq, qdf_size_t mlieseqlen,
 
 	presencebitmap = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_PBM_IDX,
 				      WLAN_ML_CTRL_PBM_BITS);
+
+	if (QDF_IS_STATUS_ERROR(util_validate_bv_mlie_min_seq_len(mlieseqlen)))
+		return QDF_STATUS_E_INVAL;
 
 	commoninfo = mlieseq + sizeof(struct wlan_ie_multilink);
 	commoninfo_len = *(mlieseq + sizeof(struct wlan_ie_multilink));
