@@ -21,6 +21,10 @@ obj-m += monitor.o
 
 include $(obj)/$(DEPTH)/os/linux/Makefile-linux.common
 
+ifeq ($(QCA_GCC13_0_SUPPORT), 1)
+EXTRA_CFLAGS += -Wno-enum-conversion
+endif
+
 INCS += -I$(obj)/$(DEPTH)/include \
         -I$(obj)/$(DEPTH)/telemetry_agent/inc \
         -I$(obj)/$(DEPTH)/os/linux/src \
