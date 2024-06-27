@@ -1439,6 +1439,7 @@ struct wlan_mlo_bridge_sta {
  * @mlo_mlme_ext_sta_op_class:
  * @mlo_mlme_ext_peer_reassoc: Callback to process reassoc
  * @mlo_mlme_ext_connect_get_partner_info: Callback to get MLO partner info
+ * @mlo_mlme_ext_teardown_tdls: Callback to teardown TDLS
  */
 struct mlo_mlme_ext_ops {
 	QDF_STATUS (*mlo_mlme_ext_validate_conn_req)(
@@ -1484,6 +1485,7 @@ struct mlo_mlme_ext_ops {
 				const struct cfg80211_connect_params *req,
 				struct mlo_partner_info *partner_info);
 #endif
+	QDF_STATUS (*mlo_mlme_ext_teardown_tdls)(struct wlan_objmgr_psoc *psoc);
 };
 
 /*

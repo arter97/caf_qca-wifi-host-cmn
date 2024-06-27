@@ -1279,6 +1279,8 @@ mlo_mgr_link_state_switch_info_handler(struct wlan_objmgr_psoc *psoc,
 {
 	uint8_t i;
 	struct wlan_mlo_dev_context *mld_ctx = NULL;
+	struct mlo_mgr_context *mlo_ctx = wlan_objmgr_get_mlo_ctx();
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
 
 	wlan_mlo_get_mlpeer_by_peer_mladdr(
 			&info->link_switch_param[0].mld_addr, &mld_ctx);
@@ -1298,7 +1300,15 @@ mlo_mgr_link_state_switch_info_handler(struct wlan_objmgr_psoc *psoc,
 				info->link_switch_param[i].active_link_bitmap);
 	}
 
-	return QDF_STATUS_SUCCESS;
+	/*
+	 * Teardown TDLS for non-DBS target so that it can be bring up on
+	 * active link.
+	 */
+	if (mlo_ctx && mlo_ctx->mlme_ops &&
+	    mlo_ctx->mlme_ops->mlo_mlme_ext_teardown_tdls)
+		status = mlo_ctx->mlme_ops->mlo_mlme_ext_teardown_tdls(psoc);
+
+	return status;
 }
 
 QDF_STATUS mlo_mgr_link_switch_complete(struct wlan_objmgr_vdev *vdev)
