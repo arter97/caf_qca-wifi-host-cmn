@@ -6785,7 +6785,8 @@ dp_tx_comp_process_desc_list(struct dp_soc *soc,
 			dp_tx_nbuf_dev_queue_free(&h, desc);
 			dp_tx_desc_free(soc, desc, desc->pool_id);
 		} else {
-			dp_tx_comp_free_buf(soc, desc, false);
+			if (desc->flags & DP_TX_DESC_FLAG_COMPLETED_TX)
+				dp_tx_comp_free_buf(soc, desc, false);
 			dp_tx_desc_release(soc, desc, desc->pool_id);
 		}
 		desc = next;
