@@ -2374,6 +2374,9 @@ QDF_STATUS cm_try_next_candidate(struct cnx_mgr *cm_ctx,
 	if (QDF_IS_STATUS_ERROR(status))
 		goto connect_err;
 
+	mlme_nofl_debug("cm_id: 0x%x Trying with next candidate as connect failed with "QDF_MAC_ADDR_FMT" reason: %d",
+			resp->cm_id, QDF_MAC_ADDR_REF(resp->bssid.bytes),
+			resp->reason);
 	/*
 	 * cached the first failure response if candidate is different from
 	 * previous.
