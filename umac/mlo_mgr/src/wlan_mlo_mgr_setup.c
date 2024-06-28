@@ -754,7 +754,8 @@ void mlo_setup_link_ready(struct wlan_objmgr_pdev *pdev, uint8_t grp_id)
 		tx_ops = wlan_psoc_get_lmac_if_txops(psoc);
 
 		/* For dynamic WSI remap validated REO post MLO SETUP */
-		if (!wlan_mlo_is_wsi_remap_in_progress(grp_id)) {
+		if (!wlan_mlo_is_wsi_remap_in_progress(grp_id) &&
+		    !mlo_ctx->dynamic_wsi_bypassed) {
 			status = wlan_mgmt_rx_reo_validate_mlo_link_info(psoc);
 			if (QDF_IS_STATUS_ERROR(status)) {
 				mlo_err("Failed to validate MLO HW link info");

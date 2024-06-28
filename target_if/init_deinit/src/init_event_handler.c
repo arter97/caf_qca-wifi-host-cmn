@@ -888,6 +888,8 @@ void init_deinit_mlo_update_soc_ready(struct wlan_objmgr_psoc *psoc)
 		 */
 		if (psoc->wsi_remap_fw_up_in_progress)
 			return;
+		if (psoc->wsi_remap_recovery_in_progress)
+			return;
 		mlo_setup_update_soc_ready(psoc, grp_id);
 	}
 }
@@ -923,6 +925,9 @@ void init_deinit_mlo_update_pdev_ready(struct wlan_objmgr_psoc *psoc,
 	 * wsi_remap_mlo_setup
 	 */
 	if (psoc->wsi_remap_fw_up_in_progress)
+		return;
+
+	if (psoc->wsi_remap_recovery_in_progress)
 		return;
 
 	wlan_objmgr_iterate_obj_list(psoc, WLAN_PDEV_OP,
