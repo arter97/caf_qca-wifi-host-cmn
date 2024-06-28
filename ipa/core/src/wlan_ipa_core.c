@@ -5522,6 +5522,11 @@ int wlan_ipa_wdi_opt_dpath_flt_add_cb(
 
 	dp_flt_param = &(ipa_obj->dp_cce_super_rule_flt_param);
 
+	if (!ipa_obj->opt_dp_active) {
+		ipa_err("IPA flt not reserved before adding");
+		return QDF_STATUS_FILT_REQ_ERROR;
+	}
+
 	if (num_flts > IPA_WDI_MAX_FILTER) {
 		ipa_err("Wrong IPA flt count %d", num_flts);
 		return QDF_STATUS_FILT_REQ_ERROR;
