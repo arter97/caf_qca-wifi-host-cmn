@@ -3133,6 +3133,15 @@ reg_validate_freq_in_afc_chan_obj(struct wlan_objmgr_pdev *pdev,
 				  qdf_freq_t primary_freq,
 				  qdf_freq_t center_320,
 				  uint16_t bw);
+#else
+static inline bool
+reg_validate_freq_in_afc_chan_obj(struct wlan_objmgr_pdev *pdev,
+				  qdf_freq_t primary_freq,
+				  qdf_freq_t center_320,
+				  uint16_t bw)
+{
+	return false;
+}
 #endif
 #endif
 
