@@ -4749,6 +4749,7 @@ QDF_STATUS wlan_ipa_opt_dp_init(struct wlan_ipa_priv *ipa_ctx)
 			qdf_event_create(&ipa_ctx->ipa_opt_dp_ctrl_clk_evt);
 			/*Init OPT_DP active data flow flag */
 			ipa_ctx->opt_dp_active = false;
+			qdf_runtime_lock_init(&ipa_ctx->opt_dp_runtime_lock);
 		} else {
 			ipa_debug("opt_dp: Disabled from WLAN INI");
 		}
@@ -4824,6 +4825,7 @@ void wlan_ipa_opt_dp_deinit(struct wlan_ipa_priv *ipa_ctx)
 	if (ipa_ctx->opt_wifi_datapath && wlan_ipa_config_is_opt_wifi_dp_enabled()) {
 		qdf_wake_lock_destroy(&ipa_ctx->opt_dp_wake_lock);
 		qdf_event_destroy(&ipa_ctx->ipa_opt_dp_ctrl_clk_evt);
+		qdf_runtime_lock_deinit(&ipa_ctx->opt_dp_runtime_lock);
 	}
 
 	if (ipa_ctx->opt_wifi_datapath_ctrl)
@@ -6041,6 +6043,7 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_cb(
 	int response = 0;
 	int wait_cnt = 0;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	qdf_runtime_lock_t *opt_dp_runtime_lock;
 
 	if (ipa_obj->ipa_pipes_down || ipa_obj->pipes_down_in_progress) {
 		ipa_err("Pipes are going down. Reject flt rsrv request");
@@ -6070,6 +6073,9 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_cb(
 			ipa_err("opt_dp: Pcie link up fail %d", response);
 			goto error_pcie_link_up;
 		}
+	} else {
+		opt_dp_runtime_lock = &ipa_obj->opt_dp_runtime_lock;
+		qdf_runtime_pm_prevent_suspend_sync(opt_dp_runtime_lock);
 	}
 
 	ipa_debug("opt_dp :Target suspend state %d",
@@ -6115,7 +6121,11 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_cb(
 		return status;
 
 error:
-	cdp_ipa_pcie_link_down(ipa_obj->dp_soc);
+	if (wlan_ipa_is_low_power_mode_config_disabled(ipa_obj->config))
+		cdp_ipa_pcie_link_down(ipa_obj->dp_soc);
+	else
+		qdf_runtime_pm_allow_suspend(&ipa_obj->opt_dp_runtime_lock);
+
 error_pcie_link_up:
 	qdf_wake_lock_release(&ipa_obj->opt_dp_wake_lock,
 			      WIFI_POWER_EVENT_WAKELOCK_OPT_WIFI_DP);
@@ -6352,11 +6362,13 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_rel_cb(void *ipa_ctx)
 								     param_val);
 		if (response) {
 			ipa_err("Low power feature enable failed. status %d",
-				response);
+					response);
 		}
 
 		response = cdp_ipa_pcie_link_down(ipa_obj->dp_soc);
 		ipa_debug("opt_dp: Vote for PCIe link down");
+	} else {
+		qdf_runtime_pm_allow_suspend(&ipa_obj->opt_dp_runtime_lock);
 	}
 
 	dp_flt_params = &(ipa_obj->dp_cce_super_rule_flt_param);
