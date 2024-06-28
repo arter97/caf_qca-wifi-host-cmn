@@ -398,6 +398,7 @@ static void mlme_multivdev_restart(struct pdev_mlme_obj *pdev_mlme)
 {
 	struct wlan_objmgr_pdev *pdev;
 	struct wlan_channel *des_chan = NULL;
+	bool is_target_scan_radio = false;
 
 	pdev = pdev_mlme->pdev;
 
@@ -408,9 +409,20 @@ static void mlme_multivdev_restart(struct pdev_mlme_obj *pdev_mlme)
 	if (!wlan_util_map_is_any_index_set(
 			pdev_mlme->restart_pend_vdev_bmap,
 			sizeof(pdev_mlme->restart_pend_vdev_bmap))) {
-		qdf_err("Sending MVR for Pdev %d psoc:%d",
-			 wlan_objmgr_pdev_get_pdev_id(pdev),
-			 wlan_psoc_get_id(wlan_pdev_get_psoc(pdev)));
+		is_target_scan_radio =
+			wlan_pdev_nif_feat_ext_cap_get(pdev,
+					WLAN_PDEV_FEXT_SCAN_RADIO);
+
+		if (is_target_scan_radio) {
+			mlme_debug("Sending MVR for Pdev %d psoc:%d",
+				   wlan_objmgr_pdev_get_pdev_id(pdev),
+				   wlan_psoc_get_id(wlan_pdev_get_psoc(pdev)));
+		} else {
+			mlme_err("Sending MVR for Pdev %d psoc:%d",
+				 wlan_objmgr_pdev_get_pdev_id(pdev),
+				 wlan_psoc_get_id(wlan_pdev_get_psoc(pdev)));
+		}
+
 		wlan_pdev_mlme_op_clear(pdev, WLAN_PDEV_OP_MBSSID_RESTART);
 		wlan_pdev_mlme_op_clear(pdev, WLAN_PDEV_OP_RESTART_INPROGRESS);
 
