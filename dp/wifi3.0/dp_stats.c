@@ -6525,29 +6525,32 @@ static void dp_print_tx_comp_stats(struct dp_soc *soc)
 	uint8_t index;
 	DP_PRINT_STATS("Tx completion release source per ring:");
 	for (index = 0; index < HAL_TX_COMP_RELEASE_SOURCE_MAX; index++) {
-		DP_PRINT_STATS("%s: %u   %u   %u   %u", tx_comp_rel_src[index],
+		DP_PRINT_STATS("%s: %u   %u   %u   %u  %u", tx_comp_rel_src[index],
 				soc->stats.tx.rsm_cnt[0][index],
 				soc->stats.tx.rsm_cnt[1][index],
 				soc->stats.tx.rsm_cnt[2][index],
-				soc->stats.tx.rsm_cnt[3][index]
+				soc->stats.tx.rsm_cnt[3][index],
+				soc->stats.tx.rsm_cnt[4][index]
 				);
 	}
 	DP_PRINT_STATS("TQM release reason per ring:");
 	for (index = 0; index < HAL_TX_TQM_RR_MAX; index++) {
-		DP_PRINT_STATS(" %s: %u   %u   %u   %u", tqm_rel_rsn[index],
+		DP_PRINT_STATS(" %s: %u   %u   %u   %u  %u", tqm_rel_rsn[index],
 				soc->stats.tx.tqm_rr_cnt[0][index],
 				soc->stats.tx.tqm_rr_cnt[1][index],
 				soc->stats.tx.tqm_rr_cnt[2][index],
-				soc->stats.tx.tqm_rr_cnt[3][index]
+				soc->stats.tx.tqm_rr_cnt[3][index],
+				soc->stats.tx.tqm_rr_cnt[4][index]
 				);
 	}
 	DP_PRINT_STATS("FW release status per ring:");
 	for (index = 0; index < HTT_TX_FW2WBM_TX_STATUS_MAX; index++) {
-		DP_PRINT_STATS(" %s: %u   %u   %u   %u", fw_rel_status[index],
+		DP_PRINT_STATS(" %s: %u   %u   %u   %u  %u", fw_rel_status[index],
 				soc->stats.tx.fw_rel_status_cnt[0][index],
 				soc->stats.tx.fw_rel_status_cnt[1][index],
 				soc->stats.tx.fw_rel_status_cnt[2][index],
-				soc->stats.tx.fw_rel_status_cnt[3][index]
+				soc->stats.tx.fw_rel_status_cnt[3][index],
+				soc->stats.tx.fw_rel_status_cnt[4][index]
 				);
 	}
 }

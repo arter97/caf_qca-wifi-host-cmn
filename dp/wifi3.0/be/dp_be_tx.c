@@ -1402,6 +1402,7 @@ int dp_ppeds_tx_comp_handler(struct dp_soc_be *be_soc, uint32_t quota)
 	struct dp_srng *srng;
 	uint16_t comp_index = 0;
 	struct dp_ppeds_tx_desc_pool_s *tx_desc_pool = &be_soc->ppeds_tx_desc;
+	uint8_t tx_comp_stats_ring_id = WBM2_SW_PPE_REL_RING_ID - 2;
 
 
 	if (qdf_unlikely(dp_srng_access_start(NULL, soc, hal_ring_hdl))) {
@@ -1435,6 +1436,7 @@ int dp_ppeds_tx_comp_handler(struct dp_soc_be *be_soc, uint32_t quota)
 		buf_src = hal_tx_comp_get_buffer_source(hal_soc,
 							tx_comp_hal_desc);
 
+		dp_update_wbm_rsm_stats(soc, tx_comp_stats_ring_id, buf_src);
 		if (qdf_unlikely(buf_src != HAL_TX_COMP_RELEASE_SOURCE_TQM &&
 				 buf_src != HAL_TX_COMP_RELEASE_SOURCE_FW)) {
 			dp_err("Tx comp release_src != TQM | FW but from %d",
@@ -1475,6 +1477,7 @@ int dp_ppeds_tx_comp_handler(struct dp_soc_be *be_soc, uint32_t quota)
 
 			status = hal_tx_comp_get_tx_status(tx_comp_hal_desc);
 
+			dp_update_fw_rsn_cnt(soc, tx_comp_stats_ring_id, status);
 			if (status == HTT_TX_FW2WBM_TX_STATUS_REINJECT) {
 				dp_ppeds_reinject_handler
 					(soc, tx_desc,
@@ -1492,6 +1495,8 @@ int dp_ppeds_tx_comp_handler(struct dp_soc_be *be_soc, uint32_t quota)
 			tx_desc->tx_status =
 				hal_tx_comp_get_tx_status(tx_comp_hal_desc);
 
+			dp_update_tqm_rsn_cnt(soc, tx_comp_stats_ring_id,
+					      tx_desc->tx_status, buf_src);
 			/*
 			 * Add desc sync to account for extended statistics
 			 * during Tx completion.
