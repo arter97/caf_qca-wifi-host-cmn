@@ -190,24 +190,6 @@ dp_tx_comp_get_params_from_hal_desc_be(struct dp_soc *soc,
 	return status;
 }
 #else
-#ifdef WLAN_MLO_MULTI_CHIP
-QDF_STATUS
-dp_tx_comp_get_params_from_hal_desc_be(struct dp_soc *soc,
-				       void *tx_comp_hal_desc,
-				       struct dp_tx_desc_s **r_tx_desc)
-{
-	uint64_t tx_desc_va;
-	QDF_STATUS status;
-
-	tx_desc_va = hal_tx_comp_get_desc_va(tx_comp_hal_desc);
-	*r_tx_desc = (struct dp_tx_desc_s *)(uintptr_t)tx_desc_va;
-
-	status = dp_tx_comp_desc_check_and_invalidate(tx_comp_hal_desc,
-						      r_tx_desc, tx_desc_va,
-						      true);
-	return status;
-}
-#else
 QDF_STATUS
 dp_tx_comp_get_params_from_hal_desc_be(struct dp_soc *soc,
 				       void *tx_comp_hal_desc,
@@ -229,7 +211,6 @@ dp_tx_comp_get_params_from_hal_desc_be(struct dp_soc *soc,
 
 	return status;
 }
-#endif /* WLAN_MLO_MULTI_CHIP */
 #endif /* DP_HW_COOKIE_CONVERT_EXCEPTION */
 #else
 
@@ -1465,9 +1446,6 @@ int dp_ppeds_tx_comp_handler(struct dp_soc_be *be_soc, uint32_t quota)
 		}
 
 		tx_desc->buffer_src = buf_src;
-		tx_desc->peer_id = dp_tx_comp_get_peer_id_be(
-							soc,
-							tx_comp_hal_desc);
 
 		if (qdf_unlikely(buf_src == HAL_TX_COMP_RELEASE_SOURCE_FW)) {
 			uint8_t htt_tx_status[HAL_TX_COMP_HTT_STATUS_LEN];
@@ -2476,9 +2454,6 @@ more_data:
 		}
 		dp_tx_comp_proto_stats_update(soc, tx_desc, ring_id);
 		tx_desc->buffer_src = buffer_src;
-		tx_desc->peer_id = dp_tx_comp_get_peer_id_be(
-							  soc,
-							  tx_comp_hal_desc);
 
 		/* get tx_desc pool from first sw desc */
 		if (!tx_desc_pool) {
