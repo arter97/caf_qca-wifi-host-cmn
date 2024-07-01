@@ -1600,3 +1600,34 @@ QDF_STATUS wlan_mlo_mgr_mld_vdev_detach(struct wlan_objmgr_vdev *vdev)
 
 	return status;
 }
+
+/**
+ * wlan_mlo_get_active_vdev_id() - This API checks current active link and
+ * returns corresponding vdev id for active link.
+ * @vdev: VDEV object
+ *
+ * Return: VDEV ID
+ */
+static uint8_t wlan_mlo_get_active_vdev_id(struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_mlo_dev_context *mlo_dev_ctx = vdev->mlo_dev_ctx;
+	struct mlo_link_info *link_info;
+	uint8_t i;
+
+	if (!mlo_dev_ctx || !wlan_vdev_mlme_is_mlo_vdev(vdev))
+		return WLAN_UMAC_VDEV_ID_MAX;
+
+	for (i = 0; i < WLAN_MAX_ML_BSS_LINKS; i++) {
+		link_info = &vdev->mlo_dev_ctx->link_ctx->links_info[i];
+
+		if (link_info->is_link_active)
+			return link_info->vdev_id;
+	}
+
+	return WLAN_UMAC_VDEV_ID_MAX;
+}
+
+uint8_t ucfg_mlo_get_active_vdev_id(struct wlan_objmgr_vdev *vdev)
+{
+	return wlan_mlo_get_active_vdev_id(vdev);
+}
