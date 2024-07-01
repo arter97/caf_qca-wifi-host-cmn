@@ -3092,6 +3092,7 @@ static inline void target_if_set_reo_shared_qref_feature(struct wlan_objmgr_psoc
 
 	if (target_psoc_get_target_type(tgt_hdl) == TARGET_TYPE_QCN9224 ||
 	    target_psoc_get_target_type(tgt_hdl) == TARGET_TYPE_QCA5332 ||
+	    target_psoc_get_target_type(tgt_hdl) == TARGET_TYPE_QCA5424 ||
 	    target_psoc_get_target_type(tgt_hdl) == TARGET_TYPE_QCN6432)
 		info->wlan_res_cfg.reo_qdesc_shared_addr_table_enabled = true;
 	else
