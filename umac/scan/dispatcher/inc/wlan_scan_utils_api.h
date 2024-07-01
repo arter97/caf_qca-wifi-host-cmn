@@ -1666,6 +1666,12 @@ util_scan_entry_bw_ind(struct scan_cache_entry *scan_entry)
 
 #ifdef WLAN_FEATURE_11BE_MLO
 static inline uint8_t*
+util_scan_entry_bv_ml_ie(struct scan_cache_entry *scan_entry)
+{
+	return scan_entry->ie_list.multi_link_bv;
+}
+
+static inline uint8_t*
 util_scan_entry_t2lm(struct scan_cache_entry *scan_entry)
 {
 	return scan_entry->ie_list.t2lm[0];
@@ -1679,6 +1685,12 @@ util_scan_entry_t2lm(struct scan_cache_entry *scan_entry)
  */
 uint32_t util_scan_entry_t2lm_len(struct scan_cache_entry *scan_entry);
 #else
+static inline uint8_t*
+util_scan_entry_bv_ml_ie(struct scan_cache_entry *scan_entry)
+{
+	return NULL;
+}
+
 static inline uint8_t*
 util_scan_entry_t2lm(struct scan_cache_entry *scan_entry)
 {
