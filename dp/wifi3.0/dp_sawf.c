@@ -2426,6 +2426,39 @@ cont:
 	return QDF_STATUS_SUCCESS;
 }
 
+/*
+ * dp_sawf_update_peer_mcs_stats() - Update mcs cout on msduq level
+ *
+ * @stats_ctx: dp sawf peer stats context
+ * @ts: hal tx completion status
+ * @tx_stats: sawf tx stats
+ * @host_q_idx: host msduq index
+ *
+ * check mcs and pkt_type range and Update mcs cout on msduq level
+ *
+ * Return: Void
+ */
+void dp_sawf_update_peer_mcs_stats(struct dp_peer_sawf_stats *stats_ctx,
+				   struct hal_tx_completion_status *ts,
+				   struct sawf_tx_stats *tx_stats,
+				   uint8_t host_q_idx)
+{
+	uint8_t mcs, pkt_type, dst_mcs_idx;
+
+	mcs = ts->mcs;
+	pkt_type = ts->pkt_type;
+	pkt_type = (pkt_type >= HAL_DOT11_MAX ? DOT11_MAX :
+		    hal_2_dp_pkt_type_map[pkt_type]);
+
+	dst_mcs_idx = dp_get_mcs_array_index_by_pkt_type_mcs(pkt_type, mcs);
+
+	if (dst_mcs_idx != MCS_INVALID_ARRAY_INDEX) {
+		DP_STATS_INC(stats_ctx,
+			     tx_stats[host_q_idx].pkt_type[pkt_type].mcs_count[dst_mcs_idx],
+			     1);
+	}
+}
+
 QDF_STATUS
 dp_sawf_tx_compl_update_peer_stats(struct dp_soc *soc,
 				   struct dp_vdev *vdev,
@@ -2509,6 +2542,7 @@ dp_sawf_tx_compl_update_peer_stats(struct dp_soc *soc,
 	case HAL_TX_TQM_RR_FRAME_ACKED:
 		DP_STATS_INC_PKT(stats_ctx, tx_stats[host_q_idx].tx_success, 1,
 			  length);
+		dp_sawf_update_peer_mcs_stats(stats_ctx, ts, tx_stats, host_q_idx);
 		break;
 	case HAL_TX_TQM_RR_REM_CMD_REM:
 		DP_STATS_INC_PKT(stats_ctx, tx_stats[host_q_idx].dropped.fw_rem, 1,
@@ -2891,6 +2925,7 @@ dp_sawf_copy_delay_stats(struct sawf_delay_stats *dst,
 static void
 dp_sawf_copy_tx_stats(struct sawf_tx_stats *dst, struct sawf_tx_stats *src)
 {
+	uint8_t pream_type, i;
 	dst->tx_success.num = src->tx_success.num;
 	dst->tx_success.bytes = src->tx_success.bytes;
 
@@ -2915,6 +2950,12 @@ dp_sawf_copy_tx_stats(struct sawf_tx_stats *dst, struct sawf_tx_stats *src)
 	dst->queue_depth = src->queue_depth;
 	dst->throughput = src->throughput;
 	dst->ingress_rate = src->ingress_rate;
+	for (pream_type = 0; pream_type <  DOT11_MAX; pream_type++) {
+		for (i = 0; i < MAX_MCS; i++) {
+			dst->pkt_type[pream_type].mcs_count[i] =
+			src->pkt_type[pream_type].mcs_count[i];
+		}
+	}
 }
 
 static QDF_STATUS

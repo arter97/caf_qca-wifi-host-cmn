@@ -612,6 +612,7 @@ struct stats_if_sawf_tx_stats {
 	uint32_t retry_count;
 	uint32_t multiple_retry_count;
 	uint32_t failed_retry_count;
+	struct pkt_type packet_type[STATS_IF_DOT11_MAX];
 };
 
 struct advance_data_tx_stats {

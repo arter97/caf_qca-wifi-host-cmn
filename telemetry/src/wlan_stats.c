@@ -1636,7 +1636,7 @@ static void
 fill_advance_peer_sawftx_stats(struct advance_peer_data_sawftx *data,
 			       struct sawf_tx_stats *tx_stats)
 {
-	uint8_t tidx = 0, queues = 0, tidx_count, queues_count;
+	uint8_t tidx = 0, queues = 0, tidx_count, queues_count, pream_type, mcs_index;
 
 	tidx_count = qdf_min((uint8_t)STATS_IF_MAX_SAWF_DATA_TIDS,
 			     (uint8_t)DP_SAWF_MAX_TIDS);
@@ -1688,6 +1688,12 @@ fill_advance_peer_sawftx_stats(struct advance_peer_data_sawftx *data,
 					tx_stats->queue_depth;
 			data->tx[tidx][queues].retry_count =
 					tx_stats->retry_count;
+			for (pream_type = 0; pream_type < DOT11_MAX; pream_type++) {
+				for (mcs_index = 0; mcs_index < MAX_MCS; mcs_index++) {
+					data->tx[tidx][queues].packet_type[pream_type].mcs_count[mcs_index] +=
+					tx_stats->pkt_type[pream_type].mcs_count[mcs_index];
+				}
+			}
 			data->tx[tidx][queues].multiple_retry_count =
 					tx_stats->multiple_retry_count;
 			data->tx[tidx][queues].failed_retry_count =
@@ -1977,6 +1983,7 @@ get_advance_peer_data_sawftx(struct sawf_tx_stats *sawf_tx_stats,
 			     struct unified_stats *stats, uint8_t svc_id)
 {
 	struct advance_peer_data_sawftx *data = NULL;
+	uint8_t pream_type, mcs_index;
 
 	data = qdf_mem_malloc(sizeof(struct advance_peer_data_sawftx));
 	if (!data) {
@@ -2029,6 +2036,12 @@ get_advance_peer_data_sawftx(struct sawf_tx_stats *sawf_tx_stats,
 		data->tx[0][0].queue_depth = sawf_tx_stats->queue_depth;
 		data->tx[0][0].retry_count =
 				sawf_tx_stats->retry_count;
+		for (pream_type = 0; pream_type < DOT11_MAX; pream_type++) {
+			for (mcs_index = 0; mcs_index < MAX_MCS; mcs_index++) {
+				data->tx[0][0].packet_type[pream_type].mcs_count[mcs_index] +=
+				sawf_tx_stats->pkt_type[pream_type].mcs_count[mcs_index];
+			}
+		}
 		data->tx[0][0].multiple_retry_count =
 				sawf_tx_stats->multiple_retry_count;
 		data->tx[0][0].failed_retry_count =

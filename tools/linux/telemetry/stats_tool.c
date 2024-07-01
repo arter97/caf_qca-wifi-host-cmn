@@ -1579,6 +1579,7 @@ print_advance_sta_data_sawf_tx(struct advance_peer_data_sawftx *data,
 			       uint8_t svc_id)
 {
 	if (svc_id > 0) {
+		uint8_t pream_type, mcs_index;
 		STATS_PRINT("----TIDX: %d----   ", data->tid);
 		STATS_PRINT("----QUEUE: %d----\n", data->msduq);
 
@@ -1644,8 +1645,18 @@ print_advance_sta_data_sawf_tx(struct advance_peer_data_sawftx *data,
 			    data->tx[0][0].burst_size_stats.success_cnt);
 		STATS_PRINT("Burst_size_failure_cnt     = %ju\n",
 			    data->tx[0][0].burst_size_stats.failure_cnt);
+		STATS_PRINT("Tx_pkt_type_mcs_count\n");
+		for (pream_type = 0; pream_type < STATS_IF_DOT11_MAX; pream_type++) {
+			for (mcs_index = 0; mcs_index < STATS_IF_MAX_MCS; mcs_index++) {
+				if (!rate_string[pream_type][mcs_index].valid)
+					continue;
+				STATS_PRINT("\t%s = %u\n",
+					    rate_string[pream_type][mcs_index].mcs_type,
+					    data->tx[0][0].packet_type[pream_type].mcs_count[mcs_index]);
+			}
+		}
 	} else {
-		uint8_t tidx = 0, queues = 0;
+		uint8_t tidx = 0, queues = 0, pream_type, mcs_index;
 		uint8_t max_queue = STATS_IF_MAX_SAWF_DATA_QUEUE;
 		struct stats_if_sawf_tx_stats *sawftx;
 
@@ -1717,6 +1728,16 @@ print_advance_sta_data_sawf_tx(struct advance_peer_data_sawftx *data,
 					sawftx->burst_size_stats.success_cnt);
 				STATS_PRINT("Burst_size_failure_cnt     = %ju\n",
 					sawftx->burst_size_stats.failure_cnt);
+				STATS_PRINT("Tx_pkt_type_mcs_count\n");
+				for (pream_type = 0; pream_type < STATS_IF_DOT11_MAX; pream_type++) {
+					for (mcs_index = 0; mcs_index < STATS_IF_MAX_MCS; mcs_index++) {
+						if (!rate_string[pream_type][mcs_index].valid)
+							continue;
+						STATS_PRINT("\t%s = %u\n",
+						rate_string[pream_type][mcs_index].mcs_type,
+						sawftx->packet_type[pream_type].mcs_count[mcs_index]);
+					}
+				}
 			}
 		}
 	}
