@@ -152,8 +152,8 @@ dp_htt_h2t_sawf_def_queues_map_req(struct htt_soc *soc,
 
 static QDF_STATUS
 dp_htt_sawf_msduq_recfg_req_send(struct htt_soc *soc,
-				 struct dp_sawf_msduq *msduq, uint8_t q_id,
-				 HTT_MSDUQ_DEACTIVATE_E q_ind)
+				 struct dp_sawf_msduq *msduq, uint16_t peer_id,
+				 uint8_t q_id, HTT_MSDUQ_DEACTIVATE_E q_ind)
 {
 	qdf_nbuf_t htt_msg;
 	uint32_t *msg_word;
@@ -169,12 +169,14 @@ dp_htt_sawf_msduq_recfg_req_send(struct htt_soc *soc,
 			HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING, 4);
 
 	if (!htt_msg) {
-		dp_htt_err("Fail to allocate htt msg buffer");
+		dp_htt_err("peer:%d | Fail to allocate htt msg buffer",
+			   peer_id);
 		return QDF_STATUS_E_NOMEM;
 	}
 
 	if (!qdf_nbuf_put_tail(htt_msg, htt_size)) {
-		dp_htt_err("Fail to expand head for HTT_H2T_MSG_TYPE_SDWF_MSDUQ_RECFG_REQ");
+		dp_htt_err("peer:%d | Fail to expand head for HTT_H2T_MSG_TYPE_SDWF_MSDUQ_RECFG_REQ",
+			   peer_id);
 		qdf_nbuf_free(htt_msg);
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -200,13 +202,15 @@ dp_htt_sawf_msduq_recfg_req_send(struct htt_soc *soc,
 	HTT_H2T_SDWF_MSDUQ_RECFG_REQ_DEACTIVATE_SET(*msg_word, q_ind);
 
 	req_cookie = DP_SAWF_MSDUQ_COOKIE_CREATE(q_id, q_ind);
-	dp_sawf_info("tgt_opaque_id: %d | svc_id: %d | q_ind: %d | req_cookie: 0x%x",
-		     msduq->tgt_opaque_id, msduq->svc_id, q_ind, req_cookie);
+	dp_sawf_info("peer:%d | tgt_opaque_id: 0x%x | svc_id: %d | q_ind: %d | req_cookie: 0x%x",
+		     peer_id, msduq->tgt_opaque_id, msduq->svc_id, q_ind,
+		     req_cookie);
 	HTT_H2T_SDWF_MSDUQ_RECFG_REQUEST_COOKIE_SET(*msg_word, req_cookie);
 
 	pkt = htt_htc_pkt_alloc(soc);
 	if (!pkt) {
-		dp_htt_err("Fail to allocate dp_htt_htc_pkt buffer");
+		dp_htt_err("peer:%d | Fail to allocate dp_htt_htc_pkt buffer",
+			   peer_id);
 		qdf_nbuf_free(htt_msg);
 		return QDF_STATUS_E_NOMEM;
 	}
@@ -215,7 +219,7 @@ dp_htt_sawf_msduq_recfg_req_send(struct htt_soc *soc,
 
 	/* Clear no_resp_ind bit */
 	msduq->no_resp_ind = 0;
-	dp_sawf_debug("Reset no_resp_ind Flag");
+	dp_sawf_debug("peer: %d | Reset no_resp_ind Flag", peer_id);
 
 	SET_HTC_PACKET_INFO_TX(
 			&pkt->htc_pkt,
@@ -247,7 +251,8 @@ dp_htt_sawf_msduq_recfg_req(struct htt_soc *soc, struct dp_peer *peer,
 	QDF_STATUS status = QDF_STATUS_E_FAILURE;
 
 	if (IS_DP_LEGACY_PEER(peer)) {
-		status = dp_htt_sawf_msduq_recfg_req_send(soc, msduq, q_id,
+		status = dp_htt_sawf_msduq_recfg_req_send(soc, msduq,
+							  peer->peer_id, q_id,
 							  q_ind);
 	} else {
 #ifdef WLAN_FEATURE_11BE
@@ -291,10 +296,11 @@ dp_htt_sawf_msduq_recfg_req(struct htt_soc *soc, struct dp_peer *peer,
 			 * back-to-back HTT send commands.
 			 */
 			if (htt_sent_for_soc[dp_get_chip_id(dpsoc)]) {
-				dp_sawf_debug("htt recfg_req for soc:%d "
-					      "svc_id:%d tgt_opaque_id: %d "
+				dp_sawf_debug("htt recfg_req for peer: %d soc:%d "
+					      "svc_id:%d tgt_opaque_id: 0x%x "
 					      "sent already. "
 					      "Hence dropping here !",
+					      peer->peer_id,
 					      dp_get_chip_id(dpsoc),
 					      msduq->svc_id,
 					      msduq->tgt_opaque_id);
@@ -306,8 +312,9 @@ dp_htt_sawf_msduq_recfg_req(struct htt_soc *soc, struct dp_peer *peer,
 			dp_sawf_debug("htt recfg_req send for MLO soc:%d peer:%d",
 				      dp_get_chip_id(dpsoc), peer->peer_id);
 			status = dp_htt_sawf_msduq_recfg_req_send(dpsoc->htt_handle,
-								  msduq, q_id,
-								  q_ind);
+								  msduq,
+								  peer->peer_id,
+								  q_id, q_ind);
 			if (status != QDF_STATUS_SUCCESS) {
 				dp_sawf_err("recfg_req send failed for soc:%d peer:%d",
 					    dp_get_chip_id(dpsoc),
@@ -345,11 +352,11 @@ dp_htt_sawf_msduq_recfg_ind(struct htt_soc *soc, uint32_t *msg_word)
 	 */
 	peer = dp_peer_get_ref_by_id(soc->dp_soc, peer_id, DP_MOD_ID_SAWF);
 
-	dp_sawf_debug("HTT resp received for peer_id %d soc %d",
+	dp_sawf_debug("HTT resp received for peer:%d soc:%d",
 		      peer_id, dp_get_chip_id(soc->dp_soc));
 
 	if (!peer) {
-		dp_sawf_err("Invalid peer: %d", peer_id);
+		dp_sawf_err("Invalid peer:%d", peer_id);
 		return status;
 	}
 
@@ -390,7 +397,7 @@ dp_htt_sawf_msduq_recfg_ind(struct htt_soc *soc, uint32_t *msg_word)
 		return status;
 	}
 
-	dp_sawf_info("peer_id: %d| svc_class_id: %d| err_code: 0x%x| tgt_opaque_id: %d| req_cookie: 0x%x",
+	dp_sawf_info("peer:%d| svc_class_id: %d| err_code: 0x%x| tgt_opaque_id: 0x%x| req_cookie: 0x%x",
 		     peer_id, msduq->svc_id, err_code, msduq->tgt_opaque_id,
 		     req_cookie);
 
@@ -398,7 +405,7 @@ dp_htt_sawf_msduq_recfg_ind(struct htt_soc *soc, uint32_t *msg_word)
 
 	/* Clear no_resp_ind bit */
 	msduq->no_resp_ind = 0;
-	dp_sawf_debug("Reset no_resp_ind Flag");
+	dp_sawf_debug("peer:%d | Reset no_resp_ind Flag", peer_id);
 
 	curr_q_state = msduq->q_state;
 
@@ -408,8 +415,9 @@ dp_htt_sawf_msduq_recfg_ind(struct htt_soc *soc, uint32_t *msg_word)
 	 */
 	if ((q_ind == HTT_MSDUQ_DEACTIVATE && curr_q_state != SAWF_MSDUQ_DEACTIVATE_PENDING) ||
 	    (q_ind == HTT_MSDUQ_REACTIVATE && curr_q_state != SAWF_MSDUQ_REACTIVATE_PENDING)) {
-		dp_sawf_err("Resp dropped | q_ind:%d msduq->q_state:%s",
-			    q_ind, dp_sawf_msduq_state_to_string(curr_q_state));
+		dp_sawf_err("peer:%d | Resp dropped for q_ind:%d msduq->q_state:%s",
+			    peer_id, q_ind,
+			    dp_sawf_msduq_state_to_string(curr_q_state));
 		qdf_spin_unlock_bh(&sawf_ctx->sawf_peer_lock);
 		dp_peer_unref_delete(peer, DP_MOD_ID_SAWF);
 		return status;
@@ -429,7 +437,8 @@ dp_htt_sawf_msduq_recfg_ind(struct htt_soc *soc, uint32_t *msg_word)
 			DP_SAWF_MSDUQ_STATS_INC(reactivate_stats, recv_failure);
 		break;
 	default:
-		dp_sawf_err("Invalid q_state:%d", curr_q_state);
+		dp_sawf_err("peer:%d | Invalid q_state:%d", peer_id,
+			    curr_q_state);
 		qdf_spin_unlock_bh(&sawf_ctx->sawf_peer_lock);
 		dp_peer_unref_delete(peer, DP_MOD_ID_SAWF);
 		return status;
@@ -440,24 +449,27 @@ dp_htt_sawf_msduq_recfg_ind(struct htt_soc *soc, uint32_t *msg_word)
 	qdf_spin_unlock_bh(&sawf_ctx->sawf_peer_lock);
 	dp_peer_unref_delete(peer, DP_MOD_ID_SAWF);
 
-	dp_sawf_info("msduq:%d | %s -> %s", q_id,
+	dp_sawf_info("peer:%d | msduq:%d | %s -> %s", peer_id, q_id,
 		     dp_sawf_msduq_state_to_string(curr_q_state),
 		     dp_sawf_msduq_state_to_string(new_q_state));
 
 	if (!is_success) {
 		status = QDF_STATUS_E_FAILURE;
-		dp_sawf_err("Resp Failed for q_id:%d | svc_id:%d | q_state:%s with error code: 0x%x ",
-			    q_id, msduq->svc_id, dp_sawf_msduq_state_to_string(curr_q_state),
+		dp_sawf_err("Resp Failed for peer:%d | q_id:%d | svc_id:%d | q_state:%s with error code: 0x%x ",
+			    peer_id, q_id, msduq->svc_id,
+			    dp_sawf_msduq_state_to_string(curr_q_state),
 			    err_code);
 		if (new_q_state == SAWF_MSDUQ_DEACTIVATED) {
 			/* Notify NM Manager about Reactivate failure */
 			if (dp_sawf_notify_deactivate_msduq(soc->dp_soc, peer,
 							    q_id, msduq->svc_id) != QDF_STATUS_SUCCESS)
-				dp_sawf_err("NOTIFY REACTIVATE FAILURE to NW Manager failed");
+				dp_sawf_err("peer:%d | NOTIFY REACTIVATE FAILURE to NW Manager failed",
+					    peer_id);
 		}
 	} else {
 		status = QDF_STATUS_SUCCESS;
-		dp_sawf_debug("Resp Success for q_id:%d | svc_id:%d", q_id, msduq->svc_id);
+		dp_sawf_debug("Resp Success for peer:%d | q_id:%d | svc_id:%d",
+			      peer_id, q_id, msduq->svc_id);
 
 		if (new_q_state == SAWF_MSDUQ_IN_USE)
 			telemetry_sawf_update_msduq_info(peer->sawf->telemetry_ctx,
@@ -466,7 +478,6 @@ dp_htt_sawf_msduq_recfg_ind(struct htt_soc *soc, uint32_t *msg_word)
 		else
 			telemetry_sawf_clear_msduq_info(peer->sawf->telemetry_ctx,
 							q_id);
-
 	}
 
 	return status;
@@ -797,8 +808,8 @@ dp_htt_sawf_msduq_map(struct htt_soc *soc, uint32_t *msg_word,
 	msg_word++;
 	tgt_opaque_id = HTT_T2H_SAWF_MSDUQ_INFO_HTT_TGT_OPAQUE_ID_GET(*msg_word);
 
-	qdf_info("|TID Q:%d|Remapped TID:%d|Host Q:%d|tgt_opaque_id: %d |",
-		 tid_queue, remapped_tid, host_queue, tgt_opaque_id);
+	qdf_info("peer:%d|TID Q:%d|Remapped TID:%d|Host Q:%d|tgt_opaque_id: 0x%x |",
+		 peer_id, tid_queue, remapped_tid, host_queue, tgt_opaque_id);
 
 	host_tid_queue = tid_queue - DP_SAWF_DEFAULT_Q_PTID_MAX;
 
