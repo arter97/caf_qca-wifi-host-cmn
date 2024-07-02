@@ -2175,7 +2175,7 @@ wlan_rptr_update_extender_info(struct wlan_objmgr_vdev *vdev,
 		sta_vdev = ext_cb->get_stavap(pdev);
 		if ((vdev == sta_vdev) && wlan_cm_is_vdev_connected(sta_vdev)) {
 			wlan_vdev_get_bss_peer_mac(sta_vdev, &stavap_bssid);
-			if (WLAN_ADDR_EQ(&stavap_bssid, bssid)) {
+			if (!WLAN_ADDR_EQ(&stavap_bssid, bssid)) {
 				RPTR_GLOBAL_LOCK(&g_priv->rptr_global_lock);
 				ss_info = &g_priv->ss_info;
 				if ((ss_info->extender_info & ROOTAP_ACCESS_MASK) != ((se_extender->extender_info) & ROOTAP_ACCESS_MASK)) {

@@ -1024,10 +1024,13 @@ static bool dp_is_mlo_3_link_peer(struct dp_peer *peer)
 	uint8_t i = 0;
 	uint8_t num_links = 0;
 
-	if (!IS_MLO_DP_LINK_PEER(peer))
+	if (IS_MLO_DP_LINK_PEER(peer))
+		mld_peer = DP_GET_MLD_PEER_FROM_PEER(peer);
+	else if (IS_MLO_DP_MLD_PEER(peer))
+		mld_peer = peer;
+	else
 		return false;
 
-	mld_peer = peer->mld_peer;
 	if (!mld_peer) {
 		dp_sawf_err("mld peer is null for MLO capable peer");
 		return false;
@@ -1722,6 +1725,7 @@ uint16_t dp_sawf_get_msduq(struct net_device *netdev, uint8_t *dest_mac,
 	struct dp_peer_sawf *sawf_ctx;
 	struct dp_sawf_msduq *msduq;
 	uint8_t static_tid, tid;
+	bool is_tid_skid_enabled;
 	bool is_lower_tid_checked = false;
 
 	if (!netdev->ieee80211_ptr) {
@@ -1778,6 +1782,9 @@ uint16_t dp_sawf_get_msduq(struct net_device *netdev, uint8_t *dest_mac,
 		}
 	}
 
+	is_tid_skid_enabled =
+		wlan_cfg_get_sawf_msduq_tid_skid_config(soc->wlan_cfg_ctx);
+
 	dp_sawf_trace("RX callback from NW Connection manager, peer_id:%d, "
 		      "svc_id:%u, soc_id:%d", peer_id, service_id, soc_id);
 
@@ -1814,6 +1821,13 @@ uint16_t dp_sawf_get_msduq(struct net_device *netdev, uint8_t *dest_mac,
 	while ((tid >= DP_SAWF_TID_MIN) && (tid < DP_SAWF_TID_MAX)) {
 		q_id = dp_sawf_get_available_msduq(soc, sawf_ctx, peer, tid,
 						   tid + DP_SAWF_TID_MAX);
+
+		if (q_id == DP_SAWF_Q_INVALID && !is_tid_skid_enabled) {
+			dp_sawf_trace("TID Skid logic is disabled. TID:%d, "
+				      "peer_id:%d", tid, peer_id);
+			goto fail;
+		}
+
 		if (q_id != DP_SAWF_Q_INVALID) {
 			msduq = &sawf_ctx->msduq[q_id];
 			dp_sawf_peer_msduq_update(peer, soc, q_id, service_id,
@@ -1858,9 +1872,11 @@ uint16_t dp_sawf_get_msduq(struct net_device *netdev, uint8_t *dest_mac,
 		}
 	}
 
+fail:
 	qdf_spin_unlock_bh(&sawf_ctx->sawf_peer_lock);
 	dp_sawf_info("MSDU Queues are not available for the peer -> peer_id:%d "
-		     "soc_id:%d", peer_id, soc_id);
+		     "soc_id:%d, is_tid_skid_enabled:%d", peer_id, soc_id,
+		     is_tid_skid_enabled);
 	dp_peer_unref_delete(peer, DP_MOD_ID_SAWF);
 
 	/* request for more msdu queues. Return error*/

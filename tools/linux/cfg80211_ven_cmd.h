@@ -914,6 +914,7 @@ enum {
 #ifdef QCA_SUPPORT_WDS_EXTENDED
 	IEEE80211_PARAM_WDS_EXT_AP_BRIDGE  = 833,  /* Flag to enable/disable wds_ext specific ap bridge */
 #endif
+	IEEE80211_PARAM_4ADDR_EAPOL = 834,
 };
 
 enum {
@@ -1545,6 +1546,10 @@ enum _ol_ath_param_t {
 #ifdef QCA_PROCESS_UPLINK_CSA
 	OL_ATH_PARAM_PROCESS_UPLINK_CSA = 553,
 #endif
+	OL_ATH_PARAM_CBS_TOTAL_DWELL_TIME = 554,
+#ifdef UMAC_SUPPORT_ACS
+	OL_ATH_PARAM_ACS_ADJ_CHAN_INTERFERENCE_BLOCKING = 555,
+#endif /* UMAC_SUPPORT_ACS */
 };
 
 #ifdef CONFIG_SUPPORT_VENCMDTABLE
@@ -2718,6 +2723,8 @@ struct vendor_commands vap_vendor_cmds[] = {
 #endif
 	{"gtx_enable", IEEE80211_PARAM_GTX_ENABLE, SET_PARAM, 1},
 	{"hwcts2self_enable", IEEE80211_PARAM_HWCTS2SELF_OFDMA, SET_PARAM, 1},
+	{"set_4addr_eapol", IEEE80211_PARAM_4ADDR_EAPOL, SET_PARAM, 1},
+	{"get_4addr_eapol", IEEE80211_PARAM_4ADDR_EAPOL, GET_PARAM, 0},
 };
 
 struct vendor_commands radio_vendor_cmds[] = {
@@ -3832,6 +3839,12 @@ struct vendor_commands radio_vendor_cmds[] = {
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_SET_CATEGORY_VERBOSE, SET_PARAM, 1},
 	{"g_radio_qdf_cv_lvl",
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_SET_CATEGORY_VERBOSE, GET_PARAM, 0},
+#if UMAC_SUPPORT_ACS
+	{"set_acs_adj_chan_interference_blocking",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_ACS_ADJ_CHAN_INTERFERENCE_BLOCKING, SET_PARAM, 1},
+	{"get_acs_adj_chan_interference_blocking",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_ACS_ADJ_CHAN_INTERFERENCE_BLOCKING, GET_PARAM, 0},
+#endif /* UMAC_SUPPORT_ACS */
 #ifdef WLAN_FEATURE_11BE
 	{"set_acs_puncture_legacy_weightage",
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_ACS_PUNCTURE_LEGACY_WEIGHTAGE, SET_PARAM, 1},
@@ -4058,6 +4071,10 @@ struct vendor_commands radio_vendor_cmds[] = {
 	{"g_process_uplink_csa_en",
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_PROCESS_UPLINK_CSA, GET_PARAM, 0},
 #endif
+	{"cbs_total_dwell_time",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_CBS_TOTAL_DWELL_TIME, SET_PARAM, 1},
+	{"g_cbs_total_dwell_time",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_CBS_TOTAL_DWELL_TIME, GET_PARAM, 0},
 };
 #endif
 
