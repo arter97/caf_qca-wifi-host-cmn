@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -455,6 +455,7 @@ enum cdp_mon_phyrx_abort_reason_code {
  * @desc_magic_mismatch: desc magic number mismatch count;
  * @null_pkt_addr: NULL packet address count;
  * @pending_desc_count: Pending desc_count during pdev deinit
+ * @nbuf_alloc_fail_cnt: nbuf alloc failure count
  */
 struct cdp_pdev_mon_stats {
 #ifndef REMOVE_MON_DBG_STATS
@@ -522,6 +523,7 @@ struct cdp_pdev_mon_stats {
 	uint32_t desc_magic_mismatch;
 	uint32_t null_pkt_addr;
 	uint32_t pending_desc_count;
+	uint32_t nbuf_alloc_fail_cnt;
 };
 
 #ifdef QCA_SUPPORT_LITE_MONITOR

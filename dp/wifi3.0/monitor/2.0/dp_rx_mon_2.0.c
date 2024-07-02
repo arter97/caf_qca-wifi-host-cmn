@@ -927,7 +927,8 @@ dp_rx_mon_handle_mon_buf_addr(struct dp_pdev *pdev,
 		return num_buf_reaped;
 	}
 
-	if (qdf_unlikely(ppdu_info->is_drop_tlv)) {
+	if (qdf_unlikely(ppdu_info->is_drop_ppdu)) {
+		DP_STATS_INC(mon_soc, frag_free, 1);
 		qdf_frag_free(addr);
 		return num_buf_reaped;
 	}
@@ -969,11 +970,9 @@ dp_rx_mon_handle_mon_buf_addr(struct dp_pdev *pdev,
 		if (qdf_unlikely(!tmp_nbuf)) {
 			dp_mon_err("nbuf is NULL");
 			DP_STATS_INC(mon_soc, frag_free, 1);
-			mon_mac->rx_mon_stats.parent_buf_free++;
 			qdf_frag_free(addr);
-			/* remove this nbuf from queue */
-			qdf_nbuf_queue_remove_last(&ppdu_info->mpdu_q[user_id]);
-			qdf_nbuf_free(nbuf);
+			ppdu_info->is_drop_ppdu = true;
+			mon_mac->rx_mon_stats.nbuf_alloc_fail_cnt++;
 			return num_buf_reaped;
 		}
 		mon_mac->rx_mon_stats.parent_buf_alloc++;
@@ -1067,6 +1066,8 @@ dp_rx_mon_handle_rx_hdr(struct dp_pdev *pdev,
 		  **/
 		if (qdf_unlikely(!nbuf)) {
 			dp_mon_debug("malloc failed pdev: %pK ", pdev);
+			ppdu_info->is_drop_ppdu = true;
+			mon_mac->rx_mon_stats.nbuf_alloc_fail_cnt++;
 			return;
 		}
 
@@ -1084,6 +1085,8 @@ dp_rx_mon_handle_rx_hdr(struct dp_pdev *pdev,
 						    DP_MON_DATA_BUFFER_SIZE, true);
 		if (qdf_unlikely(status != QDF_STATUS_SUCCESS)) {
 			dp_mon_err("num_frags exceeding MAX frags");
+			ppdu_info->is_drop_ppdu = true;
+			mon_mac->rx_mon_stats.nbuf_alloc_fail_cnt++;
 			return;
 		}
 		ppdu_info->mpdu_info[ppdu_info->user_id].mpdu_start_received = true;
@@ -1116,8 +1119,10 @@ dp_rx_mon_handle_rx_hdr(struct dp_pdev *pdev,
 						  DP_RX_MON_MAX_MONITOR_HEADER,
 						  4, FALSE);
 			if (qdf_unlikely(!tmp_nbuf)) {
-				dp_mon_err("nbuf is NULL");
-				qdf_assert_always(0);
+				dp_mon_err("nbuf alloc failed");
+				ppdu_info->is_drop_ppdu = true;
+				mon_mac->rx_mon_stats.nbuf_alloc_fail_cnt++;
+				return;
 			}
 			mon_mac->rx_mon_stats.parent_buf_alloc++;
 			dp_rx_mon_append_nbuf(nbuf, tmp_nbuf);
@@ -2155,6 +2160,17 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 		return num_buf_reaped;
 	}
 
+	/* if drop ppdu is set no need to process tlv except
+	 * buf addr tlv and drop tlv. buf addr tlv should be
+	 * processed to free desc and buf frag and drop tlv
+	 * should be processed to update stats
+	 */
+	if (ppdu_info->is_drop_ppdu &&
+	    (tlv_status != HAL_TLV_STATUS_MON_BUF_ADDR &&
+	     tlv_status != HAL_TLV_STATUS_MON_DROP)) {
+		return num_buf_reaped;
+	}
+
 	/* If user id or rx header len is invalid drop this
 	 * mpdu. However we have to honor buffer address TLV
 	 * for this mpdu to free any associated packet buffer
@@ -2321,7 +2337,7 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 		DP_STATS_INC(mon_soc, frag_free, 1);
 		mon_mac->rx_mon_stats.status_buf_count++;
 		dp_mon_record_index_update(mon_pdev_be);
-		if (qdf_unlikely(ppdu_info->is_drop_tlv)) {
+		if (qdf_unlikely(ppdu_info->is_drop_ppdu)) {
 			idx++;
 			break;
 		}
@@ -2347,7 +2363,7 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 	/* if drop tlv found in the status buffer, free all allocated mpdu
 	 * and remaining status buffers
 	 */
-	if (qdf_unlikely(ppdu_info->is_drop_tlv)) {
+	if (qdf_unlikely(ppdu_info->is_drop_ppdu)) {
 		dp_rx_mon_flush_status_buf_queue(pdev, idx, status_buf_count);
 		dp_rx_mon_free_ppdu_info(pdev, ppdu_info);
 		return NULL;
@@ -2934,6 +2950,8 @@ void dp_mon_rx_print_advanced_stats_2_0(struct dp_soc *soc,
 		       rx_mon_stats->invalid_dma_length);
 	DP_PRINT_STATS("pending_desc_count= %d",
 		       mon_mac->rx_mon_stats.pending_desc_count);
+	DP_PRINT_STATS("nbuf_alloc_fail_cnt = %d",
+		       rx_mon_stats->nbuf_alloc_fail_cnt);
 }
 #endif
 
