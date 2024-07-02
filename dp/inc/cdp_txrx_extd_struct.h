@@ -242,6 +242,7 @@ struct sawf_fw_mpdu_stats {
  * @tid: tid used for transmit
  * @msduq: msdu-queue used for transmit
  * @reinject_pkt: reinject packet
+ * @pkt_type: packet and mcs type
  */
 struct sawf_tx_stats {
 	struct cdp_pkt_info tx_success;
@@ -274,6 +275,7 @@ struct sawf_tx_stats {
 	uint8_t tid;
 	uint8_t msduq;
 	uint16_t reinject_pkt;
+	struct cdp_pkt_type pkt_type[DOT11_MAX];
 };
 
 /*
