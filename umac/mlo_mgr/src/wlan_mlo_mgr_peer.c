@@ -2879,9 +2879,12 @@ void wlan_mlo_ap_vdev_del_assoc_entry(struct wlan_objmgr_vdev *vdev,
 
 	qdf_spin_lock_bh(&assoc_list->list_lock);
 	qdf_list_remove_node(&assoc_list->peer_list, &sta_entry->mac_node);
-	qdf_spin_unlock_bh(&assoc_list->list_lock);
-
 	qdf_mem_free(sta_entry);
+	if (qdf_list_empty(&assoc_list->peer_list) && assoc_list->is_timer_started) {
+		assoc_list->is_timer_started = 0;
+		qdf_timer_stop(&assoc_list->rem_peer_mld_mac);
+	}
+	qdf_spin_unlock_bh(&assoc_list->list_lock);
 }
 
 static inline struct wlan_mlo_sta_entry *
@@ -2960,7 +2963,7 @@ void wlan_mlo_ap_delete_assoc_list_entries(void *ctx)
 {
 	struct wlan_mlo_sta_assoc_pending_list *assoc_list =
 				(struct wlan_mlo_sta_assoc_pending_list *)ctx;
-	struct wlan_mlo_sta_entry *sta_entry = NULL;
+	struct wlan_mlo_sta_entry *sta_entry = NULL, *sta_entry_next = NULL;
 	qdf_time_t current_time;
 
 	if (!assoc_list) {
@@ -2979,6 +2982,9 @@ void wlan_mlo_ap_delete_assoc_list_entries(void *ctx)
 	current_time = jiffies_to_msecs(jiffies);
 
 	while (sta_entry) {
+		sta_entry_next =
+		wlan_mlo_sta_get_next_sta_entry(&assoc_list->peer_list,
+						sta_entry);
 		if (time_after(current_time, sta_entry->time + TIMEOUT_TO_REMOVE_MLD_MAC) ||
 			assoc_list->force_remove) {
 			qdf_list_remove_node(&assoc_list->peer_list, &sta_entry->mac_node);
@@ -2991,9 +2997,8 @@ void wlan_mlo_ap_delete_assoc_list_entries(void *ctx)
 			return;
 		}
 
-		sta_entry =
-		wlan_mlo_sta_get_next_sta_entry(&assoc_list->peer_list,
-						sta_entry);
+
+		sta_entry = sta_entry_next;
 	}
 	if (qdf_list_empty(&assoc_list->peer_list) && assoc_list->is_timer_started) {
 		assoc_list->is_timer_started = 0;
