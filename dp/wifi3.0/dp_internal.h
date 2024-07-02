@@ -1061,6 +1061,14 @@ static inline void
 dp_monitor_update_mac_vdev_map(struct dp_vdev *vdev)
 {
 }
+
+static inline void
+dp_mon_rx_config_packet_type_subtype(struct dp_soc *soc,
+				     uint32_t *msg_word,
+				     struct htt_rx_ring_tlv_filter *tlv_filter,
+				     uint32_t htt_ring_id)
+{
+}
 #endif /* !WIFI_MONITOR_SUPPORT */
 
 /**
