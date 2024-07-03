@@ -1744,6 +1744,7 @@ struct cdp_tx_proto_stats {
  * @eapol_tx_comp_failures: Eapol Tx completion count
  * @rekey_tx_comp_failures: GroupRekey Tx completion count
  * @proto: DP protocol stats
+ * @tx_ppdu_duration: Tx PPDU Duration
  */
 struct cdp_tx_stats {
 	struct cdp_pkt_info comp_pkt;
@@ -1879,6 +1880,7 @@ struct cdp_tx_stats {
 #ifdef QCA_DP_PROTOCOL_STATS
 	struct cdp_tx_proto_stats proto;
 #endif
+	uint64_t tx_ppdu_duration;
 };
 
 /**
@@ -1977,6 +1979,7 @@ struct cdp_tx_stats {
  * @duplicate_count: Duplicate packets count
  * @fragment_count: Fragment packet count
  * @proto: Datapath protocol statistics
+ * @rx_ppdu_duration: Rx PPDU Duration
  */
 struct cdp_rx_stats {
 	struct cdp_pkt_info to_stack;
@@ -2081,6 +2084,7 @@ struct cdp_rx_stats {
 #ifdef QCA_DP_PROTOCOL_STATS
 	struct cdp_rx_proto_stats proto;
 #endif
+	uint64_t rx_ppdu_duration;
 };
 
 /**

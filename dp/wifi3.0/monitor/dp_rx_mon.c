@@ -829,6 +829,8 @@ dp_ppdu_desc_user_rx_time_update(struct dp_pdev *pdev,
 	if (qdf_unlikely(!mon_peer))
 		return;
 
+	DP_STATS_INC(mon_peer, rx.rx_ppdu_duration, user->rx_time_us);
+
 	ac = TID_TO_WME_AC(user->tid);
 	DP_STATS_INC(mon_peer, airtime_stats.rx_airtime_consumption[ac].consumption,
 		     user->rx_time_us);

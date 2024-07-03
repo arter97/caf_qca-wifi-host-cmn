@@ -4808,6 +4808,8 @@ dp_ppdu_desc_user_phy_tx_time_update(struct dp_pdev *pdev,
 				user->nss * user->ru_tones) / nss_ru_width_sum;
 	}
 
+	DP_STATS_INC(mon_peer, tx.tx_ppdu_duration, user->phy_tx_time_us);
+
 	dp_ppdu_desc_user_airtime_consumption_update(peer, user);
 }
 #else

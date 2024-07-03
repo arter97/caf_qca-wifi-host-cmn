@@ -5044,6 +5044,7 @@ struct dp_peer_per_pkt_tx_stats {
  * @ndpa_cnt: NDP announcement frame count
  * @rssi_chain: rssi chain
  * @wme_ac_type_bytes: Wireless Multimedia bytes Count
+ * @tx_ppdu_duration: Tx PPDU Duration
  */
 struct dp_peer_extd_tx_stats {
 	uint32_t stbc;
@@ -5104,6 +5105,7 @@ struct dp_peer_extd_tx_stats {
 	uint32_t ndpa_cnt;
 	int32_t rssi_chain[CDP_RSSI_CHAIN_LEN];
 	uint64_t wme_ac_type_bytes[WME_AC_MAX];
+	uint64_t tx_ppdu_duration;
 };
 
 /**
@@ -5239,6 +5241,7 @@ struct dp_peer_per_pkt_rx_stats {
  * @bar_cnt: Block ACK Request frame count
  * @ndpa_cnt: NDP announcement frame count
  * @wme_ac_type_bytes: Wireless Multimedia type Bytes Count
+ * @rx_ppdu_duration: Rx PPDU Duration
  */
 struct dp_peer_extd_rx_stats {
 	struct cdp_pkt_type pkt_type[DOT11_MAX];
@@ -5287,6 +5290,7 @@ struct dp_peer_extd_rx_stats {
 	uint32_t bar_cnt;
 	uint32_t ndpa_cnt;
 	uint64_t wme_ac_type_bytes[WME_AC_MAX];
+	uint64_t rx_ppdu_duration;
 };
 
 /**

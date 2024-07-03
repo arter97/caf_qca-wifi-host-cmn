@@ -2382,6 +2382,7 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		\
 		for (i = 0; i < CDP_RSSI_CHAIN_LEN; i++) \
 			_tgtobj->tx.rssi_chain[i] = _srcobj->tx.rssi_chain[i]; \
+		_tgtobj->tx.tx_ppdu_duration += _srcobj->tx.tx_ppdu_duration; \
 		_tgtobj->rx.mpdu_cnt_fcs_ok += _srcobj->rx.mpdu_cnt_fcs_ok; \
 		_tgtobj->rx.mpdu_cnt_fcs_err += _srcobj->rx.mpdu_cnt_fcs_err; \
 		_tgtobj->rx.non_ampdu_cnt += _srcobj->rx.non_ampdu_cnt; \
@@ -2449,6 +2450,7 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		for (i = 0; i < MAX_BW; i++) { \
 			_tgtobj->rx.bw[i] += _srcobj->rx.bw[i]; \
 		} \
+		_tgtobj->rx.rx_ppdu_duration += _srcobj->rx.rx_ppdu_duration; \
 		DP_UPDATE_11BE_STATS(_tgtobj, _srcobj); \
 	} while (0)
 

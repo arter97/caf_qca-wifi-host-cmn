@@ -8020,6 +8020,8 @@ void dp_print_peer_stats(struct dp_peer *peer,
 		pdev->soc->arch_ops.txrx_print_peer_stats(peer_stats,
 							  PEER_TX_STATS);
 
+	DP_PRINT_STATS("Tx PPDU Duration: %llu", peer_stats->tx.tx_ppdu_duration);
+
 	if (!IS_MLO_DP_LINK_PEER(peer)) {
 		dp_print_jitter_stats(peer, pdev);
 		dp_peer_print_tx_delay_stats(pdev, peer);
@@ -8198,6 +8200,8 @@ void dp_print_peer_stats(struct dp_peer *peer,
 	if (pdev && pdev->soc->arch_ops.txrx_print_peer_stats)
 		pdev->soc->arch_ops.txrx_print_peer_stats(peer_stats,
 							  PEER_RX_STATS);
+
+	DP_PRINT_STATS("Rx PPDU Duration: %llu", peer_stats->rx.rx_ppdu_duration);
 
 	if (!IS_MLO_DP_LINK_PEER(peer))
 		dp_peer_print_rx_delay_stats(pdev, peer);
