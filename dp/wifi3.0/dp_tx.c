@@ -6085,7 +6085,8 @@ dp_tx_comp_process_desc(struct dp_soc *soc,
 		qdf_trace_dp_packet(desc->nbuf, QDF_TX,
 				    desc->msdu_ext_desc ?
 				    desc->msdu_ext_desc->tso_desc : NULL,
-				    qdf_ktime_to_us(desc->timestamp));
+				    qdf_ktime_to_us(desc->timestamp),
+				    desc->tx_status);
 
 	if (!(desc->msdu_ext_desc) && !(desc->flags & DP_TX_DESC_FLAG_FAST)) {
 		dp_tx_enh_unmap(soc, desc);
