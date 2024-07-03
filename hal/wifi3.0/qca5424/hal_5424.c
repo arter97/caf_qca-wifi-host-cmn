@@ -910,26 +910,23 @@ static inline qdf_iomem_t hal_get_window_address_5424(struct hal_soc *hal_soc,
 	qdf_iomem_t new_offset;
 
 	/*
-	 * If offset lies within DP register range, use 3rd window to write
-	 * into DP region.
-	 */
-	if ((offset ^  UMAC_BASE) < WINDOW_RANGE_MASK) {
-		new_offset = (hal_soc->dev_base_addr + (3 * WINDOW_START) +
-				(offset & WINDOW_RANGE_MASK));
-	/*
-	 * If offset lies within CE register range, use 2nd window to write
+	 * Check if offset lies within CE register range(0x740000)
+	 * or UMAC/DP register range (0x00A00000).
+	 * If offset  lies within CE register range, map it
 	 * into CE region.
 	 */
-	} else if ((offset ^ SOC_WFSS_CE_REG_BASE) < WINDOW_RANGE_MASK) {
-		new_offset = (hal_soc->dev_base_addr + (2 * WINDOW_START) +
-				(offset & WINDOW_RANGE_MASK));
+	if (offset < 0xA00000) {
+		offset = offset - SOC_WFSS_CE_REG_BASE;
+		new_offset = (hal_soc->dev_base_addr_ce + offset);
+
+		return new_offset;
 	} else {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-				"%s: ERROR: Accessing Wrong register\n", __func__);
-		qdf_assert_always(0);
-		return 0;
+	/*
+	 * If offset lies within DP register range,
+	 * return the address as such
+	 */
+		return addr;
 	}
-	return new_offset;
 }
 
 static inline void hal_write_window_register(struct hal_soc *hal_soc)
@@ -1193,19 +1190,6 @@ hal_rx_flow_setup_fse_5424(uint8_t *rx_fst, uint32_t table_offset,
 }
 
 /**
- * hal_rx_peer_meta_data_get_5424() - get peer meta data from rx_pkt_tlvs
- * @buf: start of rx_tlv_hdr
- *
- * Return: peer meta data
- */
-static inline uint32_t hal_rx_peer_meta_data_get_5424(uint8_t *buf)
-{
-	struct rx_pkt_tlvs *rx_pkt_tlvs = (struct rx_pkt_tlvs *)buf;
-
-	return HAL_RX_TLV_MSDU_PEER_META_DATA_GET(rx_pkt_tlvs);
-}
-
-/**
  * hal_rx_msdu_get_keyid_5424() - API to get the key id of the decrypted packet
  *                                from rx_msdu_end
  * @buf: pointer to the start of RX PKT TLV header
@@ -1388,8 +1372,12 @@ static void hal_cmem_write_5424(hal_soc_handle_t hal_soc_hdl,
 {
 	struct hal_soc *hal = (struct hal_soc *)hal_soc_hdl;
 
+	/* cmem region is ioremapped from CMEM_REG_BASE, hence subtracting
+	 * that from offset.
+	 */
+	offset = offset - CMEM_REG_BASE;
 	pld_reg_write(hal->qdf_dev->dev, offset, value,
-			hal->dev_base_addr_cmem);
+		      hal->dev_base_addr_cmem);
 }
 
 /**
@@ -1736,8 +1724,6 @@ static void hal_hw_txrx_ops_attach_qca5424(struct hal_soc *hal_soc)
 		hal_rx_get_mpdu_mac_ad4_valid_be;
 	hal_soc->ops->hal_rx_mpdu_start_sw_peer_id_get =
 		hal_rx_mpdu_start_sw_peer_id_get_5424;
-	hal_soc->ops->hal_rx_tlv_peer_meta_data_get =
-		hal_rx_peer_meta_data_get_5424;
 #ifndef CONFIG_WORD_BASED_TLV
 	hal_soc->ops->hal_rx_mpdu_get_addr4 = hal_rx_mpdu_get_addr4_be;
 	hal_soc->ops->hal_rx_mpdu_info_ampdu_flag_get =

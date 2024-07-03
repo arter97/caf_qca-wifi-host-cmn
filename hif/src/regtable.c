@@ -167,7 +167,7 @@ void hif_target_register_tbl_attach(struct hif_softc *scn, u32 target_type)
 		break;
 #endif
 
-#if defined(QCN5424_HEADERS_DEF)
+#if defined(QCA5424_HEADERS_DEF)
 	case TARGET_TYPE_QCA5424:
 		scn->targetdef = QCA5424_TARGETDEF;
 		scn->target_ce_def = QCA5424_CE_TARGETDEF;
