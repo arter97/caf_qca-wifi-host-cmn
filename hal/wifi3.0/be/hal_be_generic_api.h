@@ -913,6 +913,8 @@ static inline void
 hal_txmon_get_user_desc_common(void *tx_tlv,
 			       struct hal_txmon_usr_desc_common *usr_common)
 {
+	uint8_t num_ltf_symbols;
+
 	usr_common->ltf_size =
 		HAL_TX_DESC_GET_64(tx_tlv, MACTX_USER_DESC_COMMON, LTF_SIZE);
 	usr_common->pkt_extn_pe =
@@ -925,9 +927,36 @@ hal_txmon_get_user_desc_common(void *tx_tlv,
 		HAL_TX_DESC_GET_64(tx_tlv, MACTX_USER_DESC_COMMON, CENTER_RU_0);
 	usr_common->center_ru_1 =
 		HAL_TX_DESC_GET_64(tx_tlv, MACTX_USER_DESC_COMMON, CENTER_RU_1);
-	usr_common->num_ltf_symbols =
+	num_ltf_symbols =
 		HAL_TX_DESC_GET_64(tx_tlv, MACTX_USER_DESC_COMMON,
 				   NUM_LTF_SYMBOLS);
+	/**
+	 *
+	 * Below mapping is used between num_ltf_symbols & LTF value in
+	 * radiotap header.
+	 * ---------------------------------------------------
+	 * |mactx_user_desc_common   | LTF value for radiotap|
+	 * |- LTF enum               |                       |
+	 * ---------------------------------------------------
+	 * |           0             |          0            |
+	 * ---------------------------------------------------
+	 * |           1             |          1            |
+	 * ---------------------------------------------------
+	 * |           2             |          1            |
+	 * ---------------------------------------------------
+	 * |           3             |          2            |
+	 * ---------------------------------------------------
+	 * |           4             |          2            |
+	 * ---------------------------------------------------
+	 * |           5             |          3            |
+	 * ---------------------------------------------------
+	 * |           6             |          3            |
+	 * ---------------------------------------------------
+	 * |           7             |          4            |
+	 * ---------------------------------------------------
+	 *
+	 */
+	usr_common->num_ltf_symbols = (num_ltf_symbols + 1) >> 1;
 	usr_common->doppler_indication =
 		HAL_TX_DESC_GET_64(tx_tlv, MACTX_USER_DESC_COMMON,
 				   DOPPLER_INDICATION);
