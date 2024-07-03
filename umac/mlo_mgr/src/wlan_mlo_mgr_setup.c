@@ -482,6 +482,7 @@ void mlo_setup_init(uint8_t total_grp)
 	for (id = 0; id < total_grp; id++) {
 		mlo_ctx->setup_info[id].tsf_sync_enabled = true;
 		mlo_ctx->setup_info[id].wsi_stats_info_support = 0xff;
+		mlo_ctx->setup_info[id].wsi_remap_support = 0xff;
 
 		if (qdf_event_create(&mlo_ctx->setup_info[id].event) !=
 							QDF_STATUS_SUCCESS)
