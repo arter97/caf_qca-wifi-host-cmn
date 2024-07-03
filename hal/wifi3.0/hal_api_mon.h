@@ -1442,8 +1442,7 @@ static inline void
 hal_rx_proc_phyrx_all_sigb_tlv(struct hal_soc *hal_soc, void *rx_tlv_hdr,
 			       struct hal_rx_ppdu_info *ppdu_info)
 {
-	hal_soc->ops->hal_rx_proc_phyrx_all_sigb_tlv(rx_tlv_hdr,
-						     (void *)ppdu_info);
+	//TODO not yet supported. To be called to set rawdata buffer for MU_SNIF
 }
 
 /**

@@ -2310,8 +2310,6 @@ hal_rx_mon_phyrx_other_receive_info_tlv(struct hal_soc *hal_soc,
 	void *rx_tlv;
 	struct hal_rx_ppdu_info *ppdu_info  = ppdu_info_hdl;
 
-	hal_rx_proc_phyrx_all_sigb_tlv(hal_soc, rx_tlv_hdr, ppdu_info_hdl);
-
 	tlv_len = HAL_RX_GET_USER_TLV32_LEN(rx_tlv_hdr);
 	rx_tlv = (uint8_t *)rx_tlv_hdr + HAL_RX_TLV64_HDR_SIZE;
 
