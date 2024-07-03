@@ -638,6 +638,11 @@ struct dp_rx_nbuf_frag_info {
  * @DP_CFG_EVENT_HIST_TYPE: DP config events history
  * @DP_MON_TX_DESC_POOL_TYPE: DP TX desc pool buffer
  * @DP_MON_RX_DESC_POOL_TYPE: DP RX desc pool buffer
+ * @DP_STC_CONTEXT_TYPE: DP STC context
+ * @DP_STC_SAMPLING_TABLE_TYPE: DP STC sampling table
+ * @DP_STC_RX_FLOW_TABLE_TYPE: DP STC rx flow table
+ * @DP_STC_TX_FLOW_TABLE_TYPE: DP STC tx flow table
+ * @DP_STC_CLASSIFIED_FLOW_TABLE_TYPE: DP STC classified flow table
  */
 enum dp_ctxt_type {
 	DP_PDEV_TYPE,
@@ -655,6 +660,11 @@ enum dp_ctxt_type {
 	DP_CFG_EVENT_HIST_TYPE,
 	DP_MON_TX_DESC_POOL_TYPE,
 	DP_MON_RX_DESC_POOL_TYPE,
+	DP_STC_CONTEXT_TYPE,
+	DP_STC_SAMPLING_TABLE_TYPE,
+	DP_STC_RX_FLOW_TABLE_TYPE,
+	DP_STC_TX_FLOW_TABLE_TYPE,
+	DP_STC_CLASSIFIED_FLOW_TABLE_TYPE,
 };
 
 /**
