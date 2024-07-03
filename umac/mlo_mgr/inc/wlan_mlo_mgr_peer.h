@@ -159,6 +159,17 @@ struct wlan_objmgr_peer *wlan_mlo_peer_get_assoc_peer(
 					struct wlan_mlo_peer_context *ml_peer);
 
 /**
+ * wlan_mlo_peer_get_first_active_peer() - Get first active peer
+ * @ml_peer: MLO peer
+ *
+ * This function returns the first active peer
+ *
+ * Return: first active peer, if it is found, otherwise NULL
+ */
+struct wlan_objmgr_peer *wlan_mlo_peer_get_first_active_peer(
+					struct wlan_mlo_peer_context *ml_peer);
+
+/**
  * wlan_mlo_peer_get_primary_link_vdev() - Get primary link vdev
  * @ml_peer: MLO peer
  *

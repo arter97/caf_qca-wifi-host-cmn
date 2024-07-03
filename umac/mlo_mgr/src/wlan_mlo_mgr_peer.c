@@ -285,6 +285,41 @@ struct wlan_objmgr_peer *wlan_mlo_peer_get_assoc_peer(
 
 qdf_export_symbol(wlan_mlo_peer_get_assoc_peer);
 
+struct wlan_objmgr_peer *wlan_mlo_peer_get_first_active_peer(
+					struct wlan_mlo_peer_context *ml_peer)
+{
+	struct wlan_mlo_link_peer_entry *peer_entry = NULL;
+	struct wlan_objmgr_peer *active_peer = NULL;
+	struct wlan_objmgr_peer *link_peer = NULL;
+	int i = 0;
+
+	if (!ml_peer)
+		return NULL;
+
+	mlo_peer_lock_acquire(ml_peer);
+
+	for (i = 0; i < MAX_MLO_LINK_PEERS; i++) {
+		peer_entry = &ml_peer->peer_list[i];
+		if (!peer_entry)
+			continue;
+
+		link_peer = peer_entry->link_peer;
+		if (!link_peer)
+			continue;
+
+		if (wlan_peer_get_peer_type(link_peer) !=
+		    WLAN_PEER_MLO_BRIDGE) {
+			active_peer = link_peer;
+			break;
+		}
+	}
+	mlo_peer_lock_release(ml_peer);
+
+	return active_peer;
+}
+
+qdf_export_symbol(wlan_mlo_peer_get_first_active_peer);
+
 struct wlan_objmgr_peer *wlan_mlo_peer_get_bridge_peer(
 					struct wlan_mlo_peer_context *ml_peer)
 {
