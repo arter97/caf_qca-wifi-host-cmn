@@ -81,6 +81,8 @@ struct mon_ops {
 	int (*mon_cfg80211_set_mon_fcs_cap)(struct wiphy *wiphy,
 					    struct wireless_dev *wdev,
 					    struct wlan_cfg8011_genric_params *params);
+	int (*mon_set_mu_sniffer_mode)(struct ol_ath_softc_net80211 *scn,
+				       uint8_t pdev_id, uint32_t mode);
 };
 
 #ifdef QCA_UNDECODED_METADATA_SUPPORT
@@ -159,12 +161,29 @@ int monitor_ol_ath_set_tx_sniffer_mode(struct ol_ath_softc_net80211 *scn,
 
 	soc = scn->soc;
 	if (!soc->soc_mon_ops ||
-	    !soc->soc_mon_ops->mon_cfg80211_set_peer_pkt_capture_params)
+	    !soc->soc_mon_ops->mon_set_tx_sniffer_mode)
 		return -EOPNOTSUPP;
 
 	return soc->soc_mon_ops->mon_set_tx_sniffer_mode(scn,
 							 pdev_id,
 							 soc_txrx_handle);
+}
+
+static inline
+int monitor_ol_ath_set_mu_sniffer_mode(struct ol_ath_softc_net80211 *scn,
+				       uint8_t pdev_id, uint32_t mode)
+{
+	ol_ath_soc_softc_t *soc;
+
+	if (!scn || !scn->soc)
+		return -EOPNOTSUPP;
+
+	soc = scn->soc;
+	if (!soc->soc_mon_ops ||
+	    !soc->soc_mon_ops->mon_set_mu_sniffer_mode)
+		return -EOPNOTSUPP;
+
+	return soc->soc_mon_ops->mon_set_mu_sniffer_mode(scn, pdev_id, mode);
 }
 
 static inline int

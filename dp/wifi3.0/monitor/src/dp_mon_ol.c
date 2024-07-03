@@ -567,6 +567,17 @@ static int ol_set_tx_sniffer_mode(struct ol_ath_softc_net80211 *scn,
 	return 0;
 }
 
+static int ol_set_mu_sniffer_mode(struct ol_ath_softc_net80211 *scn,
+				  uint8_t pdev_id, uint32_t mode)
+{
+	struct ieee80211com *ic = &scn->sc_ic;
+	struct wlan_objmgr_psoc *psoc = wlan_pdev_get_psoc(ic->ic_pdev_obj);
+	ol_txrx_soc_handle soc_txrx_handle;
+
+	soc_txrx_handle = wlan_psoc_get_dp_handle(psoc);
+	return cdp_set_mu_sniffer(soc_txrx_handle, pdev_id, mode);
+}
+
 #if defined(WLAN_TX_PKT_CAPTURE_ENH) || defined(WLAN_RX_PKT_CAPTURE_ENH)
 #ifdef QCA_SUPPORT_LITE_MONITOR
 int
@@ -1765,6 +1776,7 @@ static struct mon_ops monitor_ops = {
 	.mon_get_lite_monitor_config = wlan_get_lite_monitor_config,
 #endif /* QCA_SUPPORT_LITE_MONITOR */
 	.mon_cfg80211_set_mon_fcs_cap = wlan_cfg80211_set_mon_fcs_cap,
+	.mon_set_mu_sniffer_mode = ol_set_mu_sniffer_mode,
 };
 
 /**
