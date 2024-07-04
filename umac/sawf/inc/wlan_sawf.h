@@ -243,7 +243,7 @@ enum wlan_sawf_svc_type {
  * @ul_min_tput: Uplink min_throughput
  * @ul_max_latency: Uplink max latency
  * @ref_count: Number of sawf/scs procedures using the service class
- * @peer_count: Number of peers having initialized a flow in this service class
+ * @msduq_count: Number of active MSDUQs using this service class
  * @disabled_modes: Scheduler disable modes
  * @enabled_param_mask: Bitmask of enabled sawf parameters
  * @type_ref_count: Number of procedures using the svc per type
@@ -268,7 +268,7 @@ struct wlan_sawf_svc_class_params {
 	uint32_t ul_min_tput;
 	uint32_t ul_max_latency;
 	uint32_t ref_count;
-	uint32_t peer_count;
+	uint32_t msduq_count;
 	uint32_t disabled_modes;
 	uint16_t enabled_param_mask;
 };
@@ -558,32 +558,44 @@ void wlan_service_id_dec_ref_count_nolock(uint8_t svc_id);
  */
 void wlan_service_id_inc_ref_count_nolock(uint8_t svc_id);
 
-/* wlan_service_id_get_peer_count_nolock() - Get peer count
+/* wlan_service_id_get_msduq_count_nolock() - Get msduq count
  *
  * @svc_id : service-class id
  * Caller has to take care of acquiring lock
  *
- * Return: peer_count
+ * Return: msduq_count
  */
-uint32_t wlan_service_id_get_peer_count_nolock(uint8_t svc_id);
+uint32_t wlan_service_id_get_msduq_count_nolock(uint8_t svc_id);
 
-/* wlan_service_id_dec_peer_count_nolock() - Decrement peer count
+/* wlan_service_id_dec_msduq_count_nolock() - Decrement msduq count
  *
  * @svc_id : service-class id
  * Caller has to take care of acquiring lock
  *
  * Return: void
  */
-void wlan_service_id_dec_peer_count_nolock(uint8_t svc_id);
+void wlan_service_id_dec_msduq_count_nolock(uint8_t svc_id);
 
-/* wlan_service_id_inc_peer_count_nolock() - Increment peer count
+/* wlan_service_id_inc_msduq_count_nolock() - Increment msduq count
  *
  * @svc_id : service-class id
  * Caller has to take care of acquiring lock
  *
  * Return: void
  */
-void wlan_service_id_inc_peer_count_nolock(uint8_t svc_id);
+void wlan_service_id_inc_msduq_count_nolock(uint8_t svc_id);
+
+/* wlan_service_id_is_used_nolock() - Check if the service class is currently
+ * used or referenced by checking all the reference counts of the SVC.
+ *
+ * @svc_id : service-class id
+ * Caller has to take care of acquiring lock
+ *
+ * Return: bool
+ * True - If the service class is referenced and cannot be deleted/disabled.
+ * False - If the service class is not referenced and can be deleted/disabled.
+ */
+bool wlan_service_id_is_used_nolock(uint8_t svc_id);
 
 /* wlan_service_id_get_ref_count() - Get ref count
  *
@@ -609,29 +621,40 @@ void wlan_service_id_dec_ref_count(uint8_t svc_id);
  */
 void wlan_service_id_inc_ref_count(uint8_t svc_id);
 
-/* wlan_service_id_get_peer_count() - Get peer count
+/* wlan_service_id_get_msduq_count() - Get msduq count
  *
  * @svc_id : service-class id
  *
- * Return: peer_count
+ * Return: msduq_count
  */
-uint32_t wlan_service_id_get_peer_count(uint8_t svc_id);
+uint32_t wlan_service_id_get_msduq_count(uint8_t svc_id);
 
-/* wlan_service_id_dec_peer_count() - Decrement peer count
+/* wlan_service_id_dec_msduq_count() - Decrement msduq count
  *
  * @svc_id : service-class id
  *
  * Return: void
  */
-void wlan_service_id_dec_peer_count(uint8_t svc_id);
+void wlan_service_id_dec_msduq_count(uint8_t svc_id);
 
-/* wlan_service_id_inc_peer_count() - Increment peer count
+/* wlan_service_id_inc_msduq_count() - Increment msduq count
  *
  * @svc_id : service-class id
  *
  * Return: void
  */
-void wlan_service_id_inc_peer_count(uint8_t svc_id);
+void wlan_service_id_inc_msduq_count(uint8_t svc_id);
+
+/* wlan_service_id_is_used() - Check if the service class is currently used or
+ * referenced by checking all the reference counts of the SVC.
+ *
+ * @svc_id : service-class id
+ *
+ * Return: bool
+ * True - If the service class is referenced and cannot be deleted/disabled.
+ * False - If the service class is not referenced and can be deleted/disabled.
+ */
+bool wlan_service_id_is_used(uint8_t svc_id);
 
 /* wlan_disable_service_class() - Disable service class
  *

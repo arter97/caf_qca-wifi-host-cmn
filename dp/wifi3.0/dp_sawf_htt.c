@@ -23,6 +23,7 @@
 #include <dp_sawf_htt.h>
 #include "cdp_txrx_cmn_reg.h"
 #include <wlan_telemetry_agent.h>
+#include <wlan_sawf.h>
 
 #define HTT_MSG_BUF_SIZE(msg_bytes) \
 	((msg_bytes) + HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING)
@@ -340,6 +341,7 @@ dp_htt_sawf_msduq_recfg_ind(struct htt_soc *soc, uint32_t *msg_word)
 	uint8_t q_id, q_ind, new_q_state, curr_q_state;
 	bool is_success;
 	struct dp_sawf_msduq *msduq;
+	uint32_t svc_id;
 	QDF_STATUS status = QDF_STATUS_E_FAILURE;
 
 	/* word 0 */
@@ -397,8 +399,9 @@ dp_htt_sawf_msduq_recfg_ind(struct htt_soc *soc, uint32_t *msg_word)
 		return status;
 	}
 
+	svc_id = msduq->svc_id;
 	dp_sawf_info("peer:%d| svc_class_id: %d| err_code: 0x%x| tgt_opaque_id: 0x%x| req_cookie: 0x%x",
-		     peer_id, msduq->svc_id, err_code, msduq->tgt_opaque_id,
+		     peer_id, svc_id, err_code, msduq->tgt_opaque_id,
 		     req_cookie);
 
 	qdf_spin_lock_bh(&sawf_ctx->sawf_peer_lock);
@@ -428,13 +431,38 @@ dp_htt_sawf_msduq_recfg_ind(struct htt_soc *soc, uint32_t *msg_word)
 	switch (curr_q_state) {
 	case SAWF_MSDUQ_DEACTIVATE_PENDING:
 		new_q_state = is_success ? SAWF_MSDUQ_DEACTIVATED : SAWF_MSDUQ_IN_USE;
-		if (!is_success)
+		if (is_success) {
+			wlan_service_id_dec_msduq_count(svc_id);
+			dp_sawf_debug("Service class ID:%d, ref_count:%d, "
+				      "msduq_count:%d", svc_id,
+				      wlan_service_id_get_ref_count(svc_id),
+				      wlan_service_id_get_msduq_count(svc_id));
+
+			if (!wlan_service_id_is_used(svc_id)) {
+				if (soc->dp_soc->cdp_soc.ol_ops->disable_sawf_svc)
+				    soc->dp_soc->cdp_soc.ol_ops->disable_sawf_svc(svc_id);
+
+				dp_sawf_debug("Service class ID:%d is disabled",
+					      svc_id);
+				telemetry_sawf_set_svclass_cfg(false, svc_id, 0,
+							       0, 0, 0, 0, 0, 0);
+				wlan_disable_service_class(svc_id);
+			}
+		} else {
 			DP_SAWF_MSDUQ_STATS_INC(deactivate_stats, recv_failure);
+		}
 		break;
 	case SAWF_MSDUQ_REACTIVATE_PENDING:
 		new_q_state = is_success ? SAWF_MSDUQ_IN_USE : SAWF_MSDUQ_DEACTIVATED;
-		if (!is_success)
+		if (is_success) {
+			wlan_service_id_inc_msduq_count(svc_id);
+			dp_sawf_debug("Service class ID:%d, ref_count:%d, "
+				      "msduq_count:%d", svc_id,
+				      wlan_service_id_get_ref_count(svc_id),
+				      wlan_service_id_get_msduq_count(svc_id));
+		} else {
 			DP_SAWF_MSDUQ_STATS_INC(reactivate_stats, recv_failure);
+		}
 		break;
 	default:
 		dp_sawf_err("peer:%d | Invalid q_state:%d", peer_id,
@@ -456,25 +484,25 @@ dp_htt_sawf_msduq_recfg_ind(struct htt_soc *soc, uint32_t *msg_word)
 	if (!is_success) {
 		status = QDF_STATUS_E_FAILURE;
 		dp_sawf_err("Resp Failed for peer:%d | q_id:%d | svc_id:%d | q_state:%s with error code: 0x%x ",
-			    peer_id, q_id, msduq->svc_id,
+			    peer_id, q_id, svc_id,
 			    dp_sawf_msduq_state_to_string(curr_q_state),
 			    err_code);
 		if (new_q_state == SAWF_MSDUQ_DEACTIVATED) {
 			/* Notify NM Manager about Reactivate failure */
 			if (dp_sawf_notify_deactivate_msduq(soc->dp_soc, peer,
-							    q_id, msduq->svc_id) != QDF_STATUS_SUCCESS)
+							    q_id, svc_id) != QDF_STATUS_SUCCESS)
 				dp_sawf_err("peer:%d | NOTIFY REACTIVATE FAILURE to NW Manager failed",
 					    peer_id);
 		}
 	} else {
 		status = QDF_STATUS_SUCCESS;
 		dp_sawf_debug("Resp Success for peer:%d | q_id:%d | svc_id:%d",
-			      peer_id, q_id, msduq->svc_id);
+			      peer_id, q_id, svc_id);
 
 		if (new_q_state == SAWF_MSDUQ_IN_USE)
 			telemetry_sawf_update_msduq_info(peer->sawf->telemetry_ctx,
 							 q_id, msduq->remapped_tid,
-							 msduq->htt_msduq, msduq->svc_id);
+							 msduq->htt_msduq, svc_id);
 		else
 			telemetry_sawf_clear_msduq_info(peer->sawf->telemetry_ctx,
 							q_id);
@@ -832,6 +860,12 @@ dp_htt_sawf_msduq_map(struct htt_soc *soc, uint32_t *msg_word,
 						 remapped_tid, host_tid_queue,
 						 msduq->svc_id);
 	}
+
+	wlan_service_id_inc_msduq_count(msduq->svc_id);
+	dp_sawf_debug("Service class ID:%d, ref_count:%d, msduq_count:%d",
+		      msduq->svc_id,
+		      wlan_service_id_get_ref_count(msduq->svc_id),
+		      wlan_service_id_get_msduq_count(msduq->svc_id));
 
 	dp_peer_unref_delete(peer, DP_MOD_ID_SAWF);
 

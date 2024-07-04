@@ -193,7 +193,8 @@ dp_peer_sawf_ctx_alloc(struct dp_soc *soc,
 	return QDF_STATUS_SUCCESS;
 }
 
-static inline void dp_sawf_dec_peer_count(struct dp_soc *soc, struct dp_peer *peer)
+static inline void dp_peer_sawf_dec_svc_msduq_count(struct dp_soc *soc,
+						    struct dp_peer *peer)
 {
 	uint8_t q_id;
 	uint32_t svc_id;
@@ -202,17 +203,20 @@ static inline void dp_sawf_dec_peer_count(struct dp_soc *soc, struct dp_peer *pe
 	for (q_id = 0; q_id < DP_SAWF_Q_MAX; q_id++) {
 		svc_id = dp_sawf(peer, q_id, svc_id);
 		if (svc_id) {
-			wlan_service_id_dec_peer_count(svc_id);
-			/*
-			 * If both ref count and peer count are zero,
-			 * then disable that service class
-			 */
-			if (!wlan_service_id_get_peer_count(svc_id) &&
-			    !wlan_service_id_get_ref_count(svc_id)) {
+			wlan_service_id_dec_msduq_count(svc_id);
+			dp_sawf_debug("Service class ID:%d, ref_count:%d, "
+				      "msduq_count:%d", svc_id,
+				      wlan_service_id_get_ref_count(svc_id),
+				      wlan_service_id_get_msduq_count(svc_id));
+
+			if (!wlan_service_id_is_used(svc_id)) {
 				if (soc->cdp_soc.ol_ops->disable_sawf_svc)
-					cdp_soc->ol_ops->disable_sawf_svc(svc_id);
-				telemetry_sawf_set_svclass_cfg(false, svc_id,
-							       0, 0, 0, 0, 0, 0, 0);
+					cdp_soc->ol_ops->disable_sawf_svc(
+									svc_id);
+				dp_sawf_debug("Service class ID:%d is disabled",
+					      svc_id);
+				telemetry_sawf_set_svclass_cfg(false, svc_id, 0,
+							       0, 0, 0, 0, 0, 0);
 				wlan_disable_service_class(svc_id);
 			}
 		}
@@ -238,7 +242,7 @@ dp_peer_sawf_ctx_free(struct dp_soc *soc,
 	if (peer->sawf->telemetry_ctx)
 		telemetry_sawf_peer_ctx_free(peer->sawf->telemetry_ctx);
 
-	dp_sawf_dec_peer_count(soc, peer);
+	dp_peer_sawf_dec_svc_msduq_count(soc, peer);
 	qdf_spinlock_destroy(&peer->sawf->sawf_peer_lock);
 	qdf_mem_free(peer->sawf);
 
@@ -1870,7 +1874,6 @@ uint16_t dp_sawf_get_msduq(struct net_device *netdev, uint8_t *dest_mac,
 				      dp_sawf_msduq_state_to_string(
 							msduq->q_state));
 			qdf_spin_unlock_bh(&sawf_ctx->sawf_peer_lock);
-			wlan_service_id_inc_peer_count(service_id);
 			dp_peer_unref_delete(peer, DP_MOD_ID_SAWF);
 			return dp_sawf_msduq_peer_id_set(peer_id, q_id);
 		}
