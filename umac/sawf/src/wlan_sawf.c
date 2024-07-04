@@ -128,7 +128,7 @@ void wlan_print_service_class(struct wlan_sawf_svc_class_params *params)
 		      "TID: %d\nMSDU Loss Rate: %d\n"
 		      "UL Burst Size: %d\nUL Service Interval: %d\n"
 		      "UL Min throughput: %d\nUL Max Latency: %d\n"
-		      "Ref Count: %d\nPeer Count: %d\n"
+		      "Ref Count: %d\nMSDUQ Count: %d\n"
 		      "Disabled_Modes: %u\nEnabled Params Mask: 0x%04X\n",
 		      SAWF_LINE_FORMAT,
 		      params->svc_id, params->svc_type, params->app_name,
@@ -138,7 +138,7 @@ void wlan_print_service_class(struct wlan_sawf_svc_class_params *params)
 		      params->tid, params->msdu_rate_loss,
 		      params->ul_burst_size, params->ul_service_interval,
 		      params->ul_min_tput, params->ul_max_latency,
-		      params->ref_count, params->peer_count,
+		      params->ref_count, params->msduq_count,
 		      params->disabled_modes, params->enabled_param_mask);
 
 	if (nb > 0 && nb >= sizeof(buf))
@@ -856,7 +856,7 @@ void wlan_service_id_dec_ref_count_nolock(uint8_t svc_id)
 
 qdf_export_symbol(wlan_service_id_dec_ref_count_nolock);
 
-void wlan_service_id_inc_peer_count_nolock(uint8_t svc_id)
+void wlan_service_id_inc_msduq_count_nolock(uint8_t svc_id)
 {
 	struct sawf_ctx *sawf;
 
@@ -867,12 +867,12 @@ void wlan_service_id_inc_peer_count_nolock(uint8_t svc_id)
 	}
 
 	if (wlan_service_id_configured_nolock(svc_id))
-		sawf->svc_classes[svc_id - 1].peer_count++;
+		sawf->svc_classes[svc_id - 1].msduq_count++;
 }
 
-qdf_export_symbol(wlan_service_id_inc_peer_count_nolock);
+qdf_export_symbol(wlan_service_id_inc_msduq_count_nolock);
 
-void wlan_service_id_dec_peer_count_nolock(uint8_t svc_id)
+void wlan_service_id_dec_msduq_count_nolock(uint8_t svc_id)
 {
 	struct sawf_ctx *sawf;
 
@@ -883,11 +883,11 @@ void wlan_service_id_dec_peer_count_nolock(uint8_t svc_id)
 	}
 
 	if (wlan_service_id_configured_nolock(svc_id) &&
-	    sawf->svc_classes[svc_id - 1].peer_count > 0)
-		sawf->svc_classes[svc_id - 1].peer_count--;
+	    sawf->svc_classes[svc_id - 1].msduq_count > 0)
+		sawf->svc_classes[svc_id - 1].msduq_count--;
 }
 
-qdf_export_symbol(wlan_service_id_dec_peer_count_nolock);
+qdf_export_symbol(wlan_service_id_dec_msduq_count_nolock);
 
 void wlan_service_id_inc_ref_count(uint8_t svc_id)
 {
@@ -923,7 +923,7 @@ void wlan_service_id_dec_ref_count(uint8_t svc_id)
 
 qdf_export_symbol(wlan_service_id_dec_ref_count);
 
-void wlan_service_id_inc_peer_count(uint8_t svc_id)
+void wlan_service_id_inc_msduq_count(uint8_t svc_id)
 {
 	struct sawf_ctx *sawf;
 
@@ -934,13 +934,13 @@ void wlan_service_id_inc_peer_count(uint8_t svc_id)
 	}
 
 	qdf_spin_lock_bh(&sawf->lock);
-	wlan_service_id_inc_peer_count_nolock(svc_id);
+	wlan_service_id_inc_msduq_count_nolock(svc_id);
 	qdf_spin_unlock_bh(&sawf->lock);
 }
 
-qdf_export_symbol(wlan_service_id_inc_peer_count);
+qdf_export_symbol(wlan_service_id_inc_msduq_count);
 
-void wlan_service_id_dec_peer_count(uint8_t svc_id)
+void wlan_service_id_dec_msduq_count(uint8_t svc_id)
 {
 	struct sawf_ctx *sawf;
 
@@ -951,11 +951,11 @@ void wlan_service_id_dec_peer_count(uint8_t svc_id)
 	}
 
 	qdf_spin_lock_bh(&sawf->lock);
-	wlan_service_id_dec_peer_count_nolock(svc_id);
+	wlan_service_id_dec_msduq_count_nolock(svc_id);
 	qdf_spin_unlock_bh(&sawf->lock);
 }
 
-qdf_export_symbol(wlan_service_id_dec_peer_count);
+qdf_export_symbol(wlan_service_id_dec_msduq_count);
 
 uint32_t wlan_service_id_get_ref_count_nolock(uint8_t svc_id)
 {
@@ -996,7 +996,7 @@ err:
 
 qdf_export_symbol(wlan_service_id_get_ref_count);
 
-uint32_t wlan_service_id_get_peer_count_nolock(uint8_t svc_id)
+uint32_t wlan_service_id_get_msduq_count_nolock(uint8_t svc_id)
 {
 	struct sawf_ctx *sawf;
 
@@ -1007,14 +1007,14 @@ uint32_t wlan_service_id_get_peer_count_nolock(uint8_t svc_id)
 	}
 
 	if (wlan_service_id_configured_nolock(svc_id))
-		return sawf->svc_classes[svc_id - 1].peer_count;
+		return sawf->svc_classes[svc_id - 1].msduq_count;
 err:
 	return 0;
 }
 
-qdf_export_symbol(wlan_service_id_get_peer_count_nolock);
+qdf_export_symbol(wlan_service_id_get_msduq_count_nolock);
 
-uint32_t wlan_service_id_get_peer_count(uint8_t svc_id)
+uint32_t wlan_service_id_get_msduq_count(uint8_t svc_id)
 {
 	struct sawf_ctx *sawf;
 	uint32_t count;
@@ -1026,14 +1026,60 @@ uint32_t wlan_service_id_get_peer_count(uint8_t svc_id)
 	}
 
 	qdf_spin_lock_bh(&sawf->lock);
-	count = wlan_service_id_get_peer_count_nolock(svc_id);
+	count = wlan_service_id_get_msduq_count_nolock(svc_id);
 	qdf_spin_unlock_bh(&sawf->lock);
 	return count;
 err:
 	return 0;
 }
 
-qdf_export_symbol(wlan_service_id_get_peer_count);
+qdf_export_symbol(wlan_service_id_get_msduq_count);
+
+bool wlan_service_id_is_used_nolock(uint8_t svc_id)
+{
+	struct sawf_ctx *sawf;
+	bool is_used;
+
+	sawf = wlan_get_sawf_ctx();
+	if (!sawf) {
+		sawf_err("SAWF ctx is invalid");
+		goto err;
+	}
+
+	if (!wlan_service_id_get_ref_count_nolock(svc_id) &&
+	    !wlan_service_id_get_msduq_count_nolock(svc_id)) {
+		is_used = false;
+	} else {
+		is_used = true;
+	}
+
+	return is_used;
+err:
+	return false;
+}
+
+qdf_export_symbol(wlan_service_id_is_used_nolock);
+
+bool wlan_service_id_is_used(uint8_t svc_id)
+{
+	struct sawf_ctx *sawf;
+	bool is_used;
+
+	sawf = wlan_get_sawf_ctx();
+	if (!sawf) {
+		sawf_err("SAWF ctx is invalid");
+		goto err;
+	}
+
+	qdf_spin_lock_bh(&sawf->lock);
+	is_used = wlan_service_id_is_used_nolock(svc_id);
+	qdf_spin_unlock_bh(&sawf->lock);
+	return is_used;
+err:
+	return false;
+}
+
+qdf_export_symbol(wlan_service_id_is_used);
 
 void wlan_disable_service_class(uint8_t svc_id)
 {
@@ -1355,7 +1401,7 @@ QDF_STATUS wlan_sawf_delete_epcs_svc(void)
 		  wlan_service_id_get_ref_count_nolock(svc_id));
 
 	if (!wlan_service_id_get_ref_count_nolock(svc_id) &&
-	    !wlan_service_id_get_peer_count_nolock(svc_id)) {
+	    !wlan_service_id_get_msduq_count_nolock(svc_id)) {
 		wlan_sawf_send_disable_svc_to_target(svc);
 		svc->configured = false;
 	}
