@@ -1998,3 +1998,17 @@ util_scan_get_phymode(struct wlan_objmgr_pdev *pdev,
  */
 bool util_is_bssid_non_tx(struct wlan_objmgr_psoc *psoc,
 			  struct qdf_mac_addr *bssid, qdf_freq_t freq);
+
+/**
+ * util_scan_entry_renew_timestamp() - function to renew timestamp of scan entry
+ * @pdev: pdev
+ * @scan_entry: scan entry
+ *
+ * API, function to renew timestamp of scan entry to avoid aging out
+ *
+ * Return: void
+ */
+void
+util_scan_entry_renew_timestamp(struct wlan_objmgr_pdev *pdev,
+				struct scan_cache_entry *scan_entry);
+
