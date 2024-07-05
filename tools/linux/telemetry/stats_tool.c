@@ -592,7 +592,7 @@ static void display_help(void)
 {
 	STATS_PRINT("\nwifitelemetry : Displays Statistics of Access Point\n");
 	STATS_PRINT("\nUsage:\n"
-		    "Process Mode: wifitelemetry [Level] [Object] [StatsType] [FeatureName] [[-i interface_name] | [-m StationMACAddress]] [-R] [-I] [-M] [-E] [-T] [-h | ?]\n"
+		    "Process Mode: wifitelemetry [Level] [Object] [StatsType] [FeatureName] [[-i interface_name] | [-m StationMACAddress]] [-R] [-I] [-M] [-E] [-T] [-L link_id] [-h | ?]\n"
 		    "Daemon Mode: wifitelemetry async\n"
 		    "    Note: User must run wifitelemetry in background. Excecute another instance in process mode to trigger stats request.\n"
 		    "\n"
@@ -634,6 +634,10 @@ static void display_help(void)
 		    "Interface:\n"
 		    "    -i wifiX or --ifname=wifiX:  For Radio\n"
 		    "    -i athX or --ifname=athX:    For VAP\n"
+		    "\n"
+		    "Link_id:\n"
+		    "     Link_id is mandatory for vap level stats in single wiphy model\n"
+		    "    -L <link_id> or --linkid <link_id>\n"
 		    "\n"
 		    "STA MAC Address for STA stats:\n"
 		    "    -m xx:xx:xx:xx:xx:xx or --stamacaddr xx:xx:xx:xx:xx:xx\n"

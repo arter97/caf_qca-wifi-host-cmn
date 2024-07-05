@@ -628,12 +628,42 @@ static bool is_vap_radiochild(const char *rif_name, const uint8_t *rhw_addr,
 	return false;
 }
 
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+static int validate_link_id(struct stats_command *cmd)
+{
+	switch (cmd->obj) {
+	case STATS_OBJ_VAP:
+		if (cmd->link_id < 0 || cmd->link_id > MAX_LINK_ID)
+			return -EINVAL;
+		break;
+	default:
+		if (cmd->link_id != MLO_INVALID_LINK_ID)
+			return -EINVAL;
+	}
+	return 0;
+}
+#else
+static int validate_link_id(struct stats_command *cmd)
+{
+	if (cmd->link_id != MLO_INVALID_LINK_ID) {
+		STATS_WARN("Overriding link_id to 0xff for non-single-wiphy");
+		cmd->link_id = MLO_INVALID_LINK_ID;
+	}
+	return 0;
+}
+#endif
+
 static int is_valid_cmd(struct stats_command *cmd)
 {
 	u_int8_t *sta_mac = cmd->sta_mac.ether_addr_octet;
 
 	if (is_async_req() && cmd->recursive) {
 		STATS_WARN("Recursive is not supported for asyncs request\n");
+		return -EINVAL;
+	}
+
+	if (validate_link_id(cmd)) {
+		STATS_ERR("Link_id invalid %d\n", cmd->link_id);
 		return -EINVAL;
 	}
 
