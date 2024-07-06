@@ -109,6 +109,18 @@
 	HTT_TCL_METADATA_TYPE_VDEV_BASED
 #endif
 
+#ifndef HTT_TX_TCL_METADATA_GLBL_SEQ_VALID_HTT_EXT_ID_M
+#define HTT_TX_TCL_METADATA_GLBL_SEQ_VALID_HTT_EXT_ID_M 0x00008000
+#define HTT_TX_TCL_METADATA_GLBL_SEQ_VALID_HTT_EXT_ID_S 15
+
+#define HTT_TX_TCL_METADATA_GLBL_SEQ_VALID_HTT_EXT_ID_SET(var, val) \
+do { \
+	HTT_CHECK_SET_VAL(HTT_TX_TCL_METADATA_GLBL_SEQ_VALID_HTT_EXT_ID, val); \
+	((var) |= ((val) << HTT_TX_TCL_METADATA_GLBL_SEQ_VALID_HTT_EXT_ID_S)); \
+} while (0)
+
+#endif
+
 QDF_COMPILE_TIME_ASSERT(max_fw2wbm_tx_status_check,
                         MAX_EAPOL_TX_COMP_STATUS == HTT_TX_FW2WBM_TX_STATUS_MAX);
 
@@ -2507,6 +2519,11 @@ dp_tx_update_mcast_param(uint16_t peer_id,
 		msdu_info->vdev_id = vdev->vdev_id + DP_MLO_VDEV_ID_OFFSET;
 		HTT_TX_TCL_METADATA_GLBL_SEQ_HOST_INSPECTED_SET(
 							*htt_tcl_metadata, 1);
+
+		if (msdu_info->exception_fw)
+			HTT_TX_TCL_METADATA_GLBL_SEQ_VALID_HTT_EXT_ID_SET(
+					*htt_tcl_metadata, 1);
+
 	} else {
 		msdu_info->vdev_id = vdev->vdev_id;
 	}
