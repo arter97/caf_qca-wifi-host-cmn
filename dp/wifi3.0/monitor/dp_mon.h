@@ -1253,6 +1253,14 @@ struct  dp_mon_pdev {
 	uint8_t phy_ppdu_id_size;
 #ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
 	bool is_local_pkt_capture_running;
+	/* Maintain MSDU list on PPDU */
+	qdf_nbuf_queue_t msdu_queue;
+	/* Maintain MPDU list of PPDU */
+	qdf_nbuf_queue_t mpdu_queue;
+	/* To  check if 1st MPDU of PPDU */
+	bool first_mpdu;
+	/* LPC lock */
+	qdf_spinlock_t lpc_lock;
 #endif
 };
 

@@ -1667,48 +1667,187 @@ dp_rx_handle_smart_mesh_mode(struct dp_soc *soc, struct dp_pdev *pdev,
 }
 
 #ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
-int dp_rx_handle_local_pkt_capture(struct dp_pdev *pdev,
-				   struct hal_rx_ppdu_info *ppdu_info,
-				   qdf_nbuf_t nbuf)
+/**
+ * dp_rx_mon_stitch_mpdu() - Stich MPDU from MSDU
+ * @mon_pdev: mon_pdev handle
+ * @tail: 1st MSDU of next MPDU
+ *
+ * Return: mpdu buf
+ */
+static qdf_nbuf_t
+dp_rx_mon_stitch_mpdu(struct dp_mon_pdev *mon_pdev, qdf_nbuf_t tail)
 {
-	uint16_t size;
-	struct dp_mon_vdev *mon_vdev;
-	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	qdf_nbuf_t head, nbuf, next;
+	qdf_nbuf_t mpdu_buf = NULL, head_frag_list = NULL;
+	uint32_t is_first_frag, frag_list_sum_len = 0;
 
-	if (!mon_pdev->mvdev) {
+	if (!(qdf_nbuf_is_queue_empty(&mon_pdev->msdu_queue))) {
+		head = qdf_nbuf_queue_remove(&mon_pdev->msdu_queue);
+		nbuf = head;
+		mpdu_buf = qdf_nbuf_copy(head);
+		if (qdf_unlikely(!mpdu_buf))
+			goto fail;
+
+		is_first_frag = 1;
+
+		while (nbuf) {
+			/* Find the 1st msdu to append in mpdu_buf->frag_list */
+			if (nbuf != head && is_first_frag) {
+				is_first_frag = 0;
+				head_frag_list  = nbuf;
+			}
+
+			/* calculate frag_list length */
+			if (!is_first_frag)
+				frag_list_sum_len += qdf_nbuf_len(nbuf);
+
+			if (qdf_nbuf_queue_first(&mon_pdev->msdu_queue) == tail)
+				break;
+
+			next = qdf_nbuf_queue_remove(&mon_pdev->msdu_queue);
+			qdf_nbuf_set_next(nbuf, next);
+			nbuf = next;
+		}
+
+		qdf_nbuf_append_ext_list(mpdu_buf, head_frag_list,
+					 frag_list_sum_len);
+		qdf_nbuf_free(head);
+	}
+
+	return mpdu_buf;
+
+fail:
+	dp_err_rl("nbuf copy failed len: %d Q1: %d Q2: %d", qdf_nbuf_len(nbuf),
+		  qdf_nbuf_queue_len(&mon_pdev->msdu_queue),
+		  qdf_nbuf_queue_len(&mon_pdev->mpdu_queue));
+
+	/* Drop all MSDU of MPDU */
+	while (nbuf) {
+		qdf_nbuf_free(nbuf);
+		if (qdf_nbuf_queue_first(&mon_pdev->msdu_queue) == tail)
+			break;
+		nbuf = qdf_nbuf_queue_remove(&mon_pdev->msdu_queue);
+	}
+
+	return NULL;
+}
+
+/**
+ * dp_rx_mon_send_mpdu() - Send MPDU to stack
+ * @pdev: DP pdev handle
+ * @mon_pdev: mon_pdev handle
+ * @mpdu_buf: buffer to submit
+ *
+ * Return: None
+ */
+static inline void
+dp_rx_mon_send_mpdu(struct dp_pdev *pdev, struct dp_mon_pdev *mon_pdev,
+		    qdf_nbuf_t mpdu_buf)
+{
+	struct dp_mon_vdev *mon_vdev;
+
+	if (qdf_unlikely(!mon_pdev->mvdev)) {
 		dp_info_rl("Monitor vdev is NULL !!");
-		return 1;
+		qdf_nbuf_free(mpdu_buf);
+		return;
+	}
+
+	mon_pdev->ppdu_info.rx_status.ppdu_id =
+			mon_pdev->ppdu_info.com_info.ppdu_id;
+	mon_pdev->ppdu_info.rx_status.device_id = pdev->soc->device_id;
+	mon_pdev->ppdu_info.rx_status.chan_noise_floor =
+			pdev->chan_noise_floor;
+
+	if (!qdf_nbuf_update_radiotap(&mon_pdev->ppdu_info.rx_status, mpdu_buf,
+				      qdf_nbuf_headroom(mpdu_buf))) {
+		DP_STATS_INC(pdev, dropped.mon_radiotap_update_err, 1);
+		qdf_nbuf_free(mpdu_buf);
+		dp_err("radiotap_update_err");
+		return;
 	}
 
 	mon_vdev = mon_pdev->mvdev->monitor_vdev;
+	if (qdf_likely(mon_vdev && mon_vdev->osif_rx_mon))
+		mon_vdev->osif_rx_mon(mon_pdev->mvdev->osif_vdev,
+				      mpdu_buf, NULL);
+	else
+		qdf_nbuf_free(mpdu_buf);
+}
 
-	if (!ppdu_info->msdu_info.first_msdu_payload) {
-		dp_info_rl("First msdu payload not present");
-		return 1;
+int dp_rx_handle_local_pkt_capture(struct dp_pdev *pdev,
+				   struct hal_rx_ppdu_info *ppdu_info,
+				   qdf_nbuf_t nbuf, uint32_t tlv_status)
+{
+	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	qdf_nbuf_t buf, last;
+	uint16_t size;
+
+	qdf_spin_lock_bh(&mon_pdev->lpc_lock);
+	switch (tlv_status) {
+	case HAL_TLV_STATUS_MPDU_START:
+	{
+		/* Only Add MPDU to queue if multiple MPDUs present in PPDU */
+		if (qdf_unlikely(mon_pdev->first_mpdu)) {
+			mon_pdev->first_mpdu = false;
+			break;
+		}
+
+		/* last nbuf of queue points to 1st MSDU of next MPDU */
+		last = qdf_nbuf_queue_last(&mon_pdev->msdu_queue);
+		buf = dp_rx_mon_stitch_mpdu(mon_pdev, last);
+		/* Add MPDU to queue */
+		if (qdf_likely(buf))
+			qdf_nbuf_queue_add(&mon_pdev->mpdu_queue, buf);
+		break;
 	}
 
-	/* Adding 8 bytes to get to start of 802.11 frame after phy_ppdu_id */
-	size = (ppdu_info->msdu_info.first_msdu_payload -
-		qdf_nbuf_data(nbuf)) + mon_pdev->phy_ppdu_id_size;
-	ppdu_info->msdu_info.first_msdu_payload = NULL;
+	case HAL_TLV_STATUS_HEADER:
+	{
+		buf = qdf_nbuf_clone(nbuf);
+		if (qdf_unlikely(!buf))
+			break;
 
-	if (!qdf_nbuf_pull_head(nbuf, size)) {
-		dp_info_rl("No header present");
-		return 1;
+		/* Adding 8 bytes to get to start of 802.11 frame
+		 * after phy_ppdu_id
+		 */
+		size = (ppdu_info->msdu_info.first_msdu_payload -
+			qdf_nbuf_data(buf)) + mon_pdev->phy_ppdu_id_size;
+
+		if (qdf_unlikely(!qdf_nbuf_pull_head(buf, size))) {
+			qdf_nbuf_free(buf);
+			dp_info("No header present");
+			break;
+		}
+
+		/* Only retain RX MSDU payload in the skb */
+		qdf_nbuf_trim_tail(buf, qdf_nbuf_len(buf) -
+				ppdu_info->msdu_info.payload_len +
+				mon_pdev->phy_ppdu_id_size);
+
+		/* Add MSDU to Queue */
+		qdf_nbuf_queue_add(&mon_pdev->msdu_queue, buf);
+		break;
 	}
 
-	/* Only retain RX MSDU payload in the skb */
-	qdf_nbuf_trim_tail(nbuf, qdf_nbuf_len(nbuf) -
-			   ppdu_info->msdu_info.payload_len +
-			   mon_pdev->phy_ppdu_id_size);
-	if (!qdf_nbuf_update_radiotap(&mon_pdev->ppdu_info.rx_status, nbuf,
-				      qdf_nbuf_headroom(nbuf))) {
-		DP_STATS_INC(pdev, dropped.mon_radiotap_update_err, 1);
-		return 1;
+	case HAL_TLV_STATUS_PPDU_DONE:
+	{
+		while ((buf = qdf_nbuf_queue_remove(&mon_pdev->mpdu_queue)))
+			dp_rx_mon_send_mpdu(pdev, mon_pdev, buf);
+
+		/* Stich and send Last MPDU of PPDU */
+		buf = dp_rx_mon_stitch_mpdu(mon_pdev, NULL);
+		if (buf)
+			dp_rx_mon_send_mpdu(pdev, mon_pdev, buf);
+
+		mon_pdev->first_mpdu = true;
+		break;
 	}
 
-	if (mon_vdev && mon_vdev->osif_rx_mon)
-		mon_vdev->osif_rx_mon(mon_pdev->mvdev->osif_vdev, nbuf, NULL);
+	default:
+		break;
+	}
+
+	qdf_spin_unlock_bh(&mon_pdev->lpc_lock);
 
 	return 0;
 }
