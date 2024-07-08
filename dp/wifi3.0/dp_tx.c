@@ -5711,7 +5711,7 @@ dp_tx_update_peer_stats(struct dp_tx_desc_s *tx_desc,
 	if (!pdev)
 		return;
 
-	length = qdf_nbuf_len(tx_desc->nbuf);
+	length = dp_tx_get_pkt_len(tx_desc);
 	/* Update peer level ucast stats */
 	if (qdf_unlikely(txrx_peer->bss_peer &&
 			 vdev->opmode == wlan_op_mode_ap)) {
