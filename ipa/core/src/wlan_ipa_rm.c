@@ -210,6 +210,7 @@ void wlan_ipa_add_rem_flt_cb_event(struct wlan_ipa_priv *ipa_ctx)
 	qdf_event_create(&ipa_ctx->ipa_flt_evnt);
 	qdf_event_create(&ipa_ctx->ipa_ctrl_flt_evnt);
 	qdf_event_create(&ipa_ctx->ipa_ctrl_flt_rm_shutdown_evt);
+	qdf_spinlock_create(&dp_flt_params->flt_rem_lock);
 }
 #endif
 

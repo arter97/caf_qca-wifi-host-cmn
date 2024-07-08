@@ -4781,6 +4781,7 @@ void wlan_ipa_destroy_opt_wifi_flt_cb_event(struct wlan_ipa_priv *ipa_ctx)
 	qdf_event_destroy(&ipa_ctx->ipa_flt_evnt);
 	qdf_event_destroy(&ipa_ctx->ipa_ctrl_flt_evnt);
 	qdf_event_destroy(&ipa_ctx->ipa_ctrl_flt_rm_shutdown_evt);
+	qdf_spinlock_destroy(&dp_flt_params->flt_rem_lock);
 }
 
 /**
