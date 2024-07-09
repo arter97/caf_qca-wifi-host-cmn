@@ -1674,6 +1674,7 @@ uint8_t dp_rx_process_invalid_peer(struct dp_soc *soc, qdf_nbuf_t mpdu,
 	uint8_t *rx_tlv_hdr = qdf_nbuf_data(mpdu);
 	uint8_t *rx_pkt_hdr = hal_rx_pkt_hdr_get(soc->hal_soc, rx_tlv_hdr);
 	uint32_t nbuf_len;
+	bool is_bmcast = false;
 
 	wh = (struct ieee80211_frame *)rx_pkt_hdr;
 
@@ -1723,6 +1724,24 @@ out:
 			DP_STATS_INC(soc, rx.err.decrypt_err_drop, 1);
 			dp_err_rl("invalid peer frame with correct SA/RA is freed");
 			goto free;
+		} else {
+			/*
+			 * check if ta is broadcast/multicast or not,
+			 * if skb is from ff:ff:ff:ff:ff:ff or 01:xx:xx:xx:xx:xx
+			 * we should not response with deauth
+			 * frame to this TA, because it may cause
+			 * disconnection with other wlan client
+			 * by mistake.
+			 */
+			is_bmcast = qdf_is_macaddr_group((struct qdf_mac_addr *)wh->i_addr2);
+
+			dp_info("TA "QDF_MAC_ADDR_FMT" bmcast %d",
+				QDF_MAC_ADDR_REF(wh->i_addr2), is_bmcast);
+
+			if (is_bmcast) {
+				dp_info("skip rx invalid peer report to umac for b/mcast case");
+				goto free;
+			}
 		}
 	}
 
