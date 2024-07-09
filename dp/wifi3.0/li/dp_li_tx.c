@@ -360,6 +360,33 @@ static inline uint8_t dp_tx_get_rbm_id_li(struct dp_soc *soc,
 #endif
 #endif
 
+#ifdef WLAN_TX_PKT_CAPTURE_ENH
+/**
+ * dp_tx_get_override_rbm_id_li() - Get the override RBM ID for tx data.
+ * @soc: DP soc structure pointer
+ * @vdev: DP vdev structure pointer
+ * @ring_id: Transmit Queue/ring_id to be used when XPS is enabled
+ *
+ * Return: HAL ring handle
+ */
+static inline uint8_t dp_tx_get_override_rbm_id_li(struct dp_soc *soc,
+						   struct dp_vdev *vdev,
+						   uint8_t ring_id)
+{
+	if (qdf_unlikely(vdev->is_override_rbm_id))
+		return dp_tx_get_rbm_id_li(soc, vdev->rbm_id);
+
+	return dp_tx_get_rbm_id_li(soc, ring_id);
+}
+#else
+static inline uint8_t dp_tx_get_override_rbm_id_li(struct dp_soc *soc,
+						   struct dp_vdev *vdev,
+						   uint8_t ring_id)
+{
+	return dp_tx_get_rbm_id_li(soc, ring_id);
+}
+#endif
+
 #if defined(CLEAR_SW2TCL_CONSUMED_DESC)
 /**
  * dp_tx_clear_consumed_hw_descs - Reset all the consumed Tx ring descs to 0
@@ -494,7 +521,7 @@ dp_tx_hw_enqueue_li(struct dp_soc *soc, struct dp_vdev *vdev,
 			tx_exc_metadata->sec_type : vdev->sec_type);
 
 	/* Return Buffer Manager ID */
-	uint8_t bm_id = dp_tx_get_rbm_id_li(soc, ring_id);
+	uint8_t bm_id = dp_tx_get_override_rbm_id_li(soc, vdev, ring_id);
 
 	hal_ring_handle_t hal_ring_hdl = NULL;
 
