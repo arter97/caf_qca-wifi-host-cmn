@@ -27,6 +27,7 @@
 #include <wlan_dfs_mlme_api.h>
 #include <wlan_dfs_utils_api.h>
 #include <wlan_reg_services_api.h>
+#include <dfs_zero_cac.h>
 
 #if defined(QCA_DFS_RCSA_SUPPORT)
 /* dfs_prepare_nol_ie_bitmap: Create a Bitmap from the radar found subchannels
@@ -140,7 +141,7 @@ dfs_get_radar_subchans_from_nol_ie(struct wlan_dfs *dfs,
 }
 
 #if defined(WLAN_FEATURE_11BE) && defined(QCA_DFS_BW_PUNCTURE) && \
-	defined(QCA_DFS_BW_PUNCTURE)
+	defined(QCA_DFS_RCSA_SUPPORT)
 /**
  * dfs_is_freq_radar_infected() - Given a chan_freq, return true if the
  * freq is part of radar_subchans, else return false.
@@ -183,50 +184,6 @@ dfs_is_radar_subchans_empty(uint16_t *radar_subchans)
 	return true;
 }
 
-#define SUB_CHAN_BW 20 /* 20 MHZ */
-
-/**
- * dfs_cal_punc_pat_from_radar_subchans() - Calculate the puncture pattern
- * from radar subchannels.
- * @dfs: Pointer to struct wlan_dfs
- * @phymode: Channel phymode of type wlan_phymode
- * @radar_subchans: Array of radar sub-channels
- *
- * Return: Puncture pattern
- */
-static uint16_t
-dfs_cal_punc_pat_from_radar_subchans(struct wlan_dfs *dfs,
-				     enum wlan_phymode phymode,
-				     uint16_t *radar_subchans)
-{
-	const struct bonded_channel_freq *bonded_chan_ptr;
-	qdf_freq_t center_320, startchan_cfreq, endchan_cfreq;
-	enum phy_ch_width ch_width = utils_dfs_convert_wlan_phymode_to_chwidth(phymode);
-	uint16_t cur_chan_bw = wlan_reg_get_bw_value(ch_width);
-	uint8_t i = 0;
-	uint16_t radar_punc_bitmap = NO_SCHANS_PUNC;
-
-	center_320 = (ch_width == CH_WIDTH_320MHZ) ?
-		dfs->dfs_curchan->dfs_ch_mhz_freq_seg2 : 0;
-
-	bonded_chan_ptr = wlan_reg_get_bonded_chan_entry(dfs->dfs_curchan->dfs_ch_freq,
-							 ch_width, center_320);
-	if (!bonded_chan_ptr)
-		return radar_punc_bitmap;
-
-	startchan_cfreq = bonded_chan_ptr->start_freq;
-	endchan_cfreq  = wlan_reg_get_endchan_cen_from_bandstart(startchan_cfreq,
-								 cur_chan_bw);
-	while (startchan_cfreq <= endchan_cfreq) {
-		if (dfs_is_freq_radar_infected(startchan_cfreq, radar_subchans))
-			radar_punc_bitmap |= BIT(i);
-
-		startchan_cfreq = startchan_cfreq + SUB_CHAN_BW;
-		i++;
-	}
-	return radar_punc_bitmap;
-}
-
 /**
  * dfs_get_radar_bitmap_from_nolie() - Translate the NOL IE bitmap of RCSA
  * to puncture pattern.
@@ -238,21 +195,57 @@ dfs_cal_punc_pat_from_radar_subchans(struct wlan_dfs *dfs,
  * Return: Puncture bitmap
  */
 uint16_t
-dfs_get_radar_bitmap_from_nolie(struct wlan_dfs *dfs, enum wlan_phymode phymode,
+dfs_get_radar_bitmap_from_nolie(struct wlan_dfs *dfs,
 				qdf_freq_t nol_ie_start_freq,
-				uint8_t nol_ie_bitmap)
+				uint8_t nol_ie_bitmap,
+				bool *is_ignore_radar_puncture)
 {
 	uint16_t radar_subchans[MAX_20MHZ_SUBCHANS] = {};
 	uint16_t radar_punc_bitmap = NO_SCHANS_PUNC;
+	uint8_t num_schans;
 
-	dfs_get_radar_subchans_from_nol_ie(dfs, radar_subchans,
-					   nol_ie_start_freq,
-					   nol_ie_bitmap);
-	if (dfs_is_radar_subchans_empty(radar_subchans))
-		return radar_punc_bitmap;
+	*is_ignore_radar_puncture = false;
+	num_schans = dfs_get_radar_subchans_from_nol_ie(dfs, radar_subchans,
+							nol_ie_start_freq,
+							nol_ie_bitmap);
 
-	return dfs_cal_punc_pat_from_radar_subchans(dfs, phymode,
-						    radar_subchans);
+	dfs_handle_radar_puncturing(dfs, &radar_punc_bitmap,
+				    radar_subchans, num_schans,
+				    is_ignore_radar_puncture);
+
+	return radar_punc_bitmap;
+}
+
+static bool
+dfs_check_and_ignore_nol_ie_on_punctured_chans(struct wlan_dfs *dfs,
+					       uint16_t *radar_subchans,
+					       uint8_t num_subchans)
+{
+	uint16_t dfs_radar_bitmap;
+
+	if (!dfs->dfs_use_puncture)
+		return false;
+
+	dfs_radar_bitmap = dfs_generate_radar_bitmap(dfs, radar_subchans,
+						     num_subchans);
+	if (dfs_radar_bitmap &&
+	    dfs_is_ignore_radar_for_punctured_chans(dfs, dfs_radar_bitmap)) {
+		dfs_debug(dfs, WLAN_DEBUG_DFS_PUNCTURING,
+			  "Ignore NOL IE on punc channel - NOL Bitmap %x"
+			  " Cur chan Bitmap %x", dfs_radar_bitmap,
+			  dfs->dfs_curchan->dfs_ch_punc_pattern);
+		return true;
+	}
+
+	return false;
+}
+#else
+static inline bool
+dfs_check_and_ignore_nol_ie_on_punctured_chans(struct wlan_dfs *dfs,
+					       uint16_t *radar_subchans,
+					       uint8_t num_subchans)
+{
+	return false;
 }
 #endif
 
@@ -290,6 +283,11 @@ bool dfs_process_nol_ie_bitmap(struct wlan_dfs *dfs, uint8_t nol_ie_bandwidth,
 			dfs_get_radar_subchans_from_nol_ie(dfs, radar_subchans,
 							   nol_ie_startfreq,
 							   nol_ie_bitmap);
+	}
+
+	if (dfs_check_and_ignore_nol_ie_on_punctured_chans(dfs, radar_subchans,
+							   num_subchans)) {
+		return should_nol_ie_be_sent;
 	}
 
 	dfs_radar_add_channel_list_to_nol_for_freq(dfs, radar_subchans,

@@ -1388,6 +1388,13 @@ void dfs_handle_radar_puncturing(struct wlan_dfs *dfs,
 	if (*is_ignore_radar_puncture)
 		return;
 
+	if (!global_dfs_to_mlme.mlme_check_punc_sm_sanity ||
+	    !global_dfs_to_mlme.mlme_check_punc_sm_sanity(dfs->dfs_pdev_obj)) {
+		dfs_debug(dfs, WLAN_DEBUG_DFS_PUNCTURING,
+			  "Puncturing MLME sanity failed");
+		return;
+	}
+
 	dfs_total_radar_bitmap = dfs_curr_radar_bitmap |
 					dfs->dfs_curchan->dfs_ch_punc_pattern;
 
