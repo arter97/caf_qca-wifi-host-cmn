@@ -5849,6 +5849,7 @@ dp_peer_create_wifi3(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	struct dp_pdev *pdev;
 	enum cdp_txrx_ast_entry_type ast_type = CDP_TXRX_AST_TYPE_STATIC;
 	struct dp_vdev *vdev = NULL;
+	qdf_size_t peer_context_size;
 
 	if (!peer_mac_addr)
 		return QDF_STATUS_E_FAILURE;
@@ -5950,7 +5951,10 @@ dp_peer_create_wifi3(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	peer = (struct dp_peer *)qdf_mempool_alloc(soc->osdev,
 		soc->mempool_ol_ath_peer);
 #else
-	peer = (struct dp_peer *)qdf_mem_malloc(sizeof(*peer));
+	peer_context_size =
+		soc->arch_ops.txrx_get_context_size(DP_CONTEXT_TYPE_PEER);
+	if (peer_context_size)
+		peer = (struct dp_peer *)qdf_mem_malloc(peer_context_size);
 #endif
 	wlan_minidump_log(peer,
 			  sizeof(*peer),
