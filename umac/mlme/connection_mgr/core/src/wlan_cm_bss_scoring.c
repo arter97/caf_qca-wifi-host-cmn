@@ -3026,6 +3026,11 @@ void cm_print_candidate_list(qdf_list_t *candidate_list)
 		mlme_err("failed to get front of candidate_list");
 		return;
 	}
+
+	scan_entry = qdf_container_of(cur_node, struct scan_cache_node, node);
+	mlme_nofl_debug("Sorted candidate list for SSID: "QDF_SSID_FMT,
+			QDF_SSID_REF(scan_entry->entry->ssid.length,
+			scan_entry->entry->ssid.ssid));
 	while (cur_node) {
 		qdf_list_peek_next(candidate_list, cur_node, &next_node);
 
