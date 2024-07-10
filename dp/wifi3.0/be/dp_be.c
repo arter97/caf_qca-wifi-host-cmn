@@ -1783,6 +1783,7 @@ int dp_ppeds_register_msi_interrupts(struct dp_soc *soc, struct dp_srng *srng,
 	int irq = -1, ret = 0;
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
 	int pci_slot = pld_get_pci_slot(soc->osdev->dev);
+	int ds_node_id = be_soc->dp_ppeds_node_id;
 
 	srng->irq = -1;
 	irq = pld_get_msi_irq(soc->osdev->dev, vector);
@@ -1791,7 +1792,7 @@ int dp_ppeds_register_msi_interrupts(struct dp_soc *soc, struct dp_srng *srng,
 	if (ring_type == WBM2SW_RELEASE &&
 	    ring_num == WBM2_SW_PPE_REL_RING_ID) {
 		snprintf(be_soc->irq_name[2], DP_PPE_INTR_STRNG_LEN,
-			 "pci%d_ppe_wbm_rel", pci_slot);
+			 "pci%d_ppe_wbm_rel_%d", pci_slot, ds_node_id);
 
 		ret = pld_pfrm_request_irq(soc->osdev->dev, irq,
 					   dp_ppeds_handle_tx_comp,
@@ -1802,7 +1803,7 @@ int dp_ppeds_register_msi_interrupts(struct dp_soc *soc, struct dp_srng *srng,
 			goto fail;
 	} else if (ring_type == REO2PPE) {
 		snprintf(be_soc->irq_name[0], DP_PPE_INTR_STRNG_LEN,
-			 "pci%d_reo2ppe", pci_slot);
+			 "pci%d_reo2ppe_%d", pci_slot, ds_node_id);
 		ret = pld_pfrm_request_irq(soc->osdev->dev, irq,
 					   dp_ppe_ds_reo2ppe_irq_handler,
 					   IRQF_SHARED | IRQF_NO_SUSPEND,
@@ -1813,7 +1814,7 @@ int dp_ppeds_register_msi_interrupts(struct dp_soc *soc, struct dp_srng *srng,
 			goto fail;
 	} else if (ring_type == PPE2TCL) {
 		snprintf(be_soc->irq_name[1], DP_PPE_INTR_STRNG_LEN,
-			 "pci%d_ppe2tcl", pci_slot);
+			 "pci%d_ppe2tcl_%d", pci_slot, ds_node_id);
 		ret = pld_pfrm_request_irq(soc->osdev->dev, irq,
 					   dp_ppe_ds_ppe2tcl_irq_handler,
 					   IRQF_NO_SUSPEND,
