@@ -511,7 +511,6 @@ QDF_STATUS hif_ahb_enable_bus(struct hif_softc *ol_sc,
 
 	if (target_type == TARGET_TYPE_QCN6122 ||
 	    target_type == TARGET_TYPE_QCN9160 ||
-	    target_type == TARGET_TYPE_QCA5424 ||
 	    target_type == TARGET_TYPE_QCN6432) {
 		hif_update_irq_ops_with_pci(ol_sc);
 	} else {
