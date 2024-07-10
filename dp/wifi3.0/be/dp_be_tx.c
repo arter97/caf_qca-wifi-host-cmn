@@ -2429,6 +2429,9 @@ more_data:
 							hal_ring_hdl,
 							num_avail_for_reap);
 
+	/* get tx_desc pool from first sw desc */
+	tx_desc_pool = dp_get_tx_desc_pool_wrapper(soc);
+
 	/* Find head descriptor from completion ring */
 	while (qdf_likely(num_avail_for_reap--)) {
 		tx_comp_hal_desc =  dp_srng_dst_get_next(soc, hal_ring_hdl);
@@ -2450,11 +2453,6 @@ more_data:
 		dp_tx_comp_proto_stats_update(soc, tx_desc, ring_id);
 		tx_desc->buffer_src = buffer_src;
 
-		/* get tx_desc pool from first sw desc */
-		if (!tx_desc_pool) {
-			tx_desc_pool = dp_get_tx_desc_pool(soc,
-							   tx_desc->pool_id);
-		}
 		/*
 		 * If the release source is FW, process the HTT status
 		 */
