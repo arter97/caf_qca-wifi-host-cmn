@@ -387,6 +387,9 @@ mgmt_get_pdpa_action_subtype(uint8_t action_code)
 	enum mgmt_frame_type frm_type;
 
 	switch (action_code) {
+	case PDPA_ACTION_VENDOR_SPECIFIC:
+		frm_type = MGMT_ACTION_VENDOR_SPECIFIC;
+		break;
 	case PDPA_GAS_INIT_REQ:
 		frm_type = MGMT_ACTION_PDPA_GAS_INIT_REQ;
 		break;
