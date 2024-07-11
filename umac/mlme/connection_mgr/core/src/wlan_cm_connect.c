@@ -2375,9 +2375,6 @@ QDF_STATUS cm_try_next_candidate(struct cnx_mgr *cm_ctx,
 	if (QDF_IS_STATUS_ERROR(status))
 		goto connect_err;
 
-	mlme_nofl_debug("cm_id: 0x%x Trying with next candidate as connect failed with "QDF_MAC_ADDR_FMT" reason: %d",
-			resp->cm_id, QDF_MAC_ADDR_REF(resp->bssid.bytes),
-			resp->reason);
 	/*
 	 * cached the first failure response if candidate is different from
 	 * previous.
@@ -2388,6 +2385,9 @@ QDF_STATUS cm_try_next_candidate(struct cnx_mgr *cm_ctx,
 	if (!same_candidate_used) {
 		cm_store_first_candidate_rsp(cm_ctx, resp->cm_id, resp);
 		mlme_cm_osif_failed_candidate_ind(cm_ctx->vdev, resp);
+		mlme_nofl_debug(CM_PREFIX_FMT "Try with next candidate " QDF_MAC_ADDR_FMT,
+				CM_PREFIX_REF(resp->vdev_id, resp->cm_id),
+				QDF_MAC_ADDR_REF(cm_req->connect_req.cur_candidate->entry->bssid.bytes));
 	}
 
 	cm_update_ser_timer_for_new_candidate(cm_ctx, resp->cm_id);
@@ -2679,10 +2679,58 @@ void cm_update_per_peer_crypto_params(struct wlan_objmgr_vdev *vdev,
 	cm_update_per_peer_ucastcipher_crypto_params(vdev, neg_sec_info);
 }
 
+/*
+ * Buffer len size to add the dynamic connect req debug info
+ * 8 (hidden info) + 19 (OWE info) + 5 (WPS) + 6 (OSEN) +
+ * 14 (RSN OVERRIDE) + 31 (ML info) + 10 extra
+ */
+#define CM_DUMP_MAX_LEN 93
+
+static void cm_dump_connect_req(struct wlan_objmgr_psoc *psoc,
+				struct wlan_objmgr_vdev *vdev,
+				struct wlan_cm_vdev_connect_req *req,
+				struct cm_connect_req *conn_req,
+				struct security_info *neg_sec_info)
+{
+	char log_str[CM_DUMP_MAX_LEN] = {0};
+	uint32_t str_len = CM_DUMP_MAX_LEN;
+	uint8_t country_code[REG_ALPHA2_LEN + 1] = {0};
+	uint32_t len = 0;
+
+	if (util_scan_entry_is_hidden_ap(req->bss->entry))
+		len += qdf_scnprintf(log_str + len, str_len - len, "[hidden]");
+	if (req->owe_trans_ssid.length)
+		len += qdf_scnprintf(log_str + len, str_len - len,
+				     "[OWE wildcard ssid]");
+	if (req->is_wps_connection)
+		len += qdf_scnprintf(log_str + len, str_len - len, "[WPS]");
+	if (req->is_osen_connection)
+		len += qdf_scnprintf(log_str + len, str_len - len, "[OSEN]");
+	if (req->force_rsne_override)
+		len += qdf_scnprintf(log_str + len, str_len - len,
+				     "[RSN OVERRIDE]");
+	if (wlan_vdev_mlme_is_mlo_vdev(vdev))
+		len += util_scan_get_ml_info(req->bss->entry, log_str,
+					     str_len, len);
+	wlan_reg_get_cc_and_src(psoc, country_code);
+	mlme_nofl_info(CM_PREFIX_FMT "Connecting to " QDF_SSID_FMT " " QDF_MAC_ADDR_FMT " rssi %d freq %d phymode %d akm 0x%x uc 0x%x mc 0x%x, CC: %c%c %s",
+		       CM_PREFIX_REF(req->vdev_id, req->cm_id),
+		       QDF_SSID_REF(conn_req->req.ssid.length,
+				    conn_req->req.ssid.ssid),
+		       QDF_MAC_ADDR_REF(req->bss->entry->bssid.bytes),
+		       req->bss->entry->rssi_raw,
+		       req->bss->entry->channel.chan_freq,
+		       req->bss->entry->phy_mode,
+		       neg_sec_info->key_mgmt, neg_sec_info->ucastcipherset,
+		       neg_sec_info->mcastcipherset,
+		       country_code[0],
+		       country_code[1], log_str);
+}
+
 QDF_STATUS
 cm_resume_connect_after_peer_create(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 {
-	struct wlan_cm_vdev_connect_req req;
+	struct wlan_cm_vdev_connect_req req = {0};
 	struct cm_req *cm_req;
 	QDF_STATUS status;
 	struct security_info *neg_sec_info;
@@ -2691,7 +2739,6 @@ cm_resume_connect_after_peer_create(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 	struct cm_connect_req *conn_req = NULL;
 
 	psoc = wlan_pdev_get_psoc(wlan_vdev_get_pdev(cm_ctx->vdev));
-
 	cm_req = cm_get_req_by_cm_id(cm_ctx, *cm_id);
 	if (!cm_req)
 		return QDF_STATUS_E_FAILURE;
@@ -2741,25 +2788,10 @@ cm_resume_connect_after_peer_create(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 
 	neg_sec_info = &cm_req->connect_req.cur_candidate->entry->neg_sec_info;
 	if (util_scan_entry_is_hidden_ap(req.bss->entry) &&
-	    QDF_HAS_PARAM(neg_sec_info->key_mgmt, WLAN_CRYPTO_KEY_MGMT_OWE)) {
-		mlme_debug(CM_PREFIX_FMT "OWE transition candidate has wildcard ssid",
-			   CM_PREFIX_REF(req.vdev_id, req.cm_id));
+	    QDF_HAS_PARAM(neg_sec_info->key_mgmt, WLAN_CRYPTO_KEY_MGMT_OWE))
 		req.owe_trans_ssid = cm_req->connect_req.req.ssid;
-	}
 
-	wlan_reg_get_cc_and_src(psoc, country_code);
-	mlme_nofl_info(CM_PREFIX_FMT "Connecting to " QDF_SSID_FMT " " QDF_MAC_ADDR_FMT " rssi: %d freq: %d akm 0x%x cipher: uc 0x%x mc 0x%x, wps %d osen %d force RSN %d CC: %c%c",
-		       CM_PREFIX_REF(req.vdev_id, req.cm_id),
-		       QDF_SSID_REF(cm_req->connect_req.req.ssid.length,
-				    cm_req->connect_req.req.ssid.ssid),
-		       QDF_MAC_ADDR_REF(req.bss->entry->bssid.bytes),
-		       req.bss->entry->rssi_raw,
-		       req.bss->entry->channel.chan_freq,
-		       neg_sec_info->key_mgmt, neg_sec_info->ucastcipherset,
-		       neg_sec_info->mcastcipherset, req.is_wps_connection,
-		       req.is_osen_connection, req.force_rsne_override,
-		       country_code[0],
-		       country_code[1]);
+	cm_dump_connect_req(psoc, cm_ctx->vdev, &req, conn_req, neg_sec_info);
 	cm_cp_stats_cstats_log_connecting_event(cm_ctx->vdev, &req, cm_req);
 connect_req:
 	status = mlme_cm_connect_req(cm_ctx->vdev, &req);
