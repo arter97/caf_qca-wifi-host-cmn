@@ -223,6 +223,19 @@ enum wlan_ipa_wdi_opt_dpath_resp_code {
 };
 
 /**
+ * enum wlan_ipa_opt_dp_ctrl_add_resp: filter add response
+ * in opt_dp_ctrl
+ * @WLAN_IPA_CTRL_FLT_ADD_INPROGRESS: flt add inprogress
+ * @WLAN_IPA_CTRL_FLT_ADD_SUCCESS: flt add success
+ * @WLAN_IPA_CTRL_FLT_ADD_FAILURE: flt add failure
+ */
+enum wlan_ipa_opt_dp_ctrl_add_resp {
+	WLAN_IPA_CTRL_FLT_ADD_INPROGRESS = 0,
+	WLAN_IPA_CTRL_FLT_ADD_SUCCESS = 1,
+	WLAN_IPA_CTRL_FLT_ADD_FAILURE = 2
+};
+
+/**
  * struct llc_snap_hdr - LLC snap header
  * @dsap: Destination service access point
  * @ssap: Source service access point

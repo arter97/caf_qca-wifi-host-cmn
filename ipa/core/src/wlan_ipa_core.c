@@ -62,6 +62,8 @@
 #define WLAN_IPA_FLAG_MSG_USES_LIST 0x1
 #define WLAN_IPA_FLAG_MSG_USES_LIST_FLT_DEL 0x2
 #define WLAN_IPA_FLT_DEL_WAIT_TIMEOUT_MS 200
+#define WLAN_IPA_CTRL_FLT_ADD_WAIT_TIMEOUT_MS 10
+#define WLAN_IPA_CTRL_FLT_ADD_WAIT_COUNT 20
 
 static struct wlan_ipa_priv *gp_ipa;
 static void wlan_ipa_set_pending_tx_timer(struct wlan_ipa_priv *ipa_ctx);
@@ -4588,6 +4590,12 @@ static inline int wlan_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
 {
 	return 0;
 }
+
+static inline
+bool wlan_ipa_opt_dp_ctrl_flt_add_status(struct wlan_ipa_priv *ipa_obj, int hdl)
+{
+	return false;
+}
 #endif
 
 #ifdef IPA_OPT_WIFI_DP
@@ -4643,6 +4651,32 @@ static inline QDF_STATUS __wlan_ipa_reg_flt_cbs(
 		ipa_ctx->opt_wifi_datapath_ctrl = true;
 
 	return status;
+}
+
+static inline
+bool wlan_ipa_opt_dp_ctrl_flt_add_status(struct wlan_ipa_priv *ipa_obj, int hdl)
+{
+	struct wifi_dp_tx_flt_setup *dp_flt_params = NULL;
+	int wait_count = 0;
+	int index;
+
+	dp_flt_params = &ipa_obj->dp_tx_super_rule_flt_param;
+	index = hdl - WLAN_HDL_TX_FILTER1;
+	while (dp_flt_params->flt_addr_params[index].ipa_flt_add_success ==
+	       WLAN_IPA_CTRL_FLT_ADD_INPROGRESS) {
+		qdf_sleep(WLAN_IPA_CTRL_FLT_ADD_WAIT_TIMEOUT_MS);
+		wait_count++;
+		if (wait_count > WLAN_IPA_CTRL_FLT_ADD_WAIT_COUNT) {
+			ipa_err("opt_dp_ctrl, filter add failure");
+			break;
+		}
+	}
+
+	if (dp_flt_params->flt_addr_params[index].ipa_flt_add_success ==
+	    WLAN_IPA_CTRL_FLT_ADD_SUCCESS)
+		return true;
+
+	return false;
 }
 
 #ifdef IPA_WDI_OPT_DPATH_CTRL_VER_V2
@@ -4805,18 +4839,24 @@ void wlan_ipa_ctrl_flt_db_deinit(struct wlan_ipa_priv *ipa_obj)
 {
 	struct wifi_dp_tx_flt_setup *dp_flt_params = NULL;
 	int i;
+	bool add_status;
 
 	dp_flt_params = &ipa_obj->dp_tx_super_rule_flt_param;
 	for (i = 0; i < TX_SUPER_RULE_SETUP_NUM; i++) {
 		if (dp_flt_params->flt_addr_params[i].ipa_flt_in_use) {
-			ipa_debug("opt_dp_ctrl: handle deleted on SSR event - %d",
-				  dp_flt_params->flt_addr_params[i].flt_hdl);
+			add_status = wlan_ipa_opt_dp_ctrl_flt_add_status(
+				   ipa_obj,
+				   dp_flt_params->flt_addr_params[i].flt_hdl);
 			dp_flt_params->flt_addr_params[i].ipa_flt_in_use = 0;
-			if (!ipa_obj->ipa_opt_dp_ctrl_debug)
+			if (add_status && !ipa_obj->ipa_opt_dp_ctrl_debug) {
+				ipa_debug(
+				    "opt_dp_ctrl: handle deleted on SSR event - %d",
+				    dp_flt_params->flt_addr_params[i].flt_hdl);
 				wlan_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
 				  ipa_obj->hdl,
 				  dp_flt_params->flt_addr_params[i].flt_hdl,
 				  WLAN_IPA_WDI_OPT_DPATH_RESP_SUCCESS_SSR);
+			}
 		}
 	}
 }
@@ -4839,7 +4879,8 @@ void wlan_ipa_opt_dp_deinit(struct wlan_ipa_priv *ipa_ctx)
 		qdf_runtime_lock_deinit(&ipa_ctx->opt_dp_runtime_lock);
 	}
 
-	if (ipa_ctx->opt_wifi_datapath_ctrl)
+	if (ipa_ctx->opt_wifi_datapath_ctrl &&
+	    ipa_ctx->opt_dp_ctrl_ssr)
 		wlan_ipa_ctrl_flt_db_deinit(ipa_ctx);
 
 	if (cdp_ipa_get_smmu_mapped(ipa_ctx->dp_soc) ||
@@ -5254,6 +5295,7 @@ static void wlan_ipa_uc_op_cb(struct op_msg_type *op_msg,
 {
 	struct op_msg_type *msg = op_msg;
 	struct ipa_uc_fw_stats *uc_fw_stat;
+	bool add_status;
 
 	if (!ipa_ctx || !op_msg) {
 		ipa_err("INVALID ARG");
@@ -5369,15 +5411,20 @@ static void wlan_ipa_uc_op_cb(struct op_msg_type *op_msg,
 					   msg->nbuf);
 		qdf_mutex_release(&ipa_ctx->ipa_lock);
 	} else if (msg->op_code == WLAN_IPA_CTRL_FILTER_DEL_NOTIFY) {
-		ipa_info("opt_dp_ctrl: IPA notify filter del response: %d, hdl: %d",
-			 msg->rsvd_snd, msg->ctrl_del_hdl);
-		qdf_mutex_acquire(&ipa_ctx->ipa_lock);
-		if (!ipa_ctx->ipa_opt_dp_ctrl_debug)
+		add_status = wlan_ipa_opt_dp_ctrl_flt_add_status(
+							ipa_ctx,
+							msg->ctrl_del_hdl);
+		if (add_status && !ipa_ctx->ipa_opt_dp_ctrl_debug) {
+			ipa_info("opt_dp_ctrl: IPA notify filter del response: %d, hdl: %d",
+				 msg->rsvd_snd, msg->ctrl_del_hdl);
+			qdf_mutex_acquire(&ipa_ctx->ipa_lock);
 			wlan_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
 							ipa_ctx->hdl,
 							msg->ctrl_del_hdl,
 							msg->rsvd_snd);
-		qdf_mutex_release(&ipa_ctx->ipa_lock);
+			qdf_mutex_release(&ipa_ctx->ipa_lock);
+		}
+
 	} else if (msg->op_code == WLAN_IPA_SMMU_MAP) {
 		ipa_info("opt_dp: IPA smmu pool map");
 		qdf_mutex_acquire(&ipa_ctx->ipa_lock);
@@ -6496,6 +6543,9 @@ void dp_ipa_clean_tx_filter_db(struct wlan_ipa_priv *ipa_obj, bool indices[])
 	for (i = 0; i < IPA_WDI_MAX_TX_FILTER; i++) {
 		if (!indices[i])
 			continue;
+
+		dp_flt_params->flt_addr_params[i].ipa_flt_add_success =
+			WLAN_IPA_CTRL_FLT_ADD_FAILURE;
 		dp_flt_params->flt_addr_params[i].valid = 0;
 		qdf_mem_zero(dp_flt_params->flt_addr_params[i].
 			     src_ipv4_addr,
@@ -6545,6 +6595,12 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_add_cb(
 	htc_handle = lmac_get_htc_hdl(psoc);
 	if (!htc_handle) {
 		ipa_err("HTC Handle is null");
+		return QDF_STATUS_FILT_REQ_ERROR;
+	}
+
+	if (ipa_obj->opt_dp_ctrl_ssr ||
+	    ipa_obj->opt_dp_ctrl_wlan_shutdown) {
+		ipa_debug("opt_dp_ctrl, reject flt addition while ssr or shutdown");
 		return QDF_STATUS_FILT_REQ_ERROR;
 	}
 
@@ -6599,6 +6655,8 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_add_cb(
 					ipa_flt->flt_info[flt].dport;
 		dp_flt_param->flt_addr_params[i].l4_type =
 					ipa_flt->flt_info[flt].protocol;
+		dp_flt_param->flt_addr_params[i].ipa_flt_add_success =
+			WLAN_IPA_CTRL_FLT_ADD_INPROGRESS;
 		indices[i] = true;
 		ipa_debug("opt_dp_ctrl: handle assigned to filter %u",
 			  ipa_flt->flt_info[flt].out_hdl);
@@ -6691,7 +6749,12 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_add_cb(
 	ipa_debug("opt_dp_ctrl: op %d, pdev_id %d. num_flts %d",
 		  dp_flt_param->op, dp_flt_param->pdev_id, num_flts);
 
-	cdp_ipa_tx_super_rule_setup(ipa_obj->dp_soc, dp_flt_param);
+	if (!ipa_obj->opt_dp_ctrl_ssr &&
+	    !ipa_obj->opt_dp_ctrl_wlan_shutdown) {
+		cdp_ipa_tx_super_rule_setup(ipa_obj->dp_soc, dp_flt_param);
+	} else {
+		goto clean_db;
+	}
 
 	status = qdf_wait_single_event(&ipa_obj->ipa_ctrl_flt_evnt,
 				       DP_MAX_SLEEP_TIME);
@@ -6708,6 +6771,13 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_add_cb(
 		ipa_debug("opt_dp_ctrl: clean Host DB due to filter add failure");
 		goto clean_db;
 	}
+
+	for (i = 0; i < IPA_WDI_MAX_TX_FILTER; i++) {
+		if (indices[i])
+			dp_flt_param->flt_addr_params[i].ipa_flt_add_success =
+						WLAN_IPA_CTRL_FLT_ADD_SUCCESS;
+	}
+
 	return status;
 
 clean_db:
@@ -7019,8 +7089,11 @@ void wlan_ipa_wdi_opt_dpath_ctrl_notify_flt_delete(struct filter_response
 
 		if (dp_flt_params->flt_addr_params[j].req_src ==
 				WLAN_IPA_CTRL_FLT_DEL_SRC_SHUTDOWN) {
-			ipa_debug("opt_dp_ctrl, flt delete due to shutdown");
+			ipa_debug("opt_dp_ctrl, flt hdl %d delete due to shutdown",
+				  hdl);
 			code = WLAN_IPA_WDI_OPT_DPATH_RESP_SUCCESS_SHUTDOWN;
+			dp_flt_params->flt_addr_params[i].ipa_flt_in_use =
+							false;
 		}
 
 		uc_op_work->flag |= WLAN_IPA_FLAG_MSG_USES_LIST_FLT_DEL;
