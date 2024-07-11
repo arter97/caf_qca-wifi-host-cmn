@@ -1576,6 +1576,91 @@ done:
 	return qdf_status_to_os_return(rv);
 }
 
+#ifdef FEATURE_SINGLE_MSI
+static int hif_configure_irq_wrapper(struct hif_softc *scn, bool *irq_config)
+{
+	int status;
+	struct hif_pci_softc *sc = HIF_GET_PCI_SOFTC(scn);
+
+	status = hif_configure_irq(scn);
+	if (status < 0) {
+		*irq_config = false;
+		return status;
+	}
+
+	*irq_config = true;
+	if (sc->single_msi_enabled) {
+		hif_pci_device_reset(sc);
+		hif_pci_device_warm_reset(sc);
+	}
+	return status;
+}
+
+static int hif_configure_single_msi(struct hif_softc *scn)
+{
+	int ret, rv, num_msi_desired;
+	struct hif_pci_softc *sc = HIF_GET_PCI_SOFTC(scn);
+
+	hif_info("%s: E", __func__);
+
+	num_msi_desired = 1; /* Only Single MSI */
+
+	rv = hif_pci_enable_msi(sc, num_msi_desired);
+
+	hif_info("%s: num_msi_desired = %d, available_msi = %d",
+		  __func__, num_msi_desired, rv);
+
+	if (rv >= 0) {
+		hif_info("%s: use single msi", __func__);
+
+		tasklet_init(&sc->intr_tq, wlan_tasklet, (unsigned long)sc);
+		ret = request_irq(sc->pdev->irq,
+				  hif_pci_legacy_ce_interrupt_handler,
+				  IRQF_SHARED, "wlan_pci", sc);
+		if (ret) {
+			hif_err("%s: request_irq failed", __func__);
+			goto err_intr;
+		}
+		sc->num_msi_intrs = 1;
+		sc->irq = sc->pdev->irq;
+		sc->single_msi_enabled = true;
+	} else {
+		sc->num_msi_intrs = 0;
+		ret = -EIO;
+		hif_err("%s: do not support MSI, rv = %d", __func__, rv);
+	}
+
+	if (ret == 0) {
+		hif_write32_mb(sc, sc->mem + (SOC_CORE_BASE_ADDRESS |
+			       PCIE_INTR_ENABLE_ADDRESS),
+			       HOST_GROUP0_MASK);
+		hif_write32_mb(sc, sc->mem +
+			       PCIE_LOCAL_BASE_ADDRESS + PCIE_SOC_WAKE_ADDRESS,
+			       PCIE_SOC_WAKE_RESET);
+	}
+	hif_info("%s: X, ret = %d", __func__, ret);
+
+	return ret;
+
+err_intr:
+	if (sc->num_msi_intrs == 1)
+		hif_pci_disable_msi(sc);
+
+	return ret;
+}
+#else
+static int hif_configure_irq_wrapper(struct hif_softc *scn, bool *irq_config)
+{
+	*irq_config = false;
+	return 0;
+}
+
+static int hif_configure_single_msi(struct hif_softc *scn)
+{
+	return -EINVAL;
+}
+#endif /* FEATURE_SINGLE_MSI */
+
 /**
  * hif_bus_configure() - configure the pcie bus
  * @hif_sc: pointer to the hif context.
@@ -1587,6 +1672,7 @@ int hif_pci_bus_configure(struct hif_softc *hif_sc)
 	int status = 0;
 	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(hif_sc);
 	struct hif_opaque_softc *hif_osc = GET_HIF_OPAQUE_HDL(hif_sc);
+	bool irq_config_done = false;
 
 	hif_ce_prepare_config(hif_sc);
 
@@ -1642,6 +1728,20 @@ int hif_pci_bus_configure(struct hif_softc *hif_sc)
 		hif_sc->per_ce_irq = true;
 	}
 
+	if (hif_sc->target_info.target_type == TARGET_TYPE_AR6320V2) {
+		/*
+		 * for ROME chip, need do chip cold/warm reset actions after
+		 * hif_configure_irq(), otherwise host side can't receive
+		 * interrupt, then the initialization fail. At the same time,
+		 * once do the cold/warm reset, the configured CE would be
+		 * invalid. Make sure chip cold/warm reset is done before
+		 * hif_config_ce().
+		 */
+		status = hif_configure_irq_wrapper(hif_sc, &irq_config_done);
+		if (status < 0)
+			goto disable_wlan;
+	}
+
 	status = hif_config_ce(hif_sc);
 	if (status)
 		goto disable_wlan;
@@ -1663,7 +1763,7 @@ int hif_pci_bus_configure(struct hif_softc *hif_sc)
 	     (hif_sc->target_info.target_type == TARGET_TYPE_QCA6018)) &&
 	    (hif_sc->bus_type == QDF_BUS_TYPE_PCI))
 		hif_debug("Skip irq config for PCI based 8074 target");
-	else {
+	else if (!irq_config_done) {
 		status = hif_configure_irq(hif_sc);
 		if (status < 0)
 			goto unconfig_ce;
@@ -1831,7 +1931,22 @@ static void hif_pci_deinit_nopld(struct hif_pci_softc *sc)
 	pci_disable_device(sc->pdev);
 }
 
-static void hif_pci_deinit_pld(struct hif_pci_softc *sc) {}
+static void hif_pci_deinit_pld(struct hif_pci_softc *sc)
+{
+	if (sc->single_msi_enabled) {
+		/*
+		 * In pld condition, hif_pci_deinit_pld is
+		 * a common function for multi/single MSI.
+		 * For multi MSI, CNSS side take over PCI
+		 * MSI free, but not for single MSI. So
+		 * make sure pci_disable_msi() not called
+		 * two times for multi MSI. and also have
+		 * free action for single MSI.
+		 */
+		hif_pci_disable_msi(sc);
+		sc->single_msi_enabled = false;
+	}
+}
 
 static void hif_disable_pci(struct hif_pci_softc *sc)
 {
@@ -3210,6 +3325,10 @@ int hif_configure_irq(struct hif_softc *scn)
 	if (ret == 0) {
 		goto end;
 	}
+
+	ret = hif_configure_single_msi(scn);
+	if (ret == 0)
+		goto end;
 
 	switch (scn->target_info.target_type) {
 	case TARGET_TYPE_IPQ4019:
