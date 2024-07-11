@@ -225,6 +225,18 @@ static inline void dp_rx_schedule_refill_thread(struct dp_soc *soc) { }
 
 #ifdef DP_FEATURE_RX_BUFFER_RECYCLE
 /**
+ * dp_rx_page_pool_resize() - Resize page pool dynamically
+ *
+ * @soc: SoC handle
+ * @pool_id: page pool id
+ * @new_size: new size of the page pool
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_rx_page_pool_resize(struct dp_soc *soc, uint32_t pool_id,
+				  size_t new_size);
+
+/**
  * dp_rx_page_pool_nbuf_alloc_and_map() - Allocate and map NBUF from page pool
  *
  * @soc: SoC handle
@@ -278,6 +290,22 @@ void dp_rx_page_pool_free(struct dp_soc *soc, uint32_t pool_id);
 QDF_STATUS dp_rx_page_pool_alloc(struct dp_soc *soc, uint32_t pool_id,
 				 uint32_t pool_size);
 #else
+/**
+ * dp_rx_page_pool_resize() - Resize page pool dynamically
+ *
+ * @soc: SoC handle
+ * @pool_id: page pool id
+ * @new_size: new size of the page pool
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS
+dp_rx_page_pool_resize(struct dp_soc *soc, uint32_t pool_id,
+		       size_t new_size)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
 /**
  * dp_rx_page_pool_nbuf_alloc_and_map() - Allocate and map NBUF from page pool
  *

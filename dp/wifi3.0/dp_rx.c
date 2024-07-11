@@ -3434,12 +3434,6 @@ dp_rx_pdev_desc_pool_alloc(struct dp_pdev *pdev)
 	if (status != QDF_STATUS_SUCCESS)
 		return status;
 
-	status = dp_rx_page_pool_alloc(soc, mac_for_pdev, rx_sw_desc_num);
-	if (!QDF_IS_STATUS_SUCCESS(status)) {
-		dp_info("Failed to allocate RX buffer page pools, use conventional method");
-		status =  QDF_STATUS_SUCCESS;
-	}
-
 	return status;
 }
 
@@ -3451,7 +3445,6 @@ void dp_rx_pdev_desc_pool_free(struct dp_pdev *pdev)
 
 	rx_desc_pool = &soc->rx_desc_buf[mac_for_pdev];
 
-	dp_rx_page_pool_free(soc, mac_for_pdev);
 	dp_rx_desc_pool_free(soc, rx_desc_pool);
 }
 
@@ -3508,9 +3501,9 @@ QDF_STATUS dp_rx_pdev_desc_pool_init(struct dp_pdev *pdev)
 	dp_rx_desc_pool_init(soc, mac_for_pdev,
 			     rx_sw_desc_num, rx_desc_pool);
 
-	ret = dp_rx_page_pool_init(soc, mac_for_pdev);
+	ret = dp_rx_page_pool_alloc(soc, mac_for_pdev, rx_sw_desc_num);
 	if (!QDF_IS_STATUS_SUCCESS(ret))
-		dp_info("Failed to initialize RX buffer page pools, use conventional method");
+		dp_info("Failed to alloc RX buffer page pools, use conventional method");
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -3523,7 +3516,7 @@ void dp_rx_pdev_desc_pool_deinit(struct dp_pdev *pdev)
 
 	rx_desc_pool = &soc->rx_desc_buf[mac_for_pdev];
 
-	dp_rx_page_pool_deinit(soc, mac_for_pdev);
+	dp_rx_page_pool_free(soc, mac_for_pdev);
 	dp_rx_desc_pool_deinit(soc, rx_desc_pool, mac_for_pdev);
 }
 

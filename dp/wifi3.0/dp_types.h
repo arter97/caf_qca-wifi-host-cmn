@@ -1788,6 +1788,9 @@ struct dp_rx_page_pool {
 	struct dp_rx_pp_params aux_pool;
 	uint8_t active_pp_idx;
 	qdf_spinlock_t pp_lock;
+	size_t curr_pool_size;
+	size_t base_pool_size;
+	qdf_atomic_t update_in_progress;
 };
 #endif
 
