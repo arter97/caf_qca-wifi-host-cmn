@@ -649,6 +649,189 @@ int qdf_mem_cmp(const void *left, const void *right, size_t size);
  */
 void qdf_ether_addr_copy(void *dst_addr, const void *src_addr);
 
+#ifdef CONFIG_WLAN_SYSFS_MEM_STATS
+/**
+ * qdf_mem_skb_inc() - increment total skb allocation size
+ * @size: size to be added
+ *
+ * Return: none
+ */
+void qdf_mem_skb_inc(qdf_size_t size);
+
+/**
+ * qdf_mem_skb_dec() - decrement total skb allocation size
+ * @size: size to be decremented
+ *
+ * Return: none
+ */
+void qdf_mem_skb_dec(qdf_size_t size);
+
+/**
+ * qdf_mem_skb_total_inc() - increment total skb allocation size
+ * in host driver in both debug and perf builds
+ * @size: size to be added
+ *
+ * Return: none
+ */
+void qdf_mem_skb_total_inc(qdf_size_t size);
+
+/**
+ * qdf_mem_skb_total_dec() - decrement total skb allocation size
+ * in the host driver in debug and perf flavors
+ * @size: size to be decremented
+ *
+ * Return: none
+ */
+void qdf_mem_skb_total_dec(qdf_size_t size);
+
+/**
+ * qdf_mem_dp_tx_skb_inc() - Increment Tx skb allocation size
+ * @size: size to be added
+ *
+ * Return: none
+ */
+void qdf_mem_dp_tx_skb_inc(qdf_size_t size);
+
+/**
+ * qdf_mem_dp_tx_skb_dec() - Decrement Tx skb allocation size
+ * @size: size to be decreased
+ *
+ * Return: none
+ */
+void qdf_mem_dp_tx_skb_dec(qdf_size_t size);
+
+/**
+ * qdf_mem_dp_rx_skb_inc() - Increment Rx skb allocation size
+ * @size: size to be added
+ *
+ * Return: none
+ */
+void qdf_mem_dp_rx_skb_inc(qdf_size_t size);
+
+/**
+ * qdf_mem_dp_rx_skb_dec() - Decrement Rx skb allocation size
+ * @size: size to be decreased
+ *
+ * Return: none
+ */
+void qdf_mem_dp_rx_skb_dec(qdf_size_t size);
+
+/**
+ * qdf_mem_dp_tx_skb_cnt_inc() - Increment Tx buffer count
+ *
+ * Return: none
+ */
+void qdf_mem_dp_tx_skb_cnt_inc(void);
+
+/**
+ * qdf_mem_dp_tx_skb_cnt_dec() - Decrement Tx buffer count
+ *
+ * Return: none
+ */
+void qdf_mem_dp_tx_skb_cnt_dec(void);
+
+/**
+ * qdf_mem_dp_rx_skb_cnt_inc() - Increment Rx buffer count
+ *
+ * Return: none
+ */
+void qdf_mem_dp_rx_skb_cnt_inc(void);
+
+/**
+ * qdf_mem_dp_rx_skb_cnt_dec() - Decrement Rx buffer count
+ *
+ * Return: none
+ */
+void qdf_mem_dp_rx_skb_cnt_dec(void);
+
+/**
+ * __qdf_mem_record_nbuf_nbytes() - add or subtract the size of the nbuf
+ * from the total skb mem and DP tx/rx skb mem
+ * @nbytes: number of bytes
+ * @dir: direction
+ * @is_mapped: is mapped or unmapped memory
+ *
+ * Return: none
+ */
+static inline void __qdf_mem_record_nbuf_nbytes(
+	int nbytes, qdf_dma_dir_t dir, bool is_mapped)
+{
+	if (is_mapped) {
+		if (dir == QDF_DMA_TO_DEVICE) {
+			qdf_mem_dp_tx_skb_cnt_inc();
+			qdf_mem_dp_tx_skb_inc(nbytes);
+		} else if (dir == QDF_DMA_FROM_DEVICE) {
+			qdf_mem_dp_rx_skb_cnt_inc();
+			qdf_mem_dp_rx_skb_inc(nbytes);
+		}
+		qdf_mem_skb_total_inc(nbytes);
+	} else {
+		if (dir == QDF_DMA_TO_DEVICE) {
+			qdf_mem_dp_tx_skb_cnt_dec();
+			qdf_mem_dp_tx_skb_dec(nbytes);
+		} else if (dir == QDF_DMA_FROM_DEVICE) {
+			qdf_mem_dp_rx_skb_cnt_dec();
+			qdf_mem_dp_rx_skb_dec(nbytes);
+		}
+		qdf_mem_skb_total_dec(nbytes);
+	}
+}
+#else
+
+static inline void qdf_mem_skb_inc(qdf_size_t size)
+{
+}
+
+static inline void qdf_mem_skb_dec(qdf_size_t size)
+{
+}
+
+static inline void qdf_mem_skb_total_inc(qdf_size_t size)
+{
+}
+
+static inline void qdf_mem_skb_total_dec(qdf_size_t size)
+{
+}
+
+static inline void qdf_mem_dp_tx_skb_inc(qdf_size_t size)
+{
+}
+
+static inline void qdf_mem_dp_tx_skb_dec(qdf_size_t size)
+{
+}
+
+static inline void qdf_mem_dp_rx_skb_inc(qdf_size_t size)
+{
+}
+
+static inline void qdf_mem_dp_rx_skb_dec(qdf_size_t size)
+{
+}
+
+static inline void qdf_mem_dp_tx_skb_cnt_inc(void)
+{
+}
+
+static inline void qdf_mem_dp_tx_skb_cnt_dec(void)
+{
+}
+
+static inline void qdf_mem_dp_rx_skb_cnt_inc(void)
+{
+}
+
+static inline void qdf_mem_dp_rx_skb_cnt_dec(void)
+{
+}
+
+static inline void __qdf_mem_record_nbuf_nbytes(
+	int nbytes, qdf_dma_dir_t dir, bool is_mapped)
+{
+}
+#endif /* CONFIG_WLAN_SYSFS_MEM_STATS */
+
 /**
  * qdf_mem_map_nbytes_single - Map memory for DMA
  * @osdev: pomter OS device context
@@ -664,7 +847,14 @@ static inline uint32_t qdf_mem_map_nbytes_single(qdf_device_t osdev, void *buf,
 						 qdf_dma_addr_t *phy_addr)
 {
 #if defined(HIF_PCI) || defined(HIF_IPCI)
-	return __qdf_mem_map_nbytes_single(osdev, buf, dir, nbytes, phy_addr);
+	QDF_STATUS ret;
+
+	ret = __qdf_mem_map_nbytes_single(osdev, buf, dir, nbytes, phy_addr);
+
+	if (QDF_IS_STATUS_SUCCESS(ret))
+		__qdf_mem_record_nbuf_nbytes(nbytes, dir, true);
+
+	return ret;
 #else
 	return 0;
 #endif
@@ -693,6 +883,7 @@ static inline void qdf_mem_unmap_nbytes_single(qdf_device_t osdev,
 					       int nbytes)
 {
 #if defined(HIF_PCI) || defined(HIF_IPCI)
+	__qdf_mem_record_nbuf_nbytes(nbytes, dir, false);
 	__qdf_mem_unmap_nbytes_single(osdev, phy_addr, dir, nbytes);
 #endif
 }
@@ -865,151 +1056,6 @@ void qdf_mem_kmalloc_inc(qdf_size_t size);
  * Return: None
  */
 void qdf_mem_kmalloc_dec(qdf_size_t size);
-
-#ifdef CONFIG_WLAN_SYSFS_MEM_STATS
-/**
- * qdf_mem_skb_inc() - increment total skb allocation size
- * @size: size to be added
- *
- * Return: none
- */
-void qdf_mem_skb_inc(qdf_size_t size);
-
-/**
- * qdf_mem_skb_dec() - decrement total skb allocation size
- * @size: size to be decremented
- *
- * Return: none
- */
-void qdf_mem_skb_dec(qdf_size_t size);
-
-/**
- * qdf_mem_skb_total_inc() - increment total skb allocation size
- * in host driver in both debug and perf builds
- * @size: size to be added
- *
- * Return: none
- */
-void qdf_mem_skb_total_inc(qdf_size_t size);
-
-/**
- * qdf_mem_skb_total_dec() - decrement total skb allocation size
- * in the host driver in debug and perf flavors
- * @size: size to be decremented
- *
- * Return: none
- */
-void qdf_mem_skb_total_dec(qdf_size_t size);
-
-/**
- * qdf_mem_dp_tx_skb_inc() - Increment Tx skb allocation size
- * @size: size to be added
- *
- * Return: none
- */
-void qdf_mem_dp_tx_skb_inc(qdf_size_t size);
-
-/**
- * qdf_mem_dp_tx_skb_dec() - Decrement Tx skb allocation size
- * @size: size to be decreased
- *
- * Return: none
- */
-void qdf_mem_dp_tx_skb_dec(qdf_size_t size);
-
-/**
- * qdf_mem_dp_rx_skb_inc() - Increment Rx skb allocation size
- * @size: size to be added
- *
- * Return: none
- */
-void qdf_mem_dp_rx_skb_inc(qdf_size_t size);
-
-/**
- * qdf_mem_dp_rx_skb_dec() - Decrement Rx skb allocation size
- * @size: size to be decreased
- *
- * Return: none
- */
-void qdf_mem_dp_rx_skb_dec(qdf_size_t size);
-
-/**
- * qdf_mem_dp_tx_skb_cnt_inc() - Increment Tx buffer count
- *
- * Return: none
- */
-void qdf_mem_dp_tx_skb_cnt_inc(void);
-
-/**
- * qdf_mem_dp_tx_skb_cnt_dec() - Decrement Tx buffer count
- *
- * Return: none
- */
-void qdf_mem_dp_tx_skb_cnt_dec(void);
-
-/**
- * qdf_mem_dp_rx_skb_cnt_inc() - Increment Rx buffer count
- *
- * Return: none
- */
-void qdf_mem_dp_rx_skb_cnt_inc(void);
-
-/**
- * qdf_mem_dp_rx_skb_cnt_dec() - Decrement Rx buffer count
- *
- * Return: none
- */
-void qdf_mem_dp_rx_skb_cnt_dec(void);
-#else
-
-static inline void qdf_mem_skb_inc(qdf_size_t size)
-{
-}
-
-static inline void qdf_mem_skb_dec(qdf_size_t size)
-{
-}
-
-static inline void qdf_mem_skb_total_inc(qdf_size_t size)
-{
-}
-
-static inline void qdf_mem_skb_total_dec(qdf_size_t size)
-{
-}
-
-static inline void qdf_mem_dp_tx_skb_inc(qdf_size_t size)
-{
-}
-
-static inline void qdf_mem_dp_tx_skb_dec(qdf_size_t size)
-{
-}
-
-static inline void qdf_mem_dp_rx_skb_inc(qdf_size_t size)
-{
-}
-
-static inline void qdf_mem_dp_rx_skb_dec(qdf_size_t size)
-{
-}
-
-static inline void qdf_mem_dp_tx_skb_cnt_inc(void)
-{
-}
-
-static inline void qdf_mem_dp_tx_skb_cnt_dec(void)
-{
-}
-
-static inline void qdf_mem_dp_rx_skb_cnt_inc(void)
-{
-}
-
-static inline void qdf_mem_dp_rx_skb_cnt_dec(void)
-{
-}
-#endif /* CONFIG_WLAN_SYSFS_MEM_STATS */
 
 /**
  * qdf_mem_map_table_alloc() - Allocate shared memory info structure

@@ -3278,25 +3278,7 @@ static inline unsigned int __qdf_nbuf_get_allocsize(struct sk_buff *skb)
 static inline void __qdf_record_nbuf_nbytes(
 	int nbytes, qdf_dma_dir_t dir, bool is_mapped)
 {
-	if (is_mapped) {
-		if (dir == QDF_DMA_TO_DEVICE) {
-			qdf_mem_dp_tx_skb_cnt_inc();
-			qdf_mem_dp_tx_skb_inc(nbytes);
-		} else if (dir == QDF_DMA_FROM_DEVICE) {
-			qdf_mem_dp_rx_skb_cnt_inc();
-			qdf_mem_dp_rx_skb_inc(nbytes);
-		}
-		qdf_mem_skb_total_inc(nbytes);
-	} else {
-		if (dir == QDF_DMA_TO_DEVICE) {
-			qdf_mem_dp_tx_skb_cnt_dec();
-			qdf_mem_dp_tx_skb_dec(nbytes);
-		} else if (dir == QDF_DMA_FROM_DEVICE) {
-			qdf_mem_dp_rx_skb_cnt_dec();
-			qdf_mem_dp_rx_skb_dec(nbytes);
-		}
-		qdf_mem_skb_total_dec(nbytes);
-	}
+	__qdf_mem_record_nbuf_nbytes(nbytes, dir, is_mapped);
 }
 
 #else /* CONFIG_WLAN_SYSFS_MEM_STATS */
