@@ -6398,9 +6398,6 @@ QDF_STATUS dp_mon_vdev_detach(struct dp_vdev *vdev)
 	if (!mon_vdev)
 		return QDF_STATUS_E_FAILURE;
 
-	mac_id = mon_vdev->mac_id;
-	mon_mac = dp_get_mon_mac(pdev, mac_id);
-
 	if (pdev->monitor_pdev->scan_spcl_vap_configured)
 		dp_scan_spcl_vap_stats_detach(mon_vdev);
 
@@ -6409,10 +6406,16 @@ QDF_STATUS dp_mon_vdev_detach(struct dp_vdev *vdev)
 	qdf_mem_free(mon_vdev);
 	vdev->monitor_vdev = NULL;
 	pdev->monitor_pdev->mon_fcs_cap = 0;
-	/* set mvdev to NULL only if detach is called for monitor/special vap
-	 */
-	if (mon_mac->mvdev == vdev)
-		mon_mac->mvdev = NULL;
+
+	/* For ML LPC case both mon mac mvdev points to same vdev */
+	for (mac_id = 0; mac_id < MAX_NUM_LMAC_HW; mac_id++) {
+		mon_mac = dp_get_mon_mac(pdev, mac_id);
+		/* set mvdev to NULL only if detach is called for
+		 * monitor/special vap
+		 */
+		if (mon_mac->mvdev == vdev)
+			mon_mac->mvdev = NULL;
+	}
 
 	if (mon_ops->mon_lite_mon_vdev_delete)
 		mon_ops->mon_lite_mon_vdev_delete(pdev, vdev);
