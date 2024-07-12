@@ -4079,6 +4079,18 @@ bool qdf_nbuf_data_is_ipv4_pkt(uint8_t *data)
 }
 
 /**
+ * qdf_nbuf_sock_is_valid_fullsock() - Check if socket is a full socket
+ * @buf: Network buffer
+ *
+ * Return: true if it is a full socket
+ */
+static inline
+bool qdf_nbuf_sock_is_valid_fullsock(qdf_nbuf_t buf)
+{
+	return __qdf_nbuf_sock_is_valid_fullsock(buf);
+}
+
+/**
  * qdf_nbuf_sock_is_ipv4_pkt() - check if it is a ipv4 sock
  * @buf: Network buffer
  *

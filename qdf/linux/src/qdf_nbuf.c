@@ -1910,6 +1910,16 @@ bool __qdf_nbuf_data_is_ipv4_pkt(uint8_t *data)
 }
 qdf_export_symbol(__qdf_nbuf_data_is_ipv4_pkt);
 
+bool __qdf_nbuf_sock_is_valid_fullsock(struct sk_buff *skb)
+{
+	if (skb->sk && sk_fullsock(skb->sk))
+		return true;
+
+	return false;
+}
+
+qdf_export_symbol(__qdf_nbuf_sock_is_valid_fullsock);
+
 /**
  * __qdf_nbuf_sock_is_ipv4_pkt() - check if it is a ipv4 sock
  * @skb: Pointer to network buffer

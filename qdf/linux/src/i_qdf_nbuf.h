@@ -1318,6 +1318,14 @@ bool __qdf_nbuf_is_ipv4_last_fragment(struct sk_buff *skb);
  */
 bool __qdf_nbuf_is_ipv4_fragment(struct sk_buff *skb);
 
+/**
+ * __qdf_nbuf_sock_is_valid_fullsock() - Check if socket is a full socket
+ * @skb: Network buffer
+ *
+ * Return: true if it is a full socket
+ */
+bool __qdf_nbuf_sock_is_valid_fullsock(struct sk_buff *skb);
+
 bool __qdf_nbuf_is_ipv4_v6_pure_tcp_ack(struct sk_buff *skb);
 bool __qdf_nbuf_sock_is_ipv4_pkt(struct sk_buff *skb);
 bool __qdf_nbuf_sock_is_ipv6_pkt(struct sk_buff *skb);
