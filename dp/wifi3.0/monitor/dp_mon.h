@@ -1333,6 +1333,7 @@ struct  dp_mon_pdev {
 	/* Monitor FCS capture */
 	bool mon_fcs_cap;
 	uint8_t mu_sniffer_enabled;
+	uint8_t mon_version;
 };
 
 struct  dp_mon_vdev {
@@ -3482,6 +3483,25 @@ static inline QDF_STATUS dp_monitor_config_enh_tx_capture(struct dp_pdev *pdev,
 	}
 
 	return monitor_ops->mon_config_enh_tx_capture(pdev, val, mac_id);
+}
+
+/**
+ * dp_mon_enh_tx_capt_wrapper() - configure tx capture wrapper
+ * @pdev: Datapath PDEV handle
+ * @val: mode
+ *
+ * Return: status
+ */
+static inline QDF_STATUS
+dp_mon_enh_tx_capt_wrapper(struct dp_pdev *pdev, cdp_config_param_type val)
+{
+	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+
+	mon_pdev->mon_version = val.cdp_monitor_version;
+
+	return dp_monitor_config_enh_tx_capture(pdev,
+						val.cdp_pdev_param_en_tx_cap,
+						0);
 }
 
 /**

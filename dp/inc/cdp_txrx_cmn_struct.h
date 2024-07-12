@@ -176,6 +176,13 @@
 #define FILTER_DATA_NULL		0x0008
 
 /*
+ * Monitor version 1 for LT chipset
+ * Monitor version 2 for be+ chipsets
+ */
+#define MONITOR_VERSION_1 1
+#define MONITOR_VERSION_2 2
+
+/*
  * Multiply rate by 2 to avoid float point
  * and get rate in units of 500kbps
  */
@@ -1535,6 +1542,7 @@ enum cdp_pdev_param_type {
  * @cdp_reo_rings_mapping: reo rings mapping
  * @cdp_eapol_over_control_port_disable: disable eapol over control port
  * @cdp_scan_radio_support: Set scan radio support capability
+ * @cdp_monitor_version: monitor version
  */
 typedef union cdp_config_param_t {
 	/* peer params */
@@ -1661,6 +1669,7 @@ typedef union cdp_config_param_t {
 	uint32_t cdp_reo_rings_mapping;
 	bool cdp_eapol_over_control_port_disable;
 	bool cdp_scan_radio_support;
+	uint8_t cdp_monitor_version;
 } cdp_config_param_type;
 
 /**
