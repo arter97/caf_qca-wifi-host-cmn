@@ -1549,7 +1549,8 @@ struct mlo_osif_ext_ops {
 
 	QDF_STATUS
 	(*mlo_mgr_osif_link_switch_notification)(struct wlan_objmgr_vdev *vdev,
-						 uint8_t non_trans_vdev_id);
+						 uint8_t non_trans_vdev_id,
+						 bool is_start_notify);
 };
 
 /* maximum size of vdev bitmap array for MLO link set active command */
