@@ -5267,6 +5267,7 @@ struct dp_peer_per_pkt_rx_stats {
  * @wme_ac_type_bytes: Wireless Multimedia type Bytes Count
  * @rx_ppdu_duration: Rx PPDU Duration
  * @retried_msdu_count: rx msdu retries count
+ * @rx_total: total rx count
  */
 struct dp_peer_extd_rx_stats {
 	struct cdp_pkt_type pkt_type[DOT11_MAX];
@@ -5317,6 +5318,7 @@ struct dp_peer_extd_rx_stats {
 	uint64_t wme_ac_type_bytes[WME_AC_MAX];
 	uint64_t rx_ppdu_duration;
 	uint32_t retried_msdu_count;
+	struct cdp_pkt_info rx_total;
 };
 
 /**

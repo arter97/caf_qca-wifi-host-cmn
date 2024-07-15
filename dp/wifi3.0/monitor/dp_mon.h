@@ -70,6 +70,14 @@
 #define IS_LOCAL_PKT_CAPTURE_RUNNING(var, field) 0
 #endif
 
+extern const struct dp_rx_defrag_cipher dp_f_ccmp;
+
+extern const struct dp_rx_defrag_cipher dp_f_tkip;
+
+extern const struct dp_rx_defrag_cipher dp_f_wep;
+
+extern const struct dp_rx_defrag_cipher dp_f_gcmp;
+
 #ifdef QCA_ENHANCED_STATS_SUPPORT
 typedef struct dp_peer_extd_tx_stats dp_mon_peer_tx_stats;
 typedef struct dp_peer_extd_rx_stats dp_mon_peer_rx_stats;
@@ -1495,6 +1503,16 @@ static inline QDF_STATUS dp_peer_stats_notify(struct dp_pdev *pdev,
 					      struct dp_peer *peer)
 {
 	return QDF_STATUS_SUCCESS;
+}
+#endif
+
+#if defined(QCA_ENHANCED_STATS_SUPPORT)
+uint8_t dp_mon_get_802_11_hdr_length(struct cdp_rx_stats_ppdu_user *ppdu_user);
+#else
+static inline
+uint8_t dp_mon_get_802_11_hdr_length(struct cdp_rx_stats_ppdu_user *ppdu_user)
+{
+	return 0;
 }
 #endif
 

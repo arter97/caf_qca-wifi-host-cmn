@@ -1530,6 +1530,57 @@ dp_peer_get_tx_rx_stats(struct dp_peer *peer,
 }
 #endif
 
+static uint8_t dp_mon_get_802_11_sec_hdr_len(uint8_t enc_type)
+{
+	switch (enc_type) {
+	case cdp_sec_type_wep40:
+	case cdp_sec_type_wep104:
+	case cdp_sec_type_wep128:
+		return (dp_f_wep.ic_header + dp_f_wep.ic_trailer +
+			dp_f_wep.ic_miclen);
+	case cdp_sec_type_tkip:
+		return (dp_f_tkip.ic_header + dp_f_tkip.ic_trailer +
+			dp_f_tkip.ic_miclen);
+	case cdp_sec_type_aes_ccmp:
+		return (dp_f_ccmp.ic_header + dp_f_ccmp.ic_trailer +
+			dp_f_ccmp.ic_miclen);
+	case cdp_sec_type_wapi:
+	case cdp_sec_type_aes_ccmp_256:
+	case cdp_sec_type_aes_gcmp:
+	case cdp_sec_type_aes_gcmp_256:
+		return (dp_f_gcmp.ic_header + dp_f_gcmp.ic_trailer +
+			dp_f_gcmp.ic_miclen);
+	default:
+		return 0;
+	}
+}
+
+uint8_t
+dp_mon_get_802_11_hdr_length(struct cdp_rx_stats_ppdu_user *ppdu_user)
+{
+	uint8_t wifi_hdr_len = 0;
+	uint16_t fc = 0;
+
+	wifi_hdr_len = sizeof(struct ieee80211_frame);
+
+	if (!ppdu_user->frame_control_info_valid)
+		return wifi_hdr_len;
+
+	fc = ppdu_user->frame_control;
+
+	if ((((fc & DP_RX_MON_DSTODS_MASK) >> DP_RX_MON_DSTODS_BITS) &
+		IEEE80211_FC1_DIR_MASK) == IEEE80211_FC1_DIR_DSTODS) {
+		wifi_hdr_len += QDF_MAC_ADDR_SIZE;
+	}
+
+	if (fc & QDF_IEEE80211_FC0_SUBTYPE_QOS)
+		wifi_hdr_len += DP_RX_MON_QOS_LEN;
+
+	wifi_hdr_len += dp_mon_get_802_11_sec_hdr_len(ppdu_user->enc_type);
+
+	return wifi_hdr_len;
+}
+
 QDF_STATUS dp_peer_stats_notify(struct dp_pdev *dp_pdev, struct dp_peer *peer)
 {
 	struct cdp_interface_peer_stats peer_stats_intf = {0};

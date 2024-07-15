@@ -78,6 +78,20 @@ struct htt_dbgfs_cfg {
 	qdf_debugfs_file_t m;
 };
 
+/**
+ * struct dp_rx_defrag_cipher: structure to indicate cipher header
+ * @ic_name: Name
+ * @ic_header: header length
+ * @ic_trailer: trail length
+ * @ic_miclen: MIC length
+ */
+struct dp_rx_defrag_cipher {
+	const char *ic_name;
+	uint16_t ic_header;
+	uint8_t ic_trailer;
+	uint8_t ic_miclen;
+};
+
 /* Cookie MSB bits assigned for different use case.
  * Note: User can't use last 3 bits, as it is reserved for pdev_id.
  * If in future number of pdev are more than 3.
@@ -2385,6 +2399,8 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		_tgtobj->tx.tx_ppdu_duration += _srcobj->tx.tx_ppdu_duration; \
 		_tgtobj->rx.mpdu_cnt_fcs_ok += _srcobj->rx.mpdu_cnt_fcs_ok; \
 		_tgtobj->rx.mpdu_cnt_fcs_err += _srcobj->rx.mpdu_cnt_fcs_err; \
+		_tgtobj->rx.rx_total.num += _srcobj->rx.rx_total.num; \
+		_tgtobj->rx.rx_total.bytes += _srcobj->rx.rx_total.bytes; \
 		_tgtobj->rx.non_ampdu_cnt += _srcobj->rx.non_ampdu_cnt; \
 		_tgtobj->rx.ampdu_cnt += _srcobj->rx.ampdu_cnt; \
 		_tgtobj->rx.rx_mpdus += _srcobj->rx.rx_mpdus; \

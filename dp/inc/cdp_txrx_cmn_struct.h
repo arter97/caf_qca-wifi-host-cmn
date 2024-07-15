@@ -2697,6 +2697,7 @@ struct cdp_tx_completion_msdu {
  * @ast_index: ast index in multi-user case
  * @tid: TID number
  * @num_msdu: Number of MSDUs in PPDU
+ * @enc_type: Encryption type
  * @tcp_msdu_count: Number of TCP MSDUs in PPDU
  * @udp_msdu_count: Number of UDP MSDUs in PPDU
  * @other_msdu_count: Number of MSDUs other than UDP and TCP MSDUs in PPDU
@@ -2738,6 +2739,7 @@ struct cdp_rx_stats_ppdu_user {
 	uint32_t ast_index;
 	uint32_t tid;
 	uint32_t num_msdu;
+	uint8_t enc_type;
 	uint16_t  tcp_msdu_count;
 	uint16_t  udp_msdu_count;
 	uint16_t  other_msdu_count;
