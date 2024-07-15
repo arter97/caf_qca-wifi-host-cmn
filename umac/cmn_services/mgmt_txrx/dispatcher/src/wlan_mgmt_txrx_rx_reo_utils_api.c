@@ -35,9 +35,6 @@ wlan_mgmt_rx_reo_deinit(void)
 	uint8_t ml_grp;
 	uint8_t total_mlo_grps = WLAN_MAX_MLO_GROUPS;
 
-	if (total_mlo_grps > WLAN_MAX_MLO_GROUPS)
-		return QDF_STATUS_E_INVAL;
-
 	for (ml_grp = 0; ml_grp < total_mlo_grps; ml_grp++) {
 		QDF_STATUS status;
 
@@ -63,9 +60,6 @@ wlan_mgmt_rx_reo_init(void)
 {
 	uint8_t ml_grp;
 	uint8_t total_mlo_grps = WLAN_MAX_MLO_GROUPS;
-
-	if (total_mlo_grps > WLAN_MAX_MLO_GROUPS)
-		return QDF_STATUS_E_INVAL;
 
 	for (ml_grp = 0; ml_grp < total_mlo_grps; ml_grp++) {
 		QDF_STATUS status;
