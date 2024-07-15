@@ -3022,6 +3022,7 @@ QDF_STATUS dp_peer_state_update(struct cdp_soc_t *soc, uint8_t *peer_mac,
  * dp_get_vdevid() - Get virtual interface id which peer registered
  * @soc_hdl: datapath soc handle
  * @peer_mac: peer mac address
+ * @peer_type: peer type
  * @vdev_id: virtual interface id which peer registered
  *
  * Get virtual interface id which peer registered
@@ -3029,7 +3030,7 @@ QDF_STATUS dp_peer_state_update(struct cdp_soc_t *soc, uint8_t *peer_mac,
  * Return: QDF_STATUS_SUCCESS registration success
  */
 QDF_STATUS dp_get_vdevid(struct cdp_soc_t *soc_hdl, uint8_t *peer_mac,
-			 uint8_t *vdev_id);
+			 enum cdp_peer_type peer_type, uint8_t *vdev_id);
 
 struct cdp_vdev *dp_get_vdev_by_peer_addr(struct cdp_pdev *pdev_handle,
 		struct qdf_mac_addr peer_addr);
@@ -3116,7 +3117,7 @@ void dp_set_peer_as_tdls_peer(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 #else
 static inline
 QDF_STATUS dp_get_vdevid(struct cdp_soc_t *soc_hdl, uint8_t *peer_mac,
-			 uint8_t *vdev_id)
+			 enum cdp_peer_type peer_type, uint8_t *vdev_id)
 {
 	return QDF_STATUS_E_NOSUPPORT;
 }

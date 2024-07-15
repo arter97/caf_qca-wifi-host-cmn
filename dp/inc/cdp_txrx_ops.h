@@ -2091,6 +2091,7 @@ struct cdp_peer_ops {
 					uint8_t *peer_addr,
 					enum ol_txrx_peer_state state);
 	QDF_STATUS (*get_vdevid)(struct cdp_soc_t *soc_hdl, uint8_t *peer_mac,
+				 enum cdp_peer_type peer_type,
 				 uint8_t *vdev_id);
 	struct cdp_vdev * (*get_vdev_by_peer_addr)(struct cdp_pdev *pdev,
 			struct qdf_mac_addr peer_addr);

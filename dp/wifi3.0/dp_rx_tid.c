@@ -275,6 +275,24 @@ static void dp_rx_tid_update_cb(struct dp_soc *soc, void *cb_ctxt,
 	}
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO
+static inline QDF_STATUS
+dp_get_vdev_id(struct cdp_soc_t *soc_hdl, struct dp_peer *peer,
+	       uint8_t *vdev_id)
+{
+	return dp_get_vdevid(soc_hdl, peer->mac_addr.raw,
+			     peer->peer_type, vdev_id);
+}
+#else
+static inline QDF_STATUS
+dp_get_vdev_id(struct cdp_soc_t *soc_hdl, struct dp_peer *peer,
+	       uint8_t *vdev_id)
+{
+	return dp_get_vdevid(soc_hdl, peer->mac_addr.raw,
+			     CDP_WILD_PEER_TYPE, vdev_id);
+}
+#endif
+
 bool dp_get_peer_vdev_roaming_in_progress(struct dp_peer *peer)
 {
 	struct ol_if_ops *ol_ops = NULL;
@@ -291,7 +309,7 @@ bool dp_get_peer_vdev_roaming_in_progress(struct dp_peer *peer)
 	ol_ops = peer->vdev->pdev->soc->cdp_soc.ol_ops;
 
 	if (ol_ops && ol_ops->is_roam_inprogress) {
-		dp_get_vdevid(soc, peer->mac_addr.raw, &vdev_id);
+		dp_get_vdev_id(soc, peer, &vdev_id);
 		is_roaming = ol_ops->is_roam_inprogress(vdev_id);
 	}
 

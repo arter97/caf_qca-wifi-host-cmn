@@ -3872,13 +3872,16 @@ dp_clear_peer(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 }
 
 QDF_STATUS dp_get_vdevid(struct cdp_soc_t *soc_hdl, uint8_t *peer_mac,
-			 uint8_t *vdev_id)
+			 enum cdp_peer_type peer_type, uint8_t *vdev_id)
 {
+	struct cdp_peer_info peer_info = { 0 };
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
-	struct dp_peer *peer =
-		dp_peer_find_hash_find(soc, peer_mac, 0, DP_VDEV_ALL,
-				       DP_MOD_ID_CDP);
+	struct dp_peer *peer;
 
+	DP_PEER_INFO_PARAMS_INIT(&peer_info, DP_VDEV_ALL, peer_mac,
+				 false, peer_type);
+
+	peer =  dp_peer_hash_find_wrapper(soc, &peer_info, DP_MOD_ID_CDP);
 	if (!peer)
 		return QDF_STATUS_E_FAILURE;
 
