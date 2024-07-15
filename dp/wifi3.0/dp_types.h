@@ -5927,4 +5927,9 @@ void dp_rx_update_protocol_stats(hal_soc_handle_t hal_soc,
 				 struct dp_txrx_peer *txrx_peer,
 				 uint8_t link_id, qdf_nbuf_t nbuf,
 				 uint8_t *rx_tlv_hdr, uint8_t level);
+
+void dp_rx_err_update_protocol_stats(struct dp_soc *soc, struct dp_pdev *pdev,
+				     qdf_nbuf_t nbuf,
+				     union hal_wbm_err_info_u *wbm_err,
+				     uint8_t *rx_tlv_hdr);
 #endif /* _DP_TYPES_H_ */

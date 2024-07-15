@@ -2656,6 +2656,29 @@ dp_rx_set_wbm_err_info_in_nbuf(struct dp_soc *soc,
 }
 #endif /* CONFIG_NBUF_AP_PLATFORM */
 
+#ifdef QCA_DP_PROTOCOL_STATS
+static inline void
+dp_rx_err_update_protocol_stats_wrapper(struct dp_soc *soc,
+					struct dp_pdev *pdev, qdf_nbuf_t nbuf,
+					union hal_wbm_err_info_u *wbm_err,
+					uint8_t *rx_tlv_hdr)
+{
+	if (qdf_unlikely(wlan_cfg_get_dp_proto_stats(soc->wlan_cfg_ctx)) &&
+	    !qdf_nbuf_is_raw_frame(nbuf)) {
+		dp_rx_err_update_protocol_stats(soc, pdev, nbuf,
+						wbm_err, rx_tlv_hdr);
+	}
+}
+#else
+static inline void
+dp_rx_err_update_protocol_stats_wrapper(struct dp_soc *soc,
+					struct dp_pdev *pdev, qdf_nbuf_t nbuf,
+					union hal_wbm_err_info_u *wbm_err,
+					uint8_t *rx_tlv_hdr)
+{
+}
+#endif /* QCA_DP_PROTOCOL_STATS */
+
 uint32_t
 dp_rx_wbm_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
 		      hal_ring_handle_t hal_ring_hdl, uint32_t quota)
@@ -2756,6 +2779,9 @@ dp_rx_wbm_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
 		} else {
 			link_id = 0;
 		}
+
+		dp_rx_err_update_protocol_stats_wrapper(soc, dp_pdev, nbuf,
+							&wbm_err, rx_tlv_hdr);
 
 		if (wbm_err.info_bit.wbm_err_src == HAL_RX_WBM_ERR_SRC_REO) {
 			if (wbm_err.info_bit.reo_psh_rsn
