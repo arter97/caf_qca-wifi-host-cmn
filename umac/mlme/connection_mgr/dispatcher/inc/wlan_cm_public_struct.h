@@ -233,6 +233,8 @@ enum wlan_cm_source {
  * @vht_caps_mask: mask of valid vht caps
  * @fils_info: Fills related connect info
  * @is_non_assoc_link: non assoc link
+ * @link_id: IEEE link ID of the candidate
+ *              -mandatory and only used for link VDEV connect
  * @mld_addr: MLD address of candidate
  *              -mandatory and only used for link VDEV connect
  * @ml_parnter_info: ml partner link info
@@ -264,6 +266,7 @@ struct wlan_cm_connect_req {
 #endif
 	bool is_non_assoc_link;
 #ifdef WLAN_FEATURE_11BE_MLO
+	uint8_t link_id;
 	struct qdf_mac_addr mld_addr;
 	struct mlo_partner_info ml_parnter_info;
 #endif
