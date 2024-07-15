@@ -411,7 +411,7 @@ static void dump_mu_rx_info(void *mu_rx_user_info,
 			  ul_mu_user_info->sta_dcm,
 			  ul_mu_user_info->sta_coding,
 			  ul_mu_user_info->ru_start_index);
-		ul_mu_user_info += sizeof(struct uplink_user_setup_info);
+		ul_mu_user_info += 1;
 	}
 }
 
@@ -466,7 +466,7 @@ static void dump_mu_rx_info_v2(void *mu_rx_user_info,
 			  ul_mu_user_info->ru_start_index_80_1,
 			  ul_mu_user_info->ru_start_index_80_2,
 			  ul_mu_user_info->ru_start_index_80_3);
-		ul_mu_user_info += sizeof(struct uplink_user_setup_info_v2);
+		ul_mu_user_info += 1;
 	}
 }
 
