@@ -25,45 +25,6 @@
 #endif
 #include <cdp_txrx_ctrl.h>
 
-uint16_t qca_sawf_get_msduq(struct net_device *netdev, uint8_t *peer_mac,
-			    uint32_t service_id)
-{
-	osif_dev  *osdev;
-
-	if (!wlan_service_id_valid(service_id) ||
-	    !wlan_service_id_configured(service_id)) {
-	   return DP_SAWF_PEER_Q_INVALID;
-	}
-
-	osdev = ath_netdev_priv(netdev);
-	if (!osdev) {
-		qdf_err("Invalid osdev");
-		return DP_SAWF_PEER_Q_INVALID;
-	}
-
-#ifdef WLAN_FEATURE_11BE_MLO
-	if (osdev->dev_type == OSIF_NETDEV_TYPE_MLO) {
-		struct osif_mldev *mldev;
-
-		mldev = ath_netdev_priv(netdev);
-		if (!mldev) {
-			qdf_err("Invalid mldev");
-			return DP_SAWF_PEER_Q_INVALID;
-		}
-
-		osdev = osifp_peer_find_hash_find_osdev(mldev, peer_mac);
-		if (!osdev) {
-			qdf_err("Invalid link osdev");
-			return DP_SAWF_PEER_Q_INVALID;
-		}
-
-		netdev = osdev->netdev;
-	}
-#endif
-
-	return dp_sawf_get_msduq(netdev, peer_mac, service_id);
-}
-
 /* qca_sawf_get_vdev() - Fetch vdev from netdev
  *
  * @netdev : Netdevice
@@ -115,6 +76,56 @@ static struct wlan_objmgr_vdev *qca_sawf_get_vdev(struct net_device *netdev,
 
 	vdev = osdev->ctrl_vdev;
 	return vdev;
+}
+
+uint16_t qca_sawf_get_msduq(struct net_device *netdev, uint8_t *peer_mac,
+			    uint32_t service_id)
+{
+	struct wlan_objmgr_psoc *psoc;
+	struct wlan_objmgr_vdev *vdev;
+	ol_txrx_soc_handle soc_txrx_handle;
+	osif_dev  *osdev;
+#ifdef QCA_SUPPORT_WDS_EXTENDED
+	osif_peer_dev *osifp;
+#endif
+	uint8_t vdev_id;
+
+	if (!wlan_service_id_valid(service_id) ||
+	    !wlan_service_id_configured(service_id))
+		return DP_SAWF_PEER_Q_INVALID;
+
+	vdev = qca_sawf_get_vdev(netdev, peer_mac);
+	if (!vdev) {
+		sawf_err("Invalid vdev");
+		return DP_SAWF_PEER_Q_INVALID;
+	}
+
+	vdev_id = wlan_vdev_get_id(vdev);
+
+	psoc = wlan_vdev_get_psoc(vdev);
+	if (!psoc) {
+		sawf_err("Invalid psoc");
+		return DP_SAWF_PEER_Q_INVALID;
+	}
+
+	soc_txrx_handle = wlan_psoc_get_dp_handle(psoc);
+
+	osdev = ath_netdev_priv(netdev);
+	if (!osdev) {
+		sawf_err("Invalid osdev");
+		return DP_SAWF_PEER_Q_INVALID;
+	}
+
+#ifdef QCA_SUPPORT_WDS_EXTENDED
+	if (osdev->dev_type == OSIF_NETDEV_TYPE_WDS_EXT) {
+		osifp = ath_netdev_priv(netdev);
+
+		peer_mac = osifp->peer_mac_addr;
+	}
+#endif
+
+	return dp_sawf_get_msduq(soc_txrx_handle, vdev_id,
+				 peer_mac, service_id);
 }
 
 /* qca_sawf_get_default_msduq() - Return default msdu queue_id

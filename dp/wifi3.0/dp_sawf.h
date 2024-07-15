@@ -101,10 +101,21 @@
 					DP_SAWF_SERVICE_CLASS_SHIFT)
 #define DP_SAWF_QUEUE_ID_SET(queue_id) (queue_id << DP_SAWF_QUEUE_ID_SHIFT)
 
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+#define SAWF_META_VALID_MASK 0x00400000
+#define DP_SAWF_METADATA_SET(metadata, srvc_id, queue_id) \
+	(metadata = DP_SAWF_TAG_SET(DP_SAWF_VALID_TAG) | \
+	 DP_SAWF_QUEUE_ID_SET(queue_id) | \
+	 SAWF_META_VALID_MASK)
+#else
 #define DP_SAWF_METADATA_SET(metadata, srvc_id, queue_id) \
 	(metadata = DP_SAWF_TAG_SET(DP_SAWF_VALID_TAG) | \
 	 DP_SAWF_SERVICE_CLASS_SET(srvc_id) | \
-	 DP_SAWF_QUEUE_ID_SET(queue_id));
+	 DP_SAWF_QUEUE_ID_SET(queue_id))
+#endif
+
+#define DP_SAWF_INVALID_SVC_ID 0
+#define DP_SAWF_INVALID_TCL_CMD 0xffff
 
 #ifdef CONFIG_SAWF
 #ifdef SAWF_MSDUQ_DEBUG
@@ -395,6 +406,7 @@ void dp_peer_tid_delay_avg(struct cdp_delay_tx_stats *tx_delay,
  */
 QDF_STATUS
 dp_sawf_tx_enqueue_peer_stats(struct dp_soc *soc,
+			      struct dp_peer *peer,
 			      struct dp_tx_desc_s *tx_desc);
 
 #define DP_SAWF_STATS_SVC_CLASS_ID_ALL	0
@@ -562,13 +574,14 @@ dp_sawf_3_link_peer_set_tid_weight(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr,
 				   uint16_t peer_id, uint8_t tid_weight[]);
 #endif
 void dp_sawf_msduq_timer_handler(void *arg);
-uint16_t dp_sawf_get_msduq(struct net_device *netdev, uint8_t *peer_mac,
-			   uint32_t service_id);
+uint16_t dp_sawf_get_msduq(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+			   uint8_t *dest_mac, uint32_t service_id);
 bool dp_sawf_get_search_index(struct dp_soc *soc, qdf_nbuf_t nbuf,
 			      uint8_t vdev_id, uint16_t queue_id,
 			      uint32_t *flow_index);
 uint32_t dp_sawf_queue_id_get(qdf_nbuf_t nbuf);
-void dp_sawf_tcl_cmd(uint16_t *htt_tcl_metadata, qdf_nbuf_t nbuf);
+uint16_t dp_sawf_tcl_cmd(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
+			 bool is_fast_tx);
 bool dp_sawf_tag_valid_get(qdf_nbuf_t nbuf);
 uint8_t dp_sawf_tid_get(uint16_t queue_id);
 
