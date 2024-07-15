@@ -931,14 +931,15 @@ static int __os_if_wifi_pos_callback(struct sk_buff *skb)
 	osif_debug("enter");
 
 	err = wifi_pos_parse_req(skb, &req, &psoc);
-	if (err) {
-		osif_err("wifi_pos_parse_req failed");
+	if (!psoc) {
+		osif_err("null psoc");
 		return -EINVAL;
 	}
 
 	wlan_objmgr_psoc_get_ref(psoc, WLAN_WIFI_POS_OSIF_ID);
 
 	if (err) {
+		osif_err("wifi_pos_parse_req failed");
 		os_if_wifi_pos_send_rsp(psoc, wifi_pos_get_app_pid(psoc),
 					WIFI_POS_CMD_ERROR, sizeof(err), &err);
 		status = QDF_STATUS_E_INVAL;
