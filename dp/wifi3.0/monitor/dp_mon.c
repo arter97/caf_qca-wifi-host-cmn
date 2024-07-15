@@ -3348,7 +3348,7 @@ dp_tx_stats_update(struct dp_pdev *pdev, struct dp_peer *peer,
 	num_msdu = ppdu->num_msdu;
 	num_mpdu = ppdu->mpdu_success;
 	mpdu_tried = ppdu->mpdu_tried_ucast + ppdu->mpdu_tried_mcast;
-	mpdu_failed = mpdu_tried - num_mpdu;
+	mpdu_failed = ppdu->mpdu_failed;
 	tx_byte_count = ppdu->success_bytes;
 
 	/* If the peer statistics are already processed as part of
