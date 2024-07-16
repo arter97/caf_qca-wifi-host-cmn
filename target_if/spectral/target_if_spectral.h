@@ -2834,7 +2834,7 @@ target_if_160mhz_delivery_state_change(struct target_if_spectral *spectral,
  *
  * Return: Number of FFT bins
  */
-static inline uint32_t
+static inline int
 target_if_spectral_get_num_fft_bins(uint32_t fft_size,
 				    enum spectral_report_mode report_mode)
 {

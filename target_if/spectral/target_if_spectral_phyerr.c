@@ -1063,7 +1063,7 @@ target_if_populate_fft_bins_info(struct target_if_spectral *spectral,
 	bool is_fragmentation_160;
 	uint8_t spectral_fft_size;
 	uint8_t rpt_mode;
-	uint32_t num_fft_bins;
+	int num_fft_bins;
 	uint16_t start_bin;
 	uint8_t det;
 
