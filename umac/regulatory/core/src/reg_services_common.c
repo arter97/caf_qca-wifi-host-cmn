@@ -3922,6 +3922,10 @@ reg_skip_invalid_chan_freq(struct wlan_objmgr_pdev *pdev,
 	bool include_indoor_channel, dfs_master_capable;
 	uint8_t enable_srd_chan, srd_mask = 0;
 	struct wlan_objmgr_psoc *psoc;
+	enum reg_6g_ap_type ap_pwr_type;
+	enum supported_6g_pwr_types ap_pwr_mode;
+	enum channel_state chan_state;
+
 	psoc = wlan_pdev_get_psoc(pdev);
 	if (!psoc) {
 		reg_err("invalid psoc");
@@ -3948,6 +3952,17 @@ reg_skip_invalid_chan_freq(struct wlan_objmgr_pdev *pdev,
 		return status;
 	}
 
+	wlan_reg_get_cur_6g_ap_pwr_type(pdev, &ap_pwr_type);
+
+	if (ap_pwr_type == REG_INDOOR_AP)
+		ap_pwr_mode = REG_AP_LPI;
+	else if (ap_pwr_type == REG_STANDARD_POWER_AP)
+		ap_pwr_mode = REG_AP_SP;
+	else if (ap_pwr_type == REG_VERY_LOW_POWER_AP)
+		ap_pwr_mode = REG_AP_VLP;
+	else
+		ap_pwr_mode = REG_INVALID_PWR_MODE;
+
 	while (iface_mode_mask) {
 		if (iface_mode_mask & (1 << IFTYPE_AP)) {
 			srd_mask = 1;
@@ -3960,6 +3975,7 @@ reg_skip_invalid_chan_freq(struct wlan_objmgr_pdev *pdev,
 		} else {
 			break;
 		}
+
 		for (chan_enum = 0; chan_enum < *no_usable_channels;
 		     chan_enum++) {
 			if (iface_mode_mask & (1 << IFTYPE_NAN)) {
@@ -3970,9 +3986,13 @@ reg_skip_invalid_chan_freq(struct wlan_objmgr_pdev *pdev,
 				if (!res_msg[chan_enum].iface_mode_mask)
 					reg_remove_freq(res_msg, chan_enum);
 			} else {
-				if (wlan_reg_is_freq_indoor(
+				chan_state = reg_get_channel_state_for_pwrmode(
+						pdev, res_msg[chan_enum].freq,
+						ap_pwr_mode);
+				if (!reg_is_state_allowed(chan_state) ||
+				    (wlan_reg_is_freq_indoor(
 					pdev, res_msg[chan_enum].freq) &&
-					!include_indoor_channel) {
+					!include_indoor_channel)) {
 					res_msg[chan_enum].iface_mode_mask &=
 							~(iface_mode);
 					if (!res_msg[chan_enum].iface_mode_mask)
