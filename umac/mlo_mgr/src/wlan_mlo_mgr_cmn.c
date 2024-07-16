@@ -459,7 +459,7 @@ uint8_t wlan_mlo_get_psoc_group_id(struct wlan_objmgr_psoc *psoc)
 
 	if (!psoc) {
 		qdf_err("PSOC is NULL");
-		return -EINVAL;
+		return WLAN_MLO_GROUP_INVALID;
 	}
 
 	tx_ops = wlan_psoc_get_lmac_if_txops(psoc);
