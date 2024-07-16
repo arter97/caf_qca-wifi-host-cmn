@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -262,7 +262,8 @@ static inline
 QDF_STATUS dp_peer_rx_reorder_queue_setup_li(struct dp_soc *soc,
 					     struct dp_peer *peer,
 					     uint32_t tid_bitmap,
-					     uint32_t ba_window_size)
+					     uint32_t ba_window_size,
+					     bool per_tid_ba)
 {
 	int tid;
 	struct dp_rx_tid *rx_tid;

@@ -3268,11 +3268,13 @@ end:
 
 static inline QDF_STATUS
 dp_peer_rx_reorder_queue_setup(struct dp_soc *soc, struct dp_peer *peer,
-			       uint32_t tid_bitmap, uint32_t ba_window_size)
+			       uint32_t tid_bitmap, uint32_t ba_window_size,
+			       bool per_tid_ba)
 {
 	return soc->arch_ops.dp_peer_rx_reorder_queue_setup(soc,
 							    peer, tid_bitmap,
-							    ba_window_size);
+							    ba_window_size,
+							    per_tid_ba);
 }
 
 static inline

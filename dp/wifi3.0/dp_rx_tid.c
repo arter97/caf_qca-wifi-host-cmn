@@ -408,8 +408,8 @@ dp_rx_tid_update_wifi3(struct dp_peer *peer, int tid, uint32_t ba_window_size,
 		return QDF_STATUS_E_PERM;
 
 	if (!bar_update)
-		dp_peer_rx_reorder_queue_setup(soc, peer,
-					       BIT(tid), ba_window_size);
+		dp_peer_rx_reorder_queue_setup(soc, peer, BIT(tid),
+					       ba_window_size, false);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -846,9 +846,8 @@ send_wmi_reo_cmd:
 		      soc->features.multi_rx_reorder_q_setup_support,
 		      start_seq, ba_window_size);
 
-	status = dp_peer_rx_reorder_queue_setup(soc, peer,
-						tid_bitmap,
-						ba_window_size);
+	status = dp_peer_rx_reorder_queue_setup(soc, peer, tid_bitmap,
+						ba_window_size, false);
 	if (QDF_IS_STATUS_SUCCESS(status))
 		return status;
 

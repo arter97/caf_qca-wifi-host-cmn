@@ -2760,7 +2760,8 @@ struct dp_arch_ops {
 	QDF_STATUS (*dp_peer_rx_reorder_queue_setup)(struct dp_soc *soc,
 						     struct dp_peer *peer,
 						     uint32_t tid_bitmap,
-						     uint32_t ba_window_size);
+						     uint32_t ba_window_size,
+						     bool per_tid_ba);
 
 	struct dp_soc * (*dp_get_soc_by_chip_id)(struct dp_soc *soc,
 						 uint8_t chip_id);

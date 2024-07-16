@@ -265,9 +265,8 @@ dp_soc_get_num_soc_be(struct dp_soc *soc)
 #endif
 
 static inline QDF_STATUS
-dp_peer_rx_reorder_q_setup_per_tid(struct dp_peer *peer,
-				   uint32_t tid_bitmap,
-				   uint32_t ba_window_size)
+dp_peer_rx_reorder_q_setup_per_tid(struct dp_peer *peer, uint32_t tid_bitmap,
+				   uint32_t ba_window_size, bool per_tid_ba)
 {
 	int tid;
 	struct dp_rx_tid *rx_tid;
@@ -288,6 +287,10 @@ dp_peer_rx_reorder_q_setup_per_tid(struct dp_peer *peer,
 			tid_bitmap &= ~BIT(tid);
 			continue;
 		}
+
+		if (per_tid_ba)
+			ba_window_size = rx_tid->ba_status == DP_RX_BA_ACTIVE ?
+						rx_tid->ba_win_size : 1;
 
 		if (soc->cdp_soc.ol_ops->peer_rx_reorder_queue_setup(
 		    soc->ctrl_psoc,
@@ -311,9 +314,8 @@ dp_peer_rx_reorder_q_setup_per_tid(struct dp_peer *peer,
 }
 
 static inline QDF_STATUS
-dp_peer_multi_tid_params_setup(struct dp_peer *peer,
-		uint32_t tid_bitmap,
-		uint32_t ba_window_size,
+dp_peer_multi_tid_params_setup(struct dp_peer *peer, uint32_t tid_bitmap,
+			       uint32_t ba_window_size, bool per_tid_ba,
 		struct multi_rx_reorder_queue_setup_params *tid_params)
 {
 	struct dp_rx_tid *rx_tid;
@@ -338,6 +340,9 @@ dp_peer_multi_tid_params_setup(struct dp_peer *peer,
 			rx_tid->hw_qdesc_paddr;
 		tid_params->queue_params_list[tid].queue_no = tid;
 		tid_params->queue_params_list[tid].ba_window_size_valid = 1;
+		if (per_tid_ba)
+			ba_window_size = rx_tid->ba_status == DP_RX_BA_ACTIVE ?
+						rx_tid->ba_win_size : 1;
 		tid_params->queue_params_list[tid].ba_window_size =
 			ba_window_size;
 	}
@@ -351,9 +356,8 @@ dp_peer_multi_tid_params_setup(struct dp_peer *peer,
 }
 
 static inline QDF_STATUS
-dp_peer_rx_reorder_multi_q_setup(struct dp_peer *peer,
-				 uint32_t tid_bitmap,
-				 uint32_t ba_window_size)
+dp_peer_rx_reorder_multi_q_setup(struct dp_peer *peer, uint32_t tid_bitmap,
+				 uint32_t ba_window_size, bool per_tid_ba)
 {
 	QDF_STATUS status;
 	struct dp_soc *soc = peer->vdev->pdev->soc;
@@ -365,7 +369,7 @@ dp_peer_rx_reorder_multi_q_setup(struct dp_peer *peer,
 	}
 
 	status = dp_peer_multi_tid_params_setup(peer, tid_bitmap,
-						ba_window_size,
+						ba_window_size, per_tid_ba,
 						&tid_params);
 	if (qdf_unlikely(QDF_IS_STATUS_ERROR(status)))
 		return status;
@@ -406,6 +410,7 @@ bool dp_rx_mlo_igmp_handler(struct dp_soc *soc,
  * @peer: dp peer to operate on
  * @tid_bitmap: TIDs to be set up
  * @ba_window_size: BlockAck window size
+ * @per_tid_ba: Setup different BA per TID
  *
  * Return: 0 - success, others - failure
  */
@@ -413,7 +418,8 @@ static inline
 QDF_STATUS dp_peer_rx_reorder_queue_setup_be(struct dp_soc *soc,
 					     struct dp_peer *peer,
 					     uint32_t tid_bitmap,
-					     uint32_t ba_window_size)
+					     uint32_t ba_window_size,
+					     bool per_tid_ba)
 {
 	uint8_t i;
 	struct dp_mld_link_peers link_peers_info;
@@ -477,12 +483,14 @@ QDF_STATUS dp_peer_rx_reorder_queue_setup_be(struct dp_soc *soc,
 			link_peer = link_peers_info.link_peers[i];
 			if (soc->features.multi_rx_reorder_q_setup_support)
 				status = dp_peer_rx_reorder_multi_q_setup(
-					link_peer, tid_bitmap, ba_window_size);
+					link_peer, tid_bitmap, ba_window_size,
+					per_tid_ba);
 			else
 				status = dp_peer_rx_reorder_q_setup_per_tid(
 							link_peer,
 							tid_bitmap,
-							ba_window_size);
+							ba_window_size,
+							per_tid_ba);
 			if (QDF_IS_STATUS_ERROR(status)) {
 				dp_release_link_peers_ref(&link_peers_info, DP_MOD_ID_CDP);
 				return status;
@@ -494,11 +502,13 @@ QDF_STATUS dp_peer_rx_reorder_queue_setup_be(struct dp_soc *soc,
 		if (soc->features.multi_rx_reorder_q_setup_support)
 			return dp_peer_rx_reorder_multi_q_setup(peer,
 								tid_bitmap,
-								ba_window_size);
+								ba_window_size,
+								per_tid_ba);
 		else
 			return dp_peer_rx_reorder_q_setup_per_tid(peer,
 							tid_bitmap,
-							ba_window_size);
+							ba_window_size,
+							per_tid_ba);
 	} else {
 		dp_peer_err("invalid peer type %d", peer->peer_type);
 
@@ -512,7 +522,8 @@ static inline
 QDF_STATUS dp_peer_rx_reorder_queue_setup_be(struct dp_soc *soc,
 					     struct dp_peer *peer,
 					     uint32_t tid_bitmap,
-					     uint32_t ba_window_size)
+					     uint32_t ba_window_size,
+					     bool per_tid_ba)
 {
 	struct dp_rx_tid *rx_tid;
 	int tid;
@@ -553,11 +564,13 @@ QDF_STATUS dp_peer_rx_reorder_queue_setup_be(struct dp_soc *soc,
 	if (soc->features.multi_rx_reorder_q_setup_support)
 		return dp_peer_rx_reorder_multi_q_setup(peer,
 							tid_bitmap,
-							ba_window_size);
+							ba_window_size,
+							per_tid_ba);
 	else
 		return dp_peer_rx_reorder_q_setup_per_tid(peer,
 							  tid_bitmap,
-							  ba_window_size);
+							  ba_window_size,
+							  per_tid_ba);
 }
 #endif /* WLAN_FEATURE_11BE_MLO */
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -202,6 +202,7 @@ void dp_rx_prefetch_hw_sw_nbuf_desc(struct dp_soc *soc,
  * @peer: DP peer structure
  * @tid_bitmap: tids to be set up
  * @ba_window_size: BA window size
+ * @per_tid_ba: Per TID different BA
  *
  * Return: None
  */
@@ -209,7 +210,8 @@ static inline
 QDF_STATUS dp_peer_rx_reorder_queue_setup_rh(struct dp_soc *soc,
 					     struct dp_peer *peer,
 					     uint32_t tid_bitmap,
-					     uint32_t ba_window_size)
+					     uint32_t ba_window_size,
+					     bool per_tid_ba)
 {
 	return QDF_STATUS_SUCCESS;
 }

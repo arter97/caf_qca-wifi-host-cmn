@@ -3330,23 +3330,26 @@ void dp_peer_rx_init(struct dp_pdev *pdev, struct dp_peer *peer)
 }
 
 #ifdef WLAN_FEATURE_11BE_MLO
+#define DP_MAX_STRING_LEN 1000
 static void dp_peer_rx_init_reorder_queue(struct dp_pdev *pdev,
 					  struct dp_peer *peer)
 {
 	struct dp_soc *soc = pdev->soc;
-	struct dp_peer *mld_peer = DP_GET_MLD_PEER_FROM_PEER(peer);
 	struct dp_rx_tid *rx_tid = NULL;
-	uint32_t ba_window_size, tid;
+	uint32_t ba_window_size, tid, tid_bitmap = 0;
 	QDF_STATUS status;
+	char *tid_ba_str = qdf_mem_malloc(DP_MAX_STRING_LEN);
+	uint16_t index = 0;
 
 	if (dp_get_peer_vdev_roaming_in_progress(peer))
-		return;
+		goto end;
 
 	tid = DP_NON_QOS_TID;
-	rx_tid = &mld_peer->rx_tid[tid];
+	rx_tid = &peer->rx_tid[tid];
 	ba_window_size = rx_tid->ba_status == DP_RX_BA_ACTIVE ?
 					rx_tid->ba_win_size : 1;
-	status = dp_peer_rx_reorder_queue_setup(soc, peer, BIT(tid), ba_window_size);
+	status = dp_peer_rx_reorder_queue_setup(soc, peer, BIT(tid),
+						ba_window_size, false);
 	/* Do not return on failure, continue for other tids. */
 	dp_info("peer %pK " QDF_MAC_ADDR_FMT " type %d setup tid %d ba_win_size %d%s",
 		peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw),
@@ -3354,17 +3357,27 @@ static void dp_peer_rx_init_reorder_queue(struct dp_pdev *pdev,
 		QDF_IS_STATUS_SUCCESS(status) ? " SUCCESS" : " FAILED");
 
 	for (tid = 0; tid < DP_MAX_TIDS - 1; tid++) {
-		rx_tid = &mld_peer->rx_tid[tid];
+		tid_bitmap |= BIT(tid);
+
+		if (!tid_ba_str)
+			continue;
+
+		rx_tid = &peer->rx_tid[tid];
 		ba_window_size = rx_tid->ba_status == DP_RX_BA_ACTIVE ?
 						rx_tid->ba_win_size : 1;
-		status = dp_peer_rx_reorder_queue_setup(soc, peer, BIT(tid),
-							ba_window_size);
-		/* Do not return on failure, continue for other tids. */
-		dp_info("peer %pK " QDF_MAC_ADDR_FMT " type %d setup tid %d ba_win_size %d%s",
-			peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw),
-			peer->peer_type, tid, ba_window_size,
-			QDF_IS_STATUS_SUCCESS(status) ? " SUCCESS" : " FAILED");
+		index += qdf_snprint(&tid_ba_str[index],
+				     DP_MAX_STRING_LEN - index,
+				     "%u:%u ", tid, ba_window_size);
+
 	}
+
+	status = dp_peer_rx_reorder_queue_setup(soc, peer, tid_bitmap,
+						ba_window_size, true);
+	dp_info("setup tid:ba(%s) status %d", tid_ba_str ? tid_ba_str : "NULL",
+		status);
+end:
+	if (tid_ba_str)
+		qdf_mem_free(tid_ba_str);
 }
 
 void dp_peer_rx_init_wrapper(struct dp_pdev *pdev, struct dp_peer *peer,
