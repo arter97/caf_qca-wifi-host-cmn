@@ -6167,12 +6167,14 @@ void wlan_ipa_wdi_opt_dpath_notify_flt_rsvd(bool response)
 	if (!smmu_msg)
 		return;
 
-	if (response) {
+	if (response && !ipa_get_shared_smmu_enable()) {
 		smmu_msg->op_code = WLAN_IPA_SMMU_MAP;
 		uc_op_work = &ipa_ctx->uc_op_work[WLAN_IPA_SMMU_MAP];
 		uc_op_work->msg = smmu_msg;
 		cdp_ipa_set_smmu_mapped(ipa_ctx->dp_soc, 1);
 		qdf_sched_work(0, &uc_op_work->work);
+	} else {
+		qdf_mem_free(smmu_msg);
 	}
 
 	notify_msg = qdf_mem_malloc(sizeof(*notify_msg));

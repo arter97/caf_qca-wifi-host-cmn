@@ -473,3 +473,10 @@ uint32_t get_ipa_config(struct wlan_objmgr_psoc *psoc)
 #endif
 
 qdf_export_symbol(get_ipa_config);
+
+bool wlan_ipa_is_shared_smmu_enabled(void)
+{
+	return ipa_get_shared_smmu_enable();
+}
+
+qdf_export_symbol(wlan_ipa_is_shared_smmu_enabled);
