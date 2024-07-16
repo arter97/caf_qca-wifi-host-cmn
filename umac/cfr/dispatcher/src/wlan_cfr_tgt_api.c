@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -144,7 +144,7 @@ int tgt_cfr_validate_period(struct wlan_objmgr_psoc *psoc, u_int32_t period)
 	}
 
 	/* Basic check is the period should be between 0 and MAX_CFR_PRD */
-	if ((period < 0) || (period > MAX_CFR_PRD)) {
+	if (period > MAX_CFR_PRD) {
 		cfr_err("Invalid period value: %d\n", period);
 		return status;
 	}
