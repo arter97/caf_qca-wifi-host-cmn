@@ -8270,7 +8270,10 @@ uint8_t dp_tx_need_multipass_process(struct dp_soc *soc, struct dp_vdev *vdev,
 	 * Do not drop the frame when vlan_id doesn't match.
 	 * Send the frame as it is.
 	 */
-	if (*vlan_id == peer->txrx_peer->vlan_id) {
+
+	txrx_peer = dp_get_txrx_peer(peer);
+
+	if (txrx_peer && *vlan_id == txrx_peer->vlan_id) {
 		dp_peer_unref_delete(peer, DP_MOD_ID_TX_MULTIPASS);
 		return DP_VLAN_TAGGED_UNICAST;
 	}
