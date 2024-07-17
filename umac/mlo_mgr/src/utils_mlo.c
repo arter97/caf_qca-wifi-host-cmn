@@ -54,7 +54,8 @@ uint8_t *util_find_extn_eid(uint8_t eid, uint8_t extn_eid,
 	if (!frame)
 		return NULL;
 
-	while (len > MIN_IE_LEN && len >= frame[TAG_LEN_POS] + MIN_IE_LEN) {
+	while (len > MIN_IE_LEN && (frame[TAG_LEN_POS] != 0) &&
+	       (len >= frame[TAG_LEN_POS] + MIN_IE_LEN)) {
 		if ((frame[ID_POS] == eid) &&
 		    (frame[ELEM_ID_EXTN_POS] == extn_eid))
 			return frame;
@@ -125,6 +126,16 @@ util_parse_multi_link_ctrl(uint8_t *mlieseqpayload,
 	}
 
 	cinfo_len = *(mlieseqpayload + parsed_payload_len);
+
+	if (cinfo_len >
+			(mlieseqpayloadlen - parsed_payload_len)) {
+		mlo_err_rl("ML seq common info len %u larger than ML seq payload len %zu after parsed payload len %zu.",
+			   cinfo_len,
+			   mlieseqpayloadlen,
+			   parsed_payload_len);
+		return QDF_STATUS_E_PROTO;
+	}
+
 	parsed_payload_len += WLAN_ML_BV_CINFO_LENGTH_SIZE;
 
 	if (mlieseqpayloadlen <

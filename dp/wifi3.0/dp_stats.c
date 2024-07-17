@@ -6136,7 +6136,7 @@ dp_print_common_rates_info(struct cdp_pkt_type *pkt_type_array)
 			if (!cdp_rate_string[pkt_type][mcs].valid)
 				continue;
 
-			DP_PRINT_STATS("	%s = %d",
+			DP_PRINT_STATS("	%s = %u",
 				       cdp_rate_string[pkt_type][mcs].mcs_type,
 				       pkt_type_array[pkt_type].mcs_count[mcs]);
 		}
@@ -6165,14 +6165,14 @@ dp_print_common_ppdu_rates_info(struct cdp_pkt_type *pkt_type_array,
 			if (!dp_ppdu_rate_string[0][mcs].valid)
 				continue;
 
-			DP_PRINT_STATS("	%s = %d",
+			DP_PRINT_STATS("	%s = %u",
 				       dp_ppdu_rate_string[0][mcs].mcs_type,
 				       pkt_type_array->mcs_count[mcs]);
 		} else if (pkt_type == DOT11_BE) {
 			if (!dp_ppdu_rate_string[1][mcs].valid)
 				continue;
 
-			DP_PRINT_STATS("	%s = %d",
+			DP_PRINT_STATS("	%s = %u",
 				       dp_ppdu_rate_string[1][mcs].mcs_type,
 				       pkt_type_array->mcs_count[mcs]);
 		}
@@ -6192,7 +6192,7 @@ dp_print_common_ppdu_rates_info(struct cdp_pkt_type *pkt_type_array,
 		if (!dp_ppdu_rate_string[0][mcs].valid)
 			continue;
 
-		DP_PRINT_STATS("	%s = %d",
+		DP_PRINT_STATS("	%s = %u",
 			       dp_ppdu_rate_string[0][mcs].mcs_type,
 			       pkt_type_array->mcs_count[mcs]);
 	}
@@ -6219,7 +6219,7 @@ dp_print_mu_be_ppdu_rates_info(struct cdp_pkt_type *pkt_type_array)
 			if (!dp_mu_be_rate_string[pkt_type][mcs].valid)
 				continue;
 
-			DP_PRINT_STATS("	%s = %d",
+			DP_PRINT_STATS("	%s = %u",
 				       dp_mu_be_rate_string[pkt_type][mcs].mcs_type,
 				       pkt_type_array[pkt_type].mcs_count[mcs]);
 		}
@@ -6240,7 +6240,7 @@ dp_print_mu_ppdu_rates_info(struct cdp_rx_mu *rx_mu)
 			if (!dp_mu_rate_string[pkt_type][mcs].valid)
 				continue;
 
-			DP_PRINT_STATS("	%s = %d",
+			DP_PRINT_STATS("	%s = %u",
 				dp_mu_rate_string[pkt_type][mcs].mcs_type,
 				rx_mu[pkt_type].ppdu.mcs_count[mcs]);
 		}
@@ -6252,7 +6252,7 @@ dp_print_mu_ppdu_rates_info(struct cdp_rx_mu *rx_mu)
 #ifdef WLAN_FEATURE_11BE
 static inline void dp_print_rx_bw_stats(struct dp_pdev *pdev)
 {
-	DP_PRINT_STATS("BW Counts = 20MHz %d, 40MHz %d, 80MHz %d, 160MHz %d, 320MHz %d",
+	DP_PRINT_STATS("BW Counts = 20MHz %u, 40MHz %u, 80MHz %u, 160MHz %u, 320MHz %u",
 		       pdev->stats.rx.bw[0], pdev->stats.rx.bw[1],
 		       pdev->stats.rx.bw[2], pdev->stats.rx.bw[3],
 		       pdev->stats.rx.bw[4]);
@@ -6260,7 +6260,7 @@ static inline void dp_print_rx_bw_stats(struct dp_pdev *pdev)
 
 static inline void dp_print_tx_bw_stats(struct dp_pdev *pdev)
 {
-	DP_PRINT_STATS("BW Counts = 20MHz %d, 40MHz %d, 80MHz %d, 160MHz %d, 320MHz %d",
+	DP_PRINT_STATS("BW Counts = 20MHz %u, 40MHz %u, 80MHz %u, 160MHz %u, 320MHz %u",
 		       pdev->stats.tx.bw[0], pdev->stats.tx.bw[1],
 		       pdev->stats.tx.bw[2], pdev->stats.tx.bw[3],
 		       pdev->stats.tx.bw[4]);
@@ -6268,14 +6268,14 @@ static inline void dp_print_tx_bw_stats(struct dp_pdev *pdev)
 #else
 static inline void dp_print_rx_bw_stats(struct dp_pdev *pdev)
 {
-	DP_PRINT_STATS("BW Counts = 20MHz %d, 40MHz %d, 80MHz %d, 160MHz %d",
+	DP_PRINT_STATS("BW Counts = 20MHz %u, 40MHz %u, 80MHz %u, 160MHz %u",
 		       pdev->stats.rx.bw[0], pdev->stats.rx.bw[1],
 		       pdev->stats.rx.bw[2], pdev->stats.rx.bw[3]);
 }
 
 static inline void dp_print_tx_bw_stats(struct dp_pdev *pdev)
 {
-	DP_PRINT_STATS("BW Counts = 20MHz %d, 40MHz %d, 80MHz %d, 160MHz %d",
+	DP_PRINT_STATS("BW Counts = 20MHz %u, 40MHz %u, 80MHz %u, 160MHz %u",
 		       pdev->stats.tx.bw[0], pdev->stats.tx.bw[1],
 		       pdev->stats.tx.bw[2], pdev->stats.tx.bw[3]);
 }
@@ -6294,12 +6294,12 @@ void dp_print_rx_rates(struct dp_vdev *vdev)
 	index = 0;
 	for (i = 0; i < SS_COUNT; i++) {
 		index += qdf_snprint(&nss[index], DP_NSS_LENGTH - index,
-				     " %d", pdev->stats.rx.nss[i]);
+				     " %u", pdev->stats.rx.nss[i]);
 	}
 	DP_PRINT_STATS("NSS(1-8) = %s",
 		       nss);
 
-	DP_PRINT_STATS("SGI = 0.8us %d 0.4us %d 1.6us %d 3.2us %d",
+	DP_PRINT_STATS("SGI = 0.8us %u 0.4us %u 1.6us %u 3.2us %u",
 		       pdev->stats.rx.sgi_count[0],
 		       pdev->stats.rx.sgi_count[1],
 		       pdev->stats.rx.sgi_count[2],
@@ -6308,19 +6308,19 @@ void dp_print_rx_rates(struct dp_vdev *vdev)
 	dp_print_rx_bw_stats(pdev);
 
 	DP_PRINT_STATS("Reception Type ="
-		       "SU: %d MU_MIMO:%d MU_OFDMA:%d MU_OFDMA_MIMO:%d",
+		       "SU: %u MU_MIMO:%u MU_OFDMA:%u MU_OFDMA_MIMO:%u",
 		       pdev->stats.rx.reception_type[0],
 		       pdev->stats.rx.reception_type[1],
 		       pdev->stats.rx.reception_type[2],
 		       pdev->stats.rx.reception_type[3]);
 	DP_PRINT_STATS("Aggregation:\n");
-	DP_PRINT_STATS("Number of Msdu's Part of Ampdus = %d",
+	DP_PRINT_STATS("Number of Msdu's Part of Ampdus = %u",
 		       pdev->stats.rx.ampdu_cnt);
-	DP_PRINT_STATS("Number of Msdu's With No Mpdu Level Aggregation : %d",
+	DP_PRINT_STATS("Number of Msdu's With No Mpdu Level Aggregation : %u",
 		       pdev->stats.rx.non_ampdu_cnt);
-	DP_PRINT_STATS("Number of Msdu's Part of Amsdu: %d",
+	DP_PRINT_STATS("Number of Msdu's Part of Amsdu: %u",
 		       pdev->stats.rx.amsdu_cnt);
-	DP_PRINT_STATS("Number of Msdu's With No Msdu Level Aggregation: %d",
+	DP_PRINT_STATS("Number of Msdu's With No Msdu Level Aggregation: %u",
 		       pdev->stats.rx.non_amsdu_cnt);
 }
 
@@ -6331,7 +6331,7 @@ void dp_print_tx_rates(struct dp_vdev *vdev)
 	DP_PRINT_STATS("Tx Rate Info:\n");
 	dp_print_common_rates_info(pdev->stats.tx.pkt_type);
 
-	DP_PRINT_STATS("SGI = 0.8us %d 0.4us %d 1.6us %d 3.2us %d",
+	DP_PRINT_STATS("SGI = 0.8us %u 0.4us %u 1.6us %u 3.2us %u",
 		       pdev->stats.tx.sgi_count[0],
 		       pdev->stats.tx.sgi_count[1],
 		       pdev->stats.tx.sgi_count[2],
@@ -6339,22 +6339,22 @@ void dp_print_tx_rates(struct dp_vdev *vdev)
 
 	dp_print_tx_bw_stats(pdev);
 
-	DP_PRINT_STATS("OFDMA = %d", pdev->stats.tx.ofdma);
-	DP_PRINT_STATS("STBC = %d", pdev->stats.tx.stbc);
-	DP_PRINT_STATS("LDPC = %d", pdev->stats.tx.ldpc);
-	DP_PRINT_STATS("Retries = %d", pdev->stats.tx.retries);
-	DP_PRINT_STATS("Last ack rssi = %d\n", pdev->stats.tx.last_ack_rssi);
-	DP_PRINT_STATS("Number of PPDU's with Punctured Preamble = %d",
-			   pdev->stats.tx.pream_punct_cnt);
+	DP_PRINT_STATS("OFDMA = %u", pdev->stats.tx.ofdma);
+	DP_PRINT_STATS("STBC = %u", pdev->stats.tx.stbc);
+	DP_PRINT_STATS("LDPC = %u", pdev->stats.tx.ldpc);
+	DP_PRINT_STATS("Retries = %u", pdev->stats.tx.retries);
+	DP_PRINT_STATS("Last ack rssi = %u\n", pdev->stats.tx.last_ack_rssi);
+	DP_PRINT_STATS("Number of PPDU's with Punctured Preamble = %u",
+		       pdev->stats.tx.pream_punct_cnt);
 
 	DP_PRINT_STATS("Aggregation:\n");
-	DP_PRINT_STATS("Number of Msdu's Part of Ampdus = %d",
+	DP_PRINT_STATS("Number of Msdu's Part of Ampdus = %u",
 		       pdev->stats.tx.ampdu_cnt);
-	DP_PRINT_STATS("Number of Msdu's With No Mpdu Level Aggregation : %d",
+	DP_PRINT_STATS("Number of Msdu's With No Mpdu Level Aggregation : %u",
 		       pdev->stats.tx.non_ampdu_cnt);
-	DP_PRINT_STATS("Number of Msdu's Part of Amsdu = %d",
+	DP_PRINT_STATS("Number of Msdu's Part of Amsdu = %u",
 		       pdev->stats.tx.amsdu_cnt);
-	DP_PRINT_STATS("Number of Msdu's With No Msdu Level Aggregation = %d",
+	DP_PRINT_STATS("Number of Msdu's With No Msdu Level Aggregation = %u",
 		       pdev->stats.tx.non_amsdu_cnt);
 }
 
@@ -6374,7 +6374,7 @@ static void dp_print_nss(char *nss, uint32_t *pnss, uint32_t ss_count)
 	index = 0;
 	for (i = 0; i < ss_count; i++) {
 		index += qdf_snprint(&nss[index], DP_NSS_LENGTH - index,
-				     " %d", *(pnss + i));
+				     " %u", *(pnss + i));
 	}
 }
 
@@ -6688,13 +6688,13 @@ void dp_print_peer_txrx_stats_be(struct cdp_peer_stats *peer_stats,
 	uint8_t i;
 
 	if (stats_type == PEER_TX_STATS) {
-		DP_PRINT_STATS("BW Counts = 20MHZ %d 40MHZ %d 80MHZ %d 160MHZ %d 320MHZ %d\n",
+		DP_PRINT_STATS("BW Counts = 20MHZ %u 40MHZ %u 80MHZ %u 160MHZ %u 320MHZ %u\n",
 			       peer_stats->tx.bw[CMN_BW_20MHZ],
 			       peer_stats->tx.bw[CMN_BW_40MHZ],
 			       peer_stats->tx.bw[CMN_BW_80MHZ],
 			       peer_stats->tx.bw[CMN_BW_160MHZ],
 			       peer_stats->tx.bw[CMN_BW_320MHZ]);
-		DP_PRINT_STATS("Punctured BW Counts = NO_PUNC %d 20MHz %d 40MHz %d 80MHz %d 120MHz %d\n",
+		DP_PRINT_STATS("Punctured BW Counts = NO_PUNC %u 20MHz %u 40MHz %u 80MHz %u 120MHz %u\n",
 			       peer_stats->tx.punc_bw[NO_PUNCTURE],
 			       peer_stats->tx.punc_bw[PUNCTURED_20MHZ],
 			       peer_stats->tx.punc_bw[PUNCTURED_40MHZ],
@@ -6702,7 +6702,7 @@ void dp_print_peer_txrx_stats_be(struct cdp_peer_stats *peer_stats,
 			       peer_stats->tx.punc_bw[PUNCTURED_120MHZ]);
 		DP_PRINT_STATS("RU Locations");
 		for (i = 0; i < RU_INDEX_MAX; i++)
-			DP_PRINT_STATS("%s: MSDUs Success = %d MPDUs Success = %d MPDUs Tried = %d",
+			DP_PRINT_STATS("%s: MSDUs Success = %u MPDUs Success = %u MPDUs Tried = %u",
 				       cdp_ru_string[i].ru_type,
 				       peer_stats->tx.ru_loc[i].num_msdu,
 				       peer_stats->tx.ru_loc[i].num_mpdu,
@@ -6712,13 +6712,13 @@ void dp_print_peer_txrx_stats_be(struct cdp_peer_stats *peer_stats,
 		dp_print_mu_be_ppdu_rates_info(&peer_stats->tx.mu_be_ppdu_cnt[0]);
 
 	} else {
-		DP_PRINT_STATS("BW Counts = 20MHZ %d 40MHZ %d 80MHZ %d 160MHZ %d 320MHZ %d",
+		DP_PRINT_STATS("BW Counts = 20MHZ %u 40MHZ %u 80MHZ %u 160MHZ %u 320MHZ %u",
 			       peer_stats->rx.bw[CMN_BW_20MHZ],
 			       peer_stats->rx.bw[CMN_BW_40MHZ],
 			       peer_stats->rx.bw[CMN_BW_80MHZ],
 			       peer_stats->rx.bw[CMN_BW_160MHZ],
 			       peer_stats->rx.bw[CMN_BW_320MHZ]);
-		DP_PRINT_STATS("Punctured BW Counts = NO_PUNC %d 20MHz %d 40MHz %d 80MHz %d 120MHz %d\n",
+		DP_PRINT_STATS("Punctured BW Counts = NO_PUNC %u 20MHz %u 40MHz %u 80MHz %u 120MHz %u\n",
 			       peer_stats->rx.punc_bw[NO_PUNCTURE],
 			       peer_stats->rx.punc_bw[PUNCTURED_20MHZ],
 			       peer_stats->rx.punc_bw[PUNCTURED_40MHZ],
@@ -6740,44 +6740,44 @@ void dp_print_peer_txrx_stats_li(struct cdp_peer_stats *peer_stats,
 				 enum peer_stats_type stats_type)
 {
 	if (stats_type == PEER_TX_STATS) {
-		DP_PRINT_STATS("BW Counts = 20MHZ %d 40MHZ %d 80MHZ %d 160MHZ %d\n",
+		DP_PRINT_STATS("BW Counts = 20MHZ %u 40MHZ %u 80MHZ %u 160MHZ %u\n",
 			       peer_stats->tx.bw[CMN_BW_20MHZ],
 			       peer_stats->tx.bw[CMN_BW_40MHZ],
 			       peer_stats->tx.bw[CMN_BW_80MHZ],
 			       peer_stats->tx.bw[CMN_BW_160MHZ]);
 		DP_PRINT_STATS("RU Locations");
-		DP_PRINT_STATS("%s: MSDUs Success = %d MPDUs Success = %d MPDUs Tried = %d",
+		DP_PRINT_STATS("%s: MSDUs Success = %u MPDUs Success = %u MPDUs Tried = %u",
 			       cdp_ru_string[RU_26_INDEX].ru_type,
 			       peer_stats->tx.ru_loc[RU_26_INDEX].num_msdu,
 			       peer_stats->tx.ru_loc[RU_26_INDEX].num_mpdu,
 			       peer_stats->tx.ru_loc[RU_26_INDEX].mpdu_tried);
-		DP_PRINT_STATS("%s: MSDUs Success = %d MPDUs Success = %d MPDUs Tried = %d",
+		DP_PRINT_STATS("%s: MSDUs Success = %u MPDUs Success = %u MPDUs Tried = %u",
 			       cdp_ru_string[RU_52_INDEX].ru_type,
 			       peer_stats->tx.ru_loc[RU_52_INDEX].num_msdu,
 			       peer_stats->tx.ru_loc[RU_52_INDEX].num_mpdu,
 			       peer_stats->tx.ru_loc[RU_52_INDEX].mpdu_tried);
-		DP_PRINT_STATS("%s: MSDUs Success = %d MPDUs Success = %d MPDUs Tried = %d",
+		DP_PRINT_STATS("%s: MSDUs Success = %u MPDUs Success = %u MPDUs Tried = %u",
 			       cdp_ru_string[RU_106_INDEX].ru_type,
 			       peer_stats->tx.ru_loc[RU_106_INDEX].num_msdu,
 			       peer_stats->tx.ru_loc[RU_106_INDEX].num_mpdu,
 			       peer_stats->tx.ru_loc[RU_106_INDEX].mpdu_tried);
-		DP_PRINT_STATS("%s: MSDUs Success = %d MPDUs Success = %d MPDUs Tried = %d",
+		DP_PRINT_STATS("%s: MSDUs Success = %u MPDUs Success = %u MPDUs Tried = %u",
 			       cdp_ru_string[RU_242_INDEX].ru_type,
 			       peer_stats->tx.ru_loc[RU_242_INDEX].num_msdu,
 			       peer_stats->tx.ru_loc[RU_242_INDEX].num_mpdu,
 			       peer_stats->tx.ru_loc[RU_242_INDEX].mpdu_tried);
-		DP_PRINT_STATS("%s: MSDUs Success = %d MPDUs Success = %d MPDUs Tried = %d",
+		DP_PRINT_STATS("%s: MSDUs Success = %u MPDUs Success = %u MPDUs Tried = %u",
 			       cdp_ru_string[RU_484_INDEX].ru_type,
 			       peer_stats->tx.ru_loc[RU_484_INDEX].num_msdu,
 			       peer_stats->tx.ru_loc[RU_484_INDEX].num_mpdu,
 			       peer_stats->tx.ru_loc[RU_484_INDEX].mpdu_tried);
-		DP_PRINT_STATS("%s: MSDUs Success = %d MPDUs Success = %d MPDUs Tried = %d",
+		DP_PRINT_STATS("%s: MSDUs Success = %u MPDUs Success = %u MPDUs Tried = %u",
 			       cdp_ru_string[RU_996_INDEX].ru_type,
 			       peer_stats->tx.ru_loc[RU_996_INDEX].num_msdu,
 			       peer_stats->tx.ru_loc[RU_996_INDEX].num_mpdu,
 			       peer_stats->tx.ru_loc[RU_996_INDEX].mpdu_tried);
 	} else {
-		DP_PRINT_STATS("BW Counts = 20MHZ %d 40MHZ %d 80MHZ %d 160MHZ %d",
+		DP_PRINT_STATS("BW Counts = 20MHZ %u 40MHZ %u 80MHZ %u 160MHZ %u",
 			       peer_stats->rx.bw[CMN_BW_20MHZ],
 			       peer_stats->rx.bw[CMN_BW_40MHZ],
 			       peer_stats->rx.bw[CMN_BW_80MHZ],
@@ -6789,44 +6789,44 @@ void dp_print_peer_txrx_stats_rh(struct cdp_peer_stats *peer_stats,
 				 enum peer_stats_type stats_type)
 {
 	if (stats_type == PEER_TX_STATS) {
-		DP_PRINT_STATS("BW Counts = 20MHZ %d 40MHZ %d 80MHZ %d 160MHZ %d\n",
+		DP_PRINT_STATS("BW Counts = 20MHZ %u 40MHZ %u 80MHZ %u 160MHZ %u\n",
 			       peer_stats->tx.bw[CMN_BW_20MHZ],
 			       peer_stats->tx.bw[CMN_BW_40MHZ],
 			       peer_stats->tx.bw[CMN_BW_80MHZ],
 			       peer_stats->tx.bw[CMN_BW_160MHZ]);
 		DP_PRINT_STATS("RU Locations");
-		DP_PRINT_STATS("%s: MSDUs Success = %d MPDUs Success = %d MPDUs Tried = %d",
+		DP_PRINT_STATS("%s: MSDUs Success = %u MPDUs Success = %u MPDUs Tried = %u",
 			       cdp_ru_string[RU_26_INDEX].ru_type,
 			       peer_stats->tx.ru_loc[RU_26_INDEX].num_msdu,
 			       peer_stats->tx.ru_loc[RU_26_INDEX].num_mpdu,
 			       peer_stats->tx.ru_loc[RU_26_INDEX].mpdu_tried);
-		DP_PRINT_STATS("%s: MSDUs Success = %d MPDUs Success = %d MPDUs Tried = %d",
+		DP_PRINT_STATS("%s: MSDUs Success = %u MPDUs Success = %u MPDUs Tried = %u",
 			       cdp_ru_string[RU_52_INDEX].ru_type,
 			       peer_stats->tx.ru_loc[RU_52_INDEX].num_msdu,
 			       peer_stats->tx.ru_loc[RU_52_INDEX].num_mpdu,
 			       peer_stats->tx.ru_loc[RU_52_INDEX].mpdu_tried);
-		DP_PRINT_STATS("%s: MSDUs Success = %d MPDUs Success = %d MPDUs Tried = %d",
+		DP_PRINT_STATS("%s: MSDUs Success = %u MPDUs Success = %u MPDUs Tried = %u",
 			       cdp_ru_string[RU_106_INDEX].ru_type,
 			       peer_stats->tx.ru_loc[RU_106_INDEX].num_msdu,
 			       peer_stats->tx.ru_loc[RU_106_INDEX].num_mpdu,
 			       peer_stats->tx.ru_loc[RU_106_INDEX].mpdu_tried);
-		DP_PRINT_STATS("%s: MSDUs Success = %d MPDUs Success = %d MPDUs Tried = %d",
+		DP_PRINT_STATS("%s: MSDUs Success = %u MPDUs Success = %u MPDUs Tried = %u",
 			       cdp_ru_string[RU_242_INDEX].ru_type,
 			       peer_stats->tx.ru_loc[RU_242_INDEX].num_msdu,
 			       peer_stats->tx.ru_loc[RU_242_INDEX].num_mpdu,
 			       peer_stats->tx.ru_loc[RU_242_INDEX].mpdu_tried);
-		DP_PRINT_STATS("%s: MSDUs Success = %d MPDUs Success = %d MPDUs Tried = %d",
+		DP_PRINT_STATS("%s: MSDUs Success = %u MPDUs Success = %u MPDUs Tried = %u",
 			       cdp_ru_string[RU_484_INDEX].ru_type,
 			       peer_stats->tx.ru_loc[RU_484_INDEX].num_msdu,
 			       peer_stats->tx.ru_loc[RU_484_INDEX].num_mpdu,
 			       peer_stats->tx.ru_loc[RU_484_INDEX].mpdu_tried);
-		DP_PRINT_STATS("%s: MSDUs Success = %d MPDUs Success = %d MPDUs Tried = %d",
+		DP_PRINT_STATS("%s: MSDUs Success = %u MPDUs Success = %u MPDUs Tried = %u",
 			       cdp_ru_string[RU_996_INDEX].ru_type,
 			       peer_stats->tx.ru_loc[RU_996_INDEX].num_msdu,
 			       peer_stats->tx.ru_loc[RU_996_INDEX].num_mpdu,
 			       peer_stats->tx.ru_loc[RU_996_INDEX].mpdu_tried);
 	} else {
-		DP_PRINT_STATS("BW Counts = 20MHZ %d 40MHZ %d 80MHZ %d 160MHZ %d",
+		DP_PRINT_STATS("BW Counts = 20MHZ %u 40MHZ %u 80MHZ %u 160MHZ %u",
 			       peer_stats->rx.bw[CMN_BW_20MHZ],
 			       peer_stats->rx.bw[CMN_BW_40MHZ],
 			       peer_stats->rx.bw[CMN_BW_80MHZ],
@@ -6841,6 +6841,7 @@ static void dp_peer_print_reo_qref_table(struct dp_peer *peer)
 	int i;
 	uint64_t *reo_qref_addr;
 	uint32_t peer_idx;
+	uint16_t peer_id;
 
 	hal = (struct hal_soc *)peer->vdev->pdev->soc->hal_soc;
 
@@ -6854,22 +6855,30 @@ static void dp_peer_print_reo_qref_table(struct dp_peer *peer)
 		return;
 	}
 
+	DP_PRINT_STATS("Reo Qref table for peer_id: %d\n", peer->peer_id);
+	peer_id = peer->peer_id;
+	if (peer_id == HTT_INVALID_PEER)
+		return;
+
 	if (IS_MLO_DP_LINK_PEER(peer))
 		return;
 
 	if (IS_MLO_DP_MLD_PEER(peer)) {
 		hal = (struct hal_soc *)
 			  peer->vdev->pdev->soc->hal_soc;
-		peer_idx = (peer->peer_id - HAL_ML_PEER_ID_START) *
+		peer_idx = (peer_id - HAL_ML_PEER_ID_START) *
 			    DP_MAX_TIDS;
+		if (peer_idx >= REO_QUEUE_REF_ML_TABLE_SIZE)
+			return;
 		reo_qref_addr =
 			&hal->reo_qref.mlo_reo_qref_table_vaddr[peer_idx];
 	} else {
-		peer_idx = (peer->peer_id * DP_MAX_TIDS);
+		peer_idx = (peer_id * DP_MAX_TIDS);
+		if (peer_idx >= REO_QUEUE_REF_NON_ML_TABLE_SIZE)
+			return;
 		reo_qref_addr =
 			&hal->reo_qref.non_mlo_reo_qref_table_vaddr[peer_idx];
 	}
-	DP_PRINT_STATS("Reo Qref table for peer_id: %d\n", peer->peer_id);
 
 	for (i = 0; i < DP_MAX_TIDS; i++)
 		DP_PRINT_STATS("    Tid [%d]  :%llx", i, reo_qref_addr[i]);
