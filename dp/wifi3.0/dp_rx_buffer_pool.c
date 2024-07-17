@@ -411,9 +411,61 @@ void dp_rx_buffer_pool_deinit(struct dp_soc *soc, u8 mac_id)
 
 #ifdef DP_FEATURE_RX_BUFFER_RECYCLE
 
-#define DP_RX_PP_PAGE_SIZE		32768
+#define DP_RX_PP_PAGE_SIZE_HIGHER_ORDER		32768
+#define DP_RX_PP_PAGE_SIZE_LOWER_ORDER		4096
+
 #define DP_RX_PP_POOL_SIZE_THRES	 4096
 #define DP_RX_PP_AUX_POOL_SIZE           2048
+
+static QDF_STATUS
+dp_rx_page_pool_check_pages_availability(qdf_page_pool_t pp,
+					 uint32_t pool_size,
+					 size_t page_size)
+{
+	qdf_page_t *pages_list;
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+	uint32_t offset;
+	int i;
+
+	/*
+	 * Get and put pages from page pool to make sure,
+	 * no map failures will be encountered later during
+	 * actual allocation. This will also make sure memory
+	 * allocation failures will not be encountered.
+	 */
+	if (!pp) {
+		dp_err("Invalid PP params passed");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	pages_list = qdf_mem_malloc(pool_size *
+				    sizeof(qdf_page_t));
+	if (!pages_list)
+		return QDF_STATUS_E_NOMEM;
+
+	for (i = 0; i < pool_size; i++) {
+		pages_list[i] = qdf_page_pool_alloc_frag(pp, &offset,
+							 page_size);
+		if (!pages_list[i]) {
+			dp_err("page alloc failed for idx:%u", i);
+			ret = QDF_STATUS_E_FAILURE;
+			goto out_put_page;
+		}
+	}
+
+out_put_page:
+	for (i = 0; i < pool_size; i++) {
+		if (!pages_list[i])
+			continue;
+
+		qdf_page_pool_put_page(pp,
+				       pages_list[i], false);
+	}
+
+	qdf_mem_free(pages_list);
+
+	return ret;
+}
 
 QDF_STATUS
 dp_rx_page_pool_nbuf_alloc_and_map(struct dp_soc *soc,
@@ -550,12 +602,51 @@ void dp_rx_page_pool_free(struct dp_soc *soc, uint32_t pool_id)
 	qdf_spinlock_destroy(&rx_pp->pp_lock);
 }
 
+static qdf_page_pool_t
+__dp_rx_page_pool_create(struct dp_soc *soc, uint32_t pool_size,
+			 size_t buf_size, size_t *page_size,
+			 size_t *pp_size)
+{
+	qdf_page_pool_t pp;
+	size_t bufs_per_page;
+	QDF_STATUS status;
+
+alloc_page_pool:
+	*page_size = DP_RX_PP_PAGE_SIZE_HIGHER_ORDER;
+	bufs_per_page = *page_size / buf_size;
+	*pp_size = pool_size / bufs_per_page;
+	if (pool_size % bufs_per_page)
+		*pp_size = (*pp_size + 1);
+
+	pp = qdf_page_pool_create(soc->osdev, *pp_size,
+				  *page_size);
+	if (!pp) {
+		dp_err("Failed to create page pool");
+		return NULL;
+	}
+
+	status = dp_rx_page_pool_check_pages_availability(pp, *pp_size,
+							  *page_size);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		dp_info("page pool resources not available for page_size:%u",
+			*page_size);
+		qdf_page_pool_destroy(pp);
+		pp = NULL;
+		if (*page_size == DP_RX_PP_PAGE_SIZE_HIGHER_ORDER) {
+			*page_size = DP_RX_PP_PAGE_SIZE_LOWER_ORDER;
+			goto alloc_page_pool;
+		}
+	}
+
+	return pp;
+}
+
 QDF_STATUS dp_rx_page_pool_alloc(struct dp_soc *soc, uint32_t pool_id,
 				 uint32_t pool_size)
 {
 	struct dp_rx_page_pool *rx_pp = &soc->rx_pp[pool_id];
 	struct dp_rx_pp_params *pp_params;
-	size_t bufs_per_page;
+	size_t page_size;
 	qdf_page_pool_t pp;
 	size_t buf_size;
 	size_t rem_size;
@@ -589,8 +680,6 @@ QDF_STATUS dp_rx_page_pool_alloc(struct dp_soc *soc, uint32_t pool_id,
 	buf_size += QDF_SHINFO_SIZE;
 	buf_size = QDF_NBUF_ALIGN(buf_size);
 
-	bufs_per_page = DP_RX_PP_PAGE_SIZE / buf_size;
-
 	for (i = 0; i < pp_count; i++) {
 		pp_params = &rx_pp->main_pool[i];
 		pool_size = DP_RX_PP_POOL_SIZE_THRES;
@@ -598,12 +687,9 @@ QDF_STATUS dp_rx_page_pool_alloc(struct dp_soc *soc, uint32_t pool_id,
 		if (i == pp_count - 1 && rem_size)
 			pool_size = rem_size;
 
-		pp_size = pool_size / bufs_per_page;
-		if (pool_size % bufs_per_page)
-			pp_size++;
-
-		pp = qdf_page_pool_create(soc->osdev, pp_size,
-					  DP_RX_PP_PAGE_SIZE);
+		pp = __dp_rx_page_pool_create(soc, pool_size,
+					      buf_size, &page_size,
+					      &pp_size);
 		if (!pp)
 			goto out_pp_fail;
 
@@ -616,15 +702,14 @@ QDF_STATUS dp_rx_page_pool_alloc(struct dp_soc *soc, uint32_t pool_id,
 	}
 
 	rx_pp->aux_pool.pool_size = DP_RX_PP_AUX_POOL_SIZE;
-	rx_pp->aux_pool.pp_size = rx_pp->aux_pool.pool_size / bufs_per_page;
-	if (rx_pp->aux_pool.pool_size % bufs_per_page)
-		rx_pp->aux_pool.pp_size++;
-
-	rx_pp->aux_pool.pp =
-		qdf_page_pool_create(soc->osdev, rx_pp->aux_pool.pp_size,
-				     DP_RX_PP_PAGE_SIZE);
+	rx_pp->aux_pool.pp = __dp_rx_page_pool_create(soc,
+						      rx_pp->aux_pool.pool_size,
+						      buf_size, &page_size,
+						      &pp_size);
 	if (!rx_pp->aux_pool.pp)
 		goto out_pp_fail;
+
+	rx_pp->aux_pool.pp_size = pp_size;
 
 	return QDF_STATUS_SUCCESS;
 
