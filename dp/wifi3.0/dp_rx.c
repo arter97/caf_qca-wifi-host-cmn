@@ -3642,27 +3642,59 @@ bool dp_rx_deliver_special_frame(struct dp_soc *soc,
 #endif
 
 #ifdef QCA_MULTIPASS_SUPPORT
+bool dp_rx_multipass_add_vlan(struct dp_txrx_peer *txrx_peer, qdf_nbuf_t nbuf,
+			      uint8_t tid)
+{
+	struct vlan_ethhdr *vethhdrp;
+
+	if (qdf_unlikely(qdf_nbuf_headroom(nbuf) < ETHERTYPE_VLAN_LEN))
+		return false;
+
+	vethhdrp = (struct vlan_ethhdr *)qdf_nbuf_push_head(nbuf, ETHERTYPE_VLAN_LEN);
+	qdf_mem_move(qdf_nbuf_data(nbuf), qdf_nbuf_data(nbuf) +
+		     ETHERTYPE_VLAN_LEN, 2 * QDF_MAC_ADDR_SIZE);
+	vethhdrp->h_vlan_proto = htons(ETH_P_8021Q);
+	vethhdrp->h_vlan_TCI = htons(((tid & 0x7) << VLAN_PRIO_SHIFT) |
+				(txrx_peer->vlan_id & VLAN_VID_MASK));
+
+	return true;
+}
+
 bool dp_rx_multipass_process(struct dp_txrx_peer *txrx_peer, qdf_nbuf_t nbuf,
 			     uint8_t tid)
 {
 	struct vlan_ethhdr *vethhdrp;
-
 	if (qdf_unlikely(!txrx_peer->vlan_id))
 		return true;
 
 	vethhdrp = (struct vlan_ethhdr *)qdf_nbuf_data(nbuf);
-	/*
-	 * h_vlan_proto & h_vlan_TCI should be 0x8100 & zero respectively
-	 * as it is expected to be padded by 0
-	 * return false if frame doesn't have above tag so that caller will
-	 * drop the frame.
-	 */
-	if (qdf_unlikely(vethhdrp->h_vlan_proto != htons(QDF_ETH_TYPE_8021Q)) ||
-	    qdf_unlikely(vethhdrp->h_vlan_TCI != 0))
-		return false;
 
-	vethhdrp->h_vlan_TCI = htons(((tid & 0x7) << VLAN_PRIO_SHIFT) |
-		(txrx_peer->vlan_id & VLAN_VID_MASK));
+	/*
+	 * If hardware acceleration is enabled on the peer, then no need to add
+	 * a VLAN tag - if it is not enabled, then add a tag.
+	 */
+	if (txrx_peer->hw_accel_en) {
+		/*
+		 * h_vlan_proto & h_vlan_TCI should be 0x8100 &
+		 * zero respectively as it is expected to be
+		 * padded by 0, return false if frame doesn't have
+		 * above tag so that caller will drop the frame.
+		 */
+		if (qdf_unlikely(vethhdrp->h_vlan_proto != htons(QDF_ETH_TYPE_8021Q)) ||
+				 qdf_unlikely(vethhdrp->h_vlan_TCI != 0))
+			return false;
+
+		vethhdrp->h_vlan_TCI = htons(((tid & 0x7) << VLAN_PRIO_SHIFT) |
+			(txrx_peer->vlan_id & VLAN_VID_MASK));
+
+		if (vethhdrp->h_vlan_encapsulated_proto == htons(ETHERTYPE_PAE))
+			dp_tx_remove_vlan_tag(txrx_peer->vdev, nbuf);
+
+		return true;
+	}
+
+	if (!dp_rx_multipass_add_vlan(txrx_peer, nbuf, tid))
+		return false;
 
 	if (vethhdrp->h_vlan_encapsulated_proto == htons(ETHERTYPE_PAE))
 		dp_tx_remove_vlan_tag(txrx_peer->vdev, nbuf);

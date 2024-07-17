@@ -952,6 +952,9 @@ struct cdp_ctrl_ops {
 	void (*txrx_peer_set_vlan_id)(struct cdp_soc_t *cdp_soc,
 				      uint8_t vdev_id, uint8_t *peer_mac,
 				      uint16_t vlan_id);
+	void (*txrx_peer_set_hw_accel_flag)(struct cdp_soc_t *cdp_soc,
+					    uint8_t vdev_id, uint8_t *peer_mac,
+					    bool en);
 #endif
 #if defined(WLAN_TX_PKT_CAPTURE_ENH) || defined(WLAN_RX_PKT_CAPTURE_ENH)
 	QDF_STATUS (*txrx_update_peer_pkt_capture_params)(
@@ -2725,6 +2728,8 @@ struct cdp_ppeds_txrx_ops {
 			    struct cdp_ds_vp_params *vp_params,
 			    void *stats);
 	uint32_t (*ppeds_get_node_id)(struct cdp_soc_t *soc);
+	bool (*ppeds_process_mpsk_exception)(struct cdp_soc_t *soc,
+					     qdf_nbuf_t nbuf);
 };
 #endif /* WLAN_SUPPORT_PPEDS */
 

@@ -97,6 +97,7 @@ static struct cdp_ppeds_txrx_ops dp_ops_ppeds_be = {
 	.ppeds_vp_setup_recovery = dp_ppeds_vp_setup_on_fw_recovery,
 	.ppeds_stats_sync = dp_ppeds_stats_sync_be,
 	.ppeds_get_node_id = dp_ppeds_get_node_id_be,
+	.ppeds_process_mpsk_exception = NULL,
 };
 
 static void dp_ppeds_rings_status(struct dp_soc *soc)

@@ -1090,7 +1090,6 @@ dp_peer_update_inactive_time(struct dp_pdev *pdev, uint32_t tag_type,
 			     uint32_t *tag_buf);
 
 #ifndef QCA_MULTIPASS_SUPPORT
-static inline
 /**
  * dp_peer_set_vlan_id() - set vlan_id for this peer
  * @cdp_soc: soc handle
@@ -1100,9 +1099,26 @@ static inline
  *
  * Return: void
  */
+static inline
 void dp_peer_set_vlan_id(struct cdp_soc_t *cdp_soc,
 			 uint8_t vdev_id, uint8_t *peer_mac,
 			 uint16_t vlan_id)
+{
+}
+
+/**
+ * dp_peer_set_hw_accel_flag() - set HW accel flag for this peer
+ * @cdp_soc: soc handle
+ * @vdev_id: id of vdev object
+ * @peer_mac: mac address
+ * @en: Enable or disable value
+ *
+ * Return: void
+ */
+static inline
+void dp_peer_set_hw_accel_flag(struct cdp_soc_t *cdp_soc,
+			       uint8_t vdev_id, uint8_t *peer_mac,
+			       bool en)
 {
 }
 
@@ -1147,6 +1163,9 @@ void dp_peer_multipass_list_remove(struct dp_peer *peer)
 void dp_peer_set_vlan_id(struct cdp_soc_t *cdp_soc,
 			 uint8_t vdev_id, uint8_t *peer_mac,
 			 uint16_t vlan_id);
+void dp_peer_set_hw_accel_flag(struct cdp_soc_t *cdp_soc,
+			       uint8_t vdev_id, uint8_t *peer_mac,
+			       bool en);
 QDF_STATUS dp_set_vlan_groupkey(struct cdp_soc_t *soc, uint8_t vdev_id,
 				uint16_t vlan_id, uint16_t group_key);
 void dp_peer_multipass_list_init(struct dp_vdev *vdev);

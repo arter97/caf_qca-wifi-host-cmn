@@ -4603,4 +4603,49 @@ void dp_peer_set_vlan_id(struct cdp_soc_t *cdp_soc,
 		dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_TX_MULTIPASS);
 	}
 }
+
+void dp_peer_set_hw_accel_flag(struct cdp_soc_t *cdp_soc,
+			       uint8_t vdev_id, uint8_t *peer_mac,
+			       bool hw_accel_en)
+{
+	struct dp_soc *soc = (struct dp_soc *)cdp_soc;
+	struct dp_peer *peer = NULL;
+	struct dp_vdev *vdev = NULL;
+
+	vdev = dp_vdev_get_ref_by_id((struct dp_soc *)soc, vdev_id,
+				     DP_MOD_ID_TX_MULTIPASS);
+
+	if (qdf_unlikely(!vdev)) {
+		dp_err("NULL vdev");
+		return;
+	}
+
+	peer = dp_peer_get_tgt_peer_hash_find(soc, peer_mac, 0,
+					      vdev_id, DP_MOD_ID_TX_MULTIPASS);
+
+	if (qdf_unlikely(!peer)) {
+		dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_TX_MULTIPASS);
+		dp_err("NULL peer");
+		return;
+	}
+
+	if (qdf_unlikely(!peer->txrx_peer)) {
+		dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_TX_MULTIPASS);
+		dp_err("NULL txrx peer");
+		return;
+	}
+
+	/*
+	 * Set hw accel flag in case if the multipass feature is enabled.
+	 */
+	if (vdev->multipass_en) {
+		peer->txrx_peer->hw_accel_en = hw_accel_en;
+		dp_info("vdev_id %d, vdev %pK, hw_accel_en %d, peer_mac "
+			QDF_MAC_ADDR_FMT "", vdev_id, vdev,
+			hw_accel_en, QDF_MAC_ADDR_REF(peer_mac));
+	}
+
+	dp_peer_unref_delete(peer, DP_MOD_ID_TX_MULTIPASS);
+	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_TX_MULTIPASS);
+}
 #endif /* QCA_MULTIPASS_SUPPORT */

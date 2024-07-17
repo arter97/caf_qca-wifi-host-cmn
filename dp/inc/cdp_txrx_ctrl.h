@@ -635,6 +635,24 @@ cdp_peer_set_vlan_id(ol_txrx_soc_handle soc, uint8_t vdev_id,
 	soc->ops->ctrl_ops->txrx_peer_set_vlan_id(soc, vdev_id, peer_mac,
 						  vlan_id);
 }
+
+static inline void
+cdp_peer_set_hw_accel_flag(ol_txrx_soc_handle soc, uint8_t vdev_id,
+			   uint8_t *peer_mac, bool hw_accel_en)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance:");
+		QDF_BUG(0);
+		return;
+	}
+
+	if (!soc->ops->ctrl_ops ||
+	    !soc->ops->ctrl_ops->txrx_peer_set_hw_accel_flag)
+		return;
+
+	soc->ops->ctrl_ops->txrx_peer_set_hw_accel_flag(soc, vdev_id, peer_mac,
+							hw_accel_en);
+}
 #endif
 
 /**

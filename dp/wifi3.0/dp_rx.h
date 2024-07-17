@@ -2258,12 +2258,30 @@ void dp_rx_enable_mon_dest_frag(struct rx_desc_pool *rx_desc_pool,
 
 #ifndef QCA_MULTIPASS_SUPPORT
 static inline
+bool dp_rx_multipass_add_vlan(struct dp_txrx_peer *peer, qdf_nbuf_t nbuf,
+			      uint8_t tid)
+{
+	return true;
+}
+
+static inline
 bool dp_rx_multipass_process(struct dp_txrx_peer *peer, qdf_nbuf_t nbuf,
 			     uint8_t tid)
 {
 	return false;
 }
 #else
+/**
+ * dp_rx_multipass_add_vlan - insert vlan tag in case of multpass feature in DS.
+ * @peer: DP txrx peer handle
+ * @nbuf: skb
+ * @tid: traffic priority
+ *
+ * Return: bool: True in case of success else false
+ */
+bool dp_rx_multipass_add_vlan(struct dp_txrx_peer *peer, qdf_nbuf_t nbuf,
+			      uint8_t tid);
+
 /**
  * dp_rx_multipass_process - insert vlan tag on frames for traffic separation
  * @txrx_peer: DP txrx peer handle

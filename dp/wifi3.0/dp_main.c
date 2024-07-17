@@ -13485,6 +13485,7 @@ static struct cdp_ctrl_ops dp_ops_ctrl = {
 #endif /* WLAN_SUPPORT_RX_FLOW_TAG */
 #ifdef QCA_MULTIPASS_SUPPORT
 	.txrx_peer_set_vlan_id = dp_peer_set_vlan_id,
+	.txrx_peer_set_hw_accel_flag = dp_peer_set_hw_accel_flag,
 #endif /*QCA_MULTIPASS_SUPPORT*/
 #if defined(WLAN_FEATURE_TSF_AUTO_REPORT) || defined(WLAN_CONFIG_TX_DELAY)
 	.txrx_set_delta_tsf = dp_set_delta_tsf,
