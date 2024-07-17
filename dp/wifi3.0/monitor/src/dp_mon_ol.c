@@ -530,7 +530,12 @@ static void ol_ath_process_tx_frames(void *pdev_hdl, enum WDI_EVENT event,
 	if (!ptr_tx_info->radiotap_done) {
 		/* update radiotap header */
 		convert_tx_to_rx_stats(ptr_tx_info, &rx_status);
-		qdf_nbuf_update_radiotap(&rx_status, skb, RX_PADDING_SIZE);
+		if (!qdf_nbuf_update_radiotap(&rx_status, skb,
+					      RX_PADDING_SIZE)) {
+			qdf_err("failed to update rtap header for tx skb");
+			qdf_nbuf_free(skb);
+			return;
+		}
 	}
 
 	monitor_osif_deliver_tx_capture_data(osifp, skb);
@@ -863,7 +868,12 @@ ol_if_process_rx_mpdu(struct ol_ath_softc_net80211 *scn, enum WDI_EVENT event,
 	}
 
 	convert_mpdu_info_to_stats(mpdu_info, &rx_status);
-	qdf_nbuf_update_radiotap(&rx_status, mpdu_ind, RADIOTAP_HEADER_LEN);
+	if (!qdf_nbuf_update_radiotap(&rx_status, mpdu_ind,
+				      RADIOTAP_HEADER_LEN)) {
+		qdf_err("failed to update radiotap header for rx mpdu");
+		qdf_nbuf_free(mpdu_ind);
+		return;
+	}
 
 	osifp = (osif_dev *)vap->iv_ifp;
 
