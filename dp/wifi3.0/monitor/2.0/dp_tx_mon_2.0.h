@@ -448,6 +448,7 @@ struct dp_tx_ppdu_info {
  * @pkt_buf_processed: tx monitor packet buffer processed
  * @pkt_buf_drop: tx monitor packet buffer dropped due to mpdu incomplete
  * @pkt_buf_to_stack: tx monitor packet buffer send to stack
+ * @pkt_buf_radiotap_err: tx monitor packet buffer dropped due to radiotap err
  * @status_buf_recv: tx monitor status buffer received
  * @status_buf_free: tx monitor status buffer free
  * @totat_tx_mon_replenish_cnt: tx monitor replenish count
@@ -469,6 +470,7 @@ struct dp_tx_monitor_drop_stats {
 	uint64_t pkt_buf_processed;
 	uint64_t pkt_buf_drop;
 	uint64_t pkt_buf_to_stack;
+	uint64_t pkt_buf_radiotap_err;
 
 	uint64_t status_buf_recv;
 	uint64_t status_buf_free;

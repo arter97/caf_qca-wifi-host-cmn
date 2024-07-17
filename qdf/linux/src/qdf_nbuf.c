@@ -5989,8 +5989,8 @@ unsigned int qdf_nbuf_update_radiotap(struct mon_rx_status *rx_status,
 							       rtap_buf,
 							       rtap_len);
 
-		if ((rtap_len - length) > RADIOTAP_EHT_FLAGS_LEN) {
-			qdf_print("length is greater than RADIOTAP_EHT_FLAGS_LEN");
+		if ((rtap_len - length) > RADIOTAP_U_SIG_FLAGS_LEN) {
+			qdf_print("length is greater than RADIOTAP_U_SIG_FLAGS_LEN");
 			return 0;
 		}
 	}
