@@ -7006,7 +7006,7 @@ dp_tx_comp_stale_entry_handle(struct dp_soc *soc, uint32_t ring_num,
 		delta_us = curr_timestamp -
 				soc->stale_entry[ring_num].start_time;
 		if (delta_us > DP_STALE_TX_COMP_WAIT_TIMEOUT_US) {
-			dp_err("Stale tx comp desc, waited %d us", delta_us);
+			dp_err("Stale tx comp desc, waited %llu us", delta_us);
 			return QDF_STATUS_E_FAILURE;
 		}
 	} else {

@@ -7333,7 +7333,7 @@ void wlan_ipa_wdi_opt_dpath_ctrl_notify_flt_delete(struct filter_response
 			    dp_flt_params->flt_addr_params[j].dst_port) {
 				if (result ==
 					HTT_TX_LCE_SUPER_RULE_RELEASE_FAIL) {
-					ipa_debug("opt_dp_ctrl: filter with handle %d found but del failed on fw side");
+					ipa_debug("opt_dp_ctrl: filter with handle found but del failed on fw side");
 					code =
 					WLAN_IPA_WDI_OPT_DPATH_RESP_ERR_FAILURE;
 					break;

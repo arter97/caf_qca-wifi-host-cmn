@@ -5124,11 +5124,11 @@ void dp_print_tsf_tx_delay_hist(struct cdp_hist_stats *hist_stats, uint8_t type)
 	if (type == UL_DELAY) {
 		dp_info(" Delay hist polled by STA_INFO cmd");
 		dp_info("         Pkts_per_delay_bucket%60s | Min | Max | Avg |",
-			"", "");
+			"");
 	} else {
 		dp_info(" Delay jitter hist polled by STA_INFO cmd");
 		dp_info("         Pkts_per_jitter_bucket%60s | Min | Max | Avg |",
-			"", "");
+			"");
 	}
 
 	pos = 0;
