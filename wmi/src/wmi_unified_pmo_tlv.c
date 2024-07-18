@@ -141,7 +141,7 @@ static QDF_STATUS send_add_wow_wakeup_event_cmd_tlv(wmi_unified_t wmi_handle,
 	qdf_mem_copy(&(cmd->event_bitmaps[0]), bitmap, sizeof(uint32_t) *
 		     WMI_WOW_MAX_EVENT_BM_LEN);
 
-	wmi_debug("Wakeup pattern 0x%x%x%x%x %s in fw", cmd->event_bitmaps[0],
+	wmi_info("Wakeup pattern 0x%x|%x|%x|%x %s in fw", cmd->event_bitmaps[0],
 		 cmd->event_bitmaps[1], cmd->event_bitmaps[2],
 		 cmd->event_bitmaps[3], enable ? "enabled" : "disabled");
 
