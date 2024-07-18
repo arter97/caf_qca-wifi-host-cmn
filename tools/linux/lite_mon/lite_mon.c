@@ -357,12 +357,19 @@ static void lite_mon_sanitize_len(uint16_t *len)
 
 /*
  * lite_mon_sanitize_metadata: sanitize the metadata given by user
+ * @direction: direction given by user
  * @metadata: metadata given by user
  * return void
  */
-static void lite_mon_sanitize_metadata(uint16_t metadata)
+static void lite_mon_sanitize_metadata(uint8_t direction, uint16_t metadata)
 {
 	lite_mon_printf(LITE_MON_TRACE_DEBUG, "metadata 0x%02X", metadata);
+	if (direction == LITE_MON_DIRECTION_TX && metadata != 0) {
+		lite_mon_printf(LITE_MON_TRACE_ERROR,
+				"Invalid metadata option 0x%02X for Tx direction",
+				metadata);
+		exit(0);
+	}
 	if (metadata & LITE_MON_METADATA_INVALID) {
 		lite_mon_printf(LITE_MON_TRACE_ERROR,
 				"Invalid metadata option 0x%02X",
@@ -441,7 +448,8 @@ static void lite_mon_set_filter_sanity(struct lite_mon_config *mon_config)
 				 mon_config->direction,
 				 LITE_MON_DATA_FILTER_INVALID);
 	lite_mon_sanitize_len(mon_config->data.filter_config.len);
-	lite_mon_sanitize_metadata(mon_config->data.filter_config.metadata);
+	lite_mon_sanitize_metadata(mon_config->direction,
+				   mon_config->data.filter_config.metadata);
 }
 
 /*
