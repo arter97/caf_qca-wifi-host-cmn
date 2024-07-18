@@ -1439,6 +1439,9 @@ dp_tx_mon_generate_cts_rx_frm(struct dp_pdev *pdev,
 	usr_mpdu_q = &TXMON_PPDU_USR(ppdu_info, 0, mpdu_q);
 
 	nbuf = qdf_nbuf_queue_first(usr_mpdu_q);
+	if (qdf_unlikely(!nbuf))
+		return NULL;
+
 	if (dp_tx_mon_nbuf_get_num_frag(nbuf)) {
 		wh = (struct ieee80211_frame *)qdf_nbuf_get_frag_addr(nbuf, 0);
 	} else {
@@ -1559,6 +1562,9 @@ dp_tx_mon_generate_ack_rx_frm(struct dp_pdev *pdev,
 	usr_mpdu_q = &TXMON_PPDU_USR(ppdu_info, 0, mpdu_q);
 
 	nbuf = qdf_nbuf_queue_first(usr_mpdu_q);
+	if (qdf_unlikely(!nbuf))
+		return NULL;
+
 	if (dp_tx_mon_nbuf_get_num_frag(nbuf)) {
 		wh = (struct ieee80211_frame *)qdf_nbuf_get_frag_addr(nbuf, 0);
 	} else {

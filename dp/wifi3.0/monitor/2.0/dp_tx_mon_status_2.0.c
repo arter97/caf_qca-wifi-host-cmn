@@ -1370,7 +1370,6 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 	}
 	case HAL_MON_TX_FES_STATUS_PROT:
 	{
-		TXMON_PPDU_HAL(tx_prot_ppdu_info, is_used) = 1;
 		TXMON_PPDU_COM(tx_prot_ppdu_info, ppdu_timestamp) =
 			TXMON_PPDU_COM(tx_prot_ppdu_info, ppdu_timestamp) << 1;
 
