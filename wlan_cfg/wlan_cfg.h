@@ -434,11 +434,18 @@ struct wlan_cfg_dp_soc_ctxt {
 	int int_timer_threshold_other;
 	int int_batch_threshold_mon_dest;
 	int int_timer_threshold_mon_dest;
-	int tx_ring_size;
 	int time_control_bp;
 	int rx_buffer_size;
 	int qref_control_size;
+#ifdef WLAN_SUPPORT_PER_RING_CONFIG
+	int tx_comp_ring_size[WLAN_CFG_NUM_RING];
+	int tx_ring_size[WLAN_CFG_NUM_RING];
+	int reo_dst_ring_size[WLAN_CFG_NUM_RING];
+#else
+	int tx_ring_size;
 	int tx_comp_ring_size;
+	int reo_dst_ring_size;
+#endif
 	int tx_comp_ring_size_nss;
 	uint8_t int_tx_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS];
 	uint8_t int_rx_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS];
@@ -485,7 +492,6 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint32_t tx_flow_stop_queue_threshold;
 	uint32_t tx_flow_start_queue_offset;
 	int rx_defrag_min_timeout;
-	int reo_dst_ring_size;
 	int wbm_release_ring;
 	int tcl_cmd_credit_ring;
 	int tcl_status_ring;
@@ -1281,10 +1287,12 @@ int wlan_cfg_get_num_tx_ext_desc_pool(
  * wlan_cfg_get_reo_dst_ring_size() - Get REO destination ring size
  *
  * @cfg: Configuration Handle
+ * @ring_num: Ring number
  *
  * Return: reo_dst_ring_size
  */
-int wlan_cfg_get_reo_dst_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg);
+int wlan_cfg_get_reo_dst_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg,
+				   int ring_num);
 
 /**
  * wlan_cfg_set_reo_dst_ring_size() - Set the REO Destination ring size
@@ -1688,10 +1696,11 @@ int wlan_cfg_get_p2p_checksum_offload(struct wlan_cfg_dp_soc_ctxt *cfg);
 /**
  * wlan_cfg_tx_ring_size - Get Tx DMA ring size (TCL Data Ring)
  * @cfg: soc configuration context
+ * @ring_num: Ring number
  *
  * Return: Tx Ring Size
  */
-int wlan_cfg_tx_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg);
+int wlan_cfg_tx_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg, int ring_num);
 
 /**
  * wlan_cfg_set_tx_ring_size - Set Tx ring size
@@ -1730,10 +1739,11 @@ int wlan_cfg_qref_control_size(struct wlan_cfg_dp_soc_ctxt *cfg);
 /**
  * wlan_cfg_tx_comp_ring_size - Get Tx completion ring size (WBM Ring)
  * @cfg: soc configuration context
+ * @ring_num: Ring number
  *
  * Return: Tx Completion ring size
  */
-int wlan_cfg_tx_comp_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg);
+int wlan_cfg_tx_comp_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg, int ring_num);
 
 /**
  * wlan_cfg_set_tx_comp_ring_size - Set Tx completion ring size

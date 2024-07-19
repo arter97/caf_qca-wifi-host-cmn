@@ -2472,7 +2472,7 @@ static QDF_STATUS dp_soc_ppeds_srng_alloc(struct dp_soc *soc)
 		goto fail;
 	}
 
-	entries = wlan_cfg_tx_comp_ring_size(soc_cfg_ctx);
+	entries = wlan_cfg_tx_comp_ring_size(soc_cfg_ctx, DP_RING_NUM_ANY);
 	if (dp_srng_alloc(soc, &be_soc->ppeds_wbm_release_ring, WBM2SW_RELEASE,
 			  entries, 1)) {
 		dp_err("%pK: dp_srng_alloc failed for ppeds_wbm_release_ring",

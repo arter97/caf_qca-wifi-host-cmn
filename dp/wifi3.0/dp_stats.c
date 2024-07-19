@@ -5904,10 +5904,19 @@ void dp_print_soc_cfg_params(struct dp_soc *soc)
 		       soc_cfg_ctx->htt_packet_type);
 	DP_PRINT_STATS("Max peer_ids: %u ",
 		       soc_cfg_ctx->max_peer_id);
+#ifdef WLAN_SUPPORT_PER_RING_CONFIG
+	for (i = 0; i < WLAN_CFG_NUM_RING; i++)
+		DP_PRINT_STATS("Tx comp ring size[%d]: %u ",
+			       i, soc_cfg_ctx->tx_comp_ring_size[i]);
+	for (i = 0; i < WLAN_CFG_NUM_RING; i++)
+		DP_PRINT_STATS("Tx ring size[%d]: %u ",
+			       i, soc_cfg_ctx->tx_ring_size[i]);
+#else
 	DP_PRINT_STATS("Tx ring size: %u ",
 		       soc_cfg_ctx->tx_ring_size);
 	DP_PRINT_STATS("Tx comp ring size: %u ",
 		       soc_cfg_ctx->tx_comp_ring_size);
+#endif
 	DP_PRINT_STATS("Tx comp ring size nss: %u ",
 		       soc_cfg_ctx->tx_comp_ring_size_nss);
 	DP_PRINT_STATS("Int batch threshold tx: %u ",
@@ -6057,8 +6066,14 @@ void dp_print_soc_cfg_params(struct dp_soc *soc)
 		       soc_cfg_ctx->tcl_cmd_credit_ring);
 	DP_PRINT_STATS("TCL Status ring: %u ",
 		       soc_cfg_ctx->tcl_status_ring);
+#ifdef WLAN_SUPPORT_PER_RING_CONFIG
+	for (i = 0; i < WLAN_CFG_NUM_RING; i++)
+		DP_PRINT_STATS("REO Destination ring[%d]: %u ",
+			       i, soc_cfg_ctx->reo_dst_ring_size[i]);
+#else
 	DP_PRINT_STATS("REO Destination ring: %u ",
 		       soc_cfg_ctx->reo_dst_ring_size);
+#endif
 	DP_PRINT_STATS("REO Reinject ring: %u ",
 		       soc_cfg_ctx->reo_reinject_ring);
 	DP_PRINT_STATS("RX release ring: %u ",

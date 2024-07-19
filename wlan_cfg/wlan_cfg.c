@@ -4564,12 +4564,39 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	wlan_cfg_ctx->htt_packet_type = cfg_get(psoc, CFG_DP_HTT_PACKET_TYPE);
 	wlan_cfg_ctx->max_peer_id = cfg_get(psoc, CFG_DP_MAX_PEER_ID);
 
-	wlan_cfg_ctx->tx_ring_size = cfg_get(psoc, CFG_DP_TX_RING_SIZE);
 	wlan_cfg_ctx->time_control_bp = cfg_get(psoc, CFG_DP_TIME_CONTROL_BP);
 	wlan_cfg_ctx->qref_control_size =
 					cfg_get(psoc, CFG_DP_QREF_CONTROL_SIZE);
+#ifdef WLAN_SUPPORT_PER_RING_CONFIG
+	wlan_cfg_ctx->tx_comp_ring_size[0] = cfg_get(
+					psoc, CFG_DP_TX_COMPL_RING_SIZE_0);
+	wlan_cfg_ctx->tx_comp_ring_size[1] = cfg_get(
+					psoc, CFG_DP_TX_COMPL_RING_SIZE_1);
+	wlan_cfg_ctx->tx_comp_ring_size[2] = cfg_get(
+					psoc, CFG_DP_TX_COMPL_RING_SIZE_2);
+	wlan_cfg_ctx->tx_comp_ring_size[3] = cfg_get(
+					psoc, CFG_DP_TX_COMPL_RING_SIZE_3);
+
+	wlan_cfg_ctx->tx_ring_size[0] = cfg_get(psoc, CFG_DP_TX_RING_SIZE_0);
+	wlan_cfg_ctx->tx_ring_size[1] = cfg_get(psoc, CFG_DP_TX_RING_SIZE_1);
+	wlan_cfg_ctx->tx_ring_size[2] = cfg_get(psoc, CFG_DP_TX_RING_SIZE_2);
+	wlan_cfg_ctx->tx_ring_size[3] = cfg_get(psoc, CFG_DP_TX_RING_SIZE_3);
+
+	wlan_cfg_ctx->reo_dst_ring_size[0] = cfg_get(
+					psoc, CFG_DP_RX_DESTINATION_RING_0);
+	wlan_cfg_ctx->reo_dst_ring_size[1] = cfg_get(
+					psoc, CFG_DP_RX_DESTINATION_RING_1);
+	wlan_cfg_ctx->reo_dst_ring_size[2] = cfg_get(
+					psoc, CFG_DP_RX_DESTINATION_RING_2);
+	wlan_cfg_ctx->reo_dst_ring_size[3] = cfg_get(
+					psoc, CFG_DP_RX_DESTINATION_RING_3);
+#else
 	wlan_cfg_ctx->tx_comp_ring_size = cfg_get(psoc,
 						  CFG_DP_TX_COMPL_RING_SIZE);
+	wlan_cfg_ctx->tx_ring_size = cfg_get(psoc, CFG_DP_TX_RING_SIZE);
+	wlan_cfg_ctx->reo_dst_ring_size = cfg_get(psoc,
+						  CFG_DP_RX_DESTINATION_RING);
+#endif
 
 	wlan_cfg_ctx->tx_comp_ring_size_nss =
 		cfg_get(psoc, CFG_DP_NSS_COMP_RING_SIZE);
@@ -4645,8 +4672,6 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 					     CFG_DP_TCL_CMD_CREDIT_RING);
 	wlan_cfg_ctx->tcl_status_ring = cfg_get(psoc,
 						CFG_DP_TCL_STATUS_RING);
-	wlan_cfg_ctx->reo_dst_ring_size = cfg_get(psoc,
-						  CFG_DP_RX_DESTINATION_RING);
 	wlan_cfg_ctx->reo_reinject_ring = cfg_get(psoc,
 						  CFG_DP_REO_REINJECT_RING);
 	wlan_cfg_ctx->rx_release_ring = cfg_get(psoc,
@@ -5208,7 +5233,25 @@ int wlan_cfg_num_tx_comp_rings(struct wlan_cfg_dp_soc_ctxt *cfg)
 	return cfg->num_tx_comp_rings;
 }
 
-int wlan_cfg_tx_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
+#ifdef WLAN_SUPPORT_PER_RING_CONFIG
+int wlan_cfg_tx_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg, int ring_num)
+{
+	if (ring_num != DP_RING_NUM_ANY)
+		return cfg->tx_ring_size[ring_num];
+	else
+		return cfg->tx_ring_size[0];
+}
+
+void wlan_cfg_set_tx_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg,
+			       int ring_size)
+{
+	int i = 0;
+
+	for (i = 0 ; i < WLAN_CFG_NUM_RING; i++)
+		cfg->tx_ring_size[i] = ring_size;
+}
+#else
+int wlan_cfg_tx_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg, int ring_num)
 {
 	return cfg->tx_ring_size;
 }
@@ -5218,6 +5261,7 @@ void wlan_cfg_set_tx_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg,
 {
 	cfg->tx_ring_size = ring_size;
 }
+#endif
 
 int wlan_cfg_time_control_bp(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
@@ -5238,7 +5282,35 @@ int wlan_cfg_qref_control_size(struct wlan_cfg_dp_soc_ctxt *cfg)
 	return cfg->qref_control_size;
 }
 
-int wlan_cfg_tx_comp_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
+#ifdef WLAN_SUPPORT_PER_RING_CONFIG
+int wlan_cfg_tx_comp_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg, int ring_num)
+{
+	if (ring_num != DP_RING_NUM_ANY)
+		return cfg->tx_comp_ring_size[ring_num];
+	else
+		return cfg->tx_comp_ring_size[0];
+}
+
+void wlan_cfg_set_tx_comp_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg,
+				    int ring_size)
+{
+	int i = 0;
+
+	for (i = 0 ; i < WLAN_CFG_NUM_RING; i++)
+		cfg->tx_comp_ring_size[i] = ring_size;
+}
+
+void wlan_cfg_set_dp_soc_nss_cfg(struct wlan_cfg_dp_soc_ctxt *cfg, int nss_cfg)
+{
+	int i = 0;
+
+	cfg->nss_cfg = nss_cfg;
+	if (cfg->nss_cfg)
+		for (i = 0 ; i < WLAN_CFG_NUM_RING; i++)
+			cfg->tx_comp_ring_size[i] = cfg->tx_comp_ring_size_nss;
+}
+#else
+int wlan_cfg_tx_comp_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg, int ring_num)
 {
 	return cfg->tx_comp_ring_size;
 }
@@ -5248,6 +5320,14 @@ void wlan_cfg_set_tx_comp_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg,
 {
 	cfg->tx_comp_ring_size = ring_size;
 }
+
+void wlan_cfg_set_dp_soc_nss_cfg(struct wlan_cfg_dp_soc_ctxt *cfg, int nss_cfg)
+{
+	cfg->nss_cfg = nss_cfg;
+	if (cfg->nss_cfg)
+		cfg->tx_comp_ring_size = cfg->tx_comp_ring_size_nss;
+}
+#endif
 
 int wlan_cfg_per_pdev_rx_ring(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
@@ -5289,7 +5369,27 @@ void wlan_cfg_set_num_tx_ext_desc_pool(struct wlan_cfg_dp_soc_ctxt *cfg, int num
 	cfg->num_tx_ext_desc_pool = num_pool;
 }
 
-int wlan_cfg_get_reo_dst_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
+#ifdef WLAN_SUPPORT_PER_RING_CONFIG
+int wlan_cfg_get_reo_dst_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg,
+				   int ring_num)
+{
+	if (ring_num != DP_RING_NUM_ANY)
+		return cfg->reo_dst_ring_size[ring_num];
+	else
+		return cfg->reo_dst_ring_size[0];
+}
+
+void wlan_cfg_set_reo_dst_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg,
+				    int reo_dst_ring_size)
+{
+	int i = 0;
+
+	for (i = 0 ; i < WLAN_CFG_NUM_RING; i++)
+		cfg->reo_dst_ring_size[i] = reo_dst_ring_size;
+}
+#else
+int wlan_cfg_get_reo_dst_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg,
+				   int ring_num)
 {
 	return cfg->reo_dst_ring_size;
 }
@@ -5299,6 +5399,7 @@ void wlan_cfg_set_reo_dst_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg,
 {
 	cfg->reo_dst_ring_size = reo_dst_ring_size;
 }
+#endif
 
 void wlan_cfg_set_raw_mode_war(struct wlan_cfg_dp_soc_ctxt *cfg,
 			       bool raw_mode_war)
@@ -5524,13 +5625,6 @@ void wlan_cfg_set_dp_pdev_nss_enabled(struct wlan_cfg_dp_pdev_ctxt *cfg, int nss
 int wlan_cfg_get_dp_soc_nss_cfg(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return  cfg->nss_cfg;
-}
-
-void wlan_cfg_set_dp_soc_nss_cfg(struct wlan_cfg_dp_soc_ctxt *cfg, int nss_cfg)
-{
-	cfg->nss_cfg = nss_cfg;
-	if (cfg->nss_cfg)
-		cfg->tx_comp_ring_size = cfg->tx_comp_ring_size_nss;
 }
 
 int wlan_cfg_get_int_batch_threshold_ppe2tcl(struct wlan_cfg_dp_soc_ctxt *cfg)

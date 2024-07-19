@@ -9567,11 +9567,13 @@ static QDF_STATUS dp_get_psoc_param(struct cdp_soc_t *cdp_soc,
 			wlan_cfg_get_num_tx_ext_desc(wlan_cfg_ctx);
 		break;
 	case CDP_CFG_TX_RING_SIZE:
-		val->cdp_tx_ring_size = wlan_cfg_tx_ring_size(wlan_cfg_ctx);
+		val->cdp_tx_ring_size = wlan_cfg_tx_ring_size(wlan_cfg_ctx,
+							      DP_RING_NUM_ANY);
 		break;
 	case CDP_CFG_TX_COMPL_RING_SIZE:
 		val->cdp_tx_comp_ring_size =
-			wlan_cfg_tx_comp_ring_size(wlan_cfg_ctx);
+			wlan_cfg_tx_comp_ring_size(wlan_cfg_ctx,
+						   DP_RING_NUM_ANY);
 		break;
 	case CDP_CFG_RX_SW_DESC_NUM:
 		val->cdp_rx_sw_desc_num =
@@ -9579,7 +9581,8 @@ static QDF_STATUS dp_get_psoc_param(struct cdp_soc_t *cdp_soc,
 		break;
 	case CDP_CFG_REO_DST_RING_SIZE:
 		val->cdp_reo_dst_ring_size =
-			wlan_cfg_get_reo_dst_ring_size(wlan_cfg_ctx);
+			wlan_cfg_get_reo_dst_ring_size(wlan_cfg_ctx,
+						       DP_RING_NUM_ANY);
 		break;
 	case CDP_CFG_RXDMA_REFILL_RING_SIZE:
 		val->cdp_rxdma_refill_ring_size =
