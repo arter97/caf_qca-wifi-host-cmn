@@ -93,51 +93,6 @@ void target_if_snr_to_signal_strength(uint32_t target_type,
 }
 
 /**
- * get_lut_entry() - Retrieve LUT entry using cookie number
- * @pcfr: PDEV CFR object
- * @offset: cookie number
- *
- * Return: look up table entry
- */
-static struct look_up_table *get_lut_entry(struct pdev_cfr *pcfr,
-					   int offset)
-{
-	if (offset >= pcfr->lut_num) {
-		cfr_err("Invalid offset %d, lut_num %d",
-			offset, pcfr->lut_num);
-		return NULL;
-	}
-
-	return pcfr->lut[offset];
-}
-
-/**
- * release_lut_entry_enh() - Clear all params in an LUT entry
- * @pdev: objmgr PDEV
- * @lut: pointer to LUT
- *
- * Return: status
- */
-static int release_lut_entry_enh(struct wlan_objmgr_pdev *pdev,
-				 struct look_up_table *lut)
-{
-	lut->dbr_recv = false;
-	lut->tx_recv = false;
-	lut->data = NULL;
-	lut->data_len = 0;
-	lut->dbr_ppdu_id = 0;
-	lut->tx_ppdu_id = 0;
-	lut->dbr_tstamp = 0;
-	lut->txrx_tstamp = 0;
-	lut->tx_address1 = 0;
-	lut->tx_address2 = 0;
-	lut->dbr_address = 0;
-	qdf_mem_zero(&lut->header, sizeof(struct csi_cfr_header));
-
-	return 0;
-}
-
-/**
  * target_if_cfr_dump_lut_enh() - dump all valid lut entries
  * @pdev: objmgr pdev
  *
@@ -180,51 +135,6 @@ void target_if_cfr_dump_lut_enh(struct wlan_objmgr_pdev *pdev)
 
 	qdf_spin_unlock_bh(&pcfr->lut_lock);
 
-	wlan_objmgr_pdev_release_ref(pdev, WLAN_CFR_ID);
-}
-
-/**
- * cfr_free_pending_dbr_events() - Flush all pending DBR events. This is useful
- * in cases where for RXTLV drops in host monitor status ring is huge.
- * @pdev: objmgr pdev
- *
- * return: none
- */
-static void cfr_free_pending_dbr_events(struct wlan_objmgr_pdev *pdev)
-{
-	struct pdev_cfr *pcfr;
-	struct look_up_table *lut = NULL;
-	int i = 0;
-	QDF_STATUS retval = 0;
-
-	retval = wlan_objmgr_pdev_try_get_ref(pdev, WLAN_CFR_ID);
-	if (retval != QDF_STATUS_SUCCESS) {
-		cfr_err("failed to get pdev reference");
-		return;
-	}
-
-	pcfr = wlan_objmgr_pdev_get_comp_private_obj(pdev,
-						     WLAN_UMAC_COMP_CFR);
-	if (!pcfr) {
-		cfr_err("pdev object for CFR is null");
-		wlan_objmgr_pdev_release_ref(pdev, WLAN_CFR_ID);
-		return;
-	}
-
-	for (i = 0; i < pcfr->lut_num; i++) {
-		lut = get_lut_entry(pcfr, i);
-		if (!lut)
-			continue;
-
-		if (lut->dbr_recv && !lut->tx_recv &&
-		    (lut->dbr_tstamp < pcfr->last_success_tstamp)) {
-			target_if_dbr_buf_release(pdev, DBR_MODULE_CFR,
-						  lut->dbr_address,
-						  i, 0);
-			pcfr->flush_dbr_cnt++;
-			release_lut_entry_enh(pdev, lut);
-		}
-	}
 	wlan_objmgr_pdev_release_ref(pdev, WLAN_CFR_ID);
 }
 
@@ -821,7 +731,7 @@ static int correlate_and_relay_enh(struct wlan_objmgr_pdev *pdev,
 
 	psoc = wlan_pdev_get_psoc(pdev);
 	if (qdf_unlikely(!psoc)) {
-		cfr_err("psoc is null\n");
+		cfr_err("psoc is null");
 		status = STATUS_ERROR;
 		goto done;
 	}
@@ -873,8 +783,7 @@ static int correlate_and_relay_enh(struct wlan_objmgr_pdev *pdev,
 					"received with invalid length "
 					"header_length_words = %d "
 					"cfr_payload_length_bytes = %d "
-					"ppdu_id:0x%04x\n",
-					cookie,
+					"ppdu_id:0x%04x\n", cookie,
 					lut->header_length,
 					lut->payload_length,
 					lut->tx_ppdu_id);
@@ -892,9 +801,8 @@ static int correlate_and_relay_enh(struct wlan_objmgr_pdev *pdev,
 			 * event since multiple PPDUs are likely to have same
 			 * dma addr, due to ucode aborts
 			 */
-			cfr_debug("Received new dbr event for same "
-				  "cookie %u",
-				  cookie);
+			cfr_err("Received new dbr event for same "
+				  "cookie %u\n", cookie);
 			lut->tx_recv = false;
 			lut->tx_ppdu_id = 0;
 			pcfr->clear_txrx_event++;
@@ -1416,7 +1324,7 @@ void target_if_cfr_rx_tlv_process(struct wlan_objmgr_pdev *pdev, void *nbuf)
 							   lut->data_len,
 							   &end_magic, 4);
 		dump_metadata(header, cookie);
-		release_lut_entry_enh(pdev, lut);
+		release_lut_entry(pdev, lut);
 		target_if_dbr_buf_release(pdev, DBR_MODULE_CFR, buf_addr,
 					  cookie, srng_id);
 	}
@@ -1610,7 +1518,7 @@ static bool enh_cfr_dbr_event_handler(struct wlan_objmgr_pdev *pdev,
 							   lut->data_len,
 							   &end_magic, 4);
 		dump_metadata(header, cookie);
-		release_lut_entry_enh(pdev, lut);
+		release_lut_entry(pdev, lut);
 		status = true;
 	} else if (status == STATUS_HOLD) {
 		status = false;
@@ -2122,15 +2030,15 @@ target_if_peer_capture_event(ol_scn_t sc, uint8_t *data, uint32_t datalen)
 	}
 
 	if ((tx_evt_param.status & PEER_CFR_CAPTURE_EVT_STATUS_MASK) == 0) {
-		cfr_debug("CFR capture failed for peer: " QDF_MAC_ADDR_FMT,
-			  QDF_MAC_ADDR_REF(tx_evt_param.peer_mac_addr.bytes));
+		cfr_err("CFR capture failed for peer: " QDF_MAC_ADDR_FMT,
+			QDF_MAC_ADDR_REF(tx_evt_param.peer_mac_addr.bytes));
 		pcfr->tx_peer_status_cfr_fail++;
 		retval = -EINVAL;
 		goto relref;
 	}
 
 	if (tx_evt_param.status & CFR_TX_EVT_STATUS_MASK) {
-		cfr_debug("TX packet returned status %d for peer: "
+		cfr_err("TX packet returned status %d for peer: "
 			  QDF_MAC_ADDR_FMT,
 			  tx_evt_param.status & CFR_TX_EVT_STATUS_MASK,
 			  QDF_MAC_ADDR_REF(tx_evt_param.peer_mac_addr.bytes));
@@ -2145,14 +2053,14 @@ target_if_peer_capture_event(ol_scn_t sc, uint8_t *data, uint32_t datalen)
 
 	if (target_if_dbr_cookie_lookup(pdev, DBR_MODULE_CFR, buf_addr,
 					&cookie, 0)) {
-		cfr_debug("Cookie lookup failure for addr: 0x%pK status: 0x%x",
-			  (void *)((uintptr_t)buf_addr), tx_evt_param.status);
+		cfr_err("Cookie lookup failure for addr: 0x%pK status: 0x%x",
+			(void *)((uintptr_t)buf_addr), tx_evt_param.status);
 		pcfr->tx_dbr_cookie_lookup_fail++;
 		retval = -EINVAL;
 		goto relref;
 	}
 
-	cfr_debug("buffer address: 0x%pK cookie: %u",
+	cfr_debug("TX_comp: buffer address: 0x%pK cookie: %u",
 		  (void *)((uintptr_t)buf_addr), cookie);
 
 	dump_cfr_peer_tx_event_enh(&tx_evt_param, cookie);
@@ -2161,7 +2069,7 @@ target_if_peer_capture_event(ol_scn_t sc, uint8_t *data, uint32_t datalen)
 
 	lut = get_lut_entry(pcfr, cookie);
 	if (!lut) {
-		cfr_err("lut is NULL\n");
+		cfr_err("lut is NULL");
 		retval = -EINVAL;
 		goto unlock;
 	}
@@ -2232,7 +2140,7 @@ target_if_peer_capture_event(ol_scn_t sc, uint8_t *data, uint32_t datalen)
 							   lut->data_len,
 							   &end_magic, 4);
 		dump_metadata(header, cookie);
-		release_lut_entry_enh(pdev, lut);
+		release_lut_entry(pdev, lut);
 		target_if_dbr_buf_release(pdev, DBR_MODULE_CFR, buf_addr,
 					  cookie, 0);
 	} else {
@@ -2440,104 +2348,6 @@ target_if_unregister_tx_completion_enh_event_handler(struct wlan_objmgr_psoc
 	status = wmi_unified_unregister_event(wmi_hdl,
 					      wmi_peer_cfr_capture_event_id);
 	return status;
-}
-
-/*
- * lut_ageout_timer_task() - Timer to flush pending TXRX/DBR events
- *
- * Return: none
- * NB: kernel-doc script doesn't parse os_timer_func
-
- */
-static os_timer_func(lut_ageout_timer_task)
-{
-	int i = 0;
-	struct pdev_cfr *pcfr = NULL;
-	struct wlan_objmgr_pdev *pdev = NULL;
-	struct look_up_table *lut = NULL;
-	uint64_t diff, cur_tstamp;
-	uint8_t srng_id = 0;
-
-	OS_GET_TIMER_ARG(pcfr, struct pdev_cfr*);
-
-	if (!pcfr) {
-		cfr_err("pdev object for CFR is null");
-		return;
-	}
-
-	pdev = pcfr->pdev_obj;
-	if (!pdev) {
-		cfr_err("pdev is null");
-		return;
-	}
-
-	srng_id = pcfr->rcc_param.srng_id;
-	if (wlan_objmgr_pdev_try_get_ref(pdev, WLAN_CFR_ID)
-	    != QDF_STATUS_SUCCESS) {
-		cfr_err("failed to get pdev reference");
-		return;
-	}
-
-	cur_tstamp = qdf_ktime_to_ms(qdf_ktime_get());
-
-	qdf_spin_lock_bh(&pcfr->lut_lock);
-
-	for (i = 0; i < pcfr->lut_num; i++) {
-		lut = get_lut_entry(pcfr, i);
-		if (!lut)
-			continue;
-
-		if (lut->dbr_recv && !lut->tx_recv) {
-			diff = cur_tstamp - lut->dbr_tstamp;
-			if (diff > LUT_AGE_THRESHOLD) {
-				target_if_dbr_buf_release(pdev, DBR_MODULE_CFR,
-							  lut->dbr_address,
-							  i, srng_id);
-				pcfr->flush_timeout_dbr_cnt++;
-				release_lut_entry_enh(pdev, lut);
-			}
-		}
-	}
-
-	qdf_spin_unlock_bh(&pcfr->lut_lock);
-
-	if (pcfr->lut_timer_init)
-		qdf_timer_mod(&pcfr->lut_age_timer, LUT_AGE_TIMER);
-	wlan_objmgr_pdev_release_ref(pdev, WLAN_CFR_ID);
-}
-
-/**
- * target_if_cfr_start_lut_age_timer() - Start timer to flush aged-out LUT
- * entries
- * @pdev: pointer to pdev object
- *
- * Return: None
- */
-void target_if_cfr_start_lut_age_timer(struct wlan_objmgr_pdev *pdev)
-{
-	struct pdev_cfr *pcfr;
-
-	pcfr = wlan_objmgr_pdev_get_comp_private_obj(pdev,
-						     WLAN_UMAC_COMP_CFR);
-	if (pcfr->lut_timer_init)
-		qdf_timer_mod(&pcfr->lut_age_timer, LUT_AGE_TIMER);
-}
-
-/**
- * target_if_cfr_stop_lut_age_timer() - Stop timer to flush aged-out LUT
- * entries
- * @pdev: pointer to pdev object
- *
- * Return: None
- */
-void target_if_cfr_stop_lut_age_timer(struct wlan_objmgr_pdev *pdev)
-{
-	struct pdev_cfr *pcfr;
-
-	pcfr = wlan_objmgr_pdev_get_comp_private_obj(pdev,
-						     WLAN_UMAC_COMP_CFR);
-	if (pcfr->lut_timer_init)
-		qdf_timer_stop(&pcfr->lut_age_timer);
 }
 
 /**

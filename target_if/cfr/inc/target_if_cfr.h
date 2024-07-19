@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -202,4 +202,61 @@ void target_if_cfr_fill_header(struct csi_cfr_header *hdr,
 			       bool is_wifi_2_0,
 			       uint32_t target_type,
 			       bool is_rcc);
+
+/**
+ * target_if_cfr_start_lut_age_timer() - Start timer to flush aged-out LUT
+ * entries
+ * @pdev: pointer to pdev object
+ *
+ * Return: None
+ */
+void target_if_cfr_start_lut_age_timer(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * target_if_cfr_stop_lut_age_timer() - Stop timer to flush aged-out LUT
+ * entries
+ * @pdev: pointer to pdev object
+ *
+ * Return: None
+ */
+void target_if_cfr_stop_lut_age_timer(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * cfr_free_pending_dbr_events() - Flush all pending DBR events. This is useful
+ * in cases where for RXTLV drops in host monitor status ring is huge.
+ * @pdev: objmgr pdev
+ *
+ * return: none
+ */
+void cfr_free_pending_dbr_events(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * get_lut_entry() - Retrieve LUT entry using cookie number
+ * @pcfr: PDEV CFR object
+ * @offset: cookie number
+ *
+ * Return: look up table entry
+ */
+struct look_up_table *get_lut_entry(struct pdev_cfr *pcfr,
+				    int offset);
+
+/**
+ * release_lut_entry() - Clear all params in an LUT entry
+ * @pdev: objmgr PDEV
+ * @lut: pointer to LUT
+ *
+ * Return: None
+ */
+void release_lut_entry(struct wlan_objmgr_pdev *pdev,
+		       struct look_up_table *lut);
+
+/*
+ * lut_ageout_timer_task() - Timer to flush pending TXRX/DBR events
+ *
+ * Return: none
+ * NB: kernel-doc script doesn't parse os_timer_func
+
+ */
+os_timer_func(lut_ageout_timer_task);
+
 #endif

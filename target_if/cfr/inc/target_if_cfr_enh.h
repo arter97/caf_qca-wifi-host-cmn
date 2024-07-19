@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -662,24 +662,6 @@ QDF_STATUS cfr_enh_init_pdev(
 QDF_STATUS cfr_enh_deinit_pdev(
 		struct wlan_objmgr_psoc *psoc,
 		struct wlan_objmgr_pdev *pdev);
-
-/**
- * target_if_cfr_start_lut_age_timer() - Start timer to flush aged-out LUT
- * entries
- * @pdev: pointer to pdev object
- *
- * Return: None
- */
-void target_if_cfr_start_lut_age_timer(struct wlan_objmgr_pdev *pdev);
-
-/**
- * target_if_cfr_stop_lut_age_timer() - Stop timer to flush aged-out LUT
- * entries
- * @pdev: pointer to pdev object
- *
- * Return: None
- */
-void target_if_cfr_stop_lut_age_timer(struct wlan_objmgr_pdev *pdev);
 
 /**
  * target_if_cfr_dump_lut_enh() - Dump all valid LUT entries

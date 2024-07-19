@@ -35,6 +35,9 @@
 #else
 #include <target_if_cfr_dbr.h>
 #endif
+#ifdef DIRECT_BUF_RX_ENABLE
+#include <target_if_direct_buf_rx_api.h>
+#endif
 
 int target_if_cfr_stop_capture(struct wlan_objmgr_pdev *pdev,
 			       struct wlan_objmgr_peer *peer)
@@ -81,7 +84,7 @@ int target_if_cfr_stop_capture(struct wlan_objmgr_pdev *pdev,
 		pdev_cfrobj->dbr_evt_cnt, pdev_cfrobj->tx_evt_cnt,
 		pdev_cfrobj->release_cnt);
 	cfr_err("tx_peer_status_cfr_fail = %llu",
-		pdev_cfrobj->tx_peer_status_cfr_fail = 0);
+		pdev_cfrobj->tx_peer_status_cfr_fail);
 	cfr_err("tx_evt_status_cfr_fail = %llu",
 		pdev_cfrobj->tx_evt_status_cfr_fail);
 	cfr_err("tx_dbr_cookie_lookup_fail = %llu",
@@ -148,6 +151,188 @@ int target_if_cfr_periodic_peer_cfr_enable(struct wlan_objmgr_pdev *pdev,
 
 	return wmi_unified_pdev_param_send(pdev_wmi_handle,
 					   &pparam, pdev_id);
+}
+
+/**
+ * get_lut_entry() - Retrieve LUT entry using cookie number
+ * @pcfr: PDEV CFR object
+ * @offset: cookie number
+ *
+ * Return: look up table entry
+ */
+struct look_up_table *get_lut_entry(struct pdev_cfr *pcfr,
+				    int offset)
+{
+	if (offset >= pcfr->lut_num) {
+		cfr_err("Invalid offset %d, lut_num %d",
+			offset, pcfr->lut_num);
+		return NULL;
+	}
+
+	return pcfr->lut[offset];
+}
+
+/**
+ * release_lut_entry() - Clear all params in an LUT entry
+ * @pdev: objmgr PDEV
+ * @lut: pointer to LUT
+ *
+ * Return: None
+ */
+void release_lut_entry(struct wlan_objmgr_pdev *pdev,
+		       struct look_up_table *lut)
+{
+	lut->dbr_recv = false;
+	lut->tx_recv = false;
+	lut->data = NULL;
+	lut->data_len = 0;
+	lut->dbr_ppdu_id = 0;
+	lut->tx_ppdu_id = 0;
+	lut->dbr_tstamp = 0;
+	lut->txrx_tstamp = 0;
+	lut->tx_address1 = 0;
+	lut->tx_address2 = 0;
+	lut->dbr_address = 0;
+	qdf_mem_zero(&lut->header, sizeof(struct csi_cfr_header));
+}
+
+/*
+ * lut_ageout_timer_task() - Timer to flush pending TXRX/DBR events
+ *
+ * Return: none
+ * NB: kernel-doc script doesn't parse os_timer_func
+
+ */
+os_timer_func(lut_ageout_timer_task)
+{
+	int i = 0;
+	struct pdev_cfr *pcfr = NULL;
+	struct wlan_objmgr_pdev *pdev = NULL;
+	struct look_up_table *lut = NULL;
+	uint64_t diff, cur_tstamp;
+	uint8_t srng_id = 0;
+
+	OS_GET_TIMER_ARG(pcfr, struct pdev_cfr*);
+
+	if (!pcfr) {
+		cfr_err("pdev object for CFR is null");
+		return;
+	}
+
+	pdev = pcfr->pdev_obj;
+	if (!pdev) {
+		cfr_err("pdev is null");
+		return;
+	}
+
+	if (wlan_objmgr_pdev_try_get_ref(pdev, WLAN_CFR_ID)
+	    != QDF_STATUS_SUCCESS) {
+		cfr_err("failed to get pdev reference");
+		return;
+	}
+
+	cur_tstamp = qdf_ktime_to_ms(qdf_ktime_get());
+
+	qdf_spin_lock_bh(&pcfr->lut_lock);
+	for (i = 0; i < pcfr->lut_num; i++) {
+		lut = get_lut_entry(pcfr, i);
+		if (!lut)
+			continue;
+
+		if (lut->dbr_recv && !lut->tx_recv) {
+			diff = cur_tstamp - lut->dbr_tstamp;
+			if (diff > LUT_AGE_THRESHOLD) {
+				target_if_dbr_buf_release(pdev, DBR_MODULE_CFR,
+							  lut->dbr_address,
+							  i, srng_id);
+				pcfr->flush_timeout_dbr_cnt++;
+				release_lut_entry(pdev, lut);
+			}
+		}
+	}
+
+	qdf_spin_unlock_bh(&pcfr->lut_lock);
+
+	if (pcfr->lut_timer_init)
+		qdf_timer_mod(&pcfr->lut_age_timer, LUT_AGE_TIMER);
+	wlan_objmgr_pdev_release_ref(pdev, WLAN_CFR_ID);
+}
+
+/**
+ * cfr_free_pending_dbr_events() - Flush all pending DBR events. This is useful
+ * in cases where for RXTLV drops in host monitor status ring is huge.
+ * @pdev: objmgr pdev
+ *
+ * return: none
+ */
+void cfr_free_pending_dbr_events(struct wlan_objmgr_pdev *pdev)
+{
+	struct pdev_cfr *pcfr;
+	struct look_up_table *lut = NULL;
+	int i = 0;
+	QDF_STATUS retval = 0;
+
+	retval = wlan_objmgr_pdev_try_get_ref(pdev, WLAN_CFR_ID);
+	if (retval != QDF_STATUS_SUCCESS) {
+		cfr_err("Failed to get pdev reference");
+		return;
+	}
+
+	pcfr = wlan_objmgr_pdev_get_comp_private_obj(pdev, WLAN_UMAC_COMP_CFR);
+	if (!pcfr) {
+		cfr_err("pdev object for CFR is null");
+		wlan_objmgr_pdev_release_ref(pdev, WLAN_CFR_ID);
+		return;
+	}
+
+	for (i = 0; i < pcfr->lut_num; i++) {
+		lut = get_lut_entry(pcfr, i);
+		if (!lut)
+			continue;
+
+		if (lut->dbr_recv && !lut->tx_recv &&
+		    (lut->dbr_tstamp < pcfr->last_success_tstamp)) {
+			target_if_dbr_buf_release(pdev, DBR_MODULE_CFR,
+						  lut->dbr_address,
+						  i, 0);
+			pcfr->flush_dbr_cnt++;
+			release_lut_entry(pdev, lut);
+		}
+	}
+	wlan_objmgr_pdev_release_ref(pdev, WLAN_CFR_ID);
+}
+
+/**
+ * target_if_cfr_start_lut_age_timer() - Start timer to flush aged-out LUT
+ * entries
+ * @pdev: pointer to pdev object
+ *
+ * Return: None
+ */
+void target_if_cfr_start_lut_age_timer(struct wlan_objmgr_pdev *pdev)
+{
+	struct pdev_cfr *pcfr;
+
+	pcfr = wlan_objmgr_pdev_get_comp_private_obj(pdev,
+						     WLAN_UMAC_COMP_CFR);
+	if (pcfr->lut_timer_init)
+		qdf_timer_mod(&pcfr->lut_age_timer, LUT_AGE_TIMER);
+}
+
+/**
+ * target_if_cfr_stop_lut_age_timer() - Stop timer to flush aged-out LUT
+ * entries
+ * @pdev: pointer to pdev object
+ *
+ * Return: None
+ */
+void target_if_cfr_stop_lut_age_timer(struct wlan_objmgr_pdev *pdev)
+{
+	struct pdev_cfr *pcfr;
+
+	pcfr = wlan_objmgr_pdev_get_comp_private_obj(pdev, WLAN_UMAC_COMP_CFR);
+	if (pcfr->lut_timer_init)
+		qdf_timer_stop(&pcfr->lut_age_timer);
 }
 
 int target_if_cfr_enable_cfr_timer(struct wlan_objmgr_pdev *pdev,
