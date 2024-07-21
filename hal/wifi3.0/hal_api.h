@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1810,11 +1810,12 @@ uint32_t hal_srng_dst_num_valid(void *hal_soc,
  *
  * Invalidates a set of cached descriptors starting from TP to cached_HP
  *
- * Return: None
+ * Return: HAL ring descriptor
  */
-static inline void hal_srng_dst_inv_cached_descs(void *hal_soc,
-						 hal_ring_handle_t hal_ring_hdl,
-						 uint32_t entry_count)
+static inline void *
+hal_srng_dst_inv_cached_descs(void *hal_soc,
+			      hal_ring_handle_t hal_ring_hdl,
+			      uint32_t entry_count)
 {
 	struct hal_srng *srng = (struct hal_srng *)hal_ring_hdl;
 	uint32_t *first_desc;
@@ -1826,10 +1827,10 @@ static inline void hal_srng_dst_inv_cached_descs(void *hal_soc,
 	 * API call should be a no op
 	 */
 	if (!(srng->flags & HAL_SRNG_CACHED_DESC))
-		return;
+		return NULL;
 
 	if (!entry_count)
-		return;
+		return NULL;
 
 	first_desc = &srng->ring_base_vaddr[srng->u.dst_ring.tp];
 
@@ -1853,6 +1854,8 @@ static inline void hal_srng_dst_inv_cached_descs(void *hal_soc,
 					      (void *)last_desc);
 	}
 	qdf_dsb();
+
+	return last_desc;
 }
 
 /**

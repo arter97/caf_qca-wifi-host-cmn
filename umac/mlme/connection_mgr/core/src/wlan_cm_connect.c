@@ -2458,9 +2458,11 @@ QDF_STATUS cm_connect_active(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 	 * free vdev keys before setting crypto params for 1x/ owe roaming,
 	 * link vdev keys would be cleaned in osif
 	 */
-	if (!wlan_vdev_mlme_is_mlo_link_vdev(cm_ctx->vdev) &&
-	    !wlan_cm_check_mlo_roam_auth_status(cm_ctx->vdev))
-		wlan_crypto_free_vdev_key(cm_ctx->vdev);
+	if (!wlan_vdev_mlme_is_mlo_link_vdev(cm_ctx->vdev)) {
+		mlme_cm_osif_connect_active_notify(wlan_vdev_get_id(cm_ctx->vdev));
+		if (!wlan_cm_check_mlo_roam_auth_status(cm_ctx->vdev))
+			wlan_crypto_free_vdev_key(cm_ctx->vdev);
+	}
 	cm_fill_vdev_crypto_params(cm_ctx, req);
 	cm_store_wep_key(cm_ctx, &req->crypto, *cm_id);
 
@@ -3273,6 +3275,44 @@ post_err:
 	return qdf_status;
 }
 
+#if defined(CONN_MGR_ADV_FEATURE) && defined(WLAN_FEATURE_11BE_MLO)
+QDF_STATUS cm_bss_peer_create_resp_mlo_attach(struct wlan_objmgr_vdev *vdev,
+					      struct qdf_mac_addr *peer_mac)
+{
+	QDF_STATUS status;
+	struct wlan_objmgr_psoc *psoc;
+	struct wlan_objmgr_peer *link_peer;
+	struct mlo_partner_info partner_info;
+
+	if (!wlan_vdev_mlme_is_mlo_vdev(vdev))
+		return QDF_STATUS_SUCCESS;
+
+	psoc = wlan_vdev_get_psoc(vdev);
+	if (!psoc)
+		return QDF_STATUS_E_NULL_VALUE;
+
+	link_peer = wlan_objmgr_get_peer_by_mac(psoc, (uint8_t *)peer_mac,
+						WLAN_MLME_CM_ID);
+	if (!link_peer)
+		return QDF_STATUS_E_NULL_VALUE;
+
+	partner_info.num_partner_links = 1;
+	qdf_mem_copy(partner_info.partner_link_info[0].link_addr.bytes,
+		     vdev->vdev_mlme.macaddr, QDF_MAC_ADDR_SIZE);
+	partner_info.partner_link_info[0].link_id = wlan_vdev_get_link_id(vdev);
+
+	status = wlan_mlo_peer_create(vdev, link_peer, &partner_info, NULL, 0);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mlme_err("Failed to attach MLO peer " QDF_MAC_ADDR_FMT,
+			 QDF_MAC_ADDR_REF(peer_mac->bytes));
+	}
+
+	wlan_objmgr_peer_release_ref(link_peer, WLAN_MLME_CM_ID);
+
+	return status;
+}
+#endif
+
 QDF_STATUS cm_bss_peer_create_rsp(struct wlan_objmgr_vdev *vdev,
 				  QDF_STATUS status,
 				  struct qdf_mac_addr *peer_mac)
@@ -3298,6 +3338,12 @@ QDF_STATUS cm_bss_peer_create_rsp(struct wlan_objmgr_vdev *vdev,
 	}
 
 	if (QDF_IS_STATUS_SUCCESS(status)) {
+		qdf_status = cm_bss_peer_create_resp_mlo_attach(vdev, peer_mac);
+		if (QDF_IS_STATUS_ERROR(qdf_status)) {
+			mlme_cm_bss_peer_delete_req(vdev);
+			goto next_candidate;
+		}
+
 		qdf_status =
 			cm_sm_deliver_event(vdev,
 					  WLAN_CM_SM_EV_BSS_CREATE_PEER_SUCCESS,
@@ -3309,6 +3355,7 @@ QDF_STATUS cm_bss_peer_create_rsp(struct wlan_objmgr_vdev *vdev,
 		goto post_err;
 	}
 
+next_candidate:
 	/* In case of failure try with next candidate */
 	resp = qdf_mem_malloc(sizeof(*resp));
 	if (!resp) {

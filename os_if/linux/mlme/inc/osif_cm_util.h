@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015, 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -139,6 +139,10 @@ enum osif_cb_type {
 	OSIF_PRE_USERSPACE_UPDATE,
 	OSIF_NOT_HANDLED,
 };
+
+#ifdef CONN_MGR_ADV_FEATURE
+typedef void (*osif_cm_connect_active_notify_cb)(uint8_t vdev_id);
+#endif
 
 /**
  * typedef osif_cm_connect_comp_cb  - Connect complete callback
@@ -364,6 +368,7 @@ typedef QDF_STATUS
 
 /**
  * struct osif_cm_ops - connection manager legacy callbacks
+ * @connect_active_notify_cb: callback for connect active to legacy modules
  * @connect_complete_cb: callback for connect complete to legacy
  * modules
  * @disconnect_complete_cb: callback for disconnect complete to
@@ -386,6 +391,9 @@ typedef QDF_STATUS
  * @perfd_set_cpufreq_cb: callback to update CPU min freq
  */
 struct osif_cm_ops {
+#ifdef CONN_MGR_ADV_FEATURE
+	osif_cm_connect_active_notify_cb connect_active_notify_cb;
+#endif
 	osif_cm_connect_comp_cb connect_complete_cb;
 	osif_cm_disconnect_comp_cb disconnect_complete_cb;
 #ifdef CONN_MGR_ADV_FEATURE
@@ -414,6 +422,16 @@ struct osif_cm_ops {
 	os_if_cm_perfd_set_cpufreq_ctrl_cb perfd_set_cpufreq_cb;
 #endif
 };
+
+#ifdef CONN_MGR_ADV_FEATURE
+/**
+ * osif_cm_connect_active_notify() - Function to notify connect active
+ * @vdev_id: VDEV ID on which connect req is active
+ *
+ * This API notifies connect active to legacy module
+ */
+void osif_cm_connect_active_notify(uint8_t vdev_id);
+#endif
 
 /**
  * osif_cm_connect_comp_ind() - Function to indicate connect
