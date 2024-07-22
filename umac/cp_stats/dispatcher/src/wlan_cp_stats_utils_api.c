@@ -107,12 +107,6 @@ QDF_STATUS wlan_cp_stats_init(void)
 		goto wlan_cp_stats_peer_init_fail2;
 	}
 
-	status = wlan_cp_stats_cstats_init();
-	if (QDF_IS_STATUS_ERROR(status)) {
-		cp_stats_err("Failed to init chipset stats");
-		goto wlan_cp_stats_peer_init_fail2;
-	}
-
 	return QDF_STATUS_SUCCESS;
 
 wlan_cp_stats_peer_init_fail2:
@@ -157,8 +151,6 @@ wlan_cp_stats_psoc_init_fail1:
 QDF_STATUS wlan_cp_stats_deinit(void)
 {
 	QDF_STATUS status = QDF_STATUS_E_FAILURE;
-
-	wlan_cp_stats_cstats_deinit();
 
 	status = wlan_objmgr_unregister_psoc_create_handler
 				(WLAN_UMAC_COMP_CP_STATS,
@@ -219,25 +211,6 @@ QDF_STATUS wlan_cp_stats_deinit(void)
 	return status;
 }
 
-#ifdef WLAN_CHIPSET_STATS
-static void wlan_cp_stats_init_cfg(struct wlan_objmgr_psoc *psoc,
-				   struct cp_stats_context *csc)
-{
-	if (!psoc) {
-		cp_stats_err("psoc is NULL");
-		return;
-	}
-	csc->host_params.chipset_stats_enable =
-			cfg_get(psoc, CHIPSET_STATS_ENABLE);
-}
-#else
-static inline
-void wlan_cp_stats_init_cfg(struct wlan_objmgr_psoc *psoc,
-			    struct cp_stats_context *csc)
-{
-}
-#endif
-
 /* DA/OL specific call back initialization */
 QDF_STATUS wlan_cp_stats_open(struct wlan_objmgr_psoc *psoc)
 {
@@ -254,7 +227,6 @@ QDF_STATUS wlan_cp_stats_open(struct wlan_objmgr_psoc *psoc)
 		cp_stats_err("cp_stats_context is null!");
 		return QDF_STATUS_E_FAILURE;
 	}
-	wlan_cp_stats_init_cfg(psoc, csc);
 
 	if (csc->cp_stats_open)
 		status = csc->cp_stats_open(psoc);

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -474,6 +474,9 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 						ppdu_info, pdev->soc->hal_soc,
 						status_nbuf);
 
+				if (qdf_unlikely(IS_LOCAL_PKT_CAPTURE_RUNNING(mon_pdev, is_local_pkt_capture_running)))
+					dp_rx_handle_local_pkt_capture(pdev, ppdu_info, status_nbuf, tlv_status);
+
 				dp_rx_mon_update_dbg_ppdu_stats(ppdu_info,
 								rx_mon_stats);
 
@@ -529,12 +532,7 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 				qdf_nbuf_free(status_nbuf);
 		} else if (qdf_unlikely(IS_LOCAL_PKT_CAPTURE_RUNNING(mon_pdev,
 				is_local_pkt_capture_running))) {
-			int ret;
-
-			ret = dp_rx_handle_local_pkt_capture(pdev, ppdu_info,
-							     status_nbuf);
-			if (ret)
-				qdf_nbuf_free(status_nbuf);
+			qdf_nbuf_free(status_nbuf);
 		} else if (qdf_unlikely(mon_pdev->mcopy_mode)) {
 			dp_rx_process_mcopy_mode(soc, pdev,
 						 ppdu_info, tlv_status,
