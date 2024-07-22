@@ -1013,6 +1013,17 @@ QDF_STATUS dp_soc_interrupt_attach(struct cdp_soc_t *txrx_soc)
 #define AVG_MSDUS_PER_FLOW 128
 #define AVG_MSDUS_PER_MPDU 4
 
+#ifdef DP_FTM_MODE_SKIP_WBM_RING_INIT
+bool dp_skip_ftm_mode_wbm_ring_init(struct dp_soc *soc)
+{
+	if (soc->cdp_soc.ol_ops->get_con_mode &&
+	    soc->cdp_soc.ol_ops->get_con_mode() == QDF_GLOBAL_FTM_MODE)
+		return true;
+
+	return false;
+}
+#endif
+
 void dp_hw_link_desc_pool_banks_free(struct dp_soc *soc, uint32_t mac_id)
 {
 	struct qdf_mem_multi_page_t *pages;
@@ -1151,6 +1162,9 @@ void dp_hw_link_desc_ring_free(struct dp_soc *soc)
 	void *vaddr = soc->wbm_idle_link_ring.base_vaddr_unaligned;
 	qdf_dma_addr_t paddr;
 
+	if (dp_skip_ftm_mode_wbm_ring_init(soc))
+		return;
+
 	if (soc->wbm_idle_scatter_buf_base_vaddr[0]) {
 		for (i = 0; i < MAX_IDLE_SCATTER_BUFS; i++) {
 			vaddr = soc->wbm_idle_scatter_buf_base_vaddr[i];
@@ -1184,6 +1198,9 @@ QDF_STATUS dp_hw_link_desc_ring_alloc(struct dp_soc *soc)
 	uint32_t ring_type;
 	uint32_t max_alloc_size = wlan_cfg_max_alloc_size(soc->wlan_cfg_ctx);
 	uint32_t tlds;
+
+	if (dp_skip_ftm_mode_wbm_ring_init(soc))
+		return QDF_STATUS_SUCCESS;
 
 	ring_type = WBM_IDLE_LINK;
 	dp_srng = &soc->wbm_idle_link_ring;

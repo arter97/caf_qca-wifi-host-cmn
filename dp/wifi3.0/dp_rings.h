@@ -922,4 +922,25 @@ void dp_deinit_ipa_rx_refill_buf_ring(struct dp_soc *soc);
 int dp_soc_get_ext_grp_id_from_reo_num(struct cdp_soc_t *soc_handle,
 				       uint8_t reo_num);
 #endif
+
+#ifdef DP_FTM_MODE_SKIP_WBM_RING_INIT
+/**
+ * dp_skip_ftm_mode_wbm_ring_init() - Skip WBM idle ring init in FTM mode
+ * @soc: DP SoC handle
+ *
+ * Return: True in FTM mode/False otherwise
+ */
+bool dp_skip_ftm_mode_wbm_ring_init(struct dp_soc *soc);
+#else
+/**
+ * dp_skip_ftm_mode_wbm_ring_init() - Skip WBM idle ring init in FTM mode
+ * @soc: DP SoC handle
+ *
+ * Return: True in FTM mode/False otherwise
+ */
+static inline bool dp_skip_ftm_mode_wbm_ring_init(struct dp_soc *soc)
+{
+	return false;
+}
+#endif
 #endif /* _DP_RINGS_H_ */

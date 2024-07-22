@@ -2643,6 +2643,9 @@ void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id,
 	qdf_dma_addr_t link_desc_paddr;
 	uint32_t link_desc_align_mask;
 
+	if (dp_skip_ftm_mode_wbm_ring_init(soc))
+		return;
+
 	link_desc_align_mask = hal_get_link_desc_align(soc->hal_soc) - 1;
 	num_scatter_bufs = soc->num_scatter_bufs;
 
