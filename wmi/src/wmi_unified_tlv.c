@@ -448,6 +448,8 @@ static const uint32_t pdev_param_tlv[] = {
 	PARAM_MAP(pdev_param_default_6ghz_rate, PDEV_PARAM_DEFAULT_6GHZ_RATE),
 	PARAM_MAP(pdev_param_scan_blanking_mode,
 		  PDEV_PARAM_SET_SCAN_BLANKING_MODE),
+	PARAM_MAP(pdev_param_sa_parallel_mode_gpio_drive_cfg,
+		  PDEV_PARAM_SA_PARALLEL_MODE_GPIO_DRIVE_CFG),
 	PARAM_MAP(pdev_param_set_conc_low_latency_mode,
 		  PDEV_PARAM_SET_CONC_LOW_LATENCY_MODE),
 	PARAM_MAP(pdev_param_rtt_11az_rsid_range,
