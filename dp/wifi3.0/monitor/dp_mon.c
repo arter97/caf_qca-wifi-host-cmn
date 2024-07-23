@@ -3437,7 +3437,7 @@ dp_tx_stats_update(struct dp_pdev *pdev, struct dp_peer *peer,
 
 	DP_STATS_INCC(mon_peer, tx.stbc, num_msdu, ppdu->stbc);
 	DP_STATS_INCC(mon_peer, tx.ldpc, num_msdu, ppdu->ldpc);
-	if (!(ppdu->is_mcast) && ppdu->ack_rssi_valid) {
+	if (!(ppdu->is_mcast) && ppdu->ack_rssi_valid && (ppdu_desc->ack_rssi < 0x80)) {
 		DP_STATS_UPD(mon_peer, tx.last_ack_rssi, ppdu_desc->ack_rssi);
 
 		if (qdf_unlikely(mon_peer->stats.tx.avg_ack_rssi == CDP_INVALID_SNR)) {
