@@ -252,6 +252,7 @@ void qca_sawf_3_link_peer_dl_flow_count(struct net_device *netdev, uint8_t *mac_
 	uint16_t peer_id = HTT_INVALID_PEER;
 	ol_txrx_soc_handle soc_txrx_handle;
 	osif_dev *osdev = NULL;
+	struct qdf_mac_addr macaddr = {0};
 
 	if (!netdev || !netdev->ieee80211_ptr)
 		return;
@@ -266,6 +267,8 @@ void qca_sawf_3_link_peer_dl_flow_count(struct net_device *netdev, uint8_t *mac_
 	if (!cfg_get(psoc, CFG_TGT_MLO_3_LINK_TX))
 		return;
 
+	qdf_mem_copy(macaddr.bytes, mac_addr, QDF_MAC_ADDR_SIZE);
+
 	soc_txrx_handle = wlan_psoc_get_dp_handle(psoc);
 
 	osdev = ath_netdev_priv(netdev);
@@ -277,8 +280,10 @@ void qca_sawf_3_link_peer_dl_flow_count(struct net_device *netdev, uint8_t *mac_
 		peer_id = osifp->peer_id;
 	}
 #endif
+	if (wlan_vdev_mlme_get_opmode(vdev) == QDF_STA_MODE)
+		wlan_vdev_get_bss_peer_mac(vdev, &macaddr);
 
-	cdp_sawf_3_link_peer_flow_count(soc_txrx_handle, mac_addr, peer_id,
+	cdp_sawf_3_link_peer_flow_count(soc_txrx_handle, macaddr.bytes, peer_id,
 					mark_metadata);
 }
 #else
@@ -495,13 +500,15 @@ void qca_sawf_config_ul(struct net_device *dst_dev, struct net_device *src_dev,
 		qca_sawf_peer_dl_flow_count(src_dev, src_mac, rv_service_id,
 								add_or_sub, 1);
 	if (fw_mark_metadata != DP_SAWF_META_DATA_INVALID &&
-	    fw_service_id == QCA_SAWF_SVC_ID_INVALID &&
+	    (!wlan_service_id_valid(fw_service_id) &&
+	     !wlan_service_id_scs_valid(0, fw_service_id)) &&
 	    add_or_sub == FLOW_STOP)
 		qca_sawf_3_link_peer_dl_flow_count(dst_dev, dst_mac,
 						   fw_mark_metadata);
 
 	if (rv_mark_metadata != DP_SAWF_META_DATA_INVALID &&
-	    rv_service_id == QCA_SAWF_SVC_ID_INVALID &&
+	    (!wlan_service_id_valid(fw_service_id) &&
+	     !wlan_service_id_scs_valid(0, fw_service_id)) &&
 	    add_or_sub == FLOW_STOP)
 		qca_sawf_3_link_peer_dl_flow_count(src_dev, src_mac,
 						   rv_mark_metadata);

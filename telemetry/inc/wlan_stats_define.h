@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -214,11 +214,13 @@ enum stats_type_e {
  * @STATS_INFO_AGGREGATE:   Indicate aggregation flag for driver
  * @STATS_INFO_RESOLVE_STA: Indicate Host driver to resolve STA internaly
  * @STATS_INFO_ASYNC_REQ:   Indicate the request for non-blocking stats
+ * @STATS_INFO_MLD_REQ:     Indicate the request for a mld node
  */
 enum stats_info_attr {
 	STATS_INFO_AGGREGATE = 1,
 	STATS_INFO_RESOLVE_STA = 2,
 	STATS_INFO_ASYNC_REQ = 4,
+	STATS_INFO_MLD_REQ = 8,
 };
 
 enum stats_if_wme_ac {
@@ -256,6 +258,15 @@ enum stats_if_mu_packet_type {
 	STATS_IF_TXRX_TYPE_MU_MIMO = 0,
 	STATS_IF_TXRX_TYPE_MU_OFDMA = 1,
 	STATS_IF_TXRX_TYPE_MU_MAX = 2,
+};
+
+enum stats_if_tx_pkt_cap_pkt_type {
+	STATS_IF_TX_PKT_TYPE_ARP = 1,
+	STATS_IF_TX_PKT_TYPE_EAPOL,
+	STATS_IF_TX_PKT_TYPE_DHCP,
+	STATS_IF_TX_PKT_TYPE_DNS,
+	STATS_IF_TX_PKT_TYPE_ICMP,
+	STATS_IF_TX_PKT_TYPE_MAX,
 };
 
 /**
@@ -488,6 +499,12 @@ enum stats_if_rx_sw_drop {
 	STATS_IF_RX_MESH_FILTER_DROP,
 	STATS_IF_RX_ENQUEUE_DROP,
 	STATS_IF_RX_MAX_DROP,
+};
+
+enum stats_if_tx_cap_ver_e {
+	STATS_IF_TX_MON_VER_1 = 1,
+	STATS_IF_TX_MON_VER_2,
+	STATS_IF_TX_MON_VER_MAX,
 };
 
 struct stats_if_hist_bucket {
@@ -1565,6 +1582,29 @@ struct debug_pdev_data_mesh {
 	uint32_t mesh_mem_alloc;
 };
 
+struct debug_pdev_data_txcap_2_0 {
+	uint64_t ppdu_drop_cnt;
+	uint64_t mpdu_drop_cnt;
+	uint64_t tlv_drop_cnt;
+	uint64_t pkt_buf_recv;
+	uint64_t pkt_buf_free;
+	uint64_t pkt_buf_processed;
+	uint64_t pkt_buf_to_stack;
+	uint64_t status_buf_recv;
+	uint64_t status_buf_free;
+	uint64_t totat_tx_mon_replenish_cnt;
+	uint64_t total_tx_mon_reap_cnt;
+	uint64_t ppdu_info_drop_th;
+	uint64_t ppdu_info_drop_flush;
+	uint64_t ppdu_info_drop_trunc;
+	uint64_t ppdu_drop_sw_filter;
+	uint32_t ppdu_id;
+	uint32_t mode;
+	uint32_t total_tx_mon_stuck;
+	uint32_t dp_tx_pkt_cap_stats[STATS_IF_TX_PKT_TYPE_MAX];
+	uint8_t tx_mon_stuck;
+};
+
 struct debug_pdev_data_txcap {
 	uint32_t delayed_ba_not_recev;
 	uint32_t last_rcv_ppdu;
@@ -1588,6 +1628,8 @@ struct debug_pdev_data_txcap {
 	uint64_t ppdu_drop;
 	uint64_t ppdu_wrap_drop;
 	uint64_t ppdu_stats_counter[STATS_IF_PPDU_STATS_MAX_TAG];
+	uint8_t monitor_version;
+	struct debug_pdev_data_txcap_2_0 stats_2_0;
 };
 
 struct debug_pdev_data_monitor {
