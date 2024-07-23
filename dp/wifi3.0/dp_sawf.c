@@ -363,8 +363,6 @@ dp_sawf_get_peer_msduq_info(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr,
 	struct sawf_delay_stats delay_stats;
 	bool is_print_per_svc = false;
 
-	dp_sawf_debug("svc_id:%d, Debug level:%d", svc_id, debug_level);
-
 	dp_soc = cdp_soc_t_to_dp_soc(soc_hdl);
 
 	if (!dp_soc) {
@@ -379,6 +377,11 @@ dp_sawf_get_peer_msduq_info(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr,
 		return QDF_STATUS_E_FAILURE;
 	}
 
+	if (peer->bss_peer) {
+		dp_peer_unref_delete(peer, DP_MOD_ID_SAWF);
+		return QDF_STATUS_SUCCESS;
+	}
+
 	sawf_ctx = dp_peer_sawf_ctx_get(peer);
 	if (!sawf_ctx) {
 		dp_sawf_err("Invalid SAWF ctx");
@@ -386,13 +389,14 @@ dp_sawf_get_peer_msduq_info(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr,
 		return QDF_STATUS_E_FAILURE;
 	}
 
+	dp_sawf_debug("svc_id:%d, Debug level:%d", svc_id, debug_level);
+
 	if (svc_id >= DP_SAWF_SVC_CLASS_MIN && svc_id <= DP_SAWF_SVC_CLASS_MAX)
 		is_print_per_svc = true;
 
 	qdf_spin_lock_bh(&sawf_ctx->sawf_peer_lock);
 
 	if (debug_level >= SAWF_MSDUQ_DBG_LVL_INFO) {
-
 		dp_sawf_info("Peer: "QDF_MAC_ADDR_FMT"",
 			     QDF_MAC_ADDR_REF(mac_addr));
 
@@ -1653,8 +1657,9 @@ dp_sawf_peer_msduq_timeout(struct dp_soc *dpsoc, struct dp_peer *peer,
 	 * primary link.
 	 *
 	 */
-	if (!dp_peer_is_primary_link_peer(peer))
+	if (peer->bss_peer || !dp_peer_is_primary_link_peer(peer)) {
 		return;
+	}
 
 	sawf_ctx = dp_peer_sawf_ctx_get(peer);
 	if (!sawf_ctx) {
