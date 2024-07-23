@@ -1134,30 +1134,51 @@ dp_tx_lite_mon_filtering(struct dp_pdev *pdev,
 
 /**
  * dp_lite_mon_filter_rx_ctrl() - ctrl filter for litemon
+ * @soc: dp soc
  * @mon_pdev_be: Pointer to be mon pdev
+ * @ppdu_info: tx ppdu info
  * @subtype_filter: subtype filter mask
  * @wh: Pointer to header
  *
  * Return: QDF_STATUS
  */
 static inline QDF_STATUS
-dp_lite_mon_filter_rx_ctrl(struct dp_mon_pdev_be *mon_pdev_be,
+dp_lite_mon_filter_rx_ctrl(struct dp_soc *soc,
+			   struct dp_mon_pdev_be *mon_pdev_be,
+			   struct dp_tx_ppdu_info *ppdu_info,
 			   uint16_t subtype_filter,
 			   struct ieee80211_frame *wh)
 {
 	struct dp_lite_mon_rx_config *config =
 			mon_pdev_be->lite_mon_rx_config;
 	struct dp_lite_mon_peer *peer;
+	struct dp_peer *self_peer = NULL;
 	uint16_t ctrl_filter;
 
 	ctrl_filter = config->rx_config.ctrl_filter[DP_MON_FRM_FILTER_MODE_MO];
 	if (ctrl_filter & subtype_filter)
 		return QDF_STATUS_E_FAILURE;
 
+	if (ppdu_info->hal_txmon.ack_recvd) {
+		self_peer = dp_peer_find_hash_find(soc, &wh->i_addr2[0],
+						   false,
+						   DP_VDEV_ALL,
+						   DP_MOD_ID_TX_CAPTURE);
+		if (!self_peer)
+			return QDF_STATUS_E_FAILURE;
+
+		if (self_peer->peer_id ==
+				ppdu_info->hal_txmon.rx_user_status[0].sw_peer_id) {
+			/* Excluding ACK for Non connected clients*/
+			dp_peer_unref_delete(self_peer, DP_MOD_ID_TX_CAPTURE);
+			return QDF_STATUS_E_FAILURE;
+		}
+		dp_peer_unref_delete(self_peer, DP_MOD_ID_TX_CAPTURE);
+	}
+
 	ctrl_filter =
 		config->rx_config.ctrl_filter[DP_MON_FRM_FILTER_MODE_FP_MO];
-	if ((ctrl_filter & subtype_filter) &&
-	    config->rx_config.peer_count) {
+	if (config->rx_config.peer_count) {
 		qdf_spin_lock_bh(&config->lite_mon_rx_lock);
 		TAILQ_FOREACH(peer,
 			      &config->rx_config.peer_list,
@@ -1166,11 +1187,18 @@ dp_lite_mon_filter_rx_ctrl(struct dp_mon_pdev_be *mon_pdev_be,
 					 &wh->i_addr1[0],
 					 QDF_MAC_ADDR_SIZE)) {
 				qdf_spin_unlock_bh(&config->lite_mon_rx_lock);
-				return QDF_STATUS_SUCCESS;
+				if (ctrl_filter & subtype_filter)
+					return QDF_STATUS_SUCCESS;
+				else
+					return QDF_STATUS_E_FAILURE;
 			}
 		}
 		qdf_spin_unlock_bh(&config->lite_mon_rx_lock);
 	}
+
+	ctrl_filter = config->rx_config.ctrl_filter[DP_MON_FRM_FILTER_MODE_FP];
+	if (ctrl_filter & subtype_filter)
+		return QDF_STATUS_SUCCESS;
 
 	return QDF_STATUS_E_FAILURE;
 }
@@ -1199,7 +1227,9 @@ dp_tx_lite_mon_filtering(struct dp_pdev *pdev,
 }
 
 static inline QDF_STATUS
-dp_lite_mon_filter_rx_ctrl(struct dp_mon_pdev_be *mon_pdev_be,
+dp_lite_mon_filter_rx_ctrl(struct dp_soc *soc,
+			   struct dp_mon_pdev_be *mon_pdev_be,
+			   struct dp_tx_ppdu_info *ppdu_info,
 			   uint16_t subtype_filter,
 			   struct ieee80211_frame *wh)
 {
@@ -1454,8 +1484,8 @@ dp_tx_mon_generate_cts_rx_frm(struct dp_pdev *pdev,
 	}
 
 	if (QDF_STATUS_SUCCESS ==
-	    dp_lite_mon_filter_rx_ctrl(mon_pdev_be,
-				       FILTER_CTRL_CTS, wh)) {
+	    dp_lite_mon_filter_rx_ctrl(pdev->soc, mon_pdev_be,
+				       ppdu_info, FILTER_CTRL_CTS, wh)) {
 		rx_mpdu_nbuf = qdf_nbuf_alloc(pdev->soc->osdev,
 					      MAX_DUMMY_FRM_BODY, 0, 4, FALSE);
 		if (!rx_mpdu_nbuf)
@@ -1577,7 +1607,8 @@ dp_tx_mon_generate_ack_rx_frm(struct dp_pdev *pdev,
 	}
 
 	if (QDF_STATUS_SUCCESS ==
-	    dp_lite_mon_filter_rx_ctrl(mon_pdev_be, FILTER_CTRL_ACK, wh)) {
+	    dp_lite_mon_filter_rx_ctrl(pdev->soc, mon_pdev_be,
+				       ppdu_info, FILTER_CTRL_ACK, wh)) {
 		rx_mpdu_nbuf = qdf_nbuf_alloc(pdev->soc->osdev,
 					      MAX_DUMMY_FRM_BODY,
 					      0, 4, FALSE);
