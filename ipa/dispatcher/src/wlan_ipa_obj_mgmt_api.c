@@ -215,6 +215,8 @@ static void ipa_register_ready_cb(void *user_data)
 	}
 
 	ipa_obj->handle_initialized = true;
+	g_instances_added++;
+	ipa_info("No. of instances added for IPA is %d", g_instances_added);
 out:
 	ipa_init_deinit_unlock();
 }
@@ -256,13 +258,6 @@ QDF_STATUS ipa_register_is_ipa_ready(struct wlan_objmgr_pdev *pdev)
 		ipa_err("Failed to check IPA readiness %d", ret);
 		return QDF_STATUS_E_FAILURE;
 	}
-
-	/* Acquire lock */
-	ipa_init_deinit_lock();
-	g_instances_added++;
-	ipa_info("No. of instances added for IPA is %d", g_instances_added);
-	/* Unlock */
-	ipa_init_deinit_unlock();
 
 	return QDF_STATUS_SUCCESS;
 }
