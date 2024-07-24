@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -172,7 +172,8 @@ __qdf_napi_disable(struct napi_struct *napi)
 	napi_disable(napi);
 }
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 0)) || \
+    (LINUX_VERSION_CODE == KERNEL_VERSION(5, 14, 0))
 /**
  * __qdf_netif_napi_add - initialize a NAPI context
  * @netdev:  network device

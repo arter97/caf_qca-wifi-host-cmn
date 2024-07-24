@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -70,7 +70,8 @@
  * cead18552660 ("exit: Rename complete_and_exit to kthread_complete_and_exit")
  * Use the old name for kernels before 5.17
  */
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 17, 0))
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 17, 0)) && \
+	(LINUX_VERSION_CODE != KERNEL_VERSION(5, 14, 0))
 #define kthread_complete_and_exit(c, s) complete_and_exit(c, s)
 #endif
 
