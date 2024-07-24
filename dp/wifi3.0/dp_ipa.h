@@ -506,20 +506,6 @@ QDF_STATUS dp_ipa_handle_rx_buf_smmu_mapping(struct dp_soc *soc,
 					     const char *func,
 					     uint32_t line,
 					     uint8_t caller);
-/**
- * dp_ipa_handle_rx_buf_smmu_mapping_addr - Map/unmap DMA address into
- *					    IPA SMMU domain
- * @soc: DP SOC handle
- * @addr: DMA address of the buffer to be mapped/unmapped
- * @size: size of the mapping
- * @create: Map/unmap
- *
- * Return: QDF_STATUS_SUCCESS for successful operation, else failure
- */
-QDF_STATUS
-dp_ipa_handle_rx_buf_smmu_mapping_addr(struct dp_soc *soc, qdf_dma_addr_t addr,
-				       size_t size, bool create);
-
 #ifdef IPA_OPT_WIFI_DP_CTRL
 
 /**
@@ -776,23 +762,6 @@ static inline QDF_STATUS dp_ipa_handle_rx_buf_smmu_mapping(struct dp_soc *soc,
 							   const char *func,
 							   uint32_t line,
 							   uint8_t caller)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-/**
- * dp_ipa_handle_rx_buf_smmu_mapping_addr - Map/unmap DMA address into
- *					    IPA SMMU domain
- * @soc: DP SOC handle
- * @addr: DMA address of the buffer to be mapped/unmapped
- * @size: size of the mapping
- * @create: Map/unmap
- *
- * Return: QDF_STATUS_SUCCESS for successful operation, else failure
- */
-static inline QDF_STATUS
-dp_ipa_handle_rx_buf_smmu_mapping_addr(struct dp_soc *soc, qdf_dma_addr_t addr,
-				       size_t size, bool create)
 {
 	return QDF_STATUS_SUCCESS;
 }
