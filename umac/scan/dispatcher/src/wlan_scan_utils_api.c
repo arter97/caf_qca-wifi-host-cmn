@@ -2225,49 +2225,59 @@ static uint8_t util_get_link_info_offset(uint8_t *ml_ie, bool *is_ml_ie_valid)
 
 #ifdef QCA_SUPPORT_MBSSIDX_MLDID
 static void
-util_update_partner_info_from_rnr(struct scan_cache_entry *scan_entry)
+util_update_partner_info_from_rnr(struct wlan_objmgr_pdev *pdev,
+				  struct scan_cache_entry *scan_entry)
 {
-	uint8_t link_idx = 0;
-	uint8_t rnr_idx = 0;
+	uint8_t link_idx = 0, rnr_idx = 0, *cc;
 	struct scan_mbssid_info *mbssid;
 	struct rnr_bss_info *rnr = NULL;
 	struct partner_link_info *link_info = NULL;
+	struct wlan_country_ie *cc_ie;
+
+	cc_ie = util_scan_entry_country(scan_entry);
+	if (cc_ie && cc_ie->len)
+		cc = cc_ie->cc;
+	else
+		cc = NULL;
 
 	while ((rnr_idx < MAX_RNR_BSS) && (rnr_idx < scan_entry->rnr.count)) {
 		if (link_idx >= (MLD_MAX_LINKS - 1))
 			break;
 		rnr = &scan_entry->rnr.bss_info[rnr_idx];
-		if (rnr->mld_info_valid &&
-		    (rnr->mld_info.mld_id != UNKNOWN_MLD_ID)) {
-			mbssid = &scan_entry->mbssid_info;
-
-			/**
-			 * Copy link info only if MBSSID index matches with
-			 * RNR MLD ID. For a nontransmitted BSSID beacon,
-			 * MLD ID of its partners will be the MBSSID index.
-			 */
-			if (rnr->mld_info.mld_id != mbssid->profile_num) {
-				rnr_idx++;
-				continue;
-			}
-
-			link_info = &scan_entry->ml_info.link_info[link_idx];
-			qdf_mem_copy(&link_info->link_addr,
-				     &rnr->bssid, QDF_MAC_ADDR_SIZE);
-
-			link_info->link_id = rnr->mld_info.link_id;
-			link_info->freq =
-				wlan_reg_chan_opclass_to_freq(rnr->channel_number,
-							      rnr->operating_class,
-							      true);
-
-			if (!link_info->freq)
-				scm_debug("freq 0 rnr channel %u op_class %u",
-					  rnr->channel_number,
-					  rnr->operating_class);
-			link_info->op_class = rnr->operating_class;
-			link_idx++;
+		if (!rnr->mld_info_valid ||
+		    rnr->mld_info.mld_id == UNKNOWN_MLD_ID) {
+			goto next_rnr_idx;
 		}
+
+		mbssid = &scan_entry->mbssid_info;
+
+		/**
+		 * Copy link info only if MBSSID index matches with
+		 * RNR MLD ID. For a nontransmitted BSSID beacon,
+		 * MLD ID of its partners will be the MBSSID index.
+		 */
+		if (rnr->mld_info.mld_id != mbssid->profile_num)
+			goto next_rnr_idx;
+
+		link_info = &scan_entry->ml_info.link_info[link_idx];
+		qdf_copy_macaddr(&link_info->link_addr, &rnr->bssid);
+
+		link_info->link_id = rnr->mld_info.link_id;
+		link_info->freq =
+			wlan_reg_chan_opclass_to_freq_prefer_global(pdev, cc,
+								    rnr->channel_number,
+								    rnr->operating_class);
+
+		if (!link_info->freq) {
+			scm_debug("freq 0 rnr channel %u op_class %u",
+				  rnr->channel_number,
+				  rnr->operating_class);
+		}
+
+		link_info->op_class = rnr->operating_class;
+		link_idx++;
+
+next_rnr_idx:
 		rnr_idx++;
 	}
 
@@ -2275,36 +2285,47 @@ util_update_partner_info_from_rnr(struct scan_cache_entry *scan_entry)
 }
 #else /* QCA_SUPPORT_MBSSIDX_MLDID */
 static void
-util_update_partner_info_from_rnr(struct scan_cache_entry *scan_entry)
+util_update_partner_info_from_rnr(struct wlan_objmgr_pdev *pdev,
+				  struct scan_cache_entry *scan_entry)
 {
-	uint8_t link_idx = 0;
-	uint8_t rnr_idx = 0;
+	uint8_t link_idx = 0, rnr_idx = 0, *cc;
 	struct rnr_bss_info *rnr = NULL;
 	struct partner_link_info *link_info = NULL;
+	struct wlan_country_ie *cc_ie;
+
+	cc_ie = util_scan_entry_country(scan_entry);
+	if (cc_ie && cc_ie->len)
+		cc = cc_ie->cc;
+	else
+		cc = NULL;
 
 	while ((rnr_idx < MAX_RNR_BSS) && (rnr_idx < scan_entry->rnr.count)) {
 		if (link_idx >= (MLD_MAX_LINKS - 1))
 			break;
 		rnr = &scan_entry->rnr.bss_info[rnr_idx];
-		if (rnr->mld_info_valid && !rnr->mld_info.mld_id) {
-			link_info = &scan_entry->ml_info.link_info[link_idx];
-			qdf_mem_copy(&link_info->link_addr,
-				     &rnr->bssid, QDF_MAC_ADDR_SIZE);
+		if (!rnr->mld_info_valid || rnr->mld_info.mld_id)
+			goto next_rnr_idx;
 
-			link_info->link_id = rnr->mld_info.link_id;
-			link_info->freq =
-				wlan_reg_chan_opclass_to_freq(rnr->channel_number,
-							      rnr->operating_class,
-							      true);
+		link_info = &scan_entry->ml_info.link_info[link_idx];
+		qdf_copy_macaddr(&link_info->link_addr, &rnr->bssid);
 
-			if (!link_info->freq)
-				scm_debug_rl("freq 0 rnr channel %u op_class %u " QDF_MAC_ADDR_FMT,
-					     rnr->channel_number,
-					     rnr->operating_class,
-					     QDF_MAC_ADDR_REF(rnr->bssid.bytes));
-			link_info->op_class = rnr->operating_class;
-			link_idx++;
+		link_info->link_id = rnr->mld_info.link_id;
+		link_info->freq =
+			wlan_reg_chan_opclass_to_freq_prefer_global(pdev, cc,
+								    rnr->channel_number,
+								    rnr->operating_class);
+
+		if (!link_info->freq) {
+			scm_debug_rl("freq 0 rnr channel %u op_class %u " QDF_MAC_ADDR_FMT,
+				     rnr->channel_number,
+				     rnr->operating_class,
+				     QDF_MAC_ADDR_REF(rnr->bssid.bytes));
 		}
+
+		link_info->op_class = rnr->operating_class;
+		link_idx++;
+
+next_rnr_idx:
 		rnr_idx++;
 	}
 
@@ -2313,7 +2334,8 @@ util_update_partner_info_from_rnr(struct scan_cache_entry *scan_entry)
 #endif /* QCA_SUPPORT_MBSSIDX_MLDID */
 
 static void
-util_get_ml_bv_partner_link_info(struct scan_cache_entry *scan_entry)
+util_get_ml_bv_partner_link_info(struct wlan_objmgr_pdev *pdev,
+				 struct scan_cache_entry *scan_entry)
 {
 	uint8_t *ml_ie = scan_entry->ie_list.multi_link_bv;
 	uint8_t *end_ptr = NULL;
@@ -2328,7 +2350,7 @@ util_get_ml_bv_partner_link_info(struct scan_cache_entry *scan_entry)
 	qdf_size_t ml_ie_len = ml_ie[TAG_LEN_POS] + sizeof(struct ie_header);
 
 	/* Update partner info from RNR IE */
-	util_update_partner_info_from_rnr(scan_entry);
+	util_update_partner_info_from_rnr(pdev, scan_entry);
 
 	if (!offset ||
 	    (offset + sizeof(struct wlan_ml_bv_linfo_perstaprof) >= ml_ie_len)) {
@@ -2491,7 +2513,7 @@ static void util_scan_update_ml_info(struct wlan_objmgr_pdev *pdev,
 			scan_entry->ml_info.self_link_id = ml_ie[offset] & 0x0F;
 	}
 
-	util_get_ml_bv_partner_link_info(scan_entry);
+	util_get_ml_bv_partner_link_info(pdev, scan_entry);
 }
 #else
 static inline void util_scan_update_ml_info(struct wlan_objmgr_pdev *pdev,
