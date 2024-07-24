@@ -2220,69 +2220,75 @@ util_get_ml_bv_partner_link_info(struct wlan_objmgr_pdev *pdev,
 				 struct scan_cache_entry *scan_entry)
 {
 	uint8_t *ml_ie = scan_entry->ie_list.multi_link_bv;
-	uint8_t *end_ptr = NULL;
+	uint8_t *end_ptr = NULL, *cc;
 	bool is_ml_ie_valid;
 	uint8_t offset = util_get_link_info_offset(ml_ie, &is_ml_ie_valid);
 	uint16_t sta_ctrl;
 	uint8_t *stactrl_offset = NULL, *ielist_offset;
 	uint8_t perstaprof_len = 0, perstaprof_stainfo_len = 0, ielist_len = 0;
 	struct partner_link_info *link_info = NULL;
-	uint8_t eid = 0;
-	uint8_t link_idx = 0;
-	uint8_t rnr_idx = 0;
+	uint8_t eid = 0, link_idx = 0, rnr_idx = 0;
 	struct rnr_bss_info *rnr = NULL;
 	uint16_t freq;
 	struct scan_cache_entry *tmp_entry;
 	struct qdf_mac_addr bcast_addr = QDF_MAC_ADDR_BCAST_INIT;
 	struct scan_mbssid_info *mbssid;
 	qdf_size_t ml_ie_len = ml_ie[TAG_LEN_POS] + sizeof(struct ie_header);
+	struct wlan_country_ie *cc_ie;
+
+	cc_ie = util_scan_entry_country(scan_entry);
+	if (cc_ie && cc_ie->len)
+		cc = cc_ie->cc;
+	else
+		cc = NULL;
 
 	/* Update partner info  from RNR IE */
 	while ((rnr_idx < MAX_RNR_BSS) && (rnr_idx < scan_entry->rnr.count)) {
 		if (link_idx >= (MLD_MAX_LINKS - 1))
 			break;
 		rnr = &scan_entry->rnr.bss_info[rnr_idx];
-		if (rnr->mld_info_valid && !rnr->mld_info.mld_id) {
-			mbssid = &scan_entry->mbssid_info;
-			freq =
-			     wlan_reg_chan_opclass_to_freq(rnr->channel_number,
-							   rnr->operating_class,
-							   true);
+		if (!rnr->mld_info_valid || rnr->mld_info.mld_id)
+			goto next_rnr_idx;
 
-			if ((!scan_entry->mbssid_info.profile_count) &&
-			    !(rnr->bss_params & TBTT_BSS_PARAM_TRANS_BSSID_BIT)) {
-				tmp_entry =
-				       scm_scan_get_scan_entry_by_mac_freq(pdev,
-							     &rnr->bssid, freq);
-				if (tmp_entry) {
-					qdf_mem_copy(mbssid,
-						     &tmp_entry->mbssid_info,
-						     sizeof(*mbssid));
-					util_scan_free_cache_entry(tmp_entry);
-				} else {
-					qdf_mem_copy(mbssid->non_trans_bssid,
-						     rnr->bssid.bytes,
-						     QDF_MAC_ADDR_SIZE);
-					qdf_mem_copy(mbssid->trans_bssid,
-						     bcast_addr.bytes,
-						     QDF_MAC_ADDR_SIZE);
-				}
+		mbssid = &scan_entry->mbssid_info;
+		freq = wlan_reg_chan_opclass_to_freq_prefer_global(pdev, cc,
+								   rnr->channel_number,
+								   rnr->operating_class);
+
+		if ((!scan_entry->mbssid_info.profile_count) &&
+		    !(rnr->bss_params & TBTT_BSS_PARAM_TRANS_BSSID_BIT)) {
+			tmp_entry = scm_scan_get_scan_entry_by_mac_freq(pdev,
+									&rnr->bssid,
+									freq);
+			if (tmp_entry) {
+				qdf_mem_copy(mbssid, &tmp_entry->mbssid_info,
+					     sizeof(*mbssid));
+				util_scan_free_cache_entry(tmp_entry);
+			} else {
+				qdf_mem_copy(mbssid->non_trans_bssid,
+					     rnr->bssid.bytes,
+					     QDF_MAC_ADDR_SIZE);
+				qdf_mem_copy(mbssid->trans_bssid,
+					     bcast_addr.bytes,
+					     QDF_MAC_ADDR_SIZE);
 			}
-
-			link_info = &scan_entry->ml_info.link_info[link_idx];
-			qdf_mem_copy(&link_info->link_addr,
-				     &rnr->bssid, QDF_MAC_ADDR_SIZE);
-
-			link_info->link_id = rnr->mld_info.link_id;
-			link_info->freq = freq;
-
-			if (!link_info->freq)
-				scm_debug("freq 0 rnr channel %u op_class %u",
-					  rnr->channel_number,
-					  rnr->operating_class);
-			link_info->op_class = rnr->operating_class;
-			link_idx++;
 		}
+
+		link_info = &scan_entry->ml_info.link_info[link_idx];
+		qdf_mem_copy(&link_info->link_addr, &rnr->bssid,
+			     QDF_MAC_ADDR_SIZE);
+
+		link_info->link_id = rnr->mld_info.link_id;
+		link_info->freq = freq;
+
+		if (!link_info->freq)
+			scm_debug("freq 0 rnr channel %u op_class %u",
+				  rnr->channel_number,
+				  rnr->operating_class);
+		link_info->op_class = rnr->operating_class;
+		link_idx++;
+
+next_rnr_idx:
 		rnr_idx++;
 	}
 
