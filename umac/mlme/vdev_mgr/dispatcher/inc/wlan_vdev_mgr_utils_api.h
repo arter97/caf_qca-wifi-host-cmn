@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -97,4 +98,25 @@ void wlan_util_vdev_get_param(struct wlan_objmgr_vdev *vdev,
 			      enum wlan_mlme_cfg_id param_id,
 			      uint32_t *param_value);
 
+/**
+ * wlan_util_vdev_mgr_get_cac_timeout_for_vdev() - Get the CAC timeout value for
+ * a given vdev.
+ * @vdev: Pointer to vdev object.
+ *
+ * Return: CAC timeout value
+ */
+int wlan_util_vdev_mgr_get_cac_timeout_for_vdev(struct wlan_objmgr_vdev *vdev);
+
+#ifdef MOBILE_DFS_SUPPORT
+/**
+ * wlan_util_vdev_mgr_set_cac_timeout_for_vdev() - set the CAC timeout value for
+ * a given vdev.
+ * @vdev: Pointer to vdev object.
+ * @new_chan_cac_ms: cac duration of new channel
+ *
+ * Return: void
+ */
+void wlan_util_vdev_mgr_set_cac_timeout_for_vdev(struct wlan_objmgr_vdev *vdev,
+						 uint32_t new_chan_cac_ms);
+#endif /* MOBILE_DFS_SUPPORT */
 #endif /* __WLAN_VDEV_MGR_UTILS_API_H__ */
