@@ -2990,7 +2990,7 @@ static QDF_STATUS send_thermal_mitigation_param_cmd_non_tlv(wmi_unified_t wmi_ha
 	cmd->enable = param->enable;
 	cmd->dc = param->dc;
 	cmd->dc_per_event = param->dc_per_event;
-	for (i = 0; i < THERMAL_LEVELS; i++) {
+	for (i = 0; i < DEFAULT_THERMAL_LEVELS; i++) {
 		cmd->levelconf[i].tmplwm = param->levelconf[i].tmplwm;
 		cmd->levelconf[i].tmphwm = param->levelconf[i].tmphwm;
 		cmd->levelconf[i].dcoffpercent =
@@ -10101,6 +10101,25 @@ static QDF_STATUS extract_multi_vdev_restart_resp_event_non_tlv(
 }
 
 /**
+ * extract_scan_blanking_params_non_tlv() - extract scan blanking params from
+ * event
+ * @wmi_handle: wmi handle
+ * @param evt_buf: pointer to event buffer
+ * @param chan_info: Pointer to hold scan blanking parameters
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+static QDF_STATUS extract_scan_blanking_params_non_tlv(wmi_unified_t wmi_handle,
+	void *evt_buf, wmi_host_scan_blanking_params *blanking_params)
+{
+	/* For non-tlv platforms blanking is not supported  */
+	blanking_params->blanking_duration = 0;
+	blanking_params->blanking_count = 0;
+	blanking_params->valid = false;
+
+	return QDF_STATUS_SUCCESS;
+}
+/**
  * wmi_non_tlv_pdev_id_conversion_enable() - Enable pdev_id conversion
  *
  * Return None.
@@ -10455,6 +10474,8 @@ struct wmi_ops non_tlv_ops =  {
 			send_multiple_vdev_restart_req_cmd_non_tlv,
 	.extract_multi_vdev_restart_resp_event =
 		extract_multi_vdev_restart_resp_event_non_tlv,
+	.extract_scan_blanking_params =
+		extract_scan_blanking_params_non_tlv,
 };
 
 /**

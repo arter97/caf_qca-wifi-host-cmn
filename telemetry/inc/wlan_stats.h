@@ -87,6 +87,7 @@ enum stats_feat_index_e {
  * struct stats_config: Structure to hold user configurations
  * @wiphy:  Pointer to wiphy structure which came as part of User request
  * @feat:  Feat flag set to dedicated bit of this field
+ * @request_id: Indicate the request ID of non-blocking stats request
  * @lvl:  Requested level of Stats (i.e. Basic, Advance or Debug)
  * @obj:  Requested stats for object (i.e. AP, Radio, Vap or STA)
  * @type:  Requested stats category
@@ -97,10 +98,13 @@ enum stats_feat_index_e {
  * @peer_type: type of peer
  * @intf_name: Interface name for which stats are requested
  * @async_req: Indicate the request for non-blocking stats
+ * @link_id: Link id of a MLD object
+ * @resolve_sta: Indicate Host driver to find the vdev to which STA is connected
  */
 struct stats_config {
 	struct wiphy           *wiphy;
 	u_int64_t              feat;
+	u_int64_t              request_id;
 	enum stats_level_e     lvl;
 	enum stats_object_e    obj;
 	enum stats_type_e      type;
@@ -111,6 +115,40 @@ struct stats_config {
 	enum stats_peer_type   peer_type;
 	char                   intf_name[IFNAMSIZ];
 	bool                   async_req;
+	u_int8_t               link_id;
+	bool                   resolve_sta;
+};
+
+/**
+ * struct stats_list_entry: Structure used to represent an entry in
+ * the non-blocking stats work list
+ * @node : linked list node
+ * @pdev : Pointer to the PDEV object of the request
+ * @vdev : Pointer to the VDEV object of the request
+ * @cfg  : User configuration for the request
+ * @mac  : Mac address of peer for peer stats
+ */
+struct stats_list_entry {
+	qdf_list_node_t node;
+	struct wlan_objmgr_pdev *pdev;
+	struct wlan_objmgr_vdev *vdev;
+	struct stats_config *cfg;
+	uint8_t mac[QDF_MAC_ADDR_SIZE];
+};
+
+/**
+ * struct stats_work_context: Structure representing the context of stat work
+ * @work           : Instance of work
+ * @list_lock      : lock for the work list
+ * @nb_stats_work_list: queue of non-blocking stats requests
+ * @num_entries    : number of entries in the queue
+ * @is_initialized : flag to track init and deinit of context
+ */
+struct stats_work_context {
+	qdf_work_t work;
+	qdf_spinlock_t list_lock;
+	qdf_list_t nb_stats_work_list;
+	bool is_initialized;
 };
 
 /**
@@ -246,4 +284,26 @@ struct wlan_objmgr_vdev *wlan_stats_get_vdev_from_sta_mac(uint8_t *mac);
  */
 uint32_t wlan_stats_get_tlv_counts_and_total_length(struct unified_stats *stats,
 						    uint8_t *tlv_count);
+
+/**
+ * wlan_stats_nb_stats_work_attach: API to allocate work for handling
+ *                       non-blocking stats request
+ */
+void wlan_stats_nb_stats_work_attach(void);
+
+/**
+ * wlan_stats_schedule_nb_stats_work: API to queue for scheduling non-blocking
+ *                         stats request
+ * Return: QDF_STATUS_SUCCESS for success and Error code for failure
+ */
+QDF_STATUS wlan_stats_schedule_nb_stats_work(struct wlan_objmgr_pdev *pdev,
+					     struct wlan_objmgr_vdev *vdev,
+					     struct stats_config *cfg,
+					     uint8_t *mac);
+
+/**
+ * wlan_stats_nb_stats_work_detach: API to deallocate work for handling
+ *                       non-blocking stats request
+ */
+void wlan_stats_nb_stats_work_detach(void);
 #endif /* _WLAN_STATS_H_ */

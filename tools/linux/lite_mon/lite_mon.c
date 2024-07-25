@@ -51,7 +51,7 @@ static void usage(void)
 	lite_mon_printf(LITE_MON_TRACE_INFO,
 			"--metadata: Enable metadata <0x1/0x2>");
 	lite_mon_printf(LITE_MON_TRACE_INFO,
-			"--output: output vap to deliver <athX>");
+			"--output: output vap to deliver");
 	lite_mon_printf(LITE_MON_TRACE_INFO,
 			"--show_filter: Show the provided filter option");
 	lite_mon_printf(LITE_MON_TRACE_INFO,
@@ -259,6 +259,20 @@ static void lite_mon_set_default_filter(struct lite_mon_config *mon_config,
 }
 
 /*
+ * lite_mon_set_default_level: set default level in mon_config structre
+ * @mon_config: mon_config structre filled by user
+ * return void
+ */
+static void lite_mon_set_default_level(struct lite_mon_config *mon_config)
+{
+	struct lite_mon_filter_config *filter_config =
+					&mon_config->data.filter_config;
+
+	if (filter_config->level == LITE_MON_LEVEL_INVALID)
+		filter_config->level = LITE_MON_LEVEL_MSDU;
+}
+
+/*
  * lite_mon_set_defaults: set default value of mon_config structre
  * @mon_config: mon_config structre to be filled
  * @filter_input: value to detect if filter input was given by user
@@ -271,6 +285,7 @@ static void lite_mon_set_defaults(struct lite_mon_config *mon_config,
 	case LITE_MON_SET_FILTER:
 		lite_mon_set_default_filter(mon_config, filter_input);
 		lite_mon_set_default_len(mon_config);
+		lite_mon_set_default_level(mon_config);
 		break;
 	default:
 		/* Default settings for other cmdtypes can be added here */
@@ -401,9 +416,9 @@ static void lite_mon_sanitize_count(uint8_t count)
 static void lite_mon_sanitize_interface_name(char *ifname)
 {
 	lite_mon_printf(LITE_MON_TRACE_DEBUG, "interface name %s", ifname);
-	if (strncmp(ifname, "ath", VAP_IFACE_PREFIX_LEN)) {
+	if (!strlen(ifname)) {
 		lite_mon_printf(LITE_MON_TRACE_ERROR,
-				"Vap name missing or wrong");
+				"Vap name missing");
 		exit(0);
 	}
 }

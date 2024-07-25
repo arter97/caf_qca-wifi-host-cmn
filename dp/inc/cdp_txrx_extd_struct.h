@@ -242,6 +242,7 @@ struct sawf_fw_mpdu_stats {
  * @tid: tid used for transmit
  * @msduq: msdu-queue used for transmit
  * @reinject_pkt: reinject packet
+ * @pkt_type: packet and mcs type
  */
 struct sawf_tx_stats {
 	struct cdp_pkt_info tx_success;
@@ -274,6 +275,57 @@ struct sawf_tx_stats {
 	uint8_t tid;
 	uint8_t msduq;
 	uint16_t reinject_pkt;
+	struct cdp_pkt_type pkt_type[DOT11_MAX];
+};
+
+/*
+ * struct sawf_msduq_svc_params - MSDUQ Params
+ * @is_used: flag to indicate if there is active flow on this queue
+ * @svc_id: service class id
+ * @svc_type: service class type
+ * @svc_tid: service class tid
+ * @svc_ac: service class access category
+ * @priority: service class priority
+ * @service_interval: service interval (in milliseconds)
+ * @burst_size: burst size (in bytes)
+ * @min_throughput: minimum throughput (in Kbps)
+ * @delay_bound: max latency (in milliseconds)
+ * @mark_metadata: mark metadata
+ */
+struct sawf_msduq_svc_params {
+	bool is_used;
+	uint8_t svc_id;
+	uint8_t svc_type;
+	uint8_t svc_tid;
+	uint8_t svc_ac;
+	uint8_t priority;
+	uint32_t service_interval;
+	uint32_t burst_size;
+	uint32_t min_throughput;
+	uint32_t delay_bound;
+	uint32_t mark_metadata;
+};
+
+/*
+ * struct sawf_admctrl_msduq_stats - SAWF AdmCtrl MSDUQ Stats
+ * @tx_success_pkt: MSDUQ Tx success pkt count
+ */
+struct sawf_admctrl_msduq_stats {
+	uint64_t tx_success_pkt;
+};
+
+/*
+ * struct sawf_admctrl_peer_stats - SAWF AdmCtrl Peer Stats
+ * @tx_success_pkt: Tx success pkt count
+ * @avg_tx_rate: Average Tx rate
+ * @tx_airtime_consumption: Tx airtime consumption on per AC basis
+ * @msduq_stats: SAWF AdmCtrl MSDUQ Stats
+ */
+struct sawf_admctrl_peer_stats {
+	uint64_t tx_success_pkt;
+	uint64_t avg_tx_rate;
+	uint16_t tx_airtime_consumption[WME_AC_MAX];
+	struct sawf_admctrl_msduq_stats msduq_stats[DP_SAWF_MAX_TIDS * DP_SAWF_MAX_QUEUES];
 };
 #endif /* CONFIG_SAWF */
 #endif /* _CDP_TXRX_EXTD_STRUCT_H_ */

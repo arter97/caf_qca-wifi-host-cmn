@@ -2371,6 +2371,52 @@ static QDF_STATUS set_rx_pkt_type_routing_tag_update_tlv(
 }
 #endif /* WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG */
 
+#ifdef WLAN_SUPPORT_TX_PKT_CAP_CUSTOM_CLASSIFY
+/**
+ * set_tx_pkt_cap_custom_classify_update_tlv() - set tx pkt cap protocol
+ * @wmi_handle: wmi handle
+ * @param: pointer to protocol information struct
+ *
+ * @return:QDF_STATUS_SUCCESS for success or
+ *			QDF_STATUS_E_NOMEM/QDF_STATUS_E_FAILURE on failure
+*/
+static QDF_STATUS set_tx_pkt_cap_custom_classify_update_tlv(
+			wmi_unified_t wmi_hdl,
+			struct wmi_tx_pkt_cap_custom_classify_info *param)
+{
+	wmi_soc_tx_packet_custom_classify_cmd_fixed_param *cmd;
+	wmi_buf_t buf;
+	QDF_STATUS status;
+	uint32_t len = sizeof(wmi_soc_tx_packet_custom_classify_cmd_fixed_param);
+
+	buf = wmi_buf_alloc(wmi_hdl, len);
+	if (!buf) {
+		wmi_err("wmi_buf_alloc failed");
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	cmd = (wmi_soc_tx_packet_custom_classify_cmd_fixed_param *)wmi_buf_data(buf);
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		       WMITLV_TAG_STRUC_wmi_soc_tx_packet_custom_classify_cmd_fixed_param,
+		       WMITLV_GET_STRUCT_TLVLEN
+		       (wmi_soc_tx_packet_custom_classify_cmd_fixed_param));
+
+	cmd->packet_bitmap = (param->pkt_type_bitmap << 1);
+	wmi_info("Set TX PKT CUSTOM CLASSIFY - bitmap %u",
+		 cmd->packet_bitmap);
+
+	wmi_mtrace(WMI_SOC_TX_PACKET_CUSTOM_CLASSIFY_CMDID, NO_SESSION, 0);
+	status = wmi_unified_cmd_send(wmi_hdl, buf, len,
+				      WMI_SOC_TX_PACKET_CUSTOM_CLASSIFY_CMDID);
+	if (status != QDF_STATUS_SUCCESS) {
+		wmi_err("Send wmi tx packet custom classify cmd failed");
+		wmi_buf_free(buf);
+		return QDF_STATUS_E_FAILURE;
+	}
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* WLAN_SUPPORT_TX_PKT_CAP_CUSTOM_CLASSIFY */
+
 /**
  * send_peer_vlan_config_cmd_tlv() - Send PEER vlan hw acceleration cmd to fw
  * @wmi: wmi handle
@@ -2979,6 +3025,38 @@ extract_ul_ofdma_trig_rx_peer_userinfo_tlv(
 	return QDF_STATUS_SUCCESS;
 }
 #endif /* QCA_MANUAL_TRIGGERED_ULOFDMA */
+
+#ifdef WLAN_FEATURE_11BE
+static QDF_STATUS
+extract_sched_mode_probe_resp_event_tlv(wmi_unified_t wmi_handle,
+					void *evt_buf,
+					struct wlan_host_sched_mode_probe_resp_event *resp_ev)
+{
+	WMI_VDEV_SCHED_MODE_PROBE_RESP_EVENTID_param_tlvs *param_buf;
+	wmi_vdev_sched_mode_probe_resp_fixed_param *ev;
+
+	param_buf = (WMI_VDEV_SCHED_MODE_PROBE_RESP_EVENTID_param_tlvs *)evt_buf;
+	if (!param_buf) {
+		wmi_err("Invalid buf sched mode probe response");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	ev = (wmi_vdev_sched_mode_probe_resp_fixed_param *)param_buf->fixed_param;
+	if (!ev) {
+		wmi_err("null ev");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	resp_ev->vdev_id = ev->vdev_id;
+	resp_ev->tput_mbps_on = ev->tput_mbps_on;
+	resp_ev->tput_mbps_off = ev->tput_mbps_off;
+
+	wmi_info("Vdev ID: %d, Tput ON: %d, Tput Off: %d",
+		 ev->vdev_id, ev->tput_mbps_on, ev->tput_mbps_off);
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* WLAN_FEATURE_11BE */
 
 /**
  * extract_chan_info_event_tlv() - extract chan information from event
@@ -4405,23 +4483,6 @@ static void sawf_create_set_defaults(struct wmi_sawf_params *param)
 		param->msdu_rate_loss = WMI_SAWF_SVC_CLASS_PARAM_DEFAULT_MSDU_LOSS_RATE;
 }
 
-
-void parse_disabled_schd_mode(uint32_t disabled_modes,
-			      uint32_t *wmi_disabled_modes)
-{
-	if (disabled_modes & (1 << SCHED_MODE_DL_MU_MIMO))
-		*wmi_disabled_modes |= WMI_SCHED_MODE_DL_MU_MIMO;
-
-	if (disabled_modes & (1 << SCHED_MODE_UL_MU_MIMO))
-		*wmi_disabled_modes |= WMI_SCHED_MODE_UL_MU_MIMO;
-
-	if (disabled_modes & (1 << SCHED_MODE_DL_OFDMA))
-		*wmi_disabled_modes |= WMI_SCHED_MODE_DL_OFDMA;
-
-	if (disabled_modes & (1 << SCHED_MODE_UL_OFDMA))
-		*wmi_disabled_modes |= WMI_SCHED_MODE_UL_OFDMA;
-}
-
 QDF_STATUS send_sawf_create_cmd_tlv(wmi_unified_t wmi_handle,
 				    struct wmi_sawf_params *param)
 {
@@ -4430,7 +4491,6 @@ QDF_STATUS send_sawf_create_cmd_tlv(wmi_unified_t wmi_handle,
 	wmi_buf_t buf;
 	uint8_t tid;
 	uint16_t len = sizeof(*cmd);
-	uint32_t disabled_modes = 0;
 
 	buf = wmi_buf_alloc(wmi_handle, len);
 	if (!buf)
@@ -4456,8 +4516,7 @@ QDF_STATUS send_sawf_create_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->tid = param->tid;
 	cmd->msdu_loss_rate_ppm = param->msdu_rate_loss;
 
-	parse_disabled_schd_mode(param->disabled_modes, &disabled_modes);
-	cmd->disabled_sched_modes = disabled_modes;
+	cmd->disabled_sched_modes = 0;
 
 	if (param->tid == WMI_SAWF_SVC_CLASS_PARAM_DEFAULT_TID) {
 		tid = sawf_tid_infer(cmd);
@@ -4646,6 +4705,10 @@ void wmi_ap_attach_tlv(wmi_unified_t wmi_handle)
 	ops->send_wmm_update_cmd = send_wmm_update_cmd_tlv;
 	ops->extract_mgmt_tx_compl_param = extract_mgmt_tx_compl_param_tlv;
 	ops->extract_chan_info_event = extract_chan_info_event_tlv;
+#ifdef WLAN_FEATURE_11BE
+	ops->extract_sched_mode_probe_resp_event =
+		extract_sched_mode_probe_resp_event_tlv;
+#endif /* WLAN_FEATURE_11BE */
 	ops->extract_scan_blanking_params = extract_scan_blanking_params_tlv;
 #ifdef QCA_MANUAL_TRIGGERED_ULOFDMA
 	ops->extract_ulofdma_trigger_feedback_event =
@@ -4712,5 +4775,12 @@ void wmi_ap_attach_tlv(wmi_unified_t wmi_handle)
 #ifdef WLAN_FEATURE_11BE_MLO
 	ops->send_wmi_link_recommendation_cmd =
 		send_wmi_link_recommendation_cmd_tlv;
+#endif
+#ifdef WLAN_FEATURE_11BE
+	ops->send_mu_on_off_cmd = send_mu_on_off_cmd_tlv;
+#endif /* WLAN_FEATURE_11BE */
+#ifdef WLAN_SUPPORT_TX_PKT_CAP_CUSTOM_CLASSIFY
+	ops->set_tx_pkt_cap_custom_classify =
+				set_tx_pkt_cap_custom_classify_update_tlv;
 #endif
 }

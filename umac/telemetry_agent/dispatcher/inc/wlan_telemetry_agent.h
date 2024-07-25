@@ -38,7 +38,13 @@ void wlan_telemetry_emesh_application_init_deinit_notify
 	(enum agent_notification_event);
 
 void wlan_telemetry_agent_application_init_notify
-	(enum agent_notification_event, uint64_t data);
+	(enum agent_notification_event, enum rm_services service_id,
+	 uint64_t service_data);
+
+void wlan_telemetry_agent_dynamic_app_init_deinit_notify
+	(enum agent_notification_event, enum rm_services service_id,
+	 uint64_t service_data);
+
 QDF_STATUS wlan_telemetry_agent_init(void);
 QDF_STATUS wlan_telemetry_agent_deinit(void);
 
@@ -86,6 +92,32 @@ QDF_STATUS telemetry_sawf_updt_tid_msduq(void *telemetry_ctx,
 					 uint8_t hostq_id,
 					 uint8_t tid,
 					 uint8_t msduq_idx);
+
+/**
+ * telemetry_sawf_update_msduq_info - Update msduq info
+ * @telemetry_ctx: opaque telemetry ctx
+ * @hostq_id: queue-id used in host
+ * @tid: tid no
+ * @msduq_idx: msdu-queue id
+ * @svc_id: service class id
+ *
+ * Return: QDF_STATUS_SUCCESS on success
+ */
+QDF_STATUS telemetry_sawf_update_msduq_info(void *telemetry_ctx,
+					    uint8_t hostq_id,
+					    uint8_t tid,
+					    uint8_t msduq_idx,
+					    uint8_t svc_id);
+
+/**
+ * telemetry_sawf_update_msduq_info - Clear msduq active bit
+ * @telemetry_ctx: opaque telemetry ctx
+ * @hostq_id: queue-id used in host
+ *
+ * Return: QDF_STATUS_SUCCESS on success
+ */
+QDF_STATUS telemetry_sawf_clear_msduq_info(void *telemetry_ctx,
+					   uint8_t hostq_id);
 
 /**
  * telemetry_sawf_set_mov_avg_params - Set moving average params
@@ -265,7 +297,8 @@ QDF_STATUS telemetry_sawf_get_mov_avg(void *telemetry_ctx, uint8_t tid,
  */
 QDF_STATUS telemetry_sawf_reset_peer_stats(uint8_t *peer_mac);
 #else
-#define wlan_telemetry_agent_application_init_notify(param, data)
+#define wlan_telemetry_agent_dynamic_app_init_deinit_notify(param, service_id, service_data)
+#define wlan_telemetry_agent_application_init_notify(param, service_id, service_data)
 #define wlan_telemetry_emesh_application_init_deinit_notify(param)
 
 static inline
@@ -302,6 +335,23 @@ QDF_STATUS telemetry_sawf_updt_tid_msduq(void *telemetry_ctx,
 					 uint8_t hostq_id,
 					 uint8_t tid,
 					 uint8_t msduq_idx)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS telemetry_sawf_clear_msduq_info(void *telemetry_ctx,
+					   uint8_t hostq_id)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS telemetry_sawf_update_msduq_info(void *telemetry_ctx,
+					    uint8_t hostq_id,
+					    uint8_t tid,
+					    uint8_t msduq_idx,
+					    uint8_t svc_id)
 {
 	return QDF_STATUS_SUCCESS;
 }

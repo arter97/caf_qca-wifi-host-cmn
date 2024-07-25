@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -38,6 +38,148 @@
 #include <wlan_mlo_mgr_peer.h>
 #endif
 #include <wlan_objmgr_global_obj_i.h>
+
+/* Maximum number of asynchronous requests that can be scheduled by driver */
+#define WLAN_STATS_ASYNC_LIST_SIZE 8
+
+static uint8_t get_monitor_version(struct wlan_objmgr_pdev *pdev)
+{
+	struct ieee80211com *ic = NULL;
+
+	ic = wlan_pdev_get_mlme_ext_obj(pdev);
+	return ic->ic_monitor_version;
+}
+
+/* Global structure for stats work*/
+static struct stats_work_context g_stats_ctx = {0};
+
+static void free_list_entry(struct stats_list_entry *list_entry)
+{
+	qdf_mem_free(list_entry->cfg);
+	qdf_mem_free(list_entry);
+}
+
+static void stats_evt_work_handler(void *ctx)
+{
+	struct stats_list_entry *list_entry = NULL;
+	struct stats_work_context *work_ctx = (struct stats_work_context *)ctx;
+	qdf_list_node_t *cur_node = NULL;
+	qdf_list_t temp_list;
+
+	qdf_list_create(&temp_list, WLAN_STATS_ASYNC_LIST_SIZE);
+	qdf_spin_lock_bh(&work_ctx->list_lock);
+	qdf_list_join(&temp_list, &work_ctx->nb_stats_work_list);
+	qdf_spin_unlock_bh(&work_ctx->list_lock);
+
+	while (!qdf_list_remove_front(&temp_list, &cur_node)) {
+		if (!cur_node)
+			continue;
+		list_entry = qdf_container_of(cur_node, struct stats_list_entry,
+					      node);
+		if (!list_entry)
+			continue;
+
+		telemetric_reply_setup(list_entry->pdev, list_entry->vdev,
+				       list_entry->cfg, list_entry->mac);
+
+		free_list_entry(list_entry);
+		cur_node = NULL;
+		list_entry = NULL;
+	}
+	qdf_list_destroy(&temp_list);
+}
+
+void wlan_stats_nb_stats_work_attach(void)
+{
+	if (g_stats_ctx.is_initialized)
+		return;
+
+	g_stats_ctx.is_initialized = true;
+	qdf_create_work(0, &g_stats_ctx.work, stats_evt_work_handler,
+			&g_stats_ctx);
+	qdf_spinlock_create(&g_stats_ctx.list_lock);
+	qdf_list_create(&g_stats_ctx.nb_stats_work_list,
+			WLAN_STATS_ASYNC_LIST_SIZE);
+}
+
+void wlan_stats_nb_stats_work_detach(void)
+{
+	qdf_list_t *list = &g_stats_ctx.nb_stats_work_list;
+	qdf_list_node_t *cur_node = NULL;
+	struct stats_list_entry *list_entry = NULL;
+
+	if (!g_stats_ctx.is_initialized)
+		return;
+
+	g_stats_ctx.is_initialized = false;
+	qdf_flush_work(&g_stats_ctx.work);
+	qdf_disable_work(&g_stats_ctx.work);
+
+	qdf_spin_lock_bh(&g_stats_ctx.list_lock);
+
+	//Flush the queue until list is empty. Remove the nodes from the end
+	while (!qdf_list_remove_front(list, &cur_node)) {
+		if (cur_node) {
+			list_entry = qdf_container_of(cur_node,
+						      struct stats_list_entry,
+						      node);
+			if (!list_entry)
+				continue;
+			free_list_entry(list_entry);
+			cur_node = NULL;
+			list_entry = NULL;
+		}
+	}
+
+	qdf_spin_unlock_bh(&g_stats_ctx.list_lock);
+
+	/* destroy list */
+	qdf_list_destroy(list);
+	qdf_spinlock_destroy(&g_stats_ctx.list_lock);
+}
+
+QDF_STATUS wlan_stats_schedule_nb_stats_work(struct wlan_objmgr_pdev *pdev,
+					     struct wlan_objmgr_vdev *vdev,
+					     struct stats_config *cfg,
+					     uint8_t *mac)
+{
+	struct stats_list_entry *entry = NULL;
+	struct stats_config *stats_cfg = NULL;
+
+	if (!g_stats_ctx.is_initialized) {
+		qdf_err("Stats context is already detached");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (qdf_list_size(&g_stats_ctx.nb_stats_work_list) >=
+			  WLAN_STATS_ASYNC_LIST_SIZE) {
+		qdf_err("Not Scheduling stats work as MAX_SIZE reached");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	stats_cfg = qdf_mem_malloc(sizeof(struct stats_config));
+	entry = qdf_mem_malloc(sizeof(struct stats_list_entry));
+
+	if (!stats_cfg || !entry) {
+		qdf_err("Memory not allocated.");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	qdf_mem_zero(entry, sizeof(struct stats_list_entry));
+	qdf_mem_copy(stats_cfg, cfg, sizeof(struct stats_config));
+
+	entry->pdev = pdev;
+	entry->vdev = vdev;
+	qdf_mem_copy(entry->mac, mac, QDF_MAC_ADDR_SIZE);
+	entry->cfg = stats_cfg;
+
+	qdf_spin_lock_bh(&g_stats_ctx.list_lock);
+	qdf_list_insert_back(&g_stats_ctx.nb_stats_work_list, &entry->node);
+	qdf_spin_unlock_bh(&g_stats_ctx.list_lock);
+	qdf_sched_work(0, &g_stats_ctx.work);
+
+	return QDF_STATUS_SUCCESS;
+}
 
 static void fill_basic_data_tx_stats(struct basic_data_tx_stats *tx,
 				     struct cdp_tx_stats *cdp_tx)
@@ -1502,7 +1644,7 @@ static void
 fill_advance_peer_sawftx_stats(struct advance_peer_data_sawftx *data,
 			       struct sawf_tx_stats *tx_stats)
 {
-	uint8_t tidx = 0, queues = 0, tidx_count, queues_count;
+	uint8_t tidx = 0, queues = 0, tidx_count, queues_count, pream_type, mcs_index;
 
 	tidx_count = qdf_min((uint8_t)STATS_IF_MAX_SAWF_DATA_TIDS,
 			     (uint8_t)DP_SAWF_MAX_TIDS);
@@ -1554,6 +1696,12 @@ fill_advance_peer_sawftx_stats(struct advance_peer_data_sawftx *data,
 					tx_stats->queue_depth;
 			data->tx[tidx][queues].retry_count =
 					tx_stats->retry_count;
+			for (pream_type = 0; pream_type < DOT11_MAX; pream_type++) {
+				for (mcs_index = 0; mcs_index < MAX_MCS; mcs_index++) {
+					data->tx[tidx][queues].packet_type[pream_type].mcs_count[mcs_index] +=
+					tx_stats->pkt_type[pream_type].mcs_count[mcs_index];
+				}
+			}
 			data->tx[tidx][queues].multiple_retry_count =
 					tx_stats->multiple_retry_count;
 			data->tx[tidx][queues].failed_retry_count =
@@ -1682,7 +1830,10 @@ static void fill_advance_data_tx_stats(struct advance_data_tx_stats *tx,
 	tx->non_ampdu_cnt = cdp_tx->non_ampdu_cnt;
 	tx->failed_retry_count = cdp_tx->failed_retry_count;
 	tx->retry_count = cdp_tx->retry_count;
+	tx->total_msdu_retries = cdp_tx->total_msdu_retries;
 	tx->multiple_retry_count = cdp_tx->multiple_retry_count;
+	tx->mpdu_retries = cdp_tx->mpdu_retries;
+	tx->total_mpdu_retries = cdp_tx->total_mpdu_retries;
 	tx->release_src_not_tqm = cdp_tx->release_src_not_tqm;
 	tx->inval_link_id = cdp_tx->inval_link_id_pkt_cnt;
 	tx->tx_ppdus = cdp_tx->tx_ppdus;
@@ -1841,6 +1992,7 @@ get_advance_peer_data_sawftx(struct sawf_tx_stats *sawf_tx_stats,
 			     struct unified_stats *stats, uint8_t svc_id)
 {
 	struct advance_peer_data_sawftx *data = NULL;
+	uint8_t pream_type, mcs_index;
 
 	data = qdf_mem_malloc(sizeof(struct advance_peer_data_sawftx));
 	if (!data) {
@@ -1893,6 +2045,12 @@ get_advance_peer_data_sawftx(struct sawf_tx_stats *sawf_tx_stats,
 		data->tx[0][0].queue_depth = sawf_tx_stats->queue_depth;
 		data->tx[0][0].retry_count =
 				sawf_tx_stats->retry_count;
+		for (pream_type = 0; pream_type < DOT11_MAX; pream_type++) {
+			for (mcs_index = 0; mcs_index < MAX_MCS; mcs_index++) {
+				data->tx[0][0].packet_type[pream_type].mcs_count[mcs_index] +=
+				sawf_tx_stats->pkt_type[pream_type].mcs_count[mcs_index];
+			}
+		}
 		data->tx[0][0].multiple_retry_count =
 				sawf_tx_stats->multiple_retry_count;
 		data->tx[0][0].failed_retry_count =
@@ -4146,6 +4304,7 @@ static QDF_STATUS get_debug_peer_data_link(struct unified_stats *stats,
 	}
 	fill_basic_peer_data_link(&data->b_link, &peer_stats->rx);
 	data->last_ack_rssi = peer_stats->tx.last_ack_rssi;
+	data->avg_ack_rssi = CDP_SNR_OUT(peer_stats->tx.avg_ack_rssi);
 
 	stats->feat[INX_FEAT_LINK] = data;
 	stats->size[INX_FEAT_LINK] = sizeof(struct debug_peer_data_link);
@@ -4463,7 +4622,7 @@ static QDF_STATUS get_debug_peer_ctrl_tx(struct unified_stats *stats,
 	ctrl->cs_tx_dropblock = cp_stats->cs_tx_dropblock;
 	ctrl->cs_is_tx_nobuf = cp_stats->cs_is_tx_nobuf;
 	ctrl->rts_success = peer_stats->tx.rts_success;
-	ctrl->rts_success = peer_stats->tx.rts_failure;
+	ctrl->rts_failure = peer_stats->tx.rts_failure;
 	ctrl->bar_cnt = peer_stats->tx.bar_cnt;
 	ctrl->ndpa_cnt = peer_stats->tx.ndpa_cnt;
 
@@ -5260,7 +5419,28 @@ static QDF_STATUS get_debug_pdev_data_raw(struct unified_stats *stats,
 	return QDF_STATUS_SUCCESS;
 }
 
-#if FEATURE_TSO_STATS
+#ifdef FEATURE_TSO_STATS
+static void fill_debug_pdev_data_tso_info(struct debug_pdev_data_tso *data,
+					  struct cdp_tso_stats *tso)
+{
+	uint8_t inx;
+
+	for (inx = 0; inx < STATS_IF_TSO_PACKETS_MAX; inx++) {
+		data->pkt_info[inx].num_seg
+			= tso->tso_info.tso_packet_info[inx].num_seg;
+		data->pkt_info[inx].tso_packet_len
+			= tso->tso_info.tso_packet_info[inx].tso_packet_len;
+		data->pkt_info[inx].tso_seg_idx
+			= tso->tso_info.tso_packet_info[inx].tso_seg_idx;
+	}
+}
+#else
+static void fill_debug_pdev_data_tso_info(struct debug_pdev_data_tso *data,
+					  struct cdp_tso_stats *tso)
+{
+}
+#endif /* FEATURE_TSO_STATS */
+
 static QDF_STATUS get_debug_pdev_data_tso(struct unified_stats *stats,
 					  struct cdp_pdev_stats *pdev_stats)
 {
@@ -5282,26 +5462,13 @@ static QDF_STATUS get_debug_pdev_data_tso(struct unified_stats *stats,
 	data->tso_no_mem_dropped.num = tso->tso_no_mem_dropped.num;
 	data->tso_no_mem_dropped.bytes = tso->tso_no_mem_dropped.bytes;
 	data->dropped_target = tso->dropped_target;
-	for (inx = 0; inx < STATS_IF_TSO_PACKETS_MAX; inx++) {
-		data->tso_info.tso_packet_info[inx].num_seg
-			= tso->tso_info.tso_packet_info[inx].num_seg;
-		data->tso_info.tso_packet_info[inx].tso_packet_len
-			= tso->tso_info.tso_packet_info[inx].tso_packet_len;
-		data->tso_info.tso_packet_info[inx].tso_seg_idx
-			= tso->tso_info.tso_packet_info[inx].tso_seg_idx;
-	}
+	fill_debug_pdev_data_tso_info(data, tso);
+
 	stats->feat[INX_FEAT_TSO] = data;
 	stats->size[INX_FEAT_TSO] = sizeof(struct debug_pdev_data_tso);
 
 	return QDF_STATUS_SUCCESS;
 }
-#else
-static QDF_STATUS get_debug_pdev_data_tso(struct unified_stats *stats,
-					  struct cdp_pdev_stats *pdev_stats)
-{
-	return QDF_STATUS_SUCCESS;
-}
-#endif
 
 #if defined(WLAN_CFR_ENABLE) && defined(WLAN_ENH_CFR_ENABLE)
 static QDF_STATUS get_debug_pdev_data_cfr(struct unified_stats *stats,
@@ -5394,10 +5561,49 @@ static QDF_STATUS get_debug_pdev_data_mesh(struct unified_stats *stats,
 	return QDF_STATUS_SUCCESS;
 }
 
+static void get_debug_pdev_data_txcap_2_0(struct debug_pdev_data_txcap *data,
+					 struct cdp_pdev_tx_capture_stats *cap)
+{
+	data->stats_2_0.ppdu_id = cap->ppdu_id;
+	data->stats_2_0.mode = cap->mode;
+	data->stats_2_0.ppdu_drop_cnt = cap->ppdu_drop_cnt;
+	data->stats_2_0.mpdu_drop_cnt = cap->mpdu_drop_cnt;
+	data->stats_2_0.tlv_drop_cnt = cap->tlv_drop_cnt;
+	data->stats_2_0.pkt_buf_recv = cap->pkt_buf_recv;
+	data->stats_2_0.pkt_buf_free = cap->pkt_buf_free;
+	data->stats_2_0.pkt_buf_processed = cap->pkt_buf_processed;
+	data->stats_2_0.pkt_buf_to_stack = cap->pkt_buf_to_stack;
+	data->stats_2_0.status_buf_recv = cap->status_buf_recv;
+	data->stats_2_0.status_buf_free = cap->status_buf_free;
+	data->stats_2_0.totat_tx_mon_replenish_cnt =
+				cap->totat_tx_mon_replenish_cnt;
+	data->stats_2_0.total_tx_mon_reap_cnt =
+				cap->total_tx_mon_reap_cnt;
+	data->stats_2_0.tx_mon_stuck = cap->tx_mon_stuck;
+	data->stats_2_0.total_tx_mon_stuck = cap->total_tx_mon_stuck;
+	data->stats_2_0.ppdu_info_drop_th = cap->ppdu_info_drop_th;
+	data->stats_2_0.ppdu_info_drop_flush =
+				cap->ppdu_info_drop_flush;
+	data->stats_2_0.ppdu_info_drop_trunc =
+				cap->ppdu_info_drop_trunc;
+	data->stats_2_0.ppdu_drop_sw_filter = cap->ppdu_drop_sw_filter;
+	data->stats_2_0.dp_tx_pkt_cap_stats[STATS_IF_TX_PKT_TYPE_ARP] =
+		cap->dp_tx_pkt_cap_stats[TX_PKT_TYPE_ARP];
+	data->stats_2_0.dp_tx_pkt_cap_stats[STATS_IF_TX_PKT_TYPE_EAPOL] =
+		cap->dp_tx_pkt_cap_stats[TX_PKT_TYPE_EAPOL];
+	data->stats_2_0.dp_tx_pkt_cap_stats[STATS_IF_TX_PKT_TYPE_DHCP] =
+		cap->dp_tx_pkt_cap_stats[TX_PKT_TYPE_DHCP];
+	data->stats_2_0.dp_tx_pkt_cap_stats[STATS_IF_TX_PKT_TYPE_ICMP] =
+		cap->dp_tx_pkt_cap_stats[TX_PKT_TYPE_ICMP];
+	data->stats_2_0.dp_tx_pkt_cap_stats[STATS_IF_TX_PKT_TYPE_DNS] =
+		cap->dp_tx_pkt_cap_stats[TX_PKT_TYPE_DNS];
+}
+
 static QDF_STATUS
 get_debug_pdev_data_txcap(struct unified_stats *stats,
 			  struct cdp_pdev_stats *pdev_stats,
-			  struct cdp_pdev_tx_capture_stats *cap)
+			  struct cdp_pdev_tx_capture_stats *cap,
+			  uint8_t monitor_version)
 {
 	struct debug_pdev_data_txcap *data = NULL;
 	uint8_t inx, j;
@@ -5412,6 +5618,13 @@ get_debug_pdev_data_txcap(struct unified_stats *stats,
 		qdf_err("Allocation Failed!");
 		return QDF_STATUS_E_NOMEM;
 	}
+
+	if (monitor_version == STATS_IF_TX_MON_VER_2) {
+		get_debug_pdev_data_txcap_2_0(data, cap);
+		data->monitor_version = monitor_version;
+		goto done;
+	}
+
 	data->delayed_ba_not_recev = pdev_stats->cdp_delayed_ba_not_recev;
 	data->tx_ppdu_proc = pdev_stats->tx_ppdu_proc;
 	data->ack_ba_comes_twice = pdev_stats->ack_ba_comes_twice;
@@ -5450,6 +5663,7 @@ get_debug_pdev_data_txcap(struct unified_stats *stats,
 		}
 	}
 
+done:
 	stats->feat[INX_FEAT_TXCAP] = data;
 	stats->size[INX_FEAT_TXCAP] = sizeof(struct debug_pdev_data_txcap);
 
@@ -5817,6 +6031,7 @@ static QDF_STATUS get_debug_pdev_data(struct wlan_objmgr_psoc *psoc,
 	void *dp_soc = NULL;
 	uint8_t pdev_id;
 	bool stats_collected = false;
+	uint8_t monitor_version = 0;
 
 	if (!psoc || !pdev) {
 		qdf_err("Invalid pdev and psoc!");
@@ -5900,8 +6115,10 @@ static QDF_STATUS get_debug_pdev_data(struct wlan_objmgr_psoc *psoc,
 			goto get_failed;
 		}
 		ret = get_pdev_tx_capture_stats(dp_soc, pdev_id, cap);
+		monitor_version = get_monitor_version(pdev);
 		if (ret == QDF_STATUS_SUCCESS)
-			ret = get_debug_pdev_data_txcap(stats, pdev_stats, cap);
+			ret = get_debug_pdev_data_txcap(stats, pdev_stats, cap,
+							monitor_version);
 		if (ret != QDF_STATUS_SUCCESS)
 			qdf_err("Unable to fetch pdev Debug TXCAP Stats!");
 		else
@@ -6494,6 +6711,9 @@ struct wlan_objmgr_vdev *wlan_stats_get_vdev_from_sta_mac(uint8_t *mac)
 			}
 		}
 	}
+	/* Discard BSS Peer */
+	if (vdev && (wlan_vdev_get_selfpeer(vdev) == peer))
+		vdev = NULL;
 
 	return vdev;
 }

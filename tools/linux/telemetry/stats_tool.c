@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -72,6 +72,10 @@
 #define STATS_IF_GET_PEER_RIX(_val) \
 	(((_val) >> STATS_IF_PEER_RIX_OFFSET) & STATS_IF_PEER_RIX_MASK)
 #define STATS_IF_ASYNC_MODE          "async"
+/* Time in seconds for application to loop to receive non-blocking stats event*/
+#define ASYNC_STATS_TIMEOUT 5
+/* Maximum Test Simulation count */
+#define MAX_TEST_ITERATION 20
 
 static bool g_run_loop;
 static bool g_ipa_mode;
@@ -483,7 +487,7 @@ const char *mu_reception_mode[STATS_IF_TXRX_TYPE_MU_MAX] = {
 };
 #endif /* WLAN_DEBUG_TELEMETRY */
 
-static const char *opt_string = "BADarvsdcf:i:l:m:t:RIMh?";
+static const char *opt_string = "BADarvsdcf:i:l:m:t:T:L:RIMEh?";
 
 static const struct option long_opts[] = {
 	{ "basic", no_argument, NULL, 'B' },
@@ -503,6 +507,9 @@ static const struct option long_opts[] = {
 	{ "recursive", no_argument, NULL, 'R' },
 	{ "ipa", no_argument, NULL, 'I' },
 	{ "mldlink", no_argument, NULL, 'M' },
+	{ "asyncreq", no_argument, NULL, 'E' },
+	{ "test", required_argument, NULL, 'T' },
+	{ "linkid", required_argument, NULL, 'L' },
 	{ "help", no_argument, NULL, 'h' },
 	{ NULL, no_argument, NULL, 0 },
 };
@@ -545,6 +552,24 @@ const char *stats_if_sw_enq_delay_bucket[STATS_IF_DELAY_BUCKET_MAX + 1] = {
 };
 #endif
 
+const char *pdev_stats_if_sw_enq_delay_bucket[STATS_IF_DELAY_BUCKET_MAX + 1] = {
+	"0  to 1  ms", "1  to 2  ms",
+	"2  to 3  ms", "3  to 4  ms",
+	"4  to 5  ms", "5  to 6  ms",
+	"6  to 7  ms", "7  to 8  ms",
+	"8  to 9  ms", "9  to 10 ms",
+	"10 to 11 ms", "11 to 12 ms", "12+      ms"
+};
+
+const char *pdev_stats_if_fw_to_hw_delay_bucket[STATS_IF_DELAY_BUCKET_MAX + 1] = {
+	"0   to 2   ms", "2   to 5   ms",
+	"4   to 6   ms", "6   to 8   ms",
+	"8   to 10  ms", "10  to 20  ms",
+	"20  to 30  ms", "30  to 40  ms",
+	"40  to 50  ms", "50  to 100 ms",
+	"100 to 250 ms", "250 to 500 ms", "500+       ms"
+};
+
 const char *stats_if_intfrm_delay_bucket[STATS_IF_DELAY_BUCKET_MAX + 1] = {
 	"0  to 5  ms", "6  to 10 ms",
 	"11 to 15 ms", "16 to 20 ms",
@@ -567,7 +592,7 @@ static void display_help(void)
 {
 	STATS_PRINT("\nwifitelemetry : Displays Statistics of Access Point\n");
 	STATS_PRINT("\nUsage:\n"
-		    "Process Mode: wifitelemetry [Level] [Object] [StatsType] [FeatureName] [[-i interface_name] | [-m StationMACAddress]] [-R] [-I] [-M] [-h | ?]\n"
+		    "Process Mode: wifitelemetry [Level] [Object] [StatsType] [FeatureName] [[-i interface_name] | [-m StationMACAddress]] [-R] [-I] [-M] [-E] [-T] [-L link_id] [-h | ?]\n"
 		    "Daemon Mode: wifitelemetry async\n"
 		    "    Note: User must run wifitelemetry in background. Excecute another instance in process mode to trigger stats request.\n"
 		    "\n"
@@ -610,6 +635,10 @@ static void display_help(void)
 		    "    -i wifiX or --ifname=wifiX:  For Radio\n"
 		    "    -i athX or --ifname=athX:    For VAP\n"
 		    "\n"
+		    "Link_id:\n"
+		    "     Link_id is mandatory for vap level stats in single wiphy model\n"
+		    "    -L <link_id> or --linkid <link_id>\n"
+		    "\n"
 		    "STA MAC Address for STA stats:\n"
 		    "    -m xx:xx:xx:xx:xx:xx or --stamacaddr xx:xx:xx:xx:xx:xx\n"
 		    "\n"
@@ -620,7 +649,9 @@ static void display_help(void)
 		    "    -R or --recursive:  Recursive display\n"
 		    "    -I or --ipa is required to get Tx and Rx stats in IPA architecture\n"
 		    "    -M or --mldlink indicates to get link stats for MLD\n"
-		    "    -h or --help:       Usage display\n");
+		    "    -E or --asyncreq: Asynchronous stats request. It is a non-blocking request where stats data is received asynchronously as an event \n"
+		    "    -T or --test <iteration>: Option to simulate same command till the specified iteration count exhaust. Iteration count range 1-%d\n"
+		    "    -h or --help:       Usage display\n", MAX_TEST_ITERATION);
 }
 
 static char *macaddr_to_str(u_int8_t *addr)
@@ -890,7 +921,10 @@ void print_advance_data_tx_stats(struct advance_data_tx_stats *tx)
 		 tx->retries_mpdu);
 	STATS_32(stdout, "Tx Failed Retry Count", tx->failed_retry_count);
 	STATS_32(stdout, "Tx Total Retry Count", tx->retry_count);
+	STATS_32(stdout, "Tx Total msdu packets Retries Count", tx->total_msdu_retries);
 	STATS_32(stdout, "Tx Multiple Retry Count", tx->multiple_retry_count);
+	STATS_32(stdout, "Tx mpdu_retries", tx->mpdu_retries);
+	STATS_32(stdout, "Tx total_mpdu_retries", tx->total_mpdu_retries);
 	STATS_32(stdout, "Tx Release Source Not TQM", tx->release_src_not_tqm);
 	STATS_32(stdout, "Tx Invalid Link ID Packet Count", tx->inval_link_id);
 	STATS_32(stdout, "Tx PPDUs", tx->tx_ppdus);
@@ -1001,6 +1035,7 @@ void print_advance_data_rx_stats(struct advance_data_rx_stats *rx)
 	STATS_32(stdout, "MSDU's Part of AMPDU", rx->ampdu_cnt);
 	STATS_32(stdout, "MSDU's With No MPDU Level Aggregation",
 		 rx->non_ampdu_cnt);
+	STATS_32(stdout, "Rx Retries", rx->rx_retries);
 	if (!g_ipa_mode) {
 		STATS_32(stdout, "MSDU's Part of AMSDU", rx->amsdu_cnt);
 		STATS_32(stdout, "MSDU's With No MSDU Level Aggregation",
@@ -1008,7 +1043,6 @@ void print_advance_data_rx_stats(struct advance_data_rx_stats *rx)
 		STATS_32(stdout, "Rx Multipass Packet Drop",
 			 rx->multipass_rx_pkt_drop);
 		STATS_32(stdout, "Rx BAR Reaceive Count", rx->bar_recv_cnt);
-		STATS_32(stdout, "Rx Retries", rx->rx_retries);
 		print_advance_data_be_stats(rx, "Rx");
 	}
 }
@@ -1569,6 +1603,7 @@ print_advance_sta_data_sawf_tx(struct advance_peer_data_sawftx *data,
 			       uint8_t svc_id)
 {
 	if (svc_id > 0) {
+		uint8_t pream_type, mcs_index;
 		STATS_PRINT("----TIDX: %d----   ", data->tid);
 		STATS_PRINT("----QUEUE: %d----\n", data->msduq);
 
@@ -1634,8 +1669,18 @@ print_advance_sta_data_sawf_tx(struct advance_peer_data_sawftx *data,
 			    data->tx[0][0].burst_size_stats.success_cnt);
 		STATS_PRINT("Burst_size_failure_cnt     = %ju\n",
 			    data->tx[0][0].burst_size_stats.failure_cnt);
+		STATS_PRINT("Tx_pkt_type_mcs_count\n");
+		for (pream_type = 0; pream_type < STATS_IF_DOT11_MAX; pream_type++) {
+			for (mcs_index = 0; mcs_index < STATS_IF_MAX_MCS; mcs_index++) {
+				if (!rate_string[pream_type][mcs_index].valid)
+					continue;
+				STATS_PRINT("\t%s = %u\n",
+					    rate_string[pream_type][mcs_index].mcs_type,
+					    data->tx[0][0].packet_type[pream_type].mcs_count[mcs_index]);
+			}
+		}
 	} else {
-		uint8_t tidx = 0, queues = 0;
+		uint8_t tidx = 0, queues = 0, pream_type, mcs_index;
 		uint8_t max_queue = STATS_IF_MAX_SAWF_DATA_QUEUE;
 		struct stats_if_sawf_tx_stats *sawftx;
 
@@ -1707,6 +1752,16 @@ print_advance_sta_data_sawf_tx(struct advance_peer_data_sawftx *data,
 					sawftx->burst_size_stats.success_cnt);
 				STATS_PRINT("Burst_size_failure_cnt     = %ju\n",
 					sawftx->burst_size_stats.failure_cnt);
+				STATS_PRINT("Tx_pkt_type_mcs_count\n");
+				for (pream_type = 0; pream_type < STATS_IF_DOT11_MAX; pream_type++) {
+					for (mcs_index = 0; mcs_index < STATS_IF_MAX_MCS; mcs_index++) {
+						if (!rate_string[pream_type][mcs_index].valid)
+							continue;
+						STATS_PRINT("\t%s = %u\n",
+						rate_string[pream_type][mcs_index].mcs_type,
+						sawftx->packet_type[pream_type].mcs_count[mcs_index]);
+					}
+				}
 			}
 		}
 	}
@@ -2028,7 +2083,7 @@ void print_advance_radio_data_vow(struct advance_pdev_data_vow *vow)
 			count = total_tx->swq_delay.delay_bucket[idx];
 			if (count)
 				STATS_PRINT("\t\t%s:  Packets = %ju\n",
-					    stats_if_sw_enq_delay_bucket[idx],
+					    pdev_stats_if_sw_enq_delay_bucket[idx],
 					    count);
 		}
 		STATS_32(stdout, "Min", total_tx->swq_delay.min_delay);
@@ -2040,7 +2095,7 @@ void print_advance_radio_data_vow(struct advance_pdev_data_vow *vow)
 			count = total_tx->hwtx_delay.delay_bucket[idx];
 			if (count)
 				STATS_PRINT("\t\t%s:  Packets = %ju\n",
-					    stats_if_fw_to_hw_delay_bucket[idx],
+					    pdev_stats_if_fw_to_hw_delay_bucket[idx],
 					    count);
 		}
 		STATS_32(stdout, "Min", total_tx->hwtx_delay.min_delay);
@@ -2173,8 +2228,14 @@ void print_basic_sta_data(struct stats_obj *sta)
 {
 	struct basic_peer_data *data = sta->stats;
 
-	STATS_PRINT("Basic Data STATS For STA %s (Parent %s)\n",
-		    macaddr_to_str(sta->u_id.mac_addr), sta->pif_name);
+	if (sta->link_id == MLO_INVALID_LINK_ID) {
+		STATS_PRINT("Basic Data STATS For STA %s (Parent Vap %s)\n",
+			    macaddr_to_str(sta->u_id.mac_addr), sta->pif_name);
+	} else {
+		STATS_PRINT("Basic Data STATS For STA %s (Parent MLD %s Link %d)\n",
+			    macaddr_to_str(sta->u_id.mac_addr), sta->pif_name,
+			    sta->link_id);
+	}
 	if (data->tx) {
 		STATS_PRINT("Tx Stats\n");
 		print_basic_sta_data_tx(data->tx);
@@ -2197,8 +2258,14 @@ void print_basic_sta_ctrl(struct stats_obj *sta)
 {
 	struct basic_peer_ctrl *ctrl = sta->stats;
 
-	STATS_PRINT("Basic Control STATS For STA %s (Parent %s)\n",
-		    macaddr_to_str(sta->u_id.mac_addr), sta->pif_name);
+	if (sta->link_id == MLO_INVALID_LINK_ID) {
+		STATS_PRINT("Basic Control STATS For STA %s (Parent %s)\n",
+			    macaddr_to_str(sta->u_id.mac_addr), sta->pif_name);
+	} else {
+		STATS_PRINT("Basic Control STATS For STA %s (Parent %s Link %d)\n",
+			    macaddr_to_str(sta->u_id.mac_addr), sta->pif_name,
+			    sta->link_id);
+	}
 	if (ctrl->tx) {
 		STATS_PRINT("Tx Stats\n");
 		print_basic_sta_ctrl_tx(ctrl->tx);
@@ -2221,8 +2288,13 @@ void print_basic_vap_data(struct stats_obj *vap)
 {
 	struct basic_vdev_data *data = vap->stats;
 
-	STATS_PRINT("Basic Data STATS For VAP %s (Parent %s)\n",
-		    vap->u_id.if_name, vap->pif_name);
+	if (vap->link_id == MLO_INVALID_LINK_ID) {
+		STATS_PRINT("Basic Data STATS For VAP %s (Parent %s)\n",
+			    vap->u_id.if_name, vap->pif_name);
+	} else {
+		STATS_PRINT("Basic Data STATS For MLD %s Link %d (Parent %s)\n",
+			    vap->u_id.if_name, vap->link_id, vap->pif_name);
+	}
 	if (data->tx) {
 		STATS_PRINT("Tx Stats\n");
 		print_basic_vap_data_tx(data->tx);
@@ -2237,8 +2309,14 @@ void print_basic_vap_ctrl(struct stats_obj *vap)
 {
 	struct basic_vdev_ctrl *ctrl = vap->stats;
 
-	STATS_PRINT("Basic Control STATS For VAP %s (Parent %s)\n",
-		    vap->u_id.if_name, vap->pif_name);
+	if (vap->link_id == MLO_INVALID_LINK_ID) {
+		STATS_PRINT("Basic Control STATS For VAP %s (Parent %s)\n",
+			    vap->u_id.if_name, vap->pif_name);
+	} else {
+		STATS_PRINT("Basic Control STATS For MLD %s Link %d (Parent %s)\n",
+			    vap->u_id.if_name, vap->link_id, vap->pif_name);
+	}
+
 	if (ctrl->tx) {
 		STATS_PRINT("Tx Stats\n");
 		print_basic_vap_ctrl_tx(ctrl->tx);
@@ -2342,9 +2420,16 @@ void print_advance_sta_data(struct stats_obj *sta)
 	if (data->rdk)
 		print_advance_sta_data_rdk(data->rdk, sta->u_id.mac_addr,
 					   sta->pif_name);
-	else
-		STATS_PRINT("Advance Data STATS For STA %s (Parent %s)\n",
-			    macaddr_to_str(sta->u_id.mac_addr), sta->pif_name);
+	else {
+		if (sta->link_id == MLO_INVALID_LINK_ID) {
+			STATS_PRINT("Advance Data STATS For STA %s (Parent Vap %s)\n",
+				    macaddr_to_str(sta->u_id.mac_addr), sta->pif_name);
+		} else {
+			STATS_PRINT("Advance Data STATS For STA %s (Parent MLD %s Link %d)\n",
+				    macaddr_to_str(sta->u_id.mac_addr), sta->pif_name,
+				    sta->link_id);
+		}
+	}
 
 	if (data->tx) {
 		STATS_PRINT("Tx Stats\n");
@@ -2400,8 +2485,14 @@ void print_advance_sta_ctrl(struct stats_obj *sta)
 {
 	struct advance_peer_ctrl *ctrl = sta->stats;
 
-	STATS_PRINT("Advance Control STATS For STA %s (Parent %s)\n",
-		    macaddr_to_str(sta->u_id.mac_addr), sta->pif_name);
+	if (sta->link_id == MLO_INVALID_LINK_ID) {
+		STATS_PRINT("Advance Control STATS For STA %s (Parent Vap %s)\n",
+			    macaddr_to_str(sta->u_id.mac_addr), sta->pif_name);
+	} else {
+		STATS_PRINT("Advance Control STATS For STA %s (Parent MLD %s Link %d)\n",
+			    macaddr_to_str(sta->u_id.mac_addr), sta->pif_name,
+			    sta->link_id);
+	}
 	if (ctrl->tx) {
 		STATS_PRINT("Tx Stats\n");
 		print_advance_sta_ctrl_tx(ctrl->tx);
@@ -2428,8 +2519,13 @@ void print_advance_vap_data(struct stats_obj *vap)
 {
 	struct advance_vdev_data *data = vap->stats;
 
-	STATS_PRINT("Advance Data STATS for Vap %s (Parent %s)\n",
-		    vap->u_id.if_name, vap->pif_name);
+	if (vap->link_id == MLO_INVALID_LINK_ID) {
+		STATS_PRINT("Advance Data STATS for Vap %s (Parent %s)\n",
+			    vap->u_id.if_name, vap->pif_name);
+	} else {
+		STATS_PRINT("Advance Data STATS for Vap %s Link %d (Parent %s)\n",
+			    vap->u_id.if_name, vap->link_id, vap->pif_name);
+	}
 	if (data->me) {
 		STATS_PRINT("ME Stats\n");
 		print_advance_vap_data_me(data->me);
@@ -2468,8 +2564,13 @@ void print_advance_vap_ctrl(struct stats_obj *vap)
 {
 	struct advance_vdev_ctrl *ctrl = vap->stats;
 
-	STATS_PRINT("Advance Control STATS for Vap %s (Parent %s)\n",
-		    vap->u_id.if_name, vap->pif_name);
+	if (vap->link_id == MLO_INVALID_LINK_ID) {
+		STATS_PRINT("Advance Control STATS for Vap %s (Parent %s)\n",
+			    vap->u_id.if_name, vap->pif_name);
+	} else {
+		STATS_PRINT("Advance Control STATS for Vap %s Link %d (Parent %s)\n",
+			    vap->u_id.if_name, vap->link_id, vap->pif_name);
+	}
 	if (ctrl->tx) {
 		STATS_PRINT("Tx Stats\n");
 		print_advance_vap_ctrl_tx(ctrl->tx);
@@ -2778,7 +2879,7 @@ void print_debug_data_tx_stats(struct debug_data_tx_stats *tx)
 
 	STATS_PRINT("\tTx RSSI chain per BW:\n");
 	for (i = 0; i < STATS_IF_RSSI_CHAIN_MAX; i++)
-		STATS_PRINT("\t\t %u\n", tx->rssi_chain[i]);
+		STATS_PRINT("\t\t %d\n", tx->rssi_chain[i]);
 }
 
 void print_debug_data_rx_stats(struct debug_data_rx_stats *rx)
@@ -2895,6 +2996,7 @@ void print_debug_sta_data_link(struct debug_peer_data_link *link)
 {
 	print_basic_sta_data_link(&link->b_link);
 	STATS_32(stdout, "Last ack rssi", link->last_ack_rssi);
+	STATS_32(stdout, "Average ack rssi", link->avg_ack_rssi);
 }
 
 void print_debug_sta_data_rate(struct debug_peer_data_rate *rate)
@@ -3032,8 +3134,14 @@ void print_debug_sta_data(struct stats_obj *sta)
 {
 	struct debug_peer_data *data = sta->stats;
 
-	STATS_PRINT("Debug Data STATS For STA %s (Parent %s)\n",
-		    macaddr_to_str(sta->u_id.mac_addr), sta->pif_name);
+	if (sta->link_id == MLO_INVALID_LINK_ID) {
+		STATS_PRINT("Debug Data STATS For STA %s (Parent Vap %s)\n",
+			    macaddr_to_str(sta->u_id.mac_addr), sta->pif_name);
+	} else {
+		STATS_PRINT("Debug Data STATS For STA %s (Parent MLD %s Link %d)\n",
+			    macaddr_to_str(sta->u_id.mac_addr), sta->pif_name,
+			    sta->link_id);
+	}
 	if (data->tx) {
 		STATS_PRINT("Tx Stats\n");
 		print_debug_sta_data_tx(data->tx);
@@ -3064,8 +3172,14 @@ void print_debug_sta_ctrl(struct stats_obj *sta)
 {
 	struct debug_peer_ctrl *ctrl = sta->stats;
 
-	STATS_PRINT("Debug Control STATS For STA %s (Parent %s)\n",
-		    macaddr_to_str(sta->u_id.mac_addr), sta->pif_name);
+	if (sta->link_id == MLO_INVALID_LINK_ID) {
+		STATS_PRINT("Debug Control STATS For STA %s (Parent %s)\n",
+			    macaddr_to_str(sta->u_id.mac_addr), sta->pif_name);
+	} else {
+		STATS_PRINT("Debug Control STATS For STA %s (Parent %s Link %d)\n",
+			    macaddr_to_str(sta->u_id.mac_addr), sta->pif_name,
+			    sta->link_id);
+	}
 	if (ctrl->tx) {
 		STATS_PRINT("Tx Stats\n");
 		print_debug_sta_ctrl_tx(ctrl->tx);
@@ -3225,8 +3339,13 @@ void print_debug_vap_data(struct stats_obj *vap)
 {
 	struct debug_vdev_data *data = vap->stats;
 
-	STATS_PRINT("Debug Data STATS for Vap %s (Parent %s)\n",
-		    vap->u_id.if_name, vap->pif_name);
+	if (vap->link_id == MLO_INVALID_LINK_ID) {
+		STATS_PRINT("Debug Data STATS for Vap %s (Parent %s)\n",
+			    vap->u_id.if_name, vap->pif_name);
+	} else {
+		STATS_PRINT("Debug Data STATS for MLD %s Link %d (Parent %s)\n",
+			    vap->u_id.if_name, vap->link_id, vap->pif_name);
+	}
 	if (data->tx) {
 		STATS_PRINT("Tx Stats\n");
 		print_debug_vap_data_tx(data->tx);
@@ -3253,8 +3372,13 @@ void print_debug_vap_ctrl(struct stats_obj *vap)
 {
 	struct debug_vdev_ctrl *ctrl = vap->stats;
 
-	STATS_PRINT("Debug Control STATS for Vap %s (Parent %s)\n",
-		    vap->u_id.if_name, vap->pif_name);
+	if (vap->link_id == MLO_INVALID_LINK_ID) {
+		STATS_PRINT("Debug Control STATS for Vap %s (Parent %s)\n",
+			    vap->u_id.if_name, vap->pif_name);
+	} else {
+		STATS_PRINT("Debug Control STATS for MLD %s Link %d (Parent %s)\n",
+			    vap->u_id.if_name, vap->link_id, vap->pif_name);
+	}
 	if (ctrl->tx) {
 		STATS_PRINT("Tx Stats\n");
 		print_debug_vap_ctrl_tx(ctrl->tx);
@@ -3378,6 +3502,24 @@ void print_debug_radio_data_raw(struct debug_pdev_data_raw *raw)
 		 raw->num_frags_overflow_err);
 }
 
+#ifdef FEATURE_TSO_STATS
+void print_debug_tso_info(struct debug_pdev_data_tso *tso)
+{
+	uint8_t id;
+
+	for (id = 0; id < CDP_MAX_TSO_PACKETS; id++) {
+		/* TSO LEVEL 1 - PACKET INFO */
+		STATS_PRINT("Packet_Id:[%u]: Packet Length %zu | No. of segments: %u\n",
+			    id, tso->pkt_info[id].tso_packet_len,
+			    tso->pkt_info[id].num_seg);
+	}
+}
+#else
+void print_debug_tso_info(struct debug_pdev_data_tso *tso)
+{
+}
+#endif /* FEATURE_TSO_STATS */
+
 void print_debug_radio_data_tso(struct debug_pdev_data_tso *tso)
 {
 	STATS_64(stdout, "Packets dropped by host", tso->dropped_host.num);
@@ -3387,6 +3529,7 @@ void print_debug_radio_data_tso(struct debug_pdev_data_tso *tso)
 	STATS_64(stdout, "Bytes dropped due to no memory",
 		 tso->tso_no_mem_dropped.bytes);
 	STATS_32(stdout, "Packets dropped by target", tso->dropped_target);
+	print_debug_tso_info(tso);
 }
 
 static const char *capture_status_to_str(enum stats_if_chan_capture_status type)
@@ -3462,7 +3605,50 @@ void print_debug_radio_data_mesh(struct debug_pdev_data_mesh *mesh)
 	STATS_32(stdout, "Mesh Rx Stats Alloc fail", mesh->mesh_mem_alloc);
 }
 
-void print_debug_radio_data_txcap(struct debug_pdev_data_txcap *txcap)
+void print_debug_radio_data_txcap_2_0(struct debug_pdev_data_txcap *txcap)
+{
+	/* TX monitor stats needed for monitor version 2.0 */
+
+	STATS_32(stdout, "TX Capture BE stats mode", txcap->stats_2_0.mode);
+	STATS_64(stdout, "replenish count",
+			txcap->stats_2_0.totat_tx_mon_replenish_cnt);
+	STATS_64(stdout, "reap count   ",
+			txcap->stats_2_0.total_tx_mon_reap_cnt);
+	STATS_32(stdout, "monitor stuck", txcap->stats_2_0.total_tx_mon_stuck);
+	STATS_PRINT("Status buffer\n");
+	STATS_64(stdout, "received", txcap->stats_2_0.status_buf_recv);
+	STATS_64(stdout, "free    ", txcap->stats_2_0.status_buf_free);
+	STATS_PRINT("Packet buffer\n");
+	STATS_64(stdout, "received ", txcap->stats_2_0.pkt_buf_recv);
+	STATS_64(stdout, "free     ", txcap->stats_2_0.pkt_buf_free);
+	STATS_64(stdout, "processed", txcap->stats_2_0.pkt_buf_processed);
+	STATS_64(stdout, "to stack ", txcap->stats_2_0.pkt_buf_to_stack);
+	STATS_PRINT("ppdu info\n");
+	STATS_64(stdout, "threshold", txcap->stats_2_0.ppdu_info_drop_th);
+	STATS_64(stdout, "flush    ", txcap->stats_2_0.ppdu_info_drop_flush);
+	STATS_64(stdout, "truncated", txcap->stats_2_0.ppdu_info_drop_trunc);
+	STATS_PRINT("Drop stats\n");
+	STATS_64(stdout, "ppdu drop", txcap->stats_2_0.ppdu_drop_cnt);
+	STATS_64(stdout, "mpdu drop", txcap->stats_2_0.mpdu_drop_cnt);
+	STATS_64(stdout, "tlv drop ", txcap->stats_2_0.tlv_drop_cnt);
+	STATS_PRINT("Packet Classification\n");
+	STATS_32(stdout, "ARP",
+		 txcap->stats_2_0.dp_tx_pkt_cap_stats[STATS_IF_TX_PKT_TYPE_ARP]);
+	STATS_32(stdout, "EAPOL",
+		 txcap->stats_2_0.dp_tx_pkt_cap_stats[STATS_IF_TX_PKT_TYPE_EAPOL]);
+	STATS_32(stdout, "DHCP",
+		 txcap->stats_2_0.dp_tx_pkt_cap_stats[STATS_IF_TX_PKT_TYPE_DHCP]);
+	STATS_32(stdout, "DNS",
+		 txcap->stats_2_0.dp_tx_pkt_cap_stats[STATS_IF_TX_PKT_TYPE_DNS]);
+	STATS_32(stdout, "ICMP",
+		 txcap->stats_2_0.dp_tx_pkt_cap_stats[STATS_IF_TX_PKT_TYPE_ICMP]);
+	STATS_32(stdout, "Invalid Pkt id",
+		 txcap->stats_2_0.dp_tx_pkt_cap_stats[0]);
+	STATS_64(stdout, "Pkt drop sw filter",
+			txcap->stats_2_0.ppdu_drop_sw_filter);
+}
+
+void print_debug_radio_data_txcap_1_0(struct debug_pdev_data_txcap *txcap)
 {
 	uint8_t i, j;
 
@@ -3517,6 +3703,14 @@ void print_debug_radio_data_txcap(struct debug_pdev_data_txcap *txcap)
 	for (i = 0; i < STATS_IF_PPDU_STATS_MAX_TAG; i++)
 		STATS_PRINT("\t\tTag[%u] = %ju\n",
 			    i, txcap->ppdu_stats_counter[i]);
+}
+
+void print_debug_radio_data_txcap(struct debug_pdev_data_txcap *txcap)
+{
+	if (txcap->monitor_version == STATS_IF_TX_MON_VER_2)
+		print_debug_radio_data_txcap_2_0(txcap);
+	else
+		print_debug_radio_data_txcap_1_0(txcap);
 }
 
 void print_debug_radio_data_monitor(struct debug_pdev_data_monitor *monitor)
@@ -3983,9 +4177,12 @@ void print_debug_stats(struct stats_obj *obj)
 }
 #endif /* WLAN_DEBUG_TELEMETRY */
 
-void print_response(struct reply_buffer *reply)
+void print_response(struct reply_buffer *reply, bool is_async)
 {
 	struct stats_obj *obj = reply->obj_head;
+
+	if (is_async && obj)
+		STATS_PRINT("STATS Resp ID: <%d>\n", obj->response_id);
 
 	while (obj) {
 		switch (obj->lvl) {
@@ -4014,7 +4211,7 @@ void stats_async_response_handler(struct stats_command *cmd, char *ifname)
 	if (!cmd || !cmd->reply)
 		return;
 
-	print_response(cmd->reply);
+	print_response(cmd->reply, false);
 }
 
 void stop_handler(int val)
@@ -4066,6 +4263,116 @@ int handle_async_request(int argc, char *argv[])
 	return 0;
 }
 
+bool is_async_timed_out(time_t start_time, time_t curr_time)
+{
+	if (curr_time - start_time >= ASYNC_STATS_TIMEOUT)
+		return true;
+
+	return false;
+}
+
+/**
+ * Returns 0 on success, -EAGAIN if event not received within the timeout
+ * */
+int stats_async_receive(struct reply_buffer *reply)
+{
+	int status = 0;
+	time_t start_time = time(NULL);
+	bool time_out = false;
+
+	do {
+		status = libstats_receive_event(reply);
+		time_out = is_async_timed_out(start_time, time(NULL));
+	} while ((status == -EAGAIN) && !time_out);
+
+	return status;
+}
+
+int stats_async_request_handle(struct stats_command *cmd,
+			       struct reply_buffer *reply)
+{
+	int status = 0;
+
+	status = libstats_async_event_init();
+	if (status) {
+		STATS_ERR("Async stats initialization fails:%d\n", status);
+		return status;
+	}
+
+	status = libstats_async_send_stats_req(cmd);
+	if (status < 0) {
+		STATS_ERR("Async stats send request fails: %d.\n", status);
+		return status;
+	}
+
+	status = stats_async_receive(reply);
+	if (status) {
+		STATS_ERR("Async stats response is not received: %d.\n", status);
+		return status;
+	}
+
+	libstats_async_event_deinit();
+
+	return status;
+}
+
+int stats_request_simulation_test(struct stats_command *cmd, uint8_t count)
+{
+	struct reply_buffer *reply;
+	uint8_t request_id = 0, remaining = 0;
+	int status = 0;
+
+	STATS_PRINT("Test Mode Simulation with %d count:\n", count);
+	status = libstats_async_event_init();
+	if (status) {
+		STATS_ERR("Async stats initialization fails:%d\n", status);
+		return status;
+	}
+
+	do {
+		while (request_id < count) {
+			cmd->request_id = ++request_id;
+			STATS_PRINT("STATS Req ID: <%d>\n", cmd->request_id);
+			status = libstats_async_send_stats_req(cmd);
+			if (status < 0) {
+				STATS_ERR("Async stats send request<%d> failed %d.\n",
+					  status, request_id);
+				break;
+			}
+		}
+		/* Keep remaining count to retry */
+		remaining = count - request_id;
+
+		/* Try receiving all requested stats */
+		while (request_id) {
+			reply = malloc(sizeof(struct reply_buffer));
+			if (!reply) {
+				STATS_ERR("Failed to allocate memory\n");
+				return -ENOMEM;
+			}
+			memset(reply, 0, sizeof(struct reply_buffer));
+
+			status = stats_async_receive(reply);
+			if (!status)
+				print_response(reply, true);
+			else
+				STATS_ERR("Async stats response is not received: %d.\n",
+					  status);
+
+			libstats_free_reply_buffer_object(reply);
+			free(reply);
+			request_id--;
+		}
+
+		/* Restore request_id to continue */
+		request_id = count - remaining;
+	} while (remaining);
+
+	libstats_async_event_deinit();
+
+	return 0;
+}
+
 int main(int argc, char *argv[])
 {
 	struct stats_command cmd;
@@ -4089,11 +4396,15 @@ int main(int argc, char *argv[])
 	enum stats_peer_type peer_type = STATS_WILD_PEER_TYPE;
 	bool is_mld_link = false;
 	bool recursion_temp = false;
+	bool is_async_req = false;
 	char feat_flags[128] = {'\0'};
 	char ifname_temp[IFNAME_LEN] = {'\0'};
 	char stamacaddr_temp[USER_MAC_ADDR_LEN] = {'\0'};
 	struct ether_addr *ret_eth_addr = NULL;
 	u_int8_t servid_temp = 0;
+	bool is_test_mode = false;
+	uint8_t test_iterate = 0;
+	uint8_t link_id = MLO_INVALID_LINK_ID;
 
 	memset(&cmd, 0, sizeof(struct stats_command));
 
@@ -4286,6 +4597,21 @@ int main(int argc, char *argv[])
 		case 'R':
 			recursion_temp = true;
 			break;
+		case 'E':
+			is_async_req = true;
+			break;
+		case 'T':
+			is_test_mode = true;
+			test_iterate = atoi(optarg);
+			if (!test_iterate || test_iterate > MAX_TEST_ITERATION) {
+				STATS_ERR("Invalid Iteration count\n");
+				display_help();
+				return -EINVAL;
+			}
+			break;
+		case 'L':
+			link_id = atoi(optarg);
+			break;
 		default:
 			STATS_ERR("Unrecognized option\n");
 			display_help();
@@ -4306,6 +4632,12 @@ int main(int argc, char *argv[])
 		return -EINVAL;
 	}
 
+	if (link_id != MLO_INVALID_LINK_ID && obj_temp != STATS_OBJ_VAP) {
+		STATS_ERR("Link_id %d invalid for level %d",
+			  link_id, level_temp);
+		return -EINVAL;
+	}
+
 	if (feat_flags[0])
 		feat_temp = libstats_get_feature_flag(feat_flags);
 	if (!feat_temp)
@@ -4319,6 +4651,7 @@ int main(int argc, char *argv[])
 	cmd.serviceid = servid_temp;
 	cmd.mld_link = is_mld_link;
 	cmd.peer_type = peer_type;
+	cmd.link_id = link_id;
 
 	strlcpy(cmd.if_name, ifname_temp, IFNAME_LEN);
 
@@ -4330,25 +4663,48 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	/* Test mode handling */
+	if (is_test_mode) {
+		if (!is_async_req) {
+			STATS_ERR("Test mode is supported in Async request!\n");
+			return -EINVAL;
+		}
+		return stats_request_simulation_test(&cmd, test_iterate);
+	}
+
+	/* Handle Normal case */
 	reply = (struct reply_buffer *)malloc(sizeof(struct reply_buffer));
 	if (!reply) {
 		STATS_ERR("Failed to allocate memory\n");
 		return -ENOMEM;
 	}
 	memset(reply, 0, sizeof(struct reply_buffer));
-	cmd.reply = reply;
 
-	ret = libstats_request_handle(&cmd);
+	if (is_async_req) {
+		/* Handling non-blocking stats request */
+		cmd.request_id = 0;
+		ret = stats_async_request_handle(&cmd, reply);
+		if (!ret)
+			print_response(reply, true);
 
-	/* Print Output */
-	if (!ret)
-		print_response(cmd.reply);
+		libstats_free_reply_buffer_object(reply);
+		free(reply);
+		reply = NULL;
+	} else {
+		cmd.reply = reply;
 
-	/* Cleanup */
-	libstats_free_reply_buffer(&cmd);
-	if (cmd.reply)
-		free(cmd.reply);
-	cmd.reply = NULL;
+		ret = libstats_request_handle(&cmd);
+
+		/* Print Output */
+		if (!ret)
+			print_response(cmd.reply, false);
+
+		/* Cleanup */
+		libstats_free_reply_buffer(&cmd);
+		if (cmd.reply)
+			free(cmd.reply);
+		cmd.reply = NULL;
+	}
 
 	return 0;
 }

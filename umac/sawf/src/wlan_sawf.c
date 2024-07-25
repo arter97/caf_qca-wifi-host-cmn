@@ -33,12 +33,17 @@
 #include <wlan_objmgr_global_obj.h>
 #include <wlan_osif_priv.h>
 #include <cfg80211_external.h>
+#include <ol_if_athvar.h>
 #ifdef WLAN_FEATURE_11BE_MLO
 #include <wlan_mlo_mgr_peer.h>
+#include <wlan_mlo_mgr_setup.h>
+#include <wlan_mlo_mgr_cmn.h>
 #endif
 #include <wlan_telemetry_agent.h>
 #include <target_if_sawf.h>
 #include <wlan_cfg80211_sawf.h>
+
+#define MAX_CFG80211_BUF_LEN 4000
 
 static struct sawf_ctx *g_wlan_sawf_ctx;
 
@@ -74,6 +79,35 @@ QDF_STATUS wlan_sawf_deinit(void)
 
 	return QDF_STATUS_SUCCESS;
 }
+
+QDF_STATUS wlan_clear_sawf_ctx(void)
+{
+	struct wlan_sawf_svc_class_params *sawf_params;
+	uint8_t svc_idx, svc_id;
+
+	if (!g_wlan_sawf_ctx) {
+		sawf_err("SAWF global context is already freed");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	qdf_spin_lock_bh(&g_wlan_sawf_ctx->lock);
+	for (svc_idx = 0; svc_idx < SAWF_SVC_CLASS_MAX; svc_idx++) {
+		sawf_params = &g_wlan_sawf_ctx->svc_classes[svc_idx];
+		svc_id = sawf_params->svc_id;
+		if (svc_id == 0)
+			continue;
+
+		telemetry_sawf_set_svclass_cfg(false, svc_id, 0, 0, 0, 0, 0, 0,
+					       0);
+		qdf_mem_zero(sawf_params,
+			     sizeof(struct wlan_sawf_svc_class_params));
+	}
+	qdf_spin_unlock_bh(&g_wlan_sawf_ctx->lock);
+	sawf_debug("SAWF global context is cleared");
+
+	return QDF_STATUS_SUCCESS;
+}
+qdf_export_symbol(wlan_clear_sawf_ctx);
 
 struct sawf_ctx *wlan_get_sawf_ctx(void)
 {
@@ -359,6 +393,55 @@ wlan_sawf_get_uplink_params(uint8_t svc_id, uint8_t *tid,
 
 qdf_export_symbol(wlan_sawf_get_uplink_params);
 
+QDF_STATUS
+wlan_sawf_get_downlink_params(uint8_t svc_id, uint8_t *tid,
+			      uint32_t *service_interval, uint32_t *burst_size,
+			      uint32_t *min_tput, uint32_t *max_latency,
+			      uint32_t *priority, uint8_t *type)
+{
+	struct sawf_ctx *sawf;
+	struct wlan_sawf_svc_class_params *svc_param;
+
+	if (!wlan_service_id_valid(svc_id) ||
+	    !wlan_service_id_configured(svc_id))
+		return QDF_STATUS_E_INVAL;
+
+	sawf = wlan_get_sawf_ctx();
+	if (!sawf) {
+		sawf_err("SAWF ctx is invalid");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	qdf_spin_lock_bh(&sawf->lock);
+	svc_param = &sawf->svc_classes[svc_id - 1];
+
+	if (tid)
+		*tid = svc_param->tid;
+
+	if (service_interval)
+		*service_interval = svc_param->service_interval;
+
+	if (burst_size)
+		*burst_size = svc_param->burst_size;
+
+	if (min_tput)
+		*min_tput = svc_param->min_thruput_rate;
+
+	if (max_latency)
+		*max_latency = svc_param->delay_bound;
+
+	if (priority)
+		*priority = svc_param->priority;
+
+	if (type)
+		*type = svc_param->svc_type;
+
+	qdf_spin_unlock_bh(&sawf->lock);
+	return QDF_STATUS_SUCCESS;
+}
+
+qdf_export_symbol(wlan_sawf_get_downlink_params);
+
 int wlan_sawf_get_tput_stats(void *soc, void *arg, uint64_t *in_bytes,
 			     uint64_t *in_cnt, uint64_t *tx_bytes,
 			     uint64_t *tx_cnt, uint8_t tid, uint8_t msduq)
@@ -390,23 +473,48 @@ qdf_export_symbol(wlan_sawf_get_drop_stats);
 
 #ifdef WLAN_FEATURE_11BE_MLO
 static inline QDF_STATUS wlan_sawf_fill_mld_mac(struct wlan_objmgr_peer *peer,
-						struct sk_buff *vendor_event)
+						struct sk_buff *vendor_event,
+						int attr)
 {
 	if (wlan_peer_is_mlo(peer)) {
-		if (nla_put(vendor_event, QCA_WLAN_VENDOR_ATTR_SLA_PEER_MLD_MAC,
-			    QDF_MAC_ADDR_SIZE,
+		if (nla_put(vendor_event, attr, QDF_MAC_ADDR_SIZE,
 			    (void *)(wlan_peer_mlme_get_mldaddr(peer)))) {
-			sawf_err("nla put fail");
+			sawf_err("nla put fail for mld_mac");
 			return QDF_STATUS_E_FAILURE;
 		}
 	}
 	return QDF_STATUS_SUCCESS;
 }
+
+static uint16_t wlan_sawf_get_pdev_hw_link_id(struct wlan_objmgr_pdev *pdev)
+{
+	uint8_t ml_grp_id;
+	uint16_t link_id, hw_link_id;
+	struct wlan_objmgr_psoc *psoc = NULL;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		sawf_err("Unable to find psoc");
+		return 0;
+	}
+
+	mlo_psoc_get_grp_id(psoc, &ml_grp_id);
+	link_id = wlan_mlo_get_pdev_hw_link_id(pdev);
+	hw_link_id = ((ml_grp_id << 8) | link_id);
+
+	return hw_link_id;
+}
 #else
 static inline QDF_STATUS wlan_sawf_fill_mld_mac(struct wlan_objmgr_peer *peer,
-						struct sk_buff *vendor_event)
+						struct sk_buff *vendor_event,
+						int attr)
 {
 	return QDF_STATUS_SUCCESS;
+}
+
+static uint16_t wlan_sawf_get_pdev_hw_link_id(struct wlan_objmgr_pdev *pdev)
+{
+	return 0;
 }
 #endif
 
@@ -420,34 +528,41 @@ wlan_sawf_sla_process_sla_event(uint8_t svc_id, uint8_t *peer_mac,
 static void wlan_sawf_send_breach_nl(struct wlan_objmgr_peer *peer,
 				     struct psoc_peer_iter *itr)
 {
+	uint16_t hw_link_id;
 	struct wlan_objmgr_vdev *vdev;
 	struct wlan_objmgr_pdev *pdev;
-	struct vdev_osif_priv *osif_vdev;
 	struct sk_buff *vendor_event;
+	struct ieee80211com *ic = NULL;
+	struct net_device *netdev = NULL;
 	uint8_t ac = 0;
 
 	vdev = wlan_peer_get_vdev(peer);
 	if (!vdev) {
-		sawf_info("Unable to find vdev");
+		sawf_err("Unable to find vdev");
 		return;
 	}
 
 	pdev = wlan_vdev_get_pdev(vdev);
 	if (!pdev) {
-		sawf_info("Unable to find pdev");
+		sawf_err("Unable to find pdev");
 		return;
 	}
 
-	osif_vdev  = wlan_vdev_get_ospriv(vdev);
-	if (!osif_vdev) {
-		sawf_info("Unable to find osif_vdev");
+	ic = wlan_vdev_get_ic(vdev);
+	if (!ic) {
+		sawf_err("ic is NULL");
+		return;
+	}
+
+	netdev = ic->ic_netdev;
+	if (!netdev) {
+		sawf_err("netdev is NULL");
 		return;
 	}
 
 	vendor_event =
-		wlan_cfg80211_vendor_event_alloc(
-				osif_vdev->wdev->wiphy, osif_vdev->wdev,
-				4000,
+		wlan_cfg80211_vendor_event_alloc(ic->ic_wiphy, netdev->ieee80211_ptr,
+				MAX_CFG80211_BUF_LEN,
 				QCA_NL80211_VENDOR_SUBCMD_SAWF_SLA_BREACH_INDEX,
 				GFP_ATOMIC);
 
@@ -456,6 +571,8 @@ static void wlan_sawf_send_breach_nl(struct wlan_objmgr_peer *peer,
 		return;
 	}
 
+	hw_link_id = wlan_sawf_get_pdev_hw_link_id(pdev);
+
 	if (nla_put(vendor_event, QCA_WLAN_VENDOR_ATTR_SLA_PEER_MAC,
 		    QDF_MAC_ADDR_SIZE,
 		    (void *)(wlan_peer_get_macaddr(peer)))) {
@@ -463,8 +580,9 @@ static void wlan_sawf_send_breach_nl(struct wlan_objmgr_peer *peer,
 		goto error_cleanup;
 	}
 
-	if (wlan_sawf_fill_mld_mac(peer, vendor_event)) {
-			sawf_err("nla put fail");
+	if (wlan_sawf_fill_mld_mac(peer, vendor_event,
+				   QCA_WLAN_VENDOR_ATTR_SLA_PEER_MLD_MAC)) {
+		sawf_err("nla put fail");
 		goto error_cleanup;
 	}
 
@@ -489,6 +607,18 @@ static void wlan_sawf_send_breach_nl(struct wlan_objmgr_peer *peer,
 	ac = TID_TO_WME_AC(itr->tid);
 	if (nla_put_u8(vendor_event, QCA_WLAN_VENDOR_ATTR_SLA_AC,
 		       ac)) {
+		sawf_err("nla put fail");
+		goto error_cleanup;
+	}
+
+	if (nla_put_u8(vendor_event, QCA_WLAN_VENDOR_ATTR_SLA_MSDUQ_ID,
+		       itr->queue_id)) {
+		sawf_err("nla put fail");
+		goto error_cleanup;
+	}
+
+	if (nla_put_u16(vendor_event, QCA_WLAN_VENDOR_ATTR_SLA_HW_LINK_ID,
+		       hw_link_id)) {
 		sawf_err("nla put fail");
 		goto error_cleanup;
 	}
@@ -523,7 +653,8 @@ void wlan_sawf_notify_breach(uint8_t *mac_addr,
 			     uint8_t svc_id,
 			     uint8_t param,
 			     bool set_clear,
-			     uint8_t tid)
+			     uint8_t tid,
+			     uint8_t queue_id)
 {
 	struct psoc_peer_iter itr = {0};
 
@@ -532,6 +663,7 @@ void wlan_sawf_notify_breach(uint8_t *mac_addr,
 	itr.svc_id = svc_id;
 	itr.param = param;
 	itr.tid = tid;
+	itr.queue_id = queue_id;
 
 	wlan_objmgr_iterate_psoc_list(wlan_sawf_get_psoc_peer,
 				      &itr, WLAN_SAWF_ID);
@@ -1317,3 +1449,186 @@ QDF_STATUS wlan_sawf_add_epcs_rule(struct wlan_objmgr_peer *peer)
 
 	return QDF_STATUS_SUCCESS;
 }
+
+#ifdef SAWF_ADMISSION_CONTROL
+void wlan_sawf_send_peer_msduq_event_nl(struct wlan_objmgr_peer *peer,
+					struct cdp_sawf_peer_msduq_event_intf *intf)
+{
+	struct wlan_objmgr_vdev *vdev;
+	struct wlan_objmgr_pdev *pdev;
+	struct sk_buff *vendor_event;
+	struct ieee80211com *ic = NULL;
+	struct net_device *netdev = NULL;
+
+	vdev = wlan_peer_get_vdev(peer);
+	if (!vdev) {
+		sawf_err("Unable to find vdev");
+		return;
+	}
+
+	pdev = wlan_vdev_get_pdev(vdev);
+	if (!pdev) {
+		sawf_err("Unable to find pdev");
+		return;
+	}
+
+	ic = wlan_vdev_get_ic(vdev);
+	if (!ic) {
+		sawf_err("ic is NULL");
+		return;
+	}
+
+	netdev = ic->ic_netdev;
+	if (!netdev) {
+		sawf_err("netdev is NULL");
+		return;
+	}
+
+	vendor_event =
+		wlan_cfg80211_vendor_event_alloc(ic->ic_wiphy, netdev->ieee80211_ptr,
+				MAX_CFG80211_BUF_LEN,
+				QCA_NL80211_VENDOR_SUBCMD_SAWF_PEER_MSDUQ_EVENT_INDEX,
+				GFP_ATOMIC);
+
+	if (!vendor_event) {
+		sawf_err("Failed to allocate vendor event");
+		return;
+	}
+
+	intf->hw_link_id = wlan_sawf_get_pdev_hw_link_id(pdev);
+
+	if (nla_put_u16(vendor_event, QCA_WLAN_VENDOR_ATTR_SAWF_PEER_MSDUQ_HW_LINK_ID,
+			intf->hw_link_id)) {
+		sawf_err("nla put fail for hw_link_id");
+		goto error_cleanup;
+	}
+
+	if (nla_put(vendor_event, QCA_WLAN_VENDOR_ATTR_SAWF_PEER_MSDUQ_MAC,
+		    QDF_MAC_ADDR_SIZE, (void *)(wlan_peer_get_macaddr(peer)))) {
+		sawf_err("nla put fail for mac_addr");
+		goto error_cleanup;
+	}
+
+	if (wlan_sawf_fill_mld_mac(peer, vendor_event,
+				   QCA_WLAN_VENDOR_ATTR_SAWF_PEER_MSDUQ_MLD_MAC)) {
+		sawf_err("nla put fail for mld_mac");
+		goto error_cleanup;
+	}
+
+	if (nla_put_u8(vendor_event, QCA_WLAN_VENDOR_ATTR_SAWF_PEER_MSDUQ_ID,
+		       intf->queue_id)) {
+		sawf_err("nla put fail for queue_id");
+		goto error_cleanup;
+	}
+
+	if (nla_put_u8(vendor_event, QCA_WLAN_VENDOR_ATTR_SAWF_PEER_MSDUQ_EVENT_TYPE,
+		       intf->event_type)) {
+		sawf_err("nla put fail for event_type");
+		goto error_cleanup;
+	}
+
+	if (intf->event_type == SAWF_PEER_MSDUQ_DELETE_EVENT)
+		goto send_event;
+
+	if (nla_put_u8(vendor_event, QCA_WLAN_VENDOR_ATTR_SAWF_PEER_MSDUQ_SVC_ID,
+		       intf->svc_id)) {
+		sawf_err("nla put fail for svc_id");
+		goto error_cleanup;
+	}
+
+	if (nla_put_u8(vendor_event, QCA_WLAN_VENDOR_ATTR_SAWF_PEER_MSDUQ_SVC_TYPE,
+		       intf->type)) {
+		sawf_err("nla put fail for svc_type");
+		goto error_cleanup;
+	}
+
+	if (nla_put_u8(vendor_event, QCA_WLAN_VENDOR_ATTR_SAWF_PEER_MSDUQ_SVC_PRIORITY,
+		       intf->priority)) {
+		sawf_err("nla put fail for svc_priority");
+		goto error_cleanup;
+	}
+
+	if (nla_put_u8(vendor_event, QCA_WLAN_VENDOR_ATTR_SAWF_PEER_MSDUQ_TID,
+		       intf->tid)) {
+		sawf_err("nla put fail for tid");
+		goto error_cleanup;
+	}
+
+	if (nla_put_u8(vendor_event, QCA_WLAN_VENDOR_ATTR_SAWF_PEER_MSDUQ_AC,
+		       intf->ac)) {
+		sawf_err("nla put fail for ac");
+		goto error_cleanup;
+	}
+
+	if (nla_put_u32(vendor_event, QCA_WLAN_VENDOR_ATTR_SAWF_PEER_MSDUQ_MARK_METADATA,
+			intf->mark_metadata)) {
+		sawf_err("nla put fail for mark_metadata");
+		goto error_cleanup;
+	}
+
+	if (nla_put_u32(vendor_event, QCA_WLAN_VENDOR_ATTR_SAWF_PEER_MSDUQ_SERVICE_INTERVAL,
+			intf->service_interval)) {
+		sawf_err("nla put fail for service_interval");
+		goto error_cleanup;
+	}
+
+	if (nla_put_u32(vendor_event, QCA_WLAN_VENDOR_ATTR_SAWF_PEER_MSDUQ_BURST_SIZE,
+			intf->burst_size)) {
+		sawf_err("nla put fail for burst_size");
+		goto error_cleanup;
+	}
+
+	if (nla_put_u32(vendor_event, QCA_WLAN_VENDOR_ATTR_SAWF_PEER_MSDUQ_DELAY_BOUND,
+			intf->delay_bound)) {
+		sawf_err("nla put fail for delay_bound");
+		goto error_cleanup;
+	}
+
+	if (nla_put_u32(vendor_event, QCA_WLAN_VENDOR_ATTR_SAWF_PEER_MSDUQ_MIN_THROUGHTPUT,
+			intf->min_throughput)) {
+		sawf_err("nla put fail for min_throughput");
+		goto error_cleanup;
+	}
+
+send_event:
+	wlan_cfg80211_vendor_event(vendor_event, GFP_ATOMIC);
+	return;
+
+error_cleanup:
+	wlan_cfg80211_vendor_free_skb(vendor_event);
+}
+
+qdf_export_symbol(wlan_sawf_send_peer_msduq_event_nl);
+#endif
+
+bool wlan_sawf_set_flow_deprioritize_callback(void (*sawf_flow_deprioritize_callback)(struct qca_sawf_flow_deprioritize_params *params))
+{
+	struct sawf_ctx *sawf_ctx;
+
+	sawf_ctx = wlan_get_sawf_ctx();
+	if (!sawf_ctx) {
+		sawf_err("Invalid sawf ctx");
+		return false;
+	}
+
+	sawf_ctx->wlan_sawf_flow_deprioritize_callback = sawf_flow_deprioritize_callback;
+	return true;
+}
+
+qdf_export_symbol(wlan_sawf_set_flow_deprioritize_callback);
+
+void wlan_sawf_flow_deprioritize(struct qca_sawf_flow_deprioritize_params *deprio_params)
+{
+	struct sawf_ctx *sawf_ctx;
+
+	sawf_ctx = wlan_get_sawf_ctx();
+	if (!sawf_ctx) {
+		sawf_err("Invalid sawf ctx");
+		return;
+	}
+
+	if (sawf_ctx->wlan_sawf_flow_deprioritize_callback)
+		sawf_ctx->wlan_sawf_flow_deprioritize_callback(deprio_params);
+}
+
+qdf_export_symbol(wlan_sawf_flow_deprioritize);

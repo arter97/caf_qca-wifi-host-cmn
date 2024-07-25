@@ -778,6 +778,22 @@ wmi_extract_ul_ofdma_trig_rx_peer_userinfo(
 		struct wmi_host_rx_peer_userinfo_evt_data *resp);
 #endif
 
+#ifdef WLAN_FEATURE_11BE
+/**
+ * wmi_extract_sched_mode_probe_resp_event() - extract sched mode probe resp
+ * from event
+ * @wmi_handle: wmi handle
+ * @evt_buf: pointer to event buffer
+ * @resp: Pointer to hold sched mode probe resp data
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS
+wmi_extract_sched_mode_probe_resp_event(
+		wmi_unified_t wmi_handle, void *evt_buf,
+		struct wlan_host_sched_mode_probe_resp_event *resp);
+#endif /* WLAN_FEATURE_11BE */
+
 /**
  * wmi_extract_chan_info_event() - extract chan information from event
  * @wmi_handle: wmi handle
@@ -1179,4 +1195,30 @@ static inline QDF_STATUS wmi_unified_link_recmnd_info_send(
 	return QDF_STATUS_SUCCESS;
 }
 #endif
+
+#ifdef WLAN_FEATURE_11BE
+/**
+ * wmi_unified_send_mu_on_off_cmd() - send MU toggle duration command
+ * @wmi: WMI handle
+ * @params: Pointer to MU toggle duration params
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_send_mu_on_off_cmd(wmi_unified_t wmi,
+				  struct wmi_host_mu_on_off_params *params);
+#endif /* WLAN_FEATURE_11BE */
+
+#ifdef WLAN_SUPPORT_TX_PKT_CAP_CUSTOM_CLASSIFY
+/**
+ * wmi_unified_set_tx_pkt_cap_custom_classify() - api to add
+ * the protocols to be classified by tx packet capture
+ * @wmi_hdl: wmi handle
+ * @param: Packet type information
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+QDF_STATUS wmi_unified_set_tx_pkt_cap_custom_classify(
+		wmi_unified_t wmi_handle,
+		struct wmi_tx_pkt_cap_custom_classify_info *param);
+#endif /* WLAN_SUPPORT_TX_PKT_CAP_CUSTOM_CLASSIFY */
 #endif /* _WMI_UNIFIED_AP_API_H_ */

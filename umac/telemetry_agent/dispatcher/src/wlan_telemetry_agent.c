@@ -32,10 +32,20 @@ qdf_export_symbol(g_agent_ops);
 
 void wlan_telemetry_agent_application_init_notify(
 		enum agent_notification_event event,
-		uint64_t data)
+		enum rm_services service_id,
+		uint64_t service_data)
 {
 	if (g_agent_ops)
-		g_agent_ops->agent_notify_app_event(event, data);
+		g_agent_ops->agent_notify_app_event(event, service_id, service_data);
+}
+
+void wlan_telemetry_agent_dynamic_app_init_deinit_notify(
+		enum agent_notification_event event,
+		enum rm_services service_id,
+		uint64_t service_data)
+{
+	if (g_agent_ops)
+		g_agent_ops->agent_dynamic_app_init_deinit_notify(event, service_id, service_data);
 }
 
 void wlan_telemetry_emesh_application_init_deinit_notify(
@@ -256,6 +266,36 @@ QDF_STATUS telemetry_sawf_updt_tid_msduq(void *telemetry_ctx,
 
 qdf_export_symbol(telemetry_sawf_updt_tid_msduq);
 
+QDF_STATUS telemetry_sawf_update_msduq_info(void *telemetry_ctx,
+					    uint8_t hostq_id,
+					    uint8_t tid, uint8_t msduq_idx,
+					    uint8_t svc_id)
+{
+	if (g_agent_ops) {
+		if (g_agent_ops->sawf_update_msduq_info(telemetry_ctx,
+							hostq_id, tid,
+							msduq_idx, svc_id))
+			return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+qdf_export_symbol(telemetry_sawf_update_msduq_info);
+
+QDF_STATUS telemetry_sawf_clear_msduq_info(void *telemetry_ctx,
+					   uint8_t hostq_id)
+{
+	if (g_agent_ops) {
+		if (g_agent_ops->sawf_clear_msduq_info(telemetry_ctx, hostq_id))
+			return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+qdf_export_symbol(telemetry_sawf_clear_msduq_info);
+
 QDF_STATUS telemetry_sawf_set_mov_avg_params(uint32_t num_pkt,
 					     uint32_t num_win)
 {
@@ -462,6 +502,11 @@ int register_telemetry_agent_ops(struct telemetry_agent_ops *agent_ops)
 	g_agent_ops->agent_get_peer_stats = wifi_driver_get_peer_stats;
 	g_agent_ops->agent_get_emesh_pdev_stats = wifi_driver_get_emesh_pdev_stats;
 	g_agent_ops->agent_get_emesh_peer_stats = wifi_driver_get_emesh_peer_stats;
+	g_agent_ops->agent_get_deter_pdev_stats = wifi_driver_get_deter_pdev_stats;
+	g_agent_ops->agent_get_deter_peer_stats = wifi_driver_get_deter_peer_stats;
+	g_agent_ops->agent_get_erp_pdev_stats = wifi_driver_get_erp_pdev_stats;
+	g_agent_ops->agent_get_admctrl_pdev_stats = wifi_driver_get_admctrl_pdev_stats;
+	g_agent_ops->agent_get_admctrl_peer_stats = wifi_driver_get_admctrl_peer_stats;
 	/* SAWF ops */
 	g_agent_ops->sawf_get_tput_stats = wlan_sawf_get_tput_stats;
 	g_agent_ops->sawf_get_mpdu_stats = wlan_sawf_get_mpdu_stats;

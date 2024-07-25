@@ -55,7 +55,7 @@ int wlan_cfg80211_set_peer_pkt_capture_params(struct wiphy *wiphy,
 #ifndef ENABLE_CFG80211_BACKPORTS_MLO
 	ic = cfg_ctx->ic;
 #else
-	ic = cfg_ctx->ic_list[0];
+	ic = wlan_cfg80211_find_ic_by_netdev_name(wiphy, wdev->netdev->name);
 #endif
 
 	if (!ic) {
@@ -95,10 +95,11 @@ int wlan_cfg80211_set_peer_pkt_capture_params(struct wiphy *wiphy,
 		dev = wdev->netdev;
 		scn =  ath_netdev_priv(dev);
 
-		if (ic->ic_cfg80211_radio_handler.ic_set_peer_pkt_capture_params)
+		if (ic->ic_cfg80211_radio_handler.ic_set_peer_pkt_capture_params) {
 			return_val =
 				ic->ic_cfg80211_radio_handler.ic_set_peer_pkt_capture_params((void *)scn,
 											     &peer_info);
+		}
 	} else {
 			return_val = -EOPNOTSUPP;
 	}
@@ -290,7 +291,7 @@ int wlan_cfg80211_lite_monitor_config(struct wiphy *wiphy,
 #ifndef ENABLE_CFG80211_BACKPORTS_MLO
 	ic = cfg_ctx->ic;
 #else
-	ic = cfg_ctx->ic_list[0];
+	ic = wlan_cfg80211_find_ic_by_netdev_name(wiphy, wdev->netdev->name);
 #endif
 
 	if (!ic) {

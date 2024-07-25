@@ -449,6 +449,8 @@ struct debug_psoc_data {
  * @stats: Stats based on above meta information
  * @next: Next stats_obj
  * @parent: Parent stats_obj
+ * @response_id: Response ID of non-blocking stats request
+ * @link_id: Link Id of MLD level object
  */
 struct stats_obj {
 	enum stats_level_e lvl;
@@ -463,6 +465,8 @@ struct stats_obj {
 	void *stats;
 	struct stats_obj *next;
 	struct stats_obj *parent;
+	uint32_t response_id;
+	uint8_t link_id;
 };
 
 /**
@@ -483,7 +487,9 @@ struct reply_buffer {
  * @recursive: Stats recursiveness
  * @mld_link:  Stats for mld link
  * @serviceid: Stats serviceid
+ * @link_id: Link Id of MLD level object
  * @feat_flag: Stats requested for combination of Features
+ * @request_id:Request ID of non blocking stats request from application
  * @sta_mac:   Station MAC address if Stats requested for STA object
  * @if_name:   Interface name on which Stats is requested
  * @reply:     Pointer to reply buffer provided by user
@@ -496,8 +502,10 @@ struct stats_command {
 	bool recursive;
 	bool mld_link;
 	uint8_t serviceid;
+	uint8_t link_id;
 	char if_name[IFNAME_LEN];
 	u_int64_t feat_flag;
+	uint32_t request_id;
 	struct ether_addr sta_mac;
 	struct reply_buffer *reply;
 	enum stats_peer_type peer_type;
@@ -529,6 +537,14 @@ int32_t libstats_request_handle(struct stats_command *cmd);
 void libstats_free_reply_buffer(struct stats_command *cmd);
 
 /**
+ * libstats_free_reply_buffer_object(): Function to free all reply objects
+ * @reply: Pointer to reply buffer structure
+ *
+ * Return: None
+ */
+void libstats_free_reply_buffer_object(struct reply_buffer *reply);
+
+/**
  * libstats_is_ifname_valid(): Function to check interface name
  * @ifname: Pointer to Interface name to be checked
  * @obj: Type of object Radio/VAP/SoC
@@ -552,15 +568,34 @@ int32_t libstats_request_async_start(struct stats_command *cmd);
  * Return: 0 on Success, -1 on Failure
  */
 int32_t libstats_request_async_stop(struct stats_command *cmd);
+
 /**
  * libstats_async_event_init(): Initialization for non blocking stats
  *
  * Return: 0 on Success, Error code on Failure
  */
-int8_t libstats_async_event_init(void);
+int32_t libstats_async_event_init(void);
+
 /**
  * libstats_async_event_deinit(): Deinitialization for non blocking stats
  *
  */
 void libstats_async_event_deinit(void);
+
+/**
+ * libstats_async_send_stats_req(): Send request for non blocking stats
+ *
+ * Return: Num of bytes sent on Success, Error code on Failure
+ */
+int32_t libstats_async_send_stats_req(struct stats_command *cmd);
+
+/**
+ * libstats_receive_event(): Non blocking receive API to receive the event
+ *                       for non blocking stats request
+ * @buf: Buffer provided by the application to hold reply
+ *
+ * Return: 0 on Success, Error code on Failure
+ */
+int32_t libstats_receive_event(struct reply_buffer *buf);
+
 #endif /* _STATS_LIB_H_ */

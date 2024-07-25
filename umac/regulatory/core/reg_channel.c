@@ -32,6 +32,7 @@
 #include "reg_channel.h"
 #include <wlan_reg_channel_api.h>
 #include <wlan_reg_services_api.h>
+#include <cfg_ucfg_api.h>
 
 #ifdef CONFIG_HOST_FIND_CHAN
 
@@ -1195,8 +1196,8 @@ reg_get_client_power_for_rep_ap(struct wlan_objmgr_pdev *pdev,
 				enum reg_6g_ap_type ap_pwr_type,
 				enum reg_6g_client_type client_type,
 				qdf_freq_t chan_freq,
-				bool *is_psd, uint16_t *reg_eirp,
-				uint16_t *reg_psd)
+				bool *is_psd, int16_t *reg_eirp,
+				int16_t *reg_psd)
 {
 	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
 	struct regulatory_channel *master_chan_list;
@@ -1236,7 +1237,7 @@ reg_get_client_power_for_rep_ap(struct wlan_objmgr_pdev *pdev,
  */
 static QDF_STATUS reg_get_afc_psd(qdf_freq_t freq,
 				  struct regulatory_channel *afc_chan_list,
-				  uint16_t *afc_psd)
+				  int16_t *afc_psd)
 {
 	uint8_t i;
 
@@ -1254,12 +1255,12 @@ QDF_STATUS reg_get_client_psd_for_ap(struct wlan_objmgr_pdev *pdev,
 				     enum reg_6g_ap_type ap_pwr_type,
 				     enum reg_6g_client_type client_type,
 				     qdf_freq_t chan_freq,
-				     uint16_t *reg_psd)
+				     int16_t *reg_psd)
 {
 	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
 	struct regulatory_channel *master_chan_list, *afc_chan_list;
 	QDF_STATUS status = QDF_STATUS_E_FAILURE;
-	uint16_t afc_psd = 0;
+	int16_t afc_psd = 0;
 	bool is_psd;
 
 	pdev_priv_obj = reg_get_pdev_obj(pdev);
@@ -1789,6 +1790,27 @@ reg_is_dev_outdoor(struct wlan_objmgr_pdev *pdev)
 	reg_get_afc_dev_deploy_type(pdev, &reg_afc_deploy_type);
 
 	return reg_afc_deploy_type == AFC_DEPLOYMENT_OUTDOOR;
+}
+
+bool
+reg_is_composite_allowed(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_objmgr_psoc *psoc = NULL;
+	enum reg_afc_dev_deploy_type reg_afc_deploy_type;
+	bool isdot11extendedreginfo;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc)
+		return false;
+
+	isdot11extendedreginfo = cfg_get(psoc, CFG_OL_EXTENDED_REGINFO_SUPPORT);
+	reg_get_afc_dev_deploy_type(pdev, &reg_afc_deploy_type);
+
+	if (isdot11extendedreginfo &&
+		reg_afc_deploy_type == AFC_DEPLOYMENT_INDOOR)
+		return true;
+	else
+		return false;
 }
 #else
 static inline bool

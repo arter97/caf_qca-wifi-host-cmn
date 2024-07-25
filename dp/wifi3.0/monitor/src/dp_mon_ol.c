@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -66,7 +66,12 @@ void monitor_osif_deliver_rx_capture_undecoded_metadata(osif_dev *osifp,
 int wlan_cfg80211_lite_monitor_config(struct wiphy *wiphy,
 				      struct wireless_dev *wdev,
 				      struct wlan_cfg8011_genric_params *params);
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+void *monitor_osif_get_vdev_by_name(struct ieee80211com *ic, char *name);
+bool monitor_osif_is_mld_ifname(char *name);
+#else
 void *monitor_osif_get_vdev_by_name(char *name);
+#endif
 
 #ifdef QCA_SUPPORT_LITE_MONITOR
 static int ol_ath_set_rx_monitor_filter_mon_2_0(struct ieee80211com *ic,
@@ -135,6 +140,12 @@ static int ol_ath_set_rx_monitor_filter_mon_2_0(struct ieee80211com *ic,
 			mon_config->data.filter_config.mgmt_filter[LITE_MON_MODE_FILTER_MO] = filter_val->mo_mgmt;
 			mon_config->data.filter_config.data_filter[LITE_MON_MODE_FILTER_MO] = filter_val->mo_data;
 			mon_config->data.filter_config.ctrl_filter[LITE_MON_MODE_FILTER_MO] = filter_val->mo_ctrl;
+		}
+
+		if (filter_val->mode & RX_MON_FILTER_PASS_OTHER) {
+			mon_config->data.filter_config.mgmt_filter[LITE_MON_MODE_FILTER_FPMO] = filter_val->fpmo_mgmt;
+			mon_config->data.filter_config.data_filter[LITE_MON_MODE_FILTER_FPMO] = filter_val->fpmo_data;
+			mon_config->data.filter_config.ctrl_filter[LITE_MON_MODE_FILTER_FPMO] = filter_val->fpmo_ctrl;
 		}
 
 		mon_config->data.filter_config.len[LITE_MON_TYPE_DATA] = LITE_MON_LEN_ALL;
@@ -556,6 +567,17 @@ static int ol_set_tx_sniffer_mode(struct ol_ath_softc_net80211 *scn,
 	return 0;
 }
 
+static int ol_set_mu_sniffer_mode(struct ol_ath_softc_net80211 *scn,
+				  uint8_t pdev_id, uint32_t mode)
+{
+	struct ieee80211com *ic = &scn->sc_ic;
+	struct wlan_objmgr_psoc *psoc = wlan_pdev_get_psoc(ic->ic_pdev_obj);
+	ol_txrx_soc_handle soc_txrx_handle;
+
+	soc_txrx_handle = wlan_psoc_get_dp_handle(psoc);
+	return cdp_set_mu_sniffer(soc_txrx_handle, pdev_id, mode);
+}
+
 #if defined(WLAN_TX_PKT_CAPTURE_ENH) || defined(WLAN_RX_PKT_CAPTURE_ENH)
 #ifdef QCA_SUPPORT_LITE_MONITOR
 int
@@ -583,11 +605,6 @@ ol_ath_ucfg_set_peer_pkt_capture_mon_2_0(void *vscn,
 		action = LITE_MON_PEER_REMOVE;
 
 	ni = ieee80211_find_node(ic, peer_info->peer_mac, WLAN_MLME_SB_ID);
-	if (!ni && action == LITE_MON_PEER_ADD) {
-		qdf_info("Node doesn't exist");
-		return -EINVAL;
-	}
-
 	if (ni) {
 		if (!ni->ni_vap) {
 			ieee80211_free_node(ni, WLAN_MLME_SB_ID);
@@ -604,7 +621,8 @@ ol_ath_ucfg_set_peer_pkt_capture_mon_2_0(void *vscn,
 	mon_config = qdf_mem_malloc(sizeof(struct lite_mon_config));
 	if (!mon_config) {
 		qdf_err("Memory allocation failed");
-		ieee80211_free_node(ni, WLAN_MLME_SB_ID);
+		if (ni)
+			ieee80211_free_node(ni, WLAN_MLME_SB_ID);
 		return A_NO_MEMORY;
 	}
 
@@ -634,7 +652,8 @@ ol_ath_ucfg_set_peer_pkt_capture_mon_2_0(void *vscn,
 
 	wlan_set_lite_monitor_peer_config(scn, mon_config);
 
-	ieee80211_free_node(ni, WLAN_MLME_SB_ID);
+	if (ni)
+		ieee80211_free_node(ni, WLAN_MLME_SB_ID);
 	qdf_mem_free(mon_config);
 	mon_config = NULL;
 
@@ -1387,7 +1406,16 @@ int wlan_set_lite_monitor_config(void *vscn,
 		config->level = mon_config->data.filter_config.level;
 		ifname = mon_config->data.filter_config.interface_name;
 		if (strlen(ifname)) {
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+			if (monitor_osif_is_mld_ifname(ifname)) {
+				dp_mon_err("Output interface should not be mld interface");
+				retval = -EINVAL;
+				goto fail;
+			}
+			vdev = monitor_osif_get_vdev_by_name(ic, ifname);
+#else
 			vdev = monitor_osif_get_vdev_by_name(ifname);
+#endif
 			if (vdev) {
 				status = wlan_objmgr_vdev_try_get_ref(vdev, WLAN_LITE_MON_ID);
 				if (QDF_IS_STATUS_ERROR(status)) {
@@ -1583,6 +1611,7 @@ int wlan_set_lite_monitor_peer_config(void *vscn,
 	char *ifname = NULL;
 	int retval = 0;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	struct ieee80211_node *ni = NULL;
 
 	peer_config = qdf_mem_malloc(sizeof(struct cdp_lite_mon_peer_config));
 	if (!peer_config) {
@@ -1597,7 +1626,12 @@ int wlan_set_lite_monitor_peer_config(void *vscn,
 		goto fail;
 	}
 
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+	vdev = monitor_osif_get_vdev_by_name(ic, ifname);
+#else
 	vdev = monitor_osif_get_vdev_by_name(ifname);
+#endif
+
 	if (vdev) {
 		status = wlan_objmgr_vdev_try_get_ref(vdev, WLAN_LITE_MON_ID);
 		if (QDF_IS_STATUS_ERROR(status)) {
@@ -1612,7 +1646,7 @@ int wlan_set_lite_monitor_peer_config(void *vscn,
 			goto fail;
 		}
 	} else {
-		dp_mon_err("failed to get vdev");
+		dp_mon_err("invalid interface %s", ifname);
 		retval = -EINVAL;
 		goto fail;
 	}
@@ -1640,9 +1674,21 @@ int wlan_set_lite_monitor_peer_config(void *vscn,
 			}
 		}
 
-		qdf_mem_copy(peer_config->mac,
-			     mon_config->data.peer_config.mac_addr[i],
-			     QDF_MAC_ADDR_SIZE);
+#ifdef WLAN_FEATURE_11BE_MLO
+		ni = ieee80211_find_node_by_mld_mac_and_pdev(ic,
+							     mon_config->data.peer_config.mac_addr[i],
+							     WLAN_LITE_MON_ID);
+#endif
+		if (ni) {
+			qdf_mem_copy(peer_config->mac,
+				     ieee80211_node_get_macaddr(ni),
+				     QDF_MAC_ADDR_SIZE);
+			ieee80211_free_node(ni, WLAN_LITE_MON_ID);
+		} else {
+			qdf_mem_copy(peer_config->mac,
+				     mon_config->data.peer_config.mac_addr[i],
+				     QDF_MAC_ADDR_SIZE);
+		}
 
 		if (QDF_STATUS_SUCCESS ==
 		    cdp_set_lite_mon_peer_config(soc_txrx_handle,
@@ -1730,6 +1776,7 @@ static struct mon_ops monitor_ops = {
 	.mon_get_lite_monitor_config = wlan_get_lite_monitor_config,
 #endif /* QCA_SUPPORT_LITE_MONITOR */
 	.mon_cfg80211_set_mon_fcs_cap = wlan_cfg80211_set_mon_fcs_cap,
+	.mon_set_mu_sniffer_mode = ol_set_mu_sniffer_mode,
 };
 
 /**

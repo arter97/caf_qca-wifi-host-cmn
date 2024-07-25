@@ -1032,11 +1032,9 @@ void dp_peer_tx_cap_tid_queue_flush(struct dp_soc *soc, struct dp_peer *peer,
 			len--;
 		}
 
-		if (len) {
+		if (len)
 			dp_tx_capture_alert("Actual_len: %d pending len:%d !!!",
 					    actual_len, len);
-			QDF_BUG(0);
-		}
 
 		/* free xretry ppdu user alone */
 		TX_CAP_NBUF_QUEUE_FREE(&xretry_user->mpdu_q);
@@ -1141,11 +1139,9 @@ void dp_peer_tid_queue_cleanup(struct dp_peer *peer)
 			len--;
 		}
 
-		if (len) {
+		if (len)
 			dp_tx_capture_alert("Actual_len: %d pending len:%d !!!",
 					    actual_len, len);
-			QDF_BUG(0);
-		}
 
 		TX_CAP_NBUF_QUEUE_FREE(&xretry_user->mpdu_q);
 		qdf_mem_free(xretry_ppdu);
@@ -1951,7 +1947,7 @@ dp_drop_enq_msdu_on_thresh(struct dp_pdev *pdev,
 		/* free head */
 		nbuf = qdf_nbuf_queue_remove(ptr_msdu_comp_q);
 		if (qdf_unlikely(!nbuf)) {
-			qdf_assert_always(0);
+			dp_assert_always_internal(0);
 			break;
 		}
 
@@ -2580,11 +2576,12 @@ dp_enh_tx_cap_mode_change(struct dp_pdev *pdev, uint8_t user_mode)
  * dp_config_enh_tx_capture_1_0()- API to enable/disable enhanced tx capture
  * @pdev_handle: DP_PDEV handle
  * @val: user provided value
+ * @mac_id: LMAC id, dummy field not used in legacy capture
  *
  * Return: QDF_STATUS
  */
 QDF_STATUS
-dp_config_enh_tx_capture_1_0(struct dp_pdev *pdev, uint8_t val)
+dp_config_enh_tx_capture_1_0(struct dp_pdev *pdev, uint8_t val, uint8_t mac_id)
 {
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 
@@ -3519,7 +3516,7 @@ get_mpdu_clone_from_next_ppdu(struct dp_tx_cap_nbuf_list nbuf_list[],
 		dp_tx_capture_err("missed seq_no[%d] ppdu_id[%d] [%d] found but queue empty!!!",
 				  missed_seq_no, ppdu_id, ppdu_desc_cnt);
 		if (mpdu_q_len)
-			qdf_assert_always(0);
+			dp_assert_always_internal(0);
 
 		return NULL;
 	}
@@ -4348,7 +4345,7 @@ check_subseq_ppdu_to_pending_q(struct dp_tx_cap_nbuf_list nbuf_ppdu_list[],
 				tmp_pend_nbuf = qdf_nbuf_clone(
 						ptr_nbuf_list->nbuf_ppdu);
 				if (qdf_unlikely(!tmp_pend_nbuf)) {
-					qdf_assert_always(0);
+					dp_assert_always_internal(0);
 					continue;
 				}
 				qdf_nbuf_free(ptr_nbuf_list->nbuf_ppdu);
@@ -5201,7 +5198,7 @@ insert_mgmt_buf_to_queue:
 							    type,
 							    subtype,
 							    retry_len);
-					qdf_assert_always(0);
+					dp_assert_always_internal(0);
 					break;
 				}
 
@@ -5218,7 +5215,7 @@ insert_mgmt_buf_to_queue:
 							     0, 0);
 				if (qdf_unlikely(!tmp_mgmt_ctl_nbuf)) {
 					dp_tx_capture_alert("%pK: No memory to do copy!!", pdev->soc);
-					qdf_assert_always(0);
+					dp_assert_always_internal(0);
 				}
 
 				dp_update_tx_cap_info(pdev, nbuf_retry_ppdu,
@@ -5528,7 +5525,7 @@ dp_check_ppdu_and_deliver(struct dp_pdev *pdev,
 
 		if (!dp_tx_cap_nbuf_list_get_ref(ptr_nbuf_list)) {
 			if (ptr_nbuf_list->nbuf_ppdu)
-				qdf_assert_always(0);
+				dp_assert_always_internal(0);
 			continue;
 		}
 
@@ -5580,7 +5577,7 @@ dp_check_ppdu_and_deliver(struct dp_pdev *pdev,
 				 */
 				tmp_nbuf_ppdu = qdf_nbuf_clone(nbuf_ppdu);
 				if (qdf_unlikely(!tmp_nbuf_ppdu)) {
-					qdf_assert_always(0);
+					dp_assert_always_internal(0);
 					continue;
 				}
 
@@ -5673,7 +5670,7 @@ dp_check_ppdu_and_deliver(struct dp_pdev *pdev,
 				dp_ppdu_desc_free_all(pdev, ptr_nbuf_list, num_users);
 				DP_TX_PEER_DEL_REF(peer);
 				dp_print_pdev_tx_capture_stats_1_0(pdev);
-				qdf_assert_always(0);
+				dp_assert_always_internal(0);
 				return;
 			}
 
@@ -5681,7 +5678,7 @@ dp_check_ppdu_and_deliver(struct dp_pdev *pdev,
 			    CDP_BA_256_BIT_MAP_SIZE_DWORDS *
 				SEQ_SEG_SZ_BITS(user->failed_bitmap))) {
 				DP_TX_PEER_DEL_REF(peer);
-				qdf_assert_always(0);
+				dp_assert_always_internal(0);
 				return;
 			}
 			/* Fill seq holes within current schedule list */
@@ -5904,7 +5901,7 @@ dp_check_ppdu_and_deliver(struct dp_pdev *pdev,
 				tmp_nbuf = qdf_nbuf_queue_remove(tmp_ppdu_q);
 				if (qdf_unlikely(!tmp_nbuf)) {
 					DP_TX_PEER_DEL_REF(peer);
-					qdf_assert_always(0);
+					dp_assert_always_internal(0);
 					return;
 				}
 
@@ -7165,8 +7162,9 @@ dp_bar_send_ack_frm_to_stack(struct dp_soc *soc,
 	uint16_t bar_ctl;
 	uint32_t user_id;
 	uint8_t tid;
+	uint8_t mac_id = 0;
 	qdf_frag_t addr;
-	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
 
 	if (!nbuf)
 		return QDF_STATUS_E_INVAL;
@@ -7196,7 +7194,7 @@ dp_bar_send_ack_frm_to_stack(struct dp_soc *soc,
 	tid = (bar_ctl >> DP_IEEE80211_BAR_CTL_TID_S) &
 		DP_IEEE80211_BAR_CTL_TID_M;
 
-	ppdu_info = &mon_pdev->ppdu_info;
+	ppdu_info = &mon_mac->ppdu_info;
 	user_id = ppdu_info->rx_info.user_id;
 	rx_status = &ppdu_info->rx_status;
 	rx_user_status =  &ppdu_info->rx_user_status[user_id];
@@ -7295,8 +7293,9 @@ QDF_STATUS dp_send_noack_frame_to_stack(struct dp_soc *soc,
 					struct dp_pdev *pdev,
 					qdf_nbuf_t mon_mpdu)
 {
-	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
-	struct hal_rx_ppdu_info *ppdu_info = &mon_pdev->ppdu_info;
+	uint8_t mac_id = 0;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
+	struct hal_rx_ppdu_info *ppdu_info = &mon_mac->ppdu_info;
 	struct mon_rx_user_status *rx_user_status =
 				&ppdu_info->rx_user_status[0];
 	struct dp_ast_entry *ast_entry;
@@ -7379,8 +7378,9 @@ QDF_STATUS dp_handle_tx_capture_from_dest(struct dp_soc *soc,
 					  struct dp_pdev *pdev,
 					  qdf_nbuf_t mon_mpdu)
 {
-	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
-	struct hal_rx_ppdu_info *ppdu_info = &mon_pdev->ppdu_info;
+	uint8_t mac_id = 0;
+	struct dp_mon_mac *mon_mac = dp_get_mon_mac(pdev, mac_id);
+	struct hal_rx_ppdu_info *ppdu_info = &mon_mac->ppdu_info;
 
 	/*
 	 * The below switch case can be extended to

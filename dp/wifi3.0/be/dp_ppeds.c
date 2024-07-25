@@ -36,6 +36,7 @@
 
 #define DS_NAPI_BUDGET_TO_INTERNAL_BUDGET(n, s) (((n) << (s)) - 1)
 #define DS_INTERNAL_BUDGET_TO_NAPI_BUDGET(n, s) (((n) + 1) >> (s))
+#define DS_NAPI_SHIFT 2
 
 /**
  * dp_ppe_ds_ppe2tcl_irq_handler- Handle ppe2tcl ring interrupt
@@ -260,9 +261,13 @@ static int dp_ppeds_alloc_vp_search_idx_tbl_entry_be(struct dp_soc_be *be_soc,
 
 	/*
 	 * As we already found the current count not maxed out, we should
-	 * always find an non configured entry.
+	 * always find a non configured entry.
 	 */
-	qdf_assert_always(!(i == num_ppe_vp_search_idx_max));
+	if (dp_assert_always_internal(!(i == num_ppe_vp_search_idx_max))) {
+		qdf_mutex_release(&be_soc->ppe_vp_tbl_lock);
+		dp_err("Table entry index crosses max allowed");
+		return -ENOSPC;
+	}
 
 	be_soc->ppe_vp_search_idx_tbl[i].is_configured = true;
 	qdf_mutex_release(&be_soc->ppe_vp_tbl_lock);
@@ -479,9 +484,13 @@ static int dp_ppeds_alloc_vp_tbl_entry_be(struct dp_soc_be *be_soc,
 
 	/*
 	 * As we already found the current count not maxed out, we should
-	 * always find an non configured entry.
+	 * always find a non configured entry.
 	 */
-	qdf_assert_always(!(i == num_ppe_vp_max));
+	if (dp_assert_always_internal(!(i == num_ppe_vp_max))) {
+		qdf_mutex_release(&be_soc->ppe_vp_tbl_lock);
+		dp_err("Table entry index crosses max allowed");
+		return -ENOSPC;
+	}
 
 	be_soc->ppe_vp_tbl[i].is_configured = true;
 	qdf_mutex_release(&be_soc->ppe_vp_tbl_lock);
@@ -526,7 +535,11 @@ static int dp_ppeds_alloc_ppe_vp_profile_be(struct dp_soc_be *be_soc,
 	 * As we already found the current count not maxed out, we should
 	 * always find an non configured entry.
 	 */
-	qdf_assert_always(!(i == num_ppe_vp_max));
+	if (dp_assert_always_internal(!(i == num_ppe_vp_max))) {
+		dp_err("Table entry index crosses max allowed");
+		qdf_mutex_release(&be_soc->ppe_vp_tbl_lock);
+		return -ENOSPC;
+	}
 
 	be_soc->ppe_vp_profile[i].is_configured = true;
 	*ppe_vp_profile = &be_soc->ppe_vp_profile[i];
@@ -671,11 +684,6 @@ static void dp_ppeds_tx_desc_reset(void *ctxt, void *elem, void *elem_list)
 		dp_ppeds_tx_desc_free_nolock(soc, tx_desc);
 
 		if (nbuf) {
-			if (!nbuf_list) {
-				dp_err("potential memory leak");
-				qdf_assert_always(0);
-			}
-
 			nbuf->next = *nbuf_list;
 			*nbuf_list = nbuf;
 		}
@@ -731,7 +739,7 @@ static void dp_ppeds_enable_txcomp_irq(struct dp_soc_be *be_soc)
 static int dp_ppeds_tx_comp_poll(struct napi_struct *napi, int budget)
 {
 	int work_done;
-	int shift = 2;
+	int shift = DS_NAPI_SHIFT;
 	int norm_budget = DS_NAPI_BUDGET_TO_INTERNAL_BUDGET(budget, shift);
 	struct dp_soc_be *be_soc =
 		qdf_container_of(napi, struct dp_soc_be, ppeds_napi_ctxt.napi);
@@ -793,6 +801,63 @@ static void dp_ppeds_add_napi_ctxt(struct dp_soc_be *be_soc)
 #endif
 }
 
+#ifdef QCA_DP_OPTIMIZED_TX_DESC
+/**
+ * dp_ppeds_tx_desc_pool_comp_alloc() - PPE DS allocate memory for
+ * Tx desc completion status
+ * @tx_desc_pool: Tx desc pool handle
+ * @quota: Number of buffers
+ *
+ * PPE DS allocate tx desc pool completion status
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS
+dp_ppeds_tx_desc_pool_comp_alloc(struct dp_ppeds_tx_desc_pool_s *tx_desc_pool,
+				 uint16_t quota)
+{
+	if (!tx_desc_pool)
+		return QDF_STATUS_NOT_INITIALIZED;
+
+	tx_desc_pool->comp =
+		qdf_mem_malloc(sizeof(struct hal_tx_desc_comp_s) * quota);
+
+	if (!tx_desc_pool->comp)
+		return QDF_STATUS_E_NOMEM;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * dp_ppeds_tx_desc_pool_free() - PPE DS free tx desc completion status
+ * @tx_desc_pool: tx desc pool handle
+ *
+ * PPE DS free tx desc completion status
+ *
+ * Return: none
+ */
+static inline void
+dp_ppeds_tx_desc_pool_comp_free(struct dp_ppeds_tx_desc_pool_s *tx_desc_pool)
+{
+	if (tx_desc_pool && tx_desc_pool->comp) {
+		qdf_mem_free(tx_desc_pool->comp);
+		tx_desc_pool->comp = NULL;
+	}
+}
+#else
+static inline QDF_STATUS
+dp_ppeds_tx_desc_pool_comp_alloc(struct dp_ppeds_tx_desc_pool_s *tx_desc_pool,
+				 uint16_t quota)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline void
+dp_ppeds_tx_desc_pool_comp_free(struct dp_ppeds_tx_desc_pool_s *tx_desc_pool)
+{
+}
+#endif /* QCA_DP_OPTIMIZED_TX_DESC */
+
 /**
  * dp_ppeds_tx_desc_pool_alloc() - PPE DS allocate tx desc pool
  * @soc: SoC
@@ -808,6 +873,9 @@ dp_ppeds_tx_desc_pool_alloc(struct dp_soc *soc, uint16_t num_elem)
 	uint32_t desc_size;
 	struct dp_ppeds_tx_desc_pool_s *tx_desc_pool;
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	int napi_budget =
+		wlan_cfg_get_dp_soc_ppeds_tx_comp_napi_budget(soc->wlan_cfg_ctx);
+	uint16_t quota = 0;
 
 	desc_size =  qdf_get_pwr2(sizeof(struct dp_tx_desc_s));
 	tx_desc_pool = &be_soc->ppeds_tx_desc;
@@ -820,6 +888,14 @@ dp_ppeds_tx_desc_pool_alloc(struct dp_soc *soc, uint16_t num_elem)
 		dp_err("Multi page alloc fail, tx desc");
 		return QDF_STATUS_E_NOMEM;
 	}
+
+	quota = DS_NAPI_BUDGET_TO_INTERNAL_BUDGET(napi_budget, DS_NAPI_SHIFT);
+	if (QDF_STATUS_SUCCESS !=
+	    dp_ppeds_tx_desc_pool_comp_alloc(tx_desc_pool, quota)) {
+		dp_err("ppeds tx desc pool comp mem alloc failure");
+		return QDF_STATUS_E_NOMEM;
+	}
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -838,6 +914,7 @@ static void dp_ppeds_tx_desc_pool_free(struct dp_soc *soc)
 
 	tx_desc_pool = &be_soc->ppeds_tx_desc;
 
+	dp_ppeds_tx_desc_pool_comp_free(tx_desc_pool);
 	if (tx_desc_pool->desc_pages.num_pages)
 		dp_desc_multi_pages_mem_free(soc, QDF_DP_TX_PPEDS_DESC_TYPE,
 					     &tx_desc_pool->desc_pages, 0,
@@ -1084,10 +1161,16 @@ struct dp_tx_desc_s *dp_ppeds_tx_desc_alloc(struct dp_soc_be *be_soc)
 
 		/* Pool is exhausted */
 		if (!tx_desc) {
-
-			/* Try to borrow from regular tx desc pools */
-			tx_desc = dp_tx_borrow_tx_desc(&be_soc->soc);
-			if (!tx_desc) {
+			if (qdf_atomic_read(&be_soc->borrow_count) <
+					be_soc->borrow_limit) {
+				/* Try to borrow from regular tx desc pools */
+				tx_desc = dp_tx_borrow_tx_desc(&be_soc->soc);
+				if (!tx_desc) {
+					TX_DESC_LOCK_UNLOCK(&pool->lock);
+					goto failed;
+				}
+				qdf_atomic_inc(&be_soc->borrow_count);
+			} else {
 				TX_DESC_LOCK_UNLOCK(&pool->lock);
 				goto failed;
 			}
@@ -1127,6 +1210,19 @@ qdf_nbuf_t dp_ppeds_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_des
 	struct dp_ppeds_tx_desc_pool_s *pool = NULL;
 	qdf_nbuf_t nbuf = NULL;
 
+	if (tx_desc->pool_id != DP_TX_PPEDS_POOL_ID) {
+		nbuf = tx_desc->nbuf;
+		if (tx_desc->flags & DP_TX_DESC_FLAG_SPECIAL)
+			dp_tx_spcl_desc_free(soc, tx_desc, tx_desc->pool_id);
+		else
+			dp_tx_desc_free(soc, tx_desc, tx_desc->pool_id);
+
+		__dp_tx_outstanding_dec(soc);
+		qdf_atomic_dec(&be_soc->borrow_count);
+
+		return nbuf;
+	}
+
 	pool = &be_soc->ppeds_tx_desc;
 
 	TX_DESC_LOCK_LOCK(&pool->lock);
@@ -1136,7 +1232,8 @@ qdf_nbuf_t dp_ppeds_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_des
 		pool->hotlist = tx_desc;
 		pool->hot_list_len++;
 	} else {
-		__dp_tx_outstanding_dec(soc);
+		if (tx_desc->nbuf)
+			__dp_tx_outstanding_dec(soc);
 
 		nbuf = tx_desc->nbuf;
 		tx_desc->nbuf = NULL;
@@ -1443,6 +1540,18 @@ static struct ppe_ds_wlan_ops ppeds_ops = {
 #endif
 };
 
+uint32_t dp_ppeds_get_node_id_be(struct cdp_soc_t *soc_hdl)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+
+	if (!be_soc->ppeds_handle) {
+		dp_err("%p: DS is not enabled on this SOC", soc);
+		return PPE_VP_DS_INVALID_NODE_ID;
+	}
+	return be_soc->dp_ppeds_node_id;
+}
+
 void dp_ppeds_stats_sync_be(struct cdp_soc_t *soc_hdl,
 			    uint16_t vdev_id,
 			    struct cdp_ds_vp_params *vp_params,
@@ -1550,21 +1659,68 @@ QDF_STATUS dp_ppeds_vp_setup_on_fw_recovery(struct cdp_soc_t *soc_hdl,
 }
 
 /**
- * dp_ppeds_attach_vdev_be() - PPE DS table entry alloc
+ * dp_ppeds_entry_alloc_vdev_be() - allocate the PPE DS VP entry
  * @soc_hdl: CDP SoC Tx/Rx handle
- * @vdev_id: vdev id
  * @vp_arg: PPE VP opaque
  * @ppe_vp_num: Allocated PPE VP number
  * @vp_params: PPE VP ds related params
  *
- * Allocate a DS VP port and attach to BE VAP
+ * Allocate a DS VP port
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_ppeds_entry_alloc_vdev_be(struct cdp_soc_t *soc_hdl,
+					void *vp_arg, int32_t *ppe_vp_num,
+					struct cdp_ds_vp_params *vp_params)
+{
+	struct net_device *dev = vp_params->dev;
+	struct dp_soc *soc = NULL;
+	struct dp_soc_be *be_soc = NULL;
+	int16_t vp_num;
+	QDF_STATUS ret;
+
+	soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	be_soc = dp_get_be_soc_from_dp_soc(soc);
+
+	/*
+	 * Enable once PPEDS module is ready
+	 */
+	if (!be_soc->ppeds_handle) {
+		dp_err("%p: DS is not enabled on this SOC", soc);
+		ret = QDF_STATUS_E_INVAL;
+		goto fail;
+	}
+
+	vp_num = ppe_ds_wlan_vp_alloc(be_soc->ppeds_handle, dev, vp_arg);
+	if (vp_num < 0) {
+		dp_err("vp alloc failed dev %s\n", dev->name);
+		ret = QDF_STATUS_E_FAULT;
+		goto fail;
+	}
+
+	*ppe_vp_num = vp_num;
+
+	return QDF_STATUS_SUCCESS;
+
+fail:
+	return ret;
+}
+
+/**
+ * dp_ppeds_attach_vdev_be() - PPE DS table entry alloc
+ * @soc_hdl: CDP SoC Tx/Rx handle
+ * @vdev_id: vdev id
+ * @vp_arg: PPE VP opaque
+ * @vp_num: PPE VP number
+ * @vp_params: PPE VP ds related params
+ *
+ * attach DS VP port
  *
  * Return: QDF_STATUS
  */
 QDF_STATUS dp_ppeds_attach_vdev_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
-				   void *vp_arg, int32_t *ppe_vp_num, struct cdp_ds_vp_params *vp_params)
+				   void *vp_arg, int32_t vp_num, struct cdp_ds_vp_params *vp_params)
 {
-	struct net_device *dev = vp_params->dev;
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
 	struct dp_soc_be *be_soc;
 	struct dp_vdev *vdev;
@@ -1574,7 +1730,6 @@ QDF_STATUS dp_ppeds_attach_vdev_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	uint32_t peer_id;
 	int8_t ppe_vp_idx;
 	int8_t ppe_vp_profile_idx;
-	int16_t vp_num;
 	int16_t ppe_vp_search_tbl_idx = -1;
 	bool wds_ext_mode = vp_params->wds_ext_mode;
 	QDF_STATUS ret;
@@ -1608,13 +1763,6 @@ QDF_STATUS dp_ppeds_attach_vdev_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 		goto fail1;
 	}
 
-	vp_num = ppe_ds_wlan_vp_alloc(be_soc->ppeds_handle, dev, vp_arg);
-	if (vp_num < 0) {
-		dp_err("vp alloc failed\n");
-		ret = QDF_STATUS_E_FAULT;
-		goto fail1;
-	}
-
 	/*
 	 * Allocate a PPE-VP profile for a vap / wds_ext node.
 	 */
@@ -1622,7 +1770,7 @@ QDF_STATUS dp_ppeds_attach_vdev_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	if (!vp_profile) {
 		dp_err("%p: Failed to allocate VP profile for VP :%d", be_soc, vp_num);
 		ret = QDF_STATUS_E_RESOURCES;
-		goto fail2;
+		goto fail1;
 	}
 
 	be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
@@ -1630,7 +1778,7 @@ QDF_STATUS dp_ppeds_attach_vdev_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	if (ppe_vp_idx < 0) {
 		dp_err("%p: Failed to allocate PPE VP idx for vdev_id:%d", be_soc, vdev->vdev_id);
 		ret = QDF_STATUS_E_RESOURCES;
-		goto fail3;
+		goto fail2;
 	}
 
 	/*
@@ -1642,7 +1790,7 @@ QDF_STATUS dp_ppeds_attach_vdev_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 			dp_err("%p: Failed to allocate PPE VP search table idx for vdev_id:%d",
 				be_soc, vdev->vdev_id);
 			ret = QDF_STATUS_E_RESOURCES;
-			goto fail4;
+			goto fail3;
 		}
 
 		vp_profile->search_idx_reg_num = ppe_vp_search_tbl_idx;
@@ -1666,7 +1814,7 @@ QDF_STATUS dp_ppeds_attach_vdev_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 		if (!dp_peer) {
 			dp_err("%p: No peer found for WDS ext\n", vdev);
 			ret = QDF_STATUS_E_INVAL;
-			goto fail5;
+			goto fail4;
 		}
 
 		tgt_peer = dp_peer;
@@ -1682,7 +1830,7 @@ QDF_STATUS dp_ppeds_attach_vdev_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 			if (!mld_peer) {
 				dp_err("%p: No MLD peer for WDS ext\n", vdev);
 				ret = QDF_STATUS_E_INVAL;
-				goto fail5;
+				goto fail4;
 			}
 
 			tgt_peer = mld_peer;
@@ -1691,34 +1839,57 @@ QDF_STATUS dp_ppeds_attach_vdev_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 		if (dp_peer_setup_ppeds_be(soc, tgt_peer, be_vdev,
 					   (void *)vp_profile) != QDF_STATUS_SUCCESS) {
 			ret = QDF_STATUS_E_RESOURCES;
-			goto fail5;
+			goto fail4;
 		}
 
 		dp_peer_unref_delete(dp_peer, DP_MOD_ID_CDP);
 	}
 
 	vp_params->ppe_vp_profile_idx = ppe_vp_profile_idx;
-	*ppe_vp_num = vp_num;
 	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
 
 	return QDF_STATUS_SUCCESS;
 
-fail5:
+fail4:
 	if (dp_peer)
 		dp_peer_unref_delete(dp_peer, DP_MOD_ID_CDP);
 
 	if (!wds_ext_mode)
 		dp_ppeds_dealloc_vp_search_idx_tbl_entry_be(be_soc, vp_profile->search_idx_reg_num);
-fail4:
-	dp_ppeds_dealloc_vp_tbl_entry_be(be_soc, vp_profile->ppe_vp_num_idx);
 fail3:
-	dp_ppeds_dealloc_ppe_vp_profile_be(be_soc, ppe_vp_profile_idx);
+	dp_ppeds_dealloc_vp_tbl_entry_be(be_soc, vp_profile->ppe_vp_num_idx);
 fail2:
-	ppe_ds_wlan_vp_free(be_soc->ppeds_handle, vp_num);
+	dp_ppeds_dealloc_ppe_vp_profile_be(be_soc, ppe_vp_profile_idx);
 fail1:
 	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
 fail0:
 	return ret;
+}
+
+/**
+ * dp_ppeds_entry_free_vdev_be() - Free the PPE DS port
+ * @soc_hdl: CDP SoC Tx/Rx handle
+ * @vp_num: vp number
+ *
+ * Free the PPE DS port
+ *
+ * Return: void
+ */
+void dp_ppeds_entry_free_vdev_be(struct cdp_soc_t *soc_hdl, int32_t vp_num)
+{
+
+	struct dp_soc *soc;
+	struct dp_soc_be *be_soc;
+
+	soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	if (!soc) {
+		dp_err("CDP soch handle is NULL");
+		return;
+	}
+
+	be_soc = dp_get_be_soc_from_dp_soc(soc);
+
+	ppe_ds_wlan_vp_free(be_soc->ppeds_handle, vp_num);
 }
 
 /**
@@ -1765,8 +1936,6 @@ void dp_ppeds_detach_vdev_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id, struct 
 		return;
 	}
 
-	ppe_ds_wlan_vp_free(be_soc->ppeds_handle, vp_profile->vp_num);
-
 	/*
 	 * For STA mode ast index table reg also needs to be cleaned
 	 */
@@ -1778,6 +1947,62 @@ void dp_ppeds_detach_vdev_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id, struct 
 	dp_ppeds_dealloc_ppe_vp_profile_be(be_soc, ppe_vp_profile_idx);
 
 	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
+}
+
+/**
+ * dp_ppeds_detach_vp_profile() - detach ppe vp profile during vdev detach
+ * @be_soc: BE Soc handle
+ * @be_vdev: pointer to be_vdev structure
+ *
+ * The function detach the the vp profile during vdev detach
+ *
+ * Return: void
+ */
+void dp_ppeds_detach_vp_profile(struct dp_soc_be *be_soc,
+				struct dp_vdev_be *be_vdev)
+{
+	struct dp_ppe_vp_profile *ppe_vp_profile;
+	int num_ppe_vp_max, i;
+
+	if (!be_soc->ppeds_handle) {
+		dp_err("DS is not enabled on this SOC");
+		return;
+	}
+
+	num_ppe_vp_max =
+		hal_tx_get_num_ppe_vp_tbl_entries(be_soc->soc.hal_soc);
+
+	/* Iterate through ppe vp profile and
+	 * update for VAPs with same vdev_id
+	 */
+	for (i = 0; i < num_ppe_vp_max; i++) {
+		/* none of the profiles are configured */
+		if (!be_soc->num_ppe_vp_profiles)
+			break;
+
+		if (!be_soc->ppe_vp_profile[i].is_configured)
+			continue;
+
+		if (be_soc->ppe_vp_profile[i].vdev_id ==
+							be_vdev->vdev.vdev_id) {
+			ppe_vp_profile = &be_soc->ppe_vp_profile[i];
+
+			ppe_ds_wlan_vp_free(be_soc->ppeds_handle,
+					    ppe_vp_profile->vp_num);
+			/*
+			 * For STA mode ast index table reg
+			 * also needs to be cleaned.
+			 */
+			if (be_vdev->vdev.opmode == wlan_op_mode_sta) {
+				dp_ppeds_dealloc_vp_search_idx_tbl_entry_be(
+					be_soc,
+					ppe_vp_profile->search_idx_reg_num);
+			}
+
+			dp_ppeds_dealloc_vp_tbl_entry_be(be_soc, i);
+			dp_ppeds_dealloc_ppe_vp_profile_be(be_soc, i);
+		}
+	}
 }
 
 /*
@@ -2049,6 +2274,7 @@ bool dp_ppeds_target_supported(int target_type)
 	switch (target_type) {
 	case TARGET_TYPE_QCN9224:
 	case TARGET_TYPE_QCN6432:
+	case TARGET_TYPE_QCA5424:
 		return true;
 
 	default:
@@ -2111,6 +2337,8 @@ QDF_STATUS dp_ppeds_start_soc_be(struct dp_soc *soc)
 
 	be_soc->ppeds_stopped = 0;
 
+	qdf_atomic_set(&be_soc->borrow_count, 0);
+
 	dp_info("starting ppe ds for soc %pK ", soc);
 
 	/* Complete the EDMA UMAC reset during instance start */
@@ -2123,6 +2351,8 @@ QDF_STATUS dp_ppeds_start_soc_be(struct dp_soc *soc)
 		return QDF_STATUS_SUCCESS;
 	}
 
+	be_soc->dp_ppeds_node_id =
+				ppe_ds_wlan_get_node_id(be_soc->ppeds_handle);
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -2312,6 +2542,10 @@ QDF_STATUS dp_ppeds_init_soc_be(struct dp_soc *soc)
 
 	be_soc->dp_ppeds_txdesc_hotlist_len =
 	wlan_cfg_get_dp_soc_ppeds_tx_desc_hotlist_len(soc->wlan_cfg_ctx);
+	be_soc->borrow_limit =
+	wlan_cfg_get_dp_soc_ppeds_tx_desc_borrow_limit(soc->wlan_cfg_ctx);
+
+	qdf_atomic_init(&be_soc->borrow_count);
 
 	return dp_hw_cookie_conversion_init(be_soc, &be_soc->ppeds_tx_cc_ctx);
 }

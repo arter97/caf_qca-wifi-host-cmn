@@ -147,6 +147,7 @@ enum {
 	IEEE80211_PARAM_RADIO        = 104,    /* radio on/off */
 	IEEE80211_PARAM_NETWORK_SLEEP    = 105,    /* set network sleep enable/disable */
 	IEEE80211_PARAM_DROPUNENC_EAPOL    = 106,
+	IEEE80211_PARAM_ME6_WAR    = 107, /* Enable DMS war */
 
 	/*
 	 * Unassociated power consumpion improve
@@ -894,6 +895,26 @@ enum {
 	/* MLO enable/disable EXTMLD CAP advertisement */
 	IEEE80211_PARAM_MLO_EXTMLDCAPOP_FLAG = 823,
 #endif
+	/* User config to set common PSD value for all 20MHz subchannels of the
+	 * current channel in the TPE IE
+	 */
+	IEEE80211_PARAM_TPE_COMMON_PSD = 824,
+	IEEE80211_PARAM_TPE_PWR_UNIT = 825, /* User config to choose PSD or EIRP in a TPE IE */
+	IEEE80211_PARAM_TPE_PUNC_PWR = 826, /* User config to set the PSD power of the punctured channel */
+#ifdef WLAN_FEATURE_11BE_MLO
+	IEEE80211_PARAM_MLO_LINK_REJ_FLAG = 827,
+#endif
+	IEEE80211_PARAM_GTX_ENABLE = 828, /* User config to enable/disable green tx */
+	IEEE80211_PARAM_SHORT_GI20 = 829,
+	IEEE80211_PARAM_SHORT_GI40 = 830,
+	IEEE80211_PARAM_HWCTS2SELF_OFDMA = 831, /* User config to enable/disable HWCTS2SELF before DL OFDMA sequence.*/
+#ifdef WLAN_FEATURE_11BE_MLO
+	IEEE80211_PARAM_MLO_LINK_REJ_TEST = 832,
+#endif
+#ifdef QCA_SUPPORT_WDS_EXTENDED
+	IEEE80211_PARAM_WDS_EXT_AP_BRIDGE  = 833,  /* Flag to enable/disable wds_ext specific ap bridge */
+#endif
+	IEEE80211_PARAM_4ADDR_EAPOL = 834,
 };
 
 enum {
@@ -1522,6 +1543,14 @@ enum _ol_ath_param_t {
 	OL_ATH_PARAM_DISPLAY_BAND_CHANS = 550,
 	OL_ATH_PARAM_ALL_CHAN_UTIL = 551,
 	OL_ATH_PARAM_DYNAMIC_WSI_REMAP = 552,
+#ifdef QCA_PROCESS_UPLINK_CSA
+	OL_ATH_PARAM_PROCESS_UPLINK_CSA = 553,
+#endif
+	OL_ATH_PARAM_CBS_TOTAL_DWELL_TIME = 554,
+#ifdef UMAC_SUPPORT_ACS
+	OL_ATH_PARAM_ACS_ADJ_CHAN_INTERFERENCE_BLOCKING = 555,
+#endif /* UMAC_SUPPORT_ACS */
+	OL_ATH_PARAM_START_AID = 556,
 };
 
 #ifdef CONFIG_SUPPORT_VENCMDTABLE
@@ -1639,6 +1668,8 @@ struct vendor_commands vap_vendor_cmds[] = {
 	{"get_stafwd",          IEEE80211_PARAM_STA_FORWARD, GET_PARAM, 0},
 	{"mcastenhance",        IEEE80211_PARAM_ME, SET_PARAM, 1},
 	{"g_mcastenhance",      IEEE80211_PARAM_ME, GET_PARAM, 0},
+	{"me6_war",             IEEE80211_PARAM_ME6_WAR, SET_PARAM, 1},
+	{"g_me6_war",           IEEE80211_PARAM_ME6_WAR, GET_PARAM, 0},
 	{"medump_dummy",        95, SET_PARAM, 1},
 	{"medump",              95, GET_PARAM, 0},
 	{"medebug",             96, SET_PARAM, 1},
@@ -2622,6 +2653,8 @@ struct vendor_commands vap_vendor_cmds[] = {
 	{"drop_tx_mcast",      IEEE80211_PARAM_DROP_TX_MCAST, SET_PARAM, 1},
 	{"get_drop_tx_mcast",  IEEE80211_PARAM_DROP_TX_MCAST, GET_PARAM, 0},
 	{"get_wds_ext",        IEEE80211_PARAM_WDS_EXT_EN, GET_PARAM, 0},
+	{"wds_ext_ap_bridge",  IEEE80211_PARAM_WDS_EXT_AP_BRIDGE, SET_PARAM, 1},
+	{"get_wds_ext_ap_bridge", IEEE80211_PARAM_WDS_EXT_AP_BRIDGE, GET_PARAM, 0},
 #endif
 	{"get_ppevp_type",     IEEE80211_PARAM_PPEVP_TYPE, GET_PARAM, 0},
 #ifdef CONFIG_MLO_SINGLE_DEV
@@ -2675,8 +2708,24 @@ struct vendor_commands vap_vendor_cmds[] = {
 		SET_PARAM, 1},
 	{"g_extmldcap_enable_advertisement",
 		IEEE80211_PARAM_MLO_EXTMLDCAPOP_FLAG, GET_PARAM, 0},
+	{"mlo_link_rej", IEEE80211_PARAM_MLO_LINK_REJ_FLAG, SET_PARAM, 1},
+	{"g_mlo_link_rej", IEEE80211_PARAM_MLO_LINK_REJ_FLAG, GET_PARAM, 0},
+	{"mlo_lre_test_rej", IEEE80211_PARAM_MLO_LINK_REJ_TEST, SET_PARAM, 2},
+	{"g_mlo_lre_test_rej", IEEE80211_PARAM_MLO_LINK_REJ_TEST, GET_PARAM, 0},
 #endif
 	{"get_noack_map", IEEE80211_PARAM_NOACK_MAP, GET_PARAM, 0},
+#ifdef WLAN_FEATURE_11BE
+	{"set_tpe_common_psd", IEEE80211_PARAM_TPE_COMMON_PSD, SET_PARAM, 1},
+	{"get_tpe_common_psd", IEEE80211_PARAM_TPE_COMMON_PSD, GET_PARAM, 0},
+	{"set_tpe_pwr_unit",   IEEE80211_PARAM_TPE_PWR_UNIT, SET_PARAM, 1},
+	{"get_tpe_pwr_unit",   IEEE80211_PARAM_TPE_PWR_UNIT, GET_PARAM, 1},
+	{"set_tpe_punc_chan_power", IEEE80211_PARAM_TPE_PUNC_PWR, SET_PARAM, 1},
+	{"get_tpe_punc_chan_power", IEEE80211_PARAM_TPE_PUNC_PWR, GET_PARAM, 0},
+#endif
+	{"gtx_enable", IEEE80211_PARAM_GTX_ENABLE, SET_PARAM, 1},
+	{"hwcts2self_enable", IEEE80211_PARAM_HWCTS2SELF_OFDMA, SET_PARAM, 1},
+	{"set_4addr_eapol", IEEE80211_PARAM_4ADDR_EAPOL, SET_PARAM, 1},
+	{"get_4addr_eapol", IEEE80211_PARAM_4ADDR_EAPOL, GET_PARAM, 0},
 };
 
 struct vendor_commands radio_vendor_cmds[] = {
@@ -3791,6 +3840,12 @@ struct vendor_commands radio_vendor_cmds[] = {
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_SET_CATEGORY_VERBOSE, SET_PARAM, 1},
 	{"g_radio_qdf_cv_lvl",
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_SET_CATEGORY_VERBOSE, GET_PARAM, 0},
+#if UMAC_SUPPORT_ACS
+	{"set_acs_adj_chan_interference_blocking",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_ACS_ADJ_CHAN_INTERFERENCE_BLOCKING, SET_PARAM, 1},
+	{"get_acs_adj_chan_interference_blocking",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_ACS_ADJ_CHAN_INTERFERENCE_BLOCKING, GET_PARAM, 0},
+#endif /* UMAC_SUPPORT_ACS */
 #ifdef WLAN_FEATURE_11BE
 	{"set_acs_puncture_legacy_weightage",
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_ACS_PUNCTURE_LEGACY_WEIGHTAGE, SET_PARAM, 1},
@@ -4011,6 +4066,20 @@ struct vendor_commands radio_vendor_cmds[] = {
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_ALL_CHAN_UTIL, GET_PARAM, 0},
 	{"dynamic_wsi_remap",
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_DYNAMIC_WSI_REMAP, SET_PARAM, 1},
+#ifdef QCA_PROCESS_UPLINK_CSA
+	{"process_uplink_csa_en",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_PROCESS_UPLINK_CSA, SET_PARAM, 1},
+	{"g_process_uplink_csa_en",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_PROCESS_UPLINK_CSA, GET_PARAM, 0},
+#endif
+	{"cbs_total_dwell_time",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_CBS_TOTAL_DWELL_TIME, SET_PARAM, 1},
+	{"g_cbs_total_dwell_time",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_CBS_TOTAL_DWELL_TIME, GET_PARAM, 0},
+	{"set_start_aid",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_START_AID, SET_PARAM, 1},
+	{"get_start_aid",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_START_AID, GET_PARAM, 0},
 };
 #endif
 

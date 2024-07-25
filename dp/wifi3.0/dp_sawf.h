@@ -27,6 +27,7 @@
 #include "cdp_txrx_cmn_struct.h"
 #include "cdp_txrx_hist_struct.h"
 #include "cdp_txrx_extd_struct.h"
+#include "cdp_txrx_sawf.h"
 
 #define dp_sawf_alert(params...) \
 	QDF_TRACE_FATAL(QDF_MODULE_ID_DP_SAWF, params)
@@ -38,6 +39,8 @@
 	QDF_TRACE_INFO(QDF_MODULE_ID_DP_SAWF, params)
 #define dp_sawf_debug(params...) \
 	QDF_TRACE_DEBUG(QDF_MODULE_ID_DP_SAWF, params)
+#define dp_sawf_trace(params...) \
+	__QDF_TRACE_FL(QDF_TRACE_LEVEL_TRACE, QDF_MODULE_ID_DP_SAWF, ## params)
 
 #define dp_sawf_nofl_alert(params...) \
 	QDF_TRACE_FATAL_NO_FL(QDF_MODULE_ID_DP_SAWF, params)
@@ -68,11 +71,15 @@
 #define dp_sawf_print_stats(params ...)\
 	dp_sawf_debug(params)
 
+#define DP_SAWF_SVC_CLASS_MIN 1
+#define DP_SAWF_SVC_CLASS_MAX 128
+
 #define MSDU_QUEUE_LATENCY_WIN_MIN_SAMPLES 20
 #define WLAN_TX_DELAY_UNITS_US 10
 #define WLAN_TX_DELAY_MASK 0x1FFFFFFF
 #define DP_SAWF_DEFINED_Q_PTID_MAX 2
 #define DP_SAWF_DEFAULT_Q_PTID_MAX 2
+#define DP_SAWF_TID_MIN 0
 #define DP_SAWF_TID_MAX 8
 #define DP_SAWF_DEFAULT_QUEUE_MIN 0
 #define DP_SAWF_DEFAULT_QUEUE_MAX (DP_SAWF_DEFAULT_QUEUE_MIN + DP_SAWF_TID_MAX)
@@ -81,6 +88,7 @@
 #define dp_sawf(peer, msduq_num, field) ((peer)->sawf->msduq[msduq_num].field)
 #define DP_SAWF_DEFAULT_Q_INVALID 0xff
 #define DP_SAWF_PEER_Q_INVALID 0xffff
+#define DP_SAWF_Q_INVALID 0xff
 #define DP_SAWF_TAG_SHIFT 24
 #define DP_SAWF_SERVICE_CLASS_SHIFT 16
 #define DP_SAWF_QUEUE_ID_SHIFT 0
@@ -93,16 +101,86 @@
 					DP_SAWF_SERVICE_CLASS_SHIFT)
 #define DP_SAWF_QUEUE_ID_SET(queue_id) (queue_id << DP_SAWF_QUEUE_ID_SHIFT)
 
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+#define SAWF_META_VALID_MASK 0x00400000
+#define DP_SAWF_METADATA_SET(metadata, srvc_id, queue_id) \
+	(metadata = DP_SAWF_TAG_SET(DP_SAWF_VALID_TAG) | \
+	 DP_SAWF_QUEUE_ID_SET(queue_id) | \
+	 SAWF_META_VALID_MASK)
+#else
 #define DP_SAWF_METADATA_SET(metadata, srvc_id, queue_id) \
 	(metadata = DP_SAWF_TAG_SET(DP_SAWF_VALID_TAG) | \
 	 DP_SAWF_SERVICE_CLASS_SET(srvc_id) | \
-	 DP_SAWF_QUEUE_ID_SET(queue_id));
+	 DP_SAWF_QUEUE_ID_SET(queue_id))
+#endif
+
+#define DP_SAWF_INVALID_SVC_ID 0
+#define DP_SAWF_INVALID_TCL_CMD 0xffff
+
+#ifdef CONFIG_SAWF
+#ifdef SAWF_MSDUQ_DEBUG
+#define DP_SAWF_MSDUQ_STATS_INC(htt_ind_dbg, result) \
+	do { \
+		msduq->htt_ind_dbg.result++; \
+	} while (0)
+
+#else
+#define DP_SAWF_MSDUQ_STATS_INC(htt_ind_dbg, result)
+#endif
+#endif
 
 #define DP_SAWF_QUEUE_ID_GET(metadata) metadata & 0xFFFF
 #define DP_SAWF_INVALID_AST_IDX 0xffff
 #define DP_SAWF_MAX_DYNAMIC_AST 2
 
 #define DP_SAWF_DELAY_BOUND_MS_MULTIPLER 1000
+
+/**
+ * msduq_state - status of MSDUQ
+ * @SAWF_MSDUQ_UNUSED : unused MSDUQ
+ * @SAWF_MSDUQ_DEACTIVATE_PENDING : De-Activate pending resp from tgt
+ * @SAWF_MSDUQ_DEACTIVATED : De-Activate an MSDUQ
+ * @SAWF_MSDUQ_REACTIVATE_PENDING : Re-Activate pending resp from tgt
+ * @SAWF_MSDUQ_IN_USE : MSDUQ is in use
+ */
+enum msduq_state {
+	SAWF_MSDUQ_UNUSED,
+	SAWF_MSDUQ_DEACTIVATE_PENDING,
+	SAWF_MSDUQ_DEACTIVATED,
+	SAWF_MSDUQ_REACTIVATE_PENDING,
+	SAWF_MSDUQ_IN_USE,
+};
+
+static inline char *dp_sawf_msduq_state_to_string(enum msduq_state q_state)
+{
+	switch (q_state) {
+	case SAWF_MSDUQ_UNUSED:
+		return "UNUSED";
+	case SAWF_MSDUQ_DEACTIVATE_PENDING:
+		return "DEACTIVATE_PENDING";
+	case SAWF_MSDUQ_DEACTIVATED:
+		return "DEACTIVATED";
+	case SAWF_MSDUQ_REACTIVATE_PENDING:
+		return "REACTIVATE_PENDING";
+	case SAWF_MSDUQ_IN_USE:
+		return "IN_USE";
+	default:
+		return "UNKNOWN_STATE";
+	}
+}
+
+/**
+ * dp_msduq_report_level - Debug level from userspace to print MSDUQ info.
+ * SAWF_MSDUQ_DBG_LVL_INFO: Level to print Queue info
+ * SAWF_MSDUQ_DBG_LVL_DEBUG: Level to print advanced Queue info
+ * SAWF_MDSUQ_DBG_LVL_TRACE: Level to print advanced Queue info with
+ * reactivate/deactive counters and stats
+ */
+enum dp_msduq_report_level {
+	SAWF_MSDUQ_DBG_LVL_INFO = 1,
+	SAWF_MSDUQ_DBG_LVL_DEBUG,
+	SAWF_MDSUQ_DBG_LVL_TRACE,
+};
 
 /**
  * sawf_stats_level - sawf stats level
@@ -134,6 +212,15 @@ struct dp_peer_sawf_stats {
 
 struct sawf_def_queue_report {
 	uint8_t svc_class_id;
+};
+
+/* Structure to pass relevant information for deprio */
+struct dp_sawf_flow_deprioritize_params {
+	uint8_t peer_mac[QDF_MAC_ADDR_SIZE];
+	uint32_t mark_metadata;
+	bool netdev_info_valid;
+	uint32_t netdev_ifindex;
+	uint8_t netdev_mac[QDF_MAC_ADDR_SIZE];
 };
 
 /**
@@ -319,6 +406,7 @@ void dp_peer_tid_delay_avg(struct cdp_delay_tx_stats *tx_delay,
  */
 QDF_STATUS
 dp_sawf_tx_enqueue_peer_stats(struct dp_soc *soc,
+			      struct dp_peer *peer,
 			      struct dp_tx_desc_s *tx_desc);
 
 #define DP_SAWF_STATS_SVC_CLASS_ID_ALL	0
@@ -407,14 +495,55 @@ QDF_STATUS
 dp_sawf_get_peer_tx_stats(struct cdp_soc_t *soc,
 			  uint32_t svc_id, uint8_t *mac, void *data);
 
+/**
+ * dp_sawf_get_peer_msduq_svc_params - get peer msduq svc info
+ * @soc: soc handle
+ * @mac: mac address
+ * @data: data to be filled
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+dp_sawf_get_peer_msduq_svc_params(struct cdp_soc_t *soc, uint8_t *mac,
+				  void *data);
+
+#ifdef SAWF_ADMISSION_CONTROL
+/**
+ * dp_sawf_get_peer_admctrl_stats - Get Peer SAWF AdmCtrl Stats
+ * @soc: soc handle
+ * @mac: mac address
+ * @data: data to be filled
+ * @peer_type: Peer type
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+dp_sawf_get_peer_admctrl_stats(struct cdp_soc_t *soc, uint8_t *mac,
+			       void *data, enum cdp_peer_type peer_type);
+#endif
+
+#ifdef SAWF_MSDUQ_DEBUG
+struct msduq_htt_stats {
+	uint16_t recv_failure;
+	uint16_t timeout;
+};
+#endif
+
 struct dp_sawf_msduq {
-	uint8_t ref_count;
+	qdf_atomic_t ref_count;
+	uint32_t tgt_opaque_id;
+	uint32_t svc_id;
 	uint8_t htt_msduq;
 	uint8_t remapped_tid;
-	bool is_used;
-	bool del_in_progress;
-	uint32_t tx_flow_number;
-	uint32_t svc_id;
+	uint8_t q_state;
+	uint8_t is_deactivation_needed:1,
+		no_resp_ind:1,
+		map_done:1,
+		reserved:5;
+#ifdef SAWF_MSDUQ_DEBUG
+	struct msduq_htt_stats deactivate_stats;
+	struct msduq_htt_stats reactivate_stats;
+#endif
 };
 
 struct dp_sawf_msduq_tid_map {
@@ -424,6 +553,7 @@ struct dp_sawf_msduq_tid_map {
 struct dp_peer_sawf {
 	/* qdf_bitmap queue_usage; */
 	struct dp_sawf_msduq msduq[DP_SAWF_Q_MAX];
+	qdf_spinlock_t sawf_peer_lock;
 	struct dp_sawf_msduq_tid_map
 	       msduq_map[DP_SAWF_TID_MAX][DP_SAWF_DEFINED_Q_PTID_MAX];
 	struct sawf_def_queue_report tid_reports[DP_SAWF_TID_MAX];
@@ -439,14 +569,19 @@ uint16_t dp_sawf_get_peer_msduq(struct net_device *netdev, uint8_t *dest_mac,
 QDF_STATUS
 dp_sawf_3_link_peer_flow_count(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr,
 			       uint16_t peer_id, uint32_t mark_metadata);
+QDF_STATUS
+dp_sawf_3_link_peer_set_tid_weight(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr,
+				   uint16_t peer_id, uint8_t tid_weight[]);
 #endif
-uint16_t dp_sawf_get_msduq(struct net_device *netdev, uint8_t *peer_mac,
-			   uint32_t service_id);
+void dp_sawf_msduq_timer_handler(void *arg);
+uint16_t dp_sawf_get_msduq(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+			   uint8_t *dest_mac, uint32_t service_id);
 bool dp_sawf_get_search_index(struct dp_soc *soc, qdf_nbuf_t nbuf,
 			      uint8_t vdev_id, uint16_t queue_id,
 			      uint32_t *flow_index);
 uint32_t dp_sawf_queue_id_get(qdf_nbuf_t nbuf);
-void dp_sawf_tcl_cmd(uint16_t *htt_tcl_metadata, qdf_nbuf_t nbuf);
+uint16_t dp_sawf_tcl_cmd(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
+			 bool is_fast_tx);
 bool dp_sawf_tag_valid_get(qdf_nbuf_t nbuf);
 uint8_t dp_sawf_tid_get(uint16_t queue_id);
 
@@ -549,6 +684,7 @@ dp_sawf_peer_config_ul(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr,
  * @start_or_stop: Indication of start of stop
  * @peer_mac: Pointer to hold peer MAC address
  * @peer_id: peer id
+ * @flow_count: flow count
  *
  * Return: QDF_STATUS
  */
@@ -556,7 +692,7 @@ QDF_STATUS
 dp_sawf_peer_flow_count(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr,
 			uint8_t svc_id, uint8_t direction,
 			uint8_t start_or_stop, uint8_t *peer_mac,
-			uint16_t peer_id);
+			uint16_t peer_id, uint16_t flow_count);
 
 /*
  * dp_swaf_peer_sla_configuration() - Get sla configuration for a peer
@@ -574,11 +710,14 @@ dp_swaf_peer_sla_configuration(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr,
  * dp_sawf_get_peer_msduq_info - get peer MSDU Queue information
  * @soc: soc handle
  * @mac_addr: mac address
+ * @svc_id: Service class ID
+ * @debug_level: Debug level
  *
  * Return: QDF_STATUS
  */
 QDF_STATUS
-dp_sawf_get_peer_msduq_info(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr);
+dp_sawf_get_peer_msduq_info(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr,
+			    uint8_t svc_id, uint8_t debug_level);
 
 /**
  * dp_sawf_reinject_handler - Re-inject handler
@@ -591,4 +730,71 @@ dp_sawf_get_peer_msduq_info(struct cdp_soc_t *soc_hdl, uint8_t *mac_addr);
 QDF_STATUS
 dp_sawf_reinject_handler(struct dp_soc *soc, qdf_nbuf_t nbuf,
 			 uint32_t *htt_desc);
+
+/**
+ * dp_sawf_peer_msduq_event_notify - Notifier for peer msduq event
+ * @soc: SOC handle
+ * @peer: peer handle
+ * @queue_id: msduq id
+ * @svc_id: service class id
+ * @event_type: event type (add/delete/update)
+ *
+ * Return: void
+ */
+void dp_sawf_peer_msduq_event_notify(struct dp_soc *soc, struct dp_peer *peer,
+				     uint8_t queue_id, uint8_t svc_id,
+				     enum cdp_sawf_peer_msduq_event event_type);
+
+/**
+ * dp_sawf_notify_deactivate_msduq - Collects required params and notify
+ * reactivate failure to NW Manager
+ *
+ * @soc: SOC handle
+ * @peer: peer handle
+ * @q_id: MSDUQ ID
+ * @svc_id: Service class ID
+ *
+ * Required params were collected and passed to notify_deactivate_msduq to
+ * notify reactivate failure to NW Manager
+ *
+ * Return: QDF_STATUS_SUCCESS on success
+ *
+ */
+QDF_STATUS
+dp_sawf_notify_deactivate_msduq(struct dp_soc *soc, struct dp_peer *peer,
+				uint8_t q_id, uint8_t svc_id);
+
+/**
+ * dp_sawf_notify_nw_manager() - Check for MSDUQ with no resp to notify
+ * NW Manager.
+ * @soc: SOC handle
+ * @peer: dp peer handle
+ * @no_resp_q: Array to indicate MSDUQ with no response
+ *
+ * Checks for the MSDUQ with no response from tgt and notify NW Manager.
+ *
+ * Return: Void
+ */
+void dp_sawf_notify_nw_manager(struct dp_soc *soc, struct dp_peer *peer,
+			       uint8_t *no_resp_q);
+
+/**
+ * dp_soc_sawf_msduq_timer_init() - Initialize the SAWF msduq timer.
+ * @soc: data path SOC handle
+ *
+ * Return: void
+ */
+void dp_soc_sawf_msduq_timer_init(struct dp_soc *soc);
+
+/**
+ * dp_soc_sawf_msduq_timer_deinit() - De-Initialize the SAWF msduq timer.
+ * @soc: data path SoC handle
+ *
+ * Return: void
+ */
+void dp_soc_sawf_msduq_timer_deinit(struct dp_soc *soc);
+
+void dp_soc_sawf_init(struct dp_soc *soc);
+
+void dp_soc_sawf_deinit(struct dp_soc *soc);
 #endif /* DP_SAWF_H*/

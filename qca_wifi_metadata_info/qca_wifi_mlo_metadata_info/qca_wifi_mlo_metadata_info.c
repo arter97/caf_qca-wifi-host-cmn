@@ -17,6 +17,9 @@
 #include "qca_wifi_mlo_metadata_info_if.h"
 #include "qca_wifi_mlo_metadata_info.h"
 #include <ol_if_athvar.h>
+#if QCA_PPE_VP
+#include <ppe_vp_public.h>
+#endif
 
 static inline
 void qca_mlo_metadata_set_tag(uint32_t *hash)
@@ -31,6 +34,36 @@ void qca_mlo_metadata_set_primary_link_id(uint32_t *key, uint8_t link_id)
 	*key |= (link_id << MLO_METADATA_LINK_ID_SHIFT);
 }
 
+#ifdef WLAN_SUPPORT_PPEDS
+static inline
+uint8_t qca_mlo_get_ds_node_id(osif_dev *osdev)
+{
+	uint32_t node_id = MLO_METADATA_INVALID_DS_NODE_ID;
+#ifdef QCA_SUPPORT_WDS_EXTENDED
+	osif_peer_dev *osifp;
+#endif
+	switch (osdev->dev_type) {
+#ifdef QCA_SUPPORT_WDS_EXTENDED
+	case OSIF_NETDEV_TYPE_WDS_EXT:
+		osifp = (osif_peer_dev *)(osdev);
+
+		node_id = osifp->ppeds_node_id;
+		break;
+#endif
+	case OSIF_NETDEV_TYPE_VAP:
+		node_id = osdev->ppeds_node_id;
+		break;
+	}
+
+	return node_id;
+}
+#else
+static inline uint8_t qca_mlo_get_ds_node_id(osif_dev *osdev)
+{
+	return MLO_METADATA_INVALID_DS_NODE_ID;
+}
+#endif
+
 #ifdef WLAN_FEATURE_11BE_MLO
 uint32_t qca_mlo_get_mark_metadata(struct qca_mlo_metadata_param *mlo_param)
 {
@@ -38,12 +71,23 @@ uint32_t qca_mlo_get_mark_metadata(struct qca_mlo_metadata_param *mlo_param)
 	uint8_t *dest_mac = mlo_param->in_dest_mac;
 	struct osif_mldev *mldev = NULL;
 	osif_dev  *osdev = NULL;
-	wlan_if_t vap = NULL;
 	uint32_t mlo_key = 0;
+
+	/* only when DS is enabled valid node id will be updated */
+	mlo_param->out_ppe_ds_node_id = MLO_METADATA_INVALID_DS_NODE_ID;
 
 	if (qdf_unlikely(!dest_dev)) {
 		qdf_err("dest_dev is NULL");
 		return mlo_key;
+	}
+
+	/* If the netdev is vlan, it may not have ieee80211_ptr.
+	 * In that case fetch the ieee80211_ptr from its top most parent
+	 */
+	if (qdf_net_if_is_vlan_dev((struct qdf_net_if *)dest_dev)) {
+		dest_dev = vlan_dev_real_dev(dest_dev);
+		if (!dest_dev)
+			return mlo_key;
 	}
 
 	if (!dest_dev->ieee80211_ptr)
@@ -56,7 +100,9 @@ uint32_t qca_mlo_get_mark_metadata(struct qca_mlo_metadata_param *mlo_param)
 	}
 
 	if (mldev->dev_type != OSIF_NETDEV_TYPE_MLO) {
-		qdf_err("dest_dev is not a mlo dev %s", dest_dev->name);
+		/* for non mlo vaps return the valid DS node id */
+		mlo_param->out_ppe_ds_node_id =
+				qca_mlo_get_ds_node_id((osif_dev *)mldev);
 		return mlo_key;
 	}
 
@@ -71,18 +117,9 @@ uint32_t qca_mlo_get_mark_metadata(struct qca_mlo_metadata_param *mlo_param)
 		return mlo_key;
 	}
 
-	vap = osdev->os_if;
-	if (!vap) {
-		qdf_err("vap is NULL dev = %s, mac =" QDF_MAC_ADDR_FMT,
-			dest_dev->name, QDF_MAC_ADDR_REF(dest_mac));
-		return mlo_key;
-	}
 
-	if (vap->cp.icp_flags & IEEE80211_PPE_VP_DS_ACCEL)
-		mlo_param->out_ppe_ds_node_id = osdev->mlo_link_id;
-	else
-		mlo_param->out_ppe_ds_node_id = MLO_METADATA_INVALID_DS_NODE_ID;
-
+	mlo_param->out_ppe_ds_node_id =
+			qca_mlo_get_ds_node_id(osdev);
 	qca_mlo_metadata_set_primary_link_id(&mlo_key, osdev->mlo_link_id);
 	qca_mlo_metadata_set_tag(&mlo_key);
 	return mlo_key;
@@ -91,9 +128,6 @@ uint32_t qca_mlo_get_mark_metadata(struct qca_mlo_metadata_param *mlo_param)
 #else
 uint32_t qca_mlo_get_mark_metadata(struct qca_mlo_metadata_param *mlo_param)
 {
-	uint32_t mlo_key;
-
-	qca_mlo_metadata_set_primary_link_id(&mlo_key, INVALID_MLO_METADATA);
-	return mlo_key;
+	return 0;
 }
 #endif

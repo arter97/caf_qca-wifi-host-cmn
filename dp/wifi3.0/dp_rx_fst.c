@@ -358,13 +358,14 @@ dp_rx_flow_find_entry_by_tuple(hal_soc_handle_t hal_soc_hdl,
 
 /**
  * dp_rx_flow_find_entry_by_flowid() - Find DP FSE matching a given flow index
+ * @soc: soc handle
  * @fst: Rx FST Handle
  * @flow_id: Flow index of the requested flow
  *
  * Return: Pointer to the DP FSE entry
  */
 struct dp_rx_fse *
-dp_rx_flow_find_entry_by_flowid(struct dp_rx_fst *fst,
+dp_rx_flow_find_entry_by_flowid(struct dp_soc *soc, struct dp_rx_fst *fst,
 				uint32_t flow_id)
 {
 	struct dp_rx_fse *fse = NULL;
@@ -374,8 +375,11 @@ dp_rx_flow_find_entry_by_flowid(struct dp_rx_fst *fst,
 		return NULL;
 
 	dp_info("flow_idx= %d, flow_addr = %pK", flow_id, fse);
-	qdf_assert_always(fse->flow_id == hal_rx_get_hal_hash(fst->hal_rx_fst,
-							      flow_id));
+	if (dp_assert_always_internal_stat((fse->flow_id ==
+			hal_rx_get_hal_hash(fst->hal_rx_fst, flow_id)),
+			soc, rx.err.invalid_fse_flow_id)) {
+		return NULL;
+	}
 
 	return fse;
 }
@@ -396,7 +400,7 @@ QDF_STATUS dp_rx_flow_send_htt_operation_cmd(struct dp_pdev *pdev,
 	struct dp_htt_rx_flow_fst_operation fst_op;
 	struct wlan_cfg_dp_soc_ctxt *cfg = pdev->soc->wlan_cfg_ctx;
 
-	qdf_mem_set(&fst_op, 0, sizeof(struct dp_htt_rx_flow_fst_operation));
+	qdf_mem_set(&fst_op, sizeof(struct dp_htt_rx_flow_fst_operation), 0);
 
 	if (qdf_unlikely(wlan_cfg_is_rx_flow_search_table_per_pdev(cfg))) {
 		/* Firmware pdev ID starts from 1 */
@@ -708,7 +712,12 @@ QDF_STATUS dp_rx_flow_delete_entry(struct dp_pdev *pdev,
 	/* Delete the FSE in HW FST */
 	status = hal_rx_flow_delete_entry(soc->hal_soc, fst->hal_rx_fst,
 					  fse->hal_rx_fse);
-	qdf_assert_always(status == QDF_STATUS_SUCCESS);
+	if (dp_assert_always_internal_stat((status == QDF_STATUS_SUCCESS),
+				soc, rx.err.hw_fst_del_failed)) {
+		qdf_spin_unlock_bh(&fst->fst_lock);
+		dp_err("RX HW flow delete entry failed");
+		return status;
+	}
 
 	if (fse->svc_id != DP_RX_FLOW_INVALID_SVC_ID) {
 		/* send WDI event */
@@ -756,7 +765,7 @@ QDF_STATUS dp_rx_flow_update_fse_stats(struct dp_pdev *pdev, uint32_t flow_id)
 {
 	struct dp_rx_fse *fse;
 
-	fse = dp_rx_flow_find_entry_by_flowid(pdev->rx_fst, flow_id);
+	fse = dp_rx_flow_find_entry_by_flowid(pdev->soc, pdev->rx_fst, flow_id);
 
 	if (NULL == fse) {
 		dp_err("Flow not found, flow ID %u", flow_id);
@@ -816,7 +825,12 @@ void dp_rx_flow_cache_invalidate_timer_handler(void *ctx)
 
 	fst = pdev->rx_fst;
 
-	qdf_assert_always(fst);
+	if (dp_assert_always_internal_stat(fst,
+			pdev->soc, rx.err.cache_invl_fail_no_fst)) {
+		dp_err("cache invalidate failed");
+		return;
+	}
+
 	is_update_pending = qdf_atomic_read(&fst->is_cache_update_pending);
 	qdf_atomic_set(&fst->is_cache_update_pending, 0);
 
@@ -893,7 +907,7 @@ QDF_STATUS dp_rx_fst_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 		return QDF_STATUS_E_NOMEM;
 	}
 
-	qdf_mem_set(fst, 0, sizeof(struct dp_rx_fst));
+	qdf_mem_set(fst, sizeof(struct dp_rx_fst), 0);
 
 	if (!dp_rx_set_rr_reo_indication(&flow, &(fst->ring_id), cfg)) {
 		fst->ring_id = 1;
@@ -935,8 +949,8 @@ QDF_STATUS dp_rx_fst_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 		return QDF_STATUS_E_NOMEM;
 	}
 
-	qdf_mem_set((uint8_t *)fst->base, 0,
-		    (sizeof(struct dp_rx_fse) * fst->max_entries));
+	qdf_mem_set((uint8_t *)fst->base,
+		    (sizeof(struct dp_rx_fse) * fst->max_entries), 0);
 
 	fst->hal_rx_fst = hal_rx_fst_attach(
 				soc->hal_soc,
@@ -969,14 +983,15 @@ QDF_STATUS dp_rx_fst_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 				(void *)pdev,
 				QDF_TIMER_TYPE_SW);
 
-		qdf_assert_always(status == QDF_STATUS_SUCCESS);
+		if (dp_assert_always_internal(status == QDF_STATUS_SUCCESS)) {
+			dp_err("Cache invalidate timer start failed");
+		} else {
+			/* Start the timer */
+			qdf_timer_start(&fst->cache_invalidate_timer,
+					HW_RX_FSE_CACHE_INVALIDATE_DELAYED_FST_SETUP_MS);
 
-		/* Start the timer */
-		qdf_timer_start(
-			&fst->cache_invalidate_timer,
-			HW_RX_FSE_CACHE_INVALIDATE_DELAYED_FST_SETUP_MS);
-
-		qdf_atomic_set(&fst->is_cache_update_pending, false);
+			qdf_atomic_set(&fst->is_cache_update_pending, false);
+		}
 	}
 
 	dp_rx_ppe_fse_register();
@@ -1047,7 +1062,7 @@ QDF_STATUS dp_rx_flow_send_fst_fw_setup(struct dp_soc *soc,
 	if (qdf_unlikely(!wlan_cfg_is_rx_flow_tag_enabled(cfg)))
 		return QDF_STATUS_SUCCESS;
 
-	qdf_mem_set(&fst_setup, 0, sizeof(struct dp_htt_rx_flow_fst_setup));
+	qdf_mem_set(&fst_setup, sizeof(struct dp_htt_rx_flow_fst_setup), 0);
 
 	if (qdf_unlikely(wlan_cfg_is_rx_flow_search_table_per_pdev(cfg))) {
 		/* Firmware pdev ID starts from 1 */
@@ -1092,7 +1107,7 @@ QDF_STATUS dp_mon_rx_update_rx_flow_tag_stats(struct dp_pdev *pdev,
 {
 	struct dp_rx_fse *fse;
 
-	fse = dp_rx_flow_find_entry_by_flowid(pdev->rx_fst, flow_id);
+	fse = dp_rx_flow_find_entry_by_flowid(pdev->soc, pdev->rx_fst, flow_id);
 
 	if (!fse) {
 		dp_err("Flow not found, flow ID %u", flow_id);

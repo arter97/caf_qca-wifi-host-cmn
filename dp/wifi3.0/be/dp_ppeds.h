@@ -106,6 +106,14 @@ QDF_STATUS dp_ppeds_start_soc_be(struct dp_soc *soc);
 void dp_ppeds_stop_soc_be(struct dp_soc *soc);
 
 /**
+ * dp_ppeds_get_node_id_be() - get the ppe vp node id.
+ * @soc: CDP SoC Tx/Rx handle
+ *
+ * Return: node id on success, MAX value on failure
+ */
+uint32_t dp_ppeds_get_node_id_be(struct cdp_soc_t *soc_hdl);
+
+/**
  * dp_ppeds_stats_sync_be() - sync stats for DS mode.
  * @soc: CDP SoC Tx/Rx handle
  * @vdev_id: vdev id
@@ -144,11 +152,37 @@ QDF_STATUS dp_ppeds_vp_setup_on_fw_recovery(struct cdp_soc_t *soc,
 					    uint16_t profile_idx);
 
 /**
+ * dp_ppeds_entry_alloc_vdev_be() - allocate the PPE DS VP entry
+ * @soc_hdl: CDP SoC Tx/Rx handle
+ * @vp_arg: PPE VP opaque
+ * @ppe_vp_num: Allocated PPE VP number
+ * @vp_params: PPE VP ds related params
+ *
+ * Allocate a DS VP port
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_ppeds_entry_alloc_vdev_be(struct cdp_soc_t *soc_hdl,
+					void *vp_arg, int32_t *ppe_vp_num,
+					struct cdp_ds_vp_params *vp_params);
+
+/**
+ * dp_ppeds_entry_free_vdev_be() - Free the PPE DS port
+ * @soc_hdl: CDP SoC Tx/Rx handle
+ * @vp_num: vp number
+ *
+ * Free the PPE DS port
+ *
+ * Return: void
+ */
+void dp_ppeds_entry_free_vdev_be(struct cdp_soc_t *soc_hdl, int32_t vp_num);
+
+/**
  * dp_ppeds_attach_vdev_be - PPE DS table entry alloc
  * @soc: CDP SoC Tx/Rx handle
  * @vdev_id: vdev_id
  * @vp_arg: PPE VP opaque
- * @ppe_vp_num: PPE VP number
+ * @vp_num: PPE VP number
  * @vp_params: PPE virtual port params
  *
  * Allocate a DS VP port and attach to BE VAP
@@ -156,7 +190,7 @@ QDF_STATUS dp_ppeds_vp_setup_on_fw_recovery(struct cdp_soc_t *soc,
  * Return: QDF_STATUS
  */
 QDF_STATUS dp_ppeds_attach_vdev_be(struct cdp_soc_t *soc, uint8_t vdev_id,
-				   void *vp_arg, int32_t *ppe_vp_num,
+				   void *vp_arg, int32_t vp_num,
 				   struct cdp_ds_vp_params *vp_params);
 
 /*
@@ -264,6 +298,17 @@ void dp_tx_ppeds_cfg_astidx_cache_mapping(struct dp_soc *soc,
 void dp_tx_ppeds_vp_profile_update(struct dp_soc_be *be_soc,
 				   struct dp_vdev_be *be_vdev);
 
+/**
+ * dp_ppeds_detach_vp_profile() - detach ppe vp profile during vdev detach
+ * @be_soc: BE Soc handle
+ * @be_vdev: pointer to be_vdev structure
+ *
+ * The function detach the the vp profile during vdev detach
+ *
+ * Return: void
+ */
+void dp_ppeds_detach_vp_profile(struct dp_soc_be *be_soc,
+				struct dp_vdev_be *be_vdev);
 #ifdef DP_UMAC_HW_RESET_SUPPORT
 /**
  * dp_ppeds_handle_attached() - Check if ppeds handle attached

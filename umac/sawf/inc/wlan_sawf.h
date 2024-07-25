@@ -66,10 +66,16 @@
 	qdf_trace_hex_dump(QDF_MODULE_ID_SAWF, \
 			QDF_TRACE_LEVEL_DEBUG, ptr, size)
 
+#define SAWF_SVC_CLASS_INVALID 0
 #define SAWF_SVC_CLASS_MIN 1
 #define SAWF_SVC_CLASS_MAX 128
 #define WLAN_MAX_SVC_CLASS_NAME 64
 #define DISABLED_MODE_MAX_LEN 128
+
+/* Reserve service classes for STC type towards the end of the valid range */
+#define MAX_NUM_SAWF_STC_SVC_CLASS 8
+#define SAWF_STC_SVC_CLASS_MIN (SAWF_SVC_CLASS_MAX - MAX_NUM_SAWF_STC_SVC_CLASS + 1)
+#define SAWF_STC_SVC_CLASS_MAX SAWF_SVC_CLASS_MAX
 
 /*
  * Service class defined for Pre-11BE SCS (Only TID based service class
@@ -193,8 +199,15 @@ enum sawf_rule_type {
  */
 #define SAWF_STC_SVC_CLASS_DEFAULT_PRIORITY (SAWF_SCS_SVC_CLASS_DEFAULT_PRIORITY + 1)
 
+/*
+ * One extra priority is added for HH flows categorized by IFLI and RM
+ */
+#define SAWF_HH_PRIORITY SAWF_STC_SVC_CLASS_DEFAULT_PRIORITY + 1
+
 #define SAWF_MIN_PRIORITY SAWF_DEF_MIN_PRIORITY
-#define SAWF_MAX_PRIORITY SAWF_STC_SVC_CLASS_DEFAULT_PRIORITY
+#define SAWF_MAX_PRIORITY SAWF_HH_PRIORITY
+
+
 /*
  * Enum for SAWF service class type
  * WLAN_SAWF_SVC_TYPE_DEF: Default service class type
@@ -283,14 +296,20 @@ enum telemetry_sawf_param {
 	SAWF_PARAM_MAX,
 };
 
+/* Forward declaration of structure */
+struct qca_sawf_flow_deprioritize_params;
+
 /**
  * struct sawf_ctx- SAWF context
  * @lock: Lock to add or delete entry from sawf params structure
  * @svc_classes: List of all service classes
+ * @wlan_sawf_flow_deprioritize_callback: function ptr to flow
+ *     deprioritization callback
  */
 struct sawf_ctx {
 	qdf_spinlock_t lock;
 	struct wlan_sawf_svc_class_params svc_classes[SAWF_SVC_CLASS_MAX];
+	void (*wlan_sawf_flow_deprioritize_callback)(struct qca_sawf_flow_deprioritize_params *);
 };
 
 struct psoc_peer_iter {
@@ -299,6 +318,7 @@ struct psoc_peer_iter {
 	uint8_t svc_id;
 	uint8_t param;
 	uint8_t tid;
+	uint8_t queue_id;
 };
 
 /* wlan_sawf_init() - Initialize SAWF subsytem
@@ -325,6 +345,14 @@ QDF_STATUS wlan_sawf_deinit(void);
  * Return: SAWF context
  */
 struct sawf_ctx *wlan_get_sawf_ctx(void);
+
+/* wlan_clear_sawf_ctx() - Clear service aware wifi context
+ *
+ * Clear Service Aware Wifi Context
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_clear_sawf_ctx(void);
 
 /* wlan_service_id_valid() - Validate the service ID
  *
@@ -417,6 +445,25 @@ QDF_STATUS
 wlan_sawf_get_uplink_params(uint8_t svc_id, uint8_t *tid,
 			    uint32_t *service_interval, uint32_t *burst_size,
 			    uint32_t *min_tput, uint32_t *max_latency);
+
+/* wlan_sawf_get_downlink_params() - Get service class downlink parameters
+ *
+ * @svc_id: service class ID
+ * @tid: pointer to update TID
+ * @service_interval: Pointer to update Service Interval
+ * @burst_size: Pointer to update Burst Size
+ * @min_tput: Pointer to update minimum throughput
+ * @max_latency: Pointer to update max_latency
+ * @priority: Pointer to update priority
+ * @type: Pointer to update type
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wlan_sawf_get_downlink_params(uint8_t svc_id, uint8_t *tid,
+			      uint32_t *service_interval, uint32_t *burst_size,
+			      uint32_t *min_tput, uint32_t *max_latency,
+			      uint32_t *priority, uint8_t *type);
 
 /* wlan_sawf_sla_process_sla_event() - Process SLA-related nl-event
  *
@@ -698,6 +745,7 @@ int wlan_sawf_get_drop_stats(void *soc, void *arg, uint64_t *pass,
  * @param: parameter for which notification is being sent
  * @set_clear: flag tro indicate breach detection or clear
  * @tid: tid no for the sawf flow
+ * @queue_id: msduq id on which breach is detected
  *
  * Return: void
  */
@@ -705,7 +753,25 @@ void wlan_sawf_notify_breach(uint8_t *mac_addr,
 			     uint8_t svc_id,
 			     uint8_t param,
 			     bool set_clear,
-			     uint8_t tid);
+			     uint8_t tid,
+			     uint8_t queue_id);
+
+/* wlan_sawf_set_flow_deprioritize_callback()- Set flow deprioritization
+ *    function callback
+ *
+ * @sawf_flow_deprioritize_callback: callback function address
+ *
+ * Return: bool
+ */
+bool wlan_sawf_set_flow_deprioritize_callback(void (*sawf_flow_deprioritize_callback)(struct qca_sawf_flow_deprioritize_params *params));
+
+/* wlan_sawf_flow_deprioritize() - Flow deprioritization call
+ *
+ * params: Structure filled with flow deprioritization parameters
+ *
+ * Return: None
+ */
+void wlan_sawf_flow_deprioritize(struct qca_sawf_flow_deprioritize_params *params);
 #else
 static inline
 int wlan_sawf_get_tput_stats(void *soc, void *arg, uint64_t *in_bytes,
@@ -737,7 +803,8 @@ void wlan_sawf_notify_breach(uint8_t *mac_addr,
 			     uint8_t svc_id,
 			     uint8_t param,
 			     bool set_clear,
-			     uint8_t tid)
+			     uint8_t tid,
+			     uint8_t queue_id)
 {
 }
 #endif /* CONFIG_SAWF */
