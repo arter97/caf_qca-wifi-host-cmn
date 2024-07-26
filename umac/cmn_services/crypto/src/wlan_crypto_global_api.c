@@ -4283,12 +4283,12 @@ int8_t wlan_crypto_get_default_key_idx(struct wlan_objmgr_vdev *vdev, bool igtk)
 }
 
 enum wlan_crypto_cipher_type
-wlan_crypto_get_cipher(struct wlan_objmgr_vdev *vdev,
+wlan_crypto_get_cipher(struct wlan_objmgr_vdev *vdev, const uint8_t *peer_mac,
 		       bool pairwise, uint8_t key_index)
 {
 	struct wlan_crypto_key *crypto_key;
 
-	crypto_key = wlan_crypto_get_key(vdev, key_index);
+	crypto_key = wlan_crypto_get_key(vdev, peer_mac, key_index);
 
 	if (crypto_key)
 		return crypto_key->cipher_type;
@@ -4450,19 +4450,22 @@ QDF_STATUS wlan_crypto_save_ml_sta_key(
 /**
  * wlan_crypto_save_key_at_psoc() - Allocate memory for storing key in PSOC
  * @vdev: vdev object
+ * @peer_mac: MAC address of crypto key entity
  * @key_index: the index of the key that needs to be allocated
  * @crypto_key: Pointer to crypto key
  *
  * Return: QDF_STATUS
  */
 static QDF_STATUS
-wlan_crypto_save_key_at_psoc(struct wlan_objmgr_vdev *vdev, uint8_t key_index,
+wlan_crypto_save_key_at_psoc(struct wlan_objmgr_vdev *vdev,
+			     const uint8_t *peer_mac, uint8_t key_index,
 			     struct wlan_crypto_key *crypto_key)
 {
 	struct wlan_objmgr_psoc *psoc;
 	struct crypto_psoc_priv_obj *crypto_psoc_obj;
-	struct qdf_mac_addr *link_addr;
+	struct qdf_mac_addr *link_addr = NULL;
 	uint8_t link_id = CRYPTO_MAX_LINK_IDX;
+	struct wlan_objmgr_peer *peer;
 	int status = QDF_STATUS_SUCCESS;
 
 	psoc = wlan_vdev_get_psoc(vdev);
@@ -4482,10 +4485,25 @@ wlan_crypto_save_key_at_psoc(struct wlan_objmgr_vdev *vdev, uint8_t key_index,
 	if (wlan_vdev_mlme_is_mlo_vdev(vdev))
 		link_id = wlan_vdev_get_link_id(vdev);
 
-	link_addr = (struct qdf_mac_addr *)wlan_vdev_mlme_get_linkaddr(vdev);
+	if (peer_mac) {
+		peer = wlan_objmgr_get_peer_by_mac(psoc, (uint8_t *)peer_mac,
+						   WLAN_CRYPTO_ID);
+		if (peer) {
+			if (wlan_peer_get_peer_type(peer) == WLAN_PEER_TDLS) {
+				link_addr =
+					(struct qdf_mac_addr *)wlan_peer_get_macaddr(peer);
+			}
+			wlan_objmgr_peer_release_ref(peer, WLAN_CRYPTO_ID);
+		}
+	}
+
 	if (!link_addr) {
-		crypto_err("link_addr NULL");
-		return QDF_STATUS_E_FAILURE;
+		link_addr =
+			(struct qdf_mac_addr *)wlan_vdev_mlme_get_linkaddr(vdev);
+		if (!link_addr) {
+			crypto_err("link_addr NULL");
+			return QDF_STATUS_E_FAILURE;
+		}
 	}
 
 	crypto_debug("save crypto key index %d link_id %d link addr "
@@ -4504,7 +4522,7 @@ wlan_crypto_save_key_at_psoc(struct wlan_objmgr_vdev *vdev, uint8_t key_index,
 }
 
 QDF_STATUS wlan_crypto_save_key(struct wlan_objmgr_vdev *vdev,
-				uint8_t key_index,
+				const uint8_t *peer_mac, uint8_t key_index,
 				struct wlan_crypto_key *crypto_key)
 {
 	struct wlan_crypto_comp_priv *crypto_priv;
@@ -4522,7 +4540,8 @@ QDF_STATUS wlan_crypto_save_key(struct wlan_objmgr_vdev *vdev,
 	}
 
 	if (wlan_crypto_is_store_in_psoc(vdev)) {
-		wlan_crypto_save_key_at_psoc(vdev, key_index, crypto_key);
+		wlan_crypto_save_key_at_psoc(vdev, peer_mac,
+					     key_index, crypto_key);
 	} else {
 		priv_key = &crypto_priv->crypto_key;
 		if (key_index < WLAN_CRYPTO_MAXKEYIDX) {
@@ -4605,19 +4624,21 @@ struct wlan_crypto_key *wlan_crypto_get_ml_sta_link_key(
  * wlan_crypto_get_ml_keys_from_index() - Get the stored key information from
  * key index
  * @vdev: vdev object
+ * @peer_mac: MAC address of crypto key entity
  * @key_index: the index of the key that needs to be retrieved
  *
  * Return: Key material
  */
 static struct wlan_crypto_key *
 wlan_crypto_get_ml_keys_from_index(struct wlan_objmgr_vdev *vdev,
-				   uint8_t key_index)
+				   const uint8_t *peer_mac, uint8_t key_index)
 {
 	struct wlan_objmgr_psoc *psoc;
 	struct crypto_psoc_priv_obj *crypto_psoc_obj;
-	struct qdf_mac_addr *link_addr;
+	struct qdf_mac_addr *link_addr = NULL;
 	struct wlan_crypto_key_entry *key_entry = NULL;
 	uint8_t link_id = CRYPTO_MAX_LINK_IDX;
+	struct wlan_objmgr_peer *peer;
 
 	crypto_debug("crypto get key index %d", key_index);
 	psoc = wlan_vdev_get_psoc(vdev);
@@ -4637,11 +4658,26 @@ wlan_crypto_get_ml_keys_from_index(struct wlan_objmgr_vdev *vdev,
 	if (wlan_vdev_mlme_is_mlo_vdev(vdev))
 		link_id = wlan_vdev_get_link_id(vdev);
 
-	link_addr =
-		(struct qdf_mac_addr *)wlan_vdev_mlme_get_linkaddr(vdev);
+	if (peer_mac) {
+		peer = wlan_objmgr_get_peer_by_mac(psoc, (uint8_t *)peer_mac,
+						   WLAN_CRYPTO_ID);
+		if (peer) {
+			if (wlan_peer_get_peer_type(peer) == WLAN_PEER_TDLS) {
+				link_addr =
+					(struct qdf_mac_addr *)wlan_peer_get_macaddr(peer);
+			}
+			wlan_objmgr_peer_release_ref(peer, WLAN_CRYPTO_ID);
+		}
+	}
+
 	if (!link_addr) {
-		crypto_err("link_addr NULL");
-		return NULL;
+		link_addr =
+			(struct qdf_mac_addr *)wlan_vdev_mlme_get_linkaddr(vdev);
+
+		if (!link_addr) {
+			crypto_err("link_addr NULL");
+			return NULL;
+		}
 	}
 
 	key_entry = crypto_hash_find_by_linkid_and_macaddr(
@@ -4664,6 +4700,7 @@ wlan_crypto_get_ml_keys_from_index(struct wlan_objmgr_vdev *vdev,
 }
 
 struct wlan_crypto_key *wlan_crypto_get_key(struct wlan_objmgr_vdev *vdev,
+					    const uint8_t *peer_mac,
 					    uint8_t key_index)
 {
 	struct wlan_crypto_comp_priv *crypto_priv;
@@ -4682,7 +4719,8 @@ struct wlan_crypto_key *wlan_crypto_get_key(struct wlan_objmgr_vdev *vdev,
 	}
 
 	if (wlan_crypto_is_store_in_psoc(vdev)) {
-		return wlan_crypto_get_ml_keys_from_index(vdev, key_index);
+		return wlan_crypto_get_ml_keys_from_index(vdev, peer_mac,
+							  key_index);
 	} else {
 		if (key_index < WLAN_CRYPTO_MAXKEYIDX)
 			return priv_key->key[key_index];
@@ -4726,7 +4764,9 @@ void wlan_crypto_update_set_key_peer(struct wlan_objmgr_vdev *vdev,
 {
 	struct wlan_crypto_key *crypto_key;
 
-	crypto_key = wlan_crypto_get_key(vdev, key_index);
+	crypto_key = wlan_crypto_get_key(vdev,
+					 (const uint8_t *)peer_mac->bytes,
+					 key_index);
 	if (!crypto_key) {
 		crypto_err("crypto_key not present for key_idx %d", key_index);
 		return;
