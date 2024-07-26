@@ -463,7 +463,7 @@ mlo_mgr_find_and_clear_rejected_links(struct wlan_objmgr_vdev *vdev,
 				      uint8_t partner_link_id,
 				      struct mlo_partner_info *ml_partner_info)
 {
-	struct wlan_rejected_links_info rej_links;
+	struct wlan_rejected_links_info rej_links = {0};
 	struct wlan_mlo_dev_context *mlo_dev_ctx;
 	uint8_t i;
 	struct mlo_link_info *link_info;
