@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -108,6 +108,7 @@ int wlan_cfg80211_store_key(struct wlan_objmgr_vdev *vdev,
 /**
  * wlan_cfg80211_crypto_add_key() - Add key for the specified vdev
  * @vdev: vdev object
+ * @peer_mac: MAC address of the crypto key entity
  * @key_type: denotes if the add key request is for pairwise or group key
  * @key_index: Index of the key that needs to be added
  * @sync: flag to indicate whether or not to add key synchronously.
@@ -116,6 +117,7 @@ int wlan_cfg80211_store_key(struct wlan_objmgr_vdev *vdev,
  * Return: Zero on Success, negative value on failure
  */
 int wlan_cfg80211_crypto_add_key(struct wlan_objmgr_vdev *vdev,
+				 const uint8_t *peer_mac,
 				 enum wlan_crypto_key_type key_type,
 				 uint8_t key_index, bool sync);
 #endif

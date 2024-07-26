@@ -660,13 +660,13 @@ QDF_STATUS cm_set_key(struct cnx_mgr *cm_ctx, bool unicast,
 /**
  * cm_store_wep_key() - store wep keys in crypto on connect active
  * @cm_ctx: connection manager context
- * @crypto: connection crypto info
+ * @req: Connect request params
  * @cm_id: cm_id of the connection
  *
  * Return: void
  */
 void cm_store_wep_key(struct cnx_mgr *cm_ctx,
-		      struct wlan_cm_connect_crypto_info *crypto,
+		      struct wlan_cm_connect_req *req,
 		      wlan_cm_id cm_id);
 
 /**
@@ -772,7 +772,7 @@ cm_is_link_switch_connect_resp(struct wlan_cm_connect_resp *resp)
 }
 #else
 static inline void cm_store_wep_key(struct cnx_mgr *cm_ctx,
-				    struct wlan_cm_connect_crypto_info *crypto,
+				    struct wlan_cm_connect_req *req,
 				    wlan_cm_id cm_id)
 {}
 

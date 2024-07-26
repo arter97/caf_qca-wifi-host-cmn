@@ -2468,7 +2468,7 @@ QDF_STATUS cm_connect_active(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 			wlan_crypto_free_vdev_key(cm_ctx->vdev);
 	}
 	cm_fill_vdev_crypto_params(cm_ctx, req);
-	cm_store_wep_key(cm_ctx, &req->crypto, *cm_id);
+	cm_store_wep_key(cm_ctx, req, *cm_id);
 
 	if (mlo_is_sta_bridge_vdev(cm_ctx->vdev))
 		status = QDF_STATUS_SUCCESS;
