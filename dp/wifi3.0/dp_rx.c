@@ -1121,6 +1121,10 @@ QDF_STATUS __dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 				 (unsigned long long)(nbuf_frag_info.paddr),
 				 (*desc_list)->rx_desc.cookie);
 
+		if (qdf_likely(!rx_desc_pool->rx_mon_dest_frag_enable))
+			qdf_assert_always(nbuf_frag_info.paddr ==
+				QDF_NBUF_CB_PADDR((*desc_list)->rx_desc.nbuf));
+
 		hal_rxdma_buff_addr_info_set(dp_soc->hal_soc, rxdma_ring_entry,
 					     nbuf_frag_info.paddr,
 						(*desc_list)->rx_desc.cookie,
