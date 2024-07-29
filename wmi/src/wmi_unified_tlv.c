@@ -480,6 +480,8 @@ static const uint32_t pdev_param_tlv[] = {
 		  PDEV_PARAM_DSTALL_CONSECUTIVE_TX_NO_ACK_INTERVAL),
 	PARAM_MAP(pdev_param_dstall_consecutive_tx_no_ack_threshold,
 		  PDEV_PARAM_DSTALL_CONSECUTIVE_TX_NO_ACK_THRESHOLD),
+	PARAM_MAP(pdev_param_disable_lpi_ant_optimization,
+		  PDEV_PARAM_DISABLE_LPI_ANT_OPTIMIZATION),
 };
 
 /* Populate vdev_param array whose index is host param, value is target param */
@@ -771,6 +773,8 @@ static const uint32_t vdev_param_tlv[] = {
 		  VDEV_PARAM_MLO_MAX_RECOM_ACTIVE_LINKS),
 	PARAM_MAP(vdev_param_hwcts2self_ofdma,
 		  VDEV_PARAM_HWCTS2SELF_OFDMA),
+	PARAM_MAP(vdev_param_disable_lpi_ant_optimization,
+		  VDEV_PARAM_DISABLE_LPI_ANT_OPTIMIZATION),
 };
 #endif
 
