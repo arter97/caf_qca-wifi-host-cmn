@@ -3997,6 +3997,7 @@ dp_hal_srng_access_start(hal_soc_handle_t soc, hal_ring_handle_t hal_ring_hdl)
 static inline void
 dp_hal_srng_access_end(hal_soc_handle_t soc, hal_ring_handle_t hal_ring_hdl)
 {
+	hal_srng_delay_reg_force_write_detect(hal_ring_hdl);
 	hal_srng_access_end_unlocked(soc, hal_ring_hdl);
 }
 
@@ -4010,6 +4011,7 @@ dp_hal_srng_access_start(hal_soc_handle_t soc, hal_ring_handle_t hal_ring_hdl)
 static inline void
 dp_hal_srng_access_end(hal_soc_handle_t soc, hal_ring_handle_t hal_ring_hdl)
 {
+	hal_srng_delay_reg_force_write_detect(hal_ring_hdl);
 	hal_srng_access_end(soc, hal_ring_hdl);
 }
 #endif
