@@ -522,6 +522,7 @@ struct hal_reg_write_q_elem {
  * @coalesces: writes not enqueued since srng is already queued up
  * @direct: writes not enqueued and written to register directly
  * @dequeue_delay: dequeue operation be delayed
+ * @force_direct_write: writes forced and written to register directly
  */
 struct hal_reg_write_srng_stats {
 	uint32_t enqueues;
@@ -529,6 +530,9 @@ struct hal_reg_write_srng_stats {
 	uint32_t coalesces;
 	uint32_t direct;
 	uint32_t dequeue_delay;
+#ifdef DELAYED_REG_FORCE_WRITE
+	uint32_t force_direct_write;
+#endif
 };
 
 /**
@@ -865,6 +869,14 @@ struct hal_srng {
 #if defined(FEATURE_HAL_DELAYED_REG_WRITE)
 	/* flag to indicate whether srng is already queued for delayed write */
 	uint8_t reg_write_in_progress;
+#ifdef DELAYED_REG_FORCE_WRITE
+	/* flag to force register direct write next */
+	bool force_reg_direct_write;
+	/* flag to record if last time register direct write */
+	bool is_last_reg_direct_write;
+	/* count for delayed register write hang */
+	uint16_t delay_reg_write_hang_cnt;
+#endif
 	/* last dequeue elem time stamp */
 	qdf_time_t last_dequeue_time;
 
