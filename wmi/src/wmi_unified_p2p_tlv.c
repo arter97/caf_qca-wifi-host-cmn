@@ -419,6 +419,78 @@ void wmi_p2p_listen_offload_attach_tlv(wmi_unified_t wmi_handle)
 
 #ifdef FEATURE_WLAN_SUPPORT_USD
 /**
+ * wmi_p2p_op_type_convert_p2p_enum_to_wmi_enum() - this API converts
+ * P2P_USD_OP_TYPE_XX to WMI_USD_MODE_XX
+ *
+ * @p2p_op_type: P2P USD OP type
+ * @wmi_mode: pointer to WMI USD mode
+ *
+ * Return: QDF status
+ */
+static QDF_STATUS
+wmi_p2p_op_type_convert_p2p_enum_to_wmi_enum(enum p2p_usd_op_type p2p_op_type,
+					     WMI_USD_MODE *wmi_mode)
+{
+	switch (p2p_op_type) {
+	case P2P_USD_OP_TYPE_FLUSH:
+		*wmi_mode = WMI_USD_MODE_FLUSH;
+		break;
+	case P2P_USD_OP_TYPE_PUBLISH:
+		*wmi_mode = WMI_USD_MODE_PUBLISH;
+		break;
+	case P2P_USD_OP_TYPE_SUBSCRIBE:
+		*wmi_mode = WMI_USD_MODE_SUBSCRIBE;
+		break;
+	case P2P_USD_OP_TYPE_UPDATE_PUBLISH:
+		*wmi_mode = WMI_USD_MODE_UPDATE_PUBLISH;
+		break;
+	case P2P_USD_OP_TYPE_CANCEL_PUBLISH:
+		*wmi_mode = WMI_USD_MODE_CANCEL_PUBLISH;
+		break;
+	case P2P_USD_OP_TYPE_CANCEL_SUBSCRIBE:
+		*wmi_mode = WMI_USD_MODE_CANCEL_SUBSCRIBE;
+		break;
+	default:
+		wmi_err("invalid OP type %d", p2p_op_type);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * wmi_p2p_service_protocol_type_convert_p2p_enum_to_wmi_enum() - This API
+ * converts P2P_USD_SERVICE_PROTOCOL_TYPE_XX to WMI_USD_SERVICE_PROTOCOL_TYPE_XX
+ *
+ * @p2p_service_type: P2P USD service protocol type
+ * @wmi_service_type: pointer to WMI USD service protocol type
+ *
+ * Return: QDF status
+ */
+static QDF_STATUS
+wmi_p2p_service_protocol_type_convert_p2p_enum_to_wmi_enum(
+			enum p2p_usd_service_protocol_type p2p_service_type,
+			WMI_USD_SERVICE_PROTOCOL_TYPE *wmi_service_type)
+{
+	switch (p2p_service_type) {
+	case P2P_USD_SERVICE_PROTOCOL_TYPE_BONJOUR:
+		*wmi_service_type = WMI_USD_SERVICE_PROTOCOL_TYPE_BONJOUR;
+		break;
+	case P2P_USD_SERVICE_PROTOCOL_TYPE_GENERIC:
+		*wmi_service_type = WMI_USD_SERVICE_PROTOCOL_TYPE_GENERIC;
+		break;
+	case P2P_USD_SERVICE_PROTOCOL_TYPE_CSA_MATTER:
+		*wmi_service_type = WMI_USD_SERVICE_PROTOCOL_TYPE_CSA_MATTER;
+		break;
+	default:
+		wmi_err("invalid service protocol type %d", p2p_service_type);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
  * send_p2p_usd_req_cmd_tlv() - send P2P USD command to target
  * @wmi_handle: WMI handle
  * @param: P2P USD attributes parameters
@@ -440,14 +512,20 @@ send_p2p_usd_req_cmd_tlv(wmi_unified_t wmi_handle,
 	uint32_t num_channel_aligned = 0;
 	uint32_t ssi_len = 0;
 	uint32_t ssi_len_aligned = 0;
+	WMI_USD_MODE usd_mode;
 
 	if (!param) {
 		wmi_err("lo start param is null");
 		return QDF_STATUS_E_INVAL;
 	}
 
-	if (param->op_type == WMI_USD_MODE_PUBLISH ||
-	    param->op_type == WMI_USD_MODE_SUBSCRIBE) {
+	status = wmi_p2p_op_type_convert_p2p_enum_to_wmi_enum(param->op_type,
+							      &usd_mode);
+	if (QDF_IS_STATUS_ERROR(status))
+		return status;
+
+	if (usd_mode == WMI_USD_MODE_PUBLISH ||
+	    usd_mode == WMI_USD_MODE_SUBSCRIBE) {
 		num_chan_len = param->freq_config.freq_list.len;
 		num_channel_aligned = qdf_roundup(num_chan_len,
 						  sizeof(uint32_t));
@@ -460,7 +538,7 @@ send_p2p_usd_req_cmd_tlv(wmi_unified_t wmi_handle,
 
 		len += 3 * WMI_TLV_HDR_SIZE + sdf_len_aligned +
 					ssi_len_aligned + num_channel_aligned;
-	} else if (param->op_type == WMI_USD_MODE_UPDATE_PUBLISH) {
+	} else if (usd_mode == WMI_USD_MODE_UPDATE_PUBLISH) {
 		ssi_len = param->ssi.len;
 		ssi_len_aligned = qdf_roundup(ssi_len, sizeof(uint32_t));
 		len += WMI_TLV_HDR_SIZE + ssi_len_aligned;
@@ -485,12 +563,20 @@ send_p2p_usd_req_cmd_tlv(wmi_unified_t wmi_handle,
 		WMITLV_GET_STRUCT_TLVLEN(wmi_usd_service_cmd_fixed_param));
 
 	cmd->vdev_id = param->vdev_id;
-	cmd->usd_mode = param->op_type;
+	cmd->usd_mode = usd_mode;
 	cmd->instance_id = param->instance_id;
 
-	if (param->op_type == WMI_USD_MODE_PUBLISH ||
-	    param->op_type == WMI_USD_MODE_SUBSCRIBE) {
-		cmd->protocol_type = param->service_info.protocol_type;
+	if (usd_mode == WMI_USD_MODE_PUBLISH ||
+	    usd_mode == WMI_USD_MODE_SUBSCRIBE) {
+		status =
+		wmi_p2p_service_protocol_type_convert_p2p_enum_to_wmi_enum(
+					param->service_info.protocol_type,
+					&cmd->protocol_type);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			wmi_buf_free(buf);
+			return status;
+		}
+
 		cmd->time_to_live = param->ttl;
 		cmd->element_container_attr_data_len = sdf_len;
 		cmd->service_specific_info_len = ssi_len;
@@ -519,7 +605,7 @@ send_p2p_usd_req_cmd_tlv(wmi_unified_t wmi_handle,
 		WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_BYTE, ssi_len_aligned);
 		buf_ptr += WMI_TLV_HDR_SIZE;
 		qdf_mem_copy(buf_ptr, param->ssi.data, ssi_len);
-	} else if (param->op_type == WMI_USD_MODE_UPDATE_PUBLISH) {
+	} else if (usd_mode == WMI_USD_MODE_UPDATE_PUBLISH) {
 		buf_ptr += sizeof(*cmd);
 		WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_BYTE, ssi_len_aligned);
 		buf_ptr += WMI_TLV_HDR_SIZE;
@@ -535,7 +621,7 @@ send_p2p_usd_req_cmd_tlv(wmi_unified_t wmi_handle,
 				      buf, len,
 				      WMI_USD_SERVICE_CMDID);
 
-	if (status != QDF_STATUS_SUCCESS)
+	if (QDF_IS_STATUS_ERROR(status))
 		wmi_buf_free(buf);
 
 	return status;
