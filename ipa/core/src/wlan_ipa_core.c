@@ -6421,7 +6421,7 @@ int wlan_ipa_wdi_opt_dpath_flt_add_cb(
 	qdf_wait_single_event(&ipa_obj->ipa_flt_evnt,
 			      DP_MAX_SLEEP_TIME);
 
-	for (i = 0; i < num_flts; i++)
+	for (i = 0; i < IPA_WDI_MAX_FILTER; i++)
 		dp_flt_param->flt_addr_params[i].ipa_flt_evnt_required = 0;
 
 	response = dp_flt_param->ipa_flt_evnt_response;
@@ -6460,16 +6460,16 @@ int wlan_ipa_wdi_opt_dpath_flt_rem_cb(
 		for (j = 0; j < IPA_WDI_MAX_FILTER; j++) {
 			if (rem_flt->hdl_info[i] ==
 				 dp_flt_params->flt_addr_params[j].flt_hdl) {
-				dp_flt_params->flt_addr_params[i].valid = 0;
-				qdf_mem_zero(dp_flt_params->flt_addr_params[i].
+				dp_flt_params->flt_addr_params[j].valid = 0;
+				qdf_mem_zero(dp_flt_params->flt_addr_params[j].
 					     src_ipv4_addr,
 					     IPV4BYTES);
-				qdf_mem_zero(dp_flt_params->flt_addr_params[i].
+				qdf_mem_zero(dp_flt_params->flt_addr_params[j].
 					     src_ipv6_addr,
 					     IPV6BYTES);
-				dp_flt_params->flt_addr_params[i].
+				dp_flt_params->flt_addr_params[j].
 						      ipa_flt_evnt_required = 1;
-				dp_flt_params->flt_addr_params[i].ipa_flt_in_use
+				dp_flt_params->flt_addr_params[j].ipa_flt_in_use
 									= false;
 			}
 		}
@@ -6487,8 +6487,15 @@ int wlan_ipa_wdi_opt_dpath_flt_rem_cb(
 	qdf_wait_single_event(&ipa_obj->ipa_flt_evnt,
 			      DP_MAX_SLEEP_TIME);
 
-	for (i = 0; i < num_flts; i++)
-		dp_flt_params->flt_addr_params[i].ipa_flt_evnt_required = 0;
+	for (i = 0; i < num_flts; i++) {
+		for (j = 0; j < IPA_WDI_MAX_FILTER; j++) {
+			if (rem_flt->hdl_info[i] ==
+				 dp_flt_params->flt_addr_params[j].flt_hdl) {
+				dp_flt_params->flt_addr_params[j].
+						      ipa_flt_evnt_required = 0;
+			}
+		}
+	}
 
 	response = dp_flt_params->ipa_flt_evnt_response;
 	if (response != QDF_STATUS_SUCCESS) {
