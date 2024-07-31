@@ -1087,7 +1087,7 @@ static void mlo_send_link_connect(struct wlan_objmgr_vdev *vdev,
 					     ml_parnter_info,
 					     &valid_idx)) {
 			if (valid_idx == WLAN_UMAC_MLO_MAX_VDEVS) {
-				mlo_debug("Valid link not found", valid_idx);
+				mlo_debug("Valid link not found");
 				mlo_release_vdev_ref(wlan_vdev_list[i]);
 				continue;
 			}
