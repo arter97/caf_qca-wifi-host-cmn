@@ -5027,6 +5027,7 @@ static QDF_STATUS dp_vdev_attach_wifi3(struct cdp_soc_t *cdp_soc,
 	vdev->dp_proto_stats = wlan_cfg_get_dp_proto_stats(soc->wlan_cfg_ctx);
 	if (vdev->tx_encap_type == htt_cmn_pkt_type_raw)
 		vdev->dp_proto_stats = 0;
+	vdev->dp_eapol_stats = wlan_cfg_get_dp_eapol_stats(soc->wlan_cfg_ctx);
 
 	dp_tx_vdev_traffic_end_indication_attach(vdev);
 

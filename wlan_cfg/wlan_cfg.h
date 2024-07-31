@@ -397,6 +397,7 @@ struct wlan_srng_cfg {
  * @dp_proto_stats: flag to enable/disable Datapath Protocol stats.
  * @dp_rx_buffer_recycle_enabled: DP RX buffer recycling using page pool API
  *				  enabled/disabled
+ * @dp_eapol_stats: flag to enable/disable eapol drop stats
  */
 struct wlan_cfg_dp_soc_ctxt {
 	int num_int_ctxts;
@@ -653,6 +654,10 @@ struct wlan_cfg_dp_soc_ctxt {
 
 #ifdef DP_FEATURE_RX_BUFFER_RECYCLE
 	bool dp_rx_buffer_recycle_enabled;
+#endif
+
+#ifdef DP_TX_SW_DROP_STATS_INC
+	bool dp_eapol_stats;
 #endif
 };
 
@@ -3122,4 +3127,13 @@ bool wlan_cfg_get_dp_rx_buffer_recycle(struct wlan_cfg_dp_soc_ctxt *cfg);
  * Return: bool
  */
 bool wlan_cfg_get_dp_proto_stats(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_get_dp_eapol_stats() - Get DP EAPOL drop stats
+ *
+ * @cfg: soc configuration context
+ *
+ * Return: bool
+ */
+bool wlan_cfg_get_dp_eapol_stats(struct wlan_cfg_dp_soc_ctxt *cfg);
 #endif /*__WLAN_CFG_H*/

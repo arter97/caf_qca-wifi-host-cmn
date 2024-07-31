@@ -4661,6 +4661,7 @@ struct dp_vdev {
 #endif
 	bool eapol_over_control_port_disable;
 	bool dp_proto_stats;
+	bool dp_eapol_stats;
 };
 
 enum {

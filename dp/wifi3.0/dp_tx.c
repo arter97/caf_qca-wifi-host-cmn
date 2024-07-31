@@ -2546,12 +2546,19 @@ dp_tx_update_mcast_param(uint16_t peer_id,
 #endif
 
 #ifdef DP_TX_SW_DROP_STATS_INC
+static bool dp_nbuf_is_eapol_pkt(qdf_nbuf_t nbuf)
+{
+	if (nbuf->protocol == QDF_NBUF_TRAC_EAPOL_ETH_TYPE)
+		return true;
+	return false;
+}
+
 static void tx_sw_drop_stats_inc(struct dp_pdev *pdev,
 				 qdf_nbuf_t nbuf,
-				 enum cdp_tx_sw_drop drop_code)
+				 enum cdp_tx_sw_drop drop_code, bool enable)
 {
 	/* EAPOL Drop stats */
-	if (qdf_nbuf_is_ipv4_eapol_pkt(nbuf)) {
+	if (enable && dp_nbuf_is_eapol_pkt(nbuf)) {
 		switch (drop_code) {
 		case TX_DESC_ERR:
 			DP_STATS_INC(pdev, eap_drop_stats.tx_desc_err, 1);
@@ -2578,7 +2585,7 @@ static void tx_sw_drop_stats_inc(struct dp_pdev *pdev,
 #else
 static void tx_sw_drop_stats_inc(struct dp_pdev *pdev,
 				 qdf_nbuf_t nbuf,
-				 enum cdp_tx_sw_drop drop_code)
+				 enum cdp_tx_sw_drop drop_code, bool enable)
 {
 }
 #endif
@@ -3223,6 +3230,7 @@ dp_tx_send_msdu_single(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 	uint8_t tid = msdu_info->tid;
 	struct cdp_tid_tx_stats *tid_stats = NULL;
 	qdf_dma_addr_t paddr;
+	bool enable_eapol_drop_stats = vdev->dp_eapol_stats;
 
 	/* Setup Tx descriptor for an MSDU, and MSDU extension descriptor */
 	tx_desc = dp_tx_prepare_desc_single(vdev, nbuf, tx_q->desc_pool_id,
@@ -3295,7 +3303,7 @@ dp_tx_send_msdu_single(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 
 	dp_tx_update_ts_on_enqueued(vdev, msdu_info, tx_desc);
 
-	tx_sw_drop_stats_inc(pdev, nbuf, drop_code);
+	tx_sw_drop_stats_inc(pdev, nbuf, drop_code, enable_eapol_drop_stats);
 	return NULL;
 
 release_desc:
@@ -3303,7 +3311,7 @@ release_desc:
 
 fail_return:
 	dp_tx_get_tid(vdev, nbuf, msdu_info);
-	tx_sw_drop_stats_inc(pdev, nbuf, drop_code);
+	tx_sw_drop_stats_inc(pdev, nbuf, drop_code, enable_eapol_drop_stats);
 	tid_stats = &pdev->stats.tid_stats.
 		    tid_tx_stats[tx_q->ring_id][tid];
 	tid_stats->swdrop_cnt[drop_code]++;
