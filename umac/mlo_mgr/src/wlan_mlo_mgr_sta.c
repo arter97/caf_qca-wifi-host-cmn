@@ -302,7 +302,7 @@ mlo_send_link_disconnect(struct wlan_objmgr_vdev *vdev,
 	return QDF_STATUS_SUCCESS;
 }
 
-static void mlo_free_copied_conn_req(struct wlan_mlo_sta *sta_ctx)
+void mlo_free_copied_conn_req(struct wlan_mlo_sta *sta_ctx)
 {
 	if (sta_ctx) {
 		mlo_debug("enter");
