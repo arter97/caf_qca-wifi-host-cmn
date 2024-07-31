@@ -37,6 +37,7 @@
 #endif
 #include "wlan_psoc_mlme_api.h"
 #include "reg_services_public_struct.h"
+#include <wlan_crypto_global_api.h>
 
 #define MAX_IE_LEN 1024
 #define SHORT_SSID_LEN 4
@@ -139,6 +140,37 @@ uint32_t util_scan_entry_t2lm_len(struct scan_cache_entry *scan_entry)
 	return len;
 }
 #endif
+
+bool util_is_rsnxe_h2e_capable(const uint8_t *rsnxe)
+{
+	const uint8_t *rsnxe_caps;
+	uint8_t cap_len;
+
+	if (!rsnxe)
+		return false;
+
+	rsnxe_caps = wlan_crypto_parse_rsnxe_ie(rsnxe, &cap_len);
+	if (!rsnxe_caps)
+		return false;
+
+	return *rsnxe_caps & WLAN_CRYPTO_RSNX_CAP_SAE_H2E;
+}
+
+bool util_scan_entry_sae_h2e_capable(struct scan_cache_entry *scan_entry)
+{
+	const uint8_t *rsnxe;
+
+	/* If RSN caps are not there, then return false */
+	if (!util_scan_entry_rsn(scan_entry))
+		return false;
+
+	/* If not SAE AKM no need to check H2E capability */
+	if (!WLAN_CRYPTO_IS_AKM_SAE(scan_entry->neg_sec_info.key_mgmt))
+		return false;
+
+	rsnxe = util_scan_entry_rsnxe(scan_entry);
+	return util_is_rsnxe_h2e_capable(rsnxe);
+}
 
 enum wlan_band util_scan_scm_freq_to_band(uint16_t freq)
 {
