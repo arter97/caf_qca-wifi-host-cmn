@@ -3193,6 +3193,11 @@ cm_add_11_ax_candidate(struct wlan_objmgr_pdev *pdev,
 	struct scan_cache_entry *tmp_scan_entry = NULL;
 
 	tmp_scan_entry = util_scan_copy_cache_entry(scan_entry->entry);
+	if (!tmp_scan_entry) {
+		mlme_err("Copy cache entry failed");
+		return;
+	}
+
 	/* Add 11AX entry for MLO Candidate */
 	if (!tmp_scan_entry->ie_list.multi_link_bv) {
 		util_scan_free_cache_entry(tmp_scan_entry);
