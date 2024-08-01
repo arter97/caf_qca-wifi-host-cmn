@@ -2622,6 +2622,10 @@ struct cdp_sawf_ops {
 					  uint64_t *tx_cnt, uint8_t tid,
 					  uint8_t msduq);
 	QDF_STATUS
+	(*telemetry_get_msduq_tx_stats)(void *args,
+					void *msduq_tx_stats,
+					uint8_t msduq);
+	QDF_STATUS
 	(*telemetry_get_mpdu_stats)(void *arg, uint64_t *svc_int_pass,
 				    uint64_t *svc_int_fail,
 				    uint64_t *burst_pass, uint64_t *burst_fail,
