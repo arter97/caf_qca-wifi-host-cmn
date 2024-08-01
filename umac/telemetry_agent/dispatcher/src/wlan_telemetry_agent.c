@@ -512,6 +512,7 @@ int register_telemetry_agent_ops(struct telemetry_agent_ops *agent_ops)
 	g_agent_ops->sawf_get_mpdu_stats = wlan_sawf_get_mpdu_stats;
 	g_agent_ops->sawf_get_drop_stats = wlan_sawf_get_drop_stats;
 	g_agent_ops->sawf_notify_breach = wlan_sawf_notify_breach;
+	g_agent_ops->sawf_get_msduq_tx_stats = wlan_sawf_get_msduq_tx_stats;
 
 	qdf_info("Registered Telemetry Agent ops: %p", g_agent_ops);
 	return QDF_STATUS_SUCCESS;

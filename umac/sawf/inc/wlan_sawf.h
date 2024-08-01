@@ -772,11 +772,24 @@ bool wlan_sawf_set_flow_deprioritize_callback(void (*sawf_flow_deprioritize_call
  * Return: None
  */
 void wlan_sawf_flow_deprioritize(struct qca_sawf_flow_deprioritize_params *params);
+
+int wlan_sawf_get_msduq_tx_stats(void *soc, void *arg,
+				 void *msduq_tx_stats,
+				 uint8_t msduq);
+
 #else
 static inline
 int wlan_sawf_get_tput_stats(void *soc, void *arg, uint64_t *in_bytes,
 			     uint64_t *in_cnt, uint64_t *tx_bytes,
 			     uint64_t *tx_cnt, uint8_t tid, uint8_t msduq)
+{
+	return 0;
+}
+
+static inline
+int wlan_sawf_get_msduq_tx_stats(void *soc, void *arg,
+				 void *msduq_tx_stats,
+				 uint8_t msduq)
 {
 	return 0;
 }

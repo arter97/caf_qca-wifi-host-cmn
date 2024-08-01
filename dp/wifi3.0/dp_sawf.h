@@ -450,6 +450,11 @@ dp_sawf_get_tx_stats(void *arg, uint64_t *in_bytes, uint64_t *in_cnt,
 		     uint64_t *tx_bytes, uint64_t *tx_cnt,
 		     uint8_t tid, uint8_t msduq);
 
+QDF_STATUS
+dp_sawf_get_msduq_tx_stats(void *arg,
+			   void *msduq_tx_stats,
+			   uint8_t msduq);
+
 /**
  * dp_sawf_get_mpdu_sched_stats - get MPDU scheduling stats
  * @arg: argument
