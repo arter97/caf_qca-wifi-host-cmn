@@ -861,6 +861,17 @@ mlo_send_link_connect(struct wlan_objmgr_vdev *vdev,
 	if (QDF_IS_STATUS_ERROR(status))
 		return;
 
+	copied_conn_req_lock_acquire(mlo_dev_ctx->sta_ctx);
+	if (!mlo_dev_ctx->sta_ctx->copied_conn_req) {
+		mlo_dev_ctx->sta_ctx->copied_conn_req =
+			qdf_mem_malloc(sizeof(struct wlan_cm_connect_req));
+		if (mlo_dev_ctx->sta_ctx->copied_conn_req) {
+			wlan_cm_get_active_connect_req_param(vdev,
+							     mlo_dev_ctx->sta_ctx->copied_conn_req);
+		}
+	}
+	copied_conn_req_lock_release(mlo_dev_ctx->sta_ctx);
+
 	mlo_sta_get_vdev_list(vdev, &vdev_count, wlan_vdev_list);
 	for (i = 0; i < vdev_count; i++) {
 		if (wlan_vdev_list[i] == vdev) {
@@ -1025,12 +1036,17 @@ static QDF_STATUS ml_activate_pend_disconn_req_cb(struct scheduler_msg *msg)
 
 	mlo_dev_ctx = vdev->mlo_dev_ctx;
 	sta_ctx = mlo_dev_ctx->sta_ctx;
+	if (!sta_ctx || !sta_ctx->disconn_req)
+		goto release_ref;
+
 	mlo_disconnect_req(vdev, sta_ctx->disconn_req->source,
 			   sta_ctx->disconn_req->reason_code,
 			   &sta_ctx->disconn_req->bssid, false);
 
 	qdf_mem_free(sta_ctx->disconn_req);
 	sta_ctx->disconn_req = NULL;
+
+release_ref:
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLO_MGR_ID);
 
 	return QDF_STATUS_SUCCESS;

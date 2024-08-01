@@ -462,6 +462,7 @@ struct wlan_connect_rsp_ies {
  * struct wlan_roam_sync_info - roam sync information populated
  * from roam sync indication struct
  * @auth_status: roam auth status (authenticated or connected)
+ * @num_setup_links: Number of links from FW roam sync event
  * @kck_len: kck length
  * @kck: kck info in roam sync
  * @kek_len: kek length
@@ -480,6 +481,9 @@ struct wlan_connect_rsp_ies {
  */
 struct wlan_roam_sync_info {
 	uint8_t auth_status;
+#ifdef WLAN_FEATURE_11BE
+	uint8_t num_setup_links;
+#endif
 	uint8_t kck_len;
 	uint8_t kck[MAX_KCK_LEN];
 	uint8_t kek_len;

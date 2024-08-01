@@ -1318,6 +1318,26 @@ struct scan_cache_entry *
 cm_get_curr_candidate_entry(struct wlan_objmgr_vdev *vdev, wlan_cm_id cm_id);
 
 /**
+ * cm_is_first_candidate_connect_attempt() - Is it a first attempt to
+ * connect to a candidate after receiving connect request
+ * @vdev: vdev pointer
+ *
+ * Return: True if it is the first connect attempt to a candidate
+ * after receiving the connect request from the userspace
+ */
+bool cm_is_first_candidate_connect_attempt(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * cm_get_active_connect_req_param() - Get Connect request parameter
+ * @vdev: vdev pointer
+ * @req: Connection request buffer to be filled
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS cm_get_active_connect_req_param(struct wlan_objmgr_vdev *vdev,
+					   struct wlan_cm_connect_req *req);
+
+/**
  * cm_free_connect_rsp_ies() - Function to free all connection IEs.
  * @connect_rsp: pointer to connect rsp
  *
