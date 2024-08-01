@@ -2113,6 +2113,11 @@ wlan_ipa_uc_disable_pipes(struct wlan_ipa_priv *ipa_ctx, bool force_disable)
 		ipa_ctx->opt_dp_ctrl_flt_cleaned = true;
 		ipa_err("opt_dp_ctrl, return code of flt del by shutdown %d, status - %d",
 			return_code, status);
+		if (status != QDF_STATUS_SUCCESS) {
+			wlan_ipa_ctrl_flt_db_deinit(
+				ipa_ctx,
+				WLAN_IPA_WDI_OPT_DPATH_RESP_SUCCESS_SHUTDOWN);
+		}
 	}
 
 	if (ipa_ctx->opt_dp_active) {
@@ -4851,15 +4856,17 @@ void wlan_ipa_destroy_opt_wifi_flt_cb_event(struct wlan_ipa_priv *ipa_ctx)
 	qdf_spinlock_destroy(&dp_flt_params->flt_rem_lock);
 }
 
+#ifdef IPA_OPT_WIFI_DP_CTRL
 /**
  * wlan_ipa_ctrl_flt_db_deinit - clean db on wlan SSR event in
  *	opt_dp_ctrl feature
  * @ipa_obj: IPA context
+ * @status: status code of removal
  *
  * Return: void
  */
-static inline
-void wlan_ipa_ctrl_flt_db_deinit(struct wlan_ipa_priv *ipa_obj)
+void wlan_ipa_ctrl_flt_db_deinit(struct wlan_ipa_priv *ipa_obj,
+				 uint8_t status)
 {
 	struct wifi_dp_tx_flt_setup *dp_flt_params = NULL;
 	int i;
@@ -4874,16 +4881,18 @@ void wlan_ipa_ctrl_flt_db_deinit(struct wlan_ipa_priv *ipa_obj)
 			dp_flt_params->flt_addr_params[i].ipa_flt_in_use = 0;
 			if (add_status && !ipa_obj->ipa_opt_dp_ctrl_debug) {
 				ipa_debug(
-				    "opt_dp_ctrl: handle deleted on SSR event - %d",
-				    dp_flt_params->flt_addr_params[i].flt_hdl);
+				    "opt_dp_ctrl: handle deleted internally - %d, status code - %d",
+				    dp_flt_params->flt_addr_params[i].flt_hdl,
+				    status);
 				wlan_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
 				  ipa_obj->hdl,
 				  dp_flt_params->flt_addr_params[i].flt_hdl,
-				  WLAN_IPA_WDI_OPT_DPATH_RESP_SUCCESS_SSR);
+				  status);
 			}
 		}
 	}
 }
+#endif
 
 /**
  * wlan_ipa_opt_dp_deinit() - Perform opt_wifi_dp deinit steps
@@ -4904,8 +4913,12 @@ void wlan_ipa_opt_dp_deinit(struct wlan_ipa_priv *ipa_ctx)
 	}
 
 	if (ipa_ctx->opt_wifi_datapath_ctrl &&
-	    ipa_ctx->opt_dp_ctrl_ssr)
-		wlan_ipa_ctrl_flt_db_deinit(ipa_ctx);
+	    ipa_ctx->opt_dp_ctrl_ssr) {
+		ipa_ctx->opt_dp_ctrl_flt_cleaned = true;
+		wlan_ipa_ctrl_flt_db_deinit(
+				ipa_ctx,
+				WLAN_IPA_WDI_OPT_DPATH_RESP_SUCCESS_SSR);
+	}
 
 	if (cdp_ipa_get_smmu_mapped(ipa_ctx->dp_soc) ||
 	    ipa_ctx->opt_wifi_datapath_ctrl) {
@@ -7101,6 +7114,11 @@ void wlan_ipa_wdi_opt_dpath_ctrl_notify_flt_delete(struct filter_response
 	struct wlan_ipa_priv *ipa_obj = gp_ipa;
 	QDF_STATUS status;
 	uint16_t code;
+
+	if (!ipa_obj || ipa_obj->opt_dp_ctrl_flt_cleaned) {
+		ipa_err("opt_dp_ctrl: flt cleaned internally");
+		return;
+	}
 
 	dp_flt_params = &ipa_obj->dp_tx_super_rule_flt_param;
 	uc_op_work =
