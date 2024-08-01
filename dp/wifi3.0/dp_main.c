@@ -8386,6 +8386,40 @@ static QDF_STATUS dp_get_peer_param(struct cdp_soc_t *cdp_soc,  uint8_t vdev_id,
 				    enum cdp_peer_param_type param,
 				    cdp_config_param_type *val)
 {
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(cdp_soc);
+	struct dp_peer *peer;
+	struct dp_txrx_peer *txrx_peer;
+	struct cdp_peer_info peer_info = { 0 };
+
+	DP_PEER_INFO_PARAMS_INIT(&peer_info, DP_VDEV_ALL, peer_mac,
+				 false, CDP_WILD_PEER_TYPE);
+	peer = dp_peer_hash_find_wrapper(soc, &peer_info, DP_MOD_ID_CDP);
+	if (!peer)
+		return QDF_STATUS_E_INVAL;
+
+	txrx_peer = dp_get_txrx_peer(peer);
+	if (!txrx_peer) {
+		dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	switch (param) {
+	case CDP_CONFIG_TX_PKT_INFO:
+		val->pkt_info.peer_id = peer->peer_id;
+		qdf_mem_copy(&val->pkt_info.pkts, &txrx_peer->comp_pkt,
+			     sizeof(val->pkt_info.pkts));
+		break;
+	case CDP_CONFIG_RX_PKT_INFO:
+		val->pkt_info.peer_id = peer->peer_id;
+		qdf_mem_copy(&val->pkt_info.pkts, &txrx_peer->to_stack,
+			     sizeof(val->pkt_info.pkts));
+		break;
+	default:
+		break;
+	}
+
+	dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
+
 	return QDF_STATUS_SUCCESS;
 }
 

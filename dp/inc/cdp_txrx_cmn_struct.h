@@ -1350,6 +1350,8 @@ struct cdp_soc_t {
  * @CDP_CONFIG_MLD_PEER_VDEV: Change MLD peer's vdev
  * @CDP_CONFIG_PEER_FREQ: Set peer frequency
  * @CDP_CONFIG_PEER_DMS: Dms capability of peer
+ * @CDP_CONFIG_TX_PKT_INFO: TX packet count
+ * @CDP_CONFIG_RX_PKT_INFO: RX packet count
  */
 enum cdp_peer_param_type {
 	CDP_CONFIG_NAWDS,
@@ -1359,6 +1361,8 @@ enum cdp_peer_param_type {
 	CDP_CONFIG_MLD_PEER_VDEV,
 	CDP_CONFIG_PEER_FREQ,
 	CDP_CONFIG_PEER_DMS,
+	CDP_CONFIG_TX_PKT_INFO,
+	CDP_CONFIG_RX_PKT_INFO,
 };
 
 /**
@@ -1544,6 +1548,8 @@ enum cdp_pdev_param_type {
  * @cdp_scan_radio_support: Set scan radio support capability
  * @cdp_monitor_version: monitor version
  * @cdp_tx_vdev_nss_support: Vdev Tx NSS report support
+ * @pkt_info.peer_id: ID of the peer
+ * @pkt_info.pkts: packet count
  */
 typedef union cdp_config_param_t {
 	/* peer params */
@@ -1672,6 +1678,10 @@ typedef union cdp_config_param_t {
 	bool cdp_scan_radio_support;
 	uint8_t cdp_monitor_version;
 	bool cdp_tx_vdev_nss_support;
+	struct {
+		uint16_t peer_id;
+		struct cdp_pkt_info pkts;
+	} pkt_info;
 } cdp_config_param_type;
 
 /**
