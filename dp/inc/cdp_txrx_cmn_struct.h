@@ -212,6 +212,8 @@
 #define CDP_LEGACY_MCS6  6
 #define CDP_LEGACY_MCS7  7
 
+#define CDP_HTT_STATS_MAX_CHAINS 8
+
 QDF_DECLARE_EWMA(tx_lag, 1024, 8)
 struct cdp_stats_cookie;
 
@@ -2288,6 +2290,8 @@ struct cdp_delayed_tx_completion_ppdu_user {
  * @msduq_bitmap: msduq bitmap
  * @rts_success: rts success
  * @rts_failure: rts failure
+ * @tx_pwr_multiplier: tx power multiplier
+ * @tx_pwr: transmit power
  */
 struct cdp_tx_completion_ppdu_user {
 	uint32_t completion_status:8,
@@ -2397,6 +2401,8 @@ struct cdp_tx_completion_ppdu_user {
 	uint8_t mprot_type:3,
 		rts_success:1,
 		rts_failure:1;
+	uint8_t tx_pwr_multiplier;
+	int8_t tx_pwr;
 };
 
 /**
@@ -2561,6 +2567,7 @@ struct cdp_tx_mgmt_comp_info {
  * @phy_ppdu_tx_time_us: Phy per PPDU TX duration
  * @ppdu_bytes: accumulated bytes per ppdu for mem limit feature
  * @htt_seq_type: Seq type
+ * @chain_mask: chain mask for the PPDU
  * @txmode_type: tx mode type UL/DL
  * @txmode: tx mode
  * @num_ul_users: Number of UL expected users
@@ -2615,6 +2622,7 @@ struct cdp_tx_completion_ppdu {
 	uint16_t phy_ppdu_tx_time_us;
 	uint32_t ppdu_bytes;
 	uint8_t htt_seq_type;
+	uint32_t chain_mask;
 	uint8_t txmode_type;
 	uint8_t txmode;
 	uint32_t num_ul_users;
