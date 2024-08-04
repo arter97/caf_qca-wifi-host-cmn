@@ -9646,31 +9646,6 @@ reg_is_chan_punc(uint16_t in_punc_pattern, uint16_t bw)
 #endif
 
 /**
- * reg_find_non_punctured_bw() - Given the input puncture pattern and the
- * total BW of the channel, find the non-punctured bandwidth.
- * @bw: Total bandwidth of the channel
- * @in_punc_pattern: Input puncture pattern
- *
- * Return: non-punctured bw in MHz
- */
-static uint16_t
-reg_find_non_punctured_bw(uint16_t bw,  uint16_t in_punc_pattern)
-{
-	uint8_t num_punc_bw = 0;
-
-	while (in_punc_pattern) {
-		if (in_punc_pattern & 1)
-			++num_punc_bw;
-		in_punc_pattern >>= 1;
-	}
-
-	if (bw <= num_punc_bw * 20)
-		return 0;
-
-	return (bw - num_punc_bw * 20);
-}
-
-/**
  * reg_get_sp_eirp_for_punc_chans() - Find the standard EIRP power for
  * punctured channels.
  * @pdev: Pointer to struct wlan_objmgr_pdev
@@ -10216,5 +10191,24 @@ bool reg_is_dev_supports_80p80(struct wlan_objmgr_pdev *pdev)
 		return reg_tx_ops->is_80p80_supported(pdev);
 
 	return false;
+}
+#endif
+
+#ifdef WLAN_FEATURE_11BE
+uint16_t
+reg_find_non_punctured_bw(uint16_t bw,  uint16_t in_punc_pattern)
+{
+	uint8_t num_punc_bw = 0;
+
+	while (in_punc_pattern) {
+		if (in_punc_pattern & 1)
+			++num_punc_bw;
+		in_punc_pattern >>= 1;
+	}
+
+	if (bw <= num_punc_bw * 20)
+		return 0;
+
+	return (bw - num_punc_bw * 20);
 }
 #endif
