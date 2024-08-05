@@ -415,7 +415,6 @@ enum tx_ppdu_info_type {
  * struct dp_tx_ppdu_info - structure to store tx ppdu info
  * @ppdu_id: current ppdu info ppdu id
  * @frame_type: ppdu info frame type
- * @cur_usr_idx: current user index of ppdu info
  * @ulist: union of linked lists
  * @tx_ppdu_info_dlist_elem: support adding to double linked list
  * @tx_ppdu_info_slist_elem: support adding to single linked list
@@ -424,7 +423,6 @@ enum tx_ppdu_info_type {
 struct dp_tx_ppdu_info {
 	uint32_t ppdu_id;
 	uint8_t frame_type;
-	uint8_t cur_usr_idx;
 
 	union {
 		TAILQ_ENTRY(dp_tx_ppdu_info) tx_ppdu_info_dlist_elem;

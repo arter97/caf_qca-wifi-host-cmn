@@ -493,7 +493,7 @@ dp_tx_mon_generate_ack_frm(struct dp_pdev *pdev,
 	struct hal_tx_status_info *tx_status_info;
 	struct ieee80211_frame_min_one *wh_addr1 = NULL;
 	qdf_nbuf_t mpdu_nbuf = NULL;
-	uint8_t user_id = TXMON_PPDU(tx_ppdu_info, cur_usr_idx);
+	uint8_t user_id = TXMON_PPDU_HAL(tx_ppdu_info, cur_usr_idx);
 	uint8_t frm_ctl;
 
 	/* sanity check */
@@ -921,7 +921,7 @@ dp_tx_mon_generate_block_ack_frm(struct dp_pdev *pdev,
 	struct ieee80211_ctlframe_addr2 *wh_addr2 = NULL;
 	qdf_nbuf_t mpdu_nbuf = NULL;
 	uint8_t *frm = NULL;
-	uint8_t user_id = TXMON_PPDU(tx_ppdu_info, cur_usr_idx);
+	uint8_t user_id = TXMON_PPDU_HAL(tx_ppdu_info, cur_usr_idx);
 	uint32_t ba_bitmap_sz = TXMON_PPDU_USR(tx_ppdu_info,
 					       user_id, ba_bitmap_sz);
 	uint8_t frm_ctl;
@@ -1065,7 +1065,7 @@ dp_tx_mon_alloc_mpdu(struct dp_pdev *pdev, struct dp_tx_ppdu_info *tx_ppdu_info)
 		return;
 	}
 
-	usr_idx = TXMON_PPDU(tx_ppdu_info, cur_usr_idx);
+	usr_idx = TXMON_PPDU_HAL(tx_ppdu_info, cur_usr_idx);
 	usr_mpdu_q = &TXMON_PPDU_USR(tx_ppdu_info, usr_idx, mpdu_q);
 
 	qdf_nbuf_queue_add(usr_mpdu_q, mpdu_nbuf);
@@ -1109,7 +1109,7 @@ dp_tx_mon_generate_data_frm(struct dp_pdev *pdev,
 	tx_mon_be = dp_mon_pdev_get_tx_mon(mon_pdev_be, mac_id);
 
 	tx_status_info = &tx_mon_be->data_status_info;
-	usr_idx = TXMON_PPDU(tx_ppdu_info, cur_usr_idx);
+	usr_idx = TXMON_PPDU_HAL(tx_ppdu_info, cur_usr_idx);
 	usr_mpdu_q = &TXMON_PPDU_USR(tx_ppdu_info, usr_idx, mpdu_q);
 	mpdu_nbuf = qdf_nbuf_queue_last(usr_mpdu_q);
 
@@ -1327,7 +1327,7 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 	struct hal_tx_status_info *tx_status_info;
 	struct dp_mon_mac *mon_mac;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
-	uint32_t usr_idx = TXMON_PPDU(tx_data_ppdu_info, cur_usr_idx);
+	uint32_t usr_idx = TXMON_PPDU_HAL(tx_data_ppdu_info, cur_usr_idx);
 
 	/* sanity check */
 	if (qdf_unlikely(!pdev))
