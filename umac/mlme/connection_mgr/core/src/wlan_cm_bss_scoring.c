@@ -32,6 +32,7 @@
 #ifdef CONN_MGR_ADV_FEATURE
 #include "wlan_mlme_api.h"
 #include "wlan_wfa_tgt_if_tx_api.h"
+#include "wlan_action_oui_main.h"
 #endif
 #include "wlan_cm_main_api.h"
 #include "wlan_cm_public_struct.h"
@@ -3230,6 +3231,25 @@ cm_add_11_ax_candidate(struct wlan_objmgr_pdev *pdev,
 {};
 #endif
 
+static bool cm_is_slo_candidate_allowed(struct wlan_objmgr_psoc *psoc,
+					struct scan_cache_entry *scan_entry)
+{
+	struct action_oui_search_attr attr = {0};
+
+	attr.ie_data = util_scan_entry_ie_data(scan_entry);
+	attr.ie_length = util_scan_entry_ie_len(scan_entry);
+
+	if (wlan_action_oui_search(psoc, &attr,
+				   ACTION_OUI_RESTRICT_MAX_MLO_LINKS)) {
+		mlme_debug("IoT AP " QDF_MAC_ADDR_FMT
+			   " slo candidate not allowed",
+			   QDF_MAC_ADDR_REF(scan_entry->bssid.bytes));
+		return false;
+	}
+
+	return true;
+}
+
 /**
  * cm_mlo_generate_candidate_list() - generate candidate list
  * @pdev: pdev object
@@ -3269,6 +3289,14 @@ static void cm_mlo_generate_candidate_list(struct wlan_objmgr_pdev *pdev,
 	uint32_t num_link = 0;
 	uint32_t i = 0;
 	uint32_t j = 0;
+	struct wlan_objmgr_psoc *psoc;
+	bool is_slo_candidate_allowed = true;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		mlme_err("psoc NULL");
+		return;
+	}
 
 	if (qdf_list_peek_front(candidate_list, &cur_node) !=
 	    QDF_STATUS_SUCCESS) {
@@ -3282,6 +3310,11 @@ static void cm_mlo_generate_candidate_list(struct wlan_objmgr_pdev *pdev,
 		scan_entry = qdf_container_of(cur_node, struct scan_cache_node,
 					      node);
 		num_link = scan_entry->entry->ml_info.num_links;
+
+		is_slo_candidate_allowed =
+			cm_is_slo_candidate_allowed(psoc, scan_entry->entry);
+		if (!is_slo_candidate_allowed)
+			goto next;
 
 		for (i = 0; i < num_link; i++) {
 			tmp_scan_entry = util_scan_copy_cache_entry(
