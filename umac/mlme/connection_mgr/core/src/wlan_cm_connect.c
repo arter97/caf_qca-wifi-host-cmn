@@ -641,17 +641,15 @@ static bool cm_bss_peer_is_assoc_peer(struct cm_connect_req *req)
 
 /**
  * cm_candidate_mlo_update() - handle mlo scenario for candidate validating
- * @scan_entry: scan result of the candidate
  * @validate_bss_info: candidate info to be updated
  *
  * Return: None
  */
 static void
-cm_candidate_mlo_update(struct scan_cache_entry *scan_entry,
-			struct validate_bss_data *validate_bss_info)
+cm_candidate_mlo_update(struct validate_bss_data *validate_bss_info)
 {
-	validate_bss_info->is_mlo = !!scan_entry->ie_list.multi_link_bv;
-	validate_bss_info->scan_entry = scan_entry;
+	validate_bss_info->is_mlo =
+		!!validate_bss_info->scan_entry->ie_list.multi_link_bv;
 }
 
 #else
@@ -677,8 +675,7 @@ static bool cm_bss_peer_is_assoc_peer(struct cm_connect_req *req)
 }
 
 static inline void
-cm_candidate_mlo_update(struct scan_cache_entry *scan_entry,
-			struct validate_bss_data *validate_bss_info)
+cm_candidate_mlo_update(struct validate_bss_data *validate_bss_info)
 {
 }
 #endif
@@ -775,11 +772,12 @@ QDF_STATUS cm_if_mgr_validate_candidate(struct cnx_mgr *cm_ctx,
 	struct if_mgr_event_data event_data = {0};
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 
+	event_data.validate_bss_info.scan_entry = scan_entry;
 	event_data.validate_bss_info.chan_freq = scan_entry->channel.chan_freq;
 	event_data.validate_bss_info.beacon_interval = scan_entry->bcn_int;
 	qdf_copy_macaddr(&event_data.validate_bss_info.peer_addr,
 			 &scan_entry->bssid);
-	cm_candidate_mlo_update(scan_entry, &event_data.validate_bss_info);
+	cm_candidate_mlo_update(&event_data.validate_bss_info);
 
 	status = cm_t2lm_validate_candidate(cm_ctx, scan_entry);
 	if (QDF_IS_STATUS_ERROR(status))
