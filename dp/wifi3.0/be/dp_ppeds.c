@@ -2353,6 +2353,7 @@ QDF_STATUS dp_ppeds_start_soc_be(struct dp_soc *soc)
 
 	be_soc->dp_ppeds_node_id =
 				ppe_ds_wlan_get_node_id(be_soc->ppeds_handle);
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -2386,9 +2387,11 @@ QDF_STATUS dp_ppeds_register_soc_be(struct dp_soc_be *be_soc,
 	idx->ppe2tcl_start_idx = reg_info.ppe2tcl_start_idx;
 	idx->reo2ppe_start_idx = reg_info.reo2ppe_start_idx;
 	be_soc->ppeds_int_mode_enabled = reg_info.ppe_ds_int_mode_enabled;
+	be_soc->dp_ppeds_node_id = reg_info.dp_ppeds_node_id;
 
-	dp_info("ppe2tcl_start_idx %d reo2ppe_start_idx %d\n",
-		idx->ppe2tcl_start_idx, idx->reo2ppe_start_idx);
+	dp_info("ppe2tcl_start_idx %d reo2ppe_start_idx %d node id %d\n",
+		idx->ppe2tcl_start_idx, idx->reo2ppe_start_idx,
+		be_soc->dp_ppeds_node_id);
 
 	return QDF_STATUS_SUCCESS;
 }
