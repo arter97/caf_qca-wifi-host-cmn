@@ -931,6 +931,8 @@ QDF_STATUS wlan_objmgr_vdev_peer_attach(struct wlan_objmgr_vdev *vdev,
 	struct wlan_objmgr_vdev_objmgr *objmgr = &vdev->vdev_objmgr;
 	struct wlan_objmgr_pdev *pdev;
 	enum QDF_OPMODE opmode;
+	uint16_t peer_cnt;
+	uint8_t vdev_cnt;
 
 	wlan_vdev_obj_lock(vdev);
 	pdev = wlan_vdev_get_pdev(vdev);
@@ -954,9 +956,16 @@ QDF_STATUS wlan_objmgr_vdev_peer_attach(struct wlan_objmgr_vdev *vdev,
 			return QDF_STATUS_E_FAILURE;
 		}
 	} else {
-		if (wlan_pdev_get_peer_count(pdev) >=
-			wlan_pdev_get_max_peer_count(pdev)) {
+		peer_cnt = wlan_pdev_get_peer_count(pdev);
+		vdev_cnt = wlan_pdev_get_vdev_count(pdev);
+		if ((peer_cnt >= vdev_cnt) &&
+		    ((peer_cnt - vdev_cnt) >=
+			(wlan_pdev_get_max_peer_count(pdev)
+			- wlan_pdev_get_max_vdev_count(pdev)))) {
 			wlan_pdev_obj_unlock(pdev);
+			obj_mgr_err("Peer limit reached vdev:%d peers:%d",
+				    wlan_vdev_get_id(vdev),
+				    peer_cnt - vdev_cnt);
 			return QDF_STATUS_E_FAILURE;
 		}
 	}
