@@ -44,11 +44,9 @@ struct qdf_net_if;
 static inline QDF_STATUS
 __qdf_net_if_create_dummy_if(struct qdf_net_if *nif)
 {
-	int ret;
+	init_dummy_netdev((struct net_device *)nif);
 
-	ret = init_dummy_netdev((struct net_device *)nif);
-
-	return qdf_status_from_os_return(ret);
+	return qdf_status_from_os_return(0);
 }
 
 /**
