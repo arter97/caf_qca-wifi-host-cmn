@@ -1402,6 +1402,8 @@ enum cdp_peer_param_type {
  * @CDP_CONFIG_RXDMA_BUF_RING_SIZE: RXDMA buffer ring size configure
  * @CDP_CONFIG_DELAY_STATS: set/get delay stats
  * @CDP_CONFIG_MON_FCS_CAP: Set FCS monitor capture
+ * @CDP_CONFIG_LAST: Last enum
+ * @CDP_CONFIG_MAX: Max enum
  */
 enum cdp_pdev_param_type {
 	CDP_CONFIG_DEBUG_SNIFFER,
@@ -1438,6 +1440,10 @@ enum cdp_pdev_param_type {
 	CDP_CONFIG_RXDMA_BUF_RING_SIZE,
 	CDP_CONFIG_DELAY_STATS,
 	CDP_CONFIG_MON_FCS_CAP,
+
+	CDP_CONFIG_LAST,
+	CDP_CONFIG_MAX = CDP_CONFIG_LAST - 1,
+	/* Customer specific enums */
 };
 
 /**
