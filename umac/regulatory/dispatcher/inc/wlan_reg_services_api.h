@@ -1281,15 +1281,6 @@ bool wlan_reg_is_us(uint8_t *country);
  */
 bool wlan_reg_is_etsi(uint8_t *country);
 
-
-/**
- * wlan_reg_ctry_support_vlp() - Country supports VLP or not
- * @country: The country information
- *
- * Return: true or false
- */
-bool wlan_reg_ctry_support_vlp(uint8_t *country);
-
 /**
  * wlan_reg_set_country() - Set the current regulatory country
  * @pdev: The physical dev to set current country for

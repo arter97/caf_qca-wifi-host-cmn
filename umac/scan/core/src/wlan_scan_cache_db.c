@@ -1077,7 +1077,7 @@ static QDF_STATUS scm_add_update_entry(struct wlan_objmgr_psoc *psoc,
 #ifdef CONFIG_REG_CLIENT
 /**
  * scm_is_bss_allowed_for_country() - Check if bss is allowed to start for a
- * specific country and power mode (VLP?LPI/SP) for 6GHz.
+ * specific country and power mode (VLP/LPI/SP) for 6 GHz.
  * @psoc: psoc ptr
  * @scan_entry: ptr to scan entry
  *

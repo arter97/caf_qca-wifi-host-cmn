@@ -151,48 +151,6 @@ bool reg_is_etsi_alpha2(uint8_t *alpha2)
 	return false;
 }
 
-static
-const char *reg_get_power_mode_string(uint16_t reg_dmn_pair_id)
-{
-	switch (reg_dmn_pair_id) {
-	case FCC3_FCCA:
-	case FCC6_FCCA:
-		return "NON_VLP";
-	default:
-		return "VLP";
-	}
-}
-
-static bool reg_ctry_domain_supports_vlp(uint8_t *alpha2)
-{
-	uint16_t i;
-	int no_of_countries;
-
-	reg_get_num_countries(&no_of_countries);
-	for (i = 0; i < no_of_countries; i++) {
-		if (g_all_countries[i].alpha2[0] == alpha2[0] &&
-		    g_all_countries[i].alpha2[1] == alpha2[1]) {
-			if (!qdf_str_cmp(reg_get_power_mode_string(
-			    g_all_countries[i].reg_dmn_pair_id), "NON_VLP"))
-				return false;
-			else
-				return true;
-		}
-	}
-	return true;
-}
-
-bool reg_ctry_support_vlp(uint8_t *alpha2)
-{
-	if (((alpha2[0] == 'A') && (alpha2[1] == 'E')) ||
-	    ((alpha2[0] == 'P') && (alpha2[1] == 'E')) ||
-	    ((alpha2[0] == 'U') && (alpha2[1] == 'S')) ||
-	   !reg_ctry_domain_supports_vlp(alpha2))
-		return false;
-	else
-		return true;
-}
-
 static QDF_STATUS reg_set_non_offload_country(struct wlan_objmgr_pdev *pdev,
 					      struct set_country *cc)
 {
@@ -465,7 +423,8 @@ QDF_STATUS reg_check_if_6g_pwr_type_supp_for_chan(
 
 	sup_idx = reg_convert_enum_to_6g_idx(chan_idx);
 	if (sup_idx >= NUM_6GHZ_CHANNELS) {
-		reg_err("Invalid channel");
+		reg_err("sup_idx: %d, chan idx: %d, Invalid channel", sup_idx,
+			chan_idx);
 		return QDF_STATUS_E_NOSUPPORT;
 	}
 
@@ -476,6 +435,8 @@ QDF_STATUS reg_check_if_6g_pwr_type_supp_for_chan(
 	super_chan_list = pdev_priv_obj->super_chan_list;
 	chan_state_arr = super_chan_list[sup_idx].state_arr;
 	chan_flags_arr = super_chan_list[sup_idx].chan_flags_arr;
+	reg_debug("6G channel state: %d, channel flags: %d",
+		  chan_state_arr[cli_pwr_type], chan_flags_arr[cli_pwr_type]);
 	if (reg_is_state_allowed(chan_state_arr[cli_pwr_type]) &&
 	    !(chan_flags_arr[cli_pwr_type] & REGULATORY_CHAN_DISABLED))
 		return QDF_STATUS_SUCCESS;
