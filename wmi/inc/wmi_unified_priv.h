@@ -130,6 +130,10 @@
 #include <wma_sar_public_structs.h>
 #endif
 
+#ifdef FEATURE_MGMT_RX_OVER_SRNG
+#include "wlan_mgmt_rx_srng_public_structs.h"
+#endif
+
 #define WMI_UNIFIED_MAX_EVENT 0x100
 
 #ifdef WMI_EXT_DBG
@@ -3574,6 +3578,13 @@ QDF_STATUS (*extract_vendor_pdev_event)(wmi_unified_t wmi_handle,
 					uint8_t *evt_buf,
 					void *param, void *subtype);
 #endif /* WLAN_VENDOR_EXTN */
+
+#ifdef FEATURE_MGMT_RX_OVER_SRNG
+QDF_STATUS (*extract_mgmt_srng_reap_event)(
+				wmi_unified_t wmi_handle, uint8_t *evt_buf,
+				struct mgmt_srng_reap_event_params *params);
+#endif
+
 QDF_STATUS (*send_active_traffic_map_cmd)(wmi_unified_t wmi_handle,
 					  struct peer_active_traffic_map_params *param);
 QDF_STATUS (*send_sap_suspend_cmd)(wmi_unified_t wmi_handle,

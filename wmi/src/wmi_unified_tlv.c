@@ -22772,6 +22772,29 @@ send_sta_vdev_report_ap_oper_bw_cmd_tlv(wmi_unified_t wmi_handle,
 	return ret;
 }
 
+#ifdef FEATURE_MGMT_RX_OVER_SRNG
+static QDF_STATUS
+extract_mgmt_srng_reap_event_tlv(wmi_unified_t wmi_handle, uint8_t *evt_buf,
+				 struct mgmt_srng_reap_event_params *params)
+{
+	WMI_MGMT_SRNG_REAP_EVENTID_param_tlvs *param_buf = NULL;
+	wmi_mgmt_srng_reap_event_fixed_param *ev = NULL;
+
+	param_buf = (WMI_MGMT_SRNG_REAP_EVENTID_param_tlvs *)evt_buf;
+	if (!param_buf) {
+		wmi_err("Invalid mgmt rx srng reap event");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	ev = param_buf->fixed_param;
+
+	params->tail_ptr = ev->tail_pointer;
+	params->timestamp = ev->timestamp_tp_update_ms;
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 struct wmi_ops tlv_ops =  {
 	.send_vdev_create_cmd = send_vdev_create_cmd_tlv,
 	.send_vdev_delete_cmd = send_vdev_delete_cmd_tlv,
@@ -23288,6 +23311,9 @@ struct wmi_ops tlv_ops =  {
 	.extract_vendor_peer_event = extract_vendor_peer_event_tlv,
 	.extract_vendor_vdev_event = extract_vendor_vdev_event_tlv,
 	.extract_vendor_pdev_event = extract_vendor_pdev_event_tlv,
+#endif
+#ifdef FEATURE_MGMT_RX_OVER_SRNG
+	.extract_mgmt_srng_reap_event = extract_mgmt_srng_reap_event_tlv,
 #endif
 	.send_active_traffic_map_cmd = send_active_traffic_map_cmd_tlv,
 	.send_sap_suspend_cmd = send_ap_suspend_cmd_tlv,
