@@ -1101,7 +1101,7 @@ bool hif_napi_schedule(struct hif_opaque_softc *hif_ctx, int ce_id)
 		return false;
 	}
 
-	if (qdf_test_bit(NAPI_STATE_SCHED, &napii->napi.state)) {
+	if (qdf_atomic_test_bit(NAPI_STATE_SCHED, &napii->napi.state)) {
 		NAPI_DEBUG("napi scheduled, return");
 		qdf_atomic_dec(&scn->active_tasklet_cnt);
 		return false;
