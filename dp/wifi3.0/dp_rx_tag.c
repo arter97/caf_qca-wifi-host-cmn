@@ -958,19 +958,25 @@ dp_rx_ppe_del_flow_entry(struct ppe_drv_fse_rule_info *ppe_flow_info)
 	if (!ppe_flow_info->dev)
 		return QDF_STATUS_E_FAILURE;
 
+	osdev = ath_netdev_priv(ppe_flow_info->dev);
+	if (!osdev)
+		return QDF_STATUS_E_FAILURE;
+
 	/*
 	 * In case of fw recovery, VAPs will go down but VP's will
 	 * still be there. Hence this callback might get triggered even if VAP object
 	 * is down in recovery mode. So we check the recovery mode using the netdev
 	 * queue and return if netdev queue is stopped.
 	 */
-	if ((ppe_flow_info->dev->reg_state >= NETREG_UNREGISTERING) ||
-	    (netif_queue_stopped(ppe_flow_info->dev)))
+	if (ppe_flow_info->dev->reg_state >= NETREG_UNREGISTERING)
 		return QDF_STATUS_E_FAILURE;
 
-	osdev = ath_netdev_priv(ppe_flow_info->dev);
-	if (!osdev)
+	if (osdev->dev_type == OSIF_NETDEV_TYPE_VAP) {
+		if (osif_is_vap_in_recovery_mode(osdev))
+			return QDF_STATUS_E_FAILURE;
+	} else if (netif_queue_stopped(ppe_flow_info->dev)) {
 		return QDF_STATUS_E_FAILURE;
+	}
 
 	vap = dp_rx_get_vap_osif_dev(osdev);
 	if (!vap)
