@@ -17713,6 +17713,21 @@ enum qca_wlan_audio_transport_switch_status {
 };
 
 /**
+ * enum qca_wlan_audio_transport_switch_reason - Represents the reason of audio
+ * transport switch request.
+ *
+ * @QCA_WLAN_AUDIO_TRANSPORT_SWITCH_REASON_TERMINATING: Requester transport is
+ * terminating. After this indication, requester module may not be available to
+ * process further request on its transport. For ex: to handle a high priority
+ * concurrent interface, WLAN transport need to terminate and hence indicates
+ * switch to non-WLAN transport with reason terminating. User space modules
+ * switches to non-WLAN immediately without waiting for further confirmation.
+ */
+enum qca_wlan_audio_transport_switch_reason {
+	QCA_WLAN_AUDIO_TRANSPORT_SWITCH_REASON_TERMINATING = 0,
+};
+
+/**
  * enum qca_wlan_vendor_attr_audio_transport_switch - Attributes used by
  * %QCA_NL80211_VENDOR_SUBCMD_AUDIO_TRANSPORT_SWITCH vendor command.
  *
@@ -17726,11 +17741,18 @@ enum qca_wlan_audio_transport_switch_status {
  * the transport switch status from one of the values in enum
  * qca_wlan_audio_transport_switch_status. This is optional param and used in
  * both command and event path. This attribute must not be included in requests.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_AUDIO_TRANSPORT_SWITCH_REASON: u8 attribute. Indicates
+ * the transport switch reason from one of the values in enum
+ * qca_wlan_audio_transport_switch_reason. This is optional param and used in
+ * both command and event path.
  */
 enum qca_wlan_vendor_attr_audio_transport_switch {
 	QCA_WLAN_VENDOR_ATTR_AUDIO_TRANSPORT_SWITCH_INVALID = 0,
 	QCA_WLAN_VENDOR_ATTR_AUDIO_TRANSPORT_SWITCH_TYPE = 1,
 	QCA_WLAN_VENDOR_ATTR_AUDIO_TRANSPORT_SWITCH_STATUS = 2,
+	QCA_WLAN_VENDOR_ATTR_AUDIO_TRANSPORT_SWITCH_REASON = 3,
+
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_AUDIO_TRANSPORT_SWITCH_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_AUDIO_TRANSPORT_SWITCH_MAX =
