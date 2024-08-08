@@ -298,6 +298,20 @@ int libstats_is_ifname_valid(const char *ifname, enum stats_object_e obj)
 			fclose(fp);
 			ret = 1;
 		}
+	} else if (STATS_OBJ_MLD == obj) {
+		ret = 0;
+		size = sizeof(path);
+		if ((strlcpy(path, PATH_SYSNET_DEV, size) >= size) ||
+		    (strlcat(path, ifname, size) >= size) ||
+		    (strlcat(path, "/cfg80211_partnerinfo", size) >= size)) {
+			STATS_ERR("Error creating pathname\n");
+			return 0;
+		}
+		fp = fopen(path, "r");
+		if (fp) {
+			fclose(fp);
+			ret = 1;
+		}
 	} else {
 		ret = 1;
 		switch (obj) {
@@ -308,10 +322,6 @@ int libstats_is_ifname_valid(const char *ifname, enum stats_object_e obj)
 		case STATS_OBJ_RADIO:
 			str = "wifi";
 			size = 5;
-			break;
-		case STATS_OBJ_MLD:
-			str = "mld";
-			size = 4;
 			break;
 		case STATS_OBJ_LINK:
 			str = "link";
@@ -633,6 +643,9 @@ static int validate_link_id(struct stats_command *cmd)
 {
 	switch (cmd->obj) {
 	case STATS_OBJ_VAP:
+		if (libstats_is_ifname_valid(cmd->if_name, STATS_OBJ_MLD) &&
+		    cmd->link_id == MLO_INVALID_LINK_ID)
+			return 0;
 		if (cmd->link_id < 0 || cmd->link_id > MAX_LINK_ID)
 			return -EINVAL;
 		break;
