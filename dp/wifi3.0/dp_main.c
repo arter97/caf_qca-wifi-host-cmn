@@ -9493,6 +9493,11 @@ dp_set_psoc_param(struct cdp_soc_t *cdp_soc,
 		}
 		break;
 #endif
+	case CDP_VDEV_TX_NSS_SUPPORT:
+		soc->features.vdev_tx_nss_support = val.cdp_tx_vdev_nss_support;
+		dp_info("FW supports Tx Vdev NSS report: %d",
+			soc->features.vdev_tx_nss_support);
+		break;
 	default:
 		break;
 	}
@@ -9623,6 +9628,10 @@ static QDF_STATUS dp_get_psoc_param(struct cdp_soc_t *cdp_soc,
 		break;
 	case CDP_MONITOR_FLAG:
 		val->cdp_monitor_flag = soc->mon_flags;
+		break;
+	case CDP_VDEV_TX_NSS_SUPPORT:
+		val->cdp_tx_vdev_nss_support =
+					soc->features.vdev_tx_nss_support;
 		break;
 	default:
 		dp_warn("Invalid param: %u", param);
