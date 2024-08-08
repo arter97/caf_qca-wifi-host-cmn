@@ -3678,6 +3678,16 @@ struct dp_soc {
 #endif
 };
 
+/*
+ * cpu id is used as an index to set bits in service_rings_running
+ * in the service srng API. We need to make sure that the size of
+ * service_rings_running variable is big enough
+ */
+#ifndef CONFIG_X86
+QDF_COMPILE_TIME_ASSERT(num_cpu_check,
+	NR_CPUS <= (sizeof(((struct dp_soc *)0)->service_rings_running) * 8));
+#endif
+
 #define MAX_RX_MAC_RINGS 2
 /* Same as NAC_MAX_CLENT */
 #define DP_NAC_MAX_CLIENT  24
