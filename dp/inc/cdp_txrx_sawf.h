@@ -562,7 +562,7 @@ cdp_get_peer_sawf_admctrl_stats(ol_txrx_soc_handle soc, uint8_t *mac,
 #ifdef WLAN_FEATURE_11BE_MLO_3_LINK_TX
 static inline
 uint16_t cdp_sawf_get_peer_msduq(ol_txrx_soc_handle soc,
-				 struct net_device *netdev, uint8_t *dest_mac,
+				 uint8_t vdev_id, uint8_t *dest_mac,
 				 uint32_t dscp_pcp, bool pcp)
 {
 	if (!soc || !soc->ops || !soc->ops->sawf_ops ||
@@ -573,7 +573,7 @@ uint16_t cdp_sawf_get_peer_msduq(ol_txrx_soc_handle soc,
 	}
 
 	return soc->ops->sawf_ops->get_peer_msduq
-		(netdev, dest_mac, dscp_pcp, pcp);
+		(soc, vdev_id, dest_mac, dscp_pcp, pcp);
 }
 
 static inline QDF_STATUS

@@ -2671,7 +2671,8 @@ struct cdp_sawf_ops {
 #endif
 #ifdef WLAN_FEATURE_11BE_MLO_3_LINK_TX
 	uint16_t
-	(*get_peer_msduq)(struct net_device *netdev, uint8_t *dest_mac,
+	(*get_peer_msduq)(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+			  uint8_t *peer_mac,
 			  uint32_t dscp_pcp, bool pcp);
 	QDF_STATUS
 	(*sawf_3_link_peer_flow_count)(struct cdp_soc_t *hdl,
