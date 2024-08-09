@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -818,7 +818,6 @@ bool ucfg_reg_is_fcc_constraint_set(struct wlan_objmgr_pdev *pdev)
 {
 	return false;
 }
-
 #else
 static inline QDF_STATUS
 ucfg_reg_enable_disable_opclass_chans(struct wlan_objmgr_pdev *pdev,
@@ -847,5 +846,47 @@ bool ucfg_reg_is_user_country_set_allowed(struct wlan_objmgr_psoc *psoc);
  * Return: Return true if fcc constraint is set
  */
 bool ucfg_reg_is_fcc_constraint_set(struct wlan_objmgr_pdev *pdev);
+#endif
+
+#if defined(CONFIG_BAND_6GHZ) && defined(CONFIG_REG_CLIENT)
+/**
+ * ucfg_reg_is_vlp_depriority_freq() - Check if the frequency is VLP deprority
+ * frequency.
+ *
+ * @pdev: Pointer to pdev
+ * @freq: Frequency in MHz
+ *
+ * Return: True if frequency is deprority frequency, else false.
+ */
+bool ucfg_reg_is_vlp_depriority_freq(struct wlan_objmgr_pdev *pdev,
+				     qdf_freq_t freq);
+
+/**
+ * ucfg_reg_get_num_rules_of_ap_pwr_type() - Get the number of reg rules present
+ * for a given ap power type
+ *
+ * @pdev: Pointer to pdev
+ * @ap_pwr_type: AP power type
+ *
+ * Return: Return the number of reg rules for a given ap power type.
+ */
+
+uint8_t
+ucfg_reg_get_num_rules_of_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
+				      enum reg_6g_ap_type ap_pwr_type);
+#else
+static inline
+bool ucfg_reg_is_vlp_depriority_freq(struct wlan_objmgr_pdev *pdev,
+				     qdf_freq_t freq)
+{
+	return false;
+}
+
+static inline uint8_t
+ucfg_reg_get_num_rules_of_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
+				      enum reg_6g_ap_type ap_pwr_type)
+{
+	return 0;
+}
 #endif
 #endif
