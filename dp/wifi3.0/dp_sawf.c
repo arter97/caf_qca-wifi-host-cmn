@@ -2813,6 +2813,11 @@ dp_sawf_tx_compl_update_peer_stats(struct dp_soc *soc,
 
 	DP_STATS_DEC(stats_ctx, tx_stats[host_q_idx].queue_depth, 1);
 
+	DP_STATS_INCC(stats_ctx, tx_stats[host_q_idx].total_retries_count,
+			  (ts->transmit_cnt - 1),
+			  (ts->status == HAL_TX_TQM_RR_FRAME_ACKED
+			  && ts->transmit_cnt > 1));
+
 	DP_STATS_INCC(stats_ctx, tx_stats[host_q_idx].retry_count, 1,
 			  (ts->status == HAL_TX_TQM_RR_FRAME_ACKED
 			  && ts->transmit_cnt > 1));
@@ -3111,6 +3116,7 @@ static void dp_sawf_dump_tx_stats(struct sawf_tx_stats *tx_stats)
 	dp_sawf_print_stats("dropped: invalid_rr = %u",
 			tx_stats->dropped.invalid_rr);
 	dp_sawf_print_stats("tx_failed = %u", tx_stats->tx_failed);
+	dp_sawf_print_stats("total_retries_count = %u", tx_stats->total_retries_count);
 	dp_sawf_print_stats("retry_count = %u", tx_stats->retry_count);
 	dp_sawf_print_stats("multiple_retry_count = %u", tx_stats->multiple_retry_count);
 	dp_sawf_print_stats("failed_retry_count = %u", tx_stats->failed_retry_count);
@@ -3160,6 +3166,10 @@ dp_sawf_copy_tx_stats(struct sawf_tx_stats *dst, struct sawf_tx_stats *src)
 	dst->queue_depth = src->queue_depth;
 	dst->throughput = src->throughput;
 	dst->ingress_rate = src->ingress_rate;
+	dst->total_retries_count = src->total_retries_count;
+	dst->retry_count = src->retry_count;
+	dst->multiple_retry_count = src->multiple_retry_count;
+	dst->failed_retry_count = src->failed_retry_count;
 	for (pream_type = 0; pream_type <  DOT11_MAX; pream_type++) {
 		for (i = 0; i < MAX_MCS; i++) {
 			dst->pkt_type[pream_type].mcs_count[i] =
