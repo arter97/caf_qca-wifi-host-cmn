@@ -4368,8 +4368,6 @@ QDF_STATUS dp_peer_stats_notify(struct dp_pdev *dp_pdev, struct dp_peer *peer)
 
 	return QDF_STATUS_SUCCESS;
 }
-
-qdf_export_symbol(dp_peer_stats_notify);
 #endif
 
 #ifdef FEATURE_NAC_RSSI
@@ -5941,6 +5939,7 @@ static struct dp_mon_ops monitor_ops = {
 	.mon_pdev_get_filter_non_data = dp_pdev_get_filter_non_data,
 #ifdef WDI_EVENT_ENABLE
 	.mon_set_pktlog_wifi3 = dp_set_pktlog_wifi3,
+	.mon_peer_stats_notify = dp_peer_stats_notify,
 #endif
 #if defined(DP_CON_MON) && !defined(REMOVE_PKT_LOG)
 	.mon_pktlogmod_exit = dp_pktlogmod_exit,
