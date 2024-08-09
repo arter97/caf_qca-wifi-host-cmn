@@ -74,6 +74,8 @@ static void hif_initialize_default_ops(struct hif_softc *hif_sc)
 #endif
 	bus_ops->hif_affinity_mgr_set_affinity =
 		&hif_dummy_affinity_mgr_set_affinity;
+	bus_ops->hif_bus_get_device_handle =
+		&hif_dummy_bus_get_device_handle;
 }
 
 #define NUM_OPS (sizeof(struct hif_bus_ops) / sizeof(void *))

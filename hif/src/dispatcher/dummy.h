@@ -102,3 +102,5 @@ void hif_dummy_set_grp_intr_affinity(struct hif_softc *scn,
 				     uint32_t cpumask, bool perf);
 #endif
 void hif_dummy_affinity_mgr_set_affinity(struct hif_softc *scn);
+QDF_STATUS hif_dummy_bus_get_device_handle(struct hif_softc *hif_ctx,
+					   void **handle);
