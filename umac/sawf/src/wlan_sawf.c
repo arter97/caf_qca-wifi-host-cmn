@@ -452,6 +452,16 @@ int wlan_sawf_get_tput_stats(void *soc, void *arg, uint64_t *in_bytes,
 }
 qdf_export_symbol(wlan_sawf_get_tput_stats);
 
+int wlan_sawf_get_msduq_tx_stats(void *soc, void *arg,
+				 void *msduq_tx_stats,
+				 uint8_t msduq)
+{
+	return cdp_get_msduq_tx_stats(soc, arg,
+				      msduq_tx_stats,
+				      msduq);
+}
+qdf_export_symbol(wlan_sawf_get_msduq_tx_stats);
+
 int wlan_sawf_get_mpdu_stats(void *soc, void *arg, uint64_t *svc_int_pass,
 			     uint64_t *svc_int_fail,
 			     uint64_t *burst_pass, uint64_t *burst_fail,

@@ -3679,6 +3679,46 @@ dp_sawf_get_tx_stats(void *arg, uint64_t *in_bytes, uint64_t *in_cnt,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef WLAN_CONFIG_TELEMETRY_AGENT
+QDF_STATUS
+dp_sawf_get_msduq_tx_stats(void *arg,
+			   void *msduq_tx_stats,
+			   uint8_t msduq)
+{
+	struct dp_peer_sawf_stats *stats_ctx;
+	struct sawf_tx_stats *tx_stats;
+	struct telemetry_msduq_tx_stats *retries_mcs_stats = (struct telemetry_msduq_tx_stats *)msduq_tx_stats;
+	int pkt_type_index, mcs_index;
+
+	stats_ctx = (struct dp_peer_sawf_stats *)arg;
+	tx_stats = &stats_ctx->stats.tx_stats[msduq];
+
+	if (!stats_ctx) {
+		dp_sawf_err("stats_ctx in NULL\n");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	retries_mcs_stats->tx_failed = tx_stats->tx_failed;
+	retries_mcs_stats->total_retries_count = tx_stats->total_retries_count;
+	for (pkt_type_index = 0; pkt_type_index < DOT11_MAX; pkt_type_index++) {
+		for (mcs_index = 0; mcs_index < MAX_MCS; mcs_index++) {
+			retries_mcs_stats->packet_type[pkt_type_index].mcs_count[mcs_index] =
+				tx_stats->pkt_type[pkt_type_index].mcs_count[mcs_index];
+		}
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+#else
+QDF_STATUS
+dp_sawf_get_msduq_tx_stats(void *arg,
+			   void *msduq_tx_stats,
+			   uint8_t msduq)
+{
+	return QDF_STATUS_E_FAILURE;
+}
+#endif
+
 QDF_STATUS
 dp_sawf_get_mpdu_sched_stats(void *arg, uint64_t *svc_int_pass,
 			     uint64_t *svc_int_fail, uint64_t *burst_pass,
@@ -3998,6 +4038,14 @@ QDF_STATUS
 dp_sawf_get_tx_stats(void *arg, uint64_t *in_bytes, uint64_t *in_cnt,
 		     uint64_t *tx_bytes, uint64_t *tx_cnt,
 		     uint8_t tid, uint8_t msduq)
+{
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+dp_sawf_get_msduq_tx_stats(void *arg,
+			   struct telemetry_msduq_tx_stats *msduq_tx_stats,
+			   uint8_t msduq);
 {
 	return QDF_STATUS_E_FAILURE;
 }
