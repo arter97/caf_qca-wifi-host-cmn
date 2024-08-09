@@ -106,9 +106,6 @@
 #define RADIOTAP_CCK_CHANNEL 0x0020
 #define RADIOTAP_OFDM_CHANNEL 0x0040
 
-/* Max valid user info supported in EHT */
-#define MAX_NUM_EHT_USER_INFO_VALID 4
-
 #ifdef FEATURE_NBUFF_REPLENISH_TIMER
 #include <qdf_mc_timer.h>
 
@@ -5555,7 +5552,6 @@ static unsigned int
 qdf_nbuf_update_radiotap_eht_flags(struct mon_rx_status *rx_status,
 				   int8_t *rtap_buf, uint32_t rtap_len)
 {
-	uint32_t user;
 	struct mon_rx_user_status *rx_user_status = rx_status->rx_user_status;
 	/*
 	 * IEEE80211_RADIOTAP_EHT:
@@ -5602,13 +5598,6 @@ qdf_nbuf_update_radiotap_eht_flags(struct mon_rx_status *rx_status,
 	rtap_len += 4;
 
 	if (!rx_user_status) {
-		for (user = 0; user < rx_status->num_eht_user_info_valid;
-		     user++) {
-			put_unaligned_le32(rx_status->eht_user_info[user],
-					   &rtap_buf[rtap_len]);
-			rtap_len += 4;
-		}
-
 		qdf_rl_debug("EHT data %x %x %x %x %x %x %x",
 			     rx_status->eht_known, rx_status->eht_data[0],
 			     rx_status->eht_data[1], rx_status->eht_data[2],
