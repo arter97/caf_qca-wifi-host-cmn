@@ -130,6 +130,8 @@ struct dp_mon_ops {
 #ifdef WDI_EVENT_ENABLE
 	int (*mon_set_pktlog_wifi3)(struct dp_pdev *pdev, uint32_t event,
 				    bool enable);
+	QDF_STATUS (*mon_peer_stats_notify)(struct dp_pdev *dp_pdev,
+					    struct dp_peer *peer);
 #endif
 #if defined(DP_CON_MON) && !defined(REMOVE_PKT_LOG)
 	void (*mon_pktlogmod_exit)(struct dp_pdev *pdev);
@@ -2134,6 +2136,26 @@ int dp_monitor_set_pktlog_wifi3(struct dp_pdev *pdev, uint32_t event,
 	}
 
 	return monitor_ops->mon_set_pktlog_wifi3(pdev, event, enable);
+}
+static inline
+QDF_STATUS dp_monitor_peer_stats_notify(struct dp_pdev *pdev,
+					    struct dp_peer *peer)
+{
+	struct dp_mon_ops *monitor_ops;
+	struct dp_mon_soc *mon_soc = pdev->soc->monitor_soc;
+
+	if (!mon_soc) {
+		dp_mon_debug("monitor soc is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	monitor_ops = mon_soc->mon_ops;
+	if (!monitor_ops || !monitor_ops->mon_peer_stats_notify) {
+		dp_mon_debug("callback not registered");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return monitor_ops->mon_peer_stats_notify(pdev, peer);
 }
 #else
 static inline
