@@ -1340,7 +1340,6 @@ mlo_mgr_ser_link_switch_cb(struct wlan_serialization_command *cmd,
 		}
 		break;
 	case WLAN_SER_CB_RELEASE_MEM_CMD:
-		mlo_mgr_link_switch_complete(vdev);
 		break;
 	case WLAN_SER_CB_CANCEL_CMD:
 		mlo_err("Link switch cmd cancelled");
@@ -1384,9 +1383,10 @@ void mlo_mgr_remove_link_switch_cmd(struct wlan_objmgr_vdev *vdev)
 	/* Handle any pending disconnect */
 	mlo_handle_pending_disconnect(vdev);
 
+	mlo_mgr_link_switch_complete(vdev);
+
 	if (req->reason == MLO_LINK_SWITCH_REASON_HOST_FORCE) {
 		mlo_debug("Link switch not serialized");
-		mlo_mgr_link_switch_complete(vdev);
 		return;
 	}
 
