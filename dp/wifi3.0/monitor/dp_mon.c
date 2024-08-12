@@ -6759,6 +6759,25 @@ dp_mon_peer_get_stats_param(struct dp_peer *peer, enum cdp_peer_stats_type type,
 
 	return ret;
 }
+
+#ifdef QCA_PEER_EXT_STATS
+void dp_mon_peer_get_tx_ext_stats(struct dp_peer *peer,
+				  struct cdp_telemetry_peer_tx_ext_stats *stats)
+{
+	uint8_t pkt_type_index, mcs_index;
+
+	if (!peer->monitor_peer)
+		return;
+
+	stats->avg_ack_rssi = CDP_SNR_OUT(peer->monitor_peer->stats.tx.avg_ack_rssi);
+	for (pkt_type_index = 0; pkt_type_index < DOT11_MAX; pkt_type_index++) {
+		for (mcs_index = 0; mcs_index < MAX_MCS; mcs_index++) {
+			stats->packet_type[pkt_type_index].mcs_count[mcs_index] =
+			peer->monitor_peer->stats.tx.pkt_type[pkt_type_index].mcs_count[mcs_index];
+		}
+	}
+}
+#endif
 #endif
 
 void dp_mon_ops_register(struct dp_soc *soc)

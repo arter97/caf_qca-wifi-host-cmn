@@ -3345,6 +3345,26 @@ struct cdp_pdev_erp_stats {
 #endif
 
 /**
+ * struct cdp_telemetry_peer_tx_ext_stats- Structure to hold peer tx ext stats
+ * @avg_ack_rssi: avg ack rssi
+ * @tx_failed: tx failed
+ * @retries: retries
+ * @total_retries: totalretries
+ * @tx_cnt: tx cnt
+ * @tx_bytes: tx bytes
+ * @packet_type: packet mcs type
+ */
+struct cdp_telemetry_peer_tx_ext_stats {
+	uint32_t avg_ack_rssi;
+	uint32_t tx_failed;
+	uint32_t retries;
+	uint32_t total_retries;
+	uint64_t tx_cnt;
+	uint64_t tx_bytes;
+	struct cdp_pkt_type packet_type[DOT11_MAX];
+};
+
+/**
  * struct cdp_pdev_stats - pdev stats
  * @dropped: dropped packet counters
  * @dropped.msdu_not_done: packets dropped because msdu done bit not set

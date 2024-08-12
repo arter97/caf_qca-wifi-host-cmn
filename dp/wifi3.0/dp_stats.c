@@ -10643,6 +10643,68 @@ dp_get_peer_telemetry_stats(struct cdp_soc_t *soc_hdl, uint8_t *addr,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef QCA_PEER_EXT_STATS
+QDF_STATUS
+dp_get_peer_tx_ext_stats(struct cdp_soc_t *soc_hdl, uint8_t *addr,
+			 void *peer_stats)
+{
+	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
+	struct cdp_telemetry_peer_tx_ext_stats *stats =
+			(struct cdp_telemetry_peer_tx_ext_stats *)peer_stats;
+	struct dp_txrx_peer *txrx_peer;
+	struct dp_pdev *pdev;
+	uint8_t stats_arr_size;
+	uint8_t inx = 0, link_id = 0;
+	struct dp_peer *peer = dp_peer_find_hash_find(soc, addr, 0, DP_VDEV_ALL,
+						      DP_MOD_ID_MISC);
+
+	if (!peer)
+		return QDF_STATUS_E_FAILURE;
+
+	txrx_peer = dp_get_txrx_peer(peer);
+	pdev = peer->vdev->pdev;
+
+	if (!txrx_peer) {
+		dp_peer_unref_delete(peer, DP_MOD_ID_MISC);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!IS_MLO_DP_LINK_PEER(peer)) {
+		stats_arr_size = txrx_peer->stats_arr_size;
+
+		stats->tx_failed = txrx_peer->tx_failed;
+		stats->tx_cnt = txrx_peer->comp_pkt.num;
+		stats->tx_bytes = txrx_peer->comp_pkt.bytes;
+		for (inx = 0; inx < stats_arr_size; inx++) {
+			stats->retries +=
+			txrx_peer->stats[inx].per_pkt_stats.tx.retry_count;
+			stats->total_retries +=
+			txrx_peer->stats[inx].per_pkt_stats.tx.total_msdu_retries;
+		}
+	} else {
+		link_id = dp_get_peer_hw_link_id(soc, pdev);
+		stats->retries =
+		txrx_peer->stats[link_id].per_pkt_stats.tx.retry_count;
+		stats->total_retries =
+		txrx_peer->stats[link_id].per_pkt_stats.tx.total_msdu_retries;
+		stats->tx_failed =
+		txrx_peer->stats[link_id].per_pkt_stats.tx.tqm_rr_counter.res.fw_rem_tx;
+		stats->tx_cnt =
+		txrx_peer->stats[link_id].per_pkt_stats.tx.tx_success.num +
+		stats->tx_failed;
+		stats->tx_bytes =
+		txrx_peer->stats[link_id].per_pkt_stats.tx.tx_success.bytes +
+		txrx_peer->stats[link_id].per_pkt_stats.tx.tqm_rr_counter.res.fw_rem_tx_bytes;
+	}
+
+	dp_monitor_get_peer_tx_stats(soc, peer, stats);
+
+	dp_peer_unref_delete(peer, DP_MOD_ID_MISC);
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 struct cdp_pdev_deter_stats *
 dp_get_pdev_stats_deter(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 {
