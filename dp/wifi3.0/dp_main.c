@@ -10491,9 +10491,8 @@ dp_fw_stats_process(struct dp_vdev *vdev,
 }
 
 #ifdef WLAN_FEATURE_UL_JITTER
-#define VENDOR_ATTR_NSS_PKT_NSS_VALUE 0
-#define VENDOR_ATTR_NSS_PKT_TX_PACKET_COUNT 1
-#define VENDOR_ATTR_NSS_PKT_RX_PACKET_COUNT 2
+#define VENDOR_ATTR_NSS_PKT_TX_PACKET_COUNT 0
+#define VENDOR_ATTR_NSS_PKT_RX_PACKET_COUNT 1
 #define SS_COUNT_JITTER 2
 /**
  * dp_txrx_nss_request - function to get txrx nss stats
@@ -10508,17 +10507,27 @@ QDF_STATUS dp_txrx_nss_request(struct cdp_soc_t *soc_handle,
 			       uint8_t vdev_id,
 			       int **req)
 {
-	struct dp_pdev *pdev = dp_get_pdev_from_soc_pdev_id_wifi3(
-						(struct dp_soc *)soc_handle, 0);
+	QDF_STATUS status;
+	struct cdp_vdev_stats *vdev_stats = qdf_mem_malloc(sizeof(*vdev_stats));
+
+	if (!vdev_stats)
+		return QDF_STATUS_E_NOMEM;
+
+	status = dp_txrx_get_vdev_stats(soc_handle, vdev_id, vdev_stats, true);
+	if (QDF_IS_STATUS_ERROR(status))
+		goto end;
 
 	for (int i = 0; i < SS_COUNT_JITTER; i++) {
-		req[i][VENDOR_ATTR_NSS_PKT_NSS_VALUE] = i + 1;
 		req[i][VENDOR_ATTR_NSS_PKT_TX_PACKET_COUNT] =
-							  pdev->stats.tx.nss[i];
+							  vdev_stats->tx.nss[i];
 		req[i][VENDOR_ATTR_NSS_PKT_RX_PACKET_COUNT] =
-							  pdev->stats.rx.nss[i];
+							  vdev_stats->rx.nss[i];
 	}
-	return QDF_STATUS_SUCCESS;
+
+end:
+	qdf_mem_free(vdev_stats);
+
+	return status;
 }
 
 /**
