@@ -81,9 +81,8 @@ __qdf_page_pool_t __qdf_page_pool_create(qdf_device_t osdev, size_t pool_size,
 	pp_params.dma_dir = DMA_FROM_DEVICE,
 	pp_params.offset = 0,
 	pp_params.max_len = pp_page_size;
-
-	if (pp_params.order > 1)
-		pp_params.flags |= PP_FLAG_PAGE_FRAG;
+	pp_params.pool_size = pool_size;
+	pp_params.flags |= PP_FLAG_PAGE_FRAG;
 
 	pp = page_pool_create(&pp_params);
 	if (IS_ERR(pp)) {
