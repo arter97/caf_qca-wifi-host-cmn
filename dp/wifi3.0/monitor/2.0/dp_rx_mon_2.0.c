@@ -1655,6 +1655,12 @@ dp_rx_mon_handle_full_mon(struct dp_pdev *pdev,
 	}
 	wifi_hdr_len += sec_hdr_len;
 
+	/* Consider HT control field while calculating wifi hdr len if present
+	 */
+	if (wh->i_fc[1] & IEEE80211_FC1_ORDER) {
+		wifi_hdr_len += 4;
+	}
+
 	/* MSDU related stuff LLC - AMSDU subframe header etc */
 	msdu_llc_len = is_amsdu ? (DP_RX_MON_DECAP_HDR_SIZE +
 				   DP_RX_MON_LLC_SIZE +
