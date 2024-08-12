@@ -747,6 +747,7 @@ QDF_STATUS reg_set_band(struct wlan_objmgr_pdev *pdev, uint32_t band_bitmap)
 
 	reg_info("set band bitmap: %d", band_bitmap);
 	pdev_priv_obj->band_capability = band_bitmap;
+	psoc_priv_obj->band_capability = band_bitmap;
 
 	reg_compute_pdev_current_chan_list(pdev_priv_obj);
 
@@ -1125,7 +1126,7 @@ QDF_STATUS reg_set_config_vars(struct wlan_objmgr_psoc *psoc,
 	psoc_priv_obj->indoor_chan_enabled = config_vars.indoor_chan_enabled;
 	psoc_priv_obj->force_ssc_disable_indoor_channel =
 		config_vars.force_ssc_disable_indoor_channel;
-	psoc_priv_obj->band_capability = config_vars.band_capability;
+	psoc_priv_obj->band_capability &= config_vars.band_capability;
 	psoc_priv_obj->restart_beaconing = config_vars.restart_beaconing;
 	psoc_priv_obj->enable_srd_chan_in_master_mode =
 		config_vars.enable_srd_chan_in_master_mode;
