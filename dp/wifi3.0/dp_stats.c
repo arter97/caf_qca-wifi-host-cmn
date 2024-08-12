@@ -29,6 +29,9 @@
 #include <cdp_txrx_hist_struct.h>
 #include "dp_hist.h"
 #endif
+#ifdef WLAN_FEATURE_UL_JITTER
+#include "dp_hist.h"
+#endif
 #ifdef WIFI_MONITOR_SUPPORT
 #include "dp_htt.h"
 #include <dp_mon.h>
@@ -5097,6 +5100,64 @@ static inline const char *dp_str_delay_jitter_bkt(uint8_t index)
 		return "Invalid";
 
 	return delay_jitter_bkt_str[index];
+}
+
+#define DP_TX_DELAY_STATS_STR_LEN 512
+#define DP_SHORT_DELAY_BKT_COUNT 5
+void dp_print_tsf_tx_delay_hist(struct cdp_hist_stats *hist_stats, uint8_t type)
+{
+	struct cdp_hist_stats delay_stats;
+	uint8_t index;
+	uint32_t count = 0;
+	char *buf;
+	size_t pos, buf_len;
+	char hw_tx_delay_str[DP_TX_DELAY_STATS_STR_LEN] = {"\0"};
+
+	if (!hist_stats) {
+		dp_err("hist_stats is NULL!!");
+		return;
+	}
+
+	buf_len = DP_TX_DELAY_STATS_STR_LEN;
+	buf = hw_tx_delay_str;
+
+	if (type == UL_DELAY) {
+		dp_info(" Delay hist polled by STA_INFO cmd");
+		dp_info("         Pkts_per_delay_bucket%60s | Min | Max | Avg |",
+			"", "");
+	} else {
+		dp_info(" Delay jitter hist polled by STA_INFO cmd");
+		dp_info("         Pkts_per_jitter_bucket%60s | Min | Max | Avg |",
+			"", "");
+	}
+
+	pos = 0;
+	for (index = 0; index < CDP_DELAY_BUCKET_MAX; index++) {
+		if (index < DP_SHORT_DELAY_BKT_COUNT)
+			pos += qdf_scnprintf(buf + pos, buf_len - pos, "%7s",
+					     dp_str_fw_to_hw_delay_bkt(index));
+		else
+			pos += qdf_scnprintf(buf + pos, buf_len - pos, "%9s",
+					     dp_str_fw_to_hw_delay_bkt(index));
+	}
+
+	dp_info("%s", hw_tx_delay_str);
+	qdf_mem_zero(&delay_stats, sizeof(delay_stats));
+	delay_stats = *hist_stats;
+	pos = 0;
+	for (index = 0; index < CDP_DELAY_BUCKET_MAX; index++) {
+		count = delay_stats.hist.freq[index];
+		if (index < DP_SHORT_DELAY_BKT_COUNT)
+			pos += qdf_scnprintf(buf + pos, buf_len - pos,
+					     "%6u|", count);
+		else
+			pos += qdf_scnprintf(buf + pos, buf_len - pos,
+					     "%8u|", count);
+	}
+	pos += qdf_scnprintf(buf + pos, buf_len - pos,
+		"%10u | %3u | %3u|", delay_stats.min,
+		delay_stats.max, delay_stats.avg);
+	dp_info("%s", hw_tx_delay_str);
 }
 #endif
 

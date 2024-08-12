@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -66,4 +66,24 @@ void dp_copy_hist_stats(struct cdp_hist_stats *src_hist_stats,
 
 const char *dp_hist_tx_hw_delay_str(uint8_t index);
 const char *dp_hist_delay_percentile_str(uint8_t index);
+
+#ifdef WLAN_FEATURE_UL_JITTER
+enum hist_type {
+	UL_DELAY = 0,
+	UL_JITTER,
+
+	HIST_TYPE_MAX,
+};
+
+/**
+ * dp_print_tsf_tx_delay_hist() - Print ul delay and jitter hist stats
+ * for tsf autoreport enabled case
+ * @hist_stats: Hist stats object
+ * @type: Hist stats type
+ *
+ * Return: void
+ */
+void dp_print_tsf_tx_delay_hist(struct cdp_hist_stats *hist_stats,
+				uint8_t type);
+#endif
 #endif /* __DP_HIST_H_ */

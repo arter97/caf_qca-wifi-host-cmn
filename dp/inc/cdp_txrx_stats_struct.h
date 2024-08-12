@@ -1799,6 +1799,8 @@ struct cdp_rx_err_proto_stats {
  * @eapol_tx_comp_failures: Eapol Tx completion count
  * @rekey_tx_comp_failures: GroupRekey Tx completion count
  * @proto: DP protocol stats
+ * @hwtx_delay_tsf : store vdev level ul delay stats when tsf report enabled
+ * @hwtx_jitter_tsf : store vdev level ul delay jitter stats when tsf report enabled
  * @tx_ppdu_duration: Tx PPDU Duration
  */
 struct cdp_tx_stats {
@@ -1934,6 +1936,10 @@ struct cdp_tx_stats {
 	uint32_t rekey_tx_comp_failures[MAX_EAPOL_TX_COMP_STATUS];
 #ifdef QCA_DP_PROTOCOL_STATS
 	struct cdp_tx_proto_stats proto;
+#endif
+#ifdef WLAN_FEATURE_UL_JITTER
+	struct cdp_hist_stats hwtx_delay_tsf;
+	struct cdp_hist_stats hwtx_jitter_tsf;
 #endif
 	uint64_t tx_ppdu_duration;
 };

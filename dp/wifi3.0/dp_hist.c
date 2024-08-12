@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -99,6 +99,28 @@ static uint16_t dp_hist_sw_enq_dbucket[CDP_HIST_BUCKET_MAX] = {
 
 static uint16_t dp_hist_fw2hw_dbucket[CDP_HIST_BUCKET_MAX] = {
 	0, 250, 500, 750, 1000, 1500, 2000, 2500, 5000, 6000, 7000, 8000, 9000};
+#endif
+
+#ifdef WLAN_FEATURE_UL_JITTER
+/*
+ * dp_hist_hw_tsf_dbucket: HW enqueue to Completion Delay between 2 polls
+ * from NL interface when TSF auto report is enabled
+ * @index_0 = 0_2 ms
+ * @index_1 = 2_4 ms
+ * @index_2 = 4_6ms
+ * @index_3 = 6_8 ms
+ * @index_4 = 8_10 ms
+ * @index_5 = 10_20 ms
+ * @index_6 = 20_30 ms
+ * @index_7 = 30_40 ms
+ * @index_8 = 40_50 ms
+ * @index_9 = 50_100 ms
+ * @index_10 = 100_250 ms
+ * @index_11 = 250_500 ms
+ * @index_12 = 500+ ms
+ */
+static uint16_t dp_hist_hw_tsf_dbucket[CDP_HIST_BUCKET_MAX] = {
+	0, 2, 4, 6, 8, 10, 20, 30, 40, 50, 100, 250, 500};
 #endif
 
 /*
@@ -211,6 +233,24 @@ static int dp_hist_find_bucket_idx(int16_t *bucket_array, int value)
 	return idx;
 }
 
+#ifdef WLAN_FEATURE_UL_JITTER
+/* dp_hist_find_bucket_idx_hw_delay(): Return bucket index for TX hw delay
+ * and jitter in case of tsf autoreport enabled
+ * @value: Delay/ Jitter value
+ *
+ * Return: bucket index
+ */
+static inline int dp_hist_find_bucket_idx_hw_delay(int value)
+{
+	return dp_hist_find_bucket_idx(&dp_hist_hw_tsf_dbucket[0], value);
+}
+#else
+static inline int dp_hist_find_bucket_idx_hw_delay(int value)
+{
+	return CDP_HIST_BUCKET_MAX;
+}
+#endif
+
 /**
  * dp_hist_fill_buckets() - Fill the histogram frequency buckets
  * @hist_bucket: Histogram bukcets
@@ -249,6 +289,10 @@ static void dp_hist_fill_buckets(struct cdp_hist_bucket *hist_bucket, int value)
 	case CDP_HIST_TYPE_DELAY_PERCENTILE:
 		idx =  dp_hist_find_bucket_idx(
 				&dp_hist_delay_percentile_dbucket[0], value);
+		break;
+	case CDP_HIST_TYPE_HW_COMP_DELAY_TSF:
+	case CDP_HIST_TYPE_HW_COMP_DELAY_JITTER_TSF:
+		idx =  dp_hist_find_bucket_idx_hw_delay(value);
 		break;
 	default:
 		break;

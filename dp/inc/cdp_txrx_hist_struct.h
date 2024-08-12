@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -67,6 +67,8 @@ enum cdp_hist_bucket_index {
  * @CDP_HIST_TYPE_HW_TX_COMP_DELAY: Tx completion delay based on the timestamp
  *                                  provided by HW
  * @CDP_HIST_TYPE_DELAY_PERCENTILE: Tx completion delay based on the perctile
+ * @CDP_HIST_TYPE_HW_COMP_DELAY_TSF: HW TX Compl delay for TSF report enabled
+ * @CDP_HIST_TYPE_HW_COMP_DELAY_JITTER_TSF: HW TX Compl delay jitter for TSF report enabled
  * @CDP_HIST_TYPE_MAX: Max enumeration
  */
 enum cdp_hist_types {
@@ -75,6 +77,8 @@ enum cdp_hist_types {
 	CDP_HIST_TYPE_REAP_STACK,
 	CDP_HIST_TYPE_HW_TX_COMP_DELAY,
 	CDP_HIST_TYPE_DELAY_PERCENTILE,
+	CDP_HIST_TYPE_HW_COMP_DELAY_TSF,
+	CDP_HIST_TYPE_HW_COMP_DELAY_JITTER_TSF,
 	CDP_HIST_TYPE_MAX,
 };
 
