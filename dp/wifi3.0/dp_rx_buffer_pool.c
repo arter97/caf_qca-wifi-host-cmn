@@ -424,11 +424,11 @@ dp_rx_get_base_pp(struct dp_rx_page_pool *rx_pp)
 
 	/* Page Pool at 0th index is base page pool */
 	pp_params = &rx_pp->main_pool[0];
-	if (!qdf_page_pool_empty(pp_params->pp))
+	if (pp_params->pp && !qdf_page_pool_empty(pp_params->pp))
 		return pp_params;
 
 	pp_params = &rx_pp->aux_pool;
-	if (!qdf_page_pool_empty(pp_params->pp))
+	if (pp_params->pp && !qdf_page_pool_empty(pp_params->pp))
 		return pp_params;
 
 	return NULL;
@@ -513,7 +513,7 @@ dp_rx_page_pool_nbuf_alloc_and_map(struct dp_soc *soc,
 	qdf_spin_lock_bh(&rx_pp->pp_lock);
 
 	pp_params = &rx_pp->main_pool[rx_pp->active_pp_idx];
-	if (!qdf_page_pool_empty(pp_params->pp))
+	if (pp_params->pp && !qdf_page_pool_empty(pp_params->pp))
 		goto nbuf_alloc;
 
 	for (i = 0; i < DP_PAGE_POOL_MAX; i++) {
@@ -528,7 +528,7 @@ dp_rx_page_pool_nbuf_alloc_and_map(struct dp_soc *soc,
 	}
 
 	pp_params = &rx_pp->aux_pool;
-	if (qdf_page_pool_empty(pp_params->pp)) {
+	if (pp_params->pp && qdf_page_pool_empty(pp_params->pp)) {
 		ret = QDF_STATUS_E_FAILURE;
 		goto out_fail;
 	}
@@ -651,8 +651,8 @@ __dp_rx_page_pool_create(struct dp_soc *soc, uint32_t pool_size,
 	size_t bufs_per_page;
 	QDF_STATUS status;
 
-alloc_page_pool:
 	*page_size = DP_RX_PP_PAGE_SIZE_HIGHER_ORDER;
+alloc_page_pool:
 	bufs_per_page = *page_size / buf_size;
 	*pp_size = pool_size / bufs_per_page;
 	if (pool_size % bufs_per_page)
@@ -705,11 +705,18 @@ QDF_STATUS dp_rx_page_pool_alloc(struct dp_soc *soc, uint32_t pool_id,
 				      &req_rx_buffers, &in_use_rx_buffers,
 				      pool_id);
 
-	rx_pp->base_pool_size = req_rx_buffers;
+	if (!rx_pp->base_pool_size) {
+		if (req_rx_buffers) {
+			rx_pp->base_pool_size = req_rx_buffers;
+			pool_size = req_rx_buffers;
+		} else {
+			rx_pp->base_pool_size = DP_RX_PP_POOL_SIZE_THRES;
+		}
+	}
 
-	if (pool_size > DP_RX_PP_POOL_SIZE_THRES && !rx_pp->base_pool_size) {
-		pp_count = pool_size / DP_RX_PP_POOL_SIZE_THRES;
-		rem_size = pool_size % DP_RX_PP_POOL_SIZE_THRES;
+	if (pool_size > rx_pp->base_pool_size) {
+		pp_count = pool_size / rx_pp->base_pool_size;
+		rem_size = pool_size % rx_pp->base_pool_size;
 
 		if (rem_size)
 			pp_count++;
@@ -763,7 +770,7 @@ QDF_STATUS dp_rx_page_pool_alloc(struct dp_soc *soc, uint32_t pool_id,
 		goto out_pp_fail;
 
 	rx_pp->aux_pool.pp_size = pp_size;
-	rx_pp->curr_pool_size = rx_pp->base_pool_size;
+	rx_pp->curr_pool_size = pool_size;
 
 	if (QDF_IS_STATUS_ERROR(dp_rx_page_pool_init(soc, pool_id)))
 		goto out_pp_fail;
@@ -808,7 +815,6 @@ dp_rx_page_pool_upsize(struct dp_soc *soc, struct dp_rx_page_pool *rx_pp,
 	buf_size += QDF_SHINFO_SIZE;
 	buf_size = QDF_NBUF_ALIGN(buf_size);
 
-	qdf_spin_lock_bh(&rx_pp->pp_lock);
 	/* Base page pool at 0th index is always present,
 	 * so allocate page pools from 1st index.
 	 */
@@ -841,13 +847,14 @@ dp_rx_page_pool_upsize(struct dp_soc *soc, struct dp_rx_page_pool *rx_pp,
 		dp_err("Failed to upscale RX buffers using page pool");
 		goto out_pp_fail;
 	}
-	qdf_spin_unlock_bh(&rx_pp->pp_lock);
 
 	return QDF_STATUS_SUCCESS;
 
 out_pp_fail:
 	while (i > 1) {
 		pp_params = &rx_pp->main_pool[--i];
+		if (!pp_params->pp)
+			continue;
 		qdf_page_pool_destroy(pp_params->pp);
 		pp_params->pp = NULL;
 	}
@@ -896,6 +903,8 @@ QDF_STATUS dp_rx_page_pool_resize(struct dp_soc *soc, uint32_t pool_id,
 		pp_params->pp_size = 0;
 		pp_params->pp = NULL;
 	}
+
+	rx_pp->active_pp_idx = 0;
 	qdf_spin_unlock_bh(&rx_pp->pp_lock);
 
 resize_done:
