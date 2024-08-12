@@ -928,7 +928,7 @@ QDF_STATUS dp_rx_mon_add_msdu_to_list(struct dp_soc *soc, qdf_nbuf_t *head_msdu,
 	} else {
 		if (*last)
 			qdf_nbuf_set_next(*last, msdu);
-		else
+		else if (head_msdu)
 			qdf_nbuf_set_next(*head_msdu, msdu);
 	}
 	*last = msdu;

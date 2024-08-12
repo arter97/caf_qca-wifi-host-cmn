@@ -8319,7 +8319,7 @@ void dp_print_peer_stats(struct dp_peer *peer,
 		DP_PRINT_STATS("RX Invalid Link ID Packet Count = %u",
 			       peer_stats->rx.inval_link_id_pkt_cnt);
 
-	if (wlan_cfg_get_dp_proto_stats(pdev->soc->wlan_cfg_ctx))
+	if (pdev && wlan_cfg_get_dp_proto_stats(pdev->soc->wlan_cfg_ctx))
 		dp_peer_print_rx_protocol_stats(&peer_stats->rx);
 	dp_peer_print_reo_qref_table(peer);
 }
