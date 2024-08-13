@@ -3708,6 +3708,7 @@ dp_sawf_get_msduq_tx_stats(void *arg,
 		return QDF_STATUS_E_FAILURE;
 	}
 
+	retries_mcs_stats->retry_count = tx_stats->retry_count;
 	retries_mcs_stats->tx_failed = tx_stats->tx_failed;
 	retries_mcs_stats->total_retries_count = tx_stats->total_retries_count;
 	for (pkt_type_index = 0; pkt_type_index < DOT11_MAX; pkt_type_index++) {

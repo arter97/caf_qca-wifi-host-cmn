@@ -283,6 +283,9 @@ struct wlan_sawf_svc_class_params {
  * @SAWF_PARAM_DELAY_BOUND: delay-bound
  * @SAWF_PARAM_MSDU_TTL: TTL for msdu-drop
  * @SAWF_PARAM_MSDU_LOSS:  msdu-loss rate
+ * @SAWF_PARAM_PACKET_ERROR_RATE: packet error rate
+ * @SAWF_PARAM_RETRIES_PERCENTAGE: retries percentage
+ * @SAWF_PARAM_MCS_BOUND: mcs bound
  */
 enum telemetry_sawf_param {
 	SAWF_PARAM_INVALID,
@@ -293,6 +296,9 @@ enum telemetry_sawf_param {
 	SAWF_PARAM_DELAY_BOUND,
 	SAWF_PARAM_MSDU_TTL,
 	SAWF_PARAM_MSDU_LOSS,
+	SAWF_PARAM_PACKET_ERROR_RATE,
+	SAWF_PARAM_RETRIES_PERCENTAGE,
+	SAWF_PARAM_MCS_BOUND,
 	SAWF_PARAM_MAX,
 };
 

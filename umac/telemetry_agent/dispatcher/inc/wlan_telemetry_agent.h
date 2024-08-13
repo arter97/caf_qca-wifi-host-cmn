@@ -150,6 +150,10 @@ QDF_STATUS telemetry_sawf_set_sla_params(uint32_t num_pkt,
  * @delay_bound: delay boundary
  * @msdu_ttl: msdu TTL
  * @msdu_rate_loss: msdu loss rate
+ * @packet_error_rate: packet error rate
+ * @mcs_min_threshold: mcs min threshold
+ * @mcs_max_threshold: mcs max threshold
+ * @retries_threshold: retries threshold
  *
  * Return: QDF_STATUS_SUCCESS on success
  */
@@ -160,7 +164,11 @@ QDF_STATUS telemetry_sawf_set_sla_cfg(uint8_t svc_id,
 				      uint8_t svc_interval,
 				      uint8_t delay_bound,
 				      uint8_t msdu_ttl,
-				      uint8_t msdu_rate_loss);
+				      uint8_t msdu_rate_loss,
+				      uint8_t packet_error_rate,
+				      uint8_t mcs_min_threshold,
+				      uint8_t mcs_max_threshold,
+				      uint8_t retries_threshold);
 
 /**
  * telemetry_sawf_set_svclass_cfg - Set service-class config
@@ -195,6 +203,10 @@ QDF_STATUS telemetry_sawf_set_svclass_cfg(bool enable, uint8_t svc_id,
  * @delay_bound: delay boundary
  * @msdu_ttl: msdu TTL
  * @msdu_rate_loss: msdu loss rate
+ * @packet_error_rate: packet error rate
+ * @mcs_min_threshold: mcs min threshold
+ * @mcs_max_threshold: mcs max threshold
+ * @retries_threshold: retries threshold
  *
  * Return: QDF_STATUS_SUCCESS on success
  */
@@ -205,7 +217,11 @@ QDF_STATUS telemetry_sawf_set_sla_detect_cfg(uint8_t detect_type,
 					     uint8_t svc_intval,
 					     uint8_t delay_bound,
 					     uint8_t msdu_ttl,
-					     uint8_t msdu_rate_loss);
+					     uint8_t msdu_rate_loss,
+					     uint8_t packet_error_rate,
+					     uint8_t mcs_min_threshold,
+					     uint8_t mcs_max_threshold,
+					     uint8_t retries_threshold);
 
 /**
  * telemetry_sawf_update_delay - Update delay-stats in telemetry-agent
@@ -378,7 +394,11 @@ QDF_STATUS telemetry_sawf_set_sla_cfg(uint8_t svc_id,
 				      uint8_t svc_interval,
 				      uint8_t delay_bound,
 				      uint8_t msdu_ttl,
-				      uint8_t msdu_rate_loss)
+				      uint8_t msdu_rate_loss,
+				      uint8_t packet_error_rate,
+				      uint8_t mcs_min_threshold,
+				      uint8_t mcs_max_threshold,
+				      uint8_t retries_threshold)
 {
 	return QDF_STATUS_SUCCESS;
 }
@@ -404,7 +424,11 @@ QDF_STATUS telemetry_sawf_set_sla_detect_cfg(uint8_t detect_type,
 					     uint8_t svc_intval,
 					     uint8_t delay_bound,
 					     uint8_t msdu_ttl,
-					     uint8_t msdu_rate_loss)
+					     uint8_t msdu_rate_loss,
+					     uint8_t packet_error_rate,
+					     uint8_t mcs_min_threshold,
+					     uint8_t mcs_max_threshold,
+					     uint8_t retries_threshold)
 {
 	return QDF_STATUS_SUCCESS;
 }

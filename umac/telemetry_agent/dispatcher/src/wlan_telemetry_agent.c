@@ -329,17 +329,25 @@ QDF_STATUS telemetry_sawf_set_sla_cfg(uint8_t svc_id,
 				      uint8_t svc_interval,
 				      uint8_t delay_bound,
 				      uint8_t msdu_ttl,
-				      uint8_t msdu_rate_loss)
+				      uint8_t msdu_rate_loss,
+				      uint8_t packet_error_rate,
+				      uint8_t mcs_min_threshold,
+				      uint8_t mcs_max_threshold,
+				      uint8_t retries_threshold)
 {
 	if (g_agent_ops) {
-		if (g_agent_ops->sawf_set_sla_cfg(svc_id,
-						  min_tput_rate,
-						  max_tput_rate,
-						  burst_size,
-						  svc_interval,
-						  delay_bound,
-						  msdu_ttl,
-						  msdu_rate_loss))
+		if (g_agent_ops->sawf_set_sla_config(svc_id,
+						     min_tput_rate,
+						     max_tput_rate,
+						     burst_size,
+						     svc_interval,
+						     delay_bound,
+						     msdu_ttl,
+						     msdu_rate_loss,
+						     packet_error_rate,
+						     mcs_min_threshold,
+						     mcs_max_threshold,
+						     retries_threshold))
 			return QDF_STATUS_E_FAILURE;
 	}
 
@@ -381,17 +389,25 @@ QDF_STATUS telemetry_sawf_set_sla_detect_cfg(uint8_t detect_type,
 					     uint8_t svc_interval,
 					     uint8_t delay_bound,
 					     uint8_t msdu_ttl,
-					     uint8_t msdu_rate_loss)
+					     uint8_t msdu_rate_loss,
+					     uint8_t packet_error_rate,
+					     uint8_t mcs_min_threshold,
+					     uint8_t mcs_max_threshold,
+					     uint8_t retries_threshold)
 {
 	if (g_agent_ops) {
-		if (g_agent_ops->sawf_set_sla_dtct_cfg(detect_type,
-						       min_tput_rate,
-						       max_tput_rate,
-						       burst_size,
-						       svc_interval,
-						       delay_bound,
-						       msdu_ttl,
-						       msdu_rate_loss))
+		if (g_agent_ops->sawf_set_sla_detect_config(detect_type,
+							    min_tput_rate,
+							    max_tput_rate,
+							    burst_size,
+							    svc_interval,
+							    delay_bound,
+							    msdu_ttl,
+							    msdu_rate_loss,
+							    packet_error_rate,
+							    mcs_min_threshold,
+							    mcs_max_threshold,
+							    retries_threshold))
 			return QDF_STATUS_E_FAILURE;
 	}
 
