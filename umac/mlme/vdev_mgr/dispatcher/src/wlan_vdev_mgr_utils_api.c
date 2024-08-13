@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -788,6 +788,10 @@ bool wlan_util_vdev_mgr_get_acs_mode_for_vdev(struct wlan_objmgr_vdev *vdev)
 	return vdev_mlme->mgmt.ap.is_acs_mode;
 }
 
+#define FW_RESTART_TIMEOUT 30
+/* This value is derived based on the 16 MLDs */
+#define HOST_RESTART_TIMEOUT 520
+
 QDF_STATUS wlan_util_vdev_mgr_get_csa_channel_switch_time(
 		struct wlan_objmgr_vdev *vdev,
 		uint32_t *chan_switch_time)
@@ -805,8 +809,8 @@ QDF_STATUS wlan_util_vdev_mgr_get_csa_channel_switch_time(
 	/* Time between CSA count 1 and CSA count 0 is one beacon interval. */
 	*chan_switch_time = vdev_mlme->proto.generic.beacon_interval;
 
-	/* Vdev restart time */
-	*chan_switch_time += SECONDS_TO_MS(VDEV_RESTART_TIME);
+	/* Host and FW vdev restart time */
+	*chan_switch_time += FW_RESTART_TIMEOUT + HOST_RESTART_TIMEOUT;
 
 	/* Add one beacon interval time required to send beacon on the
 	 * new channel after switching to the new channel.

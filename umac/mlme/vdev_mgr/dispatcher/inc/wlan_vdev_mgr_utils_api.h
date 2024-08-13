@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -30,13 +30,6 @@
 #include <include/wlan_vdev_mlme.h>
 #include <wlan_vdev_mgr_ucfg_api.h>
 #include <cdp_txrx_cmn_struct.h>
-
-/* The total time required to receive CSA event handler from FW with CSA count
- * 0, plus, time required to process the CSA event, plus, time required to
- * send multi-vdev restart request on the new channel and send updated beacon
- * template is approximately 1 second (considered 16 AP vaps).
- */
-#define VDEV_RESTART_TIME 1
 
 /* Convert seconds to milliseconds */
 #define SECONDS_TO_MS(seconds) ((seconds) * 1000)
