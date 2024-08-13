@@ -6574,6 +6574,18 @@ void wlan_ipa_wdi_opt_dpath_notify_flt_rlsd(int flt0_rslt, int flt1_rslt)
 		result = true;
 	}
 
+	notify_msg = qdf_mem_malloc(sizeof(*notify_msg));
+	if (!notify_msg) {
+		ipa_err("Message memory allocation failed");
+		return;
+	}
+
+	notify_msg->op_code = WLAN_IPA_FILTER_REL_NOTIFY;
+	notify_msg->rsvd = result;
+	uc_op_work = &ipa_ctx->uc_op_work[WLAN_IPA_FILTER_REL_NOTIFY];
+	uc_op_work->msg = notify_msg;
+	qdf_sched_work(0, &uc_op_work->work);
+
 	smmu_msg = qdf_mem_malloc(sizeof(*smmu_msg));
 	if (!smmu_msg) {
 		ipa_err("Message memory allocation failed");
@@ -6591,18 +6603,6 @@ void wlan_ipa_wdi_opt_dpath_notify_flt_rlsd(int flt0_rslt, int flt1_rslt)
 		ipa_err("IPA SMMU not mapped!!");
 		qdf_mem_free(smmu_msg);
 	}
-
-	notify_msg = qdf_mem_malloc(sizeof(*notify_msg));
-	if (!notify_msg) {
-		ipa_err("Message memory allocation failed");
-		return;
-	}
-
-	notify_msg->op_code = WLAN_IPA_FILTER_REL_NOTIFY;
-	notify_msg->rsvd = result;
-	uc_op_work = &ipa_ctx->uc_op_work[WLAN_IPA_FILTER_REL_NOTIFY];
-	uc_op_work->msg = notify_msg;
-	qdf_sched_work(0, &uc_op_work->work);
 
 	qdf_wake_lock_release(&ipa_ctx->opt_dp_wake_lock,
 			      WIFI_POWER_EVENT_WAKELOCK_OPT_WIFI_DP);
