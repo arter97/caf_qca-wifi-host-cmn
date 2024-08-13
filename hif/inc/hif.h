@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -26,6 +26,7 @@ extern "C" {
 
 /* Header files */
 #include <qdf_status.h>
+#include "qdf_ipa.h"
 #include "qdf_nbuf.h"
 #include "qdf_lro.h"
 #include "ol_if_athvar.h"
@@ -1417,7 +1418,7 @@ enum ipa_hw_type hif_get_ipa_hw_type(void)
 static inline
 bool hif_get_ipa_present(void)
 {
-	if (ipa_uc_reg_rdyCB(NULL) != -EPERM)
+	if (qdf_ipa_uc_reg_rdyCB(NULL) != -EPERM)
 		return true;
 	else
 		return false;
@@ -1840,7 +1841,16 @@ hif_softc_to_hif_opaque_softc(struct hif_softc *hif_handle)
 
 #if defined(HIF_IPCI) && defined(FEATURE_HAL_DELAYED_REG_WRITE)
 QDF_STATUS hif_try_prevent_ep_vote_access(struct hif_opaque_softc *hif_ctx);
-void hif_set_ep_intermediate_vote_access(struct hif_opaque_softc *hif_ctx);
+
+/**
+ * hif_set_ep_intermediate_vote_access() - Set intermediate EP vote access
+ * @hif_ctx: opaque softc handle
+ *
+ * Return: QDF_STATUS of operation
+ */
+QDF_STATUS
+hif_set_ep_intermediate_vote_access(struct hif_opaque_softc *hif_ctx);
+
 void hif_allow_ep_vote_access(struct hif_opaque_softc *hif_ctx);
 void hif_set_ep_vote_access(struct hif_opaque_softc *hif_ctx,
 			    uint8_t type, uint8_t access);
@@ -1853,9 +1863,10 @@ hif_try_prevent_ep_vote_access(struct hif_opaque_softc *hif_ctx)
 	return QDF_STATUS_SUCCESS;
 }
 
-static inline void
+static inline QDF_STATUS
 hif_set_ep_intermediate_vote_access(struct hif_opaque_softc *hif_ctx)
 {
+	return QDF_STATUS_SUCCESS;
 }
 
 static inline void
