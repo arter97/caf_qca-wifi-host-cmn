@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -38,30 +38,6 @@
 #define    be16toh(_x)    be16_to_cpu(_x)
 #define    be32toh(_x)    be32_to_cpu(_x)
 #define    htobe32(_x)    cpu_to_be32(_x)
-
-#ifdef CONFIG_SMP
-/* Undo the one provided by the kernel to debug spin locks */
-#undef spin_lock
-#undef spin_unlock
-#undef spin_trylock
-
-#define spin_lock(x)  spin_lock_bh(x)
-
-#define spin_unlock(x) \
-	do { \
-		if (!spin_is_locked(x)) { \
-			WARN_ON(1); \
-			qdf_info("unlock addr=%pK, %s", x, \
-				      !spin_is_locked(x) ? "Not locked" : ""); \
-		} \
-		spin_unlock_bh(x); \
-	} while (0)
-#define spin_trylock(x) spin_trylock_bh(x)
-#define OS_SUPPORT_ASYNC_Q 1    /* support for handling asyn function calls */
-
-#else
-#define OS_SUPPORT_ASYNC_Q 0
-#endif /* ifdef CONFIG_SMP */
 
 /**
  * typedef os_mesg_t - maintain attributes of message
@@ -172,9 +148,6 @@ struct _NIC_DEV {
 	struct device *device;
 	wait_queue_head_t event_queue;
 #endif /* PERF_PWR_OFFLOAD */
-#if OS_SUPPORT_ASYNC_Q
-	os_mesg_queue_t async_q;
-#endif
 #ifdef ATH_BUS_PM
 	uint8_t is_device_asleep;
 #endif /* ATH_BUS_PM */
