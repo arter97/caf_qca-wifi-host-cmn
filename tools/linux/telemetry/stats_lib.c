@@ -643,10 +643,8 @@ static int validate_link_id(struct stats_command *cmd)
 {
 	switch (cmd->obj) {
 	case STATS_OBJ_VAP:
-		if (libstats_is_ifname_valid(cmd->if_name, STATS_OBJ_MLD) &&
-		    cmd->link_id == MLO_INVALID_LINK_ID)
-			return 0;
-		if (cmd->link_id < 0 || cmd->link_id > MAX_LINK_ID)
+		if ((cmd->link_id < 0 || cmd->link_id > MAX_LINK_ID) &&
+		    cmd->link_id != MLO_INVALID_LINK_ID)
 			return -EINVAL;
 		break;
 	default:
