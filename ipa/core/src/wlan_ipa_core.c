@@ -4821,6 +4821,8 @@ QDF_STATUS wlan_ipa_opt_dp_init(struct wlan_ipa_priv *ipa_ctx)
 			qdf_event_create(&ipa_ctx->ipa_opt_dp_ctrl_clk_evt);
 			/*Init OPT_DP active data flow flag */
 			ipa_ctx->opt_dp_active = false;
+			ipa_ctx->opt_dp_flt_rel_state =
+				WLAN_IPA_OPT_DP_FLT_REL_INIT;
 			qdf_runtime_lock_init(&ipa_ctx->opt_dp_runtime_lock);
 		} else {
 			ipa_debug("opt_dp: Disabled from WLAN INI");
@@ -5497,6 +5499,7 @@ static void wlan_ipa_uc_op_cb(struct op_msg_type *op_msg,
 		qdf_mutex_acquire(&ipa_ctx->ipa_lock);
 		qdf_ipa_wdi_opt_dpath_notify_flt_rlsd_per_inst(ipa_ctx->hdl,
 							       msg->rsvd);
+		ipa_ctx->opt_dp_flt_rel_state = WLAN_IPA_OPT_DP_FLT_REL_DONE;
 		qdf_mutex_release(&ipa_ctx->ipa_lock);
 	} else if (msg->op_code == WLAN_IPA_CTRL_TX_REINJECT) {
 		ipa_info("opt_dp_ctrl: handle opt_dp_ctrl tx pkt");
@@ -6218,6 +6221,7 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_cb(
 	}
 
 	ipa_obj->opt_dp_active = true;
+	ipa_obj->opt_dp_flt_rel_state = WLAN_IPA_OPT_DP_FLT_REL_INIT;
 	/* Hold wakelock */
 	qdf_wake_lock_acquire(&ipa_obj->opt_dp_wake_lock,
 			      WIFI_POWER_EVENT_WAKELOCK_OPT_WIFI_DP);
@@ -6522,6 +6526,12 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_rel_cb(void *ipa_ctx)
 	pdev = psoc->soc_objmgr.wlan_pdev_list[IPA_DEF_PDEV_ID];
 	pdev_id = IPA_DEF_PDEV_ID;
 
+	if (ipa_obj->opt_dp_flt_rel_state != WLAN_IPA_OPT_DP_FLT_REL_INIT) {
+		ipa_debug("opt_dp: no active filters, reject release request");
+		return QDF_STATUS_SUCCESS;
+	}
+
+	ipa_obj->opt_dp_flt_rel_state = WLAN_IPA_OPT_DP_FLT_REL_INPROGRESS;
 	if (wlan_ipa_is_low_power_mode_config_disabled(ipa_obj->config)) {
 		/* Enable Low power features before filter release */
 		ipa_debug("opt_dp: Enable low power features to release filter");
