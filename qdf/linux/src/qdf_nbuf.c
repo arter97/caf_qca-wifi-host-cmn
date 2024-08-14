@@ -4444,6 +4444,178 @@ static inline void __qdf_nbuf_fill_tso_cmn_seg_info(
 	qdf_tso_seg_dbg_record(curr_seg, TSOSEG_LOC_FILLCMNSEG);
 }
 
+#ifdef WLAN_DP_ENABLE_SW_TSO
+/**
+ * __qdf_nbuf_sw_tso_prepare_nbuf_list () - prepare nbuf list from the given TCP
+ * jumbo packet.
+ *
+ * This API prepares the nbuf list by splitting the given TCP jumbo packet into
+ * multiple segments of gso size and attach EIT header for each segment. update
+ * the skb header and TCP headers as the nbus in the formed list are going to
+ * transmitted as a normal packet instead of tso packet.
+ *
+ * @osdev: qdf device handle
+ * @skb: TCP jumbo packet
+ * @head_skb: formed skb list
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS __qdf_nbuf_sw_tso_prepare_nbuf_list(qdf_device_t osdev,
+					       struct sk_buff *skb,
+					       struct sk_buff **head_skb)
+{
+	qdf_nbuf_t tail_skb = NULL;
+	qdf_nbuf_t new_skb;
+	skb_frag_t *frag = NULL;
+	void *frag_vaddr;
+	uint32_t ori_gso_size = skb_shinfo(skb)->gso_size;
+	int num_seg = qdf_nbuf_get_tso_num_seg(skb);
+	uint32_t skb_proc = skb->len;
+	uint32_t skb_frag_len = 0;
+	uint32_t gso_size = ori_gso_size;
+	uint32_t frag_len;
+	uint32_t tcp_seq_num;
+	int i = 0;
+	int eit_hdr_len;
+	uint16_t ethproto = vlan_get_protocol(skb);
+	uint16_t ip_id = 0;
+	uint16_t copied_len;
+	uint8_t more_frags;
+	uint8_t pack_more_data;
+
+	*head_skb = NULL;
+
+	if (num_seg == 0) {
+		qdf_err("sw tso: failed to prepare skb list for tso packet");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	eit_hdr_len = (skb_transport_header(skb) -
+		       skb_mac_header(skb)) + tcp_hdrlen(skb);
+
+	skb_frag_len = skb_headlen(skb);
+	skb_frag_len -= eit_hdr_len;
+	skb_proc -= eit_hdr_len;
+
+	frag_vaddr = skb->data + eit_hdr_len;
+	frag_len = min(skb_frag_len, gso_size);
+
+	if (ethproto == htons(ETH_P_IP))
+		ip_id = ntohs(ip_hdr(skb)->id);
+
+	tcp_seq_num = ntohl(tcp_hdr(skb)->seq);
+
+	while (num_seg) {
+		more_frags = 1;
+		copied_len = 0;
+		new_skb = qdf_nbuf_alloc_simple(osdev,
+						ori_gso_size + eit_hdr_len,
+						0, 0, FALSE);
+		if (qdf_unlikely(!new_skb)) {
+			qdf_err("sw tso: failed to allocate buffer");
+			return QDF_STATUS_E_NOMEM;
+		}
+
+		if (!(*head_skb)) {
+			*head_skb = new_skb;
+			tail_skb = new_skb;
+			qdf_nbuf_set_next(new_skb, NULL);
+		} else {
+			qdf_nbuf_set_next(tail_skb, new_skb);
+			qdf_nbuf_set_next(new_skb, NULL);
+			tail_skb = new_skb;
+		}
+
+		/* copy EIT header */
+		memcpy(new_skb->data, skb->data, eit_hdr_len);
+		/* copy data */
+		memcpy(new_skb->data + eit_hdr_len, frag_vaddr, frag_len);
+
+		skb_put(new_skb, eit_hdr_len + frag_len);
+		copied_len = eit_hdr_len + frag_len;
+		skb_proc -= frag_len;
+
+		skb_set_transport_header(new_skb,
+					 (skb_transport_header(skb) -
+					  skb_mac_header(skb)));
+		skb_set_network_header(new_skb,
+				       (skb_network_header(skb) -
+					skb_mac_header(skb)));
+		skb_set_mac_header(new_skb, 0);
+
+		tcp_hdr(new_skb)->seq = htonl(tcp_seq_num);
+		tcp_seq_num += frag_len;
+		new_skb->protocol = skb->protocol;
+		new_skb->ip_summed = skb->ip_summed;
+		tcp_hdr(new_skb)->psh = 0;
+
+		if (ethproto == htons(ETH_P_IP))
+			ip_hdr(new_skb)->id = htons(ip_id);
+
+		ip_hdr(new_skb)->tot_len = htons(copied_len -
+						 skb_mac_header_len(new_skb));
+
+		if (num_seg == 1)
+			tcp_hdr(new_skb)->psh = 1;
+
+		while (more_frags) {
+			if (unlikely(skb_proc == 0))
+				return QDF_STATUS_SUCCESS;
+
+			if (frag_len < gso_size) {
+				pack_more_data = 1;
+				gso_size = gso_size - frag_len;
+			} else {
+				more_frags = 0;
+				gso_size = ori_gso_size;
+			}
+
+			/* if the next fragment is contiguous */
+			if ((frag_len != 0) && (frag_len < skb_frag_len)) {
+				frag_vaddr = frag_vaddr + frag_len;
+				skb_frag_len = skb_frag_len - frag_len;
+				frag_len = min(skb_frag_len, gso_size);
+			} else {
+				if (skb_shinfo(skb)->nr_frags == 0) {
+					qdf_assert(0);
+					qdf_nbuf_list_free(*head_skb);
+					return QDF_STATUS_E_FAILURE;
+				}
+
+				if (i >= skb_shinfo(skb)->nr_frags) {
+					qdf_assert(0);
+					qdf_nbuf_list_free(*head_skb);
+					return QDF_STATUS_E_FAILURE;
+				}
+
+				frag = &skb_shinfo(skb)->frags[i];
+				skb_frag_len = skb_frag_size(frag);
+				frag_len = min(skb_frag_len, gso_size);
+				frag_vaddr = skb_frag_address_safe(frag);
+				i++;
+			}
+			if (pack_more_data) {
+				memcpy(new_skb->data + copied_len,
+				       frag_vaddr, frag_len);
+				copied_len += frag_len;
+				skb_put(new_skb, frag_len);
+				skb_proc -= frag_len;
+				pack_more_data = 0;
+				tcp_seq_num += frag_len;
+				ip_hdr(new_skb)->tot_len = htons(copied_len -
+								 skb_mac_header_len(new_skb));
+			}
+		}
+
+		num_seg--;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+qdf_export_symbol(__qdf_nbuf_sw_tso_prepare_nbuf_list);
+#endif
+
 uint32_t __qdf_nbuf_get_tso_info(qdf_device_t osdev, struct sk_buff *skb,
 		struct qdf_tso_info_t *tso_info)
 {

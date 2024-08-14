@@ -8520,6 +8520,10 @@ void dp_txrx_path_stats(struct dp_soc *soc)
 			       pdev->soc->stats.tx.tx_comp_exception);
 		DP_PRINT_STATS("Tx desc force freed: %u",
 			       pdev->soc->stats.tx.tx_comp_force_freed);
+		DP_PRINT_STATS("SW tso pkt cnt: %u",
+			       pdev->soc->stats.tx.sw_tso_pkts);
+		DP_PRINT_STATS("SW tso fail cnt: %u",
+			       pdev->soc->stats.tx.sw_tso_fail);
 
 		buf = dp_stats_str;
 		buf_len = DP_STATS_STR_LEN;

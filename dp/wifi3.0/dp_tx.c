@@ -4504,6 +4504,78 @@ static inline void dp_vdev_tx_mark_to_fw(qdf_nbuf_t nbuf, struct dp_vdev *vdev)
 }
 #endif
 
+#ifdef WLAN_DP_ENABLE_SW_TSO
+static inline bool dp_tx_is_sw_tso_enable(void)
+{
+	return true;
+}
+
+/**
+ * dp_tx_sw_tso_handler() - software tso handler
+ *
+ * This function form the skb list from the given TCP jumbo packet by
+ * splitting the jumbo packet into multiple segments of gso size and
+ * attach EIT header for each segment. Also transmit the skbs as a normal
+ * packet instead of tso packet, which reduces the number of PCIe
+ * transactions as HW need to read EIT header and data segment separately
+ * in case of tso packet.
+ *
+ * @vdev: DP VDEV reference
+ * @nbuf: TCP jumbo buffer
+ * @msdu_info: meta data associated with the msdu
+ *
+ * Return: QDF STATUS
+ */
+static QDF_STATUS
+dp_tx_sw_tso_handler(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
+		     struct dp_tx_msdu_info_s *msdu_info)
+{
+	struct dp_soc *soc = vdev->pdev->soc;
+	qdf_nbuf_t nbuf_head = NULL;
+	qdf_nbuf_t tmp_skb, temp;
+	QDF_STATUS status;
+	int count = 0;
+
+	status = qdf_nbuf_sw_tso_prepare_nbuf_list(soc->osdev,
+						   nbuf, &nbuf_head);
+	if (status != QDF_STATUS_SUCCESS) {
+		dp_err("sw tso: failed to prepare sw tso nbuf list status %d",
+		       status);
+		return status;
+	}
+
+	tmp_skb = nbuf_head;
+	while (tmp_skb) {
+		temp = dp_tx_send_msdu_single(vdev, tmp_skb, msdu_info,
+					      HTT_INVALID_PEER, NULL);
+		if (temp) {
+			dp_err("sw tso: failed to send msdu");
+			qdf_nbuf_list_free(tmp_skb);
+			return QDF_STATUS_E_FAILURE;
+		}
+
+		tmp_skb = tmp_skb->next;
+		count++;
+	}
+
+	DP_STATS_INC(soc, tx.sw_tso_pkts, count);
+	return QDF_STATUS_SUCCESS;
+}
+#else
+static inline bool dp_tx_is_sw_tso_enable(void)
+{
+	return false;
+}
+
+static inline QDF_STATUS
+dp_tx_sw_tso_handler(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
+		     struct dp_tx_msdu_info_s *msdu_info)
+{
+	/* return failure so that it will go to default TSO path */
+	return QDF_STATUS_E_FAILURE;
+}
+#endif
+
 qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 		      qdf_nbuf_t nbuf)
 {
@@ -4517,6 +4589,7 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	struct dp_vdev *vdev = NULL;
 	qdf_nbuf_t end_nbuf = NULL;
 	uint8_t xmit_type;
+	QDF_STATUS status;
 
 	if (qdf_unlikely(vdev_id >= MAX_VDEV_CNT))
 		return nbuf;
@@ -4598,6 +4671,21 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 		dp_verbose_debug("TSO frame %pK", vdev);
 		DP_STATS_INC_PKT(vdev->pdev, tso_stats.num_tso_pkts, 1,
 				 qdf_nbuf_len(nbuf));
+
+		if (dp_tx_is_sw_tso_enable()) {
+			status = dp_tx_sw_tso_handler(vdev, nbuf, &msdu_info);
+			if (status == QDF_STATUS_SUCCESS) {
+				qdf_nbuf_free(nbuf);
+				return NULL;
+			} else if (status != QDF_STATUS_E_NOMEM) {
+				DP_STATS_INC(soc, tx.sw_tso_fail, 1);
+				return nbuf;
+			}
+			/* Go further and transmit the jumbo packet in the
+			 * usual TSO path as memory allocation failed in the
+			 * sw tso path.
+			 */
+		}
 
 		if (dp_tx_prepare_tso(vdev, nbuf, &msdu_info)) {
 			DP_STATS_INC_PKT(vdev->pdev, tso_stats.dropped_host, 1,

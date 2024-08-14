@@ -1444,6 +1444,10 @@ struct dp_soc_stats {
 		 * Index 4 indicates WBM2_SW_PPE_REL_RING_ID */
 		uint32_t fw_rel_status_cnt[MAX_TCL_DATA_RINGS][HTT_TX_FW2WBM_TX_STATUS_MAX];
 #endif
+		/* Number of pkts transmitted through sw tso path */
+		uint32_t sw_tso_pkts;
+		/* Number of TSO packets failed to transmit in sw tso path */
+		uint32_t sw_tso_fail;
 	} tx;
 
 	/* SOC level RX stats */
