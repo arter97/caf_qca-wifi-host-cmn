@@ -423,6 +423,12 @@ int dp_monitor_set_pktlog_wifi3(struct dp_pdev *pdev, uint32_t event,
 	return 0;
 }
 
+static inline
+QDF_STATUS dp_monitor_peer_stats_notify(struct dp_pdev *pdev, struct dp_peer *peer)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
 static inline void dp_monitor_pktlogmod_exit(struct dp_pdev *pdev)
 {
 }

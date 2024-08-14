@@ -9633,7 +9633,7 @@ dp_son_update_peer_stats(struct cdp_soc_t *soc, uint8_t vdev_id,
 		pdev = dp_get_pdev_for_lmac_id((struct dp_soc *)soc, ring);
 		if (!pdev)
 			continue;
-		status = dp_peer_stats_notify(pdev, peer);
+		status = dp_monitor_peer_stats_notify(pdev, peer);
 		if (QDF_IS_STATUS_ERROR(status)) {
 			dp_err("peer stats notify fail, status=%d, ring=%d",
 			       status, ring);
