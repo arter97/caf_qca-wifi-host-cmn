@@ -416,6 +416,31 @@ QDF_STATUS telemetry_sawf_set_sla_detect_cfg(uint8_t detect_type,
 
 qdf_export_symbol(telemetry_sawf_set_sla_detect_cfg);
 
+#ifdef QCA_PEER_EXT_STATS
+QDF_STATUS telemetry_peer_sla_detect(uint8_t *peer_mac,
+				     uint32_t packet_error_rate,
+				     uint32_t retries_threshold,
+				     uint32_t mcs_min_threshold,
+				     uint32_t mcs_max_threshold,
+				     uint32_t min_thruput_rate,
+				     uint32_t max_thruput_rate)
+{
+	if (g_agent_ops) {
+		if (g_agent_ops->agent_peer_sla_stats_threshold(peer_mac,
+						    packet_error_rate,
+						    retries_threshold,
+						    mcs_min_threshold,
+						    mcs_max_threshold,
+						    min_thruput_rate,
+						    max_thruput_rate))
+			return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+qdf_export_symbol(telemetry_peer_sla_detect);
+#endif
+
 QDF_STATUS telemetry_sawf_update_delay(void *telemetry_ctx, uint8_t tid,
 				       uint8_t queue, uint64_t pass,
 				       uint64_t fail)

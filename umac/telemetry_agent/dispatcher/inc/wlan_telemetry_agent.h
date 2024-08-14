@@ -312,6 +312,27 @@ QDF_STATUS telemetry_sawf_get_mov_avg(void *telemetry_ctx, uint8_t tid,
  * Return: QDF_STATUS_SUCCESS on success
  */
 QDF_STATUS telemetry_sawf_reset_peer_stats(uint8_t *peer_mac);
+
+/**
+ * telemetry_peer_sla_detect - Update peer tx stats notification
+ * thresholds
+ * @peer_mac: peer mac addr
+ * @packet_error_rate: packet error rate
+ * @retries_threshold: retries threshold
+ * @mcs_min_threshold: mcs min threshold
+ * @mcs_max_threshold: mcs max threshold
+ * @min_thruput_rate: min thruput rate
+ * @max_thruput_rate: max thruput rate
+ *
+ * Return: QDF_STATUS_SUCCESS on success
+ */
+QDF_STATUS telemetry_peer_sla_detect(uint8_t *peer_mac,
+				     uint32_t packet_error_rate,
+				     uint32_t retries_threshold,
+				     uint32_t mcs_min_threshold,
+				     uint32_t mcs_max_threshold,
+				     uint32_t min_thruput_rate,
+				     uint32_t max_thruput_rate);
 #else
 #define wlan_telemetry_agent_dynamic_app_init_deinit_notify(param, service_id, service_data)
 #define wlan_telemetry_agent_application_init_notify(param, service_id, service_data)
@@ -429,6 +450,18 @@ QDF_STATUS telemetry_sawf_set_sla_detect_cfg(uint8_t detect_type,
 					     uint8_t mcs_min_threshold,
 					     uint8_t mcs_max_threshold,
 					     uint8_t retries_threshold)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS telemetry_peer_sla_detect(uint8_t *peer_mac,
+				     uint32_t packet_error_rate,
+				     uint32_t retries_threshold,
+				     uint32_t mcs_min_threshold,
+				     uint32_t mcs_max_threshold,
+				     uint32_t min_thruput_rate,
+				     uint32_t max_thruput_rate)
 {
 	return QDF_STATUS_SUCCESS;
 }
