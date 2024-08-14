@@ -164,77 +164,6 @@ uint8_t hal_rx_wbm_err_msdu_continuation_get_5424(void *wbm_desc)
 		WBM_RELEASE_RING_RX_RX_MSDU_DESC_INFO_DETAILS_MSDU_CONTINUATION_LSB;
 }
 
-#if 0  // check this registration for MLO
-/**
- * hal_read_pmm_scratch_reg_5332(): API to read PMM Scratch register
- *
- * @soc: HAL soc
- * @reg_enum: Enum of the scratch register
- *
- * Return: uint32_t
- */
-	static inline
-		     uint32_t hal_read_pmm_scratch_reg_5332(struct hal_soc *soc,
-				     enum hal_scratch_reg_enum reg_enum)
-{
-	uint32_t val = 0;
-	void __iomem *bar;
-
-	bar = ioremap_nocache(PMM_SCRATCH_BASE_QCA5332, PMM_SCRATCH_SIZE);
-	pld_reg_read(soc->qdf_dev->dev, (reg_enum * 4), &val, bar);
-	iounmap(bar);
-	return val;
-}
-
-/**
- * hal_get_tsf2_scratch_reg_qca5332(): API to read tsf2 scratch register
- *
- * @hal_soc_hdl: HAL soc context
- * @mac_id: mac id
- * @value: Pointer to update tsf2 value
- *
- * Return: void
- */
-static void hal_get_tsf2_scratch_reg_qca5332(hal_soc_handle_t hal_soc_hdl,
-		uint8_t mac_id, uint64_t *value)
-{
-	struct hal_soc *soc = (struct hal_soc *)hal_soc_hdl;
-	uint32_t offset_lo, offset_hi;
-	enum hal_scratch_reg_enum enum_lo, enum_hi;
-
-	hal_get_tsf_enum(DEFAULT_TSF_ID, mac_id, &enum_lo, &enum_hi);
-
-	offset_lo = hal_read_pmm_scratch_reg_5332(soc, enum_lo);
-
-	offset_hi = hal_read_pmm_scratch_reg_5332(soc, enum_hi);
-
-	*value = ((uint64_t)(offset_hi) << 32 | offset_lo);
-}
-
-/**
- * hal_get_tqm_scratch_reg_qca5332(): API to read tqm scratch register
- *
- * @hal_soc_hdl: HAL soc context
- * @value: Pointer to update tqm value
- *
- * Return: void
- */
-static void hal_get_tqm_scratch_reg_qca5332(hal_soc_handle_t hal_soc_hdl,
-		uint64_t *value)
-{
-	struct hal_soc *soc = (struct hal_soc *)hal_soc_hdl;
-	uint32_t offset_lo, offset_hi;
-
-	offset_lo = hal_read_pmm_scratch_reg_5332(soc,
-			PMM_TQM_CLOCK_OFFSET_LO_US);
-
-	offset_hi = hal_read_pmm_scratch_reg_5332(soc,
-			PMM_TQM_CLOCK_OFFSET_HI_US);
-
-	*value = ((uint64_t)(offset_hi) << 32 | offset_lo);
-}
-#endif
-
 #if (defined(WLAN_SA_API_ENABLE))
 /**
  * hal_rx_proc_phyrx_other_receive_info_tlv_5424(): API to get tlv info
@@ -1562,6 +1491,61 @@ static inline uint32_t hal_rx_tlv_msdu_done_copy_get_5424(uint8_t *buf)
 	return HAL_RX_TLV_MSDU_DONE_COPY_GET(buf);
 }
 
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
+/**
+ * hal_txmon_get_frame_timestamp_qca5424() - api to get timestamp for tx monitor
+ * @tlv_tag: TLV tag
+ * @tx_tlv: pointer to tx tlv information
+ * @ppdu_info: pointer to ppdu_info
+ *
+ * Return: void
+ */
+static inline
+void hal_txmon_get_frame_timestamp_qca5424(uint32_t tlv_tag, void *tx_tlv,
+					   void *ppdu_info)
+{
+	struct hal_tx_ppdu_info *tx_ppdu_info =
+			(struct hal_tx_ppdu_info *)ppdu_info;
+
+	switch (tlv_tag) {
+	case WIFIRESPONSE_END_STATUS_E:
+	{
+		hal_response_end_status_t *resp_end_status =
+					(hal_response_end_status_t *)tx_tlv;
+
+		TXMON_HAL_STATUS(tx_ppdu_info, ppdu_timestamp) =
+			(resp_end_status->start_of_frame_timestamp_15_0 |
+			(resp_end_status->start_of_frame_timestamp_31_16 << 16));
+		break;
+	}
+
+	case WIFITX_FES_STATUS_END_E:
+	{
+		hal_tx_fes_status_end_t *tx_fes_end =
+					(hal_tx_fes_status_end_t *)tx_tlv;
+
+		TXMON_HAL_STATUS(tx_ppdu_info, ppdu_timestamp) =
+			(tx_fes_end->start_of_frame_timestamp_15_0 |
+			tx_fes_end->start_of_frame_timestamp_31_16 <<
+			HAL_TX_LSB(TX_FES_STATUS_END,
+				   START_OF_FRAME_TIMESTAMP_31_16));
+		break;
+	}
+
+	case WIFITX_FES_STATUS_PROT_E:
+	{
+		hal_tx_fes_status_prot_t *fes_prot =
+				(hal_tx_fes_status_prot_t *)tx_tlv;
+
+		TXMON_HAL_STATUS(tx_ppdu_info, ppdu_timestamp) =
+			(fes_prot->start_of_frame_timestamp_15_0 |
+			fes_prot->start_of_frame_timestamp_31_16 << 15);
+		break;
+	}
+	}
+}
+#endif
+
 /**
  * hal_read_pmm_scratch_reg_5424(): API to read PMM Scratch register
  *
@@ -1883,6 +1867,8 @@ static void hal_hw_txrx_ops_attach_qca5424(struct hal_soc *hal_soc)
 		hal_txmon_status_parse_tlv_generic_be;
 	hal_soc->ops->hal_txmon_status_get_num_users =
 		hal_txmon_status_get_num_users_generic_be;
+	hal_soc->ops->hal_txmon_get_frame_timestamp =
+				hal_txmon_get_frame_timestamp_qca5424;
 #if defined(TX_MONITOR_WORD_MASK)
 	hal_soc->ops->hal_txmon_get_word_mask =
 				hal_txmon_get_word_mask_qca5424;
