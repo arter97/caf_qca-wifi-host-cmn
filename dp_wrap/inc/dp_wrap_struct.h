@@ -21,6 +21,7 @@
 #if ATH_SUPPORT_WRAP
 
 #include <wbuf.h>
+#include <osif_private.h>
 
 #define	WRAP_DEV_HASHSIZE	32	/*dev hash table size*/
 
@@ -80,7 +81,7 @@ typedef struct dp_wrap_vdev {
 	LIST_ENTRY(dp_wrap_vdev)   wrap_dev_hash;	/*wrap oma hash list entry*/
 	TAILQ_ENTRY(dp_wrap_vdev)  wrap_dev_list_vma;  /*wrap vma dev list*/
 	LIST_ENTRY(dp_wrap_vdev)   wrap_dev_hash_vma;  /*wrap vma hash list */
-	void (*wlan_vdev_xmit_queue)(struct net_device *dev, wbuf_t wbuf);
+	void (*wlan_vdev_xmit_queue)(osif_dev *osifp, wbuf_t wbuf);
 } dp_vdev_wrap_t;
 #endif
 #endif
