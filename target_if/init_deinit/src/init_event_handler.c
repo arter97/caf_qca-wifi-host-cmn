@@ -668,6 +668,13 @@ static int init_deinit_service_ext2_ready_event_handler(ol_scn_t scn_handle,
 	if (QDF_IS_STATUS_ERROR(status))
 		target_if_err("Failed to set fw_support_ml_mon");
 
+	val.cdp_tx_vdev_nss_support =
+		info->service_ext2_param.tx_vdev_nss_support;
+	status = cdp_txrx_set_psoc_param(wlan_psoc_get_dp_handle(psoc),
+					 CDP_VDEV_TX_NSS_SUPPORT, val);
+	if (QDF_IS_STATUS_ERROR(status))
+		target_if_err("Failed to set tx_vdev_nss_support");
+
 	wlan_ipa_set_fw_cap_opt_dp_ctrl(
 			psoc, info->service_ext2_param.fw_support_opt_dp_ctrl);
 

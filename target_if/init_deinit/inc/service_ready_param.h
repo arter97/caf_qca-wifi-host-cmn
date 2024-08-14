@@ -561,6 +561,7 @@ struct wlan_psoc_host_service_ext_param {
  * @fw_support_ml_mon: FW support ML monitor mode
  * @sar_flag: SAR flag info
  * @fw_support_opt_dp_ctrl: FW support OPT_DP_CTRL
+ * @tx_vdev_nss_support: FW supports Vdev Tx NSS report
  */
 struct wlan_psoc_host_service_ext2_param {
 	uint8_t reg_db_version_major;
@@ -606,6 +607,7 @@ struct wlan_psoc_host_service_ext2_param {
 	bool fw_support_ml_mon;
 	uint32_t sar_flag;
 	bool fw_support_opt_dp_ctrl;
+	bool tx_vdev_nss_support;
 };
 
 #endif /* _SERVICE_READY_PARAM_H_*/

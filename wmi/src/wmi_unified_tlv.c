@@ -15565,6 +15565,9 @@ extract_service_ready_ext2_tlv(wmi_unified_t wmi_handle, uint8_t *event,
 	param->fw_support_opt_dp_ctrl =
 	   WMI_TARGET_CAP_QDATA_TX_LCE_FILTER_SUPPORT_GET(ev->target_cap_flags);
 
+	param->tx_vdev_nss_support =
+	WMI_TARGET_CAP_MPDU_STATS_PER_TX_NSS_SUPPORT_GET(ev->target_cap_flags);
+
 	extract_svc_rdy_ext2_afc_tlv(ev, param);
 
 	extract_hw_bdf_status(ev);
