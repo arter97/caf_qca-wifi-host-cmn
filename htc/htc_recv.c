@@ -639,7 +639,7 @@ QDF_STATUS htc_wait_recv_ctrl_message(HTC_TARGET *target)
 				  (target->HTCInitInfo.htc_ready_timeout_ms))) {
 		AR_DEBUG_PRINTF(ATH_DEBUG_ERR,
 			("Failed to receive control message\n"));
-		return QDF_STATUS_E_FAILURE;
+		return QDF_STATUS_HTC_READY_TIMEOUT;
 	}
 
 	LOCK_HTC_RX(target);
