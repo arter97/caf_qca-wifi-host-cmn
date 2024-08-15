@@ -1128,6 +1128,8 @@ void hal_mon_buff_addr_info_set(hal_soc_handle_t hal_soc_hdl,
 
 #define HAL_MAX_DL_MU_USERS	37
 #define HAL_MAX_RU_INDEX	7
+#define HAL_UL_SU_RECEPTION	0
+#define HAL_UL_MU_RECEPTION	1
 
 enum hal_tx_tlv_status {
 	HAL_MON_TX_FES_SETUP,
@@ -1510,6 +1512,7 @@ struct hal_tx_status_info {
  * @reserved: for future purpose
  * @prot_tlv_status: protection tlv status
  * @ack_rssi: rssi of received ack. Valid only if ack_recvd is set
+ * @ba_user_id: block ack user id. keeps track for ba payload build.
  * @tx_tlv_info: store tx tlv info for recording
  * @packet_info: packet information
  * @rx_status: monitor mode rx status information
@@ -1528,6 +1531,7 @@ struct hal_tx_ppdu_info {
 
 	uint32_t prot_tlv_status;
 	int8_t ack_rssi;
+	int8_t ba_user_id;
 
 #ifdef MONITOR_TLV_RECORDING_ENABLE
 	struct hal_tx_tlv_info tx_tlv_info;

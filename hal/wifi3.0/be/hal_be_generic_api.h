@@ -1653,7 +1653,7 @@ hal_txmon_status_parse_tlv_generic_be(hal_soc_handle_t hal_soc_hdl,
 			response_sta_count = 1;
 		TXMON_HAL(ppdu_info, num_users) = response_sta_count;
 
-		if (reception_type)
+		if (!reception_type)
 			TXMON_STATUS_INFO(tx_status_info,
 					  transmission_type) =
 							TXMON_SU_TRANSMISSION;
@@ -2177,6 +2177,10 @@ hal_txmon_status_parse_tlv_generic_be(hal_soc_handle_t hal_soc_hdl,
 		uint16_t ba_bitmap_sz;
 		uint64_t *ba_bitmap_tmp = NULL;
 		uint8_t offset = 0;
+		uint8_t ba_user_idx = ++TXMON_HAL(ppdu_info, ba_user_id);
+
+		ba_user_idx = ba_user_idx >= ppdu_info->num_users ? 0 :
+			      ba_user_idx;
 
 		/* user tlv */
 		status = HAL_MON_RX_FRAME_BITMAP_ACK;
@@ -2216,28 +2220,29 @@ hal_txmon_status_parse_tlv_generic_be(hal_soc_handle_t hal_soc_hdl,
 				HAL_TX_DESC_GET_64(tx_tlv, RX_FRAME_BITMAP_ACK,
 						   EXPLICT_ACK_TYPE);
 
-		TXMON_HAL_USER(ppdu_info, user_id, tid) =
+		TXMON_HAL_USER(ppdu_info, ba_user_idx, tid) =
 					HAL_TX_DESC_GET_64(tx_tlv,
 							   RX_FRAME_BITMAP_ACK,
 							   BA_TID);
-		TXMON_HAL_USER(ppdu_info, user_id, aid) =
+		TXMON_HAL_USER(ppdu_info, ba_user_idx, aid) =
 					HAL_TX_DESC_GET_64(tx_tlv,
 							   RX_FRAME_BITMAP_ACK,
 							   STA_FULL_AID);
-		TXMON_HAL_USER(ppdu_info, user_id, start_seq) =
+		TXMON_HAL_USER(ppdu_info, ba_user_idx, start_seq) =
 					HAL_TX_DESC_GET_64(tx_tlv,
 							   RX_FRAME_BITMAP_ACK,
 							   BA_TS_SEQ);
-		TXMON_HAL_USER(ppdu_info, user_id, ba_control) =
+		TXMON_HAL_USER(ppdu_info, ba_user_idx, ba_control) =
 					HAL_TX_DESC_GET_64(tx_tlv,
 							   RX_FRAME_BITMAP_ACK,
 							   BA_TS_CTRL);
-		TXMON_HAL_USER(ppdu_info, user_id, ba_bitmap_sz) =
+		TXMON_HAL_USER(ppdu_info, ba_user_idx, ba_bitmap_sz) =
 					HAL_TX_DESC_GET_64(tx_tlv,
 							   RX_FRAME_BITMAP_ACK,
 							   BA_BITMAP_SIZE);
 
-		ba_bitmap_sz = TXMON_HAL_USER(ppdu_info, user_id, ba_bitmap_sz);
+		ba_bitmap_sz = TXMON_HAL_USER(ppdu_info, ba_user_idx,
+					      ba_bitmap_sz);
 
 		/* ba bitmap */
 		offset = HAL_TX_LSB(RX_FRAME_BITMAP_ACK, BA_TS_BITMAP_31_0)
@@ -2247,7 +2252,7 @@ hal_txmon_status_parse_tlv_generic_be(hal_soc_handle_t hal_soc_hdl,
 						       BA_TS_BITMAP_31_0,
 						       offset);
 
-		qdf_mem_copy(TXMON_HAL_USER(ppdu_info, user_id, ba_bitmap),
+		qdf_mem_copy(TXMON_HAL_USER(ppdu_info, ba_user_idx, ba_bitmap),
 			     ba_bitmap_tmp, 4 << ba_bitmap_sz);
 		break;
 	}
@@ -2256,19 +2261,23 @@ hal_txmon_status_parse_tlv_generic_be(hal_soc_handle_t hal_soc_hdl,
 		uint16_t ba_bitmap_sz;
 		uint64_t *ba_bitmap_tmp = NULL;
 		uint8_t offset = 0;
+		uint8_t ba_user_idx = ++TXMON_HAL(ppdu_info, ba_user_id);
+
+		ba_user_idx = ba_user_idx >= ppdu_info->num_users ? 0 :
+			      ba_user_idx;
 
 		/* user tlv */
 		status = HAL_MON_RX_FRAME_BITMAP_BLOCK_ACK_1K;
 		SHOW_DEFINED(WIFIRX_FRAME_1K_BITMAP_ACK_E);
 		TXMON_HAL(ppdu_info, cur_usr_idx) = user_id;
-		TXMON_HAL_USER(ppdu_info, user_id, ba_bitmap_sz) =
+		TXMON_HAL_USER(ppdu_info, ba_user_idx, ba_bitmap_sz) =
 			(4 + HAL_TX_DESC_GET_64(tx_tlv, RX_FRAME_1K_BITMAP_ACK,
 						BA_BITMAP_SIZE));
-		TXMON_HAL_USER(ppdu_info, user_id, tid) =
+		TXMON_HAL_USER(ppdu_info, ba_user_idx, tid) =
 				HAL_TX_DESC_GET_64(tx_tlv,
 						   RX_FRAME_1K_BITMAP_ACK,
 						   BA_TID);
-		TXMON_HAL_USER(ppdu_info, user_id, aid) =
+		TXMON_HAL_USER(ppdu_info, ba_user_idx, aid) =
 				HAL_TX_DESC_GET_64(tx_tlv,
 						   RX_FRAME_1K_BITMAP_ACK,
 						   STA_FULL_AID);
@@ -2290,16 +2299,17 @@ hal_txmon_status_parse_tlv_generic_be(hal_soc_handle_t hal_soc_hdl,
 						   RX_FRAME_1K_BITMAP_ACK,
 						   ADDR2_47_16);
 
-		TXMON_HAL_USER(ppdu_info, user_id, start_seq) =
+		TXMON_HAL_USER(ppdu_info, ba_user_idx, start_seq) =
 				HAL_TX_DESC_GET_64(tx_tlv,
 						   RX_FRAME_1K_BITMAP_ACK,
 						   BA_TS_SEQ);
-		TXMON_HAL_USER(ppdu_info, user_id, ba_control) =
+		TXMON_HAL_USER(ppdu_info, ba_user_idx, ba_control) =
 				HAL_TX_DESC_GET_64(tx_tlv,
 						   RX_FRAME_1K_BITMAP_ACK,
 						   BA_TS_CTRL);
 
-		ba_bitmap_sz = TXMON_HAL_USER(ppdu_info, user_id, ba_bitmap_sz);
+		ba_bitmap_sz = TXMON_HAL_USER(ppdu_info, ba_user_idx,
+					      ba_bitmap_sz);
 
 		/* memcpy  ba bitmap */
 		offset = HAL_TX_LSB(RX_FRAME_1K_BITMAP_ACK, BA_TS_BITMAP_31_0)
@@ -2309,7 +2319,7 @@ hal_txmon_status_parse_tlv_generic_be(hal_soc_handle_t hal_soc_hdl,
 						       BA_TS_BITMAP_31_0,
 						       offset);
 
-		qdf_mem_copy(TXMON_HAL_USER(ppdu_info, user_id, ba_bitmap),
+		qdf_mem_copy(TXMON_HAL_USER(ppdu_info, ba_user_idx, ba_bitmap),
 			     ba_bitmap_tmp, 4 << ba_bitmap_sz);
 		break;
 	}

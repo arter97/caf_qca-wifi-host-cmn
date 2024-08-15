@@ -578,6 +578,7 @@ struct dp_tx_ppdu_info *dp_tx_mon_get_ppdu_info(struct dp_pdev *pdev,
 	}
 
 	TXMON_PPDU_HAL(tx_ppdu_info, is_used) = 0;
+	TXMON_PPDU_HAL(tx_ppdu_info, ba_user_id) = -1;
 	TXMON_PPDU_HAL(tx_ppdu_info, num_users) = num_user;
 	TXMON_PPDU_HAL(tx_ppdu_info, ppdu_id) = ppdu_id;
 	TXMON_PPDU(tx_ppdu_info, ppdu_id) = ppdu_id;
