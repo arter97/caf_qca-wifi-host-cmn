@@ -319,6 +319,7 @@ struct mlme_twt_ops {
  * @mlme_cm_ext_disconnect_req_cb:          callback to disconnect req to
  *                                          VDEV/PEER SM
  * @mlme_cm_ext_bss_peer_delete_req_cb:     callback to bss peer delete request
+ * @mlme_cm_ext_force_bss_peer_delete_req_cb: callback to force bss peer delete request
  * @mlme_cm_ext_disconnect_complete_ind_cb: callback to indicate disconnect
  *                                          complete
  * @mlme_cm_ext_vdev_down_req_cb:           callback to send vdev down to FW
@@ -390,6 +391,8 @@ struct mlme_ext_ops {
 			(struct wlan_objmgr_vdev *vdev,
 			struct wlan_cm_vdev_discon_req *req);
 	QDF_STATUS (*mlme_cm_ext_bss_peer_delete_req_cb)(
+			struct wlan_objmgr_vdev *vdev);
+	QDF_STATUS (*mlme_cm_ext_force_bss_peer_delete_req_cb)(
 			struct wlan_objmgr_vdev *vdev);
 	QDF_STATUS (*mlme_cm_ext_disconnect_complete_ind_cb)(
 				struct wlan_objmgr_vdev *vdev,
@@ -824,6 +827,16 @@ QDF_STATUS mlme_cm_disconnect_req(struct wlan_objmgr_vdev *vdev,
  */
 QDF_STATUS
 mlme_cm_bss_peer_delete_req(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * mlme_cm_force_bss_peer_delete_req() - Connection manager ext force bss peer
+ * delete request
+ * @vdev: VDEV object
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+mlme_cm_force_bss_peer_delete_req(struct wlan_objmgr_vdev *vdev);
 
 /**
  * mlme_cm_disconnect_complete_ind() - Connection manager ext disconnect

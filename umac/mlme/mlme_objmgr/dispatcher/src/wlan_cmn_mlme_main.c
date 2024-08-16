@@ -460,6 +460,16 @@ QDF_STATUS mlme_cm_bss_peer_delete_req(struct wlan_objmgr_vdev *vdev)
 	return ret;
 }
 
+QDF_STATUS mlme_cm_force_bss_peer_delete_req(struct wlan_objmgr_vdev *vdev)
+{
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+
+	if ((glbl_ops) && glbl_ops->mlme_cm_ext_force_bss_peer_delete_req_cb)
+		ret = glbl_ops->mlme_cm_ext_force_bss_peer_delete_req_cb(vdev);
+
+	return ret;
+}
+
 QDF_STATUS mlme_cm_disconnect_complete_ind(struct wlan_objmgr_vdev *vdev,
 					   struct wlan_cm_discon_rsp *rsp)
 {

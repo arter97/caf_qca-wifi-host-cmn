@@ -3385,6 +3385,27 @@ QDF_STATUS cm_bss_peer_create_resp_mlo_attach(struct wlan_objmgr_vdev *vdev,
 }
 #endif
 
+#ifdef CONN_MGR_ADV_FEATURE
+static inline
+QDF_STATUS cm_bss_peer_delete_for_new_req(struct wlan_objmgr_vdev *vdev,
+					  struct cnx_mgr *cm_ctx,
+					  wlan_cm_id cm_id)
+{
+	return mlme_cm_force_bss_peer_delete_req(vdev);
+}
+#else
+static inline
+QDF_STATUS cm_bss_peer_delete_for_new_req(struct wlan_objmgr_vdev *vdev,
+					  struct cnx_mgr *cm_ctx,
+					  wlan_cm_id cm_id)
+{
+	mlme_cm_bss_peer_delete_req(vdev);
+	cm_connect_handle_event_post_fail(cm_ctx, cm_id);
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 QDF_STATUS cm_bss_peer_create_rsp(struct wlan_objmgr_vdev *vdev,
 				  QDF_STATUS status,
 				  struct qdf_mac_addr *peer_mac)
@@ -3423,8 +3444,8 @@ QDF_STATUS cm_bss_peer_create_rsp(struct wlan_objmgr_vdev *vdev,
 		if (QDF_IS_STATUS_SUCCESS(qdf_status))
 			return qdf_status;
 
-		mlme_cm_bss_peer_delete_req(vdev);
-		goto post_err;
+		cm_bss_peer_delete_for_new_req(vdev, cm_ctx, cm_id);
+		return qdf_status;
 	}
 
 next_candidate:
