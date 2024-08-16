@@ -280,7 +280,11 @@ QDF_STATUS __qdf_wake_lock_create(qdf_wake_lock_t *lock, const char *name,
 		return status;
 
 	qdf_mem_zero(lock, sizeof(*lock));
+	QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_DEBUG,
+		  "%s enter", __func__);
 	lock->priv = wakeup_source_register(lock->lock.dev, name);
+	QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_DEBUG,
+		  "%s exit", __func__);
 	if (!(lock->priv)) {
 		QDF_BUG(0);
 		return QDF_STATUS_E_FAILURE;
@@ -398,7 +402,11 @@ void __qdf_wake_lock_destroy(qdf_wake_lock_t *lock,
 void __qdf_wake_lock_destroy(qdf_wake_lock_t *lock,
 			     const char *func, uint32_t line)
 {
+	QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_DEBUG,
+		  "%s enter", __func__);
 	wakeup_source_unregister(lock->priv);
+	QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_DEBUG,
+		  "%s exit", __func__);
 	qdf_wake_lock_dbg_untrack(lock, func, line);
 }
 #elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
