@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1744,6 +1744,7 @@ int hif_pci_bus_configure(struct hif_softc *hif_sc)
 	     (hif_sc->target_info.target_type == TARGET_TYPE_QCN6122) ||
 	     (hif_sc->target_info.target_type == TARGET_TYPE_QCN9160) ||
 	     (hif_sc->target_info.target_type == TARGET_TYPE_QCA6018) ||
+	     (hif_sc->target_info.target_type == TARGET_TYPE_QCA5424) ||
 	     (hif_sc->target_info.target_type == TARGET_TYPE_QCN6432)) &&
 	    (hif_sc->bus_type == QDF_BUS_TYPE_AHB)) {
 		hif_sc->per_ce_irq = true;
@@ -1766,6 +1767,7 @@ int hif_pci_bus_configure(struct hif_softc *hif_sc)
 	     (hif_sc->target_info.target_type == TARGET_TYPE_QCA8074V2) ||
 	     (hif_sc->target_info.target_type == TARGET_TYPE_QCA9574) ||
 	     (hif_sc->target_info.target_type == TARGET_TYPE_QCA5332) ||
+	     (hif_sc->target_info.target_type == TARGET_TYPE_QCA5424) ||
 	     (hif_sc->target_info.target_type == TARGET_TYPE_QCA5018) ||
 	     (hif_sc->target_info.target_type == TARGET_TYPE_QCN6122) ||
 	     (hif_sc->target_info.target_type == TARGET_TYPE_QCN9160) ||
@@ -3217,7 +3219,7 @@ const char *hif_pci_get_irq_name(int irq_no)
 
 #if defined(FEATURE_IRQ_AFFINITY) || defined(HIF_CPU_PERF_AFFINE_MASK)
 void hif_pci_irq_set_affinity_hint(struct hif_exec_context *hif_ext_group,
-				   bool perf)
+				   uint32_t cpumask, bool perf)
 {
 	int i, ret;
 	unsigned int cpus;
@@ -3225,9 +3227,26 @@ void hif_pci_irq_set_affinity_hint(struct hif_exec_context *hif_ext_group,
 	int package_id;
 	int cpu_cluster = perf ? hif_get_perf_cluster_bitmap() :
 				 BIT(CPU_CLUSTER_TYPE_LITTLE);
+	qdf_cpu_mask new_cpu_mask;
 
 	for (i = 0; i < hif_ext_group->numirq; i++)
 		qdf_cpumask_clear(&hif_ext_group->new_cpu_mask[i]);
+
+	if (perf && cpumask) {
+		qdf_cpumask_clear(&new_cpu_mask);
+		 qdf_for_each_online_cpu(cpus) {
+			if (BIT(cpus) & cpumask)
+				qdf_cpumask_set_cpu(i, &new_cpu_mask);
+		}
+
+		if (!qdf_cpumask_empty(&new_cpu_mask)) {
+			for (i = 0; i < hif_ext_group->numirq; i++)
+				qdf_cpumask_copy(&hif_ext_group->new_cpu_mask[i],
+						 &new_cpu_mask);
+			mask_set = true;
+			goto apply_affinity;
+		}
+	}
 
 	for (i = 0; i < hif_ext_group->numirq; i++) {
 		qdf_for_each_online_cpu(cpus) {
@@ -3240,6 +3259,8 @@ void hif_pci_irq_set_affinity_hint(struct hif_exec_context *hif_ext_group,
 			}
 		}
 	}
+
+apply_affinity:
 	for (i = 0; i < hif_ext_group->numirq; i++) {
 		if (mask_set) {
 			ret = hif_affinity_mgr_set_qrg_irq_affinity((struct hif_softc *)hif_ext_group->hif,
@@ -3357,7 +3378,7 @@ void hif_pci_config_irq_affinity(struct hif_softc *scn)
 	/* Set IRQ affinity for WLAN DP interrupts*/
 	for (i = 0; i < hif_state->hif_num_extgroup; i++) {
 		hif_ext_group = hif_state->hif_ext_group[i];
-		hif_pci_irq_set_affinity_hint(hif_ext_group, true);
+		hif_pci_irq_set_affinity_hint(hif_ext_group, 0, true);
 	}
 	/* Set IRQ affinity for CE interrupts*/
 	hif_pci_ce_irq_set_affinity_hint(scn);
@@ -3500,7 +3521,8 @@ int hif_pci_configure_grp_irq(struct hif_softc *scn,
 
 #ifdef FEATURE_IRQ_AFFINITY
 void hif_pci_set_grp_intr_affinity(struct hif_softc *scn,
-				   uint32_t grp_intr_bitmask, bool perf)
+				   uint32_t grp_intr_bitmask,
+				   uint32_t cpumask, bool perf)
 {
 	int i;
 	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
@@ -3511,7 +3533,7 @@ void hif_pci_set_grp_intr_affinity(struct hif_softc *scn,
 			continue;
 
 		hif_ext_group = hif_state->hif_ext_group[i];
-		hif_pci_irq_set_affinity_hint(hif_ext_group, perf);
+		hif_pci_irq_set_affinity_hint(hif_ext_group, cpumask, perf);
 		qdf_atomic_set(&hif_ext_group->force_napi_complete, -1);
 	}
 }
@@ -3580,6 +3602,7 @@ int hif_configure_irq(struct hif_softc *scn)
 	case TARGET_TYPE_QCA5018:
 	case TARGET_TYPE_QCA5332:
 	case TARGET_TYPE_QCA9574:
+	case TARGET_TYPE_QCA5424:
 	case TARGET_TYPE_QCN9160:
 		ret = hif_ahb_configure_irq(sc);
 		break;
@@ -3740,6 +3763,7 @@ static bool hif_is_pld_based_target(struct hif_pci_softc *sc,
 	case KIWI_DEVICE_ID:
 	case MANGO_DEVICE_ID:
 	case PEACH_DEVICE_ID:
+	case QCC2072_DEVICE_ID:
 		return true;
 	}
 	return false;
@@ -3991,6 +4015,7 @@ int hif_pci_addr_in_boundary(struct hif_softc *scn, uint32_t offset)
 	    tgt_info->target_type == TARGET_TYPE_QCA6490 ||
 	    tgt_info->target_type == TARGET_TYPE_QCN7605 ||
 	    tgt_info->target_type == TARGET_TYPE_QCA8074 ||
+	    tgt_info->target_type == TARGET_TYPE_AR6320 ||
 	    tgt_info->target_type == TARGET_TYPE_KIWI ||
 	    tgt_info->target_type == TARGET_TYPE_MANGO ||
 	    tgt_info->target_type == TARGET_TYPE_PEACH) {

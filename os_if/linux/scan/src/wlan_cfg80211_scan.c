@@ -2119,7 +2119,8 @@ check_persta_info_in_probe_resp(struct wlan_cfg80211_inform_bss *bss)
 		if (QDF_IS_STATUS_SUCCESS(qdf_status) && ml_ie) {
 			qdf_status = util_get_bvmlie_persta_partner_info(ml_ie,
 									 ml_ie_len,
-									 &partner_info);
+									 &partner_info,
+									 WLAN_FC0_STYPE_INVALID);
 			if (QDF_IS_STATUS_SUCCESS(qdf_status)) {
 				if (partner_info.num_partner_links > 0)
 					return QDF_STATUS_E_FAILURE;

@@ -388,8 +388,9 @@ peer_assoc_update_assoc_link_info(uint8_t **buf_ptr,
 				   &ml_partner_link->self_mac);
 	wmi_copy_chan_info(&ml_partner_link->wmi_chan, &req->mlo_params.chan);
 
-	wmi_debug("Send Link info with link_id: %d vdev_id: %d AP link addr: "QDF_MAC_ADDR_FMT ", STA addr: "QDF_MAC_ADDR_FMT,
+	wmi_debug("Send Link info with link_id: %d vdev_id: %d freq %d AP link addr: "QDF_MAC_ADDR_FMT ", STA addr: "QDF_MAC_ADDR_FMT,
 		  ml_partner_link->ieee_link_id, ml_partner_link->vdev_id,
+		  req->mlo_params.chan.ch_freq,
 		  QDF_MAC_ADDR_REF(req->mlo_params.bssid.bytes),
 		  QDF_MAC_ADDR_REF(req->mlo_params.mac_addr.bytes));
 
@@ -436,9 +437,10 @@ uint8_t *peer_assoc_add_ml_partner_links(uint8_t *buf_ptr,
 		WMI_CHAR_ARRAY_TO_MAC_ADDR(partner_info[i].mac_addr.bytes,
 					   &ml_partner_link->self_mac);
 
-		wmi_debug("Send Link info with link_id: %d vdev_id: %d AP link addr: "QDF_MAC_ADDR_FMT ", STA addr: "QDF_MAC_ADDR_FMT,
+		wmi_debug("Send Link info with link_id: %d vdev_id: %d freq %d AP link addr: "QDF_MAC_ADDR_FMT ", STA addr: "QDF_MAC_ADDR_FMT,
 			  ml_partner_link->ieee_link_id,
 			  ml_partner_link->vdev_id,
+			  partner_info[i].chan.ch_freq,
 			  QDF_MAC_ADDR_REF(partner_info[i].bssid.bytes),
 			  QDF_MAC_ADDR_REF(partner_info[i].mac_addr.bytes));
 		wmi_copy_chan_info(&ml_partner_link->wmi_chan,
@@ -1273,6 +1275,50 @@ extract_mlo_link_removal_evt_fixed_param_tlv(
 }
 
 /**
+ * extract_mlo_3_link_tlt_selection_fixed_param_tlv() - Extract fixed parameters
+ * TLV from the MLO 3 link tlt selection  WMI  event
+ * @wmi_handle: wmi handle
+ * @buf: pointer to event buffer
+ * @params: MLO 3 link tlt selection event parameters
+ *
+ * Return: QDF_STATUS of operation
+ */
+static QDF_STATUS
+extract_mlo_3_link_tlt_selection_fixed_param_tlv(
+	struct wmi_unified *wmi_handle,
+	void *buf,
+	struct mlo_tlt_selection_evt_params *params)
+{
+	WMI_MLO_TLT_SELECTION_FOR_TID_SPRAY_EVENTID_param_tlvs *param_buf = buf;
+	wmi_mlo_tlt_selection_for_tid_spray_event_fixed_param *ev;
+
+	if (!param_buf) {
+		wmi_err_rl("Param_buf is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (!params) {
+		wmi_err_rl("params is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	ev = param_buf->fixed_param;
+
+	/* copy mld mac address */
+	WMI_MAC_ADDR_TO_CHAR_ARRAY(&ev->mld_mac, params->mld_addr.bytes);
+
+	/* fill link bit map values */
+	qdf_mem_copy(params->link_bmap, ev->link_bmap,
+		     sizeof(params->link_bmap));
+
+	/* fill link priority */
+	qdf_mem_copy(params->link_priority, ev->hwlink_priority,
+		     sizeof(params->link_priority));
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
  * extract_mlo_link_removal_tbtt_update_tlv() - Extract TBTT update TLV
  * from the MLO link removal WMI  event
  * @wmi_handle: wmi handle
@@ -1803,10 +1849,16 @@ send_link_set_bss_params_cmd_tlv(wmi_unified_t wmi_handle,
 	uint8_t *buf_ptr;
 	wmi_mlo_link_bss_param *bss_param;
 		WMI_HOST_WLAN_PHY_MODE fw_phy_mode;
+	size_t len;
 
-	size_t len = sizeof(*cmd) +
-		     sizeof(wmi_mlo_link_bss_param) +
-		     WMI_TLV_HDR_SIZE;
+	if (!params->chan.ch_freq) {
+		wmi_err("invalid ch_freq 0 for link %d", params->link_id);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	len = sizeof(*cmd) +
+		sizeof(wmi_mlo_link_bss_param) +
+		WMI_TLV_HDR_SIZE;
 
 	buf = wmi_buf_alloc(wmi_handle, len);
 	if (!buf) {
@@ -2504,7 +2556,7 @@ static void wmi_11be_attach_mlo_setup_tlv(wmi_unified_t wmi_handle)
 
 #endif /*WLAN_MLO_MULTI_CHIP*/
 
-#if defined(WLAN_FEATURE_11BE_MLO)
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_FEATURE_11BE_MLO_ADV_FEATURE)
 /**
  * extract_mgmt_rx_ml_cu_params_tlv() - extract MGMT Critical Update params
  * from MGMT_RX_EVENT_ID or WMI_MLO_LINK_INFO_SYNC_EVENTID
@@ -2833,6 +2885,8 @@ void wmi_11be_attach_tlv(wmi_unified_t wmi_handle)
 	ops->send_mlo_link_removal_cmd = send_mlo_link_removal_cmd_tlv;
 	ops->extract_mlo_link_removal_evt_fixed_param =
 			extract_mlo_link_removal_evt_fixed_param_tlv;
+	ops->extract_mlo_3_link_tlt_selection_fixed_param =
+			extract_mlo_3_link_tlt_selection_fixed_param_tlv;
 	ops->extract_mlo_link_removal_tbtt_update =
 			extract_mlo_link_removal_tbtt_update_tlv;
 	ops->extract_mgmt_rx_mlo_link_removal_info =

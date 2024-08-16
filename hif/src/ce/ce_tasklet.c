@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -440,8 +440,8 @@ static void ce_tasklet(unsigned long data)
 		 * Enable the interrupt only when there is no pending frames in
 		 * any of the Copy Engine pipes.
 		 */
-		if (test_bit(TASKLET_STATE_SCHED,
-			     &tasklet_entry->intr_tq.state)) {
+		if (qdf_test_bit(TASKLET_STATE_SCHED,
+				 &tasklet_entry->intr_tq.state)) {
 			hif_info("ce_id%d tasklet was scheduled, return",
 				 tasklet_entry->ce_id);
 			qdf_atomic_dec(&scn->active_tasklet_cnt);
@@ -738,7 +738,7 @@ static inline bool hif_tasklet_schedule(struct hif_opaque_softc *hif_ctx,
 {
 	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
 
-	if (test_bit(TASKLET_STATE_SCHED, &tasklet_entry->intr_tq.state)) {
+	if (qdf_test_bit(TASKLET_STATE_SCHED, &tasklet_entry->intr_tq.state)) {
 		hif_debug("tasklet scheduled, return");
 		qdf_atomic_dec(&scn->active_tasklet_cnt);
 		return false;
@@ -833,8 +833,8 @@ int hif_drain_fw_diag_ce(struct hif_softc *scn)
 	/* If CE7 tasklet is triggered, no need to poll CE explicitly,
 	 * CE7 SIRQ could reschedule until there is no pending entries
 	 */
-	if (test_bit(TASKLET_STATE_SCHED, &tasklet_entry->intr_tq.state) ||
-	    test_bit(TASKLET_STATE_RUN, &tasklet_entry->intr_tq.state))
+	if (qdf_test_bit(TASKLET_STATE_SCHED, &tasklet_entry->intr_tq.state) ||
+	    qdf_test_bit(TASKLET_STATE_RUN, &tasklet_entry->intr_tq.state))
 		return -EBUSY;
 
 	return ce_poll_reap_by_id(scn, ce_id);
@@ -853,11 +853,11 @@ static inline int ce_check_tasklet_status(int ce_id,
 		struct qca_napi_info *napi;
 
 		napi = scn->napi_data.napis[ce_id];
-		if (test_bit(NAPI_STATE_SCHED, &napi->napi.state))
+		if (qdf_test_bit(NAPI_STATE_SCHED, &napi->napi.state))
 			return -EBUSY;
 	} else {
-		if (test_bit(TASKLET_STATE_SCHED,
-			     &hif_ce_state->tasklets[ce_id].intr_tq.state))
+		if (qdf_test_bit(TASKLET_STATE_SCHED,
+				 &hif_ce_state->tasklets[ce_id].intr_tq.state))
 			return -EBUSY;
 	}
 	return 0;

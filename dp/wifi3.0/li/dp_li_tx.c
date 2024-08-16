@@ -109,6 +109,8 @@ void dp_tx_process_htt_completion_li(struct dp_soc *soc,
 	htt_handle = (struct htt_soc *)soc->htt_handle;
 	htt_wbm_event_record(htt_handle->htt_logger_handle, tx_status, status);
 
+	dp_update_fw_rsn_cnt(soc, ring_id, tx_status);
+
 	/*
 	 * There can be scenario where WBM consuming descriptor enqueued
 	 * from TQM2WBM first and TQM completion can happen before MEC
@@ -250,7 +252,8 @@ void dp_tx_process_htt_completion_li(struct dp_soc *soc,
 		dp_tx_comp_process_tx_status(soc, tx_desc, &ts, txrx_peer,
 					     ring_id);
 		dp_tx_comp_process_desc(soc, tx_desc, &ts, txrx_peer);
-		dp_tx_comp_free_buf(soc, tx_desc, false);
+		if (tx_desc->flags & DP_TX_DESC_FLAG_COMPLETED_TX)
+			dp_tx_comp_free_buf(soc, tx_desc, false);
 		dp_tx_desc_release(soc, tx_desc, tx_desc->pool_id);
 
 		if (qdf_likely(txrx_peer))
@@ -357,6 +360,33 @@ static inline uint8_t dp_tx_get_rbm_id_li(struct dp_soc *soc,
 #endif
 #endif
 
+#ifdef WLAN_TX_PKT_CAPTURE_ENH
+/**
+ * dp_tx_get_override_rbm_id_li() - Get the override RBM ID for tx data.
+ * @soc: DP soc structure pointer
+ * @vdev: DP vdev structure pointer
+ * @ring_id: Transmit Queue/ring_id to be used when XPS is enabled
+ *
+ * Return: HAL ring handle
+ */
+static inline uint8_t dp_tx_get_override_rbm_id_li(struct dp_soc *soc,
+						   struct dp_vdev *vdev,
+						   uint8_t ring_id)
+{
+	if (qdf_unlikely(vdev->is_override_rbm_id))
+		return dp_tx_get_rbm_id_li(soc, vdev->rbm_id);
+
+	return dp_tx_get_rbm_id_li(soc, ring_id);
+}
+#else
+static inline uint8_t dp_tx_get_override_rbm_id_li(struct dp_soc *soc,
+						   struct dp_vdev *vdev,
+						   uint8_t ring_id)
+{
+	return dp_tx_get_rbm_id_li(soc, ring_id);
+}
+#endif
+
 #if defined(CLEAR_SW2TCL_CONSUMED_DESC)
 /**
  * dp_tx_clear_consumed_hw_descs - Reset all the consumed Tx ring descs to 0
@@ -415,7 +445,7 @@ QDF_STATUS dp_tx_compute_hw_delay_li(struct dp_soc *soc,
  * @hal_tx_desc_cached: tx descriptor
  * @fw_metadata: firmware metadata
  * @vdev_id: vdev id
- * @nbuf: skb buffer
+ * @tx_desc: Tx descriptor
  * @msdu_info: msdu info
  *
  * Return: void
@@ -423,10 +453,13 @@ QDF_STATUS dp_tx_compute_hw_delay_li(struct dp_soc *soc,
 static inline
 void dp_sawf_config_li(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 		       uint16_t *fw_metadata, uint16_t vdev_id,
-		       qdf_nbuf_t nbuf, struct dp_tx_msdu_info_s *msdu_info)
+		       struct dp_tx_desc_s *tx_desc,
+		       struct dp_tx_msdu_info_s *msdu_info)
 {
+	qdf_nbuf_t nbuf = tx_desc->nbuf;
 	uint8_t q_id = 0;
 	uint32_t flow_idx = 0;
+	uint16_t tcl_cmd_num;
 
 	q_id = dp_sawf_queue_id_get(nbuf);
 	if (q_id == DP_SAWF_DEFAULT_Q_INVALID)
@@ -443,7 +476,12 @@ void dp_sawf_config_li(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 	if (!wlan_cfg_get_sawf_config(soc->wlan_cfg_ctx))
 		return;
 
-	dp_sawf_tcl_cmd(fw_metadata, nbuf);
+	tcl_cmd_num = dp_sawf_tcl_cmd(soc, tx_desc, false);
+	if (tcl_cmd_num == DP_SAWF_INVALID_TCL_CMD)
+		return;
+
+	if (fw_metadata)
+		*fw_metadata = tcl_cmd_num;
 
 	/* For SAWF, q_id starts from DP_SAWF_Q_MAX */
 	if (!dp_sawf_get_search_index(soc, nbuf, vdev_id,
@@ -459,11 +497,11 @@ void dp_sawf_config_li(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 static inline
 void dp_sawf_config_li(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 		       uint16_t *fw_metadata, uint16_t vdev_id,
-		       qdf_nbuf_t nbuf, struct dp_tx_msdu_info_s *msdu_info)
+		       struct dp_tx_desc_s *tx_desc,
+		       struct dp_tx_msdu_info_s *msdu_info)
 {
 }
 
-#define dp_sawf_tx_enqueue_peer_stats(soc, tx_desc)
 #define dp_sawf_tx_enqueue_fail_peer_stats(soc, tx_desc)
 #endif
 
@@ -491,7 +529,7 @@ dp_tx_hw_enqueue_li(struct dp_soc *soc, struct dp_vdev *vdev,
 			tx_exc_metadata->sec_type : vdev->sec_type);
 
 	/* Return Buffer Manager ID */
-	uint8_t bm_id = dp_tx_get_rbm_id_li(soc, ring_id);
+	uint8_t bm_id = dp_tx_get_override_rbm_id_li(soc, vdev, ring_id);
 
 	hal_ring_handle_t hal_ring_hdl = NULL;
 
@@ -523,8 +561,7 @@ dp_tx_hw_enqueue_li(struct dp_soc *soc, struct dp_vdev *vdev,
 
 	if (dp_sawf_tag_valid_get(tx_desc->nbuf)) {
 		dp_sawf_config_li(soc, hal_tx_desc_cached, &fw_metadata,
-				  vdev->vdev_id, tx_desc->nbuf, msdu_info);
-		dp_sawf_tx_enqueue_peer_stats(soc, tx_desc);
+				  vdev->vdev_id, tx_desc, msdu_info);
 	}
 
 	hal_tx_desc_set_fw_metadata(hal_tx_desc_cached, fw_metadata);

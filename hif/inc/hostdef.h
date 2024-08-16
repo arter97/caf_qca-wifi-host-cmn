@@ -40,6 +40,7 @@ extern struct hostdef_s *QCA6490_HOSTdef;
 extern struct hostdef_s *QCA6750_HOSTdef;
 extern struct hostdef_s *KIWI_HOSTdef;
 extern struct hostdef_s *WCN7750_HOSTdef;
+extern struct hostdef_s *QCC2072_HOSTdef;
 
 extern struct hostdef_s *QCA8074_HOSTdef;
 extern struct hostdef_s *QCA8074V2_HOSTDEF;
@@ -52,4 +53,5 @@ extern struct hostdef_s *QCA9574_HOSTDEF;
 extern struct hostdef_s *QCA5332_HOSTDEF;
 extern struct hostdef_s *QCN9160_HOSTDEF;
 extern struct hostdef_s *QCN6432_HOSTDEF;
+extern struct hostdef_s *QCA5424_HOSTDEF;
 #endif

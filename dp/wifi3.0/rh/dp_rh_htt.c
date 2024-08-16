@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -38,7 +38,7 @@
 					(QDF_NBUF_CB_PADDR(_buf)),	\
 					(skb_end_pointer(_buf) -	\
 					(_buf)->data),			\
-					PCI_DMA_FROMDEVICE);		\
+					DMA_FROM_DEVICE);		\
 	} while (0)
 
 /**

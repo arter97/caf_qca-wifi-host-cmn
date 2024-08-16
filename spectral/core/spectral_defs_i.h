@@ -81,8 +81,6 @@
 /** pdev_spectral_streamfs - Radio specific spectral streamfs object
  * @dir_ptr:              Directory pointer for streamfs channel
  * @chan_ptr:             Pointer to streamfs channel
- * @n_subbuf_ptr:         Pointer to debugfs file for num sub-buffers
- * @subbuf_size_ptr:      Pointer to debugfs file for sub-buffer size
  * @n_subbuf:             Num of sub-buffers present inside the channel
  * @subbuf_size:          Size of each sub-buffer in bytes
  * @streamfs_buf:         Pointer within the sub-buffer in a streamfs channel
@@ -90,8 +88,6 @@
 struct pdev_spectral_streamfs {
 	qdf_dentry_t dir_ptr;
 	qdf_streamfs_chan_t chan_ptr;
-	qdf_dentry_t n_subbuf_ptr;
-	qdf_dentry_t subbuf_size_ptr;
 	uint32_t n_subbuf;
 	uint32_t subbuf_size;
 	void *streamfs_buf[SPECTRAL_MSG_TYPE_MAX];

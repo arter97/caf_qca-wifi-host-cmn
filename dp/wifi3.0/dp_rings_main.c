@@ -1013,6 +1013,17 @@ QDF_STATUS dp_soc_interrupt_attach(struct cdp_soc_t *txrx_soc)
 #define AVG_MSDUS_PER_FLOW 128
 #define AVG_MSDUS_PER_MPDU 4
 
+#ifdef DP_FTM_MODE_SKIP_WBM_RING_INIT
+bool dp_skip_ftm_mode_wbm_ring_init(struct dp_soc *soc)
+{
+	if (soc->cdp_soc.ol_ops->get_con_mode &&
+	    soc->cdp_soc.ol_ops->get_con_mode() == QDF_GLOBAL_FTM_MODE)
+		return true;
+
+	return false;
+}
+#endif
+
 void dp_hw_link_desc_pool_banks_free(struct dp_soc *soc, uint32_t mac_id)
 {
 	struct qdf_mem_multi_page_t *pages;
@@ -1151,6 +1162,9 @@ void dp_hw_link_desc_ring_free(struct dp_soc *soc)
 	void *vaddr = soc->wbm_idle_link_ring.base_vaddr_unaligned;
 	qdf_dma_addr_t paddr;
 
+	if (dp_skip_ftm_mode_wbm_ring_init(soc))
+		return;
+
 	if (soc->wbm_idle_scatter_buf_base_vaddr[0]) {
 		for (i = 0; i < MAX_IDLE_SCATTER_BUFS; i++) {
 			vaddr = soc->wbm_idle_scatter_buf_base_vaddr[i];
@@ -1184,6 +1198,9 @@ QDF_STATUS dp_hw_link_desc_ring_alloc(struct dp_soc *soc)
 	uint32_t ring_type;
 	uint32_t max_alloc_size = wlan_cfg_max_alloc_size(soc->wlan_cfg_ctx);
 	uint32_t tlds;
+
+	if (dp_skip_ftm_mode_wbm_ring_init(soc))
+		return QDF_STATUS_SUCCESS;
 
 	ring_type = WBM_IDLE_LINK;
 	dp_srng = &soc->wbm_idle_link_ring;
@@ -1501,6 +1518,48 @@ static void dp_soc_disable_unused_mac_intr_mask(struct dp_soc *soc,
 
 #ifdef IPA_OFFLOAD
 #ifdef IPA_WDI3_VLAN_SUPPORT
+
+#if defined(WLAN_FEATURE_NEAR_FULL_IRQ) && !defined(WLAN_SOFTUMAC_SUPPORT)
+static void dp_soc_reset_ipa_vlan_nf_intr_mask(struct dp_soc *soc)
+{
+	uint8_t *nf_grp_mask = NULL;
+	int grp_index;
+	int mask;
+
+	if (dp_is_reo_ring_num_in_nf_grp1(soc, IPA_ALT_REO_DEST_RING_IDX))
+		nf_grp_mask =
+		&soc->wlan_cfg_ctx->int_rx_ring_near_full_irq_1_mask[0];
+	else if (dp_is_reo_ring_num_in_nf_grp2(soc, IPA_ALT_REO_DEST_RING_IDX))
+		nf_grp_mask =
+		&soc->wlan_cfg_ctx->int_rx_ring_near_full_irq_2_mask[0];
+
+	if (qdf_unlikely(!nf_grp_mask)) {
+		dp_init_debug("%pK: ring_type %d ring_num %d not in nf grp",
+			      soc, REO_DST, IPA_ALT_REO_DEST_RING_IDX);
+		return;
+	}
+
+	grp_index = dp_srng_find_ring_in_mask(IPA_ALT_REO_DEST_RING_IDX,
+					      nf_grp_mask);
+	if (grp_index < 0) {
+		dp_init_debug("%pK: ring_type %d ring_num %d not nf masked",
+			      soc, REO_DST, IPA_ALT_REO_DEST_RING_IDX);
+		return;
+	}
+
+	mask = nf_grp_mask[grp_index];
+	mask &= ~(1 << IPA_ALT_REO_DEST_RING_IDX);
+	nf_grp_mask[grp_index] = mask;
+
+	dp_init_debug("%pK: nf_grp_mask index %d mask %d", soc, grp_index,
+		      mask);
+}
+#else /* !(WLAN_FEATURE_NEAR_FULL_IRQ && !WLAN_SOFTUMAC_SUPPORT) */
+static inline void dp_soc_reset_ipa_vlan_nf_intr_mask(struct dp_soc *soc)
+{
+}
+#endif /* WLAN_FEATURE_NEAR_FULL_IRQ && !WLAN_SOFTUMAC_SUPPORT */
+
 /**
  * dp_soc_reset_ipa_vlan_intr_mask() - reset interrupt mask for IPA offloaded
  *                                     ring for vlan tagged traffic
@@ -1515,6 +1574,8 @@ void dp_soc_reset_ipa_vlan_intr_mask(struct dp_soc *soc)
 
 	if (!wlan_ipa_is_vlan_enabled())
 		return;
+
+	dp_soc_reset_ipa_vlan_nf_intr_mask(soc);
 
 	grp_mask = &soc->wlan_cfg_ctx->int_rx_ring_mask[0];
 
@@ -1535,15 +1596,15 @@ void dp_soc_reset_ipa_vlan_intr_mask(struct dp_soc *soc)
 	 */
 	wlan_cfg_set_rx_ring_mask(soc->wlan_cfg_ctx, group_number, mask);
 }
-#else
-inline
-void dp_soc_reset_ipa_vlan_intr_mask(struct dp_soc *soc)
-{ }
+#else /* !IPA_WDI3_VLAN_SUPPORT */
+inline void dp_soc_reset_ipa_vlan_intr_mask(struct dp_soc *soc)
+{
+}
 #endif /* IPA_WDI3_VLAN_SUPPORT */
-#else
-inline
-void dp_soc_reset_ipa_vlan_intr_mask(struct dp_soc *soc)
-{ }
+#else /* !IPA_OFFLOAD */
+inline void dp_soc_reset_ipa_vlan_intr_mask(struct dp_soc *soc)
+{
+}
 #endif /* IPA_OFFLOAD */
 
 /**
@@ -2408,6 +2469,8 @@ void dp_soc_deinit(void *txrx_soc)
 
 	dp_peer_mec_spinlock_destroy(soc);
 
+	dp_soc_sawf_deinit(soc);
+
 	qdf_nbuf_queue_free(&soc->htt_stats.msg);
 
 	qdf_nbuf_queue_free(&soc->invalid_buf_queue);
@@ -2786,8 +2849,13 @@ dp_peer_setup_wifi3(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 
 	status = dp_peer_mlo_setup(soc, peer, vdev->vdev_id, setup_info);
 	if (QDF_IS_STATUS_ERROR(status)) {
-		dp_peer_err("peer mlo setup failed");
-		qdf_assert_always(0);
+		dp_peer_alert("peer mlo setup failed for link mac : "
+			      QDF_MAC_ADDR_FMT "MLD Mac : " QDF_MAC_ADDR_FMT,
+			      QDF_MAC_ADDR_REF(peer->mac_addr.raw),
+			      QDF_MAC_ADDR_REF(setup_info->mld_peer_mac));
+		status = QDF_STATUS_E_FAILURE;
+		dp_peer_mlo_setup_err_assert();
+		goto fail;
 	}
 
 	if (vdev_opmode != wlan_op_mode_monitor) {
@@ -3456,6 +3524,7 @@ static void dp_soc_cfg_init(struct dp_soc *soc)
 	case TARGET_TYPE_MANGO:
 	case TARGET_TYPE_PEACH:
 	case TARGET_TYPE_WCN7750:
+	case TARGET_TYPE_QCC2072:
 		soc->ast_override_support = 1;
 		soc->per_tid_basize_max_tid = 8;
 
@@ -3530,6 +3599,7 @@ static void dp_soc_cfg_init(struct dp_soc *soc)
 		soc->features.wds_ext_ast_override_enable = true;
 		break;
 	case TARGET_TYPE_QCA5332:
+	case TARGET_TYPE_QCA5424:
 	case TARGET_TYPE_QCN6432:
 		soc->umac_reset_supported = true;
 		soc->ast_override_support = 1;
@@ -3677,6 +3747,9 @@ void *dp_soc_init(struct dp_soc *soc, HTC_HANDLE htc_handle,
 				     ppeds_attached,
 				     soc->umac_reset_supported);
 
+	/* Reset the cpu ring map if radio is NSS/IPA offloaded */
+	dp_soc_reset_ipa_vlan_intr_mask(soc);
+
 	/* initialize WBM_IDLE_LINK ring */
 	if (dp_hw_link_desc_ring_init(soc)) {
 		dp_init_err("%pK: dp_hw_link_desc_ring_init failed", soc);
@@ -3786,6 +3859,7 @@ void *dp_soc_init(struct dp_soc *soc, HTC_HANDLE htc_handle,
 
 	qdf_spinlock_create(&soc->ast_lock);
 	dp_peer_mec_spinlock_create(soc);
+	dp_soc_sawf_init(soc);
 
 	qdf_spinlock_create(&soc->reo_desc_freelist_lock);
 	qdf_list_create(&soc->reo_desc_freelist, REO_DESC_FREELIST_SIZE);
@@ -4426,6 +4500,7 @@ void dp_soc_cfg_attach(struct dp_soc *soc)
 	case TARGET_TYPE_MANGO:
 	case TARGET_TYPE_PEACH:
 	case TARGET_TYPE_WCN7750:
+	case TARGET_TYPE_QCC2072:
 		soc->wlan_cfg_ctx->rxdma1_enable = 0;
 		break;
 	case TARGET_TYPE_QCA8074:
@@ -4450,6 +4525,7 @@ void dp_soc_cfg_attach(struct dp_soc *soc)
 	case TARGET_TYPE_QCN9224:
 	case TARGET_TYPE_QCA5332:
 	case TARGET_TYPE_QCN6432:
+	case TARGET_TYPE_QCA5424:
 		wlan_cfg_set_tso_desc_attach_defer(soc->wlan_cfg_ctx, 1);
 		wlan_cfg_set_rxdma1_enable(soc->wlan_cfg_ctx);
 		break;

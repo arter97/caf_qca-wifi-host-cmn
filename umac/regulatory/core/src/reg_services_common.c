@@ -3922,6 +3922,10 @@ reg_skip_invalid_chan_freq(struct wlan_objmgr_pdev *pdev,
 	bool include_indoor_channel, dfs_master_capable;
 	uint8_t enable_srd_chan, srd_mask = 0;
 	struct wlan_objmgr_psoc *psoc;
+	enum reg_6g_ap_type ap_pwr_type;
+	enum supported_6g_pwr_types ap_pwr_mode;
+	enum channel_state chan_state;
+
 	psoc = wlan_pdev_get_psoc(pdev);
 	if (!psoc) {
 		reg_err("invalid psoc");
@@ -3948,6 +3952,17 @@ reg_skip_invalid_chan_freq(struct wlan_objmgr_pdev *pdev,
 		return status;
 	}
 
+	wlan_reg_get_cur_6g_ap_pwr_type(pdev, &ap_pwr_type);
+
+	if (ap_pwr_type == REG_INDOOR_AP)
+		ap_pwr_mode = REG_AP_LPI;
+	else if (ap_pwr_type == REG_STANDARD_POWER_AP)
+		ap_pwr_mode = REG_AP_SP;
+	else if (ap_pwr_type == REG_VERY_LOW_POWER_AP)
+		ap_pwr_mode = REG_AP_VLP;
+	else
+		ap_pwr_mode = REG_INVALID_PWR_MODE;
+
 	while (iface_mode_mask) {
 		if (iface_mode_mask & (1 << IFTYPE_AP)) {
 			srd_mask = 1;
@@ -3960,6 +3975,7 @@ reg_skip_invalid_chan_freq(struct wlan_objmgr_pdev *pdev,
 		} else {
 			break;
 		}
+
 		for (chan_enum = 0; chan_enum < *no_usable_channels;
 		     chan_enum++) {
 			if (iface_mode_mask & (1 << IFTYPE_NAN)) {
@@ -3970,9 +3986,13 @@ reg_skip_invalid_chan_freq(struct wlan_objmgr_pdev *pdev,
 				if (!res_msg[chan_enum].iface_mode_mask)
 					reg_remove_freq(res_msg, chan_enum);
 			} else {
-				if (wlan_reg_is_freq_indoor(
+				chan_state = reg_get_channel_state_for_pwrmode(
+						pdev, res_msg[chan_enum].freq,
+						ap_pwr_mode);
+				if (!reg_is_state_allowed(chan_state) ||
+				    (wlan_reg_is_freq_indoor(
 					pdev, res_msg[chan_enum].freq) &&
-					!include_indoor_channel) {
+					!include_indoor_channel)) {
 					res_msg[chan_enum].iface_mode_mask &=
 							~(iface_mode);
 					if (!res_msg[chan_enum].iface_mode_mask)
@@ -9605,6 +9625,7 @@ reg_is_chan_punc(uint16_t in_punc_pattern, uint16_t bw)
  * @is_client_list_lookup_needed: Boolean to indicate if client list lookup is
  * needed
  * @client_type: Client power type
+ * @is_twice_power: Boolean to indicate if EIRP to be in 0.5 dBm
  *
  * Return: EIRP
  */
@@ -9613,7 +9634,8 @@ reg_get_eirp_from_mas_chan_list(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
 				uint16_t bw, uint16_t in_punc_pattern,
 				enum reg_6g_ap_type ap_pwr_type,
 				bool is_client_list_lookup_needed,
-				enum reg_6g_client_type client_type)
+				enum reg_6g_client_type client_type,
+				bool is_twice_power)
 {
 	bool is_psd;
 	struct regulatory_channel *master_chan_list = NULL;
@@ -9638,6 +9660,9 @@ reg_get_eirp_from_mas_chan_list(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
 						       master_chan_list,
 						       freq, non_punc_bw,
 						       &txpower);
+
+	if (is_twice_power)
+		return txpower * 2;
 
 	return txpower;
 }
@@ -9678,14 +9703,16 @@ static inline bool reg_is_320_opclass(qdf_freq_t freq, uint8_t op_class)
  * @freq: Frequency in MHz
  * @cen320: 320 MHz band center frequency
  * @op_class: Operating class
+ * @is_twice_power: Boolean to indicate EIRP in 0.5 dBm
  *
  * Return: EIRP power
  */
-static int8_t reg_find_eirp_in_afc_eirp_obj(struct wlan_objmgr_pdev *pdev,
+static int16_t reg_find_eirp_in_afc_eirp_obj(struct wlan_objmgr_pdev *pdev,
 					    struct chan_eirp_obj *eirp_obj,
 					    qdf_freq_t freq,
 					    qdf_freq_t cen320,
-					    uint8_t op_class)
+					    uint8_t op_class,
+					    bool is_twice_power)
 {
 	uint8_t k;
 	uint8_t subchannels[NUM_20_MHZ_CHAN_IN_320_MHZ_CHAN];
@@ -9695,9 +9722,13 @@ static int8_t reg_find_eirp_in_afc_eirp_obj(struct wlan_objmgr_pdev *pdev,
 		qdf_freq_t cfi_freq =
 			reg_compute_6g_center_freq_from_cfi(eirp_obj->cfi);
 
-		if (cfi_freq == cen320)
-			return eirp_obj->eirp_power / EIRP_PWR_SCALE;
-
+	/* FW sends as scaled AFC power value in AFC Power Evenid */
+		if (cfi_freq == cen320) {
+			if (is_twice_power)
+				return eirp_obj->eirp_power;
+			else
+				return eirp_obj->eirp_power / EIRP_PWR_SCALE;
+		}
 		return 0;
 	}
 
@@ -9705,11 +9736,15 @@ static int8_t reg_find_eirp_in_afc_eirp_obj(struct wlan_objmgr_pdev *pdev,
 						 op_class,
 						 subchannels);
 
-	for (k = 0; k < nchans; k++)
+	for (k = 0; k < nchans; k++) {
 		if (reg_chan_band_to_freq(pdev, subchannels[k],
-					  BIT(REG_BAND_6G)) == freq)
-			return eirp_obj->eirp_power / EIRP_PWR_SCALE;
-
+					  BIT(REG_BAND_6G)) == freq) {
+			if (is_twice_power)
+				return eirp_obj->eirp_power;
+			else
+				return eirp_obj->eirp_power / EIRP_PWR_SCALE;
+		}
+	}
 	return 0;
 }
 
@@ -9721,14 +9756,16 @@ static int8_t reg_find_eirp_in_afc_eirp_obj(struct wlan_objmgr_pdev *pdev,
  * @freq: Frequency in MHz
  * @cen320: 320 MHz band center frequency
  * @op_class: Operating class
+ * @is_twice_power: Boolean to indicate EIRP in 0.5 dBm
  *
  * Return: EIRP power
  */
-static int8_t reg_find_eirp_in_afc_chan_obj(struct wlan_objmgr_pdev *pdev,
+static int16_t reg_find_eirp_in_afc_chan_obj(struct wlan_objmgr_pdev *pdev,
 					    struct afc_chan_obj *chan_obj,
 					    qdf_freq_t freq,
 					    qdf_freq_t cen320,
-					    uint8_t op_class)
+					    uint8_t op_class,
+					    bool is_twice_power)
 {
 	uint8_t j;
 
@@ -9736,18 +9773,45 @@ static int8_t reg_find_eirp_in_afc_chan_obj(struct wlan_objmgr_pdev *pdev,
 		return 0;
 
 	for (j = 0; j < chan_obj->num_chans; j++) {
-		int8_t afc_eirp;
+		int16_t afc_eirp;
 		struct chan_eirp_obj *eirp_obj = &chan_obj->chan_eirp_info[j];
 
 		afc_eirp = reg_find_eirp_in_afc_eirp_obj(pdev, eirp_obj,
 							 freq, cen320,
-							 op_class);
-
+							 op_class,
+							 is_twice_power);
 		if (afc_eirp)
 			return afc_eirp;
 	}
 
 	return 0;
+}
+
+/**
+ * reg_get_twice_eirp_pwr() -  To return EIRP Power represented in 0.5Dbm steps
+ * @afc_eirp_pwr: AFC EIRP Power
+ * @reg_sp_eirp_pwr: Regulatory SP EIRP Power
+ * @is_client_list_lookup_needed: Boolean to indicate if client list lookup is
+ * needed
+ *
+ * Return: 2 * EIRP
+ */
+static int16_t
+reg_get_twice_eirp_pwr(int16_t afc_eirp_pwr,
+		       int16_t reg_sp_eirp_pwr,
+		       bool is_client_list_lookup_needed)
+{
+	int16_t min_eirp_pwr = 0;
+
+	reg_sp_eirp_pwr *= EIRP_PWR_SCALE;
+	if (is_client_list_lookup_needed)
+		min_eirp_pwr = QDF_MIN(afc_eirp_pwr - SP_AP_AND_CLIENT_POWER_DIFF_IN_SCALE,
+				reg_sp_eirp_pwr);
+	else if (afc_eirp_pwr)
+		min_eirp_pwr = QDF_MIN(afc_eirp_pwr, reg_sp_eirp_pwr);
+
+	min_eirp_pwr = (min_eirp_pwr * 2) / EIRP_PWR_SCALE;
+	return min_eirp_pwr;
 }
 
 /**
@@ -9761,6 +9825,7 @@ static int8_t reg_find_eirp_in_afc_chan_obj(struct wlan_objmgr_pdev *pdev,
  * @is_client_list_lookup_needed: Bool to indicate if the sp_eirp_pwr is fetched
  * for client or not.
  * @reg_sp_eirp_pwr: Regulatory defined SP power for the input frequency
+ * @is_twice_power: Boolean to indicate EIRP Power in 0.5 dBm
  *
  * Return: Regulatory and AFC intersected SP power of punctured channel
  */
@@ -9771,7 +9836,8 @@ reg_get_sp_eirp_for_punc_chans(struct wlan_objmgr_pdev *pdev,
 			       uint16_t bw,
 			       uint16_t in_punc_pattern,
 			       bool is_client_list_lookup_needed,
-			       int16_t reg_sp_eirp_pwr)
+			       int16_t reg_sp_eirp_pwr,
+			       bool is_twice_power)
 {
 	int16_t min_psd = REG_MIN_POWER;
 	int16_t afc_eirp_pwr = REG_MIN_POWER;
@@ -9779,6 +9845,7 @@ reg_get_sp_eirp_for_punc_chans(struct wlan_objmgr_pdev *pdev,
 	struct wlan_lmac_if_reg_tx_ops *reg_tx_ops;
 	struct wlan_objmgr_psoc *psoc;
 	QDF_STATUS status;
+	int16_t min_eirp_pwr = 0;
 
 	psoc = wlan_pdev_get_psoc(pdev);
 
@@ -9814,12 +9881,15 @@ reg_get_sp_eirp_for_punc_chans(struct wlan_objmgr_pdev *pdev,
 		  non_punc_bw, afc_eirp_pwr);
 
 	if (is_client_list_lookup_needed)
-		return QDF_MIN(afc_eirp_pwr - SP_AP_AND_CLIENT_POWER_DIFF_IN_DBM,
-			       reg_sp_eirp_pwr);
-	if (afc_eirp_pwr)
-		return QDF_MIN(afc_eirp_pwr, reg_sp_eirp_pwr);
+		min_eirp_pwr = QDF_MIN(afc_eirp_pwr - SP_AP_AND_CLIENT_POWER_DIFF_IN_DBM,
+				       reg_sp_eirp_pwr);
+	else if (afc_eirp_pwr)
+		min_eirp_pwr = QDF_MIN(afc_eirp_pwr, reg_sp_eirp_pwr);
 
-	return 0;
+	if (is_twice_power)
+		min_eirp_pwr *= 2;
+
+	return min_eirp_pwr;
 }
 
 /**
@@ -9832,6 +9902,7 @@ reg_get_sp_eirp_for_punc_chans(struct wlan_objmgr_pdev *pdev,
  * @is_client_list_lookup_needed: Boolean to indicate if client list lookup is
  * needed
  * @client_type: Client power type
+ * @is_twice_power: Boolean to indicate EIRP Power in 0.5 dBm
  *
  * Return: EIRP
  */
@@ -9840,11 +9911,13 @@ reg_get_sp_eirp_before_afc_resp_rx(struct wlan_objmgr_pdev *pdev,
 				   qdf_freq_t freq,
 				   uint16_t bw,
 				   bool is_client_list_lookup_needed,
-				   enum reg_6g_client_type client_type)
+				   enum reg_6g_client_type client_type,
+				   bool is_twice_power)
 {
 	enum reg_afc_dev_deploy_type reg_afc_dev_type;
 	struct wlan_objmgr_psoc *psoc;
 	uint8_t num_ap_sp_rules, num_ap_vlp_rules;
+	int16_t eirp_pwr = 0;
 
 	psoc = wlan_pdev_get_psoc(pdev);
 
@@ -9861,13 +9934,13 @@ reg_get_sp_eirp_before_afc_resp_rx(struct wlan_objmgr_pdev *pdev,
 
 	if (reg_afc_dev_type == AFC_DEPLOYMENT_OUTDOOR && num_ap_sp_rules &&
 	    !num_ap_vlp_rules)
-		return reg_get_eirp_from_mas_chan_list(pdev, freq, bw,
-						       NO_SCHANS_PUNC,
-						       REG_STANDARD_POWER_AP,
-						       is_client_list_lookup_needed,
-						       client_type);
-	else
-		return 0;
+		eirp_pwr = reg_get_eirp_from_mas_chan_list(pdev, freq, bw,
+						           NO_SCHANS_PUNC,
+							   REG_STANDARD_POWER_AP,
+							   is_client_list_lookup_needed,
+							   client_type,
+							   is_twice_power);
+	return eirp_pwr;
 }
 
 /**
@@ -9882,6 +9955,7 @@ reg_get_sp_eirp_before_afc_resp_rx(struct wlan_objmgr_pdev *pdev,
  * @is_client_list_lookup_needed: Boolean to indicate if client list lookup is
  * needed
  * @client_type: Client power type
+ * @is_twice_power: Boolean to indicate EIRP Power in 0.5dBM steps
  *
  * Return: EIRP
  */
@@ -9891,7 +9965,8 @@ static int16_t reg_get_sp_eirp(struct wlan_objmgr_pdev *pdev,
 			       uint16_t bw,
 			       uint16_t in_punc_pattern,
 			       bool is_client_list_lookup_needed,
-			       enum reg_6g_client_type client_type)
+			       enum reg_6g_client_type client_type,
+			       bool is_twice_power)
 {
 	uint8_t i, op_class = 0, chan_num = 0;
 	int16_t afc_eirp_pwr = 0;
@@ -9911,7 +9986,8 @@ static int16_t reg_get_sp_eirp(struct wlan_objmgr_pdev *pdev,
 	if (!reg_is_afc_power_event_received(pdev))
 		return reg_get_sp_eirp_before_afc_resp_rx(pdev, freq, bw,
 							  is_client_list_lookup_needed,
-							  client_type);
+							  client_type,
+							  is_twice_power);
 
 	reg_get_mas_chan_list_for_lookup(pdev, &sp_master_chan_list,
 					 REG_STANDARD_POWER_AP,
@@ -9933,7 +10009,8 @@ static int16_t reg_get_sp_eirp(struct wlan_objmgr_pdev *pdev,
 		return reg_get_sp_eirp_for_punc_chans(pdev, freq, cen320, bw,
 						      in_punc_pattern,
 						      is_client_list_lookup_needed,
-						      reg_sp_eirp_pwr);
+						      reg_sp_eirp_pwr,
+						      is_twice_power);
 	}
 
 	power_info = pdev_priv_obj->power_info;
@@ -9957,7 +10034,8 @@ static int16_t reg_get_sp_eirp(struct wlan_objmgr_pdev *pdev,
 							     chan_obj,
 							     freq,
 							     cen320,
-							     op_class);
+							     op_class,
+							     is_twice_power);
 		if (afc_eirp_pwr)
 			break;
 	}
@@ -9968,9 +10046,16 @@ static int16_t reg_get_sp_eirp(struct wlan_objmgr_pdev *pdev,
 						       sp_master_chan_list,
 						       freq, bw,
 						       &reg_sp_eirp_pwr);
+
+	if (is_twice_power)
+		return reg_get_twice_eirp_pwr(afc_eirp_pwr,
+					      reg_sp_eirp_pwr,
+					      is_client_list_lookup_needed);
+
 	if (is_client_list_lookup_needed)
 		return QDF_MIN(afc_eirp_pwr - SP_AP_AND_CLIENT_POWER_DIFF_IN_DBM,
 			       reg_sp_eirp_pwr);
+
 	if (afc_eirp_pwr)
 		return QDF_MIN(afc_eirp_pwr, reg_sp_eirp_pwr);
 
@@ -9983,12 +10068,14 @@ static int8_t reg_get_sp_eirp(struct wlan_objmgr_pdev *pdev,
 			      uint16_t bw,
 			      uint16_t in_punc_pattern,
 			      bool is_client_list_lookup_needed,
-			      enum reg_6g_client_type client_type)
+			      enum reg_6g_client_type client_type,
+			      bool is_twice_power)
 {
 	return reg_get_eirp_from_mas_chan_list(pdev, freq, bw, in_punc_pattern,
 					       REG_STANDARD_POWER_AP,
 					       is_client_list_lookup_needed,
-					       client_type);
+					       client_type,
+					       is_twice_power);
 }
 #endif
 
@@ -10030,18 +10117,144 @@ int16_t reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
 			 uint16_t bw, enum reg_6g_ap_type ap_pwr_type,
 			 uint16_t in_punc_pattern,
 			 bool is_client_list_lookup_needed,
-			 enum reg_6g_client_type client_type)
+			 enum reg_6g_client_type client_type,
+			 bool is_twice_power)
 {
 	if (ap_pwr_type == REG_STANDARD_POWER_AP)
 		return reg_get_sp_eirp(pdev, freq, cen320, bw, in_punc_pattern,
 				       is_client_list_lookup_needed,
-				       client_type);
+				       client_type, is_twice_power);
 
 	return reg_get_eirp_from_mas_chan_list(pdev, freq, bw, in_punc_pattern,
 					       ap_pwr_type,
 					       is_client_list_lookup_needed,
-					       client_type);
+					       client_type, is_twice_power);
 }
+
+#if defined(CONFIG_AFC_SUPPORT) && defined(CONFIG_BAND_6GHZ)
+/**
+ * reg_validate_freq_in_afc_punc_chans() - Validate the given frequency,
+ * bandwidth and puncture pattern to check if it is present in the AFC
+ * response. This is done by checking all the unpunctured sub-channels if they
+ * are part of the 20MHz AFC channel object.
+ *
+ * @pdev: pdev pointer.
+ * @freq: Input frequency.
+ * @cen320: Frequency center of 320MHz.
+ * @bw: banwidth in MHz.
+ * @in_punc_pattern: Input puncture pattern.
+ * Return: true if present in AFC response, false otherwise.
+ */
+static bool
+reg_validate_freq_in_afc_punc_chans(struct wlan_objmgr_pdev *pdev,
+				    qdf_freq_t freq,
+				    qdf_freq_t cen320,
+				    uint16_t bw,
+				    uint16_t in_punc_pattern)
+{
+	const struct bonded_channel_freq *bonded_chan_ptr = NULL;
+	qdf_freq_t start_freq;
+	qdf_freq_t end_freq;
+	uint16_t unpunctured_bw = reg_find_non_punctured_bw(bw,
+							    in_punc_pattern);
+	uint8_t unpunctured_chan_count = unpunctured_bw / BW_20_MHZ;
+	uint8_t valid_sp_sub_chan = 0;
+	uint8_t i;
+	enum phy_ch_width chwidth = reg_find_chwidth_from_bw(bw);
+
+	if (!reg_is_chan_punc(in_punc_pattern, bw))
+		return false;
+
+	bonded_chan_ptr = reg_get_bonded_chan_entry(freq, chwidth, cen320);
+	if (!bonded_chan_ptr)
+		return false;
+
+	start_freq = bonded_chan_ptr->start_freq;
+	end_freq = bonded_chan_ptr->end_freq;
+	for (freq = start_freq, i = 0; freq <= end_freq;
+	     freq += BW_20_MHZ, i++) {
+		bool is_sub_chan_punctured =
+				reg_is_chan_bit_punctured(in_punc_pattern, i);
+
+		if (!is_sub_chan_punctured)
+			if (reg_validate_freq_in_afc_chan_obj(pdev, freq, 0,
+							      BW_20_MHZ))
+				valid_sp_sub_chan++;
+	}
+
+	if (valid_sp_sub_chan == unpunctured_chan_count)
+		return true;
+
+	return false;
+}
+
+/**
+ * reg_handle_invalid_best_power_mode() - If best power mode is
+ * REG_MAX_SUPP_AP_TYPE, there is a possibility that it is SP power mode if the
+ * deployment type is outdoor and the given frequency and bandwidth is present
+ * in the AFC response. Even if the EIRP value is 0 dBm, the power mode can
+ * still be SP.
+ *
+ * @pdev: pdev pointer.
+ * @freq: Input frequency.
+ * @cen320: Frequency center of 320MHz.
+ * @bw: banwidth in MHz.
+ * @best_pwr_mode: Output bestpower mode.
+ * @eirp_list: EIRP array for various power modes.
+ * @in_punc_pattern: Input puncture pattern.
+ * Return: void.
+ */
+static void
+reg_handle_invalid_best_power_mode(struct wlan_objmgr_pdev *pdev,
+				   qdf_freq_t freq,
+				   qdf_freq_t cen320,
+				   uint16_t bw,
+				   enum reg_6g_ap_type *best_pwr_mode,
+				   int16_t *eirp_list,
+				   uint16_t in_punc_pattern)
+{
+	enum reg_afc_dev_deploy_type reg_afc_dev_type;
+	QDF_STATUS status;
+
+	/*
+	 * If the best power mode is REG_MAX_SUPP_AP_TYPE then there is a
+	 * possibility that it is SP power mode provided the following
+	 * conditions are met,
+	 * - if the deployment type is Outdoor and,
+	 * - if the AFC power event is received and,
+	 * - if the input frequency and bandwidth is part of channel object of
+	 * the AFC response or if the frequency within the bandwidth is
+	 * punctured and it forms a valid punctured SP channel and,
+	 * - if the EIRP of the channel is 0 dBm.
+	 */
+
+	status = reg_get_afc_dev_deploy_type(pdev, &reg_afc_dev_type);
+	if (QDF_IS_STATUS_ERROR(status))
+		return;
+
+	if (reg_afc_dev_type != AFC_DEPLOYMENT_OUTDOOR)
+		return;
+
+	if (!reg_validate_freq_in_afc_chan_obj(pdev, freq, cen320, bw) &&
+	    !reg_validate_freq_in_afc_punc_chans(pdev, freq, cen320, bw,
+						 in_punc_pattern))
+		return;
+
+	if (!eirp_list[REG_STANDARD_POWER_AP])
+		*best_pwr_mode = REG_STANDARD_POWER_AP;
+}
+#else
+static inline void
+reg_handle_invalid_best_power_mode(struct wlan_objmgr_pdev *pdev,
+				   qdf_freq_t freq,
+				   qdf_freq_t cen320,
+				   uint16_t bw,
+				   enum reg_6g_ap_type *best_pwr_mode,
+				   int16_t *eirp_list,
+				   uint16_t in_punc_pattern)
+{
+}
+#endif
 
 enum reg_6g_ap_type reg_get_best_pwr_mode(struct wlan_objmgr_pdev *pdev,
 					  qdf_freq_t freq,
@@ -10051,6 +10264,7 @@ enum reg_6g_ap_type reg_get_best_pwr_mode(struct wlan_objmgr_pdev *pdev,
 {
 	int16_t eirp_list[REG_MAX_SUPP_AP_TYPE + 1];
 	enum reg_6g_ap_type ap_pwr_type;
+	enum reg_6g_ap_type best_pwr_mode;
 
 	for (ap_pwr_type = REG_INDOOR_AP; ap_pwr_type <= REG_VERY_LOW_POWER_AP;
 	     ap_pwr_type++)
@@ -10058,10 +10272,19 @@ enum reg_6g_ap_type reg_get_best_pwr_mode(struct wlan_objmgr_pdev *pdev,
 				reg_get_eirp_pwr(pdev, freq, cen320, bw,
 						 ap_pwr_type, in_punc_pattern,
 						 false,
-						 REG_MAX_CLIENT_TYPE);
+						 REG_MAX_CLIENT_TYPE, false);
 
-	return reg_get_best_pwr_mode_from_eirp_list(eirp_list,
-						    REG_MAX_SUPP_AP_TYPE + 1);
+	best_pwr_mode = reg_get_best_pwr_mode_from_eirp_list(
+						eirp_list,
+						REG_MAX_SUPP_AP_TYPE + 1);
+	if (best_pwr_mode != REG_CURRENT_MAX_AP_TYPE)
+		return best_pwr_mode;
+
+	reg_handle_invalid_best_power_mode(pdev, freq, cen320, bw,
+					   &best_pwr_mode, eirp_list,
+					   in_punc_pattern);
+
+	return best_pwr_mode;
 }
 #endif
 

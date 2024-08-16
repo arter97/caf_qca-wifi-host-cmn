@@ -266,7 +266,9 @@ cdp_peer_get_vdevid(ol_txrx_soc_handle soc,
 	}
 
 	if (soc->ops->peer_ops->get_vdevid)
-		return soc->ops->peer_ops->get_vdevid(soc, peer_mac, vdev_id);
+		return soc->ops->peer_ops->get_vdevid(soc, peer_mac,
+						      CDP_WILD_PEER_TYPE,
+						      vdev_id);
 
 	return QDF_STATUS_E_NOSUPPORT;
 }

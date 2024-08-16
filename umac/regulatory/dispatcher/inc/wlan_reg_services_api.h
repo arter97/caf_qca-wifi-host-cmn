@@ -2182,6 +2182,14 @@ bool wlan_reg_is_2ghz_op_class(const uint8_t *country, uint8_t op_class);
 bool wlan_reg_is_6ghz_op_class(struct wlan_objmgr_pdev *pdev,
 			       uint8_t op_class);
 
+/**
+ * wlan_reg_is_5dot9_ghz_supported() - Check if 5.9GHz is supported or not.
+ * @psoc: PSOC pointer
+ *
+ * Return: bool
+ */
+bool wlan_reg_is_5dot9_ghz_supported(struct wlan_objmgr_psoc *psoc);
+
 #ifdef CONFIG_REG_CLIENT
 /**
  * wlan_reg_is_6ghz_supported() - Whether 6ghz is supported
@@ -2726,6 +2734,7 @@ wlan_reg_get_best_pwr_mode(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
  * @is_client_list_lookup_needed: Boolean to indicate if client list lookup is
  * needed
  * @client_type: Client power type
+ * @is_twice_power: Boolean to indicate EIRP in 0.5 dBm
  *
  * Return: EIRP power
  */
@@ -2734,7 +2743,8 @@ int16_t wlan_reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
 			      enum reg_6g_ap_type ap_pwr_type,
 			      uint16_t in_punc_pattern,
 			      bool is_client_list_lookup_needed,
-			      enum reg_6g_client_type client_type);
+			      enum reg_6g_client_type client_type,
+			      bool is_twice_power);
 #else
 static inline
 qdf_freq_t wlan_reg_get_thresh_priority_freq(struct wlan_objmgr_pdev *pdev)
@@ -2774,7 +2784,8 @@ wlan_reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev,
 		      enum reg_6g_ap_type ap_pwr_type,
 		      uint16_t in_punc_pattern,
 		      bool is_client_list_lookup_needed,
-		      enum reg_6g_client_type client_type)
+		      enum reg_6g_client_type client_type,
+		      bool is_twice_power)
 {
 	return 0;
 }
@@ -2928,6 +2939,7 @@ wlan_reg_display_super_chan_list(struct wlan_objmgr_pdev *pdev)
 }
 #endif
 
+#ifdef CONFIG_BAND_6GHZ
 /**
  * wlan_reg_get_num_rules_of_ap_pwr_type() - Get the number of reg rules
  * present for a given ap power type
@@ -2939,6 +2951,14 @@ wlan_reg_display_super_chan_list(struct wlan_objmgr_pdev *pdev)
 uint8_t
 wlan_reg_get_num_rules_of_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
 				      enum reg_6g_ap_type ap_pwr_type);
+#else
+static inline uint8_t
+wlan_reg_get_num_rules_of_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
+				      enum reg_6g_ap_type ap_pwr_type)
+{
+	return 0;
+}
+#endif
 
 /**
  * wlan_reg_register_is_chan_connected_callback() - Register callback to check
@@ -3003,6 +3023,27 @@ static inline uint16_t
 wlan_reg_find_non_punctured_bw(uint16_t bw,  uint16_t in_punc_pattern)
 {
 	return 0;
+}
+#endif
+
+#if defined(CONFIG_BAND_6GHZ) && defined(CONFIG_REG_CLIENT)
+/**
+ * wlan_reg_is_vlp_depriority_freq() - Check if the frequency is VLP deprority
+ * frequency.
+ *
+ * @pdev: Pointer to pdev
+ * @freq: Frequency in MHz
+ *
+ * Return: True if frequency is deprority frequency, else false.
+ */
+bool wlan_reg_is_vlp_depriority_freq(struct wlan_objmgr_pdev *pdev,
+				     qdf_freq_t freq);
+#else
+static inline
+bool wlan_reg_is_vlp_depriority_freq(struct wlan_objmgr_pdev *pdev,
+				     qdf_freq_t freq)
+{
+	return false;
 }
 #endif
 #endif

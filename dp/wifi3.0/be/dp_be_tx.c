@@ -190,24 +190,6 @@ dp_tx_comp_get_params_from_hal_desc_be(struct dp_soc *soc,
 	return status;
 }
 #else
-#ifdef WLAN_MLO_MULTI_CHIP
-QDF_STATUS
-dp_tx_comp_get_params_from_hal_desc_be(struct dp_soc *soc,
-				       void *tx_comp_hal_desc,
-				       struct dp_tx_desc_s **r_tx_desc)
-{
-	uint64_t tx_desc_va;
-	QDF_STATUS status;
-
-	tx_desc_va = hal_tx_comp_get_desc_va(tx_comp_hal_desc);
-	*r_tx_desc = (struct dp_tx_desc_s *)(uintptr_t)tx_desc_va;
-
-	status = dp_tx_comp_desc_check_and_invalidate(tx_comp_hal_desc,
-						      r_tx_desc, tx_desc_va,
-						      true);
-	return status;
-}
-#else
 QDF_STATUS
 dp_tx_comp_get_params_from_hal_desc_be(struct dp_soc *soc,
 				       void *tx_comp_hal_desc,
@@ -229,7 +211,6 @@ dp_tx_comp_get_params_from_hal_desc_be(struct dp_soc *soc,
 
 	return status;
 }
-#endif /* WLAN_MLO_MULTI_CHIP */
 #endif /* DP_HW_COOKIE_CONVERT_EXCEPTION */
 #else
 
@@ -305,6 +286,8 @@ void dp_tx_process_htt_completion_be(struct dp_soc *soc,
 	tx_status = HTT_TX_WBM_COMPLETION_V3_TX_STATUS_GET(htt_desc[0]);
 	htt_handle = (struct htt_soc *)soc->htt_handle;
 	htt_wbm_event_record(htt_handle->htt_logger_handle, tx_status, status);
+
+	dp_update_fw_rsn_cnt(soc, ring_id, tx_status);
 
 	/*
 	 * There can be scenario where WBM consuming descriptor enqueued
@@ -455,7 +438,8 @@ void dp_tx_process_htt_completion_be(struct dp_soc *soc,
 		dp_tx_comp_process_tx_status(soc, tx_desc, &ts, txrx_peer,
 					     ring_id);
 		dp_tx_comp_process_desc(soc, tx_desc, &ts, txrx_peer);
-		dp_tx_comp_free_buf(soc, tx_desc, false);
+		if (tx_desc->flags & DP_TX_DESC_FLAG_COMPLETED_TX)
+			dp_tx_comp_free_buf(soc, tx_desc, false);
 		dp_tx_desc_release(soc, tx_desc, tx_desc->pool_id);
 
 		if (qdf_likely(txrx_peer))
@@ -1123,17 +1107,19 @@ bool dp_tx_mlo_is_mcast_primary_be(struct dp_soc *soc,
  * @soc: DP soc handle
  * @hal_tx_desc_cached: tx descriptor
  * @fw_metadata: firmware metadata
- * @nbuf: skb buffer
+ * @tx_desc: tx descriptor
  * @msdu_info: msdu info
  *
  * Return: tid value in mark metadata
  */
 uint8_t dp_sawf_config_be(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
-			  uint16_t *fw_metadata, qdf_nbuf_t nbuf,
+			  uint16_t *fw_metadata, struct dp_tx_desc_s *tx_desc,
 			  struct dp_tx_msdu_info_s *msdu_info)
 {
+	qdf_nbuf_t nbuf = tx_desc->nbuf;
 	uint8_t q_id = 0;
 	uint8_t tid = HTT_TX_EXT_TID_INVALID;
+	uint16_t tcl_cmd_num;
 
 	q_id = dp_sawf_queue_id_get(nbuf);
 
@@ -1154,8 +1140,13 @@ uint8_t dp_sawf_config_be(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 	if (!wlan_cfg_get_sawf_config(soc->wlan_cfg_ctx))
 		return tid;
 
+	tcl_cmd_num = dp_sawf_tcl_cmd(soc, tx_desc, false);
+	if (tcl_cmd_num == DP_SAWF_INVALID_TCL_CMD)
+		return tid;
+
 	if (fw_metadata)
-		dp_sawf_tcl_cmd(fw_metadata, nbuf);
+		*fw_metadata = tcl_cmd_num;
+
 	hal_tx_desc_set_flow_override_enable(hal_tx_desc_cached,
 					     DP_TX_FLOW_OVERRIDE_ENABLE);
 	hal_tx_desc_set_flow_override(hal_tx_desc_cached,
@@ -1172,13 +1163,13 @@ uint8_t dp_sawf_config_be(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 
 uint8_t dp_sawf_config_fast_send_be(struct dp_soc *soc,
 				    uint32_t *hal_tx_desc_cached,
-				    qdf_nbuf_t nbuf)
+				    struct dp_tx_desc_s *tx_desc)
 {
-	uint32_t mark = nbuf->mark;
+	uint32_t mark = tx_desc->nbuf->mark;
 	uint16_t fw_metadata = 0;
 	uint8_t q_id;
 	uint8_t tid;
-	uint8_t service_id;
+	uint16_t tcl_cmd_num;
 
 	q_id = mark & SAWF_MSDUQ_MASK;
 
@@ -1191,13 +1182,9 @@ uint8_t dp_sawf_config_fast_send_be(struct dp_soc *soc,
 	    (q_id < DP_SAWF_DEFAULT_QUEUE_MAX))
 		return tid;
 
-	service_id = (mark >> SAWF_SERVICE_CLASS_SHIFT) &
-				SAWF_SERVICE_CLASS_MASK;
-
-	HTT_TX_TCL_METADATA_TYPE_V2_SET
-		(fw_metadata, HTT_TCL_METADATA_V2_TYPE_SVC_ID_BASED);
-	HTT_TX_FLOW_METADATA_TID_OVERRIDE_SET(fw_metadata, 1);
-	HTT_TX_TCL_METADATA_SVC_CLASS_ID_SET(fw_metadata, service_id - 1);
+	tcl_cmd_num = dp_sawf_tcl_cmd(soc, tx_desc, true);
+	if (tcl_cmd_num == DP_SAWF_INVALID_TCL_CMD)
+		return tid;
 
 	hal_tx_desc_cached[3] = fw_metadata << TCL_DATA_CMD_TCL_CMD_NUMBER_LSB;
 
@@ -1213,7 +1200,7 @@ uint8_t dp_sawf_config_fast_send_be(struct dp_soc *soc,
 
 static inline
 uint8_t dp_sawf_config_be(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
-			  uint16_t *fw_metadata, qdf_nbuf_t nbuf,
+			  uint16_t *fw_metadata, struct dp_tx_desc_s *tx_desc,
 			  struct dp_tx_msdu_info_s *msdu_info)
 {
 	return HTT_TX_EXT_TID_INVALID;
@@ -1222,7 +1209,7 @@ uint8_t dp_sawf_config_be(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 static inline
 uint8_t dp_sawf_config_fast_send_be(struct dp_soc *soc,
 				    uint32_t *hal_tx_desc_cached,
-				    qdf_nbuf_t nbuf)
+				    struct dp_tx_desc_s *tx_desc)
 {
 	return HTT_TX_EXT_TID_INVALID;
 }
@@ -1232,13 +1219,6 @@ QDF_STATUS dp_sawf_reinject_handler(struct dp_soc *soc, qdf_nbuf_t nbuf,
 				    uint32_t *htt_desc)
 {
 	return QDF_STATUS_E_FAILURE;
-}
-
-static inline
-QDF_STATUS dp_sawf_tx_enqueue_peer_stats(struct dp_soc *soc,
-					 struct dp_tx_desc_s *tx_desc)
-{
-	return QDF_STATUS_SUCCESS;
 }
 
 static inline
@@ -1399,6 +1379,7 @@ int dp_ppeds_tx_comp_handler(struct dp_soc_be *be_soc, uint32_t quota)
 	struct dp_srng *srng;
 	uint16_t comp_index = 0;
 	struct dp_ppeds_tx_desc_pool_s *tx_desc_pool = &be_soc->ppeds_tx_desc;
+	uint8_t tx_comp_stats_ring_id = WBM2_SW_PPE_REL_RING_ID - 2;
 
 
 	if (qdf_unlikely(dp_srng_access_start(NULL, soc, hal_ring_hdl))) {
@@ -1432,6 +1413,7 @@ int dp_ppeds_tx_comp_handler(struct dp_soc_be *be_soc, uint32_t quota)
 		buf_src = hal_tx_comp_get_buffer_source(hal_soc,
 							tx_comp_hal_desc);
 
+		dp_update_wbm_rsm_stats(soc, tx_comp_stats_ring_id, buf_src);
 		if (qdf_unlikely(buf_src != HAL_TX_COMP_RELEASE_SOURCE_TQM &&
 				 buf_src != HAL_TX_COMP_RELEASE_SOURCE_FW)) {
 			dp_err("Tx comp release_src != TQM | FW but from %d",
@@ -1460,9 +1442,6 @@ int dp_ppeds_tx_comp_handler(struct dp_soc_be *be_soc, uint32_t quota)
 		}
 
 		tx_desc->buffer_src = buf_src;
-		tx_desc->peer_id = dp_tx_comp_get_peer_id_be(
-							soc,
-							tx_comp_hal_desc);
 
 		if (qdf_unlikely(buf_src == HAL_TX_COMP_RELEASE_SOURCE_FW)) {
 			uint8_t htt_tx_status[HAL_TX_COMP_HTT_STATUS_LEN];
@@ -1472,6 +1451,7 @@ int dp_ppeds_tx_comp_handler(struct dp_soc_be *be_soc, uint32_t quota)
 
 			status = hal_tx_comp_get_tx_status(tx_comp_hal_desc);
 
+			dp_update_fw_rsn_cnt(soc, tx_comp_stats_ring_id, status);
 			if (status == HTT_TX_FW2WBM_TX_STATUS_REINJECT) {
 				dp_ppeds_reinject_handler
 					(soc, tx_desc,
@@ -1489,6 +1469,8 @@ int dp_ppeds_tx_comp_handler(struct dp_soc_be *be_soc, uint32_t quota)
 			tx_desc->tx_status =
 				hal_tx_comp_get_tx_status(tx_comp_hal_desc);
 
+			dp_update_tqm_rsn_cnt(soc, tx_comp_stats_ring_id,
+					      tx_desc->tx_status, buf_src);
 			/*
 			 * Add desc sync to account for extended statistics
 			 * during Tx completion.
@@ -1581,7 +1563,7 @@ dp_get_peer_from_tx_exc_meta(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 {
 	struct dp_peer *peer = NULL;
 
-	if (tx_exc_metadata->is_wds_extended) {
+	if (tx_exc_metadata->is_wds_extended_mc_bc) {
 		peer = dp_peer_get_ref_by_id(soc, tx_exc_metadata->peer_id,
 					     DP_MOD_ID_TX);
 		if (peer) {
@@ -1627,6 +1609,7 @@ dp_tx_hw_enqueue_be(struct dp_soc *soc, struct dp_vdev *vdev,
 	uint8_t num_desc_bytes = HAL_TX_DESC_LEN_BYTES;
 	uint16_t ast_idx = vdev->bss_ast_idx;
 	uint16_t ast_hash = vdev->bss_ast_hash;
+	uint32_t hp;
 
 	be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
 
@@ -1662,8 +1645,7 @@ dp_tx_hw_enqueue_be(struct dp_soc *soc, struct dp_vdev *vdev,
 
 	if (dp_sawf_tag_valid_get(tx_desc->nbuf)) {
 		dp_sawf_config_be(soc, hal_tx_desc_cached,
-				  &fw_metadata, tx_desc->nbuf, msdu_info);
-		dp_sawf_tx_enqueue_peer_stats(soc, tx_desc);
+				  &fw_metadata, tx_desc, msdu_info);
 	}
 
 	hal_tx_desc_set_buf_addr_be(soc->hal_soc, hal_tx_desc_cached,
@@ -1740,8 +1722,16 @@ dp_tx_hw_enqueue_be(struct dp_soc *soc, struct dp_vdev *vdev,
 	/* Sync cached descriptor with HW */
 	hal_tx_desc_sync(hal_tx_desc_cached, hal_tx_desc, num_desc_bytes);
 
+	dp_tx_update_proto_stats(vdev, tx_desc->nbuf, ring_id,
+				 TX_ENQUEUE_HW);
+
 	coalesce = dp_tx_attempt_coalescing(soc, vdev, tx_desc, tid,
 					    msdu_info, ring_id);
+
+	if (qdf_unlikely(dp_tx_pkt_tracepoints_enabled())) {
+		hp = hal_srng_src_get_hp(hal_ring_hdl);
+		qdf_trace_dp_tx_enqueue(tx_desc->nbuf, hp, ring_id, coalesce);
+	}
 
 	DP_STATS_INC_PKT(vdev, tx_i[msdu_info->xmit_type].processed, 1,
 			 dp_tx_get_pkt_len(tx_desc));
@@ -2217,6 +2207,9 @@ qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	DP_STATS_INC(vdev, tx_i[xmit_type].rcvd_in_fast_xmit_flow, 1);
 	DP_STATS_INC(vdev, tx_i[xmit_type].rcvd_per_core[desc_pool_id], 1);
 
+	dp_tx_update_proto_stats(vdev, nbuf, desc_pool_id,
+				 TX_RECV_FROM_STACK_FP);
+
 	pdev = vdev->pdev;
 	if (dp_tx_limit_check(vdev, nbuf))
 		return nbuf;
@@ -2287,7 +2280,7 @@ qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 
 	if (qdf_unlikely(dp_sawf_tag_valid_get(nbuf))) {
 		sawf_tid = dp_sawf_config_fast_send_be(soc, hal_tx_desc_cached,
-						       nbuf);
+						       tx_desc);
 		if (sawf_tid != HTT_TX_EXT_TID_INVALID)
 			tid = sawf_tid;
 	}
@@ -2318,6 +2311,9 @@ qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 		DP_STATS_INC(vdev, tx_i[xmit_type].dropped.enqueue_fail, 1);
 		goto ring_access_fail;
 	}
+
+	dp_tx_update_proto_stats(vdev, tx_desc->nbuf, desc_pool_id,
+				 TX_ENQUEUE_HW_FP);
 
 	tx_desc->flags |= DP_TX_DESC_FLAG_QUEUED_TX;
 
@@ -2356,6 +2352,33 @@ QDF_STATUS dp_tx_desc_pool_alloc_be(struct dp_soc *soc, uint32_t num_elem,
 void dp_tx_desc_pool_free_be(struct dp_soc *soc, uint8_t pool_id)
 {
 }
+
+#ifdef QCA_DP_PROTOCOL_STATS
+static inline void
+dp_tx_comp_proto_stats_update(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
+			      uint8_t ring_id)
+{
+	struct dp_vdev *vdev = NULL;
+
+	if (tx_desc->vdev_id != DP_INVALID_VDEV_ID) {
+		vdev = dp_vdev_get_ref_by_id(soc, tx_desc->vdev_id,
+				DP_MOD_ID_TX_COMP);
+
+		if (vdev) {
+			dp_tx_update_proto_stats(vdev, tx_desc->nbuf,
+					ring_id, TX_COMP);
+			dp_vdev_unref_delete(soc, vdev,
+					DP_MOD_ID_TX_COMP);
+		}
+	}
+}
+#else
+static inline void
+dp_tx_comp_proto_stats_update(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
+			      uint8_t ring_id)
+{
+}
+#endif
 
 uint32_t dp_tx_comp_handler_be(struct dp_intr *int_ctx, struct dp_soc *soc,
 			       hal_ring_handle_t hal_ring_hdl,
@@ -2407,11 +2430,13 @@ more_data:
 
 	last_hw_desc = dp_srng_dst_inv_cached_descs(soc, hal_ring_hdl,
 						    num_avail_for_reap);
-	dp_srng_dst_inv_cached_descs(soc, hal_ring_hdl, num_avail_for_reap);
 	last_prefetched_hw_desc = dp_srng_dst_prefetch_32_byte_desc(
 							hal_soc,
 							hal_ring_hdl,
 							num_avail_for_reap);
+
+	/* get tx_desc pool from first sw desc */
+	tx_desc_pool = dp_get_tx_desc_pool_wrapper(soc);
 
 	/* Find head descriptor from completion ring */
 	while (qdf_likely(num_avail_for_reap--)) {
@@ -2420,6 +2445,7 @@ more_data:
 			break;
 
 		buffer_src = HAL_WBM2SW_RELEASE_SRC_GET(tx_comp_hal_desc);
+		dp_update_wbm_rsm_stats(soc, ring_id, buffer_src);
 		status = dp_tx_comp_get_params_from_hal_desc_be(
 							soc, tx_comp_hal_desc,
 							&tx_desc);
@@ -2430,16 +2456,9 @@ more_data:
 			QDF_BUG(0);
 			continue;
 		}
+		dp_tx_comp_proto_stats_update(soc, tx_desc, ring_id);
 		tx_desc->buffer_src = buffer_src;
-		tx_desc->peer_id = dp_tx_comp_get_peer_id_be(
-							  soc,
-							  tx_comp_hal_desc);
 
-		/* get tx_desc pool from first sw desc */
-		if (!tx_desc_pool) {
-			tx_desc_pool = dp_get_tx_desc_pool(soc,
-							   tx_desc->pool_id);
-		}
 		/*
 		 * If the release source is FW, process the HTT status
 		 */
@@ -2460,12 +2479,15 @@ more_data:
 			if (qdf_unlikely(!tx_desc->pdev))
 				dp_tx_dump_tx_desc(tx_desc);
 		} else {
+			tx_desc->tx_status =
+				hal_tx_comp_get_tx_status(tx_comp_hal_desc);
+			dp_update_tqm_rsn_cnt(soc, ring_id, tx_desc->tx_status,
+					      buffer_src);
+
 			if (tx_desc->flags & DP_TX_DESC_FLAG_FASTPATH_SIMPLE ||
 			    tx_desc->flags & DP_TX_DESC_FLAG_PPEDS)
 				goto add_to_pool2;
 
-			tx_desc->tx_status =
-				hal_tx_comp_get_tx_status(tx_comp_hal_desc);
 			/*
 			 * If the fast completion mode is enabled extended
 			 * metadata from descriptor is not copied

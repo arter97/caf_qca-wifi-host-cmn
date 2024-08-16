@@ -1666,6 +1666,24 @@ hal_rx_flow_setup_fse_kiwi(uint8_t *rx_fst, uint32_t table_offset,
 	return fse;
 }
 
+static inline QDF_STATUS
+hal_rx_flow_delete_cmem_fse_kiwi(struct hal_soc *hal_soc, uint32_t cmem_ba,
+				 uint32_t table_offset)
+{
+	uint32_t fse_offset;
+
+	fse_offset = cmem_ba + (table_offset * HAL_RX_FST_ENTRY_SIZE);
+	if (!(HAL_CMEM_READ(hal_soc, fse_offset +
+			    HAL_OFFSET(RX_FLOW_SEARCH_ENTRY, VALID))))
+		return QDF_STATUS_E_NOENT;
+
+	/* Reset the Valid bit */
+	HAL_CMEM_WRITE(hal_soc, fse_offset + HAL_OFFSET(RX_FLOW_SEARCH_ENTRY,
+							VALID), 0);
+
+	return QDF_STATUS_SUCCESS;
+}
+
 /**
  * hal_rx_flow_setup_cmem_fse_kiwi() - Setup a flow search entry in HW CMEM FST
  * @hal_soc: hal_soc reference
@@ -2131,6 +2149,60 @@ bool hal_rx_en_mcast_fp_data_filter_kiwi(void)
 	return false;
 }
 
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
+/**
+ * hal_txmon_get_frame_timestamp_kiwi() - api to get frame timestamp for tx monitor
+ * @tlv_tag: TLV tag
+ * @tx_tlv: pointer to tx tlv information
+ * @ppdu_info: pointer to ppdu_info
+ *
+ * Return: void
+ */
+static inline
+void hal_txmon_get_frame_timestamp_kiwi(uint32_t tlv_tag, void *tx_tlv,
+					void *ppdu_info)
+{
+	struct hal_tx_ppdu_info *tx_ppdu_info =
+			(struct hal_tx_ppdu_info *) ppdu_info;
+
+	switch (tlv_tag) {
+	case WIFIRESPONSE_END_STATUS_E:
+	{
+		hal_response_end_status_t *resp_end_status =
+					(hal_response_end_status_t *)tx_tlv;
+
+		TXMON_HAL_STATUS(tx_ppdu_info, ppdu_timestamp) =
+			(resp_end_status->start_of_frame_timestamp_15_0 |
+			 (resp_end_status->start_of_frame_timestamp_31_16 << 16));
+		break;
+	}
+
+	case WIFITX_FES_STATUS_END_E:
+	{
+		hal_tx_fes_status_end_t *tx_fes_end =
+					(hal_tx_fes_status_end_t *)tx_tlv;
+
+		TXMON_HAL_STATUS(tx_ppdu_info, ppdu_timestamp) =
+			(tx_fes_end->start_of_frame_timestamp_15_0 |
+			 tx_fes_end->start_of_frame_timestamp_31_16 <<
+			 HAL_TX_LSB(TX_FES_STATUS_END,
+			 START_OF_FRAME_TIMESTAMP_31_16));
+		break;
+	}
+	case WIFITX_FES_STATUS_PROT_E:
+	{
+		hal_tx_fes_status_prot_t *fes_prot =
+					(hal_tx_fes_status_prot_t *)tx_tlv;
+
+		TXMON_HAL_STATUS(tx_ppdu_info, ppdu_timestamp) =
+			(fes_prot->start_of_frame_timestamp_15_0 |
+			fes_prot->start_of_frame_timestamp_31_16 << 15);
+		break;
+	}
+	}
+}
+#endif
+
 #ifdef QCA_WIFI_KIWI_V2
 /**
  * hal_srng_dst_hw_init_misc_1_kiwi() - Function to initialize MISC_1 register
@@ -2206,6 +2278,37 @@ void hal_srng_dst_hw_init_kiwi(struct hal_soc *hal_soc,
 	hal_srng_dst_hw_init_generic(hal_soc, srng, idle_check, idx);
 }
 
+/**
+ * hal_rx_flow_cmem_update_reo_dst_ind_kiwi - update reo dest indication
+ * in CMEM
+ * @hal_soc: HAL SOC handle
+ * @cmem_ba: CMEM base address
+ * @flow_idx: flow index for which CMEM update is needed
+ * @reo_dest_ind: reo destination indication
+ *
+ * Return: None
+ */
+static void
+hal_rx_flow_cmem_update_reo_dst_ind_kiwi(struct hal_soc *hal_soc,
+					 uint32_t cmem_ba,
+					 uint32_t flow_idx,
+					 uint8_t reo_dest_ind)
+{
+	uint32_t fse_offset;
+	uint32_t value;
+
+	fse_offset = cmem_ba + (flow_idx * HAL_RX_FST_ENTRY_SIZE);
+	value = HAL_CMEM_READ(hal_soc,
+			      fse_offset + HAL_OFFSET(RX_FLOW_SEARCH_ENTRY,
+						      L4_PROTOCOL));
+
+	value &= ~RX_FLOW_SEARCH_ENTRY_REO_DESTINATION_INDICATION_MASK;
+	value |= HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY,
+				REO_DESTINATION_INDICATION,
+				reo_dest_ind);
+	HAL_CMEM_WRITE(hal_soc, fse_offset + HAL_OFFSET(RX_FLOW_SEARCH_ENTRY,
+							L4_PROTOCOL), value);
+}
 static void hal_hw_txrx_ops_attach_kiwi(struct hal_soc *hal_soc)
 {
 	/* init and setup */
@@ -2391,6 +2494,8 @@ static void hal_hw_txrx_ops_attach_kiwi(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_fst_get_fse_size = hal_rx_fst_get_fse_size_be;
 	hal_soc->ops->hal_compute_reo_remap_ix2_ix3 =
 					hal_compute_reo_remap_ix2_ix3_kiwi;
+	hal_soc->ops->hal_rx_flow_delete_cmem_fse =
+					hal_rx_flow_delete_cmem_fse_kiwi;
 	hal_soc->ops->hal_rx_flow_setup_cmem_fse =
 						hal_rx_flow_setup_cmem_fse_kiwi;
 	hal_soc->ops->hal_rx_flow_get_cmem_fse_ts =
@@ -2481,7 +2586,11 @@ static void hal_hw_txrx_ops_attach_kiwi(struct hal_soc *hal_soc)
 				hal_txmon_status_parse_tlv_generic_be;
 	hal_soc->ops->hal_txmon_status_get_num_users =
 				hal_txmon_status_get_num_users_generic_be;
+	hal_soc->ops->hal_txmon_get_frame_timestamp =
+				hal_txmon_get_frame_timestamp_kiwi;
 #endif /* WLAN_PKT_CAPTURE_TX_2_0 */
+	hal_soc->ops->hal_rx_flow_cmem_update_reo_dst_ind =
+				hal_rx_flow_cmem_update_reo_dst_ind_kiwi;
 };
 
 struct hal_hw_srng_config hw_srng_table_kiwi[] = {
@@ -2785,7 +2894,8 @@ struct hal_hw_srng_config hw_srng_table_kiwi[] = {
 	},
 	{ /* RXDMA_BUF */
 		.start_ring_id = HAL_SRNG_WMAC1_SW2RXDMA0_BUF0,
-#if defined(IPA_OFFLOAD) && defined(FEATURE_DIRECT_LINK)
+#if defined(IPA_OFFLOAD) && (defined(FEATURE_DIRECT_LINK) || \
+			     defined(IPA_WDI3_VLAN_SUPPORT))
 		.max_rings = 4,
 #elif defined(IPA_OFFLOAD) || defined(FEATURE_DIRECT_LINK)
 		.max_rings = 3,

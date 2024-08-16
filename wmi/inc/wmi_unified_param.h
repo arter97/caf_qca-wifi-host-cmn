@@ -1003,6 +1003,18 @@ struct peer_set_params {
 };
 
 /**
+ * struct peer_active_traffic_map_params - traffic map indication parameters
+ * @vdev_id: VDEV ID
+ * @peer_macaddr: peer mac address
+ * @active_traffic_map: active traffic bitmap on this peer
+ */
+struct peer_active_traffic_map_params {
+	uint32_t vdev_id;
+	struct qdf_mac_addr peer_macaddr;
+	uint32_t active_traffic_map;
+};
+
+/**
  * struct peer_create_params - peer create cmd parameter
  * @peer_addr: peer mac addr
  * @peer_type: peer type
@@ -2129,10 +2141,12 @@ struct mlo_prb_resp_tmpl_ml_info {
  * @prb_rsp_template_frm: pointer to template probe response template
  * @prb_rsp_template_len: length of probe response template
  * @cu_ml_info: Impacted link critical update information
+ * @go_ignore_non_p2p_probe_req: go ignore non-p2p probe req
  */
 struct wmi_probe_resp_params {
 	uint8_t *prb_rsp_template_frm;
 	uint32_t prb_rsp_template_len;
+	bool go_ignore_non_p2p_probe_req;
 #ifdef WLAN_FEATURE_11BE_MLO
 	struct mlo_prb_resp_tmpl_ml_info cu_ml_info;
 #endif
@@ -5494,6 +5508,7 @@ typedef enum {
 	wmi_mlo_teardown_complete_event_id,
 	wmi_mlo_link_set_active_resp_eventid,
 	wmi_mlo_link_removal_eventid,
+	wmi_mlo_tlt_selection_for_tid_eventid,
 	wmi_mlo_link_disable_request_eventid,
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 	wmi_mlo_link_switch_request_eventid,
@@ -5970,6 +5985,12 @@ typedef enum {
 		   PDEV_PARAM_ENABLE_LARGE_MRU),
 	PDEV_PARAM(pdev_param_pwr_reduction_in_quarter_db,
 		   PDEV_PARAM_PWR_REDUCTION_IN_QUARTER_DB),
+	PDEV_PARAM(pdev_param_scan_mode,
+		   PDEV_PARAM_SCAN_MODE),
+	PDEV_PARAM(pdev_param_dstall_consecutive_tx_no_ack_interval,
+		   PDEV_PARAM_DSTALL_CONSECUTIVE_TX_NO_ACK_INTERVAL),
+	PDEV_PARAM(pdev_param_dstall_consecutive_tx_no_ack_threshold,
+		   PDEV_PARAM_DSTALL_CONSECUTIVE_TX_NO_ACK_THRESHOLD),
 	pdev_param_max,
 } wmi_conv_pdev_params_id;
 
@@ -6712,12 +6733,25 @@ typedef enum {
 	wmi_service_smem_mailbox_dlkm_support,
 	wmi_service_mlo_mode2_recovery_supported,
 	wmi_service_dynamic_wsi_remap_support,
+#ifdef CONFIG_SAWF
+	wmi_service_msduq_recfg,
+#endif
 #ifdef WLAN_FEATURE_NAN
 	wmi_service_nan_pairing_peer_create,
+	wmi_service_sta_sap_ndp_concurrency_support,
+	wmi_service_sta_p2p_ndp_conc,
 #endif
 	wmi_service_therm_throt_pout_reduction,
 #ifdef WLAN_CHIPSET_STATS
 	wmi_service_chipset_logging_support,
+#endif
+#ifdef WLAN_DP_FEATURE_STC
+	wmi_service_traffic_context_support,
+#endif
+	wmi_service_support_ap_suspend_resume,
+	wmi_service_epm,
+#ifdef WLAN_FEATURE_MULTI_LINK_SAP
+	wmi_service_mlo_sap_emlsr_support,
 #endif
 	wmi_services_max,
 } wmi_conv_service_ids;
@@ -6804,6 +6838,7 @@ typedef enum {
  * @WMI_HOST_VENDOR1_REQ1_VERSION_3_30: Major version 3, minor version 30
  * @WMI_HOST_VENDOR1_REQ1_VERSION_3_40: Major version 3, minor version 40
  * @WMI_HOST_VENDOR1_REQ1_VERSION_4_00: Major version 4, minor version 00
+ * @WMI_HOST_VENDOR1_REQ1_VERSION_4_10: Major version 4, minor version 10
  */
 typedef enum {
 	WMI_HOST_VENDOR1_REQ1_VERSION_3_00 = 0,
@@ -6812,6 +6847,7 @@ typedef enum {
 	WMI_HOST_VENDOR1_REQ1_VERSION_3_30 = 3,
 	WMI_HOST_VENDOR1_REQ1_VERSION_3_40 = 4,
 	WMI_HOST_VENDOR1_REQ1_VERSION_4_00 = 5,
+	WMI_HOST_VENDOR1_REQ1_VERSION_4_10 = 6,
 } WMI_HOST_VENDOR1_REQ1_VERSION;
 
 /**
@@ -7103,6 +7139,7 @@ struct target_feature_set {
  * @fw_ast_indication_disable: Disable AST indication
  * @is_full_bw_nol_supported: Is full bandwidth needed to put to NOL
  * @is_smem_mailbox_supported: Is smem mailbox functionality supported
+ * @is_epm_supported: Is epm functionality supported
  * @con_mode_monitor: Device is in Full monitor mode
  */
 typedef struct {
@@ -7241,6 +7278,9 @@ typedef struct {
 	bool is_full_bw_nol_supported;
 #ifdef FEATURE_SMEM_MAILBOX
 	bool is_smem_mailbox_supported;
+#endif
+#ifdef FEATURE_EPM
+	bool is_epm_supported;
 #endif
 	bool con_mode_monitor;
 } target_resource_config;
@@ -10528,6 +10568,16 @@ struct wmi_host_mu_on_off_params {
 	uint8_t vdev_id;
 	uint32_t mu_on_duration;
 	uint32_t mu_off_duration;
+};
+
+/**
+ * struct wmi_sta_vdev_report_ap_oper_bw_params - AP's reported operating BW params
+ * @vdev_id: vdev ID
+ * @ap_phymode: Current Operating AP's phymode
+ */
+struct wmi_sta_vdev_report_ap_oper_bw_params {
+	uint8_t vdev_id;
+	enum wlan_phymode ap_phymode;
 };
 
 #endif /* _WMI_UNIFIED_PARAM_H_ */

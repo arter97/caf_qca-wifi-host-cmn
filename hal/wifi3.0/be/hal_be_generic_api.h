@@ -40,6 +40,7 @@ typedef struct tx_msdu_start hal_tx_msdu_start_t;
 typedef struct tx_mpdu_start hal_tx_mpdu_start_t;
 typedef struct tx_fes_status_end hal_tx_fes_status_end_t;
 typedef struct response_end_status hal_response_end_status_t;
+typedef struct phytx_pkt_end hal_phytx_pkt_end_t;
 typedef struct tx_fes_status_prot hal_tx_fes_status_prot_t;
 typedef struct pcu_ppdu_setup_init hal_pcu_ppdu_setup_t;
 #endif
@@ -361,6 +362,7 @@ hal_txmon_get_num_users(void *tx_tlv)
 /**
  * hal_txmon_parse_tx_fes_status_end() - parse tx_fes_status_end tlv
  *
+ * @hal_soc_hdl: HAL soc handle
  * @tx_tlv: pointer to tx_fes_status_end tlv header
  * @ppdu_info: pointer to hal_tx_ppdu_info
  * @tx_status_info: pointer to hal_tx_status_info
@@ -368,7 +370,7 @@ hal_txmon_get_num_users(void *tx_tlv)
  * Return: void
  */
 static inline void
-hal_txmon_parse_tx_fes_status_end(void *tx_tlv,
+hal_txmon_parse_tx_fes_status_end(hal_soc_handle_t hal_soc_hdl, void *tx_tlv,
 				  struct hal_tx_ppdu_info *ppdu_info,
 				  struct hal_tx_status_info *tx_status_info)
 {
@@ -385,16 +387,16 @@ hal_txmon_parse_tx_fes_status_end(void *tx_tlv,
 			  response_type) = tx_fes_end->response_type;
 	TXMON_STATUS_INFO(tx_status_info,
 			  r2r_to_follow) = tx_fes_end->r2r_end_status_to_follow;
+
 	/*  update phy timestamp to ppdu timestamp */
-	TXMON_HAL_STATUS(ppdu_info, ppdu_timestamp) =
-		(tx_fes_end->start_of_frame_timestamp_15_0 |
-		 tx_fes_end->start_of_frame_timestamp_31_16 <<
-		 HAL_TX_LSB(TX_FES_STATUS_END, START_OF_FRAME_TIMESTAMP_31_16));
+	hal_txmon_get_frame_timestamp(hal_soc_hdl, WIFITX_FES_STATUS_END_E,
+				      tx_tlv, ppdu_info);
 }
 
 /**
  * hal_txmon_parse_response_end_status() - parse response_end_status tlv
  *
+ * @hal_soc_hdl: HAL soc handle
  * @tx_tlv: pointer to response_end_status tlv header
  * @ppdu_info: pointer to hal_tx_ppdu_info
  * @tx_status_info: pointer to hal_tx_status_info
@@ -402,13 +404,13 @@ hal_txmon_parse_tx_fes_status_end(void *tx_tlv,
  * Return: void
  */
 static inline void
-hal_txmon_parse_response_end_status(void *tx_tlv,
+hal_txmon_parse_response_end_status(hal_soc_handle_t hal_soc_hdl, void *tx_tlv,
 				    struct hal_tx_ppdu_info *ppdu_info,
 				    struct hal_tx_status_info *tx_status_info)
 {
-	hal_response_end_status_t *resp_end_status = NULL;
+	hal_response_end_status_t *resp_end_status =
+				(hal_response_end_status_t *)tx_tlv;
 
-	resp_end_status = (hal_response_end_status_t *)tx_tlv;
 	TXMON_HAL_STATUS(ppdu_info, bw) = resp_end_status->coex_based_tx_bw;
 	TXMON_STATUS_INFO(tx_status_info, generated_response) =
 		resp_end_status->generated_response;
@@ -416,9 +418,8 @@ hal_txmon_parse_response_end_status(void *tx_tlv,
 		resp_end_status->mba_user_count;
 	TXMON_STATUS_INFO(tx_status_info, mba_fake_bitmap_count) =
 		resp_end_status->mba_fake_bitmap_count;
-	TXMON_HAL_STATUS(ppdu_info, ppdu_timestamp) =
-		(resp_end_status->start_of_frame_timestamp_15_0 |
-		 (resp_end_status->start_of_frame_timestamp_31_16 << 16));
+	hal_txmon_get_frame_timestamp(hal_soc_hdl, WIFIRESPONSE_END_STATUS_E,
+				      tx_tlv, ppdu_info);
 }
 
 /**
@@ -489,6 +490,8 @@ hal_txmon_parse_peer_entry(void *tx_tlv,
 				peer_entry->mac_addr_b_47_16;
 	TXMON_HAL_USER(tx_ppdu_info, user_id, sw_peer_id) =
 				peer_entry->sw_peer_id;
+	TXMON_HAL_USER(tx_ppdu_info, user_id, enc_type) =
+				peer_entry->key_type;
 }
 
 /**
@@ -547,6 +550,7 @@ hal_txmon_parse_msdu_start(void *tx_tlv, uint8_t user_id,
 /**
  * hal_txmon_parse_tx_fes_status_prot() - parse tx_fes_status_prot tlv
  *
+ * @hal_soc_hdl: HAL SOC handle
  * @tx_tlv: pointer to pcu_ppdu_setup_init tlv header
  * @ppdu_info: pointer to hal_tx_ppdu_info
  * @tx_status_info: pointer to hal_tx_status_info
@@ -554,15 +558,15 @@ hal_txmon_parse_msdu_start(void *tx_tlv, uint8_t user_id,
  * Return: void
  */
 static inline void
-hal_txmon_parse_tx_fes_status_prot(void *tx_tlv,
+hal_txmon_parse_tx_fes_status_prot(hal_soc_handle_t hal_soc_hdl, void *tx_tlv,
 				   struct hal_tx_ppdu_info *ppdu_info,
 				   struct hal_tx_status_info *tx_status_info)
 {
 	hal_tx_fes_status_prot_t *fes_prot = (hal_tx_fes_status_prot_t *)tx_tlv;
 
-	TXMON_HAL_STATUS(ppdu_info, ppdu_timestamp) =
-		(fes_prot->start_of_frame_timestamp_15_0 |
-		 fes_prot->start_of_frame_timestamp_31_16 << 15);
+	TXMON_HAL(ppdu_info, cts_recvd) = fes_prot->success;
+	hal_txmon_get_frame_timestamp(hal_soc_hdl, WIFITX_FES_STATUS_PROT_E,
+				      tx_tlv, ppdu_info);
 }
 
 /**
@@ -773,10 +777,12 @@ hal_txmon_populate_he_data_per_user(struct hal_txmon_user_desc_per_user *usr,
 	he_data3 |= (usr->ldpc_extra_symbol <<
 		     QDF_MON_STATUS_LDPC_EXTRA_SYMBOL_SHIFT);
 	/* RU offset and RU */
-	he_data2 |= QDF_MON_STATUS_RU_ALLOCATION_OFFSET_KNOWN;
-	he_data2 |= (get_ru_offset_from_start_index(usr->ru_size,
+	if (TXMON_HAL(ppdu_info, su_or_mu)) {
+		he_data2 |= QDF_MON_STATUS_RU_ALLOCATION_OFFSET_KNOWN;
+		he_data2 |= (get_ru_offset_from_start_index(usr->ru_size,
 						    usr->ru_start_index) <<
-		     QDF_MON_STATUS_RU_ALLOCATION_SHIFT);
+			     QDF_MON_STATUS_RU_ALLOCATION_SHIFT);
+	}
 	/* Data BW and RU allocation */
 	if (usr->ru_size < HAL_MAX_RU_INDEX) {
 		/* update bandwidth if it is full bandwidth */
@@ -907,6 +913,8 @@ static inline void
 hal_txmon_get_user_desc_common(void *tx_tlv,
 			       struct hal_txmon_usr_desc_common *usr_common)
 {
+	uint8_t num_ltf_symbols;
+
 	usr_common->ltf_size =
 		HAL_TX_DESC_GET_64(tx_tlv, MACTX_USER_DESC_COMMON, LTF_SIZE);
 	usr_common->pkt_extn_pe =
@@ -919,15 +927,44 @@ hal_txmon_get_user_desc_common(void *tx_tlv,
 		HAL_TX_DESC_GET_64(tx_tlv, MACTX_USER_DESC_COMMON, CENTER_RU_0);
 	usr_common->center_ru_1 =
 		HAL_TX_DESC_GET_64(tx_tlv, MACTX_USER_DESC_COMMON, CENTER_RU_1);
-	usr_common->num_ltf_symbols =
+	num_ltf_symbols =
 		HAL_TX_DESC_GET_64(tx_tlv, MACTX_USER_DESC_COMMON,
 				   NUM_LTF_SYMBOLS);
+	/**
+	 *
+	 * Below mapping is used between num_ltf_symbols & LTF value in
+	 * radiotap header.
+	 * ---------------------------------------------------
+	 * |mactx_user_desc_common   | LTF value for radiotap|
+	 * |- LTF enum               |                       |
+	 * ---------------------------------------------------
+	 * |           0             |          0            |
+	 * ---------------------------------------------------
+	 * |           1             |          1            |
+	 * ---------------------------------------------------
+	 * |           2             |          1            |
+	 * ---------------------------------------------------
+	 * |           3             |          2            |
+	 * ---------------------------------------------------
+	 * |           4             |          2            |
+	 * ---------------------------------------------------
+	 * |           5             |          3            |
+	 * ---------------------------------------------------
+	 * |           6             |          3            |
+	 * ---------------------------------------------------
+	 * |           7             |          4            |
+	 * ---------------------------------------------------
+	 *
+	 */
+	usr_common->num_ltf_symbols = (num_ltf_symbols + 1) >> 1;
 	usr_common->doppler_indication =
 		HAL_TX_DESC_GET_64(tx_tlv, MACTX_USER_DESC_COMMON,
 				   DOPPLER_INDICATION);
 	usr_common->spatial_reuse =
 		HAL_TX_DESC_GET_64(tx_tlv, MACTX_USER_DESC_COMMON,
 				   SPATIAL_REUSE);
+	usr_common->gi =
+		HAL_TX_DESC_GET_64(tx_tlv, MACTX_PHY_DESC, CP_SETTING);
 
 	usr_common->ru_channel_0[0] =
 	HAL_TX_DESC_GET_64(tx_tlv, MACTX_USER_DESC_COMMON,
@@ -1091,6 +1128,8 @@ hal_txmon_populate_eht_sig_common(struct hal_txmon_usr_desc_common *usr_common,
 	uint8_t i = 0;
 
 	eht_known = (QDF_MON_STATUS_EHT_SPATIAL_REUSE_KNOWN |
+		     QDF_MON_STATUS_EHT_GUARD_INTERVAL_KNOWN |
+		     QDF_MON_STATUS_EHT_LTF_KNOWN |
 		     QDF_MON_STATUS_EHT_EHT_LTF_KNOWN |
 		     QDF_MON_STATUS_EHT_PRE_FEC_PADDING_FACTOR_KNOWN |
 		     QDF_MON_STATUS_EHT_PE_DISAMBIGUITY_KNOWN |
@@ -1098,6 +1137,10 @@ hal_txmon_populate_eht_sig_common(struct hal_txmon_usr_desc_common *usr_common,
 
 	eht_data[0] |= (usr_common->spatial_reuse <<
 			QDF_MON_STATUS_EHT_SPATIAL_REUSE_SHIFT);
+	eht_data[0] |= (usr_common->gi <<
+			QDF_MON_STATUS_EHT_GI_SHIFT);
+	eht_data[0] |= (usr_common->ltf_size <<
+			QDF_MON_STATUS_EHT_LTF_SHIFT);
 	eht_data[0] |= (usr_common->num_ltf_symbols <<
 			QDF_MON_STATUS_EHT_EHT_LTF_SHIFT);
 	eht_data[0] |= (usr_common->a_factor <<
@@ -1205,38 +1248,37 @@ hal_txmon_parse_eht_sig_non_mumimo_user_info(void *tx_tlv, uint32_t user_id,
 					     struct hal_tx_ppdu_info *ppdu_info)
 {
 	struct hal_eht_sig_non_mu_mimo_user_info *user_info;
-	uint32_t idx = TXMON_HAL_STATUS(ppdu_info, num_eht_user_info_valid);
 
 	user_info = (struct hal_eht_sig_non_mu_mimo_user_info *)tx_tlv;
 
-	TXMON_HAL_STATUS(ppdu_info, eht_user_info[idx]) |=
+	TXMON_HAL_USER(ppdu_info, user_id, eht_user_info) |=
 		QDF_MON_STATUS_EHT_USER_STA_ID_KNOWN |
 		QDF_MON_STATUS_EHT_USER_MCS_KNOWN |
 		QDF_MON_STATUS_EHT_USER_CODING_KNOWN |
 		QDF_MON_STATUS_EHT_USER_NSS_KNOWN |
 		QDF_MON_STATUS_EHT_USER_BEAMFORMING_KNOWN;
 
-	TXMON_HAL_STATUS(ppdu_info, eht_user_info[idx]) |=
+	TXMON_HAL_USER(ppdu_info, user_id, eht_user_info) |=
 				(user_info->sta_id <<
 				 QDF_MON_STATUS_EHT_USER_STA_ID_SHIFT);
 
-	TXMON_HAL_STATUS(ppdu_info, eht_user_info[idx]) |=
+	TXMON_HAL_USER(ppdu_info, user_id, eht_user_info) |=
 				(user_info->mcs <<
 				 QDF_MON_STATUS_EHT_USER_MCS_SHIFT);
 
 	TXMON_HAL_STATUS(ppdu_info, mcs) = user_info->mcs;
 
-	TXMON_HAL_STATUS(ppdu_info, eht_user_info[idx]) |=
+	TXMON_HAL_USER(ppdu_info, user_id, eht_user_info) |=
 				(user_info->nss <<
 				 QDF_MON_STATUS_EHT_USER_NSS_SHIFT);
 
 	TXMON_HAL_STATUS(ppdu_info, nss) = user_info->nss + 1;
 
-	TXMON_HAL_STATUS(ppdu_info, eht_user_info[idx]) |=
+	TXMON_HAL_USER(ppdu_info, user_id, eht_user_info) |=
 				(user_info->beamformed <<
 				 QDF_MON_STATUS_EHT_USER_BEAMFORMING_SHIFT);
 
-	TXMON_HAL_STATUS(ppdu_info, eht_user_info[idx]) |=
+	TXMON_HAL_USER(ppdu_info, user_id, eht_user_info) |=
 				(user_info->coding <<
 				 QDF_MON_STATUS_EHT_USER_CODING_SHIFT);
 
@@ -1259,31 +1301,30 @@ hal_txmon_parse_eht_sig_mumimo_user_info(void *tx_tlv, uint32_t user_id,
 					 struct hal_tx_ppdu_info *ppdu_info)
 {
 	struct hal_eht_sig_mu_mimo_user_info *user_info;
-	uint32_t idx = TXMON_HAL_STATUS(ppdu_info, num_eht_user_info_valid);
 
 	user_info = (struct hal_eht_sig_mu_mimo_user_info *)tx_tlv;
 
-	TXMON_HAL_STATUS(ppdu_info, eht_user_info[idx]) |=
+	TXMON_HAL_USER(ppdu_info, user_id, eht_user_info) |=
 		QDF_MON_STATUS_EHT_USER_STA_ID_KNOWN |
 		QDF_MON_STATUS_EHT_USER_MCS_KNOWN |
 		QDF_MON_STATUS_EHT_USER_CODING_KNOWN |
 		QDF_MON_STATUS_EHT_USER_SPATIAL_CONFIG_KNOWN;
 
-	TXMON_HAL_STATUS(ppdu_info, eht_user_info[idx]) |=
+	TXMON_HAL_USER(ppdu_info, user_id, eht_user_info) |=
 				(user_info->sta_id <<
 				 QDF_MON_STATUS_EHT_USER_STA_ID_SHIFT);
 
-	TXMON_HAL_STATUS(ppdu_info, eht_user_info[idx]) |=
+	TXMON_HAL_USER(ppdu_info, user_id, eht_user_info) |=
 				(user_info->mcs <<
 				 QDF_MON_STATUS_EHT_USER_MCS_SHIFT);
 
 	TXMON_HAL_STATUS(ppdu_info, mcs) = user_info->mcs;
 
-	TXMON_HAL_STATUS(ppdu_info, eht_user_info[idx]) |=
+	TXMON_HAL_USER(ppdu_info, user_id, eht_user_info) |=
 				(user_info->coding <<
 				 QDF_MON_STATUS_EHT_USER_CODING_SHIFT);
 
-	TXMON_HAL_STATUS(ppdu_info, eht_user_info[idx]) |=
+	TXMON_HAL_USER(ppdu_info, user_id, eht_user_info) |=
 				(user_info->spatial_coding <<
 				 QDF_MON_STATUS_EHT_USER_SPATIAL_CONFIG_SHIFT);
 	/*  TODO: CRC */
@@ -1489,6 +1530,7 @@ hal_tx_record_tlv_info(struct hal_tx_ppdu_info *ppdu_info,
 
 /**
  * hal_txmon_status_parse_tlv_generic_be() - api to parse status tlv.
+ * @hal_soc_hdl: HAL soc handle
  * @data_ppdu_info: hal_txmon data ppdu info
  * @prot_ppdu_info: hal_txmon prot ppdu info
  * @data_status_info: pointer to data status info
@@ -1499,7 +1541,8 @@ hal_tx_record_tlv_info(struct hal_tx_ppdu_info *ppdu_info,
  * Return: status
  */
 static inline uint32_t
-hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
+hal_txmon_status_parse_tlv_generic_be(hal_soc_handle_t hal_soc_hdl,
+				      void *data_ppdu_info,
 				      void *prot_ppdu_info,
 				      void *data_status_info,
 				      void *prot_status_info,
@@ -1525,7 +1568,7 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 	tx_status_info = (ppdu_info->is_data ? data_status_info :
 			  prot_status_info);
 
-	user_id = (tlv_user_id > ppdu_info->num_users ? 0 : tlv_user_id);
+	user_id = (tlv_user_id >= ppdu_info->num_users ? 0 : tlv_user_id);
 	hal_tx_record_tlv_info(ppdu_info, tlv_tag);
 
 	switch (tlv_tag) {
@@ -1542,8 +1585,24 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 	/* end of initiator FES window */
 	case WIFITX_FES_STATUS_END_E:/* UPSTREAM - COMPACTION */
 	{
-		hal_txmon_parse_tx_fes_status_end(tx_tlv, ppdu_info,
-						  tx_status_info);
+		hal_txmon_parse_tx_fes_status_end(hal_soc_hdl, tx_tlv,
+						  ppdu_info, tx_status_info);
+		if (ppdu_info->num_users == 1 &&
+		    TXMON_HAL_STATUS(ppdu_info, he_flags)) {
+			/* copy the he data to common he_data */
+			TXMON_HAL_STATUS(ppdu_info, he_data1) =
+				TXMON_HAL_USER(ppdu_info, user_id, he_data1);
+			TXMON_HAL_STATUS(ppdu_info, he_data2) =
+				TXMON_HAL_USER(ppdu_info, user_id, he_data2);
+			TXMON_HAL_STATUS(ppdu_info, he_data3) =
+				TXMON_HAL_USER(ppdu_info, user_id, he_data3);
+			TXMON_HAL_STATUS(ppdu_info, he_data4) =
+				TXMON_HAL_USER(ppdu_info, user_id, he_data4);
+			TXMON_HAL_STATUS(ppdu_info, he_data5) =
+				TXMON_HAL_USER(ppdu_info, user_id, he_data5);
+			TXMON_HAL_STATUS(ppdu_info, he_data6) =
+				TXMON_HAL_USER(ppdu_info, user_id, he_data6);
+		}
 
 		status = HAL_MON_TX_FES_STATUS_END;
 		SHOW_DEFINED(WIFITX_FES_STATUS_END_E);
@@ -1610,11 +1669,18 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 	case WIFIRESPONSE_END_STATUS_E:/* UPSTREAM - COMPACTION */
 	{
 		/* response PPDU window end */
-		hal_txmon_parse_response_end_status(tx_tlv, ppdu_info,
-						    tx_status_info);
+		hal_txmon_parse_response_end_status(hal_soc_hdl, tx_tlv,
+						    ppdu_info, tx_status_info);
 
 		status = HAL_MON_RESPONSE_END_STATUS_INFO;
 		SHOW_DEFINED(WIFIRESPONSE_END_STATUS_E);
+		break;
+	}
+	case WIFIPHYTX_PKT_END_E:
+	{
+		hal_txmon_get_frame_timestamp(hal_soc_hdl, WIFIPHYTX_PKT_END_E,
+					      tx_tlv, ppdu_info);
+		SHOW_DEFINED(WIFIPHYTX_PKT_END_E);
 		break;
 	}
 	case WIFITX_FLUSH_E:/* DOWNSTREAM */
@@ -1704,12 +1770,14 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 	}
 	case WIFITX_MPDU_END_E:/* DOWNSTREAM */
 	{
+		status = HAL_MON_TX_MPDU_END;
 		/* no tlv content */
 		SHOW_DEFINED(WIFITX_MPDU_END_E);
 		break;
 	}
 	case WIFITX_MSDU_END_E:/* DOWNSTREAM */
 	{
+		status = HAL_MON_TX_MSDU_END;
 		/* no tlv content */
 		SHOW_DEFINED(WIFITX_MSDU_END_E);
 		break;
@@ -1849,8 +1917,8 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 	}
 	case WIFITX_FES_STATUS_PROT_E:/* UPSTREAM - COMPACTION */
 	{
-		hal_txmon_parse_tx_fes_status_prot(tx_tlv, ppdu_info,
-						   tx_status_info);
+		hal_txmon_parse_tx_fes_status_prot(hal_soc_hdl, tx_tlv,
+						   ppdu_info, tx_status_info);
 
 		status = HAL_MON_TX_FES_STATUS_PROT;
 		TXMON_HAL(ppdu_info, prot_tlv_status) = tlv_tag;
@@ -1966,6 +2034,14 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 		 * TLV generated by RXPCU and provide information related to
 		 * the received BA or ACK frame
 		 */
+		struct tx_fes_status_ack_or_ba *ack =
+			(struct tx_fes_status_ack_or_ba *)tx_tlv;
+
+		if (ack->ack_ba_status_type == 0) {
+			TXMON_HAL(ppdu_info, ack_recvd) = true;
+			TXMON_HAL(ppdu_info, ack_rssi) = ack->ack_frame_rssi;
+		}
+		status = HAL_MON_TX_FES_STATUS_ACK_BA;
 		SHOW_DEFINED(WIFITX_FES_STATUS_ACK_OR_BA_E);
 		break;
 	}
@@ -2098,6 +2174,10 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 	}
 	case WIFIRX_FRAME_BITMAP_ACK_E:
 	{
+		uint16_t ba_bitmap_sz;
+		uint64_t *ba_bitmap_tmp = NULL;
+		uint8_t offset = 0;
+
 		/* user tlv */
 		status = HAL_MON_RX_FRAME_BITMAP_ACK;
 		SHOW_DEFINED(WIFIRX_FRAME_BITMAP_ACK_E);
@@ -2157,16 +2237,26 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 							   RX_FRAME_BITMAP_ACK,
 							   BA_BITMAP_SIZE);
 
-		/* ba bitmap */
-		qdf_mem_copy(TXMON_HAL_USER(ppdu_info, user_id, ba_bitmap),
-			     &HAL_SET_FLD_OFFSET_64(tx_tlv,
-						    RX_FRAME_BITMAP_ACK,
-						    BA_TS_BITMAP_31_0, 0), 32);
+		ba_bitmap_sz = TXMON_HAL_USER(ppdu_info, user_id, ba_bitmap_sz);
 
+		/* ba bitmap */
+		offset = HAL_TX_LSB(RX_FRAME_BITMAP_ACK, BA_TS_BITMAP_31_0)
+									   >> 3;
+		ba_bitmap_tmp = &HAL_SET_FLD_OFFSET_64(tx_tlv,
+						       RX_FRAME_BITMAP_ACK,
+						       BA_TS_BITMAP_31_0,
+						       offset);
+
+		qdf_mem_copy(TXMON_HAL_USER(ppdu_info, user_id, ba_bitmap),
+			     ba_bitmap_tmp, 4 << ba_bitmap_sz);
 		break;
 	}
 	case WIFIRX_FRAME_1K_BITMAP_ACK_E:
 	{
+		uint16_t ba_bitmap_sz;
+		uint64_t *ba_bitmap_tmp = NULL;
+		uint8_t offset = 0;
+
 		/* user tlv */
 		status = HAL_MON_RX_FRAME_BITMAP_BLOCK_ACK_1K;
 		SHOW_DEFINED(WIFIRX_FRAME_1K_BITMAP_ACK_E);
@@ -2208,14 +2298,19 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 				HAL_TX_DESC_GET_64(tx_tlv,
 						   RX_FRAME_1K_BITMAP_ACK,
 						   BA_TS_CTRL);
-		/* memcpy  ba bitmap */
-		qdf_mem_copy(TXMON_HAL_USER(ppdu_info, user_id, ba_bitmap),
-			     &HAL_SET_FLD_OFFSET_64(tx_tlv,
-						    RX_FRAME_1K_BITMAP_ACK,
-						    BA_TS_BITMAP_31_0, 0),
-			     4 << TXMON_HAL_USER(ppdu_info,
-						 user_id, ba_bitmap_sz));
 
+		ba_bitmap_sz = TXMON_HAL_USER(ppdu_info, user_id, ba_bitmap_sz);
+
+		/* memcpy  ba bitmap */
+		offset = HAL_TX_LSB(RX_FRAME_1K_BITMAP_ACK, BA_TS_BITMAP_31_0)
+									   >> 3;
+		ba_bitmap_tmp = &HAL_SET_FLD_OFFSET_64(tx_tlv,
+						       RX_FRAME_1K_BITMAP_ACK,
+						       BA_TS_BITMAP_31_0,
+						       offset);
+
+		qdf_mem_copy(TXMON_HAL_USER(ppdu_info, user_id, ba_bitmap),
+			     ba_bitmap_tmp, 4 << ba_bitmap_sz);
 		break;
 	}
 	case WIFIRESPONSE_START_STATUS_E:
@@ -2440,12 +2535,16 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 		uint8_t a_factor;
 		uint8_t pe_disambiguity;
 		uint8_t txbf;
+		uint8_t beam_change;
 		uint8_t txbw;
 		uint8_t txop;
 
 		status = HAL_MON_MACTX_HE_SIG_A_SU;
 		num_users = TXMON_HAL(ppdu_info, num_users);
 
+		beam_change = HAL_TX_DESC_GET_64(tx_tlv,
+						 MACTX_HE_SIG_A_SU_MACTX_HE_SIG_A_SU_INFO_DETAILS,
+						 BEAM_CHANGE);
 		mcs_of_sig_b = HAL_TX_DESC_GET_64(tx_tlv,
 						  MACTX_HE_SIG_A_SU_MACTX_HE_SIG_A_SU_INFO_DETAILS,
 						  TRANSMIT_MCS);
@@ -2522,7 +2621,7 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 		/* HE data 3 */
 		TXMON_HAL_USER(ppdu_info, user_id, he_data3) |=
 			bss_color_id |
-			(!!txbf << QDF_MON_STATUS_BEAM_CHANGE_SHIFT) |
+			(beam_change << QDF_MON_STATUS_BEAM_CHANGE_SHIFT) |
 			(coding << QDF_MON_STATUS_CODING_SHIFT) |
 			(stbc << QDF_MON_STATUS_STBC_SHIFT);
 
@@ -3103,6 +3202,8 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 		status = HAL_MON_MACTX_PHY_DESC;
 
 		num_users = TXMON_HAL(ppdu_info, num_users);
+		TXMON_HAL(ppdu_info, su_or_mu) =
+			HAL_TX_DESC_GET_64(tx_tlv, MACTX_PHY_DESC, SU_OR_MU);
 		pkt_type = HAL_TX_DESC_GET_64(tx_tlv, MACTX_PHY_DESC, PKT_TYPE);
 		is_stbc = HAL_TX_DESC_GET_64(tx_tlv, MACTX_PHY_DESC, STBC);
 		is_triggered = HAL_TX_DESC_GET_64(tx_tlv, MACTX_PHY_DESC,

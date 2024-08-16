@@ -883,6 +883,8 @@ mlo_prepare_and_send_connect(struct wlan_objmgr_vdev *vdev,
 
 	req.vdev_id = wlan_vdev_get_id(vdev);
 	req.ssid.length = ssid.length;
+	req.chan_freq = link_info.chan_freq;
+	req.link_id =  link_info.link_id;
 	qdf_mem_copy(&req.ssid.ssid, &ssid.ssid, ssid.length);
 	if (mld_addr)
 		qdf_copy_macaddr(&req.mld_addr, mld_addr);
@@ -905,6 +907,127 @@ mlo_prepare_and_send_connect(struct wlan_objmgr_vdev *vdev,
 	wlan_cm_free_connect_req_param(&req);
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+/**
+ * mlo_mgr_find_valid_partner_link_info_idx- Find non rejected partner link information
+ *
+ * @ml_parnter_info: ML partner link information
+ *
+ * Return: link index
+ */
+static uint8_t
+mlo_mgr_find_valid_partner_link_info_idx(struct mlo_partner_info *ml_parnter_info)
+{
+	uint8_t i;
+
+	if (!ml_parnter_info) {
+		mlo_err("ml partner info is null");
+		return WLAN_UMAC_MLO_MAX_VDEVS;
+	}
+
+	for (i = 0; i < ml_parnter_info->num_partner_links; i++) {
+		if (!ml_parnter_info->partner_link_info[i].link_status_code) {
+			mlo_debug("valid idx %d", i);
+			return i;
+		}
+	}
+
+	return WLAN_UMAC_MLO_MAX_VDEVS;
+}
+
+/**
+ * mlo_mgr_find_valid_partner_link_info- Find non rejected partner link information
+ *
+ * @mlo_dev_ctx: ML dev ctx pointer
+ * @ml_parnter_info: ML partner link information
+ *
+ * Return: mlo_link_info
+ */
+static struct mlo_link_info *
+mlo_mgr_find_valid_partner_link_info(struct wlan_mlo_dev_context *mlo_dev_ctx,
+				     struct mlo_partner_info *ml_parnter_info)
+{
+	uint8_t i;
+
+	if (!ml_parnter_info || !mlo_dev_ctx) {
+		mlo_err("ml partner info or mlo dev ctx is null");
+		return NULL;
+	}
+
+	for (i = 0; i < ml_parnter_info->num_partner_links; i++) {
+		if (!ml_parnter_info->partner_link_info[i].link_status_code) {
+			return mlo_mgr_get_ap_link_by_link_id(mlo_dev_ctx,
+							      ml_parnter_info->partner_link_info[i].link_id);
+		}
+	}
+
+	return NULL;
+}
+
+/**
+ * mlo_mgr_is_link_rejected- Api to check if link is rejected
+ *
+ * @vdev: vdev pointer
+ * @partner_link_id: Partner link id
+ * @ml_partner_info: ML partner info
+ * @valid_link_idx: Valid partner link idx
+ *
+ * Return: bool
+ */
+static bool
+mlo_mgr_is_link_rejected(struct wlan_objmgr_vdev *vdev,
+			 uint8_t partner_link_id,
+			 struct mlo_partner_info *ml_partner_info,
+			 uint8_t *valid_link_idx)
+{
+	struct wlan_mlo_dev_context *mlo_dev_ctx;
+	uint8_t vdev_id;
+	uint8_t link_vdev_id;
+	struct mlo_link_info *link_info;
+	struct mlo_link_info *new_link_info;
+
+	if (!vdev) {
+		mlo_err("Vdev is null");
+		return false;
+	}
+
+	if (!ml_partner_info) {
+		mlo_err("ml partner info is null");
+		return false;
+	}
+
+	vdev_id = wlan_vdev_get_id(vdev);
+	mlo_dev_ctx = vdev->mlo_dev_ctx;
+
+	if (!mlo_dev_ctx) {
+		mlo_err("ml dev ctx is null");
+		return false;
+	}
+
+	link_info = mlo_mgr_get_ap_link_by_link_id(mlo_dev_ctx, partner_link_id);
+	if (!link_info)
+		return false;
+
+	link_vdev_id = link_info->vdev_id;
+	if (link_info->link_status_code &&
+	    link_vdev_id != WLAN_INVALID_VDEV_ID) {
+		new_link_info = mlo_mgr_find_valid_partner_link_info(mlo_dev_ctx,
+								     ml_partner_info);
+		if (new_link_info) {
+			mlo_debug("Rejected link id %d vdev id %d Accepted link id %d vdev id %d",
+				  link_info->link_id, vdev_id,
+				  new_link_info->link_id,
+				  new_link_info->vdev_id);
+			mlo_mgr_link_rejection_handler(vdev, link_info,
+						       new_link_info, true);
+			*valid_link_idx = mlo_mgr_find_valid_partner_link_info_idx(ml_partner_info);
+		}
+		return true;
+	}
+
+	return false;
+}
+
 /**
  * mlo_send_link_connect- Create/Issue the connection on secondary link
  *
@@ -913,7 +1036,6 @@ mlo_prepare_and_send_connect(struct wlan_objmgr_vdev *vdev,
  *
  * Return: none
  */
-#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 static void mlo_send_link_connect(struct wlan_objmgr_vdev *vdev,
 				  struct wlan_cm_connect_resp *resp)
 {
@@ -924,6 +1046,7 @@ static void mlo_send_link_connect(struct wlan_objmgr_vdev *vdev,
 	uint16_t vdev_count = 0;
 	struct wlan_mlo_dev_context *mlo_dev_ctx = vdev->mlo_dev_ctx;
 	struct mlo_partner_info *ml_parnter_info = &resp->ml_parnter_info;
+	uint8_t valid_idx = WLAN_UMAC_MLO_MAX_VDEVS;
 
 	mlo_debug("Sending link connect on partner interface");
 	wlan_vdev_mlme_get_ssid(
@@ -935,8 +1058,22 @@ static void mlo_send_link_connect(struct wlan_objmgr_vdev *vdev,
 		return;
 	}
 
-	if(wlan_vdev_mlme_is_mlo_link_vdev(vdev))
+	if (wlan_vdev_mlme_is_mlo_link_vdev(vdev)) {
+		mlo_mgr_find_and_clear_rejected_links(vdev, MAX_MLO_LINK_ID,
+						      ml_parnter_info);
 		return;
+	}
+
+	copied_conn_req_lock_acquire(mlo_dev_ctx->sta_ctx);
+	if (!mlo_dev_ctx->sta_ctx->copied_conn_req) {
+		mlo_dev_ctx->sta_ctx->copied_conn_req =
+			qdf_mem_malloc(sizeof(struct wlan_cm_connect_req));
+		if (mlo_dev_ctx->sta_ctx->copied_conn_req) {
+			wlan_cm_get_active_connect_req_param(vdev,
+							     mlo_dev_ctx->sta_ctx->copied_conn_req);
+		}
+	}
+	copied_conn_req_lock_release(mlo_dev_ctx->sta_ctx);
 
 	mlo_sta_get_vdev_list(vdev, &vdev_count, wlan_vdev_list);
 	for (i = 0; i < vdev_count; i++) {
@@ -944,6 +1081,20 @@ static void mlo_send_link_connect(struct wlan_objmgr_vdev *vdev,
 			mlo_release_vdev_ref(wlan_vdev_list[i]);
 			continue;
 		}
+
+		if (mlo_mgr_is_link_rejected(wlan_vdev_list[i],
+					     ml_parnter_info->partner_link_info[partner_idx].link_id,
+					     ml_parnter_info,
+					     &valid_idx)) {
+			if (valid_idx == WLAN_UMAC_MLO_MAX_VDEVS) {
+				mlo_debug("Valid link not found", valid_idx);
+				mlo_release_vdev_ref(wlan_vdev_list[i]);
+				continue;
+			}
+			mlo_debug("Valid idx %d", valid_idx);
+			partner_idx = valid_idx;
+		}
+
 		wlan_vdev_mlme_set_mlo_vdev(mlo_dev_ctx->wlan_vdev_list[i]);
 		wlan_vdev_mlme_set_mlo_link_vdev(mlo_dev_ctx->wlan_vdev_list[i]);
 		wlan_vdev_set_link_id(
@@ -1255,6 +1406,71 @@ mlo_sta_ignore_link_connect_fail(struct wlan_objmgr_vdev *vdev)
 }
 #endif
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+/**
+ * mlo_mgr_update_ap_mac() - Update AP MAC information
+ * @vdev: Object Manager vdev
+ * @link_id: Link id of the AP MLD link
+ * @ap_link_addr: AP link address
+ *
+ * Update AP MAC for 1 link of AP MLD
+ * For some IoT MLO AP, AP link addr in RNR of beacon are wrong, doesn't
+ * match that of assoc rsp, AP link addr in link info in mlo context of vdev
+ * is got from scan entry, is wrong too, the wrong AP link addr is used to
+ * save PTK, the PTK will be failed to install for can't find BSS peer by
+ * wrong AP link addr.
+ * To fix it, when assoc vdev connected, use partner AP link addr in assoc
+ * rsp to update AP link addr of link info in mlo context of vdev.
+ *
+ * Return: void
+ */
+static void mlo_mgr_update_ap_mac(struct wlan_objmgr_vdev *vdev,
+				  uint8_t link_id,
+				  struct qdf_mac_addr *ap_link_addr)
+{
+	struct mlo_link_info *link_info;
+
+	if (!vdev || !vdev->mlo_dev_ctx || !ap_link_addr)
+		return;
+
+	link_info = mlo_mgr_get_ap_link_by_link_id(vdev->mlo_dev_ctx, link_id);
+	if (!link_info)
+		return;
+
+	qdf_copy_macaddr(&link_info->ap_link_addr, ap_link_addr);
+
+	mlo_debug("update AP link addr link_id: %d, vdev_id:%d, link_addr:"
+		  QDF_MAC_ADDR_FMT,
+		  link_info->link_id, link_info->vdev_id,
+		  QDF_MAC_ADDR_REF(link_info->ap_link_addr.bytes));
+}
+
+static void mlo_mgr_update_parnter_info(struct wlan_objmgr_vdev *vdev,
+				        struct wlan_cm_connect_resp *rsp)
+{
+	struct qdf_mac_addr *ap_link_addr;
+	uint8_t link_id, i;
+	struct mlo_partner_info *partner_info;
+
+	if (wlan_vdev_mlme_is_mlo_link_vdev(vdev))
+		return;
+
+	partner_info = &rsp->ml_parnter_info;
+	for (i = 0; i < partner_info->num_partner_links; i++) {
+		link_id = partner_info->partner_link_info[i].link_id;
+		ap_link_addr =
+			&partner_info->partner_link_info[i].link_addr;
+		mlo_mgr_update_ap_mac(vdev, link_id, ap_link_addr);
+	}
+}
+#else
+static inline
+void mlo_mgr_update_parnter_info(struct wlan_objmgr_vdev *vdev,
+			         struct wlan_cm_connect_resp *rsp)
+{
+}
+#endif
+
 void mlo_sta_link_connect_notify(struct wlan_objmgr_vdev *vdev,
 				 struct wlan_cm_connect_resp *rsp)
 {
@@ -1323,6 +1539,7 @@ void mlo_sta_link_connect_notify(struct wlan_objmgr_vdev *vdev,
 			mlo_update_connected_links_bmap(mlo_dev_ctx,
 							rsp->ml_parnter_info);
 		}
+		mlo_mgr_update_parnter_info(vdev, rsp);
 		mlo_send_link_connect(vdev, rsp);
 	}
 }
@@ -1772,59 +1989,11 @@ error:
 	return ch_freq;
 }
 
-#ifdef WLAN_FEATURE_ROAM_OFFLOAD
-/**
- * mlo_get_reassoc_rsp() - To get reassoc response
- * @vdev: objmgr vdev
- * @reassoc_rsp_frame: reassoc rsp
- *
- * Return: NA
- */
-static
-void mlo_get_reassoc_rsp(struct wlan_objmgr_vdev *vdev,
-			 struct element_info **reassoc_rsp_frame)
-{
-	struct wlan_mlo_dev_context *mlo_dev_ctx = vdev->mlo_dev_ctx;
-	struct wlan_mlo_sta *sta_ctx = NULL;
-
-	if (!mlo_dev_ctx || !mlo_dev_ctx->sta_ctx)
-		return;
-
-	sta_ctx = mlo_dev_ctx->sta_ctx;
-	if (!sta_ctx->copied_reassoc_rsp) {
-		mlo_err("Reassoc rsp not present for vdev_id %d",
-			wlan_vdev_get_id(vdev));
-		*reassoc_rsp_frame = NULL;
-		return;
-	}
-
-	if (!sta_ctx->copied_reassoc_rsp->connect_ies.assoc_rsp.len ||
-	    !sta_ctx->copied_reassoc_rsp->connect_ies.assoc_rsp.ptr) {
-		mlo_err("Reassoc Resp info empty vdev_id %d assoc len %d",
-			wlan_vdev_get_id(vdev),
-			sta_ctx->copied_reassoc_rsp->connect_ies.assoc_rsp.len);
-		*reassoc_rsp_frame = NULL;
-		return;
-	}
-
-	*reassoc_rsp_frame =
-		&sta_ctx->copied_reassoc_rsp->connect_ies.assoc_rsp;
-}
-#else
-static inline
-void mlo_get_reassoc_rsp(struct wlan_objmgr_vdev *vdev,
-			 struct element_info **reassoc_rsp_frame)
-{
-	*reassoc_rsp_frame = NULL;
-}
-#endif
-
 void mlo_get_assoc_rsp(struct wlan_objmgr_vdev *vdev,
 		       struct element_info *assoc_rsp_frame)
 {
 	struct wlan_mlo_dev_context *mlo_dev_ctx = vdev->mlo_dev_ctx;
 	struct wlan_mlo_sta *sta_ctx = NULL;
-	struct element_info *mlo_reassoc_rsp = NULL;
 
 	if (!mlo_dev_ctx || !mlo_dev_ctx->sta_ctx)
 		return;
@@ -1834,9 +2003,6 @@ void mlo_get_assoc_rsp(struct wlan_objmgr_vdev *vdev,
 		*assoc_rsp_frame = sta_ctx->assoc_rsp;
 		return;
 	}
-	mlo_get_reassoc_rsp(vdev, &mlo_reassoc_rsp);
-	if (mlo_reassoc_rsp)
-		*assoc_rsp_frame = *mlo_reassoc_rsp;
 }
 
 QDF_STATUS mlo_sta_save_quiet_status(struct wlan_mlo_dev_context *mlo_dev_ctx,
@@ -2582,6 +2748,7 @@ static QDF_STATUS
 mlo_sta_handle_ptqm_migration(struct wlan_objmgr_vdev *removal_vdev)
 {
 	struct wlan_objmgr_peer *bss_peer;
+	struct ptqm_peer_migrate_params params = {0};
 
 	if (!wlan_cm_is_vdev_connected(removal_vdev))
 		return QDF_STATUS_E_INVAL;
@@ -2595,8 +2762,13 @@ mlo_sta_handle_ptqm_migration(struct wlan_objmgr_vdev *removal_vdev)
 		!= wlan_vdev_get_link_id(removal_vdev))
 		return QDF_STATUS_SUCCESS;
 
-	return wlan_mlo_set_ptqm_migration(removal_vdev, bss_peer->mlo_peer_ctx,
-					   false, WLAN_LINK_ID_INVALID, true);
+	params.module_id = PTQM_MIGRATION_MODULE_MLR;
+	params.src_link_id = HW_LINK_ID_ANY;
+	params.dst_link_id = HW_LINK_ID_ANY;
+	params.force_mig = true;
+
+	return wlan_ptqm_peer_migrate_req_add(removal_vdev,
+					      bss_peer->mlo_peer_ctx, &params);
 }
 #else
 static QDF_STATUS

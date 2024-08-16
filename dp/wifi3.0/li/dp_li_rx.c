@@ -1551,7 +1551,8 @@ dp_rx_null_q_desc_handle_li(struct dp_soc *soc, qdf_nbuf_t nbuf,
 		is_eapol = qdf_nbuf_is_ipv4_eapol_pkt(nbuf);
 
 		if (is_eapol || qdf_nbuf_is_ipv4_wapi_pkt(nbuf)) {
-			if (!dp_rx_err_match_dhost(eh, vdev))
+			if (!dp_rx_err_match_dhost(eh, vdev,
+						   txrx_peer->is_mld_peer))
 				goto drop_nbuf;
 		} else {
 			goto drop_nbuf;
@@ -1570,7 +1571,8 @@ dp_rx_null_q_desc_handle_li(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	 *    These packets need to be dropped and should not get delivered
 	 *    to stack.
 	 */
-	if (qdf_unlikely(dp_rx_err_cce_drop(soc, vdev, nbuf, rx_tlv_hdr)))
+	if (qdf_unlikely(dp_rx_err_cce_drop(soc, vdev, nbuf, rx_tlv_hdr,
+					    txrx_peer->is_mld_peer)))
 		goto drop_nbuf;
 
 	if (qdf_unlikely(vdev->rx_decap_type == htt_cmn_pkt_type_raw)) {

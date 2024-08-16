@@ -141,6 +141,43 @@ util_gen_link_probe_rsp(uint8_t *frame, qdf_size_t frame_len,
 			qdf_size_t *link_frame_len);
 
 /**
+ * util_gen_link_probe_rsp_by_mld_addr() - Generate link specific probe response
+ * by mld address of the missing link.
+ * @frame: Pointer to original probe response. This should not contain the
+ * 802.11 header, and must start from the fixed fields in the probe
+ * response. This is required due to some caller semantics built into the end to
+ * end design.
+ * @frame_len: Length of original probe response
+ * @link_id: Link ID for secondary links
+ * @link_addr: Secondary link's MAC address
+ * @ml_probe_mld_addr: MLD address of missing links
+ * @link_frame: Generated secondary link specific probe response. Note
+ * that this will start from the 802.11 header (unlike the original probe
+ * response). This should be ignored in the case of failure.
+ * @link_frame_maxsize: Maximum size of generated secondary link specific
+ * probe response
+ * @link_frame_len: Pointer to location where populated length of generated
+ * secondary link specific probe response should be written. This should
+ * be ignored in the case of failure.
+ *
+ * Generate a link specific logically equivalent probe response for the
+ * secondary link from the original probe response containing a Multi-Link
+ * element. This applies to both probe responses.
+ * Currently, only two link MLO is supported.
+ *
+ * Return: QDF_STATUS_SUCCESS in the case of success, QDF_STATUS value giving
+ * the reason for error in the case of failure.
+ */
+QDF_STATUS
+util_gen_link_probe_rsp_by_mld_addr(uint8_t *frame, qdf_size_t frame_len,
+				    uint8_t link_id,
+				    struct qdf_mac_addr link_addr,
+				    struct qdf_mac_addr ml_probe_mld_addr,
+				    uint8_t *link_frame,
+				    qdf_size_t link_frame_maxsize,
+				    qdf_size_t *link_frame_len);
+
+/**
  * util_find_mlie - Find the first Multi-Link element or the start of the first
  * Multi-Link element fragment sequence in a given buffer containing elements,
  * if a Multi-Link element or element fragment sequence exists in the given
@@ -174,6 +211,45 @@ util_gen_link_probe_rsp(uint8_t *frame, qdf_size_t frame_len,
 QDF_STATUS
 util_find_mlie(uint8_t *buf, qdf_size_t buflen, uint8_t **mlieseq,
 	       qdf_size_t *mlieseqlen);
+
+/**
+ * util_find_mlie_for_ml_probe_resp_by_mldaddr - Find the basic variant
+ * Multi-Link element or the start of the basic variant Multi-Link element
+ * fragment sequence in a given buffer containing elements based on the
+ * MLD mac address, if a Multi-Link element or element fragment sequence exists
+ * in the given buffer.
+ *
+ * @buf: Buffer to be searched for the Multi-Link element or the start of the
+ * Multi-Link element fragment sequence.
+ * @buflen: Length of the buffer.
+ * @mlieseq: Pointer to location where the starting address of the Multi-Link
+ * element or Multi-Link element fragment sequence should be updated if found
+ * in the given buffer. The value NULL will be updated to this location if the
+ * element or element fragment sequence is not found. This should be ignored by
+ * the caller if the function returns error.
+ * @mlieseqlen: Pointer to location where the total length of the Multi-Link
+ * element or Multi-Link element fragment sequence should be updated if found
+ * in the given buffer. This should be ignored by the caller if the function
+ * returns error, or if the function indicates that the element or element
+ * fragment sequence was not found by providing a starting address of NULL.
+ * mac address.
+ * @mld_addr: MLD mac address to find the Multi-Link element.
+ *
+ * Multi-Link Probe response sent by a transmitting BSSID reports two Multi-Link
+ * elements: one basic variant element without link info  for the reporting
+ * transmitting BSSID and another basic variant element with per-STA profile for
+ * the non-transmitting BSSID's partner requested in the Multi-Link probe
+ * request. This function aims to fetch the non-transmitting BSSID's Multi-Link
+ * element.
+ *
+ * Return: QDF_STATUS_SUCCESS in the case of success, QDF_STATUS value giving
+ * the reason for error in the case of failure.
+ */
+QDF_STATUS
+util_find_mlie_for_ml_probe_resp_by_mldaddr(uint8_t *buf, qdf_size_t buflen,
+					    uint8_t **mlieseq,
+					    qdf_size_t *mlieseqlen,
+					    struct qdf_mac_addr mld_addr);
 
 /**
  * util_find_mlie_by_variant - Find the first Multi-Link element or the start of
@@ -446,6 +522,7 @@ util_get_bvmlie_ext_mld_cap_op_info(uint8_t *mlie_seq, qdf_size_t mlie_seqlen,
  * this structure will be reported as 0, if no Link Info is found, or no per-STA
  * profile is found, or if none of the per-STA profiles includes a MAC address
  * in the STA Info field (assuming no errors are encountered).
+ * @subtype: Frame Subtype
  *
  * Get partner link information and NSTR capability information in the
  * per-STA profiles present in a Basic variant Multi-Link element.
@@ -460,7 +537,8 @@ util_get_bvmlie_ext_mld_cap_op_info(uint8_t *mlie_seq, qdf_size_t mlie_seqlen,
 QDF_STATUS
 util_get_bvmlie_persta_partner_info(uint8_t *mlieseq,
 				    qdf_size_t mlieseqlen,
-				    struct mlo_partner_info *partner_info);
+				    struct mlo_partner_info *partner_info,
+				    uint8_t subtype);
 
 /**
  * util_get_prvmlie_mldid - Get the MLD ID from a given Probe Request
@@ -667,7 +745,8 @@ util_get_bvmlie_primary_linkid(uint8_t *mlieseq, qdf_size_t mlieseqlen,
 static inline QDF_STATUS
 util_get_bvmlie_persta_partner_info(uint8_t *mlieseq,
 				    qdf_size_t mlieseqlen,
-				    struct mlo_partner_info *partner_info)
+				    struct mlo_partner_info *partner_info,
+				    uint8_t subtype)
 {
 	return QDF_STATUS_E_NOSUPPORT;
 }

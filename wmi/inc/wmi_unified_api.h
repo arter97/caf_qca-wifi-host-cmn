@@ -1008,6 +1008,17 @@ wmi_unified_vdev_set_nac_rssi_send(wmi_unified_t wmi_handle,
 				   struct vdev_scan_nac_rssi_params *req);
 
 /**
+ * wmi_unified_twt_vdev_config_send() - WMI twt vdev config parameter function
+ * @wmi_handle: handle to WMI.
+ * @param: pointer to hold twt config parameter
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS
+wmi_unified_twt_vdev_config_send(wmi_unified_t wmi_handle,
+				 struct twt_vdev_config_params *param);
+
+/**
  * wmi_unified_vdev_set_param_send() - WMI vdev set parameter function
  * @wmi_handle: handle to WMI.
  * @param: pointer to hold vdev set parameter
@@ -1543,6 +1554,20 @@ QDF_STATUS wmi_unified_set_mimops(wmi_unified_t wmi_handle,
 QDF_STATUS
 wmi_unified_lro_config_cmd(wmi_unified_t wmi_handle,
 			   struct wmi_lro_config_cmd_t *wmi_lro_cmd);
+
+#ifdef WLAN_DP_FEATURE_STC
+/**
+ * wmi_unified_send_opm_stats_cmd() - Send OPM stats command
+ * @wmi_handle: Pointer to wmi handle
+ * @pdev_id: pdev_id
+ *
+ * This function sends down the OPM stats command to firmware.
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_send_opm_stats_cmd(wmi_unified_t wmi_handle,
+					  uint8_t pdev_id);
+#endif
 
 /**
  * wmi_unified_set_thermal_mgmt_cmd() - set thermal mgmt command to fw
@@ -5161,6 +5186,17 @@ wmi_unified_peer_ppe_ds_param_send(wmi_unified_t wmi_handle,
 #endif /* WLAN_SUPPORT_PPEDS */
 
 /**
+ * wmi_unified_peer_active_traffic_map_send - Send traffic map to FW
+ * @wmi_handle: WMI handle
+ * @param: Traffic map indication param
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wmi_unified_peer_active_traffic_map_send(wmi_unified_t wmi_handle,
+					 struct peer_active_traffic_map_params *param);
+
+/**
  * wmi_extract_pktlog_decode_info_event() - Extract pktlog decode info
  * @wmi_handle: WMI handle
  * @evt_buf: event buffer
@@ -5327,5 +5363,30 @@ wmi_extract_vendor_pdev_event(wmi_unified_t wmi_hdl,
 			      void *evt_buf,
 			      void *param, void *subtype);
 #endif /* WLAN_VENDOR_EXTN */
+/**
+ * wmi_unified_sap_suspend_cmd_send() - WMI to set AP in suspend/resume
+ *
+ * @wmi_handle: handle to WMI.
+ * @param: pointer to hold vdev suspend params
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS
+wmi_unified_sap_suspend_cmd_send(wmi_unified_t wmi_handle,
+				 struct vdev_suspend_params *param);
+
+/**
+ * wmi_unified_send_sta_vdev_report_ap_oper_bw_cmd() - WMI to send STA VDEV associated AP's
+ * reported operating BW to FW
+ *
+ * @wmi_handle: handle to WMI
+ * @param: pointer to ap oper bw params
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS
+wmi_unified_send_sta_vdev_report_ap_oper_bw_cmd(
+					wmi_unified_t wmi_handle,
+					struct wmi_sta_vdev_report_ap_oper_bw_params *param);
 
 #endif /* _WMI_UNIFIED_API_H_ */

@@ -1123,7 +1123,6 @@ cdp_get_pdev_stats_deter(ol_txrx_soc_handle soc, uint8_t pdev_id)
 {
 	if (!soc || !soc->ops) {
 		dp_cdp_debug("Invalid Instance");
-		QDF_BUG(0);
 		return NULL;
 	}
 
@@ -1204,7 +1203,6 @@ cdp_get_peer_stats_deter(ol_txrx_soc_handle soc, uint8_t vdev_id, uint8_t *addr)
 {
 	if (!soc || !soc->ops) {
 		dp_cdp_debug("Invalid Instance");
-		QDF_BUG(0);
 		return NULL;
 	}
 

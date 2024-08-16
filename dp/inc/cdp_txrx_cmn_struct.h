@@ -424,6 +424,12 @@ enum cdp_host_reo_dest_ring {
     cdp_host_reo_dest_ring_2 = 2,
     cdp_host_reo_dest_ring_3 = 3,
     cdp_host_reo_dest_ring_4 = 4,
+#ifdef CONFIG_BERYLLIUM
+    cdp_host_reo_dest_ring_5 = 7,
+    cdp_host_reo_dest_ring_6 = 8,
+    cdp_host_reo_dest_ring_7 = 9,
+    cdp_host_reo_dest_ring_8 = 10,
+#endif
 };
 
 enum htt_cmn_t2h_en_stats_type {
@@ -517,11 +523,13 @@ enum ol_txrx_peer_state {
 /**
  * struct cdp_peer_output_param - peer output info for dp hash find
  * @vdev_id: Vdev ID
+ * @peer_id: Peer ID
  * @state: peer state
  * @mld_peer: whether is mld peer
  */
 struct cdp_peer_output_param {
 	uint8_t vdev_id;
+	uint16_t peer_id;
 	enum ol_txrx_peer_state state;
 	bool mld_peer;
 };
@@ -646,6 +654,16 @@ struct cdp_mscs_params {
 #endif
 
 /**
+ * enum cdp_peer_event - Peer events
+ * @CDP_PEER_EVENT_MAP: Peer map event
+ * @CDP_PEER_EVENT_UNMAP: Peer unmap event
+ */
+enum cdp_peer_event {
+	CDP_PEER_EVENT_MAP,
+	CDP_PEER_EVENT_UNMAP,
+};
+
+/**
  * struct cdp_ds_vp_params - Direct Switch related params
  * @dev: Net device
  * @peer_id: peer id
@@ -701,8 +719,10 @@ enum cdp_sec_type {
  * @sec_type: sec_type to be passed to HAL
  * @is_tx_sniffer: Indicates if the packet has to be sniffed
  * @is_intrabss_fwd:
+ * @is_dms_pkt: If the packet is dms supported or not
+ * @reserved: reserved bits for new field additions
  * @ppdu_cookie: 16-bit ppdu cookie that has to be replayed back in completions
- * @is_wds_extended:
+ * @is_wds_extended_mc_bc: Identifier for a MCAST/BCAST packet
  * @is_mlo_mcast: Indicates if mlo_mcast enable or not
  *
  * This structure holds the parameters needed in the exception path of tx
@@ -714,10 +734,12 @@ struct cdp_tx_exception_metadata {
 	uint16_t tx_encap_type;
 	enum cdp_sec_type sec_type;
 	uint8_t is_tx_sniffer :1,
-		is_intrabss_fwd :1;
+		is_intrabss_fwd :1,
+		is_dms_pkt :1,
+		reserved :5;
 	uint16_t ppdu_cookie;
 #ifdef QCA_SUPPORT_WDS_EXTENDED
-	uint8_t is_wds_extended;
+	uint8_t is_wds_extended_mc_bc;
 #endif
 #if defined(WLAN_MCAST_MLO) || defined(WLAN_MCAST_MLO_SAP)
 	uint8_t is_mlo_mcast;
@@ -1320,6 +1342,7 @@ struct cdp_soc_t {
  * @CDP_CONFIG_IN_TWT: In TWT session or not
  * @CDP_CONFIG_MLD_PEER_VDEV: Change MLD peer's vdev
  * @CDP_CONFIG_PEER_FREQ: Set peer frequency
+ * @CDP_CONFIG_PEER_DMS: Dms capability of peer
  */
 enum cdp_peer_param_type {
 	CDP_CONFIG_NAWDS,
@@ -1328,6 +1351,7 @@ enum cdp_peer_param_type {
 	CDP_CONFIG_IN_TWT,
 	CDP_CONFIG_MLD_PEER_VDEV,
 	CDP_CONFIG_PEER_FREQ,
+	CDP_CONFIG_PEER_DMS,
 };
 
 /**
@@ -1411,6 +1435,7 @@ enum cdp_pdev_param_type {
  *
  * @cdp_peer_param_nawds: Enable nawds mode
  * @cdp_peer_param_isolation: Enable isolation
+ * @cdp_peer_param_dms: Enable dms
  * @cdp_peer_param_in_twt: in TWT session or not
  * @cdp_peer_param_nac: Enable nac
  * @cdp_peer_param_freq: Peer frequency
@@ -1441,6 +1466,7 @@ enum cdp_pdev_param_type {
  * @cdp_vdev_param_wrap: qwrap ap vap
  * @cdp_vdev_param_mon_freq: set monitor frequency
  * @cdp_vdev_param_monitor_chan: monitor channel
+ * @cdp_vdev_paran_wds_ext_ap_bridge: enable/disable ap_bridge for wds_ext peers
  *
  * @cdp_pdev_param_dbg_snf: Enable debug sniffer feature
  * @cdp_pdev_param_bpr_enable: Enable bcast probe feature
@@ -1478,6 +1504,7 @@ enum cdp_pdev_param_type {
  * @cdp_psoc_param_vdev_stats_hw_offload: Configure HW vdev stats offload
  * @cdp_pdev_param_undecoded_metadata_enable: Undecoded metadata capture enable
  * @cdp_sawf_enabled: SAWF enable/disable
+ * @cdp_sawf_msduq_reclaim_enabled: SAWF MSDUQ reclaim enable/disable
  * @cdp_sawf_stats: SAWF stats config
  * @cdp_vdev_param_traffic_end_ind: Traffic end indication enable/disable
  * @cdp_skel_enable : Enable/Disable skeleton code for Umac reset debug
@@ -1506,11 +1533,14 @@ enum cdp_pdev_param_type {
  * @cdp_pdev_param_mon_fcs_cap: monitor fcs capture
  * @cdp_monitor_flag: monitor interface flags
  * @cdp_reo_rings_mapping: reo rings mapping
+ * @cdp_eapol_over_control_port_disable: disable eapol over control port
+ * @cdp_scan_radio_support: Set scan radio support capability
  */
 typedef union cdp_config_param_t {
 	/* peer params */
 	bool cdp_peer_param_nawds;
 	bool cdp_peer_param_isolation;
+	bool cdp_peer_param_dms;
 	uint8_t cdp_peer_param_nac;
 	bool cdp_peer_param_in_twt;
 	uint32_t cdp_peer_param_freq;
@@ -1547,6 +1577,7 @@ typedef union cdp_config_param_t {
 	bool cdp_vdev_param_wrap;
 	qdf_freq_t cdp_vdev_param_mon_freq;
 	int cdp_vdev_param_monitor_chan;
+	bool cdp_vdev_paran_wds_ext_ap_bridge;
 
 	/* pdev params */
 	bool cdp_pdev_param_cptr_latcy;
@@ -1594,6 +1625,7 @@ typedef union cdp_config_param_t {
 	bool cdp_psoc_param_vdev_stats_hw_offload;
 	bool cdp_pdev_param_undecoded_metadata_enable;
 	bool cdp_sawf_enabled;
+	bool cdp_sawf_msduq_reclaim_enabled;
 	uint8_t cdp_sawf_stats;
 	bool cdp_drop_3addr_mcast;
 	bool cdp_vdev_param_traffic_end_ind;
@@ -1627,6 +1659,8 @@ typedef union cdp_config_param_t {
 	uint8_t cdp_pdev_param_mon_fcs_cap;
 	uint8_t cdp_monitor_flag;
 	uint32_t cdp_reo_rings_mapping;
+	bool cdp_eapol_over_control_port_disable;
+	bool cdp_scan_radio_support;
 } cdp_config_param_type;
 
 /**
@@ -1707,6 +1741,7 @@ enum cdp_pdev_bpr_param {
  * @CDP_ENABLE_HLOS_TID_OVERRIDE: set hlos tid override flag
  * @CDP_CFG_WDS_EXT: enable/disable wds ext feature
  * @CDP_DROP_TX_MCAST: enable/disable tx mcast drop
+ * @CDP_WDS_EXT_AP_BRIDGE: enable/disable ap_bridge for wds_ext peers
  * @CDP_ENABLE_PEER_AUTHORIZE: enable peer authorize flag
  * @CDP_ENABLE_PEER_TID_LATENCY: set peer tid latency enable flag
  * @CDP_SET_VAP_MESH_TID: Set latency tid in vap
@@ -1722,6 +1757,7 @@ enum cdp_pdev_bpr_param {
  * @CDP_VDEV_SET_MAC_ADDR: Set mac address for vdev
  * @CDP_MONITOR_CHANNEL: monitor channel
  * @CDP_MONITOR_FREQUENCY: monitor frequency
+ * @CDP_EAPOL_OVER_CONTROL_PORT_DISABLE: Disable eapol over control port
  */
 enum cdp_vdev_param_type {
 	CDP_ENABLE_NAWDS,
@@ -1751,6 +1787,7 @@ enum cdp_vdev_param_type {
 #ifdef QCA_SUPPORT_WDS_EXTENDED
 	CDP_CFG_WDS_EXT,
 	CDP_DROP_TX_MCAST,
+	CDP_WDS_EXT_AP_BRIDGE,
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
 	CDP_ENABLE_PEER_AUTHORIZE,
 #ifdef WLAN_SUPPORT_MESH_LATENCY
@@ -1775,6 +1812,7 @@ enum cdp_vdev_param_type {
 	CDP_VDEV_SET_MAC_ADDR,
 	CDP_MONITOR_CHANNEL,
 	CDP_MONITOR_FREQUENCY,
+	CDP_EAPOL_OVER_CONTROL_PORT_DISABLE,
 };
 
 /**
@@ -1809,6 +1847,8 @@ enum cdp_vdev_param_type {
  * @CDP_FW_SUPPORT_ML_MON: FW support ML monitor
  * @CDP_MONITOR_FLAG: Monitor interface configuration
  * @CDP_CFG_REO_RINGS_MAPPING: Reo rings mapping configuration
+ * @CDP_SCAN_RADIO_SUPPORT: Scan Radio capability
+ * @CDP_SAWF_MSDUQ_RECLAIM_SUPPORT: To initiate msduq reclaim related functions
  */
 enum cdp_psoc_param_type {
 	CDP_ENABLE_RATE_STATS,
@@ -1842,6 +1882,10 @@ enum cdp_psoc_param_type {
 	CDP_FW_SUPPORT_ML_MON,
 	CDP_MONITOR_FLAG,
 	CDP_CFG_REO_RINGS_MAPPING,
+	CDP_SCAN_RADIO_SUPPORT,
+#ifdef CONFIG_SAWF
+	CDP_SAWF_MSDUQ_RECLAIM_SUPPORT,
+#endif
 };
 
 #ifdef CONFIG_AP_PLATFORM
@@ -2677,6 +2721,7 @@ struct cdp_tx_completion_msdu {
  * @rix: rate index
  * @mpdu_retries: retries of mpdu in rx
  * @rx_time_us: Rx duration
+ * @retried_msdu_count: retries of msdu in rx
  */
 struct cdp_rx_stats_ppdu_user {
 	uint16_t peer_id;
@@ -2717,6 +2762,7 @@ struct cdp_rx_stats_ppdu_user {
 	uint32_t rix;
 	uint32_t mpdu_retries;
 	uint16_t rx_time_us;
+	uint16_t retried_msdu_count;
 };
 
 /**
@@ -3342,12 +3388,18 @@ struct cdp_pdev_attach_params {
  * @peer_mac: Peer mac address
  * @chip_id: CHIP ID
  * @pdev_id: PDEV ID
+ * @old_vdev_id: previous vdev_id used only for primary umac migration event
+ * @old_chip_id: previous vdev_id used only for primary umac migration event
+ * @old_pdev_id: previous vdev_id used only for primary umac migration event
  */
 struct cdp_txrx_peer_params_update {
-	uint8_t	vdev_id;
-	uint8_t	*peer_mac;
-	uint8_t	chip_id;
-	uint8_t	pdev_id;
+	uint8_t vdev_id;
+	uint8_t *peer_mac;
+	uint8_t chip_id;
+	uint8_t pdev_id;
+	uint8_t old_vdev_id;
+	uint8_t old_chip_id;
+	uint8_t old_pdev_id;
 };
 
 /**

@@ -129,7 +129,7 @@ static QDF_STATUS qdf_ini_read_values(char **main_cursor,
 			cursor++;
 	}
 
-	return QDF_STATUS_E_INVAL;
+	return QDF_STATUS_E_FAILURE;
 }
 
 QDF_STATUS qdf_ini_parse(const char *ini_path, void *context,
@@ -367,21 +367,27 @@ static bool qdf_check_ini_validity(char **main_cursor)
 				return true;
 			status = qdf_validate_key(read_key);
 			if (QDF_IS_STATUS_ERROR(status)) {
-				status = QDF_STATUS_E_INVAL;
-				goto out;
+				qdf_err("Invalid INI: %s", read_key);
+				return false;
 			}
 			status = qdf_validate_value(read_value);
 			if (QDF_IS_STATUS_ERROR(status)) {
-				status = QDF_STATUS_E_INVAL;
-				goto out;
+				qdf_err("Invalid INI value: %s", read_value);
+				return false;
 			}
 		}
 	}
 
-out:
-	if (QDF_IS_STATUS_ERROR(status))
-		return false;
-	return true;
+	/* After parsing ini file, to break above loop qdf_ini_read_values()
+	 * returns the status as QDF_STATUS_E_FAILURE. In such case, the ini
+	 * file is valid and we return true. But if the status returned is
+	 * QDF_STATUS_E_INVAL then it is a genuine error and the ini file is
+	 * invalid. So, we return false in such case.
+	 */
+	if (status == QDF_STATUS_E_FAILURE)
+		return true;
+
+	return false;
 }
 
 bool qdf_valid_ini_check(const char  *ini_path)

@@ -1685,7 +1685,8 @@ uint16_t hal_rx_get_rx_sequence_be(uint8_t *buf)
 }
 
 #ifdef RECEIVE_OFFLOAD
-#if defined(QCA_WIFI_KIWI_V2) || defined(QCA_WIFI_WCN7750)
+#if defined(QCA_WIFI_KIWI_V2) || defined(QCA_WIFI_WCN7750) || \
+	defined(QCA_WIFI_QCC2072)
 static inline
 uint16_t hal_rx_get_fisa_cumulative_l4_checksum_be(uint8_t *buf)
 {
@@ -2113,6 +2114,16 @@ hal_rx_msdu_end_sa_sw_peer_id_get_be(uint8_t *buf)
 static inline
 void hal_rx_parse_eht_sig_hdr_be(struct hal_soc *hal_soc, uint8_t *tlv,
 				 void *ppdu_info_handle)
+{
+}
+
+static inline
+void hal_rx_ru_info_details_be(void *rx_tlv_hdr, void *ppdu_info_hdl)
+{
+}
+
+static inline
+void hal_rx_proc_phyrx_all_sigb_tlv_be(void *rx_tlv_hdr, void *ppdu_info_hdl)
 {
 }
 #endif /* _HAL_BE_RX_TLV_H_ */

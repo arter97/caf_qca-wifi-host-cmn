@@ -266,7 +266,11 @@ struct dp_mon_pdev_be {
 #ifdef WLAN_PKT_CAPTURE_TX_2_0
 	uint8_t tx_mon_mode;
 	uint8_t tx_mon_filter_length;
+#ifdef FEATURE_ML_LOCAL_PKT_CAPTURE
+	struct dp_pdev_tx_monitor_be tx_monitor_be[MAX_NUM_LMAC_HW];
+#else
 	struct dp_pdev_tx_monitor_be tx_monitor_be;
+#endif
 	struct dp_tx_monitor_drop_stats tx_stats;
 #endif
 #if defined(WLAN_PKT_CAPTURE_RX_2_0) && defined(QCA_MONITOR_2_0_PKT_SUPPORT)
@@ -328,6 +332,62 @@ struct dp_mon_soc_be {
 
 	bool is_dp_mon_soc_initialized;
 };
+#endif
+
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
+#ifdef FEATURE_ML_LOCAL_PKT_CAPTURE
+/**
+ * dp_tx_mon_get_pdev_mac_from_work_arg() - Get pdev and mac_id from work
+ *                                          argument
+ * @work_arg: pointer to work argument
+ * @p_dp_pdev: address of dp pdev object
+ * @p_mac_id: address of mac id
+ *
+ * Return: None
+ */
+static inline void dp_tx_mon_get_pdev_mac_from_work_arg(
+						void *work_arg,
+						struct dp_pdev **p_dp_pdev,
+						uint8_t *p_mac_id)
+{
+	struct dp_tx_mon_work_arg *tx_mon_arg =
+				(struct dp_tx_mon_work_arg *)work_arg;
+
+	*p_dp_pdev = tx_mon_arg->dp_pdev;
+	*p_mac_id = tx_mon_arg->mac_id;
+}
+
+/**
+ * dp_mon_pdev_get_tx_mon() - Get TX Mon object with given mac id
+ * @mon_pdev: monitor dp pdev object
+ * @mac_id: Mac ID
+ *
+ * Return: DP TX Mon object
+ */
+static inline
+struct dp_pdev_tx_monitor_be *dp_mon_pdev_get_tx_mon(
+					struct dp_mon_pdev_be *mon_pdev,
+					uint8_t mac_id)
+{
+	return &mon_pdev->tx_monitor_be[mac_id];
+}
+#else
+static inline void dp_tx_mon_get_pdev_mac_from_work_arg(
+						void *work_arg,
+						struct dp_pdev **p_dp_pdev,
+						uint8_t *p_mac_id)
+{
+	*p_dp_pdev = (struct dp_pdev *)work_arg;
+}
+
+static inline
+struct dp_pdev_tx_monitor_be *dp_mon_pdev_get_tx_mon(
+					struct dp_mon_pdev_be *mon_pdev,
+					uint8_t mac_id)
+{
+	return &mon_pdev->tx_monitor_be;
+}
+#endif
 #endif
 
 /**

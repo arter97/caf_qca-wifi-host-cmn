@@ -240,6 +240,8 @@
 #define WLAN_VDEV_OP_MLO_LINK_REMOVAL_IN_PROGRESS 0x01000000
 /* MLO link switch is in progress on this VDEV */
 #define WLAN_VDEV_OP_MLO_LINK_SWITCH_IN_PROGRESS 0x02000000
+ /* MLO link rejection handling is in progress on this VDEV */
+#define WLAN_VDEV_OP_MLO_LINK_REJECTION_IN_PROGRESS 0x04000000
 
  /* flag to indicate disconnect only legacy peers due to moving to DFS channel
   * from non-DFS channel
@@ -457,6 +459,7 @@ struct wlan_objmgr_vdev_objmgr {
  * @vdev_lock:      VDEV lock
  * @mlo_dev_ctx:    MLO device context
  * @twt_work:	    TWT work
+ * @is_ap_suspend:	AP suspend state
  */
 struct wlan_objmgr_vdev {
 	qdf_list_node_t vdev_node;
@@ -473,6 +476,7 @@ struct wlan_objmgr_vdev {
 #ifdef WLAN_SUPPORT_TWT
 	qdf_work_t twt_work;
 #endif
+	qdf_atomic_t is_ap_suspend;
 };
 
 /*
@@ -1785,6 +1789,21 @@ static inline bool wlan_vdev_mlme_is_mlo_ap(struct wlan_objmgr_vdev *vdev)
 		wlan_vdev_mlme_is_mlo_vdev(vdev);
 }
 
+/**
+ * wlan_vdev_is_mlo_ap_with_multi_vdev() - whether it is mlo ap with vdev count
+ * more than 1
+ * @vdev: VDEV object
+ *
+ * Return: True if it is mlo ap and multi vdev, otherwise false.
+ */
+
+static inline
+bool wlan_vdev_is_mlo_ap_with_multi_vdev(struct wlan_objmgr_vdev *vdev)
+{
+	return wlan_vdev_mlme_is_mlo_ap(vdev) &&
+		(vdev->mlo_dev_ctx->wlan_vdev_count > 1);
+}
+
 #ifdef WLAN_FEATURE_MULTI_LINK_SAP
 /**
  * wlan_vdev_mlme_is_mlo_ap_sync_disabled() - check if vdev up sync between
@@ -1924,6 +1943,52 @@ wlan_vdev_mlme_is_mlo_link_switch_in_progress(struct wlan_objmgr_vdev *vdev)
 
 	return wlan_vdev_mlme_op_flags_get(vdev, flag);
 }
+
+/**
+ * wlan_vdev_mlme_set_mlo_link_rejection_in_progress() - Set link rejection in
+ * progress flag for VDEV.
+ * @vdev: VDEV object manager.
+ *
+ * Return: void
+ */
+static inline void
+wlan_vdev_mlme_set_mlo_link_rejection_in_progress(struct wlan_objmgr_vdev *vdev)
+{
+	unsigned long flag = WLAN_VDEV_OP_MLO_LINK_REJECTION_IN_PROGRESS;
+
+	wlan_vdev_mlme_op_flags_set(vdev, flag);
+}
+
+/**
+ * wlan_vdev_mlme_clear_mlo_link_rejection_in_progress() - Clear link rejection in
+ * progress flag for VDEV.
+ * @vdev: VDEV object manager
+ *
+ * Return: void
+ */
+static inline void
+wlan_vdev_mlme_clear_mlo_link_rejection_in_progress(struct wlan_objmgr_vdev *vdev)
+{
+	unsigned long flag = WLAN_VDEV_OP_MLO_LINK_REJECTION_IN_PROGRESS;
+
+	wlan_vdev_mlme_op_flags_clear(vdev, flag);
+}
+
+/**
+ * wlan_vdev_mlme_is_mlo_link_rejection_in_progress() - Return true if VDEV is
+ * in link rejection in progress.
+ * @vdev: VDEV object manager.
+ *
+ * Return: bool
+ */
+static inline bool
+wlan_vdev_mlme_is_mlo_link_rejection_in_progress(struct wlan_objmgr_vdev *vdev)
+{
+	unsigned long flag = WLAN_VDEV_OP_MLO_LINK_REJECTION_IN_PROGRESS;
+
+	return wlan_vdev_mlme_op_flags_get(vdev, flag);
+}
+
 #else
 static inline void
 wlan_vdev_mlme_set_mlo_link_switch_in_progress(struct wlan_objmgr_vdev *vdev)
@@ -1940,6 +2005,23 @@ wlan_vdev_mlme_is_mlo_link_switch_in_progress(struct wlan_objmgr_vdev *vdev)
 {
 	return false;
 }
+
+static inline void
+wlan_vdev_mlme_set_mlo_link_rejection_in_progress(struct wlan_objmgr_vdev *vdev)
+{
+}
+
+static inline void
+wlan_vdev_mlme_clear_mlo_link_rejection_in_progress(struct wlan_objmgr_vdev *vdev)
+{
+}
+
+static inline bool
+wlan_vdev_mlme_is_mlo_link_rejection_in_progress(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
+
 #endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE  */
 
 #ifdef WLAN_MCAST_MLO
@@ -2050,6 +2132,12 @@ static inline bool wlan_vdev_mlme_is_mlo_ap_sync_disabled(
 }
 
 static inline
+bool wlan_vdev_is_mlo_ap_with_multi_vdev(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
+
+static inline
 void wlan_vdev_mlme_set_mlo_vdev(struct wlan_objmgr_vdev *vdev)
 {
 }
@@ -2102,6 +2190,23 @@ bool wlan_vdev_mlme_is_link_sta_vdev(struct wlan_objmgr_vdev *vdev)
 {
 	return false;
 }
+
+static inline void
+wlan_vdev_mlme_set_mlo_link_rejection_in_progress(struct wlan_objmgr_vdev *vdev)
+{
+}
+
+static inline void
+wlan_vdev_mlme_clear_mlo_link_rejection_in_progress(struct wlan_objmgr_vdev *vdev)
+{
+}
+
+static inline bool
+wlan_vdev_mlme_is_mlo_link_rejection_in_progress(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
+
 #endif
 
 /**

@@ -927,6 +927,26 @@ static inline bool dp_mon_should_reset_buf_ring_filter(struct dp_pdev *pdev)
 #endif
 
 #ifdef QCA_MONITOR_PKT_SUPPORT
+/**
+ * dp_mon_filter_dest_for_mm_rx_mon - check if mission mode + RX monitor
+ * @soc: SOC handler
+ *
+ * Check if current monitor destination ring update operation is for
+ * mission mode + RX monitor
+ *
+ * Return: true - yes, false - not
+ */
+static inline
+bool dp_mon_filter_dest_for_mm_rx_mon(struct dp_soc *soc)
+{
+	if (soc->cdp_soc.ol_ops->get_con_mode &&
+	    soc->cdp_soc.ol_ops->get_con_mode() == QDF_GLOBAL_MISSION_MODE &&
+	    QDF_MONITOR_FLAG_OTHER_BSS & soc->mon_flags)
+		return true;
+
+	return false;
+}
+
 static QDF_STATUS dp_mon_filter_dest_update(struct dp_pdev *pdev,
 					    struct dp_mon_filter *pfilter,
 					    bool *pmon_mode_set)
@@ -942,12 +962,21 @@ static QDF_STATUS dp_mon_filter_dest_update(struct dp_pdev *pdev,
 			DP_MON_FILTER_SRNG_TYPE_RXDMA_BUF);
 
 	dp_mon_filter_h2t_setup(soc, pdev, srng_type, pfilter);
-
 	*pmon_mode_set = pfilter->valid;
-	if (dp_mon_should_reset_buf_ring_filter(pdev) || *pmon_mode_set) {
+
+	if (*pmon_mode_set) {
 		status = dp_mon_ht2_rx_ring_cfg(soc, pdev,
 						srng_type,
 						&pfilter->tlv_filter);
+	} else if (dp_mon_should_reset_buf_ring_filter(pdev)) {
+		if (dp_mon_filter_dest_for_mm_rx_mon(soc)) {
+			dp_info("Reset rxdma buffer to regular filter");
+			status = soc->arch_ops.dp_rxdma_ring_sel_cfg(soc);
+		} else {
+			status = dp_mon_ht2_rx_ring_cfg(soc, pdev,
+							srng_type,
+							&pfilter->tlv_filter);
+		}
 	} else {
 		/*
 		 * For WIN case the monitor buffer ring is used and it does need

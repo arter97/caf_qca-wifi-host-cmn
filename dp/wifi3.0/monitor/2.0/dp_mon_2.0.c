@@ -1285,6 +1285,16 @@ QDF_STATUS dp_mon_pdev_tlv_logger_deinit(struct dp_pdev *pdev)
 
 #endif
 
+#ifdef QCA_MCOPY_SUPPORT
+QDF_STATUS dp_mcopy_check_deliver_2_0(struct dp_pdev *pdev,
+				      uint16_t peer_id,
+				      uint32_t ppdu_id,
+				      uint8_t first_msdu)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 /**
  * dp_mon_register_feature_ops_2_0() - register feature ops
  *
@@ -1324,6 +1334,8 @@ dp_mon_register_feature_ops_2_0(struct dp_soc *soc)
 					dp_print_pdev_tx_monitor_stats_2_0;
 	mon_ops->mon_config_enh_tx_capture = dp_config_enh_tx_monitor_2_0;
 	mon_ops->mon_tx_peer_filter = dp_peer_set_tx_capture_enabled_2_0;
+	mon_ops->mon_pdev_tx_capture_get_stats =
+					dp_get_pdev_tx_capture_stats_2_0;
 #endif
 #if (defined(WIFI_MONITOR_SUPPORT) && defined(WLAN_TX_MON_CORE_DEBUG))
 	mon_ops->mon_peer_tid_peer_id_update = NULL;
@@ -1351,7 +1363,7 @@ dp_mon_register_feature_ops_2_0(struct dp_soc *soc)
 #ifdef QCA_MCOPY_SUPPORT
 	mon_ops->mon_filter_setup_mcopy_mode = NULL;
 	mon_ops->mon_filter_reset_mcopy_mode = NULL;
-	mon_ops->mon_mcopy_check_deliver = NULL;
+	mon_ops->mon_mcopy_check_deliver = dp_mcopy_check_deliver_2_0;
 #endif
 #ifdef QCA_ENHANCED_STATS_SUPPORT
 	mon_ops->mon_filter_setup_enhanced_stats =
@@ -1423,6 +1435,8 @@ dp_mon_register_feature_ops_2_0(struct dp_soc *soc)
 		dp_mon_filter_reset_undecoded_metadata_capture_2_0;
 #endif
 	mon_ops->rx_enable_fpmo = dp_rx_mon_enable_fpmo;
+	mon_ops->rx_config_packet_type_subtype =
+		dp_rx_mon_config_packet_type_subtype;
 	mon_ops->mon_rx_print_advanced_stats =
 		dp_mon_rx_print_advanced_stats_2_0;
 	mon_ops->mon_mac_filter_set = NULL;
@@ -1568,6 +1582,7 @@ struct cdp_mon_ops dp_ops_mon_2_0 = {
 	.stop_local_pkt_capture = NULL,
 	.is_local_pkt_capture_running = NULL,
 #endif /* WLAN_FEATURE_LOCAL_PKT_CAPTURE */
+	.txrx_set_mu_sniffer = dp_pdev_set_mu_sniffer,
 };
 
 #if defined(WLAN_PKT_CAPTURE_TX_2_0) || \

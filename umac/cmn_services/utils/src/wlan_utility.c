@@ -1598,6 +1598,32 @@ uint32_t wlan_get_pdev_id_from_vdev_id(struct wlan_objmgr_psoc *psoc,
 }
 qdf_export_symbol(wlan_get_pdev_id_from_vdev_id);
 
+QDF_STATUS
+wlan_get_self_macaddr_from_vdev_id(struct wlan_objmgr_psoc *psoc,
+				   uint8_t vdev_id,
+				   wlan_objmgr_ref_dbgid dbg_id,
+				   struct qdf_mac_addr *self_mac_addr)
+{
+	struct wlan_objmgr_vdev *vdev;
+
+	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc,
+						    vdev_id, dbg_id);
+	if (vdev) {
+		wlan_vdev_obj_lock(vdev);
+		qdf_mem_copy(self_mac_addr->bytes,
+			     wlan_vdev_mlme_get_macaddr(vdev),
+			     QDF_MAC_ADDR_SIZE);
+		wlan_vdev_obj_unlock(vdev);
+		wlan_objmgr_vdev_release_ref(vdev, dbg_id);
+
+		return QDF_STATUS_SUCCESS;
+	}
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+qdf_export_symbol(wlan_get_self_macaddr_from_vdev_id);
+
 static void wlan_vdev_active(struct wlan_objmgr_pdev *pdev, void *object,
 			     void *arg)
 {

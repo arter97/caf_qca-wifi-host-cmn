@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021, 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -26,6 +26,7 @@
 #if !defined WLAN_MBSS
 #include "wlan_if_mgr_roam.h"
 #endif
+#include "wlan_if_mgr_nan.h"
 
 const char *if_mgr_get_event_str(enum wlan_if_mgr_evt event)
 {
@@ -54,6 +55,9 @@ const char *if_mgr_get_event_str(enum wlan_if_mgr_evt event)
 	CASE_RETURN_STRING(WLAN_IF_MGR_EV_AP_CSA_COMPLETE);
 	CASE_RETURN_STRING(WLAN_IF_MGR_EV_STA_CSA_COMPLETE);
 	CASE_RETURN_STRING(WLAN_IF_MGR_EV_CONNECT_ACTIVE);
+	CASE_RETURN_STRING(WLAN_IF_MGR_EV_NAN_PRE_ENABLE);
+	CASE_RETURN_STRING(WLAN_IF_MGR_EV_NAN_POST_ENABLE);
+	CASE_RETURN_STRING(WLAN_IF_MGR_EV_NAN_POST_DISABLE);
 	default:
 		return "Unknown";
 	}
@@ -170,7 +174,15 @@ QDF_STATUS if_mgr_deliver_event(struct wlan_objmgr_vdev *vdev,
 	case WLAN_IF_MGR_EV_CONNECT_ACTIVE:
 		status = if_mgr_connect_active(vdev, event_data);
 		break;
-
+	case WLAN_IF_MGR_EV_NAN_PRE_ENABLE:
+		status = if_mgr_nan_pre_enable(vdev, event_data);
+		break;
+	case WLAN_IF_MGR_EV_NAN_POST_ENABLE:
+		status = if_mgr_nan_post_enable(vdev, event_data);
+		break;
+	case WLAN_IF_MGR_EV_NAN_POST_DISABLE:
+		status = if_mgr_nan_post_disable(vdev, event_data);
+		break;
 	default:
 		status = if_mgr_deliver_mbss_event(vdev, event, event_data);
 	}

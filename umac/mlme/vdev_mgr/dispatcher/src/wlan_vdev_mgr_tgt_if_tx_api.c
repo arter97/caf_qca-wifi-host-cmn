@@ -842,3 +842,55 @@ QDF_STATUS tgt_vdev_peer_set_param_send(struct wlan_objmgr_vdev *vdev,
 
 	return status;
 }
+
+bool tgt_sap_is_suspend_supported(struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_lmac_if_mlme_tx_ops *txops;
+
+	if (!vdev) {
+		mlme_err("vdev not found");
+		return false;
+	}
+	txops = wlan_vdev_mlme_get_lmac_txops(vdev);
+	if (!txops || !txops->is_sap_suspend_support_enabled) {
+		mlme_err("VDEV: No Tx Ops");
+		return false;
+	}
+
+	return txops->is_sap_suspend_support_enabled(vdev);
+}
+
+QDF_STATUS tgt_sap_suspend_param_send(struct wlan_objmgr_psoc *psoc,
+				      struct vdev_suspend_params *param)
+{
+	QDF_STATUS status;
+	struct wlan_lmac_if_mlme_tx_ops *txops;
+	struct wlan_objmgr_vdev *vdev;
+
+	if (!param) {
+		mlme_err("Invalid input");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, param->vdev_id,
+						    WLAN_MLME_OBJMGR_ID);
+	if (!vdev) {
+		mlme_err("vdev %d: vdev not found", param->vdev_id);
+		return QDF_STATUS_E_FAILURE;
+	}
+	txops = wlan_vdev_mlme_get_lmac_txops(vdev);
+	if (!txops || !txops->vdev_set_param_send) {
+		mlme_err("VDEV: No Tx Ops");
+		status = QDF_STATUS_E_INVAL;
+		goto end;
+	}
+
+	status = txops->sap_suspend_param_send(vdev, param);
+	if (QDF_IS_STATUS_ERROR(status))
+		mlme_err("VDEV_%d: Tx Ops Error : %d", param->vdev_id, status);
+
+end:
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLME_OBJMGR_ID);
+	return status;
+}
+

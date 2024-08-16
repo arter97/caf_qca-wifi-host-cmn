@@ -237,6 +237,13 @@ QDF_STATUS ucfg_dcs_get_ch_util(struct wlan_objmgr_psoc *psoc, uint8_t mac_id,
 }
 
 #ifdef DCS_INTERFERENCE_DETECTION
+void
+ucfg_dcs_trigger_dcs(struct wlan_objmgr_psoc *psoc, uint8_t pdev_id,
+		     uint8_t vdev_id, enum wlan_host_dcs_type dcs_type)
+{
+	wlan_dcs_trigger_dcs(psoc, pdev_id, vdev_id, dcs_type);
+}
+
 QDF_STATUS
 ucfg_dcs_switch_chan(struct wlan_objmgr_vdev *vdev, qdf_freq_t tgt_freq,
 		     enum phy_ch_width tgt_width)

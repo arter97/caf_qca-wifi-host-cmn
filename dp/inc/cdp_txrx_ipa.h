@@ -943,6 +943,9 @@ struct addr_params {
 	uint32_t flt_hdl;
 	uint8_t ipa_flt_evnt_required;
 	bool ipa_flt_in_use;
+	qdf_event_t ipa_ctrl_flt_rm_evt;
+	uint16_t req_src;
+	uint8_t ipa_flt_add_success;
 };
 
 struct wifi_dp_flt_setup {
@@ -1023,6 +1026,21 @@ cdp_ipa_tx_opt_dp_ctrl_pkt(ol_txrx_soc_handle soc,
 								 nbuf);
 	return QDF_STATUS_SUCCESS;
 }
+
+static inline bool
+cdp_ipa_opt_dp_ctrl_debug_enable(ol_txrx_soc_handle soc)
+{
+	if (!soc || !soc->ops || !soc->ops->ipa_ops) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
+			  "%s invalid instance", __func__);
+		return false;
+	}
+
+	if (soc->ops->ipa_ops->ipa_tx_opt_dp_ctrl_pkt)
+		return soc->ops->ipa_ops->ipa_opt_dp_ctrl_debug_enable(soc);
+
+	return false;
+}
 #endif
 
 static inline QDF_STATUS
@@ -1092,6 +1110,12 @@ cdp_ipa_tx_opt_dp_ctrl_pkt(ol_txrx_soc_handle soc,
 			   uint8_t vdev_id, qdf_nbuf_t nbuf)
 {
 	return QDF_STATUS_SUCCESS;
+}
+
+static inline bool
+cdp_ipa_opt_dp_ctrl_debug_enable(ol_txrx_soc_handle soc)
+{
+	return false;
 }
 #endif
 

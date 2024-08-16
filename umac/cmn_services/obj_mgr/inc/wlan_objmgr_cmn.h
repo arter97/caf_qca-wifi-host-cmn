@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -190,6 +190,9 @@ typedef QDF_STATUS (*wlan_objmgr_peer_destroy_handler)(
 typedef void (*wlan_objmgr_peer_status_handler)(
 				struct wlan_objmgr_peer *peer, void *arg,
 						QDF_STATUS status);
+
+typedef void (*wlan_objmgr_peer_phymode_change_notify_handler)(
+				struct wlan_objmgr_peer *peer, void *arg);
 
 /**
  * enum wlan_objmgr_ref_dbgid - ref count debug id

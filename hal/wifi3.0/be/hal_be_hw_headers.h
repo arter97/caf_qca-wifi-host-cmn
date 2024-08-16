@@ -28,7 +28,8 @@
 #include "wbm2sw_completion_ring_tx.h"
 #include "wbm2sw_completion_ring_rx.h"
 
-#if defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_WCN7750)
+#if defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_WCN7750) || \
+	defined(QCA_WIFI_QCC2072)
 #include "msmhwioreg.h"
 #endif
 #include "phyrx_common_user_info.h"
@@ -146,6 +147,11 @@ defined(WLAN_PKT_CAPTURE_RX_2_0)
 #ifdef REO_SHARED_QREF_TABLE_EN
 #include "rx_reo_queue_reference.h"
 #endif
+
+#ifdef QCA_WIFI_PEACH
+#include "phytx_pkt_end.h"
+#endif
+
 #define HAL_DESC_64_SET_FIELD(_desc, _word, _fld, _value) do { \
 	((uint64_t *)(_desc))[(_word ## _ ## _fld ## _OFFSET) >> 3] &= \
 		~(_word ## _ ## _fld ## _MASK); \

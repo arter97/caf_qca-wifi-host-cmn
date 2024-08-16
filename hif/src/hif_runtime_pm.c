@@ -547,7 +547,8 @@ QDF_STATUS hif_rtpm_deregister(uint32_t id)
 
 QDF_STATUS hif_rtpm_set_autosuspend_delay(int delay)
 {
-	if (delay < HIF_RTPM_DELAY_MIN || delay > HIF_RTPM_DELAY_MAX) {
+	if ((delay < HIF_RTPM_DELAY_MIN || delay > HIF_RTPM_DELAY_MAX) &&
+	    delay > 0) {
 		hif_err("Invalid delay value %d ms", delay);
 		return QDF_STATUS_E_INVAL;
 	}

@@ -110,8 +110,6 @@ do {                                            \
 
 #define HAL_TX_COMPLETION_DESC_LEN_DWORDS (NUM_OF_DWORDS_WBM_RELEASE_RING)
 #define HAL_TX_COMPLETION_DESC_LEN_BYTES (NUM_OF_DWORDS_WBM_RELEASE_RING*4)
-#define HAL_TX_COMPLETION_DESC_LEN_BYTES_WO_VA \
-	(HAL_TX_COMPLETION_DESC_LEN_BYTES - 8)
 #define HAL_TX_BITS_PER_TID 3
 #define HAL_TX_TID_BITS_MASK ((1 << HAL_TX_BITS_PER_TID) - 1)
 #define HAL_TX_NUM_DSCP_PER_REGISTER 10
@@ -121,6 +119,7 @@ do {                                            \
 #define HAL_MAX_HW_DSCP_TID_V2_MAPS 48
 #define HAL_MAX_HW_DSCP_TID_V2_MAPS_5332 24
 #define HAL_MAX_HW_DSCP_TID_V2_MAPS_6432 24
+#define HAL_MAX_HW_DSCP_TID_V2_MAPS_5424 24
 #define HTT_META_HEADER_LEN_BYTES 64
 #define HAL_TX_EXT_DESC_WITH_META_DATA \
 	(HTT_META_HEADER_LEN_BYTES + HAL_TX_EXTENSION_DESC_LEN_BYTES)
@@ -130,9 +129,21 @@ do {                                            \
 /* Length of WBM release ring without the status words */
 #define HAL_TX_COMPLETION_DESC_BASE_LEN 12
 
-#define HAL_TX_COMP_RELEASE_SOURCE_TQM 0
-#define HAL_TX_COMP_RELEASE_SOURCE_REO 2
-#define HAL_TX_COMP_RELEASE_SOURCE_FW 3
+/**
+ * enum hal_tx_comp_rel_src - Indicates the release source module
+ * @HAL_TX_COMP_RELEASE_SOURCE_TQM    : TQM released this buffer or descriptor
+ * @HAL_TX_COMP_RELEASE_SOURCE_RXDMA  : RXDMA released this buffer or descriptor
+ * @HAL_TX_COMP_RELEASE_SOURCE_REO    : REO released this buffer or descriptor
+ * @HAL_TX_COMP_RELEASE_SOURCE_FW     : FW released this buffer or descriptor
+ * @HAL_TX_COMP_RELEASE_SOURCE_MAX    : count of number of enumerator
+ */
+enum hal_tx_comp_rel_src {
+	HAL_TX_COMP_RELEASE_SOURCE_TQM,
+	HAL_TX_COMP_RELEASE_SOURCE_RXDMA,
+	HAL_TX_COMP_RELEASE_SOURCE_REO,
+	HAL_TX_COMP_RELEASE_SOURCE_FW,
+	HAL_TX_COMP_RELEASE_SOURCE_MAX
+};
 
 /* Define a place-holder release reason for FW */
 #define HAL_TX_COMP_RELEASE_REASON_FW 99
@@ -195,6 +206,8 @@ do {                                            \
  * struct hal_tx_completion_status - HAL Tx completion descriptor contents
  * The fields of this struct are aligned to WBM2SW TX comp Desc to populate
  * them efficiently. Do not add/removed the fields of the struct.
+ * @reserved_va1: reserved for VA
+ * @reserved_va2: reserved for VA
  * @release_src: release source = TQM/FW
  * @reserved1: reserved
  * @status: frame acked/failed
@@ -235,6 +248,8 @@ do {                                            \
  * @reserved6: reserved
  */
 struct hal_tx_completion_status {
+	uint32_t reserved_va1;
+	uint32_t reserved_va2;
 	uint32_t release_src:3,
 		 reserved1:10,
 		 status:4,
@@ -257,7 +272,11 @@ struct hal_tx_completion_status {
 		 mcs:4,
 		 ofdma:1,
 		 tones_in_ru:12,
+	#ifdef TX_NSS_STATS_SUPPORT
+		 tx_nss:3;
+	#else
 		 reserved5:3;
+	#endif
 	uint32_t tsf;
 	uint32_t peer_id:16,
 		 tid:8,
@@ -753,8 +772,7 @@ static inline void hal_tx_comp_desc_sync(void *hw_desc,
 	if (!read_status) {
 		qdf_mem_copy(comp, hw_desc, HAL_TX_COMPLETION_DESC_BASE_LEN);
 	} else {
-		qdf_mem_copy(comp, (((uint32_t *)hw_desc) + 2),
-			     HAL_TX_COMPLETION_DESC_LEN_BYTES_WO_VA);
+		qdf_mem_copy(comp, hw_desc, HAL_TX_COMPLETION_DESC_LEN_BYTES);
 	}
 }
 

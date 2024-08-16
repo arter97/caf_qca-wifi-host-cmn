@@ -162,6 +162,7 @@ static void scm_add_rnr_channel_db(struct wlan_objmgr_psoc *psoc,
 		/* Skip if entry is not valid */
 		if (!rnr_bss->channel_number)
 			continue;
+
 		chan_freq = wlan_reg_chan_opclass_to_freq(rnr_bss->channel_number,
 							  rnr_bss->operating_class,
 							  true);
@@ -257,6 +258,11 @@ void scm_filter_rnr_flag_pno(struct wlan_objmgr_vdev *vdev,
 			}
 		}
 	}
+}
+#else
+static void scm_add_rnr_channel_db(struct wlan_objmgr_psoc *psoc,
+				   struct scan_cache_entry *entry)
+{
 }
 #endif
 
@@ -936,41 +942,6 @@ scm_find_duplicate(struct wlan_objmgr_pdev *pdev,
  */
 #define SCAN_DUMP_MAX_LEN 95
 
-#ifdef WLAN_FEATURE_11BE_MLO
-/**
- * scm_dump_ml_scan_info(): Dump ml scan info
- * @scan_params: new received entry
- * @log_str: Buffer pointer
- * @str_len: max string length
- * @len: already filled length in buffer
- *
- * Return: length filled in buffer
- */
-static uint32_t scm_dump_ml_scan_info(struct scan_cache_entry *scan_params,
-				      char *log_str, uint32_t str_len,
-				      uint32_t len)
-{
-	/* Scenario: When both STA and AP support ML then
-	 * Driver will fill ml_info structure and print the MLD address and no.
-	 * of links.
-	 */
-	if (qdf_is_macaddr_zero(&scan_params->ml_info.mld_mac_addr))
-		return 0;
-
-	return qdf_scnprintf(log_str + len, str_len - len,
-		", MLD " QDF_MAC_ADDR_FMT " links %d",
-		QDF_MAC_ADDR_REF(scan_params->ml_info.mld_mac_addr.bytes),
-		scan_params->ml_info.num_links);
-}
-#else
-static uint32_t scm_dump_ml_scan_info(struct scan_cache_entry *scan_params,
-				      char *log_str, uint32_t str_len,
-				      uint32_t len)
-{
-	return 0;
-}
-#endif
-
 static void scm_dump_scan_entry(struct wlan_objmgr_pdev *pdev,
 				struct scan_cache_entry *scan_params)
 {
@@ -1015,7 +986,7 @@ static void scm_dump_scan_entry(struct wlan_objmgr_pdev *pdev,
 		len += qdf_scnprintf(log_str + len, str_len - len, "[CSA IE]");
 
 	/* Add ML info */
-	len += scm_dump_ml_scan_info(scan_params, log_str, str_len, len);
+	len += util_scan_get_ml_info(scan_params, log_str, str_len, len);
 
 	scm_nofl_debug("Rcvd %s(%d): " QDF_MAC_ADDR_FMT " \"" QDF_SSID_FMT "\" freq %d rssi %d tsf %u seq %d snr %d phy %d %s",
 		       (scan_params->frm_subtype == MGMT_SUBTYPE_PROBE_RESP) ?
@@ -1384,6 +1355,9 @@ QDF_STATUS __scm_handle_bcn_probe(struct scan_bcn_probe_event *bcn)
 			qdf_mem_free(scan_node);
 			continue;
 		}
+
+		if (bcn->save_rnr_info)
+			scm_add_rnr_channel_db(psoc, scan_entry);
 
 		qdf_mem_free(scan_node);
 	}

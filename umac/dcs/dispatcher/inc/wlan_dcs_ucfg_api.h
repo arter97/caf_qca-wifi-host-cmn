@@ -258,6 +258,19 @@ void ucfg_dcs_set_user_request(struct wlan_objmgr_psoc *psoc, uint8_t mac_id,
  */
 QDF_STATUS ucfg_dcs_get_ch_util(struct wlan_objmgr_psoc *psoc, uint8_t mac_id,
 				struct wlan_host_dcs_ch_util_stats *dcs_stats);
+
+/**
+ * ucfg_dcs_trigger_dcs() - ucfg wrapper to trigger DCS
+ * @psoc: psoc Pointer
+ * @pdev_id: pdev id
+ * @vdev_id: vdev id
+ * @dcs_type: DCS type
+ *
+ * Return: void
+ */
+void
+ucfg_dcs_trigger_dcs(struct wlan_objmgr_psoc *psoc, uint8_t pdev_id,
+		     uint8_t vdev_id, enum wlan_host_dcs_type dcs_type);
 /**
  * ucfg_dcs_switch_chan() - switch channel for vdev
  * @vdev: vdev ptr
@@ -351,6 +364,12 @@ ucfg_dcs_switch_chan(struct wlan_objmgr_vdev *vdev, qdf_freq_t tgt_freq,
 		     enum phy_ch_width tgt_width)
 {
 	return QDF_STATUS_SUCCESS;
+}
+
+static inline void
+ucfg_dcs_trigger_dcs(struct wlan_objmgr_psoc *psoc, uint8_t pdev_id,
+		     uint8_t vdev_id, enum wlan_host_dcs_type dcs_type)
+{
 }
 
 static inline

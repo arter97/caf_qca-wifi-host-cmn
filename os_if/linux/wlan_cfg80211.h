@@ -197,6 +197,11 @@
  * non-blocking stats request
  * @QCA_NL80211_VENDOR_SUBCMD_SPECTRAL_SCAN_COMPLETE_INDEX: Event index for
  * spectral scan completion
+ * @QCA_NL80211_VENDOR_SUBCMD_FLOW_STATS_INDEX: Event index for flow stats
+ * @QCA_NL80211_VENDOR_SUBCMD_CLASSIFIED_FLOW_REPORT_INDEX: Event index for
+ * the flow report sent for classified flow
+ * @QCA_NL80211_VENDOR_SUBCMD_ASYNC_GET_STATION_INDEX: Event index for async
+ * get station sent for ucast cmd
  */
 
 enum qca_nl80211_vendor_subcmds_index {
@@ -340,6 +345,11 @@ enum qca_nl80211_vendor_subcmds_index {
 	QCA_NL80211_VENDOR_SUBCMD_TELEMETRY_STATS_INDEX,
 #endif
 	QCA_NL80211_VENDOR_SUBCMD_SPECTRAL_SCAN_COMPLETE_INDEX,
+#ifdef WLAN_DP_FEATURE_STC
+	QCA_NL80211_VENDOR_SUBCMD_FLOW_STATS_INDEX,
+	QCA_NL80211_VENDOR_SUBCMD_CLASSIFIED_FLOW_REPORT_INDEX,
+#endif
+	QCA_NL80211_VENDOR_SUBCMD_ASYNC_GET_STATION_INDEX,
 };
 
 #if !defined(SUPPORT_WDEV_CFG80211_VENDOR_EVENT_ALLOC) && \

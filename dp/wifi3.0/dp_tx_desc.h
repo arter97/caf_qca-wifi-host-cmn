@@ -1262,10 +1262,6 @@ static inline void dp_tx_desc_update_fast_comp_flag(struct dp_soc *soc,
 	if (qdf_likely(!(desc->flags & DP_TX_DESC_FLAG_TO_FW)) &&
 	    qdf_likely(allow_fast_comp))
 		desc->flags |= DP_TX_DESC_FLAG_SIMPLE;
-
-	if (qdf_likely(desc->nbuf->is_from_recycler) &&
-	    qdf_likely(desc->nbuf->fast_xmit))
-		desc->flags |= DP_TX_DESC_FLAG_FAST;
 }
 
 #else
@@ -1303,6 +1299,66 @@ struct dp_tx_desc_s *dp_tx_desc_find(struct dp_soc *soc,
 		tx_desc_pool->elem_size * offset;
 }
 
+
+#ifdef QCA_SUPPORT_DP_GLOBAL_CTX
+/**
+ * dp_tx_ext_desc_alloc() - Get tx extension descriptor from pool
+ * @soc: handle for the device sending the data
+ * @desc_pool_id: target pool id
+ *
+ * Return: None
+ */
+static inline
+struct dp_tx_ext_desc_elem_s *dp_tx_ext_desc_alloc(struct dp_soc *soc,
+						   uint8_t desc_pool_id)
+{
+	struct dp_tx_ext_desc_elem_s *c_elem;
+	struct dp_tx_ext_desc_pool_s *pool;
+	struct dp_global_context *dp_global = NULL;
+
+	desc_pool_id = dp_tx_ext_desc_pool_override(desc_pool_id);
+	dp_global = wlan_objmgr_get_global_ctx();
+	pool = dp_global->tx_ext_desc[desc_pool_id];
+
+	qdf_spin_lock_bh(&pool->lock);
+	if (pool->num_free <= 0) {
+		qdf_spin_unlock_bh(&pool->lock);
+		return NULL;
+	}
+	c_elem = pool->freelist;
+	pool->freelist = pool->freelist->next;
+	pool->num_free--;
+	qdf_spin_unlock_bh(&pool->lock);
+	return c_elem;
+}
+
+/**
+ * dp_tx_ext_desc_free() - Release tx extension descriptor to the pool
+ * @soc: handle for the device sending the data
+ * @elem: ext descriptor pointer should release
+ * @desc_pool_id: target pool id
+ *
+ * Return: None
+ */
+static inline void dp_tx_ext_desc_free(struct dp_soc *soc,
+       struct dp_tx_ext_desc_elem_s *elem, uint8_t desc_pool_id)
+{
+	struct dp_tx_ext_desc_pool_s *pool;
+	struct dp_global_context *dp_global = NULL;
+
+	desc_pool_id = dp_tx_ext_desc_pool_override(desc_pool_id);
+	dp_global = wlan_objmgr_get_global_ctx();
+	pool = dp_global->tx_ext_desc[desc_pool_id];
+
+	elem->flags = 0;
+	qdf_spin_lock_bh(&pool->lock);
+	elem->next = pool->freelist;
+	pool->freelist = elem;
+	pool->num_free++;
+	qdf_spin_unlock_bh(&pool->lock);
+	return;
+}
+#else
 /**
  * dp_tx_ext_desc_alloc() - Get tx extension descriptor from pool
  * @soc: handle for the device sending the data
@@ -1350,6 +1406,7 @@ static inline void dp_tx_ext_desc_free(struct dp_soc *soc,
 	qdf_spin_unlock_bh(&soc->tx_ext_desc[desc_pool_id].lock);
 	return;
 }
+#endif
 
 /**
  * dp_tx_ext_desc_free_multiple() - Free multiple tx extension descriptor and

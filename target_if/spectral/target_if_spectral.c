@@ -154,6 +154,11 @@ target_if_spectral_check_buffer_size(struct wlan_objmgr_pdev *pdev,
 
 	spectral = get_target_if_spectral_handle_from_pdev(pdev);
 
+	if (!spectral) {
+		spectral_err("spectral variable in null.");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
 	status = spectral->spectral_buf_cb.get_buff_size(pdev, &buffer_size);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		spectral_err("Failed to get spectral buffer size");
@@ -3177,6 +3182,11 @@ target_if_spectral_scan_timeout_handler(qdf_hrtimer_data_t *arg)
 
 	smode = spectral_timer->smode;
 
+	if (smode >= SPECTRAL_SCAN_MODE_MAX) {
+		spectral_err("Invalid Spectral mode %u", smode);
+		return QDF_HRTIMER_NORESTART;
+	}
+
 	spectral = qdf_container_of(spectral_timer,
 				    struct target_if_spectral,
 				    spectral_timer[smode]);
@@ -3455,7 +3465,8 @@ target_if_spectral_len_adj_swar_init(struct spectral_fft_bin_len_adj_swar *swar,
 	    target_type == TARGET_TYPE_KIWI ||
 	    target_type == TARGET_TYPE_MANGO ||
 	    target_type == TARGET_TYPE_PEACH ||
-	    target_type == TARGET_TYPE_WCN7750) {
+	    target_type == TARGET_TYPE_WCN7750 ||
+	    target_type == TARGET_TYPE_QCC2072) {
 		swar->fftbin_size_war = SPECTRAL_FFTBIN_SIZE_WAR_2BYTE_TO_1BYTE;
 		rparams->hw_fft_bin_width = 2;
 	} else if (target_type == TARGET_TYPE_QCA8074 ||
@@ -3531,7 +3542,8 @@ target_if_spectral_report_params_init(
 	    target_type == TARGET_TYPE_KIWI ||
 	    target_type == TARGET_TYPE_MANGO ||
 	    target_type == TARGET_TYPE_PEACH ||
-	    target_type == TARGET_TYPE_WCN7750) {
+	    target_type == TARGET_TYPE_WCN7750 ||
+	    target_type == TARGET_TYPE_QCC2072) {
 		rparams->version = SPECTRAL_REPORT_FORMAT_VERSION_2;
 		rparams->num_spectral_detectors =
 				NUM_SPECTRAL_DETECTORS_GEN3_V2;
@@ -4000,7 +4012,8 @@ target_if_pdev_spectral_init(struct wlan_objmgr_pdev *pdev)
 	    target_type == TARGET_TYPE_KIWI ||
 	    target_type == TARGET_TYPE_MANGO ||
 	    target_type == TARGET_TYPE_PEACH ||
-	    target_type == TARGET_TYPE_WCN7750)
+	    target_type == TARGET_TYPE_WCN7750 ||
+	    target_type == TARGET_TYPE_QCC2072)
 		spectral->direct_dma_support = true;
 
 	target_if_spectral_report_params_init(&spectral->rparams,
@@ -4027,7 +4040,8 @@ target_if_pdev_spectral_init(struct wlan_objmgr_pdev *pdev)
 	    (target_type == TARGET_TYPE_KIWI) ||
 	    (target_type == TARGET_TYPE_MANGO) ||
 	    (target_type == TARGET_TYPE_PEACH) ||
-	    (target_type == TARGET_TYPE_WCN7750)) {
+	    (target_type == TARGET_TYPE_WCN7750) ||
+	    (target_type == TARGET_TYPE_QCC2072)) {
 		spectral->spectral_gen = SPECTRAL_GEN3;
 		spectral->hdr_sig_exp = SPECTRAL_PHYERR_SIGNATURE_GEN3;
 		spectral->tag_sscan_summary_exp =
@@ -4211,10 +4225,7 @@ target_if_psoc_spectral_init(struct wlan_objmgr_psoc *psoc)
 	return psoc_spectral;
 
 fail:
-	if (psoc_spectral)
-		target_if_psoc_spectral_deinit(psoc);
-
-	return psoc_spectral;
+	return NULL;
 }
 
 /**
@@ -4461,7 +4472,7 @@ target_if_is_agile_span_overlap_with_operating_span
 	uint32_t op_end_freq;
 	uint32_t agile_start_freq;
 	uint32_t agile_end_freq;
-	uint32_t cfreq2;
+	int16_t cfreq2;
 
 	if (!spectral) {
 		spectral_err("spectral object is NULL");
@@ -4894,8 +4905,7 @@ _target_if_set_spectral_config(struct target_if_spectral *spectral,
 		sparams->ss_pwr_format = !!param->value;
 		break;
 	case SPECTRAL_PARAM_RPT_MODE:
-		if ((param->value < SPECTRAL_PARAM_RPT_MODE_MIN) ||
-		    (param->value > SPECTRAL_PARAM_RPT_MODE_MAX)) {
+		if (param->value > SPECTRAL_PARAM_RPT_MODE_MAX) {
 			*err = SPECTRAL_SCAN_ERR_PARAM_INVALID_VALUE;
 			return QDF_STATUS_E_FAILURE;
 		}

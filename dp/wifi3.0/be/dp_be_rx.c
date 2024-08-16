@@ -346,6 +346,29 @@ dp_rx_war_store_msdu_done_fail_desc(struct dp_soc *soc,
 }
 #endif
 
+#ifdef QCA_DP_PROTOCOL_STATS
+static inline void
+dp_rx_update_protocol_stats_wrapper(struct dp_soc *soc,
+				    struct dp_txrx_peer *txrx_peer,
+				    uint8_t link_id, qdf_nbuf_t nbuf,
+				    uint8_t *rx_tlv_hdr, uint8_t level)
+{
+	if (qdf_unlikely(wlan_cfg_get_dp_proto_stats(soc->wlan_cfg_ctx)) &&
+	    !qdf_nbuf_is_raw_frame(nbuf)) {
+		dp_rx_update_protocol_stats(soc->hal_soc, txrx_peer, link_id,
+					    nbuf, rx_tlv_hdr, level);
+	}
+}
+#else
+static inline void
+dp_rx_update_protocol_stats_wrapper(struct dp_soc *soc,
+				    struct dp_txrx_peer *txrx_peer,
+				    uint8_t link_id, qdf_nbuf_t nbuf,
+				    uint8_t *rx_tlv_hdr, uint8_t level)
+{
+}
+#endif /* QCA_DP_PROTOCOL_STATS */
+
 uint32_t dp_rx_process_be(struct dp_intr *int_ctx,
 			  hal_ring_handle_t hal_ring_hdl, uint8_t reo_ring_num,
 			  uint32_t quota)
@@ -405,6 +428,7 @@ uint32_t dp_rx_process_be(struct dp_intr *int_ctx,
 	uint32_t l3_pad;
 	uint8_t link_id = 0;
 	uint16_t buf_size;
+	uint8_t is_ctrl_refill = 0;
 
 	DP_HIST_INIT();
 
@@ -559,7 +583,10 @@ more_data:
 		pkt_capture_offload =
 			dp_rx_copy_desc_info_in_nbuf_cb(soc, ring_desc,
 							rx_desc->nbuf,
-							reo_ring_num);
+							reo_ring_num,
+							&is_ctrl_refill);
+		if (is_ctrl_refill)
+			goto refill_opt_dp_ctrl;
 
 		if (qdf_unlikely(qdf_nbuf_is_rx_chfrag_cont(rx_desc->nbuf))) {
 			/* In dp_rx_sg_create() until the last buffer,
@@ -610,8 +637,13 @@ more_data:
 								soc, rx_desc,
 								reo_ring_num);
 			if (qdf_likely(old_rx_desc)) {
-				if (dp_rx_add_to_ipa_desc_free_list(soc,
-								    old_rx_desc)
+				/** For opt_dp_ctrl if this buffer is refilled
+				 * from FW, the execution will not reach here
+				 */
+				if (dp_rx_add_to_ipa_desc_free_list(
+							soc,
+							old_rx_desc,
+							is_ctrl_refill)
 							!= QDF_STATUS_SUCCESS) {
 					rx_bufs_reaped[rx_desc->chip_id][rx_desc->pool_id]++;
 					dp_rx_add_to_free_desc_list
@@ -640,14 +672,16 @@ more_data:
 		 * move unmap after scattered msdu waiting break logic
 		 * in case double skb unmap happened.
 		 */
-		dp_rx_nbuf_unmap(soc, rx_desc, reo_ring_num);
 		DP_RX_PROCESS_NBUF(soc, nbuf_head, nbuf_tail, ebuf_head,
 				   ebuf_tail, rx_desc);
 
+refill_opt_dp_ctrl:
+		dp_rx_nbuf_unmap(soc, rx_desc, reo_ring_num);
 		quota -= 1;
 		num_pending -= 1;
 
-		if (dp_rx_add_to_ipa_desc_free_list(soc, rx_desc) !=
+		if (dp_rx_add_to_ipa_desc_free_list(soc, rx_desc,
+						    is_ctrl_refill) !=
 						QDF_STATUS_SUCCESS) {
 			rx_bufs_reaped[rx_desc->chip_id][rx_desc->pool_id]++;
 			dp_rx_add_to_free_desc_list
@@ -912,6 +946,11 @@ done:
 
 			qdf_nbuf_set_pktlen(nbuf, pkt_len);
 			dp_rx_skip_tlvs(soc, nbuf, l3_pad);
+
+			dp_rx_update_protocol_stats_wrapper(soc, txrx_peer,
+							    link_id, nbuf,
+							    rx_tlv_hdr,
+							    RX_RECV_FROM_HW);
 		}
 
 		dp_rx_send_pktlog(soc, rx_pdev, nbuf, QDF_TX_RX_STATUS_OK);
@@ -1068,6 +1107,9 @@ done:
 						      link_id);
 
 		tid_stats->delivered_to_stack++;
+		dp_rx_update_protocol_stats_wrapper(soc, txrx_peer,
+						    link_id, nbuf, rx_tlv_hdr,
+						    RX_SENT_TO_STACK);
 		nbuf = next;
 	}
 
@@ -1343,7 +1385,7 @@ QDF_STATUS dp_wbm_get_rx_desc_from_hal_desc_be(struct dp_soc *soc,
 					       struct dp_rx_desc **r_rx_desc)
 {
 	/* SW do cookie conversion */
-	uint32_t cookie = HAL_RX_WBM_COMP_BUF_COOKIE_GET(ring_desc);
+	uint32_t cookie = HAL_RX_BUF_COOKIE_GET(ring_desc);
 
 	*r_rx_desc = (struct dp_rx_desc *)
 			dp_cc_desc_find(soc, cookie);
@@ -1556,6 +1598,83 @@ dp_rx_intrabss_fwd_mlo_allow(struct dp_txrx_peer *ta_peer,
 
 #ifdef INTRA_BSS_FWD_OFFLOAD
 /**
+ * dp_rx_intrabss_get_params_be() - Function to get destination soc and vdev id
+ *                                  parameters to forward the intrabss traffic
+ * @soc: pointer to soc structure
+ * @vdev: DP vdev handle
+ * @ta_peer: transmitter DP peer handle
+ * @params_in: Input parameters peer id , chip id, pmac id and module id
+ * @params_out: Output parameters having destination soc and vdev id
+ *
+ * Return: bool: true in success case, else false
+ */
+
+bool dp_rx_intrabss_get_params_be(struct dp_soc *soc, struct dp_vdev *vdev,
+				  struct dp_txrx_peer *ta_peer,
+				  struct dp_be_intrabss_in_params params_in,
+				  struct dp_be_intrabss_params *params_out)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	struct dp_vdev_be *be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
+	struct dp_peer *da_peer = NULL;
+
+	if (dp_assert_always_internal_stat(
+		(params_in.dest_chip_id <= (DP_MLO_MAX_DEST_CHIP_ID - 1)),
+		&be_soc->soc, rx.err.intra_bss_bad_chipid))
+		return false;
+
+	if (!be_soc->ml_ctxt)
+		params_out->dest_soc = (struct dp_soc *)be_soc;
+	else
+		params_out->dest_soc =
+			dp_mlo_get_soc_ref_by_chip_id(be_soc->ml_ctxt,
+						      params_in.dest_chip_id
+						     );
+	if (!params_out->dest_soc)
+		return false;
+
+	da_peer = dp_peer_get_tgt_peer_by_id(params_out->dest_soc,
+					     params_in.da_peer_id,
+					     DP_MOD_ID_RX);
+	if (da_peer) {
+		if (da_peer->bss_peer || (da_peer->txrx_peer == ta_peer)) {
+			dp_peer_unref_delete(da_peer, DP_MOD_ID_RX);
+			return false;
+		}
+
+		if (dp_rx_intrabss_wds_ext_ap_bridge_check(
+							ta_peer,
+							da_peer->txrx_peer,
+							false)) {
+			dp_peer_unref_delete(da_peer, DP_MOD_ID_RX);
+			return false;
+		}
+
+		dp_peer_unref_delete(da_peer, DP_MOD_ID_RX);
+	}
+
+	if ((!be_vdev->mlo_dev_ctxt) || (!be_soc->ml_ctxt)) {
+		params_out->tx_vdev_id = vdev->vdev_id;
+		return true;
+	}
+
+	if (params_in.dest_chip_id == be_soc->mlo_chip_id) {
+		if (params_in.dest_chip_pmac_id == vdev->pdev->pdev_id)
+			params_out->tx_vdev_id = vdev->vdev_id;
+		else
+			params_out->tx_vdev_id =
+			be_vdev->mlo_dev_ctxt->vdev_list[params_in.dest_chip_id]
+			[params_in.dest_chip_pmac_id];
+		return true;
+	}
+
+	params_out->tx_vdev_id =
+		be_vdev->mlo_dev_ctxt->vdev_list[params_in.dest_chip_id]
+		[params_in.dest_chip_pmac_id];
+	return true;
+}
+
+/**
  * dp_rx_intrabss_ucast_check_be() - Check if intrabss is allowed
  *				     for unicast frame
  * @nbuf: RX packet buffer
@@ -1575,12 +1694,7 @@ dp_rx_intrabss_ucast_check_be(qdf_nbuf_t nbuf,
 			      struct dp_be_intrabss_params *params)
 {
 	uint8_t dest_chip_id, dest_chip_pmac_id;
-	struct dp_vdev_be *be_vdev =
-		dp_get_be_vdev_from_dp_vdev(ta_peer->vdev);
-	struct dp_soc_be *be_soc =
-		dp_get_be_soc_from_dp_soc(params->dest_soc);
-	uint16_t da_peer_id;
-	struct dp_peer *da_peer = NULL;
+	struct dp_be_intrabss_in_params params_in;
 
 	if (!qdf_nbuf_is_intra_bss(nbuf))
 		return false;
@@ -1589,52 +1703,12 @@ dp_rx_intrabss_ucast_check_be(qdf_nbuf_t nbuf,
 					 &dest_chip_id,
 					 &dest_chip_pmac_id);
 
-	if (dp_assert_always_internal_stat(
-				(dest_chip_id <= (DP_MLO_MAX_DEST_CHIP_ID - 1)),
-				&be_soc->soc, rx.err.intra_bss_bad_chipid))
-		return false;
+	params_in.da_peer_id = HAL_RX_PEER_ID_GET(msdu_metadata);
+	params_in.dest_chip_id = dest_chip_id;
+	params_in.dest_chip_pmac_id = dest_chip_pmac_id;
 
-	if (!be_soc->ml_ctxt)
-		params->dest_soc = (struct dp_soc *)be_soc;
-	else
-		params->dest_soc =
-			dp_mlo_get_soc_ref_by_chip_id(be_soc->ml_ctxt,
-						      dest_chip_id);
-	if (!params->dest_soc)
-		return false;
-
-	da_peer_id = HAL_RX_PEER_ID_GET(msdu_metadata);
-
-	da_peer = dp_peer_get_tgt_peer_by_id(params->dest_soc, da_peer_id,
-					     DP_MOD_ID_RX);
-	if (da_peer) {
-		if (da_peer->bss_peer || (da_peer->txrx_peer == ta_peer)) {
-			dp_peer_unref_delete(da_peer, DP_MOD_ID_RX);
-			return false;
-		}
-		dp_peer_unref_delete(da_peer, DP_MOD_ID_RX);
-	}
-
-	if ((!be_vdev->mlo_dev_ctxt) || (!be_soc->ml_ctxt)) {
-		params->tx_vdev_id = ta_peer->vdev->vdev_id;
-		return true;
-	}
-
-	if (dest_chip_id == be_soc->mlo_chip_id) {
-		if (dest_chip_pmac_id == ta_peer->vdev->pdev->pdev_id)
-			params->tx_vdev_id = ta_peer->vdev->vdev_id;
-		else
-			params->tx_vdev_id =
-				be_vdev->mlo_dev_ctxt->vdev_list[dest_chip_id]
-							  [dest_chip_pmac_id];
-		return true;
-	}
-
-	params->tx_vdev_id =
-		be_vdev->mlo_dev_ctxt->vdev_list[dest_chip_id]
-						[dest_chip_pmac_id];
-
-	return true;
+	return dp_rx_intrabss_get_params_be(params->dest_soc, ta_peer->vdev,
+					    ta_peer, params_in, params);
 }
 #else
 #ifdef WLAN_MLO_MULTI_CHIP
@@ -1797,6 +1871,13 @@ rel_da_peer:
 	return ret;
 }
 #endif /* WLAN_MLO_MULTI_CHIP */
+bool dp_rx_intrabss_get_params_be(struct dp_soc *soc, struct dp_vdev *vdev,
+				  struct dp_txrx_peer *ta_peer,
+				  struct dp_be_intrabss_in_params params_in,
+				  struct dp_be_intrabss_params *params_out)
+{
+	return false;
+}
 #endif /* INTRA_BSS_FWD_OFFLOAD */
 
 #if defined(WLAN_PKT_CAPTURE_RX_2_0) || defined(CONFIG_WORD_BASED_TLV)
@@ -1936,14 +2017,45 @@ dp_release_mlo_intrabss_vdev(struct dp_vdev *intrabss_vdev)
 			     intrabss_vdev, DP_MOD_ID_RX);
 }
 
-static inline
-bool dp_rx_intrabss_mlo_mcbc_fwd(struct dp_soc *soc, struct dp_vdev *vdev,
-				 qdf_nbuf_t nbuf_copy)
+bool dp_rx_intrabss_get_mcbc_params_be(struct dp_soc *soc, struct dp_vdev *vdev,
+				       struct dp_be_intrabss_params *params)
 {
 	struct dp_vdev *intrabss_vdev = NULL;
 	struct dp_vdev_be *be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+
+	intrabss_vdev = dp_get_mlo_intrabss_vdev(be_soc, be_vdev);
+
+	if (!intrabss_vdev)
+		return false;
+
+	params->dest_soc = intrabss_vdev->pdev->soc;
+	params->tx_vdev_id = intrabss_vdev->vdev_id;
+
+	dp_release_mlo_intrabss_vdev(intrabss_vdev);
+	return true;
+}
+
+bool dp_rx_intrabss_mlo_mcbc_fwd_be(struct dp_be_intrabss_params params,
+				    qdf_nbuf_t nbuf_copy, uint8_t link_id,
+				    uint16_t len,
+				    struct dp_txrx_peer *ta_txrx_peer,
+				    struct cdp_tid_rx_stats *tid_stats)
+{
 	struct cdp_tx_exception_metadata tx_exc_metadata = {0};
+	struct dp_vdev *vdev = NULL;
+	struct dp_vdev_be *be_vdev = NULL;
+
+	vdev = dp_vdev_get_ref_by_id(params.dest_soc, params.tx_vdev_id,
+				     DP_MOD_ID_RX);
+	if (!vdev)
+		return false;
+
+	be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
+	if (!be_vdev->mcast_primary) {
+		dp_vdev_unref_delete(params.dest_soc, vdev, DP_MOD_ID_RX);
+		return false;
+	}
 
 	tx_exc_metadata.is_mlo_mcast = 1;
 	tx_exc_metadata.tx_encap_type = CDP_INVALID_TX_ENCAP_TYPE;
@@ -1951,27 +2063,37 @@ bool dp_rx_intrabss_mlo_mcbc_fwd(struct dp_soc *soc, struct dp_vdev *vdev,
 	tx_exc_metadata.peer_id = CDP_INVALID_PEER;
 	tx_exc_metadata.tid = CDP_INVALID_TID;
 
-	intrabss_vdev = dp_get_mlo_intrabss_vdev(be_soc, be_vdev);
-
-	if (!intrabss_vdev)
-		return false;
-
-	nbuf_copy = dp_tx_send_exception((struct cdp_soc_t *)
-					 intrabss_vdev->pdev->soc,
-					 intrabss_vdev->vdev_id,
-					 nbuf_copy, &tx_exc_metadata);
-
-	if (nbuf_copy)
+	nbuf_copy = dp_tx_send_exception((struct cdp_soc_t *)params.dest_soc,
+					 params.tx_vdev_id, nbuf_copy,
+					 &tx_exc_metadata);
+	if (nbuf_copy) {
+		DP_PEER_PER_PKT_STATS_INC_PKT(ta_txrx_peer, rx.intra_bss.fail,
+					      1, len, link_id);
+		tid_stats->fail_cnt[INTRABSS_DROP]++;
 		qdf_nbuf_free(nbuf_copy);
+		dp_vdev_unref_delete(params.dest_soc, vdev, DP_MOD_ID_RX);
+		return false;
+	}
 
-	dp_release_mlo_intrabss_vdev(intrabss_vdev);
+	DP_PEER_PER_PKT_STATS_INC_PKT(ta_txrx_peer, rx.intra_bss.pkts, 1, len,
+				      link_id);
+	tid_stats->intrabss_cnt++;
+	dp_vdev_unref_delete(params.dest_soc, vdev, DP_MOD_ID_RX);
 	return true;
 }
 
 #else
-static inline
-bool dp_rx_intrabss_mlo_mcbc_fwd(struct dp_soc *soc, struct dp_vdev *vdev,
-				 qdf_nbuf_t nbuf_copy)
+bool dp_rx_intrabss_mlo_mcbc_fwd_be(struct dp_be_intrabss_params params,
+				    qdf_nbuf_t nbuf_copy, uint8_t link_id,
+				    uint16_t len,
+				    struct dp_txrx_peer *ta_txrx_peer,
+				    struct cdp_tid_rx_stats *tid_stats)
+{
+	return false;
+}
+
+bool dp_rx_intrabss_get_mcbc_params_be(struct dp_soc *soc, struct dp_vdev *vdev,
+				       struct dp_be_intrabss_params *params)
 {
 	return false;
 }
@@ -1984,9 +2106,11 @@ dp_rx_intrabss_mcast_handler_be(struct dp_soc *soc,
 				struct cdp_tid_rx_stats *tid_stats,
 				uint8_t link_id)
 {
+	uint16_t len = QDF_NBUF_CB_RX_PKT_LEN(nbuf_copy);
+	struct dp_be_intrabss_params params = {0};
+
 	if (qdf_unlikely(ta_txrx_peer->vdev->nawds_enabled)) {
 		struct cdp_tx_exception_metadata tx_exc_metadata = {0};
-		uint16_t len = QDF_NBUF_CB_RX_PKT_LEN(nbuf_copy);
 
 		tx_exc_metadata.peer_id = ta_txrx_peer->peer_id;
 		tx_exc_metadata.is_intrabss_fwd = 1;
@@ -2010,9 +2134,12 @@ dp_rx_intrabss_mcast_handler_be(struct dp_soc *soc,
 		return true;
 	}
 
-	if (dp_rx_intrabss_mlo_mcbc_fwd(soc, ta_txrx_peer->vdev,
-					nbuf_copy))
+	if (dp_rx_intrabss_get_mcbc_params_be(soc, ta_txrx_peer->vdev,
+					      &params)) {
+		dp_rx_intrabss_mlo_mcbc_fwd_be(params, nbuf_copy, link_id, len,
+					       ta_txrx_peer, tid_stats);
 		return true;
+	}
 
 	return false;
 }
@@ -2625,7 +2752,8 @@ dp_rx_null_q_desc_handle_be(struct dp_soc *soc, qdf_nbuf_t nbuf,
 		is_eapol = qdf_nbuf_is_ipv4_eapol_pkt(nbuf);
 
 		if (is_eapol || qdf_nbuf_is_ipv4_wapi_pkt(nbuf)) {
-			if (!dp_rx_err_match_dhost(eh, vdev))
+			if (!dp_rx_err_match_dhost(eh, vdev,
+						   txrx_peer->is_mld_peer))
 				goto drop_nbuf;
 		} else {
 			goto drop_nbuf;
@@ -2644,7 +2772,8 @@ dp_rx_null_q_desc_handle_be(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	 *    These packets need to be dropped and should not get delivered
 	 *    to stack.
 	 */
-	if (qdf_unlikely(dp_rx_err_cce_drop(soc, vdev, nbuf, rx_tlv_hdr)))
+	if (qdf_unlikely(dp_rx_err_cce_drop(soc, vdev, nbuf, rx_tlv_hdr,
+					    txrx_peer->is_mld_peer)))
 		goto drop_nbuf;
 
 	/*

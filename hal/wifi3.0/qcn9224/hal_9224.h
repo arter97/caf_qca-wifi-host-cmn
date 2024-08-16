@@ -363,65 +363,81 @@ hal_rx_proc_phyrx_all_sigb_tlv_9224(void *rx_tlv_hdr, void *ppdu_info_hdl)
 	}
 }
 
+#define PHYRX_OTHER_RCV_INFO_RU_DETAILS_USER_ID_MASK 0x00FF
+#define PHYRX_OTHER_RCV_INFO_RU_DETAILS_USER_ID_SHFT 8
+#define DP_SUPPORTED_MU_SNIF_USERS 4
+#define DP_CHECK_IF_NOT_HEMU(ppdu_info) \
+			((ppdu_info)->rx_status.he_data1 & 0x2) != 2
+
 /**
- * hal_rx_proc_phyrx_other_receive_info_tlv_9224() - API to get tlv info
+ * hal_rx_ru_info_details_9224() - API to get RU info
  * @rx_tlv_hdr: RX TLV header
  * @ppdu_info_hdl: Handle to PPDU info to update
  *
  * Return: None
  */
 static inline
-void hal_rx_proc_phyrx_other_receive_info_tlv_9224(void *rx_tlv_hdr,
-						   void *ppdu_info_hdl)
+void hal_rx_ru_info_details_9224(void *rx_tlv_hdr, void *ppdu_info_hdl)
 {
-	uint32_t tlv_tag, tlv_len, pkt_type;
-	void *rx_tlv;
 	uint32_t ru_details_channel_0;
+	uint32_t ru_details_channel_1;
+	void *rx_tlv;
 	struct hal_rx_ppdu_info *ppdu_info =
 		(struct hal_rx_ppdu_info *)ppdu_info_hdl;
+	uint32_t sta_ids;
+	uint8_t i, sta_id;
 
-	hal_rx_proc_phyrx_all_sigb_tlv_9224(rx_tlv_hdr, ppdu_info_hdl);
-
-	tlv_len = HAL_RX_GET_USER_TLV32_LEN(rx_tlv_hdr);
-	rx_tlv = (uint8_t *)rx_tlv_hdr + HAL_RX_TLV64_HDR_SIZE;
-
-	if (!tlv_len)
+	if (DP_CHECK_IF_NOT_HEMU(ppdu_info))
 		return;
 
-	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(rx_tlv);
-	rx_tlv = (uint8_t *)rx_tlv + HAL_RX_TLV64_HDR_SIZE;
+	rx_tlv = (uint8_t *)rx_tlv_hdr + HAL_RX_TLV64_HDR_SIZE;
+	ru_details_channel_0 =
+		HAL_RX_GET(rx_tlv, PHYRX_OTHER_RECEIVE_INFO_RU_DETAILS,
+			   RU_DETAILS_CHANNEL_0);
+	ru_details_channel_1 =
+		HAL_RX_GET_64(rx_tlv, PHYRX_OTHER_RECEIVE_INFO_RU_DETAILS,
+			      RU_DETAILS_CHANNEL_1);
 
-	pkt_type = HAL_RX_GET_64(rx_tlv,
-				 PHYRX_OTHER_RECEIVE_INFO_ALL_SIGB_DETAILS,
-				 PKT_TYPE);
+	qdf_mem_copy(ppdu_info->rx_status.he_RU, &ru_details_channel_0,
+		     sizeof(uint32_t));
+	qdf_mem_copy(&ppdu_info->rx_status.he_RU[4], &ru_details_channel_1,
+		     sizeof(uint32_t));
 
-	switch (tlv_tag) {
-	case WIFIPHYRX_OTHER_RECEIVE_INFO_RU_DETAILS_E:
-	if (pkt_type ==
-		HAL_RX_PKT_TYPE_11AX) {
-		ru_details_channel_0 =
-			HAL_RX_GET(rx_tlv,
-				   PHYRX_OTHER_RECEIVE_INFO_RU_DETAILS,
-				   RU_DETAILS_CHANNEL_0);
+	QDF_TRACE(QDF_MODULE_ID_DP_RX_MON_STATUS, QDF_TRACE_LEVEL_DEBUG,
+		  "RU_0: %x RU_1: %x BW: %d", ru_details_channel_0,
+		  ru_details_channel_1, ppdu_info->rx_status.bw);
 
-		qdf_mem_copy(ppdu_info->rx_status.he_RU,
-			     &ru_details_channel_0,
-			     sizeof(ppdu_info->rx_status.he_RU));
+	sta_ids =
+		HAL_RX_GET(rx_tlv, PHYRX_OTHER_RECEIVE_INFO_RU_DETAILS, SPARE);
+	QDF_TRACE(QDF_MODULE_ID_DP_RX_MON_STATUS, QDF_TRACE_LEVEL_DEBUG,
+		  "Sta_ids: %x", sta_ids);
 
-		ppdu_info->rx_status.he_flags1 |=
-			QDF_MON_STATUS_CHANNEL_1_RU_KNOWN;
-		if (ppdu_info->rx_status.bw >= HAL_FULL_RX_BW_40) {
-			ppdu_info->rx_status.he_flags1 |=
-				QDF_MON_STATUS_CHANNEL_2_RU_KNOWN;
-		}
+	for (i = 0; i < DP_SUPPORTED_MU_SNIF_USERS; i++) {
+		sta_id = (sta_ids >>
+			  (PHYRX_OTHER_RCV_INFO_RU_DETAILS_USER_ID_SHFT * i)) &
+			 PHYRX_OTHER_RCV_INFO_RU_DETAILS_USER_ID_MASK;
+		ppdu_info->rx_user_status[i].he_data4 |= sta_id <<
+						    QDF_MON_STATUS_STA_ID_SHIFT;
+
+		QDF_TRACE(QDF_MODULE_ID_DP_RX_MON_STATUS, QDF_TRACE_LEVEL_DEBUG,
+			  "Sta_id: %x", ppdu_info->rx_user_status[i].he_data4);
 	}
 
+	switch (ppdu_info->rx_status.bw) {
+	case HAL_FULL_RX_BW_160:
+		ppdu_info->rx_status.he_flags1 |= QDF_MON_STATUS_RU_3_KNOWN;
+		fallthrough;
+	case HAL_FULL_RX_BW_80:
+		ppdu_info->rx_status.he_flags1 |= QDF_MON_STATUS_RU_2_KNOWN;
+		fallthrough;
+	case HAL_FULL_RX_BW_40:
+		ppdu_info->rx_status.he_flags1 |= QDF_MON_STATUS_RU_1_KNOWN;
+		fallthrough;
+	case HAL_FULL_RX_BW_20:
+		ppdu_info->rx_status.he_flags1 |= QDF_MON_STATUS_RU_0_KNOWN;
 		break;
 	default:
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  "%s unhandled TLV type: %d, TLV len:%d",
-			  __func__, tlv_tag, tlv_len);
-	break;
+		break;
 	}
 }
 
@@ -1546,16 +1562,17 @@ hal_rx_flow_setup_fse_9224(uint8_t *rx_fst, uint32_t table_offset,
 }
 
 /**
- * hal_rx_peer_meta_data_get_9224() - get peer meta data from rx_pkt_tlvs
- * @buf: start of rx_tlv_hdr
+ * hal_rx_tlv_l3_type_get_9224() - API to get the l3 type from
+ *                               rx_msdu_start TLV
+ * @buf: pointer to the start of RX PKT TLV headers
  *
- * Return: peer meta data
+ * Return: uint32_t(l3 type)
  */
-static inline uint32_t hal_rx_peer_meta_data_get_9224(uint8_t *buf)
+static inline uint32_t hal_rx_tlv_l3_type_get_9224(uint8_t *buf)
 {
 	struct rx_pkt_tlvs *rx_pkt_tlvs = (struct rx_pkt_tlvs *)buf;
 
-	return HAL_RX_TLV_MSDU_PEER_META_DATA_GET(rx_pkt_tlvs);
+	return HAL_RX_TLV_L3_TYPE_GET(rx_pkt_tlvs);
 }
 
 /**
@@ -1948,6 +1965,61 @@ static inline uint32_t hal_rx_tlv_msdu_done_copy_get_9224(uint8_t *buf)
 	return HAL_RX_TLV_MSDU_DONE_COPY_GET(buf);
 }
 
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
+/**
+ * hal_txmon_get_frame_timestamp_qcn9224() - api to get frame timestamp for tx monitor
+ * @tlv_tag: TLV tag
+ * @tx_tlv: pointer to tx tlv information
+ * @ppdu_info: pointer to ppdu_info
+ *
+ * Return: void
+ */
+static inline
+void hal_txmon_get_frame_timestamp_qcn9224(uint32_t tlv_tag, void *tx_tlv,
+					   void *ppdu_info)
+{
+	struct hal_tx_ppdu_info *tx_ppdu_info =
+			(struct hal_tx_ppdu_info *) ppdu_info;
+
+	switch (tlv_tag) {
+	case WIFIRESPONSE_END_STATUS_E:
+	{
+		hal_response_end_status_t *resp_end_status =
+					(hal_response_end_status_t *)tx_tlv;
+
+		TXMON_HAL_STATUS(tx_ppdu_info, ppdu_timestamp) =
+			(resp_end_status->start_of_frame_timestamp_15_0 |
+			 (resp_end_status->start_of_frame_timestamp_31_16 << 16));
+		break;
+	}
+
+	case WIFITX_FES_STATUS_END_E:
+	{
+		hal_tx_fes_status_end_t *tx_fes_end =
+					(hal_tx_fes_status_end_t *)tx_tlv;
+
+		TXMON_HAL_STATUS(tx_ppdu_info, ppdu_timestamp) =
+			(tx_fes_end->start_of_frame_timestamp_15_0 |
+			 tx_fes_end->start_of_frame_timestamp_31_16 <<
+			 HAL_TX_LSB(TX_FES_STATUS_END,
+			 START_OF_FRAME_TIMESTAMP_31_16));
+		break;
+	}
+
+	case WIFITX_FES_STATUS_PROT_E:
+	{
+		hal_tx_fes_status_prot_t *fes_prot =
+			(hal_tx_fes_status_prot_t *)tx_tlv;
+
+		TXMON_HAL_STATUS(tx_ppdu_info, ppdu_timestamp) =
+			(fes_prot->start_of_frame_timestamp_15_0 |
+			fes_prot->start_of_frame_timestamp_31_16 << 15);
+		break;
+	}
+	}
+}
+#endif
+
 static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 {
 	/* init and setup */
@@ -1991,8 +2063,9 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_get_tlv = hal_rx_get_tlv_9224;
 	hal_soc->ops->hal_rx_parse_eht_sig_hdr =
 				hal_rx_parse_eht_sig_hdr_9224;
-	hal_soc->ops->hal_rx_proc_phyrx_other_receive_info_tlv =
-				hal_rx_proc_phyrx_other_receive_info_tlv_9224;
+	hal_soc->ops->hal_rx_ru_info_details = hal_rx_ru_info_details_9224;
+	hal_soc->ops->hal_rx_proc_phyrx_all_sigb_tlv =
+					hal_rx_proc_phyrx_all_sigb_tlv_9224;
 
 	hal_soc->ops->hal_rx_dump_msdu_end_tlv = hal_rx_dump_msdu_end_tlv_9224;
 	hal_soc->ops->hal_rx_dump_mpdu_start_tlv =
@@ -2048,8 +2121,6 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 					hal_rx_get_mpdu_mac_ad4_valid_be;
 	hal_soc->ops->hal_rx_mpdu_start_sw_peer_id_get =
 		hal_rx_mpdu_start_sw_peer_id_get_9224;
-	hal_soc->ops->hal_rx_tlv_peer_meta_data_get =
-		hal_rx_peer_meta_data_get_9224;
 	hal_soc->ops->hal_rx_mpdu_get_to_ds = hal_rx_mpdu_get_to_ds_be;
 	hal_soc->ops->hal_rx_mpdu_get_fr_ds = hal_rx_mpdu_get_fr_ds_be;
 	hal_soc->ops->hal_rx_get_mpdu_frame_control_valid =
@@ -2093,6 +2164,7 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 					hal_rx_msdu_get_flow_params_be;
 	hal_soc->ops->hal_rx_tlv_get_tcp_chksum = hal_rx_tlv_get_tcp_chksum_be;
 	hal_soc->ops->hal_rx_get_rx_sequence = hal_rx_get_rx_sequence_be;
+	hal_soc->ops->hal_rx_tlv_l3_type_get = hal_rx_tlv_l3_type_get_9224;
 
 #if defined(WLAN_CFR_ENABLE) && defined(WLAN_ENH_CFR_ENABLE)
 	hal_soc->ops->hal_rx_get_bb_info = hal_rx_get_bb_info_9224;
@@ -2211,6 +2283,8 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 				hal_txmon_status_parse_tlv_generic_be;
 	hal_soc->ops->hal_txmon_status_get_num_users =
 				hal_txmon_status_get_num_users_generic_be;
+	hal_soc->ops->hal_txmon_get_frame_timestamp =
+				hal_txmon_get_frame_timestamp_qcn9224;
 #if defined(TX_MONITOR_WORD_MASK)
 	hal_soc->ops->hal_txmon_get_word_mask =
 				hal_txmon_get_word_mask_qcn9224;

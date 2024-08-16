@@ -681,6 +681,23 @@ uint32_t wlan_get_pdev_id_from_vdev_id(struct wlan_objmgr_psoc *psoc,
 				 wlan_objmgr_ref_dbgid dbg_id);
 
 /**
+ * wlan_get_self_macaddr_from_vdev_id() - Fetch vdev mac address
+ * @psoc: psoc object
+ * @vdev_id: vdev identifier
+ * @dbg_id: object manager debug id
+ * @self_mac_addr: buffer to fetch and fill the mac addr
+ *
+ * This function is used to fetch the mac addr from the vdev
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wlan_get_self_macaddr_from_vdev_id(struct wlan_objmgr_psoc *psoc,
+				   uint8_t vdev_id,
+				   wlan_objmgr_ref_dbgid dbg_id,
+				   struct qdf_mac_addr *self_mac_addr);
+
+/**
  * wlan_util_is_vdev_active() - Check for vdev active
  * @pdev: pdev pointer
  * @dbg_id: debug id for ref counting

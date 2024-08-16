@@ -240,6 +240,16 @@ typedef __qdf_net_dev_stats qdf_net_dev_stats;
  */
 typedef __qdf_dummy_netdev_t qdf_dummy_netdev_t;
 
+/*
+ * function pointer to compare function
+ */
+typedef __qdf_cmp_func_t qdf_cmp_func_t;
+
+/*
+ * function pointer to swap function
+ */
+typedef __qdf_swap_func_t qdf_swap_func_t;
+
 /**
  * struct qdf_dma_map_info - Information inside a DMA map.
  * @nsegs: total number mapped segments
@@ -1664,6 +1674,7 @@ enum qdf_suspend_type {
  * serialization timed out.
  * @QDF_DIRECT_LINK_ADSP_NMI_CRASH: ADSP NMI crash in the context of direct link
  * @QDF_ENABLE_IRQ_FAILURE: Failed to enable IRQs
+ * @QDF_VDEV_LINK_MISMATCH: Vdev link info mismatch
  */
 enum qdf_hang_reason {
 	QDF_REASON_UNSPECIFIED,
@@ -1710,6 +1721,7 @@ enum qdf_hang_reason {
 	QDF_VDEV_ACTIVE_SER_LINK_SWITCH_TIMEOUT,
 	QDF_DIRECT_LINK_ADSP_NMI_CRASH,
 	QDF_ENABLE_IRQ_FAILURE,
+	QDF_VDEV_LINK_MISMATCH,
 };
 
 /**
@@ -1886,7 +1898,8 @@ enum qdf_iommu_attr {
  * @QDF_DP_RX_DESC_BUF_TYPE: DP RX SW descriptor
  * @QDF_DP_RX_DESC_STATUS_TYPE: DP RX SW descriptor for monitor status
  * @QDF_DP_HW_LINK_DESC_TYPE: DP HW link descriptor
- * @QDF_DP_HW_CC_SPT_PAGE_TYPE: DP pages for HW CC secondary page table
+ * @QDF_DP_TX_HW_CC_SPT_PAGE_TYPE: DP pages for TX HW CC secondary page table
+ * @QDF_DP_RX_HW_CC_SPT_PAGE_TYPE: DP pages for RX HW CC secondary page table
  * @QDF_DP_TX_TCL_DESC_TYPE: DP TCL descriptor
  * @QDF_DP_TX_DIRECT_LINK_CE_BUF_TYPE: DP tx direct link CE source ring buf
  *  pages
@@ -1905,7 +1918,8 @@ enum qdf_dp_desc_type {
 	QDF_DP_RX_DESC_BUF_TYPE,
 	QDF_DP_RX_DESC_STATUS_TYPE,
 	QDF_DP_HW_LINK_DESC_TYPE,
-	QDF_DP_HW_CC_SPT_PAGE_TYPE,
+	QDF_DP_TX_HW_CC_SPT_PAGE_TYPE,
+	QDF_DP_RX_HW_CC_SPT_PAGE_TYPE,
 	QDF_DP_TX_TCL_DESC_TYPE,
 #ifdef FEATURE_DIRECT_LINK
 	QDF_DP_TX_DIRECT_LINK_CE_BUF_TYPE,

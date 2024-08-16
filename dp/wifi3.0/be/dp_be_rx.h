@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -26,17 +26,6 @@
 #include <dp_rx.h>
 #include "hal_be_rx.h"
 #include "hal_be_rx_tlv.h"
-
-/*
- * dp_be_intrabss_params
- *
- * @dest_soc: dest soc to forward the packet to
- * @tx_vdev_id: vdev id retrieved from dest peer
- */
-struct dp_be_intrabss_params {
-	struct dp_soc *dest_soc;
-	uint8_t tx_vdev_id;
-};
 
 #ifndef QCA_HOST_MODE_WIFI_DISABLED
 
@@ -735,6 +724,50 @@ dp_rx_wbm_err_reap_desc_be(struct dp_intr *int_ctx, struct dp_soc *soc,
 			   uint32_t *rx_bufs_used);
 
 /**
+ * dp_rx_intrabss_get_params_be() - Function to get destination soc and vdev id
+ *                                  parameters to forward the intrabss traffic
+ * @soc: pointer to soc structure
+ * @vdev: DP vdev handle
+ * @ta_peer: transmitter DP peer handle
+ * @params_in: Input parameters peer id , chip id, pmac id and module id
+ * @params_out: Output parameters having destination soc and vdev id
+ *
+ * Return: bool: false in case of error, else true
+ */
+bool dp_rx_intrabss_get_params_be(struct dp_soc *soc, struct dp_vdev *vdev,
+				  struct dp_txrx_peer *ta_peer,
+				  struct dp_be_intrabss_in_params params_in,
+				  struct dp_be_intrabss_params *params_out);
+
+/*
+ * dp_rx_intrabss_get_mcbc_params_be - Get intrabss multicast soc and vdev id
+ * @soc: Handle to DP Soc structure
+ * @vdev: DP vdev handle
+ * @params: parameters having destination soc and vdev id
+ *
+ * Return: bool: false in case of error, else true
+ */
+bool dp_rx_intrabss_get_mcbc_params_be(struct dp_soc *soc, struct dp_vdev *vdev,
+				       struct dp_be_intrabss_params *params);
+
+/**
+ * dp_rx_intrabss_mlo_mcbc_fwd_be() - Function to forward the multicast and
+ *                                    broadcast packets
+ * @params: parameters having destination soc and vdev id
+ * @nbuf_copy: nbuf that has to be intrabss forwarded
+ * @link_id: link id on which the packet is received
+ * @len: Length
+ * @ta_txrx_peer: source txrx_peer entry
+ * @tid_stats: tid_stats structure
+ *
+ * Return: bool: false in case of error, else true
+ */
+bool dp_rx_intrabss_mlo_mcbc_fwd_be(struct dp_be_intrabss_params params,
+				    qdf_nbuf_t nbuf_copy, uint8_t link_id,
+				    uint16_t len,
+				    struct dp_txrx_peer *ta_txrx_peer,
+				    struct cdp_tid_rx_stats *tid_stats);
+/**
  * dp_rx_null_q_desc_handle_be() - Function to handle NULL Queue
  *                                 descriptor violation on either a
  *                                 REO or WBM ring
@@ -817,6 +850,22 @@ dp_rx_set_link_id_be(qdf_nbuf_t nbuf, uint32_t peer_mdata)
 	QDF_NBUF_CB_RX_LOGICAL_LINK_ID(nbuf) = logical_link_id;
 }
 
+#ifdef IPA_OPT_WIFI_DP_CTRL
+static inline void
+dp_rx_set_refill_opt_dp_ctrl(uint8_t *is_ctrl_refill,
+			     uint32_t peer_mdata)
+{
+	*is_ctrl_refill =
+		HTT_RX_PEER_META_DATA_V1A_QDATA_REFILL_GET(peer_mdata);
+}
+#else
+static inline void
+dp_rx_set_refill_opt_dp_ctrl(uint8_t *is_ctrl_refill,
+			     uint32_t peer_mdata)
+{
+}
+#endif
+
 static inline uint16_t
 dp_rx_get_peer_id_be(qdf_nbuf_t nbuf)
 {
@@ -834,7 +883,8 @@ dp_rx_set_mpdu_msdu_desc_info_in_nbuf(qdf_nbuf_t nbuf,
 static inline uint8_t dp_rx_copy_desc_info_in_nbuf_cb(struct dp_soc *soc,
 						      hal_ring_desc_t ring_desc,
 						      qdf_nbuf_t nbuf,
-						      uint8_t reo_ring_num)
+						      uint8_t reo_ring_num,
+						      uint8_t *is_ctrl_refill)
 {
 	struct hal_rx_mpdu_desc_info mpdu_desc_info;
 	struct hal_rx_msdu_desc_info msdu_desc_info;
@@ -867,6 +917,7 @@ static inline uint8_t dp_rx_copy_desc_info_in_nbuf_cb(struct dp_soc *soc,
 		dp_rx_peer_metadata_vdev_id_get_be(soc, peer_mdata);
 	dp_rx_set_msdu_lmac_id(nbuf, peer_mdata);
 	dp_rx_set_link_id_be(nbuf, peer_mdata);
+	dp_rx_set_refill_opt_dp_ctrl(is_ctrl_refill, peer_mdata);
 
 	/* to indicate whether this msdu is rx offload */
 	pkt_capture_offload =
@@ -962,11 +1013,13 @@ dp_rx_set_mpdu_msdu_desc_info_in_nbuf(qdf_nbuf_t nbuf,
 static inline uint8_t dp_rx_copy_desc_info_in_nbuf_cb(struct dp_soc *soc,
 						      hal_ring_desc_t ring_desc,
 						      qdf_nbuf_t nbuf,
-						      uint8_t reo_ring_num)
+						      uint8_t reo_ring_num,
+						      uint8_t *is_ctrl_refill)
 {
 	uint32_t mpdu_desc_info = 0;
 	uint32_t msdu_desc_info = 0;
 	uint32_t peer_mdata = 0;
+	bool is_frag = qdf_nbuf_is_frag(nbuf);
 
 	/* get REO mpdu & msdu desc info */
 	hal_rx_get_mpdu_msdu_desc_info_be(ring_desc,
@@ -979,7 +1032,8 @@ static inline uint8_t dp_rx_copy_desc_info_in_nbuf_cb(struct dp_soc *soc,
 					      peer_mdata,
 					      msdu_desc_info);
 
-		return 0;
+	qdf_nbuf_set_is_frag(nbuf, is_frag);
+	return 0;
 }
 
 static inline uint8_t hal_rx_get_l3_pad_bytes_be(qdf_nbuf_t nbuf,

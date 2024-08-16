@@ -32,6 +32,8 @@
 #include <net/cfg80211.h>
 #ifdef IPA_OPT_WIFI_DP
 #include "init_deinit_lmac.h"
+#include "cdp_txrx_cmn_struct.h"
+#include "wlan_ipa_obj_mgmt_api.h"
 #endif
 #if defined(QCA_LL_TX_FLOW_CONTROL_V2) || !defined(QCA_IPA_LL_TX_FLOW_CONTROL)
 #include <cdp_txrx_flow_ctrl_v2.h>
@@ -56,8 +58,12 @@
 #define OPT_DP_TARGET_RESUME_WAIT_TIMEOUT_MS 50
 #define OPT_DP_TARGET_RESUME_WAIT_COUNT 10
 #endif
-#define WLAN_IPA_MSG_LIST_SIZE_MAX 8
+#define WLAN_IPA_MSG_LIST_SIZE_MAX 16
 #define WLAN_IPA_FLAG_MSG_USES_LIST 0x1
+#define WLAN_IPA_FLAG_MSG_USES_LIST_FLT_DEL 0x2
+#define WLAN_IPA_FLT_DEL_WAIT_TIMEOUT_MS 200
+#define WLAN_IPA_CTRL_FLT_ADD_WAIT_TIMEOUT_MS 10
+#define WLAN_IPA_CTRL_FLT_ADD_WAIT_COUNT 20
 
 static struct wlan_ipa_priv *gp_ipa;
 static void wlan_ipa_set_pending_tx_timer(struct wlan_ipa_priv *ipa_ctx);
@@ -548,7 +554,7 @@ static inline void wlan_ipa_wdi_get_wdi_version(struct wlan_ipa_priv *ipa_ctx)
 	ipa_ctx->wdi_version = IPA_WDI_3;
 }
 #elif defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_KIWI_V2) || \
-      defined(QCA_WIFI_WCN7750)
+      defined(QCA_WIFI_WCN7750) || defined(QCA_WIFI_QCC2072)
 static inline void wlan_ipa_wdi_get_wdi_version(struct wlan_ipa_priv *ipa_ctx)
 {
 	ipa_ctx->wdi_version = IPA_WDI_3_V2;
@@ -615,22 +621,38 @@ static inline void wlan_ipa_ast_notify_cb(void *priv, void *data)
 }
 #endif
 
+#if !defined(QCA_LL_TX_FLOW_CONTROL_V2) && !defined(QCA_IPA_LL_TX_FLOW_CONTROL)
+static inline
+void wlan_ipa_setup_sys_params(qdf_ipa_sys_connect_params_t *sys_in,
+			       struct wlan_ipa_priv *ipa_ctx)
+{
+	int i;
+
+	for (i = 0; i < WLAN_IPA_MAX_IFACE; i++)
+		qdf_mem_copy(sys_in + i,
+			     &ipa_ctx->sys_pipe[i].ipa_sys_params,
+			     sizeof(qdf_ipa_sys_connect_params_t));
+}
+#else
+static inline
+void wlan_ipa_setup_sys_params(qdf_ipa_sys_connect_params_t *sys_in,
+			       struct wlan_ipa_priv *ipa_ctx)
+{
+}
+#endif
+
 static inline QDF_STATUS
 wlan_ipa_wdi_setup(struct wlan_ipa_priv *ipa_ctx,
 		   qdf_device_t osdev)
 {
 	qdf_ipa_sys_connect_params_t *sys_in = NULL;
-	int i;
 	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
 
 	sys_in = qdf_mem_malloc(sizeof(*sys_in) * WLAN_IPA_MAX_IFACE);
 	if (!sys_in)
 		return QDF_STATUS_E_NOMEM;
 
-	for (i = 0; i < WLAN_IPA_MAX_IFACE; i++)
-		qdf_mem_copy(sys_in + i,
-			     &ipa_ctx->sys_pipe[i].ipa_sys_params,
-			     sizeof(qdf_ipa_sys_connect_params_t));
+	wlan_ipa_setup_sys_params(sys_in, ipa_ctx);
 
 	qdf_status = cdp_ipa_setup(ipa_ctx->dp_soc, IPA_DEF_PDEV_ID,
 				   wlan_ipa_i2w_cb, wlan_ipa_w2i_cb,
@@ -1231,11 +1253,13 @@ static int wlan_ipa_send_sta_eapol_to_nw(qdf_nbuf_t skb,
 {
 	struct ethhdr *eh;
 	struct wlan_objmgr_vdev *vdev = NULL;
-	struct wlan_objmgr_psoc *psoc = ipa_ctx->psoc;
+	struct wlan_objmgr_psoc *psoc = NULL;
 	uint8_t pdev_id;
 
 	if (!ipa_ctx)
 		return -EINVAL;
+
+	psoc = ipa_ctx->psoc;
 
 	eh = (struct ethhdr *)qdf_nbuf_data(skb);
 
@@ -1733,7 +1757,9 @@ static void __wlan_ipa_w2i_cb(void *priv, qdf_ipa_dp_evt_type_t evt,
 			if (iface_context->device_mode == QDF_SAP_MODE &&
 			    !wlan_ipa_eapol_intrabss_fwd_check(ipa_ctx,
 					      iface_context->session_id, skb)) {
-				ipa_err_rl("EAPOL intrabss fwd drop DA:" QDF_MAC_ADDR_FMT,
+				ipa_err_rl("id %u EAPOL intrabss fwd drop DA: "
+					   QDF_MAC_ADDR_FMT,
+					   iface_context->session_id,
 					   QDF_MAC_ADDR_REF(qdf_nbuf_data(skb) +
 					   QDF_NBUF_DEST_MAC_OFFSET));
 				ipa_ctx->ipa_rx_internal_drop_count++;
@@ -2046,16 +2072,48 @@ end:
 	return qdf_status;
 }
 
+#ifndef IPA_OPT_WIFI_DP_CTRL
+static inline
+int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
+			   void *ipa_ctx,
+			   struct ipa_wdi_opt_dpath_flt_rem_cb_params *in,
+			   uint16_t source)
+{
+	return 0;
+}
+#endif
+
 QDF_STATUS
 wlan_ipa_uc_disable_pipes(struct wlan_ipa_priv *ipa_ctx, bool force_disable)
 {
-	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
+	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS, status;
 	int wait_count = 0;
+	int return_code;
 
 	ipa_debug("enter: force_disable %u autonomy_disabled %u pipes_disabled %u",
 		  force_disable,
 		  qdf_atomic_read(&ipa_ctx->autonomy_disabled),
 		  qdf_atomic_read(&ipa_ctx->pipes_disabled));
+
+	ipa_debug("opt_dp_ctrl, feature enable - %d, wlan_shutdown - %d, ssr - %d",
+		  ipa_ctx->opt_wifi_datapath_ctrl,
+		  ipa_ctx->opt_dp_ctrl_wlan_shutdown,
+		  ipa_ctx->opt_dp_ctrl_ssr);
+
+	if (ipa_ctx->opt_wifi_datapath_ctrl &&
+	    ipa_ctx->opt_dp_ctrl_wlan_shutdown && !ipa_ctx->opt_dp_ctrl_ssr &&
+	    !ipa_ctx->opt_dp_ctrl_flt_cleaned) {
+		qdf_event_reset(&ipa_ctx->ipa_ctrl_flt_rm_shutdown_evt);
+		return_code = wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
+					ipa_ctx, NULL,
+					WLAN_IPA_CTRL_FLT_DEL_SRC_SHUTDOWN);
+		status = qdf_wait_single_event(
+				&ipa_ctx->ipa_ctrl_flt_rm_shutdown_evt,
+				WLAN_IPA_FLT_DEL_WAIT_TIMEOUT_MS);
+		ipa_ctx->opt_dp_ctrl_flt_cleaned = true;
+		ipa_err("opt_dp_ctrl, return code of flt del by shutdown %d, status - %d",
+			return_code, status);
+	}
 
 	if (ipa_ctx->opt_dp_active) {
 		wlan_ipa_wdi_opt_dpath_flt_rsrv_rel_cb(ipa_ctx);
@@ -2541,7 +2599,8 @@ end:
     defined(QCA_WIFI_QCA6490) || defined(QCA_WIFI_QCA6750) || \
     defined(QCA_WIFI_WCN7850) || defined(QCA_WIFI_QCN9000) || \
     defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_KIWI_V2)    || \
-    defined(QCA_WIFI_QCN9224) || defined(QCA_WIFI_WCN7750)
+    defined(QCA_WIFI_QCN9224) || defined(QCA_WIFI_WCN7750) || \
+    defined(QCA_WIFI_QCC2072)
 
 #if defined(QCA_CONFIG_RPS) && !defined(MDM_PLATFORM)
 /**
@@ -2953,7 +3012,8 @@ static QDF_STATUS wlan_ipa_send_msg(qdf_netdev_t net_dev,
 		return QDF_STATUS_E_NOMEM;
 
 	QDF_IPA_SET_META_MSG_TYPE(&meta, type);
-	strlcpy(QDF_IPA_WLAN_MSG_NAME(msg), net_dev->name, IPA_RESOURCE_NAME_MAX);
+	strscpy(QDF_IPA_WLAN_MSG_NAME(msg), net_dev->name,
+		IPA_RESOURCE_NAME_MAX);
 	qdf_mem_copy(QDF_IPA_WLAN_MSG_MAC_ADDR(msg), mac_addr, QDF_NET_ETH_LEN);
 	QDF_IPA_WLAN_MSG_NETDEV_IF_ID(msg) = net_dev->ifindex;
 
@@ -3113,7 +3173,7 @@ wlan_ipa_set_peer_id(struct wlan_ipa_priv *ipa_ctx,
 	if (!msg_ex)
 		return QDF_STATUS_E_NOMEM;
 
-	strlcpy(msg_ex->name, net_dev->name, IPA_RESOURCE_NAME_MAX);
+	strscpy(msg_ex->name, net_dev->name, IPA_RESOURCE_NAME_MAX);
 	msg_ex->num_of_attribs = IPA_TA_PEER_ID_ATTRI;
 	ipa_info("Num of attribute set to: %d", IPA_TA_PEER_ID_ATTRI);
 
@@ -3168,7 +3228,7 @@ wlan_ipa_set_peer_id(struct wlan_ipa_priv *ipa_ctx,
 	if (!msg_ex)
 		return QDF_STATUS_E_NOMEM;
 
-	strlcpy(msg_ex->name, net_dev->name, IPA_RESOURCE_NAME_MAX);
+	strscpy(msg_ex->name, net_dev->name, IPA_RESOURCE_NAME_MAX);
 	msg_ex->num_of_attribs = 1;
 	msg_ex->attribs[0].attrib_type = WLAN_HDR_ATTRIB_MAC_ADDR;
 
@@ -3936,7 +3996,7 @@ static QDF_STATUS __wlan_ipa_wlan_evt(qdf_netdev_t net_dev, uint8_t device_mode,
 		return QDF_STATUS_E_NOMEM;
 
 	QDF_IPA_SET_META_MSG_TYPE(&meta, type);
-	strlcpy(QDF_IPA_WLAN_MSG_NAME(msg), net_dev->name,
+	strscpy(QDF_IPA_WLAN_MSG_NAME(msg), net_dev->name,
 		IPA_RESOURCE_NAME_MAX);
 	qdf_mem_copy(QDF_IPA_WLAN_MSG_MAC_ADDR(msg), mac_addr, QDF_NET_ETH_LEN);
 	QDF_IPA_WLAN_MSG_NETDEV_IF_ID(msg) = net_dev->ifindex;
@@ -4284,7 +4344,9 @@ static int wlan_ipa_setup_tx_sys_pipe(struct wlan_ipa_priv *ipa_ctx,
 }
 #endif /* QCA_LL_TX_FLOW_CONTROL_V2 */
 
-#if defined(CONFIG_IPA_WDI_UNIFIED_API) && defined(IPA_WDI3_GSI)
+#if (defined(CONFIG_IPA_WDI_UNIFIED_API) || \
+		(LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))) && \
+		defined(IPA_WDI3_GSI)
 /**
  * wlan_ipa_get_rx_ipa_client() - Get IPA RX ipa client
  * @ipa_ctx: IPA context
@@ -4521,6 +4583,21 @@ static void wlan_ipa_mcc_work_handler(void *data)
 }
 #endif
 
+#ifndef IPA_OPT_WIFI_DP_CTRL
+static inline int wlan_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
+				ipa_wdi_hdl_t hdl, u32 fltr_hdl,
+				uint16_t code)
+{
+	return 0;
+}
+
+static inline
+bool wlan_ipa_opt_dp_ctrl_flt_add_status(struct wlan_ipa_priv *ipa_obj, int hdl)
+{
+	return false;
+}
+#endif
+
 #ifdef IPA_OPT_WIFI_DP
 #ifdef IPA_OPT_WIFI_DP_CTRL
 /**
@@ -4547,9 +4624,19 @@ static inline QDF_STATUS __wlan_ipa_reg_flt_cbs(
 	ipa_wdi_opt_dpath_ctrl_flt_rem_cb ctrl_flt_rem_cb = NULL;
 	ipa_wdi_opt_dpath_clk_status_cb clk_cb = NULL;
 
+	if (ipa_ctx->ipa_opt_dp_ctrl_debug) {
+		ipa_debug("opt_dp_ctrl, ipa debug enabled for unit testing");
+		qdf_ipa_wdi_register_flt_cb(hdl, flt_rsrv_cb,
+					    flt_rsrv_rel_cb,
+					    flt_add_cb,
+					    flt_rem_cb);
+		ipa_ctx->opt_wifi_datapath_ctrl = true;
+		return QDF_STATUS_SUCCESS;
+	}
 	if (ipa_ctx->fw_cap_opt_dp_ctrl) {
 		ctrl_flt_add_cb	= &wlan_ipa_wdi_opt_dpath_ctrl_flt_add_cb;
-		ctrl_flt_rem_cb = &wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb;
+		ctrl_flt_rem_cb =
+			&wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb_wrapper;
 		clk_cb = &wlan_ipa_wdi_opt_dpath_clk_status_cb;
 	}
 
@@ -4565,6 +4652,69 @@ static inline QDF_STATUS __wlan_ipa_reg_flt_cbs(
 
 	return status;
 }
+
+static inline
+bool wlan_ipa_opt_dp_ctrl_flt_add_status(struct wlan_ipa_priv *ipa_obj, int hdl)
+{
+	struct wifi_dp_tx_flt_setup *dp_flt_params = NULL;
+	int wait_count = 0;
+	int index;
+
+	dp_flt_params = &ipa_obj->dp_tx_super_rule_flt_param;
+	index = hdl - WLAN_HDL_TX_FILTER1;
+	while (dp_flt_params->flt_addr_params[index].ipa_flt_add_success ==
+	       WLAN_IPA_CTRL_FLT_ADD_INPROGRESS) {
+		qdf_sleep(WLAN_IPA_CTRL_FLT_ADD_WAIT_TIMEOUT_MS);
+		wait_count++;
+		if (wait_count > WLAN_IPA_CTRL_FLT_ADD_WAIT_COUNT) {
+			ipa_err("opt_dp_ctrl, filter add failure");
+			break;
+		}
+	}
+
+	if (dp_flt_params->flt_addr_params[index].ipa_flt_add_success ==
+	    WLAN_IPA_CTRL_FLT_ADD_SUCCESS)
+		return true;
+
+	return false;
+}
+
+#ifdef IPA_WDI_OPT_DPATH_CTRL_VER_V2
+/**
+ * wlan_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst() - notify IPA
+ * with filter delete response for optional wifi ctrl datapath
+ * @hdl: ipa hdl
+ * @fltr_hdl : filter hdl
+ * @code: filter delete status code
+ *
+ * Return: 0 on success, negative on failure
+ */
+static inline int wlan_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
+					ipa_wdi_hdl_t hdl, u32 fltr_hdl,
+					uint16_t code)
+{
+	return qdf_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(hdl,
+								  fltr_hdl,
+								  code);
+}
+#else
+static inline int wlan_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
+					ipa_wdi_hdl_t hdl, u32 fltr_hdl,
+					uint16_t code)
+{
+	if (code == WLAN_IPA_WDI_OPT_DPATH_RESP_ERR_FAILURE ||
+	    code == WLAN_IPA_WDI_OPT_DPATH_RESP_ERR_INTERNAL ||
+	    code == WLAN_IPA_WDI_OPT_DPATH_RESP_ERR_TIMEOUT)
+		return qdf_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
+								hdl,
+								fltr_hdl,
+								false);
+	return qdf_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
+							hdl,
+							fltr_hdl,
+							true);
+}
+#endif
 #else
 /**
  * __wlan_ipa_reg_flt_cbs() - register cb functions with IPA
@@ -4634,7 +4784,7 @@ QDF_STATUS wlan_ipa_opt_dp_init(struct wlan_ipa_priv *ipa_ctx)
 
 	/* Register call backs for opt wifi dp */
 	if (ipa_ctx->opt_wifi_datapath) {
-		if (ipa_config_is_opt_wifi_dp_enabled()) {
+		if (wlan_ipa_config_is_opt_wifi_dp_enabled()) {
 			status = wlan_ipa_reg_flt_cbs(ipa_ctx);
 			ipa_debug("opt_dp: Register flt cb. status %d", status);
 			qdf_wake_lock_create(&ipa_ctx->opt_dp_wake_lock,
@@ -4642,6 +4792,7 @@ QDF_STATUS wlan_ipa_opt_dp_init(struct wlan_ipa_priv *ipa_ctx)
 			qdf_event_create(&ipa_ctx->ipa_opt_dp_ctrl_clk_evt);
 			/*Init OPT_DP active data flow flag */
 			ipa_ctx->opt_dp_active = false;
+			qdf_runtime_lock_init(&ipa_ctx->opt_dp_runtime_lock);
 		} else {
 			ipa_debug("opt_dp: Disabled from WLAN INI");
 		}
@@ -4661,8 +4812,19 @@ QDF_STATUS wlan_ipa_opt_dp_init(struct wlan_ipa_priv *ipa_ctx)
 static inline
 void wlan_ipa_destroy_opt_wifi_flt_cb_event(struct wlan_ipa_priv *ipa_ctx)
 {
+	struct wifi_dp_tx_flt_setup *dp_flt_params;
+	int i;
+
+	dp_flt_params = &ipa_ctx->dp_tx_super_rule_flt_param;
+	for (i = 0; i < TX_SUPER_RULE_SETUP_NUM; i++) {
+		qdf_event_destroy(&dp_flt_params->flt_addr_params[i].
+				  ipa_ctrl_flt_rm_evt);
+	}
+
 	qdf_event_destroy(&ipa_ctx->ipa_flt_evnt);
 	qdf_event_destroy(&ipa_ctx->ipa_ctrl_flt_evnt);
+	qdf_event_destroy(&ipa_ctx->ipa_ctrl_flt_rm_shutdown_evt);
+	qdf_spinlock_destroy(&dp_flt_params->flt_rem_lock);
 }
 
 /**
@@ -4677,18 +4839,24 @@ void wlan_ipa_ctrl_flt_db_deinit(struct wlan_ipa_priv *ipa_obj)
 {
 	struct wifi_dp_tx_flt_setup *dp_flt_params = NULL;
 	int i;
+	bool add_status;
 
 	dp_flt_params = &ipa_obj->dp_tx_super_rule_flt_param;
-	ipa_debug("opt_dp_ctrl: clean filter DB on SSR event");
 	for (i = 0; i < TX_SUPER_RULE_SETUP_NUM; i++) {
 		if (dp_flt_params->flt_addr_params[i].ipa_flt_in_use) {
-			ipa_debug("opt_dp_ctrl: handle deleted on SSR event - %d",
-				  dp_flt_params->flt_addr_params[i].flt_hdl);
+			add_status = wlan_ipa_opt_dp_ctrl_flt_add_status(
+				   ipa_obj,
+				   dp_flt_params->flt_addr_params[i].flt_hdl);
 			dp_flt_params->flt_addr_params[i].ipa_flt_in_use = 0;
-			qdf_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
-				ipa_obj->hdl,
-				dp_flt_params->flt_addr_params[i].flt_hdl,
-				HTT_TX_LCE_SUPER_RULE_RELEASE_SUCCESS);
+			if (add_status && !ipa_obj->ipa_opt_dp_ctrl_debug) {
+				ipa_debug(
+				    "opt_dp_ctrl: handle deleted on SSR event - %d",
+				    dp_flt_params->flt_addr_params[i].flt_hdl);
+				wlan_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
+				  ipa_obj->hdl,
+				  dp_flt_params->flt_addr_params[i].flt_hdl,
+				  WLAN_IPA_WDI_OPT_DPATH_RESP_SUCCESS_SSR);
+			}
 		}
 	}
 }
@@ -4705,12 +4873,14 @@ void wlan_ipa_opt_dp_deinit(struct wlan_ipa_priv *ipa_ctx)
 	if (ipa_ctx->uc_loaded)
 		wlan_ipa_destroy_opt_wifi_flt_cb_event(ipa_ctx);
 
-	if (ipa_ctx->opt_wifi_datapath && ipa_config_is_opt_wifi_dp_enabled()) {
+	if (ipa_ctx->opt_wifi_datapath && wlan_ipa_config_is_opt_wifi_dp_enabled()) {
 		qdf_wake_lock_destroy(&ipa_ctx->opt_dp_wake_lock);
 		qdf_event_destroy(&ipa_ctx->ipa_opt_dp_ctrl_clk_evt);
+		qdf_runtime_lock_deinit(&ipa_ctx->opt_dp_runtime_lock);
 	}
 
-	if (ipa_ctx->opt_wifi_datapath_ctrl)
+	if (ipa_ctx->opt_wifi_datapath_ctrl &&
+	    ipa_ctx->opt_dp_ctrl_ssr)
 		wlan_ipa_ctrl_flt_db_deinit(ipa_ctx);
 
 	if (cdp_ipa_get_smmu_mapped(ipa_ctx->dp_soc) ||
@@ -4793,6 +4963,12 @@ QDF_STATUS wlan_ipa_setup(struct wlan_ipa_priv *ipa_ctx,
 	qdf_spinlock_create(&ipa_ctx->enable_disable_lock);
 	ipa_ctx->pipes_down_in_progress = false;
 	ipa_ctx->pipes_enable_in_progress = false;
+	ipa_ctx->opt_dp_ctrl_ssr = false;
+	ipa_ctx->opt_dp_ctrl_wlan_shutdown = false;
+	ipa_ctx->opt_wifi_datapath_ctrl = false;
+	ipa_ctx->opt_dp_ctrl_flt_cleaned = false;
+	ipa_ctx->ipa_opt_dp_ctrl_debug =
+		cdp_ipa_opt_dp_ctrl_debug_enable(ipa_ctx->dp_soc);
 	qdf_nbuf_queue_init(&ipa_ctx->pm_queue_head);
 	qdf_list_create(&ipa_ctx->pending_event, 1000);
 	qdf_mutex_create(&ipa_ctx->event_lock);
@@ -5119,7 +5295,7 @@ static void wlan_ipa_uc_op_cb(struct op_msg_type *op_msg,
 {
 	struct op_msg_type *msg = op_msg;
 	struct ipa_uc_fw_stats *uc_fw_stat;
-	int i;
+	bool add_status;
 
 	if (!ipa_ctx || !op_msg) {
 		ipa_err("INVALID ARG");
@@ -5235,27 +5411,20 @@ static void wlan_ipa_uc_op_cb(struct op_msg_type *op_msg,
 					   msg->nbuf);
 		qdf_mutex_release(&ipa_ctx->ipa_lock);
 	} else if (msg->op_code == WLAN_IPA_CTRL_FILTER_DEL_NOTIFY) {
-		for (i = 0; i < msg->rsvd_snd; i++) {
-			ipa_info("opt_dp_ctrl: IPA notify filter delete response: %d",
-				 msg->flt_del_hdl[i]);
+		add_status = wlan_ipa_opt_dp_ctrl_flt_add_status(
+							ipa_ctx,
+							msg->ctrl_del_hdl);
+		if (add_status && !ipa_ctx->ipa_opt_dp_ctrl_debug) {
+			ipa_info("opt_dp_ctrl: IPA notify filter del response: %d, hdl: %d",
+				 msg->rsvd_snd, msg->ctrl_del_hdl);
 			qdf_mutex_acquire(&ipa_ctx->ipa_lock);
-			qdf_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
+			wlan_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
 							ipa_ctx->hdl,
-							msg->flt_del_hdl[i],
-							msg->rsvd);
+							msg->ctrl_del_hdl,
+							msg->rsvd_snd);
 			qdf_mutex_release(&ipa_ctx->ipa_lock);
 		}
-	} else if (msg->op_code == WLAN_IPA_CTRL_FILTER_HIGH_TPUT_NOTIFY) {
-		for (i = 0; i < msg->rsvd_snd; i++) {
-			ipa_info("opt_dp_ctrl: IPA notify high tput filter delete response: %d",
-				 msg->flt_del_hdl[i]);
-			qdf_mutex_acquire(&ipa_ctx->ipa_lock);
-			qdf_ipa_wdi_opt_dpath_notify_ctrl_flt_del_per_inst(
-							ipa_ctx->hdl,
-							msg->flt_del_hdl[i],
-							msg->rsvd);
-			qdf_mutex_release(&ipa_ctx->ipa_lock);
-		}
+
 	} else if (msg->op_code == WLAN_IPA_SMMU_MAP) {
 		ipa_info("opt_dp: IPA smmu pool map");
 		qdf_mutex_acquire(&ipa_ctx->ipa_lock);
@@ -5278,9 +5447,11 @@ static void wlan_ipa_uc_op_cb(struct op_msg_type *op_msg,
 	qdf_mem_free(op_msg);
 }
 
-QDF_STATUS wlan_fw_event_msg_list_enqueue(struct uc_op_work_struct *uc_op_work,
-					  uint8_t op_code, uint8_t vdev_id,
-					  qdf_nbuf_t nbuf)
+#ifdef IPA_OPT_WIFI_DP_CTRL
+static QDF_STATUS
+wlan_fw_event_msg_list_enqueue(struct uc_op_work_struct *uc_op_work,
+			       uint8_t op_code, uint8_t vdev_id,
+			       qdf_nbuf_t nbuf)
 {
 	uint16_t hp, tp;
 	struct op_msg_list *list = uc_op_work->msg_list;
@@ -5293,6 +5464,7 @@ QDF_STATUS wlan_fw_event_msg_list_enqueue(struct uc_op_work_struct *uc_op_work,
 	}
 
 	ipa_debug("enqueue msg to the list");
+	qdf_spin_lock_bh(&list->lock);
 	hp = list->hp;
 	tp = list->tp;
 	if (tp > hp)
@@ -5302,6 +5474,7 @@ QDF_STATUS wlan_fw_event_msg_list_enqueue(struct uc_op_work_struct *uc_op_work,
 
 	if (!num_pkt) {
 		ipa_err("list is full");
+		qdf_spin_unlock_bh(&list->lock);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -5312,26 +5485,75 @@ QDF_STATUS wlan_fw_event_msg_list_enqueue(struct uc_op_work_struct *uc_op_work,
 	hp++;
 	hp &= (list->list_size - 1);
 	list->hp = hp;
+	qdf_spin_unlock_bh(&list->lock);
 	ipa_debug("hp value %d", hp);
 	return QDF_STATUS_SUCCESS;
 }
 
-struct msg_elem *wlan_fw_event_msg_list_dequeue(
-					struct uc_op_work_struct *uc_op_work)
+static QDF_STATUS wlan_fw_event_msg_list_enqueue_flt_hdl(
+				struct uc_op_work_struct *uc_op_work,
+				uint16_t op_code,
+				uint32_t hdl,
+				uint16_t result)
+{
+	uint16_t hp, tp;
+	struct op_msg_list *list = uc_op_work->msg_list;
+	struct msg_elem *msg;
+	uint16_t num_entries;
+
+	if (!list || !list->entries) {
+		ipa_err("list allocation failed");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	ipa_debug("enqueue msg to the list");
+	qdf_spin_lock_bh(&list->lock);
+	hp = list->hp;
+	tp = list->tp;
+	if (tp > hp)
+		num_entries = (tp - hp - 1);
+	else
+		num_entries = (list->list_size - hp + tp - 1);
+
+	if (!num_entries) {
+		ipa_err("list is full");
+		qdf_spin_unlock_bh(&list->lock);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	msg = &list->entries[hp];
+	msg->hdl = hdl;
+	msg->result = result;
+	msg->op_code = op_code;
+	hp++;
+	hp &= (list->list_size - 1);
+	list->hp = hp;
+	qdf_spin_unlock_bh(&list->lock);
+	ipa_debug("hp value %d", hp);
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
+static struct msg_elem *
+wlan_fw_event_msg_list_dequeue(struct uc_op_work_struct *uc_op_work)
 {
 	uint16_t hp, tp;
 	struct op_msg_list *list = uc_op_work->msg_list;
 	struct msg_elem *msg;
 
+	qdf_spin_lock_bh(&list->lock);
 	tp = list->tp;
 	hp = list->hp;
-	if (tp == hp)
+	if (tp == hp) {
+		qdf_spin_unlock_bh(&list->lock);
 		return NULL;
+	}
 
 	ipa_debug("dequeue msg from the list");
 	msg = &list->entries[tp++];
 	tp &= (list->list_size - 1);
 	list->tp = tp;
+	qdf_spin_unlock_bh(&list->lock);
 	ipa_debug("tp value %d", tp);
 	return msg;
 }
@@ -5355,6 +5577,28 @@ static void __wlan_ipa_uc_fw_op_event_handler(void *data)
 		uc_op_work->msg = NULL;
 		ipa_debug("posted msg %d", msg->op_code);
 		wlan_ipa_uc_op_cb(msg, ipa_ctx);
+	} else if (uc_op_work->flag & WLAN_IPA_FLAG_MSG_USES_LIST_FLT_DEL) {
+		ipa_debug("filter delete notification");
+		notify_msg = wlan_fw_event_msg_list_dequeue(uc_op_work);
+		qdf_event_set(&ipa_ctx->ipa_ctrl_flt_rm_shutdown_evt);
+		while (notify_msg) {
+			msg = qdf_mem_malloc(sizeof(*msg));
+			if (!msg) {
+				ipa_err("Message memory allocation failed");
+				return;
+			}
+
+			msg->ctrl_del_hdl =
+				notify_msg->hdl;
+			msg->op_code =
+				notify_msg->op_code;
+			msg->rsvd_snd = notify_msg->result;
+			ipa_debug("posted msg %d", msg->op_code);
+			wlan_ipa_uc_op_cb(msg, ipa_ctx);
+			notify_msg =
+				 wlan_fw_event_msg_list_dequeue(uc_op_work);
+		}
+
 	} else {
 		ipa_debug("dequeuing msg from list");
 		notify_msg = wlan_fw_event_msg_list_dequeue(uc_op_work);
@@ -5463,7 +5707,8 @@ QDF_STATUS wlan_ipa_uc_ol_init(struct wlan_ipa_priv *ipa_ctx,
 		ipa_ctx->uc_op_work[i].osdev = osdev;
 		ipa_ctx->uc_op_work[i].msg = NULL;
 		ipa_ctx->uc_op_work[i].ipa_priv_bp = ipa_ctx;
-		if (i == WLAN_IPA_CTRL_TX_REINJECT) {
+		if (i == WLAN_IPA_CTRL_TX_REINJECT ||
+		    i == WLAN_IPA_CTRL_FILTER_DEL_NOTIFY) {
 			ipa_ctx->uc_op_work[i].msg_list = qdf_mem_malloc(
 						sizeof(struct op_msg_list));
 			ipa_ctx->uc_op_work[i].flag =
@@ -5479,6 +5724,8 @@ QDF_STATUS wlan_ipa_uc_ol_init(struct wlan_ipa_priv *ipa_ctx,
 						WLAN_IPA_MSG_LIST_SIZE_MAX;
 				if (!ipa_ctx->uc_op_work[i].msg_list->entries)
 					ipa_err("msg list memory allocation failed");
+				qdf_spinlock_create(&ipa_ctx->uc_op_work[i].
+						    msg_list->lock);
 			}
 		}
 
@@ -5563,8 +5810,11 @@ QDF_STATUS wlan_ipa_uc_ol_deinit(struct wlan_ipa_priv *ipa_ctx)
 		qdf_cancel_work(&ipa_ctx->uc_op_work[i].work);
 		qdf_mem_free(ipa_ctx->uc_op_work[i].msg);
 		ipa_ctx->uc_op_work[i].msg = NULL;
-		if (i == WLAN_IPA_CTRL_TX_REINJECT) {
+		if (i == WLAN_IPA_CTRL_TX_REINJECT ||
+		    i == WLAN_IPA_CTRL_FILTER_DEL_NOTIFY) {
 			qdf_mem_free(ipa_ctx->uc_op_work[i].msg_list->entries);
+			qdf_spinlock_destroy(&ipa_ctx->uc_op_work[i].
+					     msg_list->lock);
 			qdf_mem_free(ipa_ctx->uc_op_work[i].msg_list);
 		}
 	}
@@ -5705,6 +5955,11 @@ void wlan_ipa_cleanup_dev_iface(struct wlan_ipa_priv *ipa_ctx,
 	}
 }
 
+void wlan_ipa_uc_shutdown_opt_dp_ctrl_cleanup(struct wlan_ipa_priv *ipa_ctx)
+{
+	ipa_ctx->opt_dp_ctrl_wlan_shutdown = true;
+}
+
 void wlan_ipa_uc_ssr_cleanup(struct wlan_ipa_priv *ipa_ctx)
 {
 	struct wlan_ipa_iface_context *iface;
@@ -5728,6 +5983,8 @@ void wlan_ipa_uc_ssr_cleanup(struct wlan_ipa_priv *ipa_ctx)
 			wlan_ipa_cleanup_iface(iface, NULL);
 		}
 	}
+
+	ipa_ctx->opt_dp_ctrl_ssr = true;
 }
 
 void wlan_ipa_fw_rejuvenate_send_msg(struct wlan_ipa_priv *ipa_ctx)
@@ -5775,6 +6032,35 @@ void wlan_ipa_flush_pending_vdev_events(struct wlan_ipa_priv *ipa_ctx,
 }
 
 #ifdef IPA_OPT_WIFI_DP
+/**
+ * wlan_is_ipa_rx_cce_port_config_enabled() - use tcp/udp port in rx filter
+ * @ipa_cfg: IPA config
+ *
+ * Return: true if source/destination port is needed in filter, otherwise false
+ */
+static inline bool
+wlan_is_ipa_rx_cce_port_config_enabled(struct wlan_ipa_config *ipa_cfg)
+{
+	return WLAN_IPA_IS_CONFIG_ENABLED(ipa_cfg,
+					  WLAN_IPA_SET_PORT_IN_CCE_CONFIG_MASK);
+}
+
+/**
+ * wlan_ipa_is_low_power_mode_config_disabled() - is low power mode disabled?
+ * @ipa_cfg: IPA config
+ *
+ * Return: true if low power mode need to disable, otherwise false
+ */
+static inline bool
+wlan_ipa_is_low_power_mode_config_disabled(struct wlan_ipa_config *ipa_cfg)
+{
+	bool val;
+
+	val = WLAN_IPA_IS_CONFIG_ENABLED(ipa_cfg,
+					 WLAN_IPA_LOW_POWER_MODE_ENABLE_MASK);
+	return !val;
+}
+
 void wlan_ipa_wdi_opt_dpath_notify_flt_rsvd(bool response)
 {
 	struct wlan_ipa_priv *ipa_ctx = gp_ipa;
@@ -5818,6 +6104,7 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_cb(
 	int response = 0;
 	int wait_cnt = 0;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	qdf_runtime_lock_t *opt_dp_runtime_lock;
 
 	if (ipa_obj->ipa_pipes_down || ipa_obj->pipes_down_in_progress) {
 		ipa_err("Pipes are going down. Reject flt rsrv request");
@@ -5838,12 +6125,18 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_cb(
 	qdf_wake_lock_acquire(&ipa_obj->opt_dp_wake_lock,
 			      WIFI_POWER_EVENT_WAKELOCK_OPT_WIFI_DP);
 	ipa_debug("opt_dp: Wakelock acquired");
+
 	qdf_pm_system_wakeup();
 
-	response = cdp_ipa_pcie_link_up(ipa_obj->dp_soc);
-	if (response) {
-		ipa_err("opt_dp: Pcie link up fail %d", response);
-		goto error_pcie_link_up;
+	if (wlan_ipa_is_low_power_mode_config_disabled(ipa_obj->config)) {
+		response = cdp_ipa_pcie_link_up(ipa_obj->dp_soc);
+		if (response) {
+			ipa_err("opt_dp: Pcie link up fail %d", response);
+			goto error_pcie_link_up;
+		}
+	} else {
+		opt_dp_runtime_lock = &ipa_obj->opt_dp_runtime_lock;
+		qdf_runtime_pm_prevent_suspend_sync(opt_dp_runtime_lock);
 	}
 
 	ipa_debug("opt_dp :Target suspend state %d",
@@ -5860,14 +6153,18 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_cb(
 	}
 
 	/* Disable Low power features before filter reservation */
-	ipa_debug("opt_dp: Disable low power features to reserve filter");
-	param_val = 0;
-	response = cdp_ipa_opt_dp_enable_disable_low_power_mode(pdev, pdev_id,
-								param_val);
-	if (response) {
-		ipa_err("Low power feature disable failed. status %d",
-			response);
-		goto error;
+	if (wlan_ipa_is_low_power_mode_config_disabled(ipa_obj->config)) {
+		ipa_debug("opt_dp: Disable low pwr features to reserve filter");
+		param_val = 0;
+		response =
+			cdp_ipa_opt_dp_enable_disable_low_power_mode(pdev,
+								     pdev_id,
+								     param_val);
+		if (response) {
+			ipa_err("Low power feature disable failed. status %d",
+				response);
+			goto error;
+		}
 	}
 
 	ipa_debug("opt_dp: Send filter reserve req");
@@ -5885,7 +6182,11 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_cb(
 		return status;
 
 error:
-	cdp_ipa_pcie_link_down(ipa_obj->dp_soc);
+	if (wlan_ipa_is_low_power_mode_config_disabled(ipa_obj->config))
+		cdp_ipa_pcie_link_down(ipa_obj->dp_soc);
+	else
+		qdf_runtime_pm_allow_suspend(&ipa_obj->opt_dp_runtime_lock);
+
 error_pcie_link_up:
 	qdf_wake_lock_release(&ipa_obj->opt_dp_wake_lock,
 			      WIFI_POWER_EVENT_WAKELOCK_OPT_WIFI_DP);
@@ -5923,6 +6224,11 @@ int wlan_ipa_wdi_opt_dpath_flt_add_cb(
 
 	dp_flt_param = &(ipa_obj->dp_cce_super_rule_flt_param);
 
+	if (!ipa_obj->opt_dp_active) {
+		ipa_err("IPA flt not reserved before adding");
+		return QDF_STATUS_FILT_REQ_ERROR;
+	}
+
 	if (num_flts > IPA_WDI_MAX_FILTER) {
 		ipa_err("Wrong IPA flt count %d", num_flts);
 		return QDF_STATUS_FILT_REQ_ERROR;
@@ -5954,6 +6260,19 @@ int wlan_ipa_wdi_opt_dpath_flt_add_cb(
 				ipa_flt->flt_info[flt].version);
 			return QDF_STATUS_FILT_REQ_ERROR;
 		}
+
+		if (wlan_is_ipa_rx_cce_port_config_enabled(ipa_obj->config))
+			if ((ipa_flt->flt_info[flt].protocol ==
+			    CDP_FLOW_PROTOCOL_TYPE_UDP) ||
+			    (ipa_flt->flt_info[flt].protocol ==
+			    CDP_FLOW_PROTOCOL_TYPE_TCP)) {
+				dp_flt_param->flt_addr_params[i].l4_type =
+					ipa_flt->flt_info[flt].protocol;
+				dp_flt_param->flt_addr_params[i].src_port =
+					qdf_ntohs(ipa_flt->flt_info[flt].sport);
+				dp_flt_param->flt_addr_params[i].dst_port =
+					qdf_ntohs(ipa_flt->flt_info[flt].dport);
+			}
 
 		if (dp_flt_param->flt_addr_params[i].l3_type == IPV4) {
 			src_ip_addr = qdf_ntohl(ipa_flt->flt_info[flt].
@@ -6098,17 +6417,25 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_rel_cb(void *ipa_ctx)
 	psoc = ipa_obj->psoc;
 	pdev = psoc->soc_objmgr.wlan_pdev_list[IPA_DEF_PDEV_ID];
 	pdev_id = IPA_DEF_PDEV_ID;
-	/* Enable Low power features before filter release */
-	ipa_debug("opt_dp: Enable low power features to release filter");
-	param_val = 1;
-	response = cdp_ipa_opt_dp_enable_disable_low_power_mode(pdev, pdev_id,
-								param_val);
-	if (response) {
-		ipa_err("Low power feature enable failed. status %d", response);
-	}
 
-	response = cdp_ipa_pcie_link_down(ipa_obj->dp_soc);
-	ipa_debug("opt_dp: Vote for PCIe link down");
+	if (wlan_ipa_is_low_power_mode_config_disabled(ipa_obj->config)) {
+		/* Enable Low power features before filter release */
+		ipa_debug("opt_dp: Enable low power features to release filter");
+		param_val = 1;
+		response =
+			cdp_ipa_opt_dp_enable_disable_low_power_mode(pdev,
+								     pdev_id,
+								     param_val);
+		if (response) {
+			ipa_err("Low power feature enable failed. status %d",
+					response);
+		}
+
+		response = cdp_ipa_pcie_link_down(ipa_obj->dp_soc);
+		ipa_debug("opt_dp: Vote for PCIe link down");
+	} else {
+		qdf_runtime_pm_allow_suspend(&ipa_obj->opt_dp_runtime_lock);
+	}
 
 	dp_flt_params = &(ipa_obj->dp_cce_super_rule_flt_param);
 	for (i = 0; i < IPA_WDI_MAX_FILTER; i++)
@@ -6158,6 +6485,7 @@ void wlan_ipa_wdi_opt_dpath_notify_flt_rlsd(int flt0_rslt, int flt1_rslt)
 		qdf_sched_work(0, &uc_op_work->work);
 	} else {
 		ipa_err("IPA SMMU not mapped!!");
+		qdf_mem_free(smmu_msg);
 	}
 
 	notify_msg = qdf_mem_malloc(sizeof(*notify_msg));
@@ -6215,6 +6543,9 @@ void dp_ipa_clean_tx_filter_db(struct wlan_ipa_priv *ipa_obj, bool indices[])
 	for (i = 0; i < IPA_WDI_MAX_TX_FILTER; i++) {
 		if (!indices[i])
 			continue;
+
+		dp_flt_params->flt_addr_params[i].ipa_flt_add_success =
+			WLAN_IPA_CTRL_FLT_ADD_FAILURE;
 		dp_flt_params->flt_addr_params[i].valid = 0;
 		qdf_mem_zero(dp_flt_params->flt_addr_params[i].
 			     src_ipv4_addr,
@@ -6264,6 +6595,12 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_add_cb(
 	htc_handle = lmac_get_htc_hdl(psoc);
 	if (!htc_handle) {
 		ipa_err("HTC Handle is null");
+		return QDF_STATUS_FILT_REQ_ERROR;
+	}
+
+	if (ipa_obj->opt_dp_ctrl_ssr ||
+	    ipa_obj->opt_dp_ctrl_wlan_shutdown) {
+		ipa_debug("opt_dp_ctrl, reject flt addition while ssr or shutdown");
 		return QDF_STATUS_FILT_REQ_ERROR;
 	}
 
@@ -6318,6 +6655,8 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_add_cb(
 					ipa_flt->flt_info[flt].dport;
 		dp_flt_param->flt_addr_params[i].l4_type =
 					ipa_flt->flt_info[flt].protocol;
+		dp_flt_param->flt_addr_params[i].ipa_flt_add_success =
+			WLAN_IPA_CTRL_FLT_ADD_INPROGRESS;
 		indices[i] = true;
 		ipa_debug("opt_dp_ctrl: handle assigned to filter %u",
 			  ipa_flt->flt_info[flt].out_hdl);
@@ -6410,7 +6749,12 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_add_cb(
 	ipa_debug("opt_dp_ctrl: op %d, pdev_id %d. num_flts %d",
 		  dp_flt_param->op, dp_flt_param->pdev_id, num_flts);
 
-	cdp_ipa_tx_super_rule_setup(ipa_obj->dp_soc, dp_flt_param);
+	if (!ipa_obj->opt_dp_ctrl_ssr &&
+	    !ipa_obj->opt_dp_ctrl_wlan_shutdown) {
+		cdp_ipa_tx_super_rule_setup(ipa_obj->dp_soc, dp_flt_param);
+	} else {
+		goto clean_db;
+	}
 
 	status = qdf_wait_single_event(&ipa_obj->ipa_ctrl_flt_evnt,
 				       DP_MAX_SLEEP_TIME);
@@ -6427,6 +6771,13 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_add_cb(
 		ipa_debug("opt_dp_ctrl: clean Host DB due to filter add failure");
 		goto clean_db;
 	}
+
+	for (i = 0; i < IPA_WDI_MAX_TX_FILTER; i++) {
+		if (indices[i])
+			dp_flt_param->flt_addr_params[i].ipa_flt_add_success =
+						WLAN_IPA_CTRL_FLT_ADD_SUCCESS;
+	}
+
 	return status;
 
 clean_db:
@@ -6434,9 +6785,28 @@ clean_db:
 	return QDF_STATUS_FILT_REQ_ERROR;
 }
 
-int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
+int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb_wrapper(
 			   void *ipa_ctx,
 			   struct ipa_wdi_opt_dpath_flt_rem_cb_params *in)
+{
+	struct wlan_ipa_priv *ipa_obj = (struct wlan_ipa_priv *)ipa_ctx;
+
+	if (ipa_obj->opt_dp_ctrl_ssr ||
+	    ipa_obj->opt_dp_ctrl_wlan_shutdown) {
+		ipa_debug("opt_dp_ctrl, flt del requested while ssr or shutdown");
+		return WLAN_IPA_WDI_OPT_DPATH_RESP_SUCCESS;
+	}
+
+	ipa_debug("opt_dp_ctrl, flt del requested from ipa");
+	return wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
+						ipa_ctx, in,
+						WLAN_IPA_CTRL_FLT_DEL_SRC_IPA);
+}
+
+int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
+			   void *ipa_ctx,
+			   struct ipa_wdi_opt_dpath_flt_rem_cb_params *in,
+			   uint16_t source)
 {
 	struct ipa_wdi_opt_dpath_flt_rem_cb_params *rem_flt =
 			(struct ipa_wdi_opt_dpath_flt_rem_cb_params *)(in);
@@ -6445,17 +6815,19 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
 	struct wlan_objmgr_pdev *pdev;
 	struct wlan_objmgr_psoc *psoc;
 	uint8_t num_flts;
-	uint32_t i, j, response;
+	uint32_t i, j;
 	void *htc_handle;
 	QDF_STATUS status;
 	bool delete_all = false;
+	bool valid = false;
+	int code;
 
 	psoc = ipa_obj->psoc;
 	pdev = psoc->soc_objmgr.wlan_pdev_list[IPA_DEF_PDEV_ID];
 	if (!rem_flt) {
 		delete_all = true;
 		num_flts = IPA_WDI_MAX_TX_FILTER;
-		ipa_debug("opt_dp_ctrl: delete all active filter on IPA request");
+		ipa_debug("opt_dp_ctrl: delete all active filter request");
 	} else {
 		num_flts = rem_flt->num_tuples;
 		ipa_debug("opt_dp_ctrl: num of filters to be removed %d:",
@@ -6465,7 +6837,21 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
 	htc_handle = lmac_get_htc_hdl(psoc);
 	if (!htc_handle) {
 		ipa_err("HTC Handle is null");
-		return QDF_STATUS_FILT_REQ_ERROR;
+		return WLAN_IPA_WDI_OPT_DPATH_RESP_ERR_INTERNAL;
+	}
+
+	if (num_flts > IPA_WDI_MAX_TX_FILTER) {
+		ipa_err("opt_dp_ctrl, num of flts received from ipa is invalid");
+		return WLAN_IPA_WDI_OPT_DPATH_RESP_ERR_INTERNAL;
+	}
+
+	for (i = 0; i < num_flts; i++) {
+		if (rem_flt && (rem_flt->hdl_info[i] < WLAN_HDL_TX_FILTER1 ||
+				rem_flt->hdl_info[i] > WLAN_HDL_TX_FILTER3)) {
+			ipa_err("opt_dp_ctrl, wrong flt hdl %d",
+				rem_flt->hdl_info[i]);
+			return WLAN_IPA_WDI_OPT_DPATH_RESP_ERR_INTERNAL;
+		}
 	}
 
 	ipa_obj->ctrl_stats.flt_rm_req_cnt += num_flts;
@@ -6475,47 +6861,81 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
 		if (rem_flt)
 			ipa_debug("opt_dp_ctrl: flt handle received from ipa %u",
 				  rem_flt->hdl_info[i]);
+
 		for (j = 0; j < IPA_WDI_MAX_TX_FILTER; j++) {
 			if ((delete_all || (rem_flt && rem_flt->hdl_info[i] ==
 			    dp_flt_params->flt_addr_params[j].flt_hdl)) &&
-			    dp_flt_params->flt_addr_params[j].ipa_flt_in_use) {
+			    dp_flt_params->flt_addr_params[j].ipa_flt_in_use &&
+			    !dp_flt_params->flt_addr_params[j].
+			    ipa_flt_evnt_required) {
 				ipa_debug("opt_dp_ctrl: filter hdl found in DB %d:",
 					  dp_flt_params->flt_addr_params[j].
 					  flt_hdl);
 				dp_flt_params->flt_addr_params[j].
 						ipa_flt_evnt_required = 1;
+				qdf_event_reset(
+					&dp_flt_params->flt_addr_params[j].
+					ipa_ctrl_flt_rm_evt);
+				valid = true;
+				dp_flt_params->flt_addr_params[j].req_src =
+									source;
 			}
 		}
+	}
+
+	if (!valid) {
+		if (ipa_obj->opt_dp_ctrl_ssr ||
+		    ipa_obj->opt_dp_ctrl_wlan_shutdown) {
+			qdf_spin_unlock_bh(&dp_flt_params->flt_rem_lock);
+			return WLAN_IPA_WDI_OPT_DPATH_RESP_SUCCESS;
+		}
+
+		ipa_err("opt_dp_ctrl, filter received not found in internal DB");
+		qdf_spin_unlock_bh(&dp_flt_params->flt_rem_lock);
+		return WLAN_IPA_WDI_OPT_DPATH_RESP_ERR_INTERNAL;
 	}
 
 	dp_flt_params->op = HTT_TX_LCE_SUPER_RULE_RELEASE;
 	dp_flt_params->pdev_id = IPA_DEF_PDEV_ID;
 	dp_flt_params->num_filters = num_flts;
-	qdf_event_reset(&ipa_obj->ipa_ctrl_flt_evnt);
-
 	ipa_debug("opt_dp_ctrl: op %d, pdev_id %d. num_flts %d",
 		  dp_flt_params->op, dp_flt_params->pdev_id, num_flts);
 
 	cdp_ipa_tx_super_rule_setup(ipa_obj->dp_soc, dp_flt_params);
 	qdf_spin_unlock_bh(&dp_flt_params->flt_rem_lock);
 
-	status = qdf_wait_single_event(&ipa_obj->ipa_ctrl_flt_evnt,
-				       DP_MAX_SLEEP_TIME);
+	for (i = 0; i < IPA_WDI_MAX_TX_FILTER; i++) {
+		if (dp_flt_params->flt_addr_params[i].ipa_flt_evnt_required) {
+			status = qdf_wait_single_event(
+					&dp_flt_params->flt_addr_params[i].
+					ipa_ctrl_flt_rm_evt,
+					DP_MAX_SLEEP_TIME);
+		}
+	}
 
 	for (i = 0; i < IPA_WDI_MAX_TX_FILTER; i++)
 		dp_flt_params->flt_addr_params[i].ipa_flt_evnt_required = 0;
 
-	response = dp_flt_params->ipa_flt_evnt_response;
-
-	if (status != QDF_STATUS_SUCCESS || response != QDF_STATUS_SUCCESS) {
+	if (status != QDF_STATUS_SUCCESS) {
 		ipa_debug("opt_dp_ctrl: flt delete failure");
-		if (status == QDF_STATUS_E_TIMEOUT)
-			qdf_err("TIMEOUT_OCCURS");
-		else
+		if (status == QDF_STATUS_E_TIMEOUT) {
+			if (ipa_obj->opt_dp_ctrl_ssr ||
+			    ipa_obj->opt_dp_ctrl_wlan_shutdown) {
+				ipa_debug("opt_dp_ctrl, ssr or shutdown casereturn success");
+				code = WLAN_IPA_WDI_OPT_DPATH_RESP_SUCCESS;
+			} else {
+				qdf_err("TIMEOUT_OCCURS");
+				code = WLAN_IPA_WDI_OPT_DPATH_RESP_ERR_TIMEOUT;
+			}
+		} else {
 			qdf_err("Error on event wait for filter rem cb");
+			code = WLAN_IPA_WDI_OPT_DPATH_RESP_ERR_INTERNAL;
+		}
+	} else {
+		code = WLAN_IPA_WDI_OPT_DPATH_RESP_SUCCESS;
 	}
 
-	return status;
+	return code;
 }
 
 int wlan_ipa_wdi_opt_dpath_clk_status_cb(void *ipa_ctx, bool status)
@@ -6591,25 +7011,18 @@ void wlan_ipa_wdi_opt_dpath_ctrl_notify_flt_install(struct filter_response
 void wlan_ipa_wdi_opt_dpath_ctrl_notify_flt_delete(struct filter_response
 						   *flt_resp_params)
 {
-	int i, j;
+	int i, j, hdl;
 	uint8_t valid, result;
 	uint16_t dst_port;
-	struct op_msg_type *notify_msg;
-	struct op_msg_type *notify_msg_tput;
 	struct uc_op_work_struct *uc_op_work;
-	struct uc_op_work_struct *uc_op_work_tput;
 	struct wifi_dp_tx_flt_setup *dp_flt_params = NULL;
 	struct wlan_ipa_priv *ipa_obj = gp_ipa;
-	bool is_flt_rem_req = false;
-	bool tput = false;
-	uint16_t id;
+	QDF_STATUS status;
+	uint16_t code;
 
 	dp_flt_params = &ipa_obj->dp_tx_super_rule_flt_param;
-	notify_msg = qdf_mem_malloc(sizeof(*notify_msg));
-	if (!notify_msg) {
-		ipa_err("Message memory allocation failed");
-		return;
-	}
+	uc_op_work =
+		&ipa_obj->uc_op_work[WLAN_IPA_CTRL_FILTER_DEL_NOTIFY];
 
 	for (i = 0; i < TX_SUPER_RULE_SETUP_NUM; i++) {
 		valid = flt_resp_params[i].valid;
@@ -6620,6 +7033,16 @@ void wlan_ipa_wdi_opt_dpath_ctrl_notify_flt_delete(struct filter_response
 		if (!valid)
 			continue;
 
+		hdl = WLAN_HDL_TX_FILTER1 + i;
+		if (result != HTT_TX_LCE_SUPER_RULE_RELEASE_SUCCESS_HIGH_TPUT) {
+			qdf_event_set(&dp_flt_params->flt_addr_params[i].
+				      ipa_ctrl_flt_rm_evt);
+		} else {
+			ipa_obj->ctrl_stats.active_filter--;
+			ipa_obj->ctrl_stats.tput_del_cnt++;
+			code = WLAN_IPA_WDI_OPT_DPATH_RESP_SUCCESS_HIGH_TPUT;
+		}
+
 		if (result == HTT_TX_LCE_SUPER_RULE_RELEASE_FAIL) {
 			dp_flt_params->ipa_flt_evnt_response =
 				QDF_STATUS_FILT_REQ_ERROR;
@@ -6627,10 +7050,21 @@ void wlan_ipa_wdi_opt_dpath_ctrl_notify_flt_delete(struct filter_response
 		} else if (result == HTT_TX_LCE_SUPER_RULE_RELEASE_SUCCESS) {
 			dp_flt_params->ipa_flt_evnt_response =
 				QDF_STATUS_SUCCESS;
+			ipa_obj->ctrl_stats.active_filter--;
+			code = WLAN_IPA_WDI_OPT_DPATH_RESP_SUCCESS;
 		}
+
 		for (j = 0; j < IPA_WDI_MAX_TX_FILTER; j++) {
-			if (result && dst_port ==
+			if (dst_port ==
 			    dp_flt_params->flt_addr_params[j].dst_port) {
+				if (result ==
+					HTT_TX_LCE_SUPER_RULE_RELEASE_FAIL) {
+					ipa_debug("opt_dp_ctrl: filter with handle %d found but del failed on fw side");
+					code =
+					WLAN_IPA_WDI_OPT_DPATH_RESP_ERR_FAILURE;
+					break;
+				}
+
 				ipa_debug("opt_dp_ctrl: filter with handle %d is deleting",
 					  j);
 				dp_flt_params->flt_addr_params[j].valid = 0;
@@ -6647,71 +7081,31 @@ void wlan_ipa_wdi_opt_dpath_ctrl_notify_flt_delete(struct filter_response
 				break;
 			}
 		}
+
 		if (j == IPA_WDI_MAX_TX_FILTER) {
-			ipa_err("Wrong filter number");
+			ipa_err("opt_dp_ctrl, handle not found in internal DB");
 			continue;
 		}
 
-		if (result == HTT_TX_LCE_SUPER_RULE_RELEASE_SUCCESS_HIGH_TPUT) {
-			if (!tput) {
-				notify_msg_tput =
-				    qdf_mem_malloc(sizeof(*notify_msg_tput));
-				if (!notify_msg_tput) {
-					ipa_err("Memory allocation failed for filter delete due to tput");
-					continue;
-				}
-				tput = true;
-				notify_msg_tput->rsvd_snd = 0;
-				notify_msg_tput->op_code =
-					WLAN_IPA_CTRL_FILTER_HIGH_TPUT_NOTIFY;
-				notify_msg_tput->rsvd = result;
-			}
-
-			id = notify_msg_tput->rsvd_snd;
-			notify_msg_tput->flt_del_hdl[id] =
-				dp_flt_params->flt_addr_params[j].flt_hdl;
-			notify_msg_tput->rsvd_snd++;
-			ipa_obj->ctrl_stats.tput_del_cnt++;
-			ipa_obj->ctrl_stats.active_filter--;
-		} else {
-			if (!is_flt_rem_req) {
-				notify_msg->op_code =
-					WLAN_IPA_CTRL_FILTER_DEL_NOTIFY;
-				notify_msg->rsvd = result;
-				notify_msg->rsvd_snd = 0;
-				is_flt_rem_req = true;
-				qdf_event_set(&ipa_obj->ipa_ctrl_flt_evnt);
-			}
-
-			id = notify_msg->rsvd_snd;
-			notify_msg->flt_del_hdl[id] =
-				    dp_flt_params->flt_addr_params[j].flt_hdl;
-			notify_msg->rsvd_snd++;
-			ipa_obj->ctrl_stats.active_filter--;
+		if (dp_flt_params->flt_addr_params[j].req_src ==
+				WLAN_IPA_CTRL_FLT_DEL_SRC_SHUTDOWN) {
+			ipa_debug("opt_dp_ctrl, flt hdl %d delete due to shutdown",
+				  hdl);
+			code = WLAN_IPA_WDI_OPT_DPATH_RESP_SUCCESS_SHUTDOWN;
+			dp_flt_params->flt_addr_params[i].ipa_flt_in_use =
+							false;
 		}
+
+		uc_op_work->flag |= WLAN_IPA_FLAG_MSG_USES_LIST_FLT_DEL;
+		status = wlan_fw_event_msg_list_enqueue_flt_hdl(
+						uc_op_work,
+						WLAN_IPA_CTRL_FILTER_DEL_NOTIFY,
+						hdl, code);
+		if (status == QDF_STATUS_SUCCESS)
+			ipa_debug("filter handle queued to list");
 	}
 
-	if (is_flt_rem_req) {
-		ipa_debug("opt_dp_ctrl: msg sent to ipa, op_code: %u, result: %u, no. of hdl: %u",
-			  notify_msg->op_code,  notify_msg->rsvd,
-			  notify_msg->rsvd_snd);
-		uc_op_work =
-			&ipa_obj->uc_op_work[WLAN_IPA_CTRL_FILTER_DEL_NOTIFY];
-		uc_op_work->msg = notify_msg;
-		qdf_sched_work(0, &uc_op_work->work);
-	} else {
-		qdf_mem_free(notify_msg);
-	}
-
-	if (tput) {
-		ipa_debug("opt_dp_ctrl: msg sent to ipa in high tput, op_code: %u, result: %u, no. of hdl: %u",
-			  notify_msg_tput->op_code,  notify_msg_tput->rsvd,
-			  notify_msg_tput->rsvd_snd);
-		uc_op_work_tput =
-		   &ipa_obj->uc_op_work[WLAN_IPA_CTRL_FILTER_HIGH_TPUT_NOTIFY];
-		uc_op_work_tput->msg = notify_msg_tput;
-		qdf_sched_work(0, &uc_op_work_tput->work);
-	}
+	qdf_sched_work(0, &uc_op_work->work);
 }
 #endif
 #endif /* IPA_OPT_WIFI_DP */

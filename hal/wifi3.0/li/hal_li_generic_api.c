@@ -1087,6 +1087,16 @@ void hal_rx_parse_eht_sig_hdr_li(struct hal_soc *hal_soc, uint8_t *tlv,
 {
 }
 
+static inline
+void hal_rx_ru_info_details_li(void *rx_tlv_hdr, void *ppdu_info_hdl)
+{
+}
+
+static inline
+void hal_rx_proc_phyrx_all_sigb_tlv_li(void *rx_tlv_hdr, void *ppdu_info_hdl)
+{
+}
+
 void hal_hw_txrx_default_ops_attach_li(struct hal_soc *hal_soc)
 {
 	hal_soc->ops->hal_get_reo_qdesc_size = hal_get_reo_qdesc_size_li;
@@ -1176,4 +1186,7 @@ void hal_hw_txrx_default_ops_attach_li(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_phy_legacy_get_rssi =
 						hal_rx_phy_legacy_get_rssi_li;
 	hal_soc->ops->hal_rx_parse_eht_sig_hdr = hal_rx_parse_eht_sig_hdr_li;
+	hal_soc->ops->hal_rx_ru_info_details = hal_rx_ru_info_details_li;
+	hal_soc->ops->hal_rx_proc_phyrx_all_sigb_tlv =
+					hal_rx_proc_phyrx_all_sigb_tlv_li;
 }

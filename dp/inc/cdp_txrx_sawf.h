@@ -101,7 +101,8 @@ cdp_sawf_peer_get_map_conf(ol_txrx_soc_handle soc,
 }
 
 static inline QDF_STATUS
-cdp_sawf_peer_get_msduq_info(ol_txrx_soc_handle soc, uint8_t *mac)
+cdp_sawf_peer_get_msduq_info(ol_txrx_soc_handle soc, char *mac, uint8_t svc_id,
+			     uint8_t debug_level)
 {
 	if (!soc || !soc->ops) {
 		dp_cdp_debug("Invalid Instance");
@@ -114,7 +115,8 @@ cdp_sawf_peer_get_msduq_info(ol_txrx_soc_handle soc, uint8_t *mac)
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	return soc->ops->sawf_ops->sawf_get_peer_msduq_info(soc, mac);
+	return soc->ops->sawf_ops->sawf_get_peer_msduq_info(soc, mac, svc_id,
+							    debug_level);
 }
 
 #ifdef CONFIG_SAWF
@@ -469,6 +471,33 @@ cdp_swaf_peer_sla_configuration(ol_txrx_soc_handle soc, uint8_t *mac_addr,
 							       sla_mask);
 }
 
+/**
+ * cdp_get_peer_sawf_admctrl_stats() - Call to get Peer SAWF AdmCtrl stats
+ * @soc: soc handle
+ * @mac: peer mac address
+ * @data: opaque pointer
+ * @peer_type: peer type
+ *
+ * return: status Success/Failure
+ */
+static inline QDF_STATUS
+cdp_get_peer_sawf_admctrl_stats(ol_txrx_soc_handle soc, uint8_t *mac,
+				void *data, enum cdp_peer_type peer_type)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance");
+		QDF_BUG(0);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!soc->ops->sawf_ops ||
+	    !soc->ops->sawf_ops->txrx_get_peer_sawf_admctrl_stats)
+		return QDF_STATUS_E_FAILURE;
+
+	return soc->ops->sawf_ops->txrx_get_peer_sawf_admctrl_stats(soc, mac,
+								    data,
+								    peer_type);
+}
 #else
 static inline QDF_STATUS
 cdp_sawf_mpdu_stats_req(ol_txrx_soc_handle soc, uint8_t enable)
@@ -499,6 +528,13 @@ cdp_get_peer_sawf_tx_stats(ol_txrx_soc_handle soc, uint32_t svc_id,
 static inline QDF_STATUS
 cdp_swaf_peer_sla_configuration(ol_txrx_soc_handle soc, uint8_t *mac_addr,
 				uint16_t *sla_mask)
+{
+	return QDF_STATUS_E_FAILURE;
+}
+
+static inline QDF_STATUS
+cdp_get_peer_sawf_admctrl_stats(ol_txrx_soc_handle soc, uint8_t *mac,
+				void *data, enum cdp_peer_type peer_type)
 {
 	return QDF_STATUS_E_FAILURE;
 }

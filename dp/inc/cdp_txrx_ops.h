@@ -684,6 +684,10 @@ struct cdp_cmn_ops {
 	QDF_STATUS (*set_vdev_pcp_tid_map)(struct cdp_soc_t *soc,
 					   uint8_t vdev_id,
 					   uint8_t pcp, uint8_t tid);
+#ifdef IPA_OPT_WIFI_DP_CTRL
+	 bool (*txrx_get_opt_dp_ctrl_refill_cap)(ol_txrx_soc_handle soc);
+#endif
+
 #ifdef DP_RX_UDP_OVER_PEER_ROAM
 	QDF_STATUS (*txrx_update_roaming_peer)(struct cdp_soc_t *soc,
 					       uint8_t vdev_id,
@@ -729,7 +733,6 @@ struct cdp_cmn_ops {
 #ifdef WLAN_FEATURE_PKT_CAPTURE_V2
 	void (*set_pkt_capture_mode)(struct cdp_soc_t *soc, bool val);
 #endif
-
 #ifdef FEATURE_RUNTIME_PM
 	void (*set_rtpm_tput_policy)(struct cdp_soc_t *soc, bool val);
 #endif
@@ -990,6 +993,14 @@ struct cdp_ctrl_ops {
 					    uint8_t vdev_id,
 					    uint32_t *val);
 #endif
+#ifdef WLAN_FEATURE_UL_JITTER
+	QDF_STATUS (*txrx_nss_request)(struct cdp_soc_t *soc_handle,
+				       uint8_t vdev_id, int **req);
+
+	QDF_STATUS (*avg_ul_delay_jitter_stats)(struct cdp_soc_t *soc_handle,
+						uint8_t vdev_id,
+						uint32_t *val);
+#endif
 #ifdef QCA_UNDECODED_METADATA_SUPPORT
 	QDF_STATUS (*txrx_set_pdev_phyrx_error_mask)(struct cdp_soc_t *soc,
 						     uint8_t pdev_id,
@@ -1011,6 +1022,17 @@ struct cdp_ctrl_ops {
 #endif
 	uint64_t (*txrx_get_pdev_mlo_timestamp_offset)(struct cdp_soc_t *soc,
 						       uint8_t pdev_id);
+
+	QDF_STATUS (*txrx_set_req_buff_descs)(struct cdp_soc_t *soc,
+					      uint64_t req_rx_buff_descs,
+					      uint32_t pdev_id);
+	QDF_STATUS (*txrx_get_num_buff_descs_info)(struct cdp_soc_t *soc,
+						   uint64_t *req_rx_buff_descs,
+						   uint64_t *in_use_rx_buff_descs,
+						   uint32_t pdev_id);
+	uint32_t (*txrx_buffers_replenish_on_demand)(struct cdp_soc_t *soc,
+						     uint32_t num_buffers,
+						     uint32_t pedv_id);
 };
 
 struct cdp_me_ops {
@@ -1024,6 +1046,26 @@ struct cdp_me_ops {
 					qdf_nbuf_t wbuf, u_int8_t newmac[][6],
 					uint8_t newmaccnt, uint8_t tid,
 					bool is_igmp, bool is_dms_pkt);
+
+	bool (*is_peer_dms_capable)(struct cdp_soc_t *soc, uint8_t vdev_id,
+				    uint8_t *mac_addr);
+#ifdef CONFIG_SAWF
+	void (*tx_me_add_sawf_metadata)(struct cdp_soc_t *soc, uint8_t vdev_id,
+					uint16_t peer_id, uint8_t *mac,
+					qdf_nbuf_t nbuf,
+					uint8_t is_mlo_non_bond);
+	uint8_t (*tx_me_update_group_flow)(struct cdp_soc_t *soc,
+					   uint8_t vdev_id,
+					   uint32_t *ip, uint16_t ip_version,
+					   int flowcount_delta,
+					   bool is_mlo_non_bond);
+#ifdef QCA_SUPPORT_WDS_EXTENDED
+	void (*tx_me_wds_ext_intf_clear)(struct cdp_soc_t *soc,
+					 struct net_device *dev,
+					 uint8_t vdev_id, uint8_t *mac,
+					 uint8_t is_mlo_non_bond);
+#endif /* QCA_SUPPORT_WDS_EXTENDED */
+#endif /* CONFIG_SAWF */
 };
 
 /**
@@ -1055,6 +1097,7 @@ struct cdp_me_ops {
  * @start_local_pkt_capture: start local packet capture
  * @stop_local_pkt_capture: stop local packet capture
  * @is_local_pkt_capture_running: is local packet capture running
+ * @txrx_set_mu_sniffer: sets mu_sniffer flag in mon_pdev
  */
 struct cdp_mon_ops {
 
@@ -1173,6 +1216,9 @@ struct cdp_mon_ops {
 	bool (*is_local_pkt_capture_running)(struct cdp_soc_t *soc,
 					     uint8_t pdev_id);
 #endif
+	QDF_STATUS
+	(*txrx_set_mu_sniffer)(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
+			       uint32_t mode);
 };
 
 /**
@@ -1810,11 +1856,20 @@ void (*peer_send_wds_disconnect)(struct cdp_ctrl_objmgr_psoc *psoc,
 #ifdef CONFIG_SAWF_DEF_QUEUES
 	int (*disable_sawf_svc)(uint8_t svc_id);
 #endif
+#if defined(IPA_OFFLOAD) && defined(QCA_IPA_LL_TX_FLOW_CONTROL)
+	uint8_t (*get_mlo_chip_id)(struct cdp_ctrl_objmgr_psoc *psoc);
+#endif
 	void (*dp_print_fisa_stats)(enum cdp_fisa_stats_id stats_id);
 #if defined(IPA_OFFLOAD) && defined(IPA_OFFLOAD_LOW_MEM)
 	uint16_t (*pdev_get_num_buff)(struct cdp_ctrl_objmgr_psoc *psoc,
 				      uint8_t pdev_id,
 				      enum qdf_buff_type_tx_rx buff_type);
+#endif
+#ifdef WLAN_DP_FEATURE_STC
+	QDF_STATUS (*dp_peer_event_notify)(ol_txrx_soc_handle soc,
+					   enum cdp_peer_event event,
+					   uint16_t peer_id, uint8_t vdev_id,
+					   uint8_t *peer_mac_addr);
 #endif
 };
 
@@ -2036,6 +2091,7 @@ struct cdp_peer_ops {
 					uint8_t *peer_addr,
 					enum ol_txrx_peer_state state);
 	QDF_STATUS (*get_vdevid)(struct cdp_soc_t *soc_hdl, uint8_t *peer_mac,
+				 enum cdp_peer_type peer_type,
 				 uint8_t *vdev_id);
 	struct cdp_vdev * (*get_vdev_by_peer_addr)(struct cdp_pdev *pdev,
 			struct qdf_mac_addr peer_addr);
@@ -2278,6 +2334,7 @@ struct cdp_throttle_ops {
  * @ipa_rx_super_rule_setup: Setup cce super rules based on filter tuple
  * @ipa_tx_super_rule_setup: Setup tx super rules based on filter tuple
  * @ipa_tx_opt_dp_ctrl_pkt: handle opt_dp_ctrl tx pkt
+ * @ipa_opt_dp_ctrl_debug_enable: get opt_dp_ctrl debug ini value
  * @ipa_ast_create: Create/Update ast entry
  * @ipa_get_wdi_version: Get WDI version
  * @ipa_is_ring_ipa_rx: Check whether the given ring is ipa rx ring or not
@@ -2396,6 +2453,9 @@ struct cdp_ipa_ops {
 	QDF_STATUS (*ipa_tx_opt_dp_ctrl_pkt)(struct cdp_soc_t *soc_hdl,
 					     uint8_t vdev_id,
 					     qdf_nbuf_t nbuf);
+#ifdef IPA_OPT_WIFI_DP_CTRL
+	bool (*ipa_opt_dp_ctrl_debug_enable)(struct cdp_soc_t *soc_hdl);
+#endif
 #endif
 #ifdef IPA_WDS_EASYMESH_FEATURE
 	QDF_STATUS (*ipa_ast_create)(struct cdp_soc_t *soc_hdl,
@@ -2533,7 +2593,8 @@ struct cdp_sawf_ops {
 					  uint8_t *mac_addr);
 #ifdef CONFIG_SAWF
 	QDF_STATUS
-	(*sawf_get_peer_msduq_info)(struct cdp_soc_t *soc, uint8_t *mac_addr);
+	(*sawf_get_peer_msduq_info)(struct cdp_soc_t *soc, uint8_t *mac_addr,
+				    uint8_t svc_id, uint8_t debug_level);
 	QDF_STATUS
 	(*txrx_get_peer_sawf_delay_stats)(struct cdp_soc_t *soc,
 					  uint32_t svc_id, uint8_t *mac,
@@ -2583,6 +2644,19 @@ struct cdp_sawf_ops {
 				uint8_t svc_id, uint8_t direction,
 				uint8_t start_or_stop, uint8_t *peer_mac,
 				uint16_t peer_id, uint16_t flow_count);
+	QDF_STATUS
+	(*txrx_get_peer_sawf_admctrl_stats)(struct cdp_soc_t *soc, uint8_t *mac,
+					    void *data,
+					    enum cdp_peer_type peer_type);
+
+	QDF_STATUS
+	(*sawf_get_peer_mark)(struct cdp_soc_t *hdl, uint8_t *peer_mac,
+			      uint32_t service_id, uint16_t peer_id,
+			      uint32_t *mark, uint8_t vdev_id);
+
+	uint8_t (*sawf_get_svc_id)(uint32_t mark);
+
+	bool (*sawf_get_me_status)(ol_txrx_soc_handle soc);
 #endif
 #ifdef WLAN_FEATURE_11BE_MLO_3_LINK_TX
 	uint16_t

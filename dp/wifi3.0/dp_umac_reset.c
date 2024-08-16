@@ -681,7 +681,6 @@ QDF_STATUS dp_umac_reset_interrupt_attach(struct dp_soc *soc,
 	uint32_t msi_base_data, msi_vector_start;
 	uint32_t umac_reset_vector, umac_reset_irq;
 	struct hal_soc *hal_soc;
-	struct dp_global_context *dp_global;
 	QDF_STATUS status;
 
 	if (!soc) {
@@ -702,32 +701,27 @@ QDF_STATUS dp_umac_reset_interrupt_attach(struct dp_soc *soc,
 	}
 
 	hal_soc = (struct hal_soc *)soc->hal_soc;
-	dp_global = wlan_objmgr_get_global_ctx();
 
-	if (target_type == TARGET_TYPE_QCA5332) {
-		dp_global->dev_base_addr_pcie0 =
+	if (target_type == TARGET_TYPE_QCN6432) {
+		hal_soc->dev_base_addr_pcie0 =
 			qdf_ioremap(PCIE0_TYPE0_MSI_CTRL, PCIE_MEM_SIZE);
-		if (IS_ERR(dp_global->dev_base_addr_pcie0)) {
+		if (IS_ERR(hal_soc->dev_base_addr_pcie0)) {
 			dp_umac_reset_err("ioremap failed for PCIE0");
 			return QDF_STATUS_E_IO;
 		}
-
-		dp_global->dev_base_addr_pcie1 =
+		hal_soc->dev_base_addr_pcie1 =
 			qdf_ioremap(PCIE1_TYPE0_MSI_CTRL, PCIE_MEM_SIZE);
-		if (IS_ERR(dp_global->dev_base_addr_pcie1)) {
+		if (IS_ERR(hal_soc->dev_base_addr_pcie1)) {
 			dp_umac_reset_err("ioremap failed for PCIE1");
 			return QDF_STATUS_E_IO;
 		}
-
-		dp_global->dev_base_addr_pcie2 =
+		hal_soc->dev_base_addr_pcie2 =
 			qdf_ioremap(PCIE2_TYPE0_MSI_CTRL, PCIE_MEM_SIZE);
-		if (IS_ERR(dp_global->dev_base_addr_pcie2)) {
+		if (IS_ERR(hal_soc->dev_base_addr_pcie2)) {
 			dp_umac_reset_err("ioremap failed for PCIE2");
 			return QDF_STATUS_E_IO;
 		}
-	}
 
-	if (target_type == TARGET_TYPE_QCN6432) {
 		soc->pcie_slot = pld_get_pci_slot(soc->osdev->dev);
 		if (soc->pcie_slot < 0) {
 			dp_umac_reset_err("Invalid PCI SLOT %d",
@@ -735,13 +729,6 @@ QDF_STATUS dp_umac_reset_interrupt_attach(struct dp_soc *soc,
 			qdf_assert_always(0);
 			return QDF_STATUS_E_FAILURE;
 		}
-
-		hal_soc->dev_base_addr_pcie0 =
-			dp_global->dev_base_addr_pcie0;
-		hal_soc->dev_base_addr_pcie1 =
-			dp_global->dev_base_addr_pcie1;
-		hal_soc->dev_base_addr_pcie2 =
-			dp_global->dev_base_addr_pcie2;
 
 		status = hif_get_umac_reset_irq(soc->hif_handle,
 						&umac_reset_irq);
@@ -796,7 +783,7 @@ QDF_STATUS dp_umac_reset_interrupt_attach(struct dp_soc *soc,
 QDF_STATUS
 dp_umac_reset_interrupt_detach(struct dp_soc *soc, uint8_t recovery_type)
 {
-	struct dp_global_context *dp_global;
+	struct hal_soc *hal_soc;
 
 	if (!soc) {
 		dp_umac_reset_err("DP SOC is null");
@@ -808,21 +795,21 @@ dp_umac_reset_interrupt_detach(struct dp_soc *soc, uint8_t recovery_type)
 		return QDF_STATUS_SUCCESS;
 	}
 
+	hal_soc = (struct hal_soc *)soc->hal_soc;
 	if (recovery_type != MLO_RECOVERY_MODE_1) {
-		dp_global = wlan_objmgr_get_global_ctx();
-		if (dp_global->dev_base_addr_pcie0) {
-			iounmap(dp_global->dev_base_addr_pcie0);
-			dp_global->dev_base_addr_pcie0 = NULL;
+		if (hal_soc->dev_base_addr_pcie0 && soc->pcie_slot == 0) {
+			iounmap(hal_soc->dev_base_addr_pcie0);
+			hal_soc->dev_base_addr_pcie0 = NULL;
 		}
 
-		if (dp_global->dev_base_addr_pcie1) {
-			iounmap(dp_global->dev_base_addr_pcie1);
-			dp_global->dev_base_addr_pcie1 = NULL;
+		if (hal_soc->dev_base_addr_pcie1 && soc->pcie_slot == 1) {
+			iounmap(hal_soc->dev_base_addr_pcie1);
+			hal_soc->dev_base_addr_pcie1 = NULL;
 		}
 
-		if (dp_global->dev_base_addr_pcie2) {
-			iounmap(dp_global->dev_base_addr_pcie2);
-			dp_global->dev_base_addr_pcie2 = NULL;
+		if (hal_soc->dev_base_addr_pcie2 && soc->pcie_slot == 2) {
+			iounmap(hal_soc->dev_base_addr_pcie2);
+			hal_soc->dev_base_addr_pcie2 = NULL;
 		}
 	}
 

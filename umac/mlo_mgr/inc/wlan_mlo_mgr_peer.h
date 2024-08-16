@@ -159,6 +159,17 @@ struct wlan_objmgr_peer *wlan_mlo_peer_get_assoc_peer(
 					struct wlan_mlo_peer_context *ml_peer);
 
 /**
+ * wlan_mlo_peer_get_first_active_peer() - Get first active peer
+ * @ml_peer: MLO peer
+ *
+ * This function returns the first active peer
+ *
+ * Return: first active peer, if it is found, otherwise NULL
+ */
+struct wlan_objmgr_peer *wlan_mlo_peer_get_first_active_peer(
+					struct wlan_mlo_peer_context *ml_peer);
+
+/**
  * wlan_mlo_peer_get_primary_link_vdev() - Get primary link vdev
  * @ml_peer: MLO peer
  *
@@ -973,4 +984,13 @@ void wlan_mlo_ap_vdev_del_assoc_entry(struct wlan_objmgr_vdev *vdev,
 struct wlan_mlo_sta_entry *
 wlan_mlo_ap_vdev_find_assoc_entry(struct wlan_objmgr_vdev *vdev,
 				  struct qdf_mac_addr *mld_addr);
+/**
+ * wlan_mlo_ap_delete_assoc_list_entries() - Delete mld mac address
+ * @ctx: pointer to wlan_mlo_sta_assoc_pending_list structure
+ *
+ * API to delete mld mac address from the list
+ *
+ * Return: void
+ */
+void wlan_mlo_ap_delete_assoc_list_entries(void *ctx);
 #endif

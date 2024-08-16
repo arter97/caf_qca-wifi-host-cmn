@@ -100,6 +100,20 @@ struct ieee80211_ctlframe_addr2 {
 	uint8_t i_addr2[QDF_NET_MAC_ADDR_MAX_LEN];
 } __packed;
 
+static const uint8_t encrypt_map[11] = {
+	cdp_sec_type_wep40,
+	cdp_sec_type_wep104,
+	cdp_sec_type_tkip_nomic,
+	cdp_sec_type_wep128,
+	cdp_sec_type_tkip,
+	cdp_sec_type_wapi,
+	cdp_sec_type_aes_ccmp,
+	cdp_sec_type_none,
+	cdp_sec_type_aes_ccmp_256,
+	cdp_sec_type_aes_gcmp,
+	cdp_sec_type_aes_gcmp_256
+};
+
 #ifndef WLAN_TX_PKT_CAPTURE_ENH
 static inline void
 dp_process_ppdu_stats_update_failed_bitmap(struct dp_pdev *pdev,
@@ -714,7 +728,7 @@ struct dp_mon_ops {
 #ifdef WIFI_MONITOR_SUPPORT
 	void (*mon_print_pdev_tx_capture_stats)(struct dp_pdev *pdev);
 	QDF_STATUS (*mon_config_enh_tx_capture)(struct dp_pdev *pdev,
-						uint8_t val);
+						uint8_t val, uint8_t mac_id);
 	QDF_STATUS (*mon_tx_peer_filter)(struct dp_pdev *pdev_handle,
 					 struct dp_peer *peer_handle,
 					 uint8_t is_tx_pkt_cap_enable,
@@ -852,6 +866,9 @@ struct dp_mon_ops {
 				       struct htt_rx_ring_tlv_filter *tlv_filter);
 	void (*rx_enable_fpmo)(uint32_t *msg_word,
 			       struct htt_rx_ring_tlv_filter *tlv_filter);
+	void (*rx_config_packet_type_subtype)(uint32_t *msg_word,
+					      struct htt_rx_ring_tlv_filter *tlv_filter,
+					      uint32_t htt_ring_id);
 #ifndef DISABLE_MON_CONFIG
 	void (*mon_register_intr_ops)(struct dp_soc *soc);
 #endif
@@ -1090,6 +1107,16 @@ struct dp_mon_mac {
 	uint32_t mon_last_buf_cookie;
 	qdf_nbuf_queue_t rx_status_q;
 	struct hal_rx_ppdu_info ppdu_info;
+#ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
+	/* Maintain MSDU list on PPDU */
+	qdf_nbuf_queue_t msdu_queue;
+	/* Maintain MPDU list of PPDU */
+	qdf_nbuf_queue_t mpdu_queue;
+	/* To  check if 1st MPDU of PPDU */
+	bool first_mpdu;
+	/* LPC lock */
+	qdf_spinlock_t lpc_lock;
+#endif
 };
 
 struct  dp_mon_pdev {
@@ -1097,7 +1124,8 @@ struct  dp_mon_pdev {
 	bool monitor_configured;
 	uint32_t mon_vdev_id;
 
-#ifdef FEATURE_ML_MONITOR_MODE_SUPPORT
+#if defined(FEATURE_ML_MONITOR_MODE_SUPPORT) || \
+	defined(FEATURE_ML_LOCAL_PKT_CAPTURE)
 	struct dp_mon_mac mon_mac[MAX_NUM_LMAC_HW];
 #else
 	struct dp_mon_mac mon_mac;
@@ -1281,6 +1309,7 @@ struct  dp_mon_pdev {
 #endif
 	/* Monitor FCS capture */
 	bool mon_fcs_cap;
+	uint8_t mu_sniffer_enabled;
 };
 
 struct  dp_mon_vdev {
@@ -1298,7 +1327,8 @@ struct  dp_mon_vdev {
 	uint8_t mac_id;
 };
 
-#ifdef FEATURE_ML_MONITOR_MODE_SUPPORT
+#if defined(FEATURE_ML_MONITOR_MODE_SUPPORT) || \
+	defined(FEATURE_ML_LOCAL_PKT_CAPTURE)
 /**
  * dp_get_mon_mac() - Get mon_mac handle
  * @pdev: dp pdev handle
@@ -1309,11 +1339,6 @@ struct  dp_mon_vdev {
 static inline
 struct dp_mon_mac *dp_get_mon_mac(struct dp_pdev *pdev, uint8_t mac_id)
 {
-	struct dp_soc *soc = pdev->soc;
-
-	if (soc->wlan_cfg_ctx->num_rxdma_dst_rings_per_pdev == 1)
-		return &pdev->monitor_pdev->mon_mac[0];
-
 	return &pdev->monitor_pdev->mon_mac[mac_id];
 }
 #else
@@ -1794,7 +1819,13 @@ dp_monitor_update_mac_vdev_map(struct dp_vdev *vdev)
 	mon_mac->mon_chan_band = vdev->monitor_vdev->mon_chan_band;
 	mon_mac->mon_chan_freq = vdev->monitor_vdev->mon_chan_freq;
 	mon_mac->mon_chan_num = vdev->monitor_vdev->mon_chan_num;
-	pdev->ch_band_lmac_id_mapping[mon_mac->mon_chan_band] = vdev->lmac_id;
+
+	if (mon_mac->mon_chan_band < REG_BAND_UNKNOWN)
+		pdev->ch_band_lmac_id_mapping[mon_mac->mon_chan_band] =
+			vdev->lmac_id;
+	else
+		dp_err("Band Unknown: %d", mon_mac->mon_chan_band);
+
 	vdev->monitor_vdev->mac_id = vdev->lmac_id;
 
 	dp_info("mac_id %d vdev_id %d ch_num: %d freq: %d band %d",
@@ -3374,11 +3405,13 @@ static inline void dp_monitor_print_pdev_tx_capture_stats(struct dp_pdev *pdev)
  * dp_monitor_config_enh_tx_capture() - configure tx capture
  * @pdev: Datapath PDEV handle
  * @val: mode
+ * @mac_id: LMAC ID
  *
  * Return: status
  */
 static inline QDF_STATUS dp_monitor_config_enh_tx_capture(struct dp_pdev *pdev,
-							  uint32_t val)
+							  uint32_t val,
+							  uint8_t mac_id)
 {
 	struct dp_mon_ops *monitor_ops;
 	struct dp_mon_soc *mon_soc = pdev->soc->monitor_soc;
@@ -3394,7 +3427,7 @@ static inline QDF_STATUS dp_monitor_config_enh_tx_capture(struct dp_pdev *pdev,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	return monitor_ops->mon_config_enh_tx_capture(pdev, val);
+	return monitor_ops->mon_config_enh_tx_capture(pdev, val, mac_id);
 }
 
 /**
@@ -4076,17 +4109,21 @@ void dp_monitor_pdev_set_mon_vdev(struct dp_vdev *vdev)
 	 *
 	 * vdev - mac mapping will be updated during vdev start.
 	 **/
-	uint8_t mac_id = 0;
+	uint8_t mac_id;
 	struct dp_mon_mac *mon_mac;
 
 	if (!vdev->pdev->monitor_pdev)
 		return;
 
-	mon_mac = dp_get_mon_mac(vdev->pdev, mac_id);
-	if (!mon_mac->mvdev)
-		mon_mac->mvdev = vdev;
-	else
-		dp_info("set mvdev skipped for vdev_id: %u", vdev->vdev_id);
+	/* Need to initialize both mon_mac to same vdev for ML LPC */
+	for (mac_id = 0; mac_id < MAX_NUM_LMAC_HW; mac_id++) {
+		mon_mac = dp_get_mon_mac(vdev->pdev, mac_id);
+		if (!mon_mac->mvdev)
+			mon_mac->mvdev = vdev;
+		else
+			dp_info("skip to set mvdev - vdev_id: %u, mac_id: %u",
+				vdev->vdev_id, mac_id);
+	}
 }
 
 static inline
@@ -4189,6 +4226,39 @@ dp_mon_rx_enable_mpdu_logging(struct dp_soc *soc, uint32_t *msg_word,
 	}
 
 	monitor_ops->rx_enable_mpdu_logging(msg_word, tlv_filter);
+}
+
+/**
+ * dp_mon_rx_config_packet_type_subtype() - set packet type subtype
+ * filters
+ * @soc: dp soc handle
+ * @msg_word: msg word
+ * @tlv_filter: rx fing filter config
+ * @htt_ring_id: ring id
+ *
+ * Return: void
+ */
+static inline void
+dp_mon_rx_config_packet_type_subtype(struct dp_soc *soc,
+				     uint32_t *msg_word,
+				     struct htt_rx_ring_tlv_filter *tlv_filter,
+				     uint32_t htt_ring_id)
+{
+	struct dp_mon_soc *mon_soc = soc->monitor_soc;
+	struct dp_mon_ops *monitor_ops;
+
+	if (!mon_soc) {
+		dp_mon_debug("mon soc is NULL");
+		return;
+	}
+
+	monitor_ops = mon_soc->mon_ops;
+	if (!monitor_ops || !monitor_ops->rx_config_packet_type_subtype) {
+		dp_mon_debug("callback not registered");
+		return;
+	}
+
+	monitor_ops->rx_config_packet_type_subtype(msg_word, tlv_filter, htt_ring_id);
 }
 
 /**
@@ -5174,4 +5244,40 @@ dp_mon_pdev_filter_init(struct dp_mon_pdev *mon_pdev)
 	mon_pdev->mo_ctrl_filter = FILTER_CTRL_ALL;
 	mon_pdev->mo_data_filter = FILTER_DATA_ALL;
 }
+
+/*
+ * dp_convert_enc_to_cdp_enc() - convert encryption type to cdp format
+ *
+ *@ppdu_info: ppdu information
+ *
+ * This API is used to update the encryption type to cdp format
+ *
+ * Return: void
+ */
+static inline void
+dp_convert_enc_to_cdp_enc(struct mon_rx_user_status *rx_user_status,
+			  uint8_t user_idx, uint8_t direction)
+{
+	uint8_t idx;
+
+	idx = rx_user_status[user_idx].enc_type;
+	rx_user_status[user_idx].enc_type = encrypt_map[idx];
+
+	QDF_TRACE(QDF_MODULE_ID_MON,
+		  QDF_TRACE_LEVEL_DEBUG,
+		  "User: %d TLV enc_type = %d map enc_type = %d direction = %d",
+		  user_idx, idx, encrypt_map[idx], direction);
+}
+
+/**
+ * dp_pdev_set_mu_sniffer() - enable mu_sniffer
+ * @soc_hdl: Datapath soc handle
+ * @pdev_id: id of datapath PDEV handle
+ * @mode: enable/disable value
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+dp_pdev_set_mu_sniffer(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
+		       uint32_t mode);
 #endif /* _DP_MON_H_ */

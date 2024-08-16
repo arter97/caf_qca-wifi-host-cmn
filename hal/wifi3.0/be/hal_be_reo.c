@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -675,191 +675,191 @@ hal_reo_queue_stats_status_be(hal_ring_desc_t ring_desc,
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 	struct hal_reo_queue_status *st =
 		(struct hal_reo_queue_status *)st_handle;
-	uint64_t *reo_desc = (uint64_t *)ring_desc;
-	uint64_t val;
+	reo_sts_block_size_t *reo_desc = (reo_sts_block_size_t *)ring_desc;
+	reo_sts_block_size_t val;
 
 	/*
 	 * Offsets of descriptor fields defined in HW headers start
 	 * from the field after TLV header
 	 */
-	reo_desc += HAL_GET_NUM_QWORDS(sizeof(struct tlv_32_hdr));
+	reo_desc += HAL_REO_STS_DESC_OFFSET(sizeof(struct tlv_32_hdr));
 
 	/* header */
 	hal_reo_status_get_header(ring_desc, HAL_REO_QUEUE_STATS_STATUS_TLV,
 				  &(st->header), hal_soc);
 
 	/* SSN */
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS, SSN)];
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS, SSN)];
 	st->ssn = HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS, SSN, val);
 
 	/* current index */
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 CURRENT_INDEX)];
 	st->curr_idx =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      CURRENT_INDEX, val);
 
 	/* PN bits */
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 PN_31_0)];
 	st->pn_31_0 =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      PN_31_0, val);
 
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 PN_63_32)];
 	st->pn_63_32 =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      PN_63_32, val);
 
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 PN_95_64)];
 	st->pn_95_64 =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      PN_95_64, val);
 
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 PN_127_96)];
 	st->pn_127_96 =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      PN_127_96, val);
 
 	/* timestamps */
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 LAST_RX_ENQUEUE_TIMESTAMP)];
 	st->last_rx_enq_tstamp =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      LAST_RX_ENQUEUE_TIMESTAMP, val);
 
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 LAST_RX_DEQUEUE_TIMESTAMP)];
 	st->last_rx_deq_tstamp =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      LAST_RX_DEQUEUE_TIMESTAMP, val);
 
 	/* rx bitmap */
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 RX_BITMAP_31_0)];
 	st->rx_bitmap_31_0 =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      RX_BITMAP_31_0, val);
 
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 RX_BITMAP_63_32)];
 	st->rx_bitmap_63_32 =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      RX_BITMAP_63_32, val);
 
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 RX_BITMAP_95_64)];
 	st->rx_bitmap_95_64 =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      RX_BITMAP_95_64, val);
 
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 RX_BITMAP_127_96)];
 	st->rx_bitmap_127_96 =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      RX_BITMAP_127_96, val);
 
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 RX_BITMAP_159_128)];
 	st->rx_bitmap_159_128 =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      RX_BITMAP_159_128, val);
 
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 RX_BITMAP_191_160)];
 	st->rx_bitmap_191_160 =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      RX_BITMAP_191_160, val);
 
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 RX_BITMAP_223_192)];
 	st->rx_bitmap_223_192 =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      RX_BITMAP_223_192, val);
 
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 RX_BITMAP_255_224)];
 	st->rx_bitmap_255_224 =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      RX_BITMAP_255_224, val);
 
 	/* various counts */
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 CURRENT_MPDU_COUNT)];
 	st->curr_mpdu_cnt =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      CURRENT_MPDU_COUNT, val);
 
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 CURRENT_MSDU_COUNT)];
 	st->curr_msdu_cnt =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      CURRENT_MSDU_COUNT, val);
 
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 TIMEOUT_COUNT)];
 	st->fwd_timeout_cnt =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      TIMEOUT_COUNT, val);
 
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 FORWARD_DUE_TO_BAR_COUNT)];
 	st->fwd_bar_cnt =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      FORWARD_DUE_TO_BAR_COUNT, val);
 
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 DUPLICATE_COUNT)];
 	st->dup_cnt =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      DUPLICATE_COUNT, val);
 
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 FRAMES_IN_ORDER_COUNT)];
 	st->frms_in_order_cnt =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      FRAMES_IN_ORDER_COUNT, val);
 
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 BAR_RECEIVED_COUNT)];
 	st->bar_rcvd_cnt =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      BAR_RECEIVED_COUNT, val);
 
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 MPDU_FRAMES_PROCESSED_COUNT)];
 	st->mpdu_frms_cnt =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      MPDU_FRAMES_PROCESSED_COUNT, val);
 
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 MSDU_FRAMES_PROCESSED_COUNT)];
 	st->msdu_frms_cnt =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      MSDU_FRAMES_PROCESSED_COUNT, val);
 
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 TOTAL_PROCESSED_BYTE_COUNT)];
 	st->total_cnt =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      TOTAL_PROCESSED_BYTE_COUNT, val);
 
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 LATE_RECEIVE_MPDU_COUNT)];
 	st->late_recv_mpdu_cnt =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      LATE_RECEIVE_MPDU_COUNT, val);
 
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 WINDOW_JUMP_2K)];
 	st->win_jump_2k =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
 			      WINDOW_JUMP_2K, val);
 
-	val = reo_desc[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_GET_QUEUE_STATS_STATUS,
 					 HOLE_COUNT)];
 	st->hole_cnt =
 		HAL_GET_FIELD(REO_GET_QUEUE_STATS_STATUS,
@@ -874,22 +874,22 @@ hal_reo_flush_queue_status_be(hal_ring_desc_t ring_desc,
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 	struct hal_reo_flush_queue_status *st =
 			(struct hal_reo_flush_queue_status *)st_handle;
-	uint64_t *reo_desc = (uint64_t *)ring_desc;
-	uint64_t val;
+	reo_sts_block_size_t *reo_desc = (reo_sts_block_size_t *)ring_desc;
+	reo_sts_block_size_t val;
 
 	/*
 	 * Offsets of descriptor fields defined in HW headers start
 	 * from the field after TLV header
 	 */
-	reo_desc += HAL_GET_NUM_QWORDS(sizeof(struct tlv_32_hdr));
+	reo_desc += HAL_REO_STS_DESC_OFFSET(sizeof(struct tlv_32_hdr));
 
 	/* header */
 	hal_reo_status_get_header(ring_desc, HAL_REO_FLUSH_QUEUE_STATUS_TLV,
 				  &(st->header), hal_soc);
 
 	/* error bit */
-	val = reo_desc[HAL_OFFSET(REO_FLUSH_QUEUE_STATUS,
-					 ERROR_DETECTED)];
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_FLUSH_QUEUE_STATUS,
+					  ERROR_DETECTED)];
 	st->error = HAL_GET_FIELD(REO_FLUSH_QUEUE_STATUS, ERROR_DETECTED,
 				  val);
 }
@@ -902,27 +902,27 @@ hal_reo_flush_cache_status_be(hal_ring_desc_t ring_desc,
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 	struct hal_reo_flush_cache_status *st =
 			(struct hal_reo_flush_cache_status *)st_handle;
-	uint64_t *reo_desc = (uint64_t *)ring_desc;
-	uint64_t val;
+	reo_sts_block_size_t *reo_desc = (reo_sts_block_size_t *)ring_desc;
+	reo_sts_block_size_t val;
 
 	/*
 	 * Offsets of descriptor fields defined in HW headers start
 	 * from the field after TLV header
 	 */
-	reo_desc += HAL_GET_NUM_QWORDS(sizeof(struct tlv_32_hdr));
+	reo_desc += HAL_REO_STS_DESC_OFFSET(sizeof(struct tlv_32_hdr));
 
 	/* header */
 	hal_reo_status_get_header(ring_desc, HAL_REO_FLUSH_CACHE_STATUS_TLV,
 				  &(st->header), hal_soc);
 
 	/* error bit */
-	val = reo_desc[HAL_OFFSET_QW(REO_FLUSH_CACHE_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_FLUSH_CACHE_STATUS,
 					 ERROR_DETECTED)];
 	st->error = HAL_GET_FIELD(REO_FLUSH_QUEUE_STATUS, ERROR_DETECTED,
 				  val);
 
 	/* block error */
-	val = reo_desc[HAL_OFFSET_QW(REO_FLUSH_CACHE_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_FLUSH_CACHE_STATUS,
 					 BLOCK_ERROR_DETAILS)];
 	st->block_error = HAL_GET_FIELD(REO_FLUSH_CACHE_STATUS,
 					BLOCK_ERROR_DETAILS,
@@ -932,14 +932,14 @@ hal_reo_flush_cache_status_be(hal_ring_desc_t ring_desc,
 			    (unsigned long *)&hal_soc->reo_res_bitmap);
 
 	/* cache flush status */
-	val = reo_desc[HAL_OFFSET_QW(REO_FLUSH_CACHE_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_FLUSH_CACHE_STATUS,
 					 CACHE_CONTROLLER_FLUSH_STATUS_HIT)];
 	st->cache_flush_status = HAL_GET_FIELD(REO_FLUSH_CACHE_STATUS,
 					CACHE_CONTROLLER_FLUSH_STATUS_HIT,
 					val);
 
 	/* cache flush descriptor type */
-	val = reo_desc[HAL_OFFSET_QW(REO_FLUSH_CACHE_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_FLUSH_CACHE_STATUS,
 				  CACHE_CONTROLLER_FLUSH_STATUS_DESC_TYPE)];
 	st->cache_flush_status_desc_type =
 		HAL_GET_FIELD(REO_FLUSH_CACHE_STATUS,
@@ -947,7 +947,7 @@ hal_reo_flush_cache_status_be(hal_ring_desc_t ring_desc,
 			      val);
 
 	/* cache flush count */
-	val = reo_desc[HAL_OFFSET_QW(REO_FLUSH_CACHE_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_FLUSH_CACHE_STATUS,
 				  CACHE_CONTROLLER_FLUSH_COUNT)];
 	st->cache_flush_cnt =
 		HAL_GET_FIELD(REO_FLUSH_CACHE_STATUS,
@@ -963,28 +963,28 @@ hal_reo_unblock_cache_status_be(hal_ring_desc_t ring_desc,
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 	struct hal_reo_unblk_cache_status *st =
 			(struct hal_reo_unblk_cache_status *)st_handle;
-	uint64_t *reo_desc = (uint64_t *)ring_desc;
-	uint64_t val;
+	reo_sts_block_size_t *reo_desc = (reo_sts_block_size_t *)ring_desc;
+	reo_sts_block_size_t val;
 
 	/*
 	 * Offsets of descriptor fields defined in HW headers start
 	 * from the field after TLV header
 	 */
-	reo_desc += HAL_GET_NUM_QWORDS(sizeof(struct tlv_32_hdr));
+	reo_desc += HAL_REO_STS_DESC_OFFSET(sizeof(struct tlv_32_hdr));
 
 	/* header */
 	hal_reo_status_get_header(ring_desc, HAL_REO_UNBLK_CACHE_STATUS_TLV,
 				  &st->header, hal_soc);
 
 	/* error bit */
-	val = reo_desc[HAL_OFFSET_QW(REO_UNBLOCK_CACHE_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_UNBLOCK_CACHE_STATUS,
 				  ERROR_DETECTED)];
 	st->error = HAL_GET_FIELD(REO_UNBLOCK_CACHE_STATUS,
 				  ERROR_DETECTED,
 				  val);
 
 	/* unblock type */
-	val = reo_desc[HAL_OFFSET_QW(REO_UNBLOCK_CACHE_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_UNBLOCK_CACHE_STATUS,
 				  UNBLOCK_TYPE)];
 	st->unblock_type = HAL_GET_FIELD(REO_UNBLOCK_CACHE_STATUS,
 					 UNBLOCK_TYPE,
@@ -1002,42 +1002,42 @@ void hal_reo_flush_timeout_list_status_be(hal_ring_desc_t ring_desc,
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 	struct hal_reo_flush_timeout_list_status *st =
 			(struct hal_reo_flush_timeout_list_status *)st_handle;
-	uint64_t *reo_desc = (uint64_t *)ring_desc;
-	uint64_t val;
+	reo_sts_block_size_t *reo_desc = (reo_sts_block_size_t *)ring_desc;
+	reo_sts_block_size_t val;
 
 	/*
 	 * Offsets of descriptor fields defined in HW headers start
 	 * from the field after TLV header
 	 */
-	reo_desc += HAL_GET_NUM_QWORDS(sizeof(struct tlv_32_hdr));
+	reo_desc += HAL_REO_STS_DESC_OFFSET(sizeof(struct tlv_32_hdr));
 
 	/* header */
 	hal_reo_status_get_header(ring_desc, HAL_REO_TIMOUT_LIST_STATUS_TLV,
 				  &(st->header), hal_soc);
 
 	/* error bit */
-	val = reo_desc[HAL_OFFSET_QW(REO_FLUSH_TIMEOUT_LIST_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_FLUSH_TIMEOUT_LIST_STATUS,
 					 ERROR_DETECTED)];
 	st->error = HAL_GET_FIELD(REO_FLUSH_TIMEOUT_LIST_STATUS,
 				  ERROR_DETECTED,
 				  val);
 
 	/* list empty */
-	val = reo_desc[HAL_OFFSET_QW(REO_FLUSH_TIMEOUT_LIST_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_FLUSH_TIMEOUT_LIST_STATUS,
 					 TIMOUT_LIST_EMPTY)];
 	st->list_empty = HAL_GET_FIELD(REO_FLUSH_TIMEOUT_LIST_STATUS,
 				       TIMOUT_LIST_EMPTY,
 				       val);
 
 	/* release descriptor count */
-	val = reo_desc[HAL_OFFSET_QW(REO_FLUSH_TIMEOUT_LIST_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_FLUSH_TIMEOUT_LIST_STATUS,
 					 RELEASE_DESC_COUNT)];
 	st->rel_desc_cnt = HAL_GET_FIELD(REO_FLUSH_TIMEOUT_LIST_STATUS,
 					 RELEASE_DESC_COUNT,
 					 val);
 
 	/* forward buf count */
-	val = reo_desc[HAL_OFFSET_QW(REO_FLUSH_TIMEOUT_LIST_STATUS,
+	val = reo_desc[HAL_REO_STS_OFFSET(REO_FLUSH_TIMEOUT_LIST_STATUS,
 					 FORWARD_BUF_COUNT)];
 	st->fwd_buf_cnt = HAL_GET_FIELD(REO_FLUSH_TIMEOUT_LIST_STATUS,
 					FORWARD_BUF_COUNT,
@@ -1051,14 +1051,14 @@ void hal_reo_desc_thres_reached_status_be(hal_ring_desc_t ring_desc,
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 	struct hal_reo_desc_thres_reached_status *st =
 			(struct hal_reo_desc_thres_reached_status *)st_handle;
-	uint64_t *reo_desc = (uint64_t *)ring_desc;
-	uint64_t val;
+	reo_sts_block_size_t *reo_desc = (reo_sts_block_size_t *)ring_desc;
+	reo_sts_block_size_t val;
 
 	/*
 	 * Offsets of descriptor fields defined in HW headers start
 	 * from the field after TLV header
 	 */
-	reo_desc += HAL_GET_NUM_QWORDS(sizeof(struct tlv_32_hdr));
+	reo_desc += HAL_REO_STS_DESC_OFFSET(sizeof(struct tlv_32_hdr));
 
 	/* header */
 	hal_reo_status_get_header(ring_desc,
@@ -1066,7 +1066,7 @@ void hal_reo_desc_thres_reached_status_be(hal_ring_desc_t ring_desc,
 				  &(st->header), hal_soc);
 
 	/* threshold index */
-	val = reo_desc[HAL_OFFSET_QW(
+	val = reo_desc[HAL_REO_STS_OFFSET(
 				 REO_DESCRIPTOR_THRESHOLD_REACHED_STATUS,
 				 THRESHOLD_INDEX)];
 	st->thres_index = HAL_GET_FIELD(
@@ -1075,7 +1075,7 @@ void hal_reo_desc_thres_reached_status_be(hal_ring_desc_t ring_desc,
 				val);
 
 	/* link desc counters */
-	val = reo_desc[HAL_OFFSET_QW(
+	val = reo_desc[HAL_REO_STS_OFFSET(
 				 REO_DESCRIPTOR_THRESHOLD_REACHED_STATUS,
 				 LINK_DESCRIPTOR_COUNTER0)];
 	st->link_desc_counter0 = HAL_GET_FIELD(
@@ -1083,7 +1083,7 @@ void hal_reo_desc_thres_reached_status_be(hal_ring_desc_t ring_desc,
 				LINK_DESCRIPTOR_COUNTER0,
 				val);
 
-	val = reo_desc[HAL_OFFSET_QW(
+	val = reo_desc[HAL_REO_STS_OFFSET(
 				 REO_DESCRIPTOR_THRESHOLD_REACHED_STATUS,
 				 LINK_DESCRIPTOR_COUNTER1)];
 	st->link_desc_counter1 = HAL_GET_FIELD(
@@ -1091,7 +1091,7 @@ void hal_reo_desc_thres_reached_status_be(hal_ring_desc_t ring_desc,
 				LINK_DESCRIPTOR_COUNTER1,
 				val);
 
-	val = reo_desc[HAL_OFFSET_QW(
+	val = reo_desc[HAL_REO_STS_OFFSET(
 				 REO_DESCRIPTOR_THRESHOLD_REACHED_STATUS,
 				 LINK_DESCRIPTOR_COUNTER2)];
 	st->link_desc_counter2 = HAL_GET_FIELD(
@@ -1099,7 +1099,7 @@ void hal_reo_desc_thres_reached_status_be(hal_ring_desc_t ring_desc,
 				LINK_DESCRIPTOR_COUNTER2,
 				val);
 
-	val = reo_desc[HAL_OFFSET_QW(
+	val = reo_desc[HAL_REO_STS_OFFSET(
 				 REO_DESCRIPTOR_THRESHOLD_REACHED_STATUS,
 				 LINK_DESCRIPTOR_COUNTER_SUM)];
 	st->link_desc_counter_sum = HAL_GET_FIELD(
@@ -1116,13 +1116,13 @@ hal_reo_rx_update_queue_status_be(hal_ring_desc_t ring_desc,
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 	struct hal_reo_update_rx_queue_status *st =
 			(struct hal_reo_update_rx_queue_status *)st_handle;
-	uint64_t *reo_desc = (uint64_t *)ring_desc;
+	reo_sts_block_size_t *reo_desc = (reo_sts_block_size_t *)ring_desc;
 
 	/*
 	 * Offsets of descriptor fields defined in HW headers start
 	 * from the field after TLV header
 	 */
-	reo_desc += HAL_GET_NUM_QWORDS(sizeof(struct tlv_32_hdr));
+	reo_desc += HAL_REO_STS_DESC_OFFSET(sizeof(struct tlv_32_hdr));
 
 	/* header */
 	hal_reo_status_get_header(ring_desc,

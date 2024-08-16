@@ -586,6 +586,9 @@ static void wlan_lmac_if_umac_reg_rx_ops_register(
 
 	rx_ops->reg_rx_ops.reg_r2p_table_update_response_handler =
 		tgt_reg_process_r2p_table_update_response;
+
+	rx_ops->reg_rx_ops.reg_is_5dot9_ghz_supported =
+		wlan_reg_is_5dot9_ghz_supported;
 }
 
 #ifdef CONVERGED_P2P_ENABLE

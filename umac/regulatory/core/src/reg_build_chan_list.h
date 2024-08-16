@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -131,6 +131,25 @@ struct regulatory_channel *reg_get_reg_maschan_lst_frm_6g_pwr_mode(
 			enum supported_6g_pwr_types supp_pwr_mode,
 			struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj,
 			uint16_t chan_idx);
+
+/**
+ * reg_find_afc_max_bw_from_chip_cap() - Find the maximum AFC BW based on the
+ * chip capabilities.
+ *
+ * @pdev: Pointer to PDEV object.
+ *
+ * Return:
+ * AFC_BW_320 if the chip supports 11BE, else return AFC_BW_160.
+ */
+#ifdef WLAN_FEATURE_11BE
+uint16_t reg_find_afc_max_bw_from_chip_cap(struct wlan_objmgr_pdev *pdev);
+#else
+static inline uint16_t
+reg_find_afc_max_bw_from_chip_cap(struct wlan_objmgr_pdev *pdev)
+{
+	return BW_160_MHZ;
+}
+#endif
 
 /**
  * reg_convert_supported_6g_pwr_type_to_ap_pwr_type() - The supported 6G power

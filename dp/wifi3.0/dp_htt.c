@@ -1975,6 +1975,13 @@ int htt_h2t_rx_ring_cfg(struct htt_soc *htt_soc, int pdev_id,
 	/* "response_required" field should be set if a HTT response message is
 	 * required after setting up the ring.
 	 */
+
+	/* word 22, 23, 24, 25, 26, 27*/
+	msg_word += 2;
+	*msg_word = 0;
+	dp_mon_rx_config_packet_type_subtype(soc->dp_soc, msg_word,
+					     htt_tlv_filter, htt_ring_id);
+
 	pkt = htt_htc_pkt_alloc(soc);
 	if (!pkt) {
 		dp_err("pkt alloc failed, ring_type %d ring_id %d htt_ring_id %d",
@@ -3057,7 +3064,8 @@ dp_get_srng_ring_state_from_hal(struct dp_soc *soc,
 }
 
 #ifdef QCA_MONITOR_PKT_SUPPORT
-static inline int dp_validate_ring_num(int ring_num) {
+static inline bool dp_validate_ring_num(int ring_num)
+{
 	if (dp_assert_always_internal(ring_num < DP_MAX_SRNGS)) {
 		dp_err("Ring number %d crossed max rings %d",
 						ring_num, DP_MAX_SRNGS);
@@ -3113,14 +3121,19 @@ dp_queue_mon_ring_stats(struct dp_pdev *pdev,
 		}
 	}
 }
-#else
-static void
+#else /* !QCA_MONITOR_PKT_SUPPORT */
+static inline bool dp_validate_ring_num(int ring_num)
+{
+	return false;
+}
+
+static inline void
 dp_queue_mon_ring_stats(struct dp_pdev *pdev,
 			int lmac_id, uint32_t *num_srng,
 			struct dp_soc_srngs_state *soc_srngs_state)
 {
 }
-#endif
+#endif /* QCA_MONITOR_PKT_SUPPORT */
 
 #ifndef WLAN_DP_DISABLE_TCL_CMD_CRED_SRNG
 static inline QDF_STATUS

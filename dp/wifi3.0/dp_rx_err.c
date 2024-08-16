@@ -838,7 +838,7 @@ free_nbuf:
 
 #if defined(QCA_WIFI_QCA6390) || defined(QCA_WIFI_QCA6490) || \
     defined(QCA_WIFI_QCA6750) || defined(QCA_WIFI_KIWI) || \
-    defined(QCA_WIFI_WCN7750)
+    defined(QCA_WIFI_WCN7750) || defined(QCA_WIFI_QCC2072)
 bool
 dp_rx_null_q_handle_invalid_peer_id_exception(struct dp_soc *soc,
 					      uint8_t pool_id,
@@ -911,7 +911,8 @@ dp_rx_deliver_to_osif_stack(struct dp_soc *soc,
 			    qdf_nbuf_t tail,
 			    bool is_eapol)
 {
-	if (is_eapol && soc->eapol_over_control_port)
+	if (is_eapol && soc->eapol_over_control_port &&
+	    !vdev->eapol_over_control_port_disable)
 		dp_rx_eapol_deliver_to_stack(soc, vdev, txrx_peer, nbuf, NULL);
 	else
 		dp_rx_deliver_to_stack(soc, vdev, txrx_peer, nbuf, NULL);
@@ -930,16 +931,23 @@ dp_rx_deliver_to_osif_stack(struct dp_soc *soc,
 #endif
 
 #ifdef WLAN_FEATURE_11BE_MLO
-int dp_rx_err_match_dhost(qdf_ether_header_t *eh, struct dp_vdev *vdev)
+int dp_rx_err_match_dhost(qdf_ether_header_t *eh, struct dp_vdev *vdev,
+			  bool is_ml)
 {
-	return ((qdf_mem_cmp(eh->ether_dhost, &vdev->mac_addr.raw[0],
-			     QDF_MAC_ADDR_SIZE) == 0) ||
-		(qdf_mem_cmp(eh->ether_dhost, &vdev->mld_mac_addr.raw[0],
-			     QDF_MAC_ADDR_SIZE) == 0));
+	if (is_ml)
+		return ((qdf_mem_cmp(eh->ether_dhost,
+				     &vdev->mld_mac_addr.raw[0],
+				     QDF_MAC_ADDR_SIZE) == 0) ||
+			(qdf_mem_cmp(eh->ether_dhost, &vdev->mac_addr.raw[0],
+				     QDF_MAC_ADDR_SIZE) == 0));
+	else
+		return (qdf_mem_cmp(eh->ether_dhost, &vdev->mac_addr.raw[0],
+				    QDF_MAC_ADDR_SIZE) == 0);
 }
 
 #else
-int dp_rx_err_match_dhost(qdf_ether_header_t *eh, struct dp_vdev *vdev)
+int dp_rx_err_match_dhost(qdf_ether_header_t *eh, struct dp_vdev *vdev,
+			  bool is_ml)
 {
 	return (qdf_mem_cmp(eh->ether_dhost, &vdev->mac_addr.raw[0],
 			    QDF_MAC_ADDR_SIZE) == 0);
@@ -995,7 +1003,7 @@ dp_rx_err_populate_mpdu_desc_info(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	if (first_msdu_in_mpdu_processed) {
 		/*
 		 * This is the 2nd indication of first_msdu in the same mpdu.
-		 * Skip re-parsing the mdpu_desc_info and use the cached one,
+		 * Skip re-parsing the mpdu_desc_info and use the cached one,
 		 * since this msdu is most probably from the current mpdu
 		 * which is being processed
 		 */
@@ -1809,7 +1817,7 @@ dp_rx_err_route_hdl(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	if (is_eapol || qdf_nbuf_is_ipv4_wapi_pkt(nbuf)) {
 		qdf_ether_header_t *eh =
 			(qdf_ether_header_t *)qdf_nbuf_data(nbuf);
-		if (dp_rx_err_match_dhost(eh, vdev)) {
+		if (dp_rx_err_match_dhost(eh, vdev, txrx_peer->is_mld_peer)) {
 			DP_STATS_INC_PKT(vdev, rx_i.routed_eapol_pkt, 1,
 					 qdf_nbuf_len(nbuf));
 
@@ -2995,7 +3003,7 @@ dp_rx_wbm_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
 				dp_rx_nbuf_free(nbuf);
 			} else {
 				/* should not enter here */
-				dp_err("invalid rxdma push reason %u, wbm_err 0x%lx",
+				dp_err("invalid rxdma push reason %u, wbm_err 0x%x",
 				       wbm_err.info_bit.rxdma_psh_rsn,
 				       wbm_err.info);
 				dp_rx_nbuf_free(nbuf);

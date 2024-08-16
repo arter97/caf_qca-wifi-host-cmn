@@ -360,4 +360,21 @@ QDF_STATUS tgt_vdev_peer_set_param_send(struct wlan_objmgr_vdev *vdev,
 					uint8_t *peer_mac_addr,
 					uint32_t param_id,
 					uint32_t param_value);
+/*
+ * tgt_sap_is_suspend_supported() - API to get SAP vdev suspend support
+ * @vdev: Pointer to object manager VDEV
+ *
+ * Return: bool support enabled or disabled
+ */
+bool tgt_sap_is_suspend_supported(struct wlan_objmgr_vdev *vdev);
+
+/*
+ * tgt_sap_suspend_param_send() - API to send SAP vdev suspend cmd
+ * @psoc: Pointer to psoc
+ * @param: vdev suspend params
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS tgt_sap_suspend_param_send(struct wlan_objmgr_psoc *psoc,
+				      struct vdev_suspend_params *param);
 #endif /* __WLAN_VDEV_MGR_TX_OPS_API_H__ */

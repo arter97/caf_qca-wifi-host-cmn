@@ -1554,6 +1554,8 @@ QDF_STATUS wlan_vdev_get_bss_peer_mac(struct wlan_objmgr_vdev *vdev,
 	return QDF_STATUS_SUCCESS;
 }
 
+qdf_export_symbol(wlan_vdev_get_bss_peer_mac);
+
 #ifdef WLAN_FEATURE_11BE_MLO
 QDF_STATUS wlan_vdev_get_bss_peer_mld_mac(struct wlan_objmgr_vdev *vdev,
 					  struct qdf_mac_addr *mld_mac)

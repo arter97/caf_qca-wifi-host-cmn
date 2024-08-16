@@ -61,6 +61,9 @@
 #define HAL_RX_GET_SW_PEER_ID(rx_mpdu_start)	\
 	HAL_RX_GET(rx_mpdu_start, RX_MPDU_INFO_10, SW_PEER_ID)
 
+#define HAL_RX_GET_ENCRYPT_TYPE(rx_mpdu_start)	\
+	HAL_RX_GET(rx_mpdu_start, RX_MPDU_INFO_7, ENCRYPT_TYPE)
+
 #define HAL_REO_R0_CONFIG(soc, reg_val, reo_params)		\
 	do { \
 		reg_val &= \

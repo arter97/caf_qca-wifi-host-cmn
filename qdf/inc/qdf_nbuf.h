@@ -257,7 +257,7 @@ typedef __qdf_nbuf_queue_t qdf_nbuf_queue_t;
 #define RADIOTAP_TX_FLAGS_LEN (2 + 1)
 #define RADIOTAP_VHT_FLAGS_LEN (12 + 1)
 #define RADIOTAP_HE_FLAGS_LEN (12 + 1)
-#define RADIOTAP_HE_MU_FLAGS_LEN (8 + 1)
+#define RADIOTAP_HE_MU_FLAGS_LEN (12 + 1)
 #define RADIOTAP_HE_MU_OTHER_FLAGS_LEN (18 + 1)
 #define RADIOTAP_U_SIG_FLAGS_LEN (12 + 3)
 #define RADIOTAP_EHT_FLAGS_LEN (58 + 3)
@@ -521,7 +521,6 @@ struct mon_rx_status {
 	uint32_t eht_known;
 	uint32_t eht_data[9];
 	uint32_t eht_all_user_num;
-	uint32_t eht_user_info[EHT_USER_INFO_LEN];
 #ifdef QCA_UNDECODED_METADATA_SUPPORT
 	uint32_t phyrx_abort:1,
 		 phyrx_abort_reason:8,
@@ -605,6 +604,7 @@ struct mon_rx_status {
  * @rs_flags: Flags to indicate AMPDU or AMSDU aggregation
  * @mpdu_cnt_fcs_ok: mpdu count received with fcs ok
  * @mpdu_cnt_fcs_err: mpdu count received with fcs ok bitmap
+ * @is_mpdu_incomplete: Flag to indicate mpdu incomplete
  * @mpdu_fcs_ok_bitmap: mpdu with fcs ok bitmap
  * @mpdu_ok_byte_count: mpdu byte count with fcs ok
  * @mpdu_err_byte_count: mpdu byte count with fcs err
@@ -614,6 +614,7 @@ struct mon_rx_status {
  * @ba_bitmap: 256 bit block ack bitmap
  * @aid: Association ID
  * @enc_type: ecnryption type
+ * @retried_msdu_count: retried msdu count
  * @mpdu_q: user mpdu_queue used for monitor
  */
 struct mon_rx_user_status {
@@ -642,8 +643,8 @@ struct mon_rx_user_status {
 		 frame_control_info_valid : 1,
 		 frame_control : 16,
 		 data_sequence_control_info_valid : 1,
-		 ba_bitmap_sz : 2,
 		 filter_category : 2;
+	uint16_t ba_bitmap_sz;
 	uint16_t tcp_msdu_count;
 	uint16_t udp_msdu_count;
 	uint16_t other_msdu_count;
@@ -674,15 +675,17 @@ struct mon_rx_user_status {
 	uint8_t rs_flags;
 	uint16_t mpdu_cnt_fcs_ok;
 	uint8_t mpdu_cnt_fcs_err;
+	uint8_t is_mpdu_incomplete;
 	uint32_t mpdu_fcs_ok_bitmap[QDF_MON_STATUS_MPDU_FCS_BMAP_NWORDS];
 	uint32_t mpdu_ok_byte_count;
 	uint32_t mpdu_err_byte_count;
 	uint16_t retry_mpdu;
 	uint16_t start_seq;
 	uint16_t ba_control;
-	uint32_t ba_bitmap[8];
+	uint32_t ba_bitmap[32];
 	uint16_t aid;
 	uint8_t enc_type;
+	uint16_t retried_msdu_count;
 	qdf_nbuf_queue_t mpdu_q;
 };
 
@@ -1399,6 +1402,32 @@ void qdf_nbuf_unmap_nbytes_single_paddr_debug(qdf_device_t osdev,
 	qdf_nbuf_unmap_nbytes_single_paddr_debug(osdev, buf, phy_addr, \
 						 dir, nbytes, __func__, \
 						 __LINE__)
+
+/**
+ * qdf_nbuf_track_map_single() - Add NBUF into DMA map tracker
+ * @osdev: Device handler
+ * @buf: NBUF
+ * @dir: DMA direction
+ *
+ * Return: QDF_STATUS
+ */
+#define qdf_nbuf_track_map_single(osdev, buf, dir) \
+	qdf_nbuf_track_map_single_debug(osdev, buf, dir, __func__, __LINE__)
+
+/**
+ * qdf_nbuf_track_map_single_debug() - Add NBUF into DMA map tracker
+ * @osdev: Device handler
+ * @buf: NBUF
+ * @dir: DMA direction
+ * @func: function name
+ * @line: line number
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS qdf_nbuf_track_map_single_debug(qdf_device_t osdev, qdf_nbuf_t buf,
+					   qdf_dma_dir_t dir, const char *func,
+					   uint32_t line);
+
 #else /* NBUF_MAP_UNMAP_DEBUG */
 
 static inline void qdf_nbuf_map_check_for_leaks(void) {}
@@ -1462,6 +1491,12 @@ qdf_nbuf_unmap_nbytes_single_paddr(qdf_device_t osdev, qdf_nbuf_t buf,
 {
 	__qdf_record_nbuf_nbytes(__qdf_nbuf_get_end_offset(buf), dir, false);
 	__qdf_mem_unmap_nbytes_single(osdev, phy_addr, dir, nbytes);
+}
+
+static inline QDF_STATUS
+qdf_nbuf_track_map_single(qdf_device_t osdev, qdf_nbuf_t buf, qdf_dma_dir_t dir)
+{
+	return QDF_STATUS_SUCCESS;
 }
 #endif /* NBUF_MAP_UNMAP_DEBUG */
 
@@ -2536,7 +2571,37 @@ qdf_nbuf_t
 qdf_nbuf_page_frag_alloc_debug(qdf_device_t osdev, qdf_size_t size, int reserve,
 			       int align, qdf_frag_cache_t *pf_cache,
 			       const char *func, uint32_t line);
+/**
+ * qdf_nbuf_page_pool_alloc() - Allocates nbuf from Kernel page pool
+ * @d: Device handler
+ * @s: Buffer size
+ * @r: Headroom size for the buffer
+ * @a: size of the required alignment
+ * @pp: Page Pool reference
+ * @o: buffer offset within the page
+ *
+ * Return: nbuf
+ */
+#define qdf_nbuf_page_pool_alloc(d, s, r, a, pp, o) \
+	qdf_nbuf_page_pool_alloc_debug(d, s, r, a, pp, o,  __func__, __LINE__)
 
+/**
+ * qdf_nbuf_page_pool_alloc_debug() - Allocates nbuf from Kernel page pool
+ * @osdev: Device handler
+ * @size: Buffer size
+ * @reserve: Headroom size for the buffer
+ * @align: size of the required alignment
+ * @pp: Page Pool reference
+ * @offset: buffer offset within the page
+ * @func: function name
+ * @line: line number
+ *
+ * Return: nbuf
+ */
+qdf_nbuf_t
+qdf_nbuf_page_pool_alloc_debug(qdf_device_t osdev, qdf_size_t size, int reserve,
+			       int align, qdf_page_pool_t pp, uint32_t *offset,
+			       const char *func, uint32_t line);
 /**
  * qdf_nbuf_ssr_register_region() - Register nbuf history with SSR dump
  *
@@ -2729,6 +2794,30 @@ qdf_nbuf_page_frag_alloc_fl(qdf_device_t osdev, qdf_size_t size, int reserve,
 {
 	return __qdf_nbuf_page_frag_alloc(osdev, size, reserve, align, pf_cache,
 					  func, line);
+}
+
+/**
+ * qdf_nbuf_page_pool_alloc() - Allocates nbuf from Kernel page pool
+ * @osdev: Device handler
+ * @size: Buffer size
+ * @reserve: Headroom size for the buffer
+ * @align: size of the required alignment
+ * @pp: Page Pool reference
+ * @offset: buffer offset within the page
+ *
+ * Return: nbuf
+ */
+#define qdf_nbuf_page_pool_alloc(osdev, size, reserve, align, pp, offset) \
+	qdf_nbuf_page_pool_alloc_fl(osdev, size, reserve, align, pp, offset, \
+			  __func__, __LINE__)
+
+static inline qdf_nbuf_t
+qdf_nbuf_page_pool_alloc_fl(qdf_device_t osdev, qdf_size_t size, int reserve,
+			    int align, qdf_page_pool_t pp, uint32_t *offset,
+			    const char *func, uint32_t line)
+{
+	return __qdf_nbuf_page_pool_alloc(osdev, size, reserve, align, pp,
+					  offset, func, line);
 }
 #endif /* NBUF_MEMORY_DEBUG */
 
@@ -3427,6 +3516,45 @@ static inline void qdf_nbuf_set_tx_ip_cksum(qdf_nbuf_t buf)
 }
 
 /**
+ * qdf_nbuf_is_ipv4_first_fragment() - check if first fragmented packet
+ * @buf: Network buffer
+ *
+ * Return: true if first frag else false
+ */
+static inline bool qdf_nbuf_is_ipv4_first_fragment(qdf_nbuf_t buf)
+{
+	return __qdf_nbuf_is_ipv4_first_fragment(buf);
+}
+
+/**
+ * qdf_nbuf_get_ipv4_flow_info() - get ipv4 flow info
+ * @buf: Network buffer
+ * @flow_info: pointer to qdf_flow_info
+ *
+ * Return: QDF_STATUS
+ */
+static inline
+QDF_STATUS qdf_nbuf_get_ipv4_flow_info(qdf_nbuf_t buf,
+				       struct qdf_flow_info *flow_info)
+{
+	return __qdf_nbuf_get_ipv4_flow_info(buf, flow_info);
+}
+
+/**
+ * qdf_nbuf_get_ipv6_flow_info() - get ipv6 flow info
+ * @buf: Network buffer
+ * @flow_info: pointer to qdf_flow_info
+ *
+ * Return: QDF_STATUS
+ */
+static inline
+QDF_STATUS qdf_nbuf_get_ipv6_flow_info(qdf_nbuf_t buf,
+				       struct qdf_flow_info *flow_info)
+{
+	return __qdf_nbuf_get_ipv6_flow_info(buf, flow_info);
+}
+
+/**
  * qdf_nbuf_flow_dissect_flow_keys() - extract the flow_keys struct and return
  * @buf: Network buffer
  * @flow: list of flow keys
@@ -3983,6 +4111,18 @@ bool qdf_nbuf_data_is_ipv4_pkt(uint8_t *data)
 }
 
 /**
+ * qdf_nbuf_sock_is_valid_fullsock() - Check if socket is a full socket
+ * @buf: Network buffer
+ *
+ * Return: true if it is a full socket
+ */
+static inline
+bool qdf_nbuf_sock_is_valid_fullsock(qdf_nbuf_t buf)
+{
+	return __qdf_nbuf_sock_is_valid_fullsock(buf);
+}
+
+/**
  * qdf_nbuf_sock_is_ipv4_pkt() - check if it is a ipv4 sock
  * @buf: Network buffer
  *
@@ -4488,6 +4628,20 @@ bool qdf_nbuf_is_ipv6_pkt(qdf_nbuf_t buf)
 {
 	return __qdf_nbuf_data_is_ipv6_pkt(qdf_nbuf_data(buf));
 }
+
+#ifdef BIG_ENDIAN_HOST
+static inline
+uint16_t qdf_nbuf_get_ether_type(qdf_nbuf_t buf)
+{
+	return __qdf_nbuf_get_ethernet_type(qdf_nbuf_data(buf));
+}
+#else
+static inline
+uint16_t qdf_nbuf_get_ether_type(qdf_nbuf_t buf)
+{
+	return QDF_SWAP_U16(__qdf_nbuf_get_ether_type(qdf_nbuf_data(buf)));
+}
+#endif
 
 /**
  * qdf_nbuf_sock_is_ipv6_pkt() - check if it is a ipv6 sock
@@ -5603,6 +5757,18 @@ static inline qdf_size_t qdf_nbuf_get_truesize(qdf_nbuf_t nbuf)
 static inline qdf_size_t qdf_nbuf_get_allocsize(qdf_nbuf_t nbuf)
 {
 	return __qdf_nbuf_get_allocsize(nbuf);
+}
+
+/**
+ * qdf_is_pp_nbuf: Check if SKB memory is from page pool
+ *
+ * @nbuf: nbuf reference
+ *
+ * Return: True/False
+ */
+static inline bool qdf_is_pp_nbuf(qdf_nbuf_t nbuf)
+{
+	return __qdf_is_pp_nbuf(nbuf);
 }
 
 #ifdef NBUF_FRAG_MEMORY_DEBUG

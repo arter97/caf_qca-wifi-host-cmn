@@ -43,6 +43,10 @@ QDF_STATUS tgt_wifi_radar_init_pdev(struct wlan_objmgr_pdev *pdev)
 	struct wlan_objmgr_psoc *psoc = wlan_pdev_get_psoc(pdev);
 
 	wifi_radar_tx_ops = wlan_psoc_get_wifi_radar_txops(psoc);
+	if (!wifi_radar_tx_ops) {
+		wifi_radar_err("Failed to get wifi radar tx_ops");
+		return QDF_STATUS_E_FAILURE;
+	}
 
 	if (wifi_radar_tx_ops->wifi_radar_init_pdev)
 		status = wifi_radar_tx_ops->wifi_radar_init_pdev(psoc, pdev);
@@ -60,6 +64,10 @@ QDF_STATUS tgt_wifi_radar_deinit_pdev(struct wlan_objmgr_pdev *pdev)
 	struct wlan_objmgr_psoc *psoc = wlan_pdev_get_psoc(pdev);
 
 	wifi_radar_tx_ops = wlan_psoc_get_wifi_radar_txops(psoc);
+	if (!wifi_radar_tx_ops) {
+		wifi_radar_err("Failed to get wifi radar tx_ops");
+		return QDF_STATUS_E_FAILURE;
+	}
 
 	if (wifi_radar_tx_ops->wifi_radar_deinit_pdev)
 		status = wifi_radar_tx_ops->wifi_radar_deinit_pdev(psoc, pdev);
@@ -149,6 +157,7 @@ int tgt_wifi_radar_validate_chainmask(struct pdev_wifi_radar *pwr,
 				      u_int32_t rx_chainmask)
 {
 	uint8_t txchain_pos = 0, i = 0;
+	unsigned long chain = tx_chainmask;
 
 	if (!tx_chainmask) {
 		wifi_radar_err("Invalid tx chain mask, 1 chain must be set");
@@ -160,8 +169,7 @@ int tgt_wifi_radar_validate_chainmask(struct pdev_wifi_radar *pwr,
 		return 0;
 	}
 
-	txchain_pos = qdf_find_first_bit((unsigned long *)&tx_chainmask,
-					 (sizeof(tx_chainmask) * 8));
+	txchain_pos = qdf_find_first_bit(&chain, (sizeof(chain) * 8));
 	if (txchain_pos >= HOST_MAX_CHAINS) {
 		wifi_radar_err(" invalid tx chain requested for wifi radar");
 		return 0;
@@ -203,7 +211,8 @@ int tgt_wifi_radar_command(struct wlan_objmgr_pdev *pdev,
 	struct wlan_objmgr_psoc *psoc = wlan_pdev_get_psoc(pdev);
 
 	wr_tx_ops = wlan_psoc_get_wifi_radar_txops(psoc);
-	if (wr_tx_ops->wifi_radar_capture_and_cal)
+
+	if (wr_tx_ops && wr_tx_ops->wifi_radar_capture_and_cal)
 		return wr_tx_ops->wifi_radar_capture_and_cal(pdev, params);
 
 	return 0;

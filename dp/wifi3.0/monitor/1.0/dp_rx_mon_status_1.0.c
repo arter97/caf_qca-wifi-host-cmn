@@ -489,6 +489,9 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 						ppdu_info, pdev->soc->hal_soc,
 						status_nbuf);
 
+				if (qdf_unlikely(IS_LOCAL_PKT_CAPTURE_RUNNING(mon_pdev, is_local_pkt_capture_running)))
+					dp_rx_handle_local_pkt_capture(pdev, ppdu_info, status_nbuf, mac_id, tlv_status);
+
 				dp_rx_mon_update_dbg_ppdu_stats(ppdu_info,
 								rx_mon_stats);
 
@@ -516,7 +519,12 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 				 (tlv_status == HAL_TLV_STATUS_MPDU_START) ||
 				 (tlv_status == HAL_TLV_STATUS_MSDU_END));
 		}
+
+		/* convert encryption type to cdp enum */
+		dp_convert_enc_to_cdp_enc(ppdu_info->rx_user_status,
+					  ppdu_info->user_id, RX_SIDE);
 		dp_mon_rx_stats_update_rssi_dbm_params(mon_pdev, ppdu_info);
+
 		if (qdf_unlikely(mon_pdev->dp_peer_based_pktlog)) {
 			dp_rx_process_peer_based_pktlog(soc, ppdu_info,
 							status_nbuf,
@@ -545,13 +553,7 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 				qdf_nbuf_free(status_nbuf);
 		} else if (qdf_unlikely(IS_LOCAL_PKT_CAPTURE_RUNNING(mon_pdev,
 				is_local_pkt_capture_running))) {
-			int ret;
-
-			ret = dp_rx_handle_local_pkt_capture(pdev, ppdu_info,
-							     status_nbuf,
-							     mac_id);
-			if (ret)
-				qdf_nbuf_free(status_nbuf);
+			qdf_nbuf_free(status_nbuf);
 		} else if (qdf_unlikely(mon_pdev->mcopy_mode)) {
 			dp_rx_process_mcopy_mode(soc, pdev,
 						 ppdu_info, tlv_status,
@@ -613,11 +615,14 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 					mon_mac->mon_chan_freq;
 			}
 
-			if (!mon_soc->full_mon_mode)
+			if (!mon_soc->full_mon_mode) {
 				dp_rx_mon_dest_process(soc, int_ctx, mac_id,
 						       quota);
-
-			dp_mon_rx_ppdu_status_reset(mon_mac);
+				dp_mon_rx_ppdu_status_reset(mon_mac);
+			} else {
+				mon_mac->mon_ppdu_status =
+						DP_PPDU_STATUS_START;
+			}
 		} else {
 			dp_rx_mon_handle_ppdu_undecoded_metadata(soc, pdev,
 								 ppdu_info,

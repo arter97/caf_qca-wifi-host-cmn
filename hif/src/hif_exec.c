@@ -401,8 +401,7 @@ qdf_export_symbol(hif_print_napi_stats);
 #endif /* WLAN_FEATURE_RX_SOFTIRQ_TIME_LIMIT */
 #endif /* QCA_WIFI_WCN6450 */
 
-#if defined(WLAN_FEATURE_RX_SOFTIRQ_TIME_LIMIT) || \
-	defined(WLAN_DP_LOAD_BALANCE_SUPPORT)
+#if defined(WLAN_FEATURE_RX_SOFTIRQ_TIME_LIMIT)
 /**
  * hif_exec_update_service_start_time() - Update NAPI poll start time
  * @hif_ext_group: hif_ext_group of type NAPI
@@ -416,6 +415,15 @@ static inline void
 hif_exec_update_service_start_time(struct hif_exec_context *hif_ext_group)
 {
 	hif_ext_group->poll_start_time = qdf_time_sched_clock();
+}
+#elif defined(WLAN_DP_LOAD_BALANCE_SUPPORT)
+static inline void
+hif_exec_update_service_start_time(struct hif_exec_context *hif_ext_group)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ext_group->hif);
+
+	if (scn->is_load_balance_enabled)
+		hif_ext_group->poll_start_time = qdf_time_sched_clock();
 }
 #else
 static inline void
@@ -655,9 +663,14 @@ hif_irq_disabled_time_limit_reached(struct hif_exec_context *hif_ext_group)
 static inline void
 hif_exec_update_soft_irq_time(struct hif_exec_context *hif_ext_group)
 {
-	int cpu = qdf_get_cpu();
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ext_group->hif);
+	int cpu;
 	uint64_t time;
 
+	if (!scn->is_load_balance_enabled)
+		return;
+
+	cpu = qdf_get_cpu();
 	time = qdf_time_sched_clock() - hif_ext_group->poll_start_time;
 	if (qdf_get_current() != qdf_this_cpu_ksoftirqd())
 		hif_ext_group->total_irq_time[cpu] += time;
@@ -675,7 +688,10 @@ hif_exec_update_soft_irq_time(struct hif_exec_context *hif_ext_group)
 static inline void
 hif_update_irq_handler_start_time(struct hif_exec_context *hif_ext_group)
 {
-	hif_ext_group->irq_start_time = qdf_time_sched_clock();
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ext_group->hif);
+
+	if (scn->is_load_balance_enabled)
+		hif_ext_group->irq_start_time = qdf_time_sched_clock();
 }
 
 /**
@@ -687,9 +703,15 @@ hif_update_irq_handler_start_time(struct hif_exec_context *hif_ext_group)
 static inline void
 hif_update_irq_handle_time(struct hif_exec_context *hif_ext_group)
 {
-	uint64_t cur_time = qdf_time_sched_clock();
-	int cpu = qdf_get_cpu();
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ext_group->hif);
+	uint64_t cur_time;
+	int cpu;
 
+	if (!scn->is_load_balance_enabled)
+		return;
+
+	cur_time = qdf_time_sched_clock();
+	cpu = qdf_get_cpu();
 	hif_ext_group->total_irq_time[cpu] += cur_time -
 					hif_ext_group->irq_start_time;
 }
@@ -815,11 +837,11 @@ static int hif_exec_poll(struct napi_struct *napi, int budget)
 	int cpu = smp_processor_id();
 	bool force_complete = false;
 
+	hif_exec_update_service_start_time(hif_ext_group);
 	hif_record_event(hif_ext_group->hif, hif_ext_group->grp_id,
 			 0, 0, 0, HIF_EVENT_BH_SCHED);
 
 	hif_ext_group->force_break = false;
-	hif_exec_update_service_start_time(hif_ext_group);
 
 	if (budget)
 		normalized_budget = NAPI_BUDGET_TO_INTERNAL_BUDGET(budget, shift);

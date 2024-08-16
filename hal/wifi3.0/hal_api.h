@@ -69,7 +69,7 @@ struct ring_util_stats {
 
 /* calculate the register address offset from bar0 of shadow register x */
 #if defined(QCA_WIFI_QCA6390) || defined(QCA_WIFI_QCA6490) || \
-    defined(QCA_WIFI_KIWI)
+    defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_QCC2072)
 #define SHADOW_REGISTER_START_ADDRESS_OFFSET 0x000008FC
 #define SHADOW_REGISTER_END_ADDRESS_OFFSET \
 	((SHADOW_REGISTER_START_ADDRESS_OFFSET) + (4 * (MAX_SHADOW_REGISTERS)))
@@ -272,7 +272,8 @@ static inline void hal_tx_init_cmd_credit_ring(hal_soc_handle_t hal_soc_hdl,
  */
 #if !defined(QCA_WIFI_QCA6390) && !defined(QCA_WIFI_QCA6490) && \
     !defined(QCA_WIFI_QCA6750) && !defined(QCA_WIFI_KIWI) && \
-    !defined(QCA_WIFI_WCN6450) && !defined(QCA_WIFI_WCN7750)
+    !defined(QCA_WIFI_WCN6450) && !defined(QCA_WIFI_WCN7750) && \
+    !defined(QCA_WIFI_QCC2072)
 static inline void hal_write32_mb(struct hal_soc *hal_soc, uint32_t offset,
 				  uint32_t value)
 {
@@ -529,7 +530,8 @@ static inline void hal_srng_write_address_32_mb(struct hal_soc *hal_soc,
 
 #if !defined(QCA_WIFI_QCA6390) && !defined(QCA_WIFI_QCA6490) && \
     !defined(QCA_WIFI_QCA6750) && !defined(QCA_WIFI_KIWI) && \
-    !defined(QCA_WIFI_WCN6450) && !defined(QCA_WIFI_WCN7750)
+    !defined(QCA_WIFI_WCN6450) && !defined(QCA_WIFI_WCN7750) && \
+    !defined(QCA_WIFI_QCC2072)
 /**
  * hal_read32_mb() - Access registers to read configuration
  * @hal_soc: hal soc handle
@@ -3599,6 +3601,34 @@ void hal_srng_dst_set_tp(hal_ring_handle_t hal_ring_hdl, uint16_t idx)
 	struct hal_srng *srng = (struct hal_srng *)hal_ring_hdl;
 
 	srng->u.dst_ring.tp = idx * srng->entry_size;
+}
+
+/**
+ * hal_srng_src_get_hp() - get head idx.
+ * @hal_ring_hdl: srng handle
+ *
+ * Return: head idx
+ */
+static inline
+uint32_t hal_srng_src_get_hp(hal_ring_handle_t hal_ring_hdl)
+{
+	struct hal_srng *srng = (struct hal_srng *)hal_ring_hdl;
+
+	return srng->u.src_ring.hp;
+}
+
+/**
+ * hal_srng_dst_get_tp() - get tail idx.
+ * @hal_ring_hdl: srng handle
+ *
+ * Return: head idx
+ */
+static inline
+uint32_t hal_srng_dst_get_tp(hal_ring_handle_t hal_ring_hdl)
+{
+	struct hal_srng *srng = (struct hal_srng *)hal_ring_hdl;
+
+	return srng->u.dst_ring.tp;
 }
 
 /**

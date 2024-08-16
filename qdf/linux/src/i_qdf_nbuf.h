@@ -40,6 +40,7 @@
 #include <qdf_util.h>
 #include <qdf_nbuf_frag.h>
 #include "qdf_time.h"
+#include <qdf_page_pool.h>
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0))
 /* Since commit
@@ -83,7 +84,8 @@ typedef struct flow_keys __qdf_flow_keys_t;
 
 #define QDF_NBUF_CB_TX_MAX_OS_FRAGS 1
 
-#define QDF_SHINFO_SIZE    SKB_DATA_ALIGN(sizeof(struct skb_shared_info))
+#define QDF_NBUF_ALIGN     SKB_DATA_ALIGN
+#define QDF_SHINFO_SIZE    QDF_NBUF_ALIGN(sizeof(struct skb_shared_info))
 
 /* QDF_NBUF_CB_TX_MAX_EXTRA_FRAGS -
  * max tx fragments added by the driver
@@ -128,6 +130,30 @@ typedef union {
 	uint64_t       u64;
 	qdf_dma_addr_t dma_addr;
 } qdf_paddr_t;
+
+/*
+ * struct flow_info - Structure used for defining flow
+ * @proto: Flow proto
+ * @src_port: Source port
+ * @dst_port: Destination port
+ * @src_ip: Source IP (IPv4/IPv6)
+ * @dst_ip: Destination IP (IPv4/IPv6)
+ * @flow_label: Flow label if IPv6 is used for src_ip/dst_ip
+ */
+struct qdf_flow_info {
+	uint8_t proto;
+	uint16_t src_port;
+	uint16_t dst_port;
+	union {
+		uint32_t ipv4_addr;
+		uint32_t ipv6_addr[4];
+	} src_ip;
+	union {
+		uint32_t ipv4_addr;
+		uint32_t ipv6_addr[4];
+	} dst_ip;
+	uint32_t flow_label;
+};
 
 typedef void (*qdf_nbuf_trace_update_t)(char *);
 typedef void (*qdf_nbuf_free_t)(__qdf_nbuf_t);
@@ -429,6 +455,32 @@ __qdf_nbuf_page_frag_alloc(__qdf_device_t osdev, size_t size, int reserve,
 			   const char *func, uint32_t line);
 
 /**
+ * __qdf_nbuf_page_pool_alloc() - Allocate nbuf from @pp kernel page pool
+ *
+ * @osdev: Device handle
+ * @size: Netbuf requested size
+ * @reserve: headroom to start with
+ * @align: Align
+ * @pp: Page pool reference
+ * @offset: Offset within the page pool page where buffer is allocated
+ * @func: Function name of the call site
+ * @line: line number of the call site
+ *
+ * This allocates a nbuf, aligns if needed and reserves some space in the front,
+ * since the reserve is done after alignment the reserve value if being
+ * unaligned will result in an unaligned address.
+ *
+ * It will call kernel page pool APIs for allocation of skb->head, prefer
+ * this API for buffers that are allocated and freed only once i.e., for
+ * reusable buffers.
+ *
+ * Return: nbuf or %NULL if no memory
+ */
+__qdf_nbuf_t
+__qdf_nbuf_page_pool_alloc(qdf_device_t osdev, size_t size, int reserve,
+			   int align, __qdf_page_pool_t pp, uint32_t *offset,
+			   const char *func, uint32_t line);
+/**
  * __qdf_nbuf_clone() - clone the nbuf (copy is readonly)
  * @nbuf: Pointer to network buffer
  *
@@ -673,6 +725,18 @@ bool __qdf_nbuf_data_is_ipv4_pkt(uint8_t *data);
  *         FALSE if not
  */
 bool __qdf_nbuf_data_is_ipv6_pkt(uint8_t *data);
+
+/**
+ *  __qdf_nbuf_get_ether_type() - Get the ether type
+ * @data: Pointer to network data buffer
+ *
+ * Get the ether type in case of 8021Q and 8021AD tag
+ * is present in L2 header, e.g for the returned ether type
+ * value, if IPV4 data ether type 0x0800, return 0x0008.
+ *
+ * Return ether type.
+ */
+uint16_t __qdf_nbuf_get_ether_type(uint8_t *data);
 
 /**
  * __qdf_nbuf_data_is_ipv4_mcast_pkt() - check if it is IPV4 multicast packet.
@@ -1254,6 +1318,14 @@ bool __qdf_nbuf_is_ipv4_last_fragment(struct sk_buff *skb);
  */
 bool __qdf_nbuf_is_ipv4_fragment(struct sk_buff *skb);
 
+/**
+ * __qdf_nbuf_sock_is_valid_fullsock() - Check if socket is a full socket
+ * @skb: Network buffer
+ *
+ * Return: true if it is a full socket
+ */
+bool __qdf_nbuf_sock_is_valid_fullsock(struct sk_buff *skb);
+
 bool __qdf_nbuf_is_ipv4_v6_pure_tcp_ack(struct sk_buff *skb);
 bool __qdf_nbuf_sock_is_ipv4_pkt(struct sk_buff *skb);
 bool __qdf_nbuf_sock_is_ipv6_pkt(struct sk_buff *skb);
@@ -1455,6 +1527,132 @@ static inline void __qdf_nbuf_set_tx_ip_cksum(struct sk_buff *skb)
 
 	iph = (struct iphdr *)(skb->data + QDF_NBUF_TRAC_IPV4_OFFSET);
 	ip_send_check(iph);
+}
+
+/**
+ * __qdf_nbuf_is_ipv4_first_fragment() - check if first fragmented packet
+ * @skb: Pointer to network buffer
+ *
+ * Return: true if first frag else false
+ */
+static inline bool __qdf_nbuf_is_ipv4_first_fragment(const struct sk_buff *skb)
+{
+	struct iphdr *iph;
+
+	if (skb->protocol == htons(ETH_P_IP)) {
+		iph = (struct iphdr *)((uint8_t *)(skb->data) +
+						QDF_NBUF_TRAC_IPV4_OFFSET);
+		if ((iph->frag_off & htons(IP_OFFSET)) == 0)
+			return true;
+	}
+	return false;
+}
+
+/**
+ * __qdf_nbuf_get_ipv4_flow_info() - get ipv4 flow info
+ * @skb: Pointer to network buffer
+ * @flow_info: pointer to qdf_flow_info
+ *
+ * Return: QDF_STATUS
+ */
+static inline
+QDF_STATUS __qdf_nbuf_get_ipv4_flow_info(const struct sk_buff *skb,
+					 struct qdf_flow_info *flow_info)
+{
+	struct iphdr *iph;
+	struct tcphdr *tcph;
+	unsigned int ihl;
+	struct udphdr *udph;
+
+	if (skb->protocol != htons(ETH_P_IP))
+		return QDF_STATUS_E_NOSUPPORT;
+
+	iph = (struct iphdr *)((uint8_t *)(skb->data) +
+					QDF_NBUF_TRAC_IPV4_OFFSET);
+	ihl = iph->ihl << 2;
+
+	flow_info->src_ip.ipv4_addr = ntohl(iph->saddr);
+	flow_info->dst_ip.ipv4_addr = ntohl(iph->daddr);
+	flow_info->proto = iph->protocol;
+
+	if (IPPROTO_UDP == iph->protocol) {
+		udph = (struct udphdr *)((uint8_t *)(skb->data) +
+			QDF_NBUF_TRAC_IPV4_OFFSET + ihl);
+		flow_info->src_port = ntohs(udph->source);
+		flow_info->dst_port = ntohs(udph->dest);
+		return QDF_STATUS_SUCCESS;
+	} else if (IPPROTO_TCP == iph->protocol) {
+		tcph = (struct tcphdr *)((uint8_t *)(skb->data) +
+			QDF_NBUF_TRAC_IPV4_OFFSET + ihl);
+		flow_info->src_port = ntohs(tcph->source);
+		flow_info->dst_port = ntohs(tcph->dest);
+		return QDF_STATUS_SUCCESS;
+	}
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+/**
+ * __qdf_nbuf_get_ipv6_flow_info() - get ipv6 flow info
+ * @skb: Pointer to network buffer
+ * @flow_info: pointer to qdf_flow_info
+ *
+ * Return: QDF_STATUS
+ */
+static inline
+QDF_STATUS __qdf_nbuf_get_ipv6_flow_info(const struct sk_buff *skb,
+					 struct qdf_flow_info *flow_info)
+{
+	struct ipv6hdr *ipv6h;
+	unsigned char offset;
+	unsigned int nexthdr;
+
+	if (skb->protocol == htons(ETH_P_IPV6)) {
+		ipv6h = (struct ipv6hdr *)skb_network_header(skb);
+
+		memcpy(&flow_info->src_ip.ipv6_addr, &ipv6h->saddr,
+		       sizeof(flow_info->src_ip.ipv6_addr));
+		memcpy(&flow_info->dst_ip.ipv6_addr, &ipv6h->daddr,
+		       sizeof(flow_info->dst_ip.ipv6_addr));
+
+		nexthdr = ipv6h->nexthdr;
+		offset = sizeof(struct ipv6hdr);
+
+		while (nexthdr != NEXTHDR_NONE) {
+			switch (nexthdr) {
+			case NEXTHDR_HOP:
+			case NEXTHDR_ROUTING:
+			case NEXTHDR_DEST:
+				nexthdr = ((struct ipv6_opt_hdr *)(skb_network_header(skb) +
+						offset))->nexthdr;
+				offset += (((struct ipv6_opt_hdr *)(skb_network_header(skb) +
+						offset))->hdrlen + 1) << 3;
+				break;
+			case IPPROTO_TCP:
+				if ((offset + sizeof(struct tcphdr)) > skb->len)
+					return QDF_STATUS_E_INVAL;
+
+				flow_info->src_port = ntohs(*(uint16_t *)
+					(skb_network_header(skb) + offset));
+				flow_info->dst_port = ntohs(*(uint16_t *)
+					(skb_network_header(skb) + offset + 2));
+				flow_info->proto = IPPROTO_TCP;
+				return QDF_STATUS_SUCCESS;
+			case IPPROTO_UDP:
+				if ((offset + sizeof(struct udphdr)) > skb->len)
+					return QDF_STATUS_E_INVAL;
+
+				flow_info->src_port = ntohs(*(uint16_t *)
+					(skb_network_header(skb) + offset));
+				flow_info->dst_port = ntohs(*(uint16_t *)
+					(skb_network_header(skb) + offset + 2));
+				flow_info->proto = IPPROTO_UDP;
+				return QDF_STATUS_SUCCESS;
+			default:
+				return QDF_STATUS_E_NOSUPPORT;
+			}
+		}
+	}
+	return QDF_STATUS_E_NOSUPPORT;
 }
 
 /**

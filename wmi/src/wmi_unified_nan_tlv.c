@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -997,6 +997,7 @@ static QDF_STATUS extract_ndp_confirm_tlv(wmi_unified_t wmi_handle,
 		rsp->ch[i].freq = event->ndp_channel_list[i].mhz;
 		rsp->ch[i].nss = event->nss_list[i];
 		ch_mode = WMI_GET_CHANNEL_MODE(&event->ndp_channel_list[i]);
+		rsp->ch[i].phymode = ch_mode;
 		rsp->ch[i].ch_width = wmi_get_ch_width_from_phy_mode(wmi_handle,
 								     ch_mode);
 		if (ndi_dbs) {
@@ -1224,6 +1225,7 @@ static QDF_STATUS extract_ndp_sch_update_tlv(wmi_unified_t wmi_handle,
 		ind->ch[i].freq = event->ndl_channel_list[i].mhz;
 		ind->ch[i].nss = event->nss_list[i];
 		ch_mode = WMI_GET_CHANNEL_MODE(&event->ndl_channel_list[i]);
+		ind->ch[i].phymode = ch_mode;
 		ind->ch[i].ch_width = wmi_get_ch_width_from_phy_mode(wmi_handle,
 								     ch_mode);
 		if (ndi_dbs) {

@@ -1569,5 +1569,15 @@ mgmt_rx_reo_validate_mlo_link_info(struct wlan_objmgr_psoc *psoc);
  */
 QDF_STATUS
 mgmt_rx_reo_release_frames(uint8_t mlo_grp_id, uint32_t link_bitmap);
+
+/**
+ * wlan_mgmt_rx_reo_is_fpmo_war_applicable - check if reo frame is
+ * invalid and timestamp is zero
+ * @mgmt_rx_reo_params: management rx reo parameters
+ *
+ * Return: True or False
+ */
+bool wlan_mgmt_rx_reo_is_fpmo_war_applicable(
+			struct mgmt_rx_reo_params *mgmt_rx_reo_params);
 #endif /* WLAN_MGMT_RX_REO_SUPPORT */
 #endif /* _WLAN_MGMT_TXRX_RX_REO_I_H */

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -101,6 +101,21 @@ static inline struct wlan_objmgr_vdev *
 wlan_mlo_mgr_link_switch_get_assoc_vdev(struct wlan_objmgr_vdev *vdev)
 {
 	return mlo_mgr_link_switch_get_assoc_vdev(vdev);
+}
+
+/**
+ * wlan_mlo_mgr_link_rej_set_mac_addr_resp() - Dispatcher API to call to
+ * notify about status of set mac addr request.
+ * @vdev: VDEV object manager
+ * @resp_status: Status of request
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS
+wlan_mlo_mgr_link_rej_set_mac_addr_resp(struct wlan_objmgr_vdev *vdev,
+					   uint8_t resp_status)
+{
+	return mlo_mgr_link_reject_set_mac_addr_resp(vdev, resp_status);
 }
 
 /**

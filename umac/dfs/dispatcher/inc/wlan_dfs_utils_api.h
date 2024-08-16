@@ -1031,27 +1031,42 @@ utils_dfs_convert_wlan_phymode_to_chwidth(enum wlan_phymode phymode);
  * frame, puncture the nol infected channels and formulate the radar puncture
  * bitmap.
  * @pdev: Pointer to struct wlan_objmgr_pdev
- * @phy_mode: Phymode of enum wlan_phymode.
  * @nol_ie_start_freq: Start frequency of the NOL infected channels
  * @nol_ie_bitmap : NOL IE bitmap
+ * @is_ignore_radar_puncture: Boolean Flag to check if radar should be ignored
  *
  * Return: Punctured radar bitmap
  */
-#if defined(WLAN_FEATURE_11BE) && defined(QCA_DFS_BW_EXPAND) && \
+#if defined(WLAN_FEATURE_11BE) && defined(QCA_DFS_BW_PUNCTURE) && \
 	defined(QCA_DFS_RCSA_SUPPORT)
 uint16_t
 utils_dfs_get_radar_bitmap_from_nolie(struct wlan_objmgr_pdev *pdev,
-				      enum wlan_phymode phy_mode,
 				      qdf_freq_t nol_ie_start_freq,
-				      uint8_t nol_ie_bitmap);
+				      uint8_t nol_ie_bitmap,
+				      bool *is_ignore_radar_puncture);
 #else
 static inline uint16_t
 utils_dfs_get_radar_bitmap_from_nolie(struct wlan_objmgr_pdev *pdev,
-				      enum wlan_phymode phy_mode,
 				      qdf_freq_t nol_ie_start_freq,
-				      uint8_t nol_ie_bitmap)
+				      uint8_t nol_ie_bitmap,
+				      bool *is_ignore_radar_puncture)
 {
 	return NO_SCHANS_PUNC;
 }
 #endif
+
+#if defined(WLAN_FEATURE_11BE) && defined(QCA_DFS_BW_PUNCTURE)
+/**
+ * utils_dfs_stop_punc_sm() - Stop the DFS Puncturing SM.
+ * @pdev: Pointer to struct wlan_objmgr_pdev
+ *
+ * Return: None.
+ */
+void utils_dfs_stop_punc_sm(struct wlan_objmgr_pdev *pdev);
+#else
+static inline void utils_dfs_stop_punc_sm(struct wlan_objmgr_pdev *pdev)
+{
+}
+#endif
+
 #endif /* _WLAN_DFS_UTILS_API_H_ */

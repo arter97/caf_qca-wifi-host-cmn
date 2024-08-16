@@ -188,10 +188,18 @@ QDF_STATUS cm_set_key(struct cnx_mgr *cm_ctx, bool unicast,
 		wep_key_idx = wlan_crypto_get_default_key_idx(cm_ctx->vdev,
 							      false);
 		crypto_key = wlan_crypto_get_key(cm_ctx->vdev, wep_key_idx);
+		if (!crypto_key) {
+			mlme_err("NULL crypto key at index=%d", wep_key_idx);
+			return QDF_STATUS_E_NULL_VALUE;
+		}
 		qdf_mem_copy(crypto_key->macaddr, bssid->bytes,
 			     QDF_MAC_ADDR_SIZE);
 	} else {
 		crypto_key = wlan_crypto_get_key(cm_ctx->vdev, key_idx);
+		if (!crypto_key) {
+			mlme_err("NULL crypto key at index=%d", key_idx);
+			return QDF_STATUS_E_NULL_VALUE;
+		}
 	}
 
 	return wlan_crypto_set_key_req(cm_ctx->vdev, crypto_key, (unicast ?
@@ -863,7 +871,8 @@ bool cm_is_cm_id_current_candidate_single_pmk(struct cnx_mgr *cm_ctx,
 		return is_single_pmk;
 
 	akm = wlan_crypto_get_param(cm_ctx->vdev, WLAN_CRYPTO_PARAM_KEY_MGMT);
-	if (!QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_SAE))
+	if (!(QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_SAE) ||
+	      QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY)))
 		return is_single_pmk;
 
 	cm_req_lock_acquire(cm_ctx);
@@ -1683,6 +1692,36 @@ cm_get_active_connect_req_param(struct wlan_objmgr_vdev *vdev,
 		*req = cm_req->connect_req.req;
 		qdf_mem_zero(&req->assoc_ie, sizeof(struct element_info));
 		qdf_mem_zero(&req->scan_ie, sizeof(struct element_info));
+		if (cm_req->connect_req.req.assoc_ie.len) {
+			req->assoc_ie.ptr =
+			   qdf_mem_malloc(cm_req->connect_req.req.assoc_ie.len);
+			if (!req->assoc_ie.ptr) {
+				status = QDF_STATUS_E_NOMEM;
+				break;
+			}
+			qdf_mem_copy(req->assoc_ie.ptr,
+				     cm_req->connect_req.req.assoc_ie.ptr,
+				     cm_req->connect_req.req.assoc_ie.len);
+			req->assoc_ie.len =
+				cm_req->connect_req.req.assoc_ie.len;
+		}
+
+		if (cm_req->connect_req.req.scan_ie.len) {
+			req->scan_ie.ptr =
+			   qdf_mem_malloc(cm_req->connect_req.req.scan_ie.len);
+			if (!req->scan_ie.ptr) {
+				qdf_mem_free(req->assoc_ie.ptr);
+				qdf_mem_zero(&req->assoc_ie,
+					     sizeof(struct element_info));
+				status = QDF_STATUS_E_NOMEM;
+				break;
+			}
+			qdf_mem_copy(req->scan_ie.ptr,
+				     cm_req->connect_req.req.scan_ie.ptr,
+				     cm_req->connect_req.req.scan_ie.len);
+			req->scan_ie.len = cm_req->connect_req.req.scan_ie.len;
+		}
+
 		status = QDF_STATUS_SUCCESS;
 		break;
 	}

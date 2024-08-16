@@ -482,6 +482,7 @@ void mlo_setup_init(uint8_t total_grp)
 	for (id = 0; id < total_grp; id++) {
 		mlo_ctx->setup_info[id].tsf_sync_enabled = true;
 		mlo_ctx->setup_info[id].wsi_stats_info_support = 0xff;
+		mlo_ctx->setup_info[id].wsi_remap_support = 0xff;
 
 		if (qdf_event_create(&mlo_ctx->setup_info[id].event) !=
 							QDF_STATUS_SUCCESS)
@@ -753,7 +754,8 @@ void mlo_setup_link_ready(struct wlan_objmgr_pdev *pdev, uint8_t grp_id)
 		tx_ops = wlan_psoc_get_lmac_if_txops(psoc);
 
 		/* For dynamic WSI remap validated REO post MLO SETUP */
-		if (!wlan_mlo_is_wsi_remap_in_progress(grp_id)) {
+		if (!wlan_mlo_is_wsi_remap_in_progress(grp_id) &&
+		    !mlo_ctx->dynamic_wsi_bypassed) {
 			status = wlan_mgmt_rx_reo_validate_mlo_link_info(psoc);
 			if (QDF_IS_STATUS_ERROR(status)) {
 				mlo_err("Failed to validate MLO HW link info");
@@ -1081,7 +1083,12 @@ static void mlo_send_teardown_req(struct wlan_objmgr_psoc *psoc,
 			}
 
 			if (!setup_info->trigger_umac_reset) {
-				if (psoc == wlan_pdev_get_psoc(temp_pdev)) {
+				/*
+				 * Set umac_reset for link_idx psoc that matches the current soc
+				 * or first chip that is going for teardown in WSI bypass.
+				 */
+				if (psoc == wlan_pdev_get_psoc(temp_pdev) ||
+				    wlan_mlo_is_wsi_remap_in_progress(grp_id)) {
 					umac_reset = 1;
 					setup_info->trigger_umac_reset = 1;
 				}

@@ -45,6 +45,7 @@
 #define WLAN_FC0_TYPE_DATA        2
 
 /* Definitions for management frame subtypes in Frame Control field */
+#define WLAN_FC0_STYPE_INVALID       -1
 #define WLAN_FC0_STYPE_ASSOC_REQ      0
 #define WLAN_FC0_STYPE_ASSOC_RESP     1
 #define WLAN_FC0_STYPE_REASSOC_REQ    2
@@ -82,6 +83,7 @@
 #define WLAN_FC0_STYPE_QOS_NULL           12
 #define WLAN_FC0_STYPE_QOS_CFPOLL         14
 #define WLAN_FC0_STYPE_QOS_CFACKPOLL      15
+
 
 /* Get Type/Subtype subfields in Frame Control field */
 #define WLAN_FC0_GET_TYPE(fc)    (((fc) & 0x0c) >> 2)
@@ -312,6 +314,13 @@ enum qcn_attribute_id {
 #define WLAN_RNR_TBTT_OFFSET_INVALID             255
 #define WLAN_TPE_IE_MIN_LEN                      2
 #define WLAN_MAX_NUM_TPE_IE                      8
+/* Number of max TX power elements supported plus size of Transmit Power
+ * Information element.
+ * For 320 MHz, the maximum number of subchannels is 16.
+ * And 2 extra octets for (1) Transmit Power Information Field and
+ * (2) Extension Transmit PSD Information Field
+ */
+#define WLAN_TPE_IE_MAX_LEN                      18
 
 /* BSS Parameters subield of RNR IE */
 
@@ -332,11 +341,6 @@ enum qcn_attribute_id {
 
 /* Wide band channel switch IE length */
 #define WLAN_WIDE_BW_CHAN_SWITCH_IE_LEN          3
-
-/* Number of max TX power elements supported plus size of Transmit Power
- * Information element.
- */
-#define WLAN_TPE_IE_MAX_LEN                      9
 
 #ifdef WLAN_FEATURE_11BE
 /* Bandwidth indication element IE maximum length */

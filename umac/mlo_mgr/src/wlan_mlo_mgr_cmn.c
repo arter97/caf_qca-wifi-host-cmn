@@ -575,9 +575,12 @@ bool wlan_mlo_is_wsi_remap_in_progress(uint8_t grp_id)
 	if (!mlo_ctx)
 		return false;
 
+	if (!mlo_ctx->total_grp)
+		return false;
+
 	if (grp_id >= mlo_ctx->total_grp) {
-		mlo_err("Invalid grp id %d, total no of groups %d",
-			grp_id, mlo_ctx->total_grp);
+		mlo_debug("Invalid grp id %d, total no of groups %d",
+			  grp_id, mlo_ctx->total_grp);
 		return false;
 	}
 
@@ -614,6 +617,39 @@ void mlo_get_ml_vdev_list(struct wlan_objmgr_vdev *vdev,
 						WLAN_MLO_MGR_ID);
 			if (QDF_IS_STATUS_ERROR(status))
 				break;
+			wlan_vdev_list[*vdev_count] =
+				dev_ctx->wlan_vdev_list[i];
+			(*vdev_count) += 1;
+		}
+	}
+	mlo_dev_lock_release(dev_ctx);
+}
+
+void mlo_get_partner_vdev_list(struct wlan_objmgr_vdev *vdev,
+			       uint16_t *vdev_count,
+			       struct wlan_objmgr_vdev **wlan_vdev_list)
+{
+	struct wlan_mlo_dev_context *dev_ctx;
+	int i;
+	QDF_STATUS status;
+
+	*vdev_count = 0;
+
+	if (!vdev || !vdev->mlo_dev_ctx) {
+		mlo_err("Invalid input");
+		return;
+	}
+
+	dev_ctx = vdev->mlo_dev_ctx;
+
+	mlo_dev_lock_acquire(dev_ctx);
+	for (i = 0; i < QDF_ARRAY_SIZE(dev_ctx->wlan_vdev_list); i++) {
+		if (dev_ctx->wlan_vdev_list[i]) {
+			status = wlan_objmgr_vdev_try_get_ref(
+						dev_ctx->wlan_vdev_list[i],
+						WLAN_MLO_MGR_ID);
+			if (QDF_IS_STATUS_ERROR(status))
+				continue;
 			wlan_vdev_list[*vdev_count] =
 				dev_ctx->wlan_vdev_list[i];
 			(*vdev_count) += 1;

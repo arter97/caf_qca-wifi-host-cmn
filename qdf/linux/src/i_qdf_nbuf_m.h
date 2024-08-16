@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -27,6 +27,9 @@
 
 #ifndef _I_QDF_NBUF_M_H
 #define _I_QDF_NBUF_M_H
+
+#include "i_qdf_page_pool.h"
+
 /**
  * struct qdf_nbuf_cb - network buffer control block contents (skb->cb)
  *                    - data passed between layers of the driver.
@@ -236,8 +239,10 @@ struct qdf_nbuf_cb {
 						} tcp;
 						struct {
 							uint32_t mpdu_seq:12,
-								 reserved:20;
-							uint32_t reserved1;
+								 rx_flow_id:8,
+								 track_flow:1,
+								 reserved:11;
+							uint32_t rx_flow_mdata;
 						} ext;
 					} dp_ext;
 					union {
@@ -578,6 +583,15 @@ QDF_COMPILE_TIME_ASSERT(qdf_nbuf_cb_size,
 #define QDF_NBUF_CB_RX_MPDU_SEQ_NUM(skb) \
 	(((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.dev.priv_cb_m. \
 	 dp_ext.ext.mpdu_seq)
+#define QDF_NBUF_CB_EXT_RX_FLOW_ID(skb) \
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.dev.priv_cb_m. \
+	 dp_ext.ext.rx_flow_id)
+#define QDF_NBUF_CB_RX_TRACK_FLOW(skb) \
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.dev.priv_cb_m. \
+	 dp_ext.ext.track_flow)
+#define QDF_NBUF_CB_RX_FLOW_METADATA(skb) \
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.dev.priv_cb_m. \
+	 dp_ext.ext.rx_flow_mdata)
 
 #define QDF_NBUF_CB_RX_LRO_CTX(skb) \
 	(((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.dev.priv_cb_m.lro_ctx)
@@ -760,6 +774,13 @@ __qdf_nbuf_unmap_nbytes_single(qdf_device_t osdev, struct sk_buff *buf,
 			       qdf_dma_dir_t dir, int nbytes)
 {
 	qdf_dma_addr_t paddr = QDF_NBUF_CB_PADDR(buf);
+
+	/* Sync the DMA buffer for CPU instead of unmap
+	 * for page pool buffers since these are recyclable.
+	 */
+	if (__qdf_is_pp_nbuf(buf))
+		return dma_sync_single_for_cpu(osdev->dev, paddr, nbytes,
+					       __qdf_dma_dir_to_os(dir));
 
 	if (qdf_likely(paddr)) {
 		__qdf_record_nbuf_nbytes(

@@ -516,6 +516,8 @@ enum wlan_mlme_cfg_id;
  * @target_if_mlo_teardown_req: MLO teardown
  * @vdev_send_set_mac_addr: API to send set MAC address request to FW
  * @vdev_peer_set_param_send: API to send peer param to FW
+ * @sap_suspend_param_send: API to send SAP vdev suspend param
+ * @is_sap_suspend_support_enabled: API to check SAP vdev suspend support
  */
 struct wlan_lmac_if_mlme_tx_ops {
 	uint32_t (*get_wifi_iface_id) (struct wlan_objmgr_pdev *pdev);
@@ -620,6 +622,12 @@ QDF_STATUS (*vdev_send_set_mac_addr)(struct qdf_mac_addr mac_addr,
 					       uint8_t *peer_mac_addr,
 					       uint32_t param_id,
 					       uint32_t param_value);
+	QDF_STATUS (*sap_suspend_param_send)(
+				struct wlan_objmgr_vdev *vdev,
+				struct vdev_suspend_params *param);
+	bool (*is_sap_suspend_support_enabled)
+				(struct wlan_objmgr_vdev *vdev);
+
 };
 
 /**
@@ -1678,6 +1686,11 @@ struct wlan_lmac_if_mlo_tx_ops {
 				struct mlo_wsi_link_stats *param);
 };
 
+typedef void (*trace_link_set_active_cb_type)(
+			struct wlan_objmgr_psoc *psoc,
+			struct mlo_link_set_active_param *cmd,
+			struct mlo_link_set_active_resp *event);
+
 /**
  * struct wlan_lmac_if_mlo_rx_ops - defines southbound rx callbacks for mlo
  * @process_link_set_active_resp: function pointer to rx FW events
@@ -1685,10 +1698,12 @@ struct wlan_lmac_if_mlo_tx_ops {
  * @mlo_link_removal_handler: function pointer for MLO link removal handler
  * @process_mlo_link_state_info_event: function pointer for mlo link state
  * @mlo_link_disable_request_handler: function ptr for mlo link disable request
+ * @mlo_3_link_tlt_selection_handler: function pointer for mlo tlt selection
  * @mlo_link_switch_request_handler: Handler function pointer to deliver link
  * switch request params from FW to host.
  * @mlo_link_state_switch_event_handler: Function pointer to handle link state
  * switch event
+ * @trace_link_set_active_cb: callback to trace the set link command and event
  */
 struct wlan_lmac_if_mlo_rx_ops {
 	QDF_STATUS
@@ -1706,6 +1721,11 @@ struct wlan_lmac_if_mlo_rx_ops {
 	QDF_STATUS (*mlo_link_disable_request_handler)(
 			struct wlan_objmgr_psoc *psoc,
 			void *evt_params);
+#ifdef WLAN_FEATURE_11BE_MLO_3_LINK_TX
+	QDF_STATUS (*mlo_3_link_tlt_selection_handler)(
+			struct wlan_objmgr_psoc *psoc,
+			struct mlo_tlt_selection_evt_params *evt_params);
+#endif
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 	QDF_STATUS
 	(*mlo_link_switch_request_handler)(struct wlan_objmgr_psoc *psoc,
@@ -1714,6 +1734,7 @@ struct wlan_lmac_if_mlo_rx_ops {
 	(*mlo_link_state_switch_event_handler)(struct wlan_objmgr_psoc *psoc,
 					       struct mlo_link_switch_state_info *info);
 #endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
+	trace_link_set_active_cb_type trace_link_set_active_cb;
 };
 #endif
 
@@ -2096,6 +2117,8 @@ struct wlan_lmac_if_mgmt_txrx_rx_ops {
  * @reg_get_eirp_preferred_support:
  * @reg_r2p_table_update_response_handler: function pointer to handle
  *		rate2power update response from fw.
+ * @reg_is_5dot9_ghz_supported: Function pointer to get the 5.9GHz support
+ * information.
  */
 struct wlan_lmac_if_reg_rx_ops {
 	QDF_STATUS (*master_list_handler)(struct cur_regulatory_info
@@ -2190,6 +2213,7 @@ struct wlan_lmac_if_reg_rx_ops {
 	QDF_STATUS (*reg_r2p_table_update_response_handler)(
 			struct wlan_objmgr_psoc *psoc,
 			uint32_t pdev_id);
+	bool (*reg_is_5dot9_ghz_supported)(struct wlan_objmgr_psoc *psoc);
 };
 
 #ifdef CONVERGED_P2P_ENABLE

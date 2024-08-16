@@ -376,6 +376,7 @@ struct mlo_wsi_info {
  * @last_mlo_peer_id: Previously allocated ML peer ID
  * @setup_info: Pointer to MLO setup_info of all groups
  * @total_grp: Total number of MLO groups
+ * @dynamic_wsi_bypassed: Dynamic bypassed performed
  * @tsf_sync_enabled: MLO TSF sync is enabled at FW or not
  * @mlme_ops: MLO MLME callback function pointers
  * @osif_ops: MLO to OSIF callback function pointers
@@ -404,6 +405,7 @@ struct mlo_mgr_context {
 #ifdef WLAN_MLO_MULTI_CHIP
 	struct mlo_setup_info *setup_info;
 	uint8_t total_grp;
+	bool dynamic_wsi_bypassed;
 #elif defined(WLAN_FEATURE_11BE_MLO) && !defined(WLAN_MLO_MULTI_CHIP)
 	bool tsf_sync_enabled;
 #endif
@@ -553,10 +555,14 @@ struct ttlm_comp_priv {
  * struct ttlm_rsp_info - TTLM response frame info
  * @t2lm_info: TTLM mapping
  * @t2lm_resp_type: TTLM status corresponds to TTL response frame
+ * @token: TTLM request dialog token
+ * @dest_addr: Action resp destination address
  */
 struct ttlm_rsp_info {
 	struct wlan_t2lm_info *t2lm_info;
 	enum wlan_t2lm_resp_frm_type t2lm_resp_type;
+	uint8_t token;
+	struct qdf_mac_addr dest_addr;
 };
 
 /**
@@ -780,6 +786,36 @@ struct wlan_link_force_context {
 		disallow_mode_link_bmap[MAX_DISALLOW_BMAP_COMB];
 };
 
+/**
+ * struct wlan_rejected_links_info - Data Structure to store
+ * rejected links info
+ * @num_rej_link_cnt: Number of rejected links
+ * @rejected_link_ids: Rejected Link Ids
+ */
+struct wlan_rejected_links_info {
+	uint8_t num_rej_link_cnt;
+	uint8_t rejected_link_ids[WLAN_UMAC_MLO_MAX_VDEVS];
+};
+
+/**
+ * struct wlan_mlo_link_reject_req - Data Structure for link reject
+ * request
+ * @vdev_id: Vdev id
+ * @rej_ieee_link_id: Rejected link id of the ML link
+ * @rej_ap_link_addr: Rejected AP link address
+ * @acc_ieee_link_id: Accepted Link id of the ML link.
+ * @acc_ap_link_addr: Accepted AP link address
+ * @link_reject_update_in_progress: Link reject update in progress.
+ */
+struct wlan_mlo_link_reject_req {
+	uint8_t vdev_id;
+	uint8_t rej_ieee_link_id;
+	struct qdf_mac_addr rej_ap_link_addr;
+	uint8_t acc_ieee_link_id;
+	struct qdf_mac_addr acc_ap_link_addr;
+	bool link_reject_update_in_progress;
+};
+
 #if defined(UMAC_SUPPORT_MLNAWDS) || defined(MESH_MODE_SUPPORT)
 /**
  * struct mlnawds_config - MLO NAWDS configuration
@@ -813,6 +849,7 @@ struct mlnawds_config {
  * @ap_link_addr: Associated link BSSID
  * @link_chan_info: Associated link channel info
  * @is_link_active: link state
+ * @link_status_code: wlan status code for link
  */
 struct mlo_link_info {
 	struct qdf_mac_addr link_addr;
@@ -832,6 +869,7 @@ struct mlo_link_info {
 	struct wlan_channel *link_chan_info;
 #endif
 	bool is_link_active;
+	enum wlan_status_code link_status_code;
 };
 
 /**
@@ -887,10 +925,16 @@ struct emlsr_capability {
 /**
  * struct wlan_mlo_sta_assoc_pending_list - MLO sta assoc pending list entry
  * @peer_list: MLO peer list
+ * @is_timer_started: Indicate timer is started to remove peer mld mac from list
+ * @force_remove: To clear all peer mld mac's from the list
+ * @rem_peer_mld_mac: timer trigger parameter
  * @list_lock: lock to access members of structure
  */
 struct wlan_mlo_sta_assoc_pending_list {
 	qdf_list_t peer_list;
+	bool is_timer_started;
+	bool force_remove;
+	qdf_timer_t rem_peer_mld_mac;
 	qdf_spinlock_t list_lock;
 };
 
@@ -1023,6 +1067,7 @@ struct wlan_mlo_link_mac_update {
  * @wlan_bridge_vdev_list: list of bridge vdevs associated with this MLO
  * @wlan_bridge_vdev_count: number of elements in the bridge vdev list
  * @bridge_sta_ctx: bridge sta context
+ * @br_pdev_list: pdev used for bridge vap creation in the MLD
  * @wlan_vdev_count: number of elements in the vdev list
  * @mlo_peer_list: list peers in this MLO connection
  * @wlan_max_mlo_peer_count: peer count across the links of specific MLO
@@ -1050,6 +1095,7 @@ struct wlan_mlo_dev_context {
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 	struct wlan_objmgr_vdev *wlan_bridge_vdev_list[WLAN_UMAC_MLO_MAX_BRIDGE_VDEVS];
 	struct wlan_mlo_bridge_sta *bridge_sta_ctx;
+	struct wlan_objmgr_pdev *br_pdev_list[MLO_MAX_BRIDGE_LINKS_PER_MLD];
 #endif
 	uint16_t wlan_vdev_count;
 	uint16_t wlan_bridge_vdev_count;
@@ -1241,6 +1287,7 @@ struct ttlm_state_sm {
  * @primary_umac_migration_in_progress: flag to indicate primary umac migration
  * in progress
  * @ttlm_sm: TTLM state machine
+ * @ttlm_request_timer: TTLM request timer
  * @peer_ptqm_migrate_ctx: PTQM migration peer context
  */
 struct wlan_mlo_peer_context {
@@ -1287,6 +1334,7 @@ struct wlan_mlo_peer_context {
 	bool primary_umac_migration_in_progress;
 #ifdef WLAN_FEATURE_11BE_MLO_TTLM
 	struct ttlm_state_sm ttlm_sm;
+	qdf_mc_timer_t ttlm_request_timer;
 #endif
 #ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
 	struct ptqm_migrate_peer_context *peer_ptqm_migrate_ctx;
@@ -1423,6 +1471,7 @@ struct wlan_mlo_bridge_sta {
  * @mlo_mlme_ext_sta_op_class:
  * @mlo_mlme_ext_peer_reassoc: Callback to process reassoc
  * @mlo_mlme_ext_connect_get_partner_info: Callback to get MLO partner info
+ * @mlo_mlme_ext_teardown_tdls: Callback to teardown TDLS
  */
 struct mlo_mlme_ext_ops {
 	QDF_STATUS (*mlo_mlme_ext_validate_conn_req)(
@@ -1468,6 +1517,7 @@ struct mlo_mlme_ext_ops {
 				const struct cfg80211_connect_params *req,
 				struct mlo_partner_info *partner_info);
 #endif
+	QDF_STATUS (*mlo_mlme_ext_teardown_tdls)(struct wlan_objmgr_psoc *psoc);
 };
 
 /*
@@ -1475,6 +1525,10 @@ struct mlo_mlme_ext_ops {
  * @mlo_mgr_osif_update_bss_info: Callback to update each link connection info.
  * @mlo_mgr_osif_update_mac_addr: Callback to notify MAC addr update complete
  *                                from old link id to new link id for the vdev.
+ * @mlo_roam_osif_update_mac_addr: Callback to notify MAC addr update during
+				   roam sync for the vdev.
+ * @mlo_mgr_osif_link_rej_update_mac_addr: Callback to notify MAC addr update
+ *                                for link rejection.
  * @mlo_mgr_osif_link_switch_notification: Notify OSIF on start of link switch
  */
 struct mlo_osif_ext_ops {
@@ -1486,10 +1540,17 @@ struct mlo_osif_ext_ops {
 	QDF_STATUS (*mlo_mgr_osif_update_mac_addr)(int32_t ieee_old_link_id,
 						   int32_t ieee_new_link_id,
 						   uint8_t vdev_id);
+	QDF_STATUS (*mlo_roam_osif_update_mac_addr)(struct wlan_objmgr_vdev *vdev,
+						    struct qdf_mac_addr *old_self_mac,
+						    struct qdf_mac_addr *new_self_mac);
+
+	QDF_STATUS (*mlo_mgr_osif_link_rej_update_mac_addr)(uint8_t ieee_rej_link_id,
+				     uint8_t ieee_acc_link_id, uint8_t vdev_id);
 
 	QDF_STATUS
 	(*mlo_mgr_osif_link_switch_notification)(struct wlan_objmgr_vdev *vdev,
-						 uint8_t non_trans_vdev_id);
+						 uint8_t non_trans_vdev_id,
+						 bool is_start_notify);
 };
 
 /* maximum size of vdev bitmap array for MLO link set active command */
@@ -1763,6 +1824,21 @@ struct mlo_link_disable_request_evt_params {
 	uint32_t link_id_bitmap;
 };
 
+#define MAX_INDEX_FOR_LINK_PRIORITY_BITMAP 5
+#define NUM_TID_PER_AC 2
+/**
+ * struct mlo_tlt_selection_evt_params - MLO tlt selection
+ * request params
+ * @mld_addr: mld address
+ * @link_priority: link priority order based on hw chip id
+ * @link_bmap: Link priority bitmap
+ */
+struct mlo_tlt_selection_evt_params {
+	struct qdf_mac_addr mld_addr;
+	uint32_t link_priority[MAX_INDEX_FOR_LINK_PRIORITY_BITMAP];
+	uint32_t link_bmap[NUM_TID_PER_AC];
+};
+
 #define MAX_LINK_SWITCH_TLV 5
 /**
  * struct mlo_link_switch_params - Structure to hold link State switch
@@ -1883,11 +1959,13 @@ struct peer_entry_ptqm_migrate_event_params {
 /**
  * struct wlan_mlo_sta_entry - MLO sta entry
  * @mac_node: QDF list mac_node member
+ * @time: To indicate when the peer mld mac is added to list
  * @peer_mld_addr: MLO peer MAC address
  */
 
 struct wlan_mlo_sta_entry {
 	qdf_list_node_t mac_node;
+	qdf_time_t time;
 	struct qdf_mac_addr peer_mld_addr;
 };
 

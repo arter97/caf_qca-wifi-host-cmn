@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -425,6 +425,7 @@ void hif_ahb_disable_bus(struct hif_softc *scn)
 			mem_pa_size = memres->end - memres->start + 1;
 
 		if (tgt_info->target_type == TARGET_TYPE_QCA5018 ||
+		    tgt_info->target_type == TARGET_TYPE_QCA5424 ||
 		    tgt_info->target_type == TARGET_TYPE_QCA5332) {
 			iounmap(sc->mem_ce);
 			sc->mem_ce = NULL;
@@ -497,12 +498,14 @@ QDF_STATUS hif_ahb_enable_bus(struct hif_softc *ol_sc,
 
 	if (target_type == TARGET_TYPE_QCN6122 ||
 	    target_type == TARGET_TYPE_QCN9160 ||
+	    target_type == TARGET_TYPE_QCA5424 ||
 	    target_type == TARGET_TYPE_QCN6432) {
 		hif_ahb_get_bar_addr_pld(sc, dev);
 	}
 
 	/* 11BE SoC chipsets Need to call this function to get cmem addr */
 	if (target_type == TARGET_TYPE_QCA5332 ||
+	    target_type == TARGET_TYPE_QCA5424 ||
 	    target_type == TARGET_TYPE_QCN6432)
 		hif_ahb_get_soc_cmem_info_pld(sc, dev);
 
@@ -576,7 +579,8 @@ QDF_STATUS hif_ahb_enable_bus(struct hif_softc *ol_sc,
 	 * Allocate separate I/O remap to access CE registers.
 	 */
 	if (tgt_info->target_type == TARGET_TYPE_QCA5018 ||
-	    tgt_info->target_type == TARGET_TYPE_QCA5332) {
+	    tgt_info->target_type == TARGET_TYPE_QCA5332 ||
+	    tgt_info->target_type == TARGET_TYPE_QCA5424) {
 		struct hif_softc *scn = HIF_GET_SOFTC(sc);
 
 		sc->mem_ce = qdf_ioremap(HOST_CE_ADDRESS, HOST_CE_SIZE);
@@ -588,7 +592,8 @@ QDF_STATUS hif_ahb_enable_bus(struct hif_softc *ol_sc,
 		pld_set_bar_addr(dev, sc->mem_ce);
 	}
 
-	if (tgt_info->target_type == TARGET_TYPE_QCA5332) {
+	if (tgt_info->target_type == TARGET_TYPE_QCA5332 ||
+	    tgt_info->target_type == TARGET_TYPE_QCA5424) {
 		struct hif_softc *scn = HIF_GET_SOFTC(sc);
 
 		/*
@@ -709,6 +714,7 @@ void hif_ahb_irq_enable(struct hif_softc *scn, int ce_id)
 			    tgt_info->target_type == TARGET_TYPE_QCA8074V2 ||
 			    tgt_info->target_type == TARGET_TYPE_QCA9574 ||
 			    tgt_info->target_type == TARGET_TYPE_QCA5332 ||
+			    tgt_info->target_type == TARGET_TYPE_QCA5424 ||
 			    tgt_info->target_type == TARGET_TYPE_QCA5018 ||
 			    tgt_info->target_type == TARGET_TYPE_QCA6018) {
 				/* Enable destination ring interrupts for
@@ -763,6 +769,7 @@ void hif_ahb_irq_disable(struct hif_softc *scn, int ce_id)
 			    tgt_info->target_type == TARGET_TYPE_QCA8074V2 ||
 			    tgt_info->target_type == TARGET_TYPE_QCA9574 ||
 			    tgt_info->target_type == TARGET_TYPE_QCA5332 ||
+			    tgt_info->target_type == TARGET_TYPE_QCA5424 ||
 			    tgt_info->target_type == TARGET_TYPE_QCA5018 ||
 			    tgt_info->target_type == TARGET_TYPE_QCA6018) {
 				/* Disable destination ring interrupts for
@@ -834,6 +841,7 @@ void hif_display_ahb_irq_regs(struct hif_softc *scn)
 
 	if (tgt_info->target_type == TARGET_TYPE_QCN6122 ||
 	    tgt_info->target_type == TARGET_TYPE_QCN9160 ||
+	    tgt_info->target_type == TARGET_TYPE_QCA5424 ||
 	    tgt_info->target_type == TARGET_TYPE_QCN6432) {
 		return;
 	}
@@ -848,6 +856,7 @@ void hif_display_ahb_irq_regs(struct hif_softc *scn)
 		    tgt_info->target_type == TARGET_TYPE_QCA8074V2 ||
 		    tgt_info->target_type == TARGET_TYPE_QCA9574 ||
 		    tgt_info->target_type == TARGET_TYPE_QCA5332 ||
+		    tgt_info->target_type == TARGET_TYPE_QCA5424 ||
 		    tgt_info->target_type == TARGET_TYPE_QCA5018 ||
 		    tgt_info->target_type == TARGET_TYPE_QCA6018) {
 			regval = hif_read32_mb(scn, mem +

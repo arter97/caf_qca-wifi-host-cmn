@@ -44,6 +44,7 @@
 #include <qdf_crypto.h>
 #include <linux/igmp.h>
 #include <net/mld.h>
+#include <qdf_page_pool.h>
 
 #if defined(FEATURE_TSO)
 #include <net/ipv6.h>
@@ -162,17 +163,7 @@ static inline uint8_t __qdf_nbuf_get_ip_offset(uint8_t *data)
 	return QDF_NBUF_TRAC_IP_OFFSET;
 }
 
-/**
- *  __qdf_nbuf_get_ether_type() - Get the ether type
- * @data: Pointer to network data buffer
- *
- * Get the ether type in case of 8021Q and 8021AD tag
- * is present in L2 header, e.g for the returned ether type
- * value, if IPV4 data ether type 0x0800, return 0x0008.
- *
- * Return ether type.
- */
-static inline uint16_t __qdf_nbuf_get_ether_type(uint8_t *data)
+uint16_t __qdf_nbuf_get_ether_type(uint8_t *data)
 {
 	uint16_t ether_type;
 
@@ -188,6 +179,8 @@ static inline uint16_t __qdf_nbuf_get_ether_type(uint8_t *data)
 
 	return ether_type;
 }
+
+qdf_export_symbol(__qdf_nbuf_get_ether_type);
 
 void qdf_nbuf_tx_desc_count_display(void)
 {
@@ -792,6 +785,55 @@ skb_alloc:
 
 qdf_export_symbol(__qdf_nbuf_page_frag_alloc);
 
+#ifdef DP_FEATURE_RX_BUFFER_RECYCLE
+struct sk_buff *
+__qdf_nbuf_page_pool_alloc(qdf_device_t osdev, size_t size, int reserve,
+			   int align, __qdf_page_pool_t pp, uint32_t *offset,
+			   const char *func, uint32_t line)
+{
+	struct sk_buff *skb;
+	struct page *page;
+
+	if (align)
+		size += (align - 1);
+
+	size = SKB_DATA_ALIGN(size) +
+		SKB_DATA_ALIGN(sizeof(struct skb_shared_info));
+
+	*offset = 0;
+
+	page = qdf_page_pool_alloc_frag(pp, offset, size);
+	if (!page) {
+		qdf_rl_nofl_err("failed to alloc page pool buffer %zuB @ %s:%d",
+				size, func, line);
+		return NULL;
+	}
+
+	skb = napi_build_skb(page_address(page) + *offset, size);
+	if (!skb) {
+		qdf_page_pool_put_page(pp, page, false);
+		qdf_rl_nofl_err("failed to build skb %zuB @ %s:%d",
+				size, func, line);
+		return NULL;
+	}
+
+	skb_mark_for_recycle(skb);
+	qdf_nbuf_set_defaults(skb, align, reserve);
+
+	return skb;
+}
+#else
+struct sk_buff *
+__qdf_nbuf_page_pool_alloc(qdf_device_t osdev, size_t size, int reserve,
+			   int align, __qdf_page_pool_t pp, uint32_t *offset,
+			   const char *func, uint32_t line)
+{
+	return NULL;
+}
+#endif
+
+qdf_export_symbol(__qdf_nbuf_page_pool_alloc);
+
 #ifdef QCA_DP_TX_NBUF_LIST_FREE
 void
 __qdf_nbuf_dev_kfree_list(__qdf_nbuf_queue_head_t *nbuf_queue_head)
@@ -1245,6 +1287,25 @@ void qdf_nbuf_unmap_nbytes_single_debug(qdf_device_t osdev,
 
 qdf_export_symbol(qdf_nbuf_unmap_nbytes_single_debug);
 
+QDF_STATUS qdf_nbuf_track_map_single_debug(qdf_device_t osdev, qdf_nbuf_t buf,
+					   qdf_dma_dir_t dir, const char *func,
+					   uint32_t line)
+{
+	QDF_STATUS status;
+
+	status = qdf_nbuf_track_map(buf, func, line);
+	if (QDF_IS_STATUS_ERROR(status))
+		return status;
+
+	if (!is_initial_mem_debug_disabled)
+		qdf_nbuf_history_add(buf, func, line, QDF_NBUF_MAP);
+	qdf_net_buf_debug_update_map_node(buf, func, line);
+
+	return status;
+}
+
+qdf_export_symbol(qdf_nbuf_track_map_single_debug);
+
 void qdf_nbuf_unmap_nbytes_single_paddr_debug(qdf_device_t osdev,
 					      qdf_nbuf_t buf,
 					      qdf_dma_addr_t phy_addr,
@@ -1491,6 +1552,8 @@ __qdf_nbuf_data_get_dhcp_subtype(uint8_t *data)
 
 	return subtype;
 }
+
+qdf_export_symbol(__qdf_nbuf_data_get_dhcp_subtype);
 
 #define EAPOL_WPA_KEY_INFO_KEY_TYPE BIT(3)
 #define EAPOL_WPA_KEY_INFO_ACK BIT(7)
@@ -1822,6 +1885,8 @@ __qdf_nbuf_data_get_ipv4_proto(uint8_t *data)
 	return proto_type;
 }
 
+qdf_export_symbol(__qdf_nbuf_data_get_ipv4_proto);
+
 uint8_t
 __qdf_nbuf_data_get_ipv6_tc(uint8_t *data)
 {
@@ -1863,6 +1928,16 @@ bool __qdf_nbuf_data_is_ipv4_pkt(uint8_t *data)
 		return false;
 }
 qdf_export_symbol(__qdf_nbuf_data_is_ipv4_pkt);
+
+bool __qdf_nbuf_sock_is_valid_fullsock(struct sk_buff *skb)
+{
+	if (skb->sk && sk_fullsock(skb->sk))
+		return true;
+
+	return false;
+}
+
+qdf_export_symbol(__qdf_nbuf_sock_is_valid_fullsock);
 
 /**
  * __qdf_nbuf_sock_is_ipv4_pkt() - check if it is a ipv4 sock
@@ -2362,6 +2437,8 @@ bool __qdf_nbuf_data_is_dns_query(uint8_t *data)
 	return false;
 }
 
+qdf_export_symbol(__qdf_nbuf_data_is_dns_query);
+
 bool __qdf_nbuf_data_is_dns_response(uint8_t *data)
 {
 	uint16_t op_code;
@@ -2380,6 +2457,8 @@ bool __qdf_nbuf_data_is_dns_response(uint8_t *data)
 	}
 	return false;
 }
+
+qdf_export_symbol(__qdf_nbuf_data_is_dns_response);
 
 bool __qdf_nbuf_data_is_tcp_fin(uint8_t *data)
 {
@@ -2488,6 +2567,8 @@ bool __qdf_nbuf_data_is_icmpv4_req(uint8_t *data)
 	return false;
 }
 
+qdf_export_symbol(__qdf_nbuf_data_is_icmpv4_req);
+
 bool __qdf_nbuf_data_is_icmpv4_rsp(uint8_t *data)
 {
 	uint8_t op_code;
@@ -2499,6 +2580,8 @@ bool __qdf_nbuf_data_is_icmpv4_rsp(uint8_t *data)
 		return true;
 	return false;
 }
+
+qdf_export_symbol(__qdf_nbuf_data_is_icmpv4_rsp);
 
 bool __qdf_nbuf_data_is_icmpv4_redirect(uint8_t *data)
 {
@@ -2617,8 +2700,9 @@ bool __qdf_nbuf_data_is_ipv4_mcast_pkt(uint8_t *data)
 		 * Check first word of the IPV4 address and if it is
 		 * equal to 0xE then it represents multicast IP.
 		 */
-		if ((*dst_addr & QDF_NBUF_TRAC_IPV4_ADDR_BCAST_MASK) ==
-				QDF_NBUF_TRAC_IPV4_ADDR_MCAST_MASK)
+		if ((*dst_addr &
+		     QDF_SWAP_U32(QDF_NBUF_TRAC_IPV4_ADDR_BCAST_MASK)) ==
+		     QDF_SWAP_U32(QDF_NBUF_TRAC_IPV4_ADDR_MCAST_MASK))
 			return true;
 		else
 			return false;
@@ -2636,10 +2720,10 @@ bool __qdf_nbuf_data_is_ipv6_mcast_pkt(uint8_t *data)
 
 		/*
 		 * Check first byte of the IP address and if it
-		 * 0xFF00 then it is a IPV6 mcast packet.
+		 * 0xFF then it is a IPV6 mcast packet.
 		 */
-		if (*dst_addr ==
-		     QDF_SWAP_U16(QDF_NBUF_TRAC_IPV6_DEST_ADDR))
+		if ((*dst_addr & QDF_SWAP_U16(QDF_NBUF_TRAC_IPV6_DEST_ADDR)) ==
+		    QDF_SWAP_U16(QDF_NBUF_TRAC_IPV6_DEST_ADDR))
 			return true;
 		else
 			return false;
@@ -3981,6 +4065,33 @@ qdf_nbuf_dev_kfree_list_debug(__qdf_nbuf_queue_head_t *nbuf_queue_head,
 }
 
 qdf_export_symbol(qdf_nbuf_dev_kfree_list_debug);
+
+qdf_nbuf_t
+qdf_nbuf_page_pool_alloc_debug(qdf_device_t osdev, qdf_size_t size, int reserve,
+			       int align, qdf_page_pool_t pp, uint32_t *offset,
+			       const char *func, uint32_t line)
+{
+	qdf_nbuf_t nbuf;
+
+	if (is_initial_mem_debug_disabled)
+		return __qdf_nbuf_page_pool_alloc(osdev, size, reserve, align,
+						  pp, offset, func, line);
+
+	nbuf = __qdf_nbuf_page_pool_alloc(osdev, size, reserve, align,
+					  pp, offset, func, line);
+
+	/* Store SKB in internal QDF tracking table */
+	if (qdf_likely(nbuf)) {
+		qdf_net_buf_debug_add_node(nbuf, size, func, line);
+		qdf_nbuf_history_add(nbuf, func, line, QDF_NBUF_ALLOC);
+	} else {
+		qdf_nbuf_history_add(nbuf, func, line, QDF_NBUF_ALLOC_FAILURE);
+	}
+
+	return nbuf;
+}
+
+qdf_export_symbol(qdf_nbuf_page_pool_alloc_debug);
 #endif /* NBUF_MEMORY_DEBUG */
 
 #if defined(QCA_DP_NBUF_FAST_PPEDS)
@@ -5268,25 +5379,57 @@ qdf_nbuf_update_radiotap_he_mu_flags(struct mon_rx_status *rx_status,
 
 		rtap_buf[rtap_len] = rx_status->he_RU[3];
 		rtap_len += 1;
+
+		rtap_buf[rtap_len] = rx_status->he_RU[4];
+		rtap_len += 1;
+
+		rtap_buf[rtap_len] = rx_status->he_RU[5];
+		rtap_len += 1;
+
+		rtap_buf[rtap_len] = rx_status->he_RU[6];
+		rtap_len += 1;
+
+		rtap_buf[rtap_len] = rx_status->he_RU[7];
+		rtap_len += 1;
 	} else {
-		put_unaligned_le16(rx_user_status->he_flags1,
-				   &rtap_buf[rtap_len]);
+		put_unaligned_le16(rx_user_status->he_flags1 |
+				   rx_status->he_flags1, &rtap_buf[rtap_len]);
 		rtap_len += 2;
 
-		put_unaligned_le16(rx_user_status->he_flags2,
-				   &rtap_buf[rtap_len]);
+		put_unaligned_le16(rx_user_status->he_flags2 |
+				   rx_status->he_flags2, &rtap_buf[rtap_len]);
 		rtap_len += 2;
 
-		rtap_buf[rtap_len] = rx_user_status->he_RU[0];
+		rtap_buf[rtap_len] = rx_user_status->he_RU[0] |
+					rx_status->he_RU[0];
 		rtap_len += 1;
 
-		rtap_buf[rtap_len] = rx_user_status->he_RU[1];
+		rtap_buf[rtap_len] = rx_user_status->he_RU[1] |
+					rx_status->he_RU[1];
 		rtap_len += 1;
 
-		rtap_buf[rtap_len] = rx_user_status->he_RU[2];
+		rtap_buf[rtap_len] = rx_user_status->he_RU[2] |
+					rx_status->he_RU[2];
 		rtap_len += 1;
 
-		rtap_buf[rtap_len] = rx_user_status->he_RU[3];
+		rtap_buf[rtap_len] = rx_user_status->he_RU[3] |
+					rx_status->he_RU[3];
+		rtap_len += 1;
+
+		rtap_buf[rtap_len] = rx_user_status->he_RU[4] |
+					rx_status->he_RU[4];
+		rtap_len += 1;
+
+		rtap_buf[rtap_len] = rx_user_status->he_RU[5] |
+					rx_status->he_RU[5];
+		rtap_len += 1;
+
+		rtap_buf[rtap_len] = rx_user_status->he_RU[6] |
+					rx_status->he_RU[6];
+		rtap_len += 1;
+
+		rtap_buf[rtap_len] = rx_user_status->he_RU[7] |
+					rx_status->he_RU[7];
 		rtap_len += 1;
 		qdf_debug("he_flags %x %x he-RU %x %x %x %x",
 			  rx_user_status->he_flags1,

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1598,7 +1598,8 @@ dbglog_debugfs_raw_data(wmi_unified_t wmi_handle, const uint8_t *buf,
 	/* drop oldest entries */
 	while (skb_queue_len(&fwlog->fwlog_queue) > ATH6KL_FWLOG_MAX_ENTRIES) {
 		skb = __skb_dequeue(&fwlog->fwlog_queue);
-		kfree_skb(skb);
+		if (skb)
+			kfree_skb(skb);
 	}
 
 	spin_unlock(&fwlog->fwlog_queue.lock);
@@ -1880,6 +1881,10 @@ static int diag_fw_handler(ol_scn_t scn, uint8_t *data, uint32_t datalen)
 		AR_DEBUG_PRINTF(ATH_DEBUG_ERR, ("NULL Pointer assigned\n"));
 		return A_ERROR;
 	}
+
+	if (cds_is_pm_fw_debug_enable())
+		qdf_debug("Received fw data of len: %d\n", datalen);
+
 	/* when fw assert occurs,host can't use TLV format. */
 	if (wma->is_fw_assert) {
 		datap = data;

@@ -65,6 +65,9 @@ void hal_qca5018_attach(struct hal_soc *hal);
 #ifdef QCA_WIFI_QCA5332
 void hal_qca5332_attach(struct hal_soc *hal);
 #endif
+#ifdef QCA_WIFI_QCA5424
+void hal_qca5424_attach(struct hal_soc *hal);
+#endif
 #ifdef INCLUDE_HAL_KIWI
 void hal_kiwi_attach(struct hal_soc *hal);
 #endif
@@ -73,6 +76,9 @@ void hal_peach_attach(struct hal_soc *hal);
 #endif
 #ifdef QCA_WIFI_WCN7750
 void hal_wcn7750_attach(struct hal_soc *hal);
+#endif
+#ifdef QCA_WIFI_QCC2072
+void hal_qcc2072_attach(struct hal_soc *hal);
 #endif
 
 #ifdef ENABLE_VERBOSE_DEBUG
@@ -456,6 +462,11 @@ static void hal_target_based_configure(struct hal_soc *hal)
 			hal_wcn7750_attach(hal);
 		break;
 #endif
+#ifdef QCA_WIFI_QCC2072
+	case TARGET_TYPE_QCC2072:
+		hal->use_register_windowing = true;
+		hal_qcc2072_attach(hal);
+#endif
 #ifdef INCLUDE_HAL_KIWI
 	case TARGET_TYPE_KIWI:
 	case TARGET_TYPE_MANGO:
@@ -570,6 +581,17 @@ static void hal_target_based_configure(struct hal_soc *hal)
 		hal->static_window_map = true;
 		hal_wcn6450_attach(hal);
 	break;
+#endif
+#if defined(QCA_WIFI_QCA5424)
+	case TARGET_TYPE_QCA5424:
+		hal->use_register_windowing = true;
+		/*
+		 * Static window map  is enabled for qcn6432 to use 2mb bar
+		 * size and use multiple windows to write into registers.
+		 */
+		hal->static_window_map = true;
+		hal_qca5424_attach(hal);
+		break;
 #endif
 	default:
 	break;

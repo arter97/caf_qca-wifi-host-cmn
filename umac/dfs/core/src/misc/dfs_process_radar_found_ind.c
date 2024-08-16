@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -255,6 +255,38 @@ dfs_find_20mhz_subchans_from_offsets(struct freqs_offsets *freq_offset,
 }
 
 #ifdef CONFIG_CHAN_FREQ_API
+#ifdef MOBILE_DFS_SUPPORT
+/**
+ * dfs_radar_detect_center_freq_adjust() - Helper function to adjust center
+ * frequency of Radar detected.
+ *
+ * @curchan: Pointer to current DFS channel structure
+ * @freq_center: Pointer to center frequency to be adjusted
+ *
+ * For mobile device platform only has one Radar detector so segment id always
+ * set 0, when bandwidth greater than 80 MHz, center frequency should adjust
+ * from center frequency of primary segment to center frequency of whole
+ * bandwidth.
+ */
+static inline void
+dfs_radar_detect_center_freq_adjust(struct dfs_channel *curchan,
+				    uint32_t *freq_center)
+{
+	if (WLAN_IS_CHAN_MODE_160(curchan) || WLAN_IS_CHAN_MODE_320(curchan)) {
+		dfs_debug(NULL, WLAN_DEBUG_DFS_ALWAYS,
+			  "center freq %d override to %d",
+			  *freq_center, curchan->dfs_ch_mhz_freq_seg2);
+		*freq_center = curchan->dfs_ch_mhz_freq_seg2;
+	}
+}
+#else
+static inline void
+dfs_radar_detect_center_freq_adjust(struct dfs_channel *curchan,
+				    uint32_t *freq_center)
+{
+}
+#endif
+
 void
 dfs_compute_radar_found_cfreq(struct wlan_dfs *dfs,
 			      struct radar_found_info *radar_found,
@@ -300,6 +332,7 @@ dfs_compute_radar_found_cfreq(struct wlan_dfs *dfs,
 		}
 	} else if (!radar_found->segment_id) {
 		*freq_center = curchan->dfs_ch_mhz_freq_seg1;
+		dfs_radar_detect_center_freq_adjust(curchan, freq_center);
 	} else {
 		/* Radar found on secondary segment by the HW, when preCAC
 		 * was not running in legacy chips or preCAC was running

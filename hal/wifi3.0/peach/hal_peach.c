@@ -1441,44 +1441,43 @@ hal_rx_tlv_populate_mpdu_desc_info_peach(uint8_t *buf,
 static void hal_reo_status_get_header_peach(hal_ring_desc_t ring_desc, int b,
 					   void *h1)
 {
-	uint64_t *d = (uint64_t *)ring_desc;
-	uint64_t val1 = 0;
+	uint32_t *d = (uint32_t *)ring_desc;
+	uint32_t val1 = 0;
 	struct hal_reo_status_header *h =
 			(struct hal_reo_status_header *)h1;
 
-	/* Offsets of descriptor fields defined in HW headers start
-	 * from the field after TLV header
-	 */
-	d += HAL_GET_NUM_QWORDS(sizeof(struct tlv_32_hdr));
+	/* 4 bytes of TLV header */
+	d += HAL_GET_NUM_DWORDS(sizeof(struct tlv_32_hdr));
 
+	/* offset includes 4 bytes padding */
 	switch (b) {
 	case HAL_REO_QUEUE_STATS_STATUS_TLV:
-		val1 = d[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+		val1 = d[HAL_OFFSET_DW(REO_GET_QUEUE_STATS_STATUS,
 			STATUS_HEADER_REO_STATUS_NUMBER)];
 		break;
 	case HAL_REO_FLUSH_QUEUE_STATUS_TLV:
-		val1 = d[HAL_OFFSET_QW(REO_FLUSH_QUEUE_STATUS,
+		val1 = d[HAL_OFFSET_DW(REO_FLUSH_QUEUE_STATUS,
 			STATUS_HEADER_REO_STATUS_NUMBER)];
 		break;
 	case HAL_REO_FLUSH_CACHE_STATUS_TLV:
-		val1 = d[HAL_OFFSET_QW(REO_FLUSH_CACHE_STATUS,
+		val1 = d[HAL_OFFSET_DW(REO_FLUSH_CACHE_STATUS,
 			STATUS_HEADER_REO_STATUS_NUMBER)];
 		break;
 	case HAL_REO_UNBLK_CACHE_STATUS_TLV:
-		val1 = d[HAL_OFFSET_QW(REO_UNBLOCK_CACHE_STATUS,
+		val1 = d[HAL_OFFSET_DW(REO_UNBLOCK_CACHE_STATUS,
 			STATUS_HEADER_REO_STATUS_NUMBER)];
 		break;
 	case HAL_REO_TIMOUT_LIST_STATUS_TLV:
-		val1 = d[HAL_OFFSET_QW(REO_FLUSH_TIMEOUT_LIST_STATUS,
+		val1 = d[HAL_OFFSET_DW(REO_FLUSH_TIMEOUT_LIST_STATUS,
 			STATUS_HEADER_REO_STATUS_NUMBER)];
 		break;
 	case HAL_REO_DESC_THRES_STATUS_TLV:
 		val1 =
-		  d[HAL_OFFSET_QW(REO_DESCRIPTOR_THRESHOLD_REACHED_STATUS,
+		  d[HAL_OFFSET_DW(REO_DESCRIPTOR_THRESHOLD_REACHED_STATUS,
 		  STATUS_HEADER_REO_STATUS_NUMBER)];
 		break;
 	case HAL_REO_UPDATE_RX_QUEUE_STATUS_TLV:
-		val1 = d[HAL_OFFSET_QW(REO_UPDATE_RX_REO_QUEUE_STATUS,
+		val1 = d[HAL_OFFSET_DW(REO_UPDATE_RX_REO_QUEUE_STATUS,
 			STATUS_HEADER_REO_STATUS_NUMBER)];
 		break;
 	default:
@@ -1497,32 +1496,32 @@ static void hal_reo_status_get_header_peach(hal_ring_desc_t ring_desc, int b,
 			      REO_CMD_EXECUTION_STATUS, val1);
 	switch (b) {
 	case HAL_REO_QUEUE_STATS_STATUS_TLV:
-		val1 = d[HAL_OFFSET_QW(REO_GET_QUEUE_STATS_STATUS,
+		val1 = d[HAL_OFFSET_DW(REO_GET_QUEUE_STATS_STATUS,
 			STATUS_HEADER_TIMESTAMP)];
 		break;
 	case HAL_REO_FLUSH_QUEUE_STATUS_TLV:
-		val1 = d[HAL_OFFSET_QW(REO_FLUSH_QUEUE_STATUS,
+		val1 = d[HAL_OFFSET_DW(REO_FLUSH_QUEUE_STATUS,
 			STATUS_HEADER_TIMESTAMP)];
 		break;
 	case HAL_REO_FLUSH_CACHE_STATUS_TLV:
-		val1 = d[HAL_OFFSET_QW(REO_FLUSH_CACHE_STATUS,
+		val1 = d[HAL_OFFSET_DW(REO_FLUSH_CACHE_STATUS,
 			STATUS_HEADER_TIMESTAMP)];
 		break;
 	case HAL_REO_UNBLK_CACHE_STATUS_TLV:
-		val1 = d[HAL_OFFSET_QW(REO_UNBLOCK_CACHE_STATUS,
+		val1 = d[HAL_OFFSET_DW(REO_UNBLOCK_CACHE_STATUS,
 			STATUS_HEADER_TIMESTAMP)];
 		break;
 	case HAL_REO_TIMOUT_LIST_STATUS_TLV:
-		val1 = d[HAL_OFFSET_QW(REO_FLUSH_TIMEOUT_LIST_STATUS,
+		val1 = d[HAL_OFFSET_DW(REO_FLUSH_TIMEOUT_LIST_STATUS,
 			STATUS_HEADER_TIMESTAMP)];
 		break;
 	case HAL_REO_DESC_THRES_STATUS_TLV:
 		val1 =
-		  d[HAL_OFFSET_QW(REO_DESCRIPTOR_THRESHOLD_REACHED_STATUS,
+		  d[HAL_OFFSET_DW(REO_DESCRIPTOR_THRESHOLD_REACHED_STATUS,
 		  STATUS_HEADER_TIMESTAMP)];
 		break;
 	case HAL_REO_UPDATE_RX_QUEUE_STATUS_TLV:
-		val1 = d[HAL_OFFSET_QW(REO_UPDATE_RX_REO_QUEUE_STATUS,
+		val1 = d[HAL_OFFSET_DW(REO_UPDATE_RX_REO_QUEUE_STATUS,
 			STATUS_HEADER_TIMESTAMP)];
 		break;
 	default:
@@ -1852,6 +1851,24 @@ hal_rx_flow_setup_fse_peach(uint8_t *rx_fst, uint32_t table_offset,
 	HAL_CLR_FLD(fse, RX_FLOW_SEARCH_ENTRY, TIMESTAMP);
 
 	return fse;
+}
+
+static inline QDF_STATUS
+hal_rx_flow_delete_cmem_fse_peach(struct hal_soc *hal_soc, uint32_t cmem_ba,
+				  uint32_t table_offset)
+{
+	uint32_t fse_offset;
+
+	fse_offset = cmem_ba + (table_offset * HAL_RX_FST_ENTRY_SIZE);
+	if (!(HAL_CMEM_READ(hal_soc, fse_offset +
+			    HAL_OFFSET(RX_FLOW_SEARCH_ENTRY, VALID))))
+		return QDF_STATUS_E_NOENT;
+
+	/* Reset the Valid bit */
+	HAL_CMEM_WRITE(hal_soc, fse_offset + HAL_OFFSET(RX_FLOW_SEARCH_ENTRY,
+							VALID), 0);
+
+	return QDF_STATUS_SUCCESS;
 }
 
 /**
@@ -2412,6 +2429,29 @@ hal_rx_flow_cmem_update_reo_dst_ind(struct hal_soc *hal_soc, uint32_t cmem_ba,
 							L4_PROTOCOL), value);
 }
 
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
+/**
+ * hal_txmon_get_frame_timestamp_peach() - api to get frame timestamp for tx monitor
+ * @tlv_tag: TLV tag
+ * @tx_tlv: pointer to tx tlv information
+ * @ppdu_info: pointer to ppdu_info
+ *
+ * Return: void
+ */
+static inline
+void hal_txmon_get_frame_timestamp_peach(uint32_t tlv_tag, void *tx_tlv,
+			     void *ppdu_info)
+{
+	struct hal_tx_ppdu_info *tx_ppdu_info =
+			(struct hal_tx_ppdu_info *) ppdu_info;
+	    hal_phytx_pkt_end_t *phytx_pkt_end = (hal_phytx_pkt_end_t *)tx_tlv;
+
+		TXMON_HAL_STATUS(tx_ppdu_info, ppdu_timestamp) =
+			    (phytx_pkt_end->start_of_frame_timestamp_15_0 |
+				     (phytx_pkt_end->start_of_frame_timestamp_31_16 << 16));
+}
+#endif
+
 static void hal_hw_txrx_ops_attach_peach(struct hal_soc *hal_soc)
 {
 	/* init and setup */
@@ -2608,6 +2648,8 @@ static void hal_hw_txrx_ops_attach_peach(struct hal_soc *hal_soc)
 					hal_compute_reo_remap_ix2_ix3_peach;
 	hal_soc->ops->hal_rx_flow_setup_cmem_fse =
 						hal_rx_flow_setup_cmem_fse_peach;
+	hal_soc->ops->hal_rx_flow_delete_cmem_fse =
+					hal_rx_flow_delete_cmem_fse_peach;
 	hal_soc->ops->hal_rx_flow_get_cmem_fse_ts =
 					hal_rx_flow_get_cmem_fse_ts_peach;
 	hal_soc->ops->hal_rx_flow_get_cmem_fse = hal_rx_flow_get_cmem_fse_peach;
@@ -2694,6 +2736,8 @@ static void hal_hw_txrx_ops_attach_peach(struct hal_soc *hal_soc)
 				hal_txmon_status_parse_tlv_generic_be;
 	hal_soc->ops->hal_txmon_status_get_num_users =
 				hal_txmon_status_get_num_users_generic_be;
+	hal_soc->ops->hal_txmon_get_frame_timestamp =
+				hal_txmon_get_frame_timestamp_peach;
 #endif /* WLAN_PKT_CAPTURE_TX_2_0 */
 	hal_soc->ops->hal_rx_flow_cmem_update_reo_dst_ind =
 				hal_rx_flow_cmem_update_reo_dst_ind;

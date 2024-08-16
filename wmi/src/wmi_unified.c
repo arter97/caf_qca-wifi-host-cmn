@@ -2889,6 +2889,34 @@ void wmi_process_fw_event(struct wmi_unified *wmi_handle, wmi_buf_t evt_buf)
 	__wmi_control_rx(wmi_handle, evt_buf);
 }
 
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+static void
+wmi_dump_event(wmi_buf_t evt_buf)
+{
+	uint32_t id;
+
+	id = WMI_GET_FIELD(qdf_nbuf_data(evt_buf), WMI_CMD_HDR, COMMANDID);
+	if (id != WMI_ROAM_STATS_EVENTID)
+		return;
+
+	/*
+	 * Dump of event for debugging connectivity logging issues.
+	 * The format of the prints below is based on WHUNT hexdump
+	 * expected format.
+	 */
+	wmi_debug("EVENT: 0x%x", id);
+	wmi_debug("Time: 0x%llx", qdf_get_log_timestamp());
+	wmi_debug("Length:%d\n", (int)qdf_nbuf_len(evt_buf));
+	qdf_trace_hex_dump(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_DEBUG,
+			   qdf_nbuf_data(evt_buf),
+			   (int)qdf_nbuf_len(evt_buf));
+}
+#else
+static void
+wmi_dump_event(wmi_buf_t evt_buf)
+{}
+#endif
+
 void __wmi_control_rx(struct wmi_unified *wmi_handle, wmi_buf_t evt_buf)
 {
 	uint32_t id;
@@ -2904,6 +2932,7 @@ void __wmi_control_rx(struct wmi_unified *wmi_handle, wmi_buf_t evt_buf)
 
 	id = WMI_GET_FIELD(qdf_nbuf_data(evt_buf), WMI_CMD_HDR, COMMANDID);
 
+	wmi_dump_event(evt_buf);
 	wmi_ext_dbg_msg_event_record(wmi_handle, qdf_nbuf_data(evt_buf),
 				     qdf_nbuf_len(evt_buf));
 
@@ -3654,8 +3683,14 @@ static QDF_STATUS wmi_connect_pdev_htc_service(struct wmi_soc *soc,
 	status = htc_connect_service(soc->htc_handle, &connect, &response);
 
 	if (QDF_IS_STATUS_ERROR(status)) {
-		wmi_err("Failed to connect to WMI CONTROL service status:%d",
-			 status);
+		if (connect.service_id !=
+				WMI_CONTROL_SVC_WMAC1 &&
+				connect.service_id !=
+				WMI_CONTROL_SVC_WMAC2) {
+			wmi_err(
+				"Failed to connect to WMI CONTROL service status:%d",
+				status);
+		}
 		return status;
 	}
 

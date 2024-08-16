@@ -116,7 +116,7 @@ mlo_wsi_link_info_setup_mlo_grps(struct mlo_mgr_context *mlo_mgr)
 				      &mlo_mgr->wsi_info->num_psoc,
 				      WLAN_MLO_MGR_ID);
 	if (!mlo_mgr->wsi_info->num_psoc)
-		mlo_info("Could not find active PSOCs");
+		mlo_debug("Could not find active PSOCs");
 
 	for (i = 0; i < MLO_WSI_MAX_MLO_GRPS; i++) {
 		mlo_grp_info =
@@ -141,8 +141,8 @@ mlo_wsi_link_info_setup_mlo_grps(struct mlo_mgr_context *mlo_mgr)
 				mlo_grp_info->psoc_order[j] =
 							MLO_WSI_PSOC_ID_MAX;
 			}
-			mlo_err("PSOC order %d, index %d",
-				mlo_grp_info->psoc_order[j], j);
+			mlo_debug("PSOC order %d, index %d",
+				  mlo_grp_info->psoc_order[j], j);
 		}
 	}
 }
@@ -959,6 +959,24 @@ QDF_STATUS wlan_mlo_check_valid_config(struct wlan_mlo_dev_context *ml_dev,
 	return QDF_STATUS_SUCCESS;
 }
 
+void mlo_t2lm_reset_established_and_upcoming_mapping(
+		struct wlan_mlo_dev_context *ml_dev)
+{
+	struct wlan_t2lm_info *t2lm;
+
+	/* Reset establishd T2LM */
+	qdf_mem_zero(&ml_dev->t2lm_ctx.established_t2lm,
+		     sizeof(struct wlan_mlo_t2lm_ie));
+
+	t2lm = &ml_dev->t2lm_ctx.established_t2lm.t2lm;
+	t2lm->direction = WLAN_T2LM_BIDI_DIRECTION;
+	t2lm->default_link_mapping = 1;
+
+	/* Reset upcoming T2LM */
+	qdf_mem_zero(&ml_dev->t2lm_ctx.upcoming_t2lm,
+		     sizeof(struct wlan_mlo_t2lm_ie));
+}
+
 /**
  * mlo_t2lm_ctx_init() - API to initialize the t2lm context with the default
  * values.
@@ -979,6 +997,9 @@ static inline void mlo_t2lm_ctx_init(struct wlan_mlo_dev_context *ml_dev,
 	t2lm->direction = WLAN_T2LM_BIDI_DIRECTION;
 	t2lm->default_link_mapping = 1;
 	t2lm->link_mapping_size = 0;
+
+	ml_dev->t2lm_ctx.mlo_dev_ctx = ml_dev;
+	ml_dev->t2lm_ctx.t2lm_timer.t2lm_ctx = &ml_dev->t2lm_ctx;
 
 	wlan_mlo_t2lm_timer_init(vdev);
 	wlan_mlo_t2lm_register_link_update_notify_handler(ml_dev);
@@ -1009,6 +1030,11 @@ static inline void mlo_epcs_ctx_init(struct wlan_mlo_dev_context *ml_dev)
  */
 static inline void mlo_ptqm_migration_init(struct wlan_mlo_dev_context *ml_dev)
 {
+	uint8_t idx;
+
+	for (idx = 0; idx < WLAN_UMAC_MLO_MAX_VDEVS; idx++)
+		ml_dev->link_ptqm_migrate_ctx[idx] = NULL;
+
 	qdf_timer_init(NULL, &ml_dev->ptqm_migrate_timer,
 		       mlo_mlme_ptqm_migrate_timer_cb, (void *)(ml_dev),
 		       QDF_TIMER_TYPE_WAKE_APPS);
@@ -1108,6 +1134,9 @@ static QDF_STATUS mlo_dev_ctx_init(struct wlan_objmgr_vdev *vdev)
 	struct mlo_mgr_context *g_mlo_ctx = wlan_objmgr_get_mlo_ctx();
 	uint8_t id = 0;
 	struct wlan_objmgr_psoc *psoc = NULL;
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+	uint8_t idx;
+#endif
 
 	if (wlan_vdev_mlme_is_mlo_bridge_vdev(vdev)) {
 		status = mlo_add_to_bridge_vdev_list(vdev);
@@ -1147,6 +1176,11 @@ static QDF_STATUS mlo_dev_ctx_init(struct wlan_objmgr_vdev *vdev)
 		}
 		mlo_dev_lock_release(ml_dev);
 		return QDF_STATUS_SUCCESS;
+	}
+
+	if (qdf_list_size(&g_mlo_ctx->ml_dev_list) >= WLAN_UMAC_MLO_MAX_DEV) {
+		mlo_err("No more MLD allowed");
+		return QDF_STATUS_E_RESOURCES;
 	}
 
 	/* Create a new ML dev context */
@@ -1224,6 +1258,9 @@ static QDF_STATUS mlo_dev_ctx_init(struct wlan_objmgr_vdev *vdev)
 					     psoc, WLAN_MD_CP_MLO_BRG_STA,
 					     "wlan_mlo_bridge_sta");
 			qdf_mem_free(ml_dev->bridge_sta_ctx);
+
+			for (idx = 0; idx < MLO_MAX_BRIDGE_LINKS_PER_MLD; idx++)
+				ml_dev->br_pdev_list[idx] = NULL;
 #endif
 		} else if (wlan_vdev_mlme_get_opmode(vdev) == QDF_SAP_MODE) {
 			wlan_minidump_remove(ml_dev->ap_ctx,
@@ -1562,4 +1599,35 @@ QDF_STATUS wlan_mlo_mgr_mld_vdev_detach(struct wlan_objmgr_vdev *vdev)
 	wlan_vdev_obj_unlock(vdev);
 
 	return status;
+}
+
+/**
+ * wlan_mlo_get_active_vdev_id() - This API checks current active link and
+ * returns corresponding vdev id for active link.
+ * @vdev: VDEV object
+ *
+ * Return: VDEV ID
+ */
+static uint8_t wlan_mlo_get_active_vdev_id(struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_mlo_dev_context *mlo_dev_ctx = vdev->mlo_dev_ctx;
+	struct mlo_link_info *link_info;
+	uint8_t i;
+
+	if (!mlo_dev_ctx || !wlan_vdev_mlme_is_mlo_vdev(vdev))
+		return WLAN_UMAC_VDEV_ID_MAX;
+
+	for (i = 0; i < WLAN_MAX_ML_BSS_LINKS; i++) {
+		link_info = &vdev->mlo_dev_ctx->link_ctx->links_info[i];
+
+		if (link_info->is_link_active)
+			return link_info->vdev_id;
+	}
+
+	return WLAN_UMAC_VDEV_ID_MAX;
+}
+
+uint8_t ucfg_mlo_get_active_vdev_id(struct wlan_objmgr_vdev *vdev)
+{
+	return wlan_mlo_get_active_vdev_id(vdev);
 }

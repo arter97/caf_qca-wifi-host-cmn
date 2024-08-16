@@ -152,6 +152,7 @@
 #define EIRP_PWR_SCALE 100
 
 #define SP_AP_AND_CLIENT_POWER_DIFF_IN_DBM 6
+#define SP_AP_AND_CLIENT_POWER_DIFF_IN_SCALE 600
 
 extern const struct chan_map *channel_map;
 extern const struct chan_map channel_map_us[];
@@ -2827,7 +2828,7 @@ enum reg_6g_ap_type reg_get_best_pwr_mode(struct wlan_objmgr_pdev *pdev,
  * @is_client_list_lookup_needed: Boolean to indicate if client list lookup is
  * needed
  * @client_type: Client power type
- *
+ * @is_twice_power: Boolean to indicate EIRP power in 0.5dbm steps
  * Return: EIRP power
  */
 int16_t reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
@@ -2835,8 +2836,8 @@ int16_t reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
 			 uint16_t bw, enum reg_6g_ap_type ap_pwr_type,
 			 uint16_t in_punc_pattern,
 			 bool is_client_list_lookup_needed,
-			 enum reg_6g_client_type client_type);
-
+			 enum reg_6g_client_type client_type,
+			 bool is_twice_power);
 #else
 static inline
 qdf_freq_t reg_compute_6g_center_freq_from_cfi(uint8_t ieee_6g_cfi)
@@ -3132,6 +3133,15 @@ reg_validate_freq_in_afc_chan_obj(struct wlan_objmgr_pdev *pdev,
 				  qdf_freq_t primary_freq,
 				  qdf_freq_t center_320,
 				  uint16_t bw);
+#else
+static inline bool
+reg_validate_freq_in_afc_chan_obj(struct wlan_objmgr_pdev *pdev,
+				  qdf_freq_t primary_freq,
+				  qdf_freq_t center_320,
+				  uint16_t bw)
+{
+	return false;
+}
 #endif
 #endif
 
@@ -3145,6 +3155,7 @@ reg_validate_freq_in_afc_chan_obj(struct wlan_objmgr_pdev *pdev,
  */
 uint16_t reg_get_max_bw_5G_for_fo(struct wlan_objmgr_pdev *pdev);
 
+#ifdef CONFIG_BAND_6GHZ
 /**
  * reg_get_num_rules_of_ap_pwr_type() - Get the number of reg rules present
  * for a given ap power type
@@ -3156,6 +3167,14 @@ uint16_t reg_get_max_bw_5G_for_fo(struct wlan_objmgr_pdev *pdev);
 uint8_t
 reg_get_num_rules_of_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
 				 enum reg_6g_ap_type ap_pwr_type);
+#else
+static inline uint8_t
+reg_get_num_rules_of_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
+				 enum reg_6g_ap_type ap_pwr_type)
+{
+	return 0;
+}
+#endif
 
 /**
  * reg_process_r2p_table_update_response() - Process the response received from
@@ -3231,6 +3250,26 @@ static inline uint16_t
 reg_find_non_punctured_bw(uint16_t bw,  uint16_t in_punc_pattern)
 {
 	return bw;
+}
+#endif
+
+#if defined(CONFIG_BAND_6GHZ) && defined(CONFIG_REG_CLIENT)
+/**
+ * reg_is_vlp_depriority_freq() - Check if the frequency is VLP deprority freq.
+ *
+ * @pdev: Pdev object.
+ * @freq: Frequency in MHz.
+ *
+ * Return: True if freq is VLP deprority frequency, else false.
+ */
+bool reg_is_vlp_depriority_freq(struct wlan_objmgr_pdev *pdev,
+				qdf_freq_t freq);
+#else
+static inline bool
+reg_is_vlp_depriority_freq(struct wlan_objmgr_pdev *pdev,
+			   qdf_freq_t freq)
+{
+	return false;
 }
 #endif
 #endif

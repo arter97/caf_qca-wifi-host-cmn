@@ -385,6 +385,51 @@ static QDF_STATUS target_if_vdev_mgr_set_param_send(
 	return status;
 }
 
+static bool
+target_if_sap_is_suspend_support_enabled(struct wlan_objmgr_vdev *vdev)
+{
+	struct wmi_unified *wmi_handle;
+
+	if (!vdev) {
+		mlme_err("Vdev NULL");
+		return false;
+	}
+
+	wmi_handle = target_if_vdev_mgr_wmi_handle_get(vdev);
+	if (!wmi_handle) {
+		mlme_err("Failed to get WMI handle!");
+		return false;
+	}
+
+	return wmi_service_enabled(wmi_handle,
+				   wmi_service_support_ap_suspend_resume);
+}
+
+static QDF_STATUS
+target_if_sap_suspend_param_send(struct wlan_objmgr_vdev *vdev,
+				 struct vdev_suspend_params *param)
+{
+	QDF_STATUS status;
+	struct wmi_unified *wmi_handle;
+
+	if (!vdev || !param) {
+		mlme_err("Vdev/param NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	wmi_handle = target_if_vdev_mgr_wmi_handle_get(vdev);
+	if (!wmi_handle) {
+		mlme_err("Failed to get WMI handle!");
+		return QDF_STATUS_E_INVAL;
+	}
+	if (wlan_vdev_is_mlo_ap_with_multi_vdev(vdev))
+		param->vdev_id = 0xFF;
+
+	status = wmi_unified_sap_suspend_cmd_send(wmi_handle, param);
+
+	return status;
+}
+
 static QDF_STATUS target_if_vdev_mgr_create_send(
 					struct wlan_objmgr_vdev *vdev,
 					struct vdev_create_params *param)
@@ -1575,5 +1620,9 @@ target_if_vdev_mgr_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 	target_if_vdev_register_set_mac_address(mlme_tx_ops);
 	mlme_tx_ops->vdev_peer_set_param_send =
 			target_if_vdev_peer_set_param_send;
+	mlme_tx_ops->sap_suspend_param_send =
+			target_if_sap_suspend_param_send;
+	mlme_tx_ops->is_sap_suspend_support_enabled =
+			target_if_sap_is_suspend_support_enabled;
 	return QDF_STATUS_SUCCESS;
 }

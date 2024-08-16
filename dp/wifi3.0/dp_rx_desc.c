@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -504,6 +504,9 @@ uint16_t dp_rx_get_free_desc_list(struct dp_soc *soc, uint32_t pool_id,
 	}
 	(*tail)->next = NULL;
 	qdf_spin_unlock_bh(&rx_desc_pool->lock);
+
+	dp_rx_desc_inc_in_use_count(rx_desc_pool, count);
+
 	return count;
 }
 
@@ -533,3 +536,57 @@ void dp_rx_add_desc_list_to_free_list(struct dp_soc *soc,
 }
 
 qdf_export_symbol(dp_rx_add_desc_list_to_free_list);
+
+#ifdef WLAN_DP_DYNAMIC_RESOURCE_MGMT
+bool
+dp_rx_buffers_is_skip_replenish(struct dp_soc *soc,
+				struct rx_desc_pool *rx_desc_pool,
+				union dp_rx_desc_list_elem_t **desc_list,
+				union dp_rx_desc_list_elem_t **tail,
+				uint32_t *num_req_buffers,
+				uint32_t mac_id)
+{
+	uint64_t required_count, in_use_count, reclaim_count;
+	uint32_t num_alloc_buffers = *num_req_buffers;
+
+	if (rx_desc_pool->desc_type != QDF_DP_RX_DESC_BUF_TYPE)
+		return false;
+
+	required_count = qdf_atomic_read(&rx_desc_pool->required_count);
+	in_use_count = qdf_atomic_read(&rx_desc_pool->in_use_count);
+
+	if (in_use_count > required_count) {
+		/*Release all the desc list at once*/
+		if ((!*desc_list))
+			return true;
+		dp_rx_add_desc_list_to_free_list(soc, desc_list, tail,
+						 mac_id, rx_desc_pool);
+		qdf_atomic_sub(num_alloc_buffers, &rx_desc_pool->in_use_count);
+
+		reclaim_count = in_use_count - required_count;
+		if (qdf_unlikely(reclaim_count < num_alloc_buffers)) {
+			/*
+			 * example case where additional buffers to be
+			 * reclaimed are 10, but num_req_buffers 64 so
+			 * 64 buffers will be reclaimed, instead of 10.
+			 */
+			num_alloc_buffers -= reclaim_count;
+			*desc_list = *tail = NULL;
+			num_alloc_buffers = dp_rx_get_free_desc_list(soc,
+							mac_id,
+							rx_desc_pool,
+							num_alloc_buffers,
+							desc_list,
+							tail);
+			*num_req_buffers = num_alloc_buffers;
+			if (!num_alloc_buffers) {
+				dp_err("Rx descriptors not available");
+				return true;
+			}
+			return false;
+		}
+		return true;
+	}
+	return false;
+}
+#endif

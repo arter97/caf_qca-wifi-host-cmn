@@ -1570,6 +1570,13 @@ bool wlan_reg_is_6ghz_op_class(struct wlan_objmgr_pdev *pdev,
 
 qdf_export_symbol(wlan_reg_is_6ghz_op_class);
 
+bool wlan_reg_is_5dot9_ghz_supported(struct wlan_objmgr_psoc *psoc)
+{
+	return reg_is_5dot9_ghz_supported(psoc);
+}
+
+qdf_export_symbol(wlan_reg_is_5dot9_ghz_supported);
+
 #ifdef CONFIG_REG_CLIENT
 bool wlan_reg_is_6ghz_supported(struct wlan_objmgr_psoc *psoc)
 {
@@ -1877,11 +1884,12 @@ int16_t wlan_reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
 			      enum reg_6g_ap_type ap_pwr_type,
 			      uint16_t in_punc_pattern,
 			      bool is_client_list_lookup_needed,
-			      enum reg_6g_client_type client_type)
+			      enum reg_6g_client_type client_type,
+			      bool is_twice_power)
 {
 	return reg_get_eirp_pwr(pdev, freq, cen320, bw, ap_pwr_type,
 				in_punc_pattern, is_client_list_lookup_needed,
-				client_type);
+				client_type, is_twice_power);
 }
 
 qdf_export_symbol(wlan_reg_get_eirp_pwr);
@@ -2032,5 +2040,13 @@ uint16_t
 wlan_reg_find_non_punctured_bw(uint16_t bw,  uint16_t in_punc_pattern)
 {
 	return reg_find_non_punctured_bw(bw, in_punc_pattern);
+}
+#endif
+
+#if defined(CONFIG_BAND_6GHZ) && defined(CONFIG_REG_CLIENT)
+bool wlan_reg_is_vlp_depriority_freq(struct wlan_objmgr_pdev *pdev,
+				     qdf_freq_t freq)
+{
+	return reg_is_vlp_depriority_freq(pdev, freq);
 }
 #endif

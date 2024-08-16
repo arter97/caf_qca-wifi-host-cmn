@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -66,8 +67,6 @@ static inline void athdiag_procfs_remove(void)
 {
 }
 #endif
-
-#define DMA_MAPPING_ERROR(dev, addr) dma_mapping_error((dev), (addr))
 
 int ath_sdio_probe(void *context, void *hif_handle);
 void ath_sdio_remove(void *context, void *hif_handle);

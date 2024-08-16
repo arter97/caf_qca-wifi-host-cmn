@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022,2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -140,6 +140,7 @@ enum cfg_fallback_behavior {
 #define CFG_1G_6G_SECTION "1G-6G"
 
 #define CFG_SCAN_RADIO_SECTION "SCAN-RADIO"
+#define CFG_SCAN_RADIO_OPTIMIZED_RING_CONFIG_SECTION "SCAN-RADIO-OPTIMIZED-RING-CONFIGS"
 
 #define CFG_SBS_NSS_RING_SECTION "SBS-NSS-RING"
 #define CFG_DBS_NSS_RING_SECTION "DBS-NSS-RING"

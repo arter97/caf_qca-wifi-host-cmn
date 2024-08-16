@@ -88,6 +88,8 @@ typedef void *hif_handle_t;
 #define HIF_TYPE_WCN6450 33
 #define HIF_TYPE_QCN6432 34
 #define HIF_TYPE_WCN7750 35
+#define HIF_TYPE_QCA5424 36
+#define HIF_TYPE_QCC2072 37
 
 #define DMA_COHERENT_MASK_DEFAULT   37
 
@@ -772,7 +774,14 @@ static inline void hif_event_history_deinit(struct hif_opaque_softc *hif_ctx,
 }
 #endif /* WLAN_FEATURE_DP_EVENT_HISTORY */
 
+#ifndef HIF_SDIO
 void hif_display_ctrl_traffic_pipes_state(struct hif_opaque_softc *hif_ctx);
+#else
+static inline void
+hif_display_ctrl_traffic_pipes_state(struct hif_opaque_softc *hif_ctx)
+{
+}
+#endif
 
 #if defined(HIF_CONFIG_SLUB_DEBUG_ON) || defined(HIF_CE_DEBUG_DATA_BUF)
 void hif_display_latest_desc_hist(struct hif_opaque_softc *hif_ctx);
@@ -2741,16 +2750,19 @@ static inline int hif_system_pm_state_check(struct hif_opaque_softc *hif)
  * @scn: hif handle
  * @grp_intr_bitmask: grp intrs for which perf affinity should be
  *  applied
+ * @cpumask: cpu mask to which grp intrs should be affined
  * @perf: affine to perf or non-perf cluster
  *
  * Return: None
  */
 void hif_set_grp_intr_affinity(struct hif_opaque_softc *scn,
-			       uint32_t grp_intr_bitmask, bool perf);
+			       uint32_t grp_intr_bitmask,
+			       uint32_t cpumask, bool perf);
 #else
 static inline
 void hif_set_grp_intr_affinity(struct hif_opaque_softc *scn,
-			       uint32_t grp_intr_bitmask, bool perf)
+			       uint32_t grp_intr_bitmask,
+			       uint32_t cpumask, bool perf)
 {
 }
 #endif
@@ -3026,6 +3038,7 @@ static inline void hif_print_reg_write_stats(struct hif_opaque_softc *hif_ctx)
 void hif_ce_print_ring_stats(struct hif_opaque_softc *hif_ctx);
 
 #ifdef WLAN_DP_LOAD_BALANCE_SUPPORT
+void hif_set_load_balance_enabled_flag(struct hif_opaque_softc *hif_ctx);
 void hif_get_wlan_rx_time_stats(struct hif_opaque_softc *hif_ctx,
 				uint64_t *wlan_irq_time,
 				uint64_t *wlan_ksoftirqd_time);

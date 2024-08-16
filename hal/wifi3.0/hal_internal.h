@@ -1149,6 +1149,10 @@ struct hal_hw_txrx_ops {
 
 	void (*hal_rx_proc_phyrx_other_receive_info_tlv)(void *rx_tlv_hdr,
 							void *ppdu_info_handle);
+	void (*hal_rx_ru_info_details)(void *rx_tlv_hdr,
+				       void *ppdu_info_handle);
+	void (*hal_rx_proc_phyrx_all_sigb_tlv)(void *rx_tlv_hdr,
+					       void *ppdu_info_handle);
 	void (*hal_rx_dump_msdu_end_tlv)(void *pkt_tlvs, uint8_t dbg_level);
 	void (*hal_rx_dump_rx_attention_tlv)(void *pkt_tlvs, uint8_t dbg_level);
 	void (*hal_rx_dump_msdu_start_tlv)(void *pkt_tlvs, uint8_t dbg_level);
@@ -1281,6 +1285,9 @@ struct hal_hw_txrx_ops {
 	uint32_t (*hal_rx_flow_setup_cmem_fse)(
 				struct hal_soc *soc, uint32_t cmem_ba,
 				uint32_t table_offset, uint8_t *rx_flow);
+	QDF_STATUS (*hal_rx_flow_delete_cmem_fse)(struct hal_soc *soc,
+						  uint32_t cmem_ba,
+						  uint32_t table_offset);
 	uint32_t (*hal_rx_flow_get_cmem_fse_ts)(struct hal_soc *soc,
 						uint32_t fse_offset);
 	void (*hal_rx_flow_get_cmem_fse)(struct hal_soc *soc,
@@ -1424,7 +1431,8 @@ struct hal_hw_txrx_ops {
 					       void *pkt_info);
 	/* TX MONITOR */
 #ifdef WLAN_PKT_CAPTURE_TX_2_0
-	uint32_t (*hal_txmon_status_parse_tlv)(void *data_ppdu_info,
+	uint32_t (*hal_txmon_status_parse_tlv)(hal_soc_handle_t hal_soc_hdl,
+					       void *data_ppdu_info,
 					       void *prot_ppdu_info,
 					       void *data_status_info,
 					       void *prot_status_info,
@@ -1433,6 +1441,8 @@ struct hal_hw_txrx_ops {
 	uint32_t (*hal_txmon_status_get_num_users)(void *tx_tlv_hdr,
 						   uint8_t *num_users);
 	void (*hal_txmon_get_word_mask)(void *wmask);
+	void (*hal_txmon_get_frame_timestamp)(uint32_t tlv_tag,
+					      void *tx_tlv, void *ppdu_info);
 #endif /* WLAN_PKT_CAPTURE_TX_2_0 */
 	QDF_STATUS (*hal_reo_shared_qaddr_setup)(hal_soc_handle_t hal_soc_hdl,
 						 struct reo_queue_ref_table
@@ -1714,6 +1724,7 @@ void hal_peach_attach(struct hal_soc *hal_soc);
 void hal_qcn9224v2_attach(struct hal_soc *hal_soc);
 void hal_wcn6450_attach(struct hal_soc *hal_soc);
 void hal_wcn7750_attach(struct hal_soc *hal_soc);
+void hal_qcc2072_attach(struct hal_soc *hal_soc);
 
 /**
  * hal_soc_to_hal_soc_handle() - API to convert hal_soc to opaque

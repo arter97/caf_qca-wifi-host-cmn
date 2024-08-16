@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2018, 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -34,6 +34,7 @@
 #include "a_types.h"
 #include "dummy.h"
 #include "qdf_module.h"
+#include "hif_exec.h"
 
 /**
  * hif_initialize_default_ops() - initializes default operations values
@@ -714,7 +715,8 @@ int hif_enable_grp_irqs(struct hif_opaque_softc *scn)
 
 #ifdef FEATURE_IRQ_AFFINITY
 void hif_set_grp_intr_affinity(struct hif_opaque_softc *scn,
-			       uint32_t grp_intr_bitmask, bool perf)
+			       uint32_t grp_intr_bitmask,
+			       uint32_t cpumask, bool perf)
 {
 	struct hif_softc *hif_sc = HIF_GET_SOFTC(scn);
 
@@ -722,7 +724,7 @@ void hif_set_grp_intr_affinity(struct hif_opaque_softc *scn,
 		return;
 
 	hif_sc->bus_ops.hif_set_grp_intr_affinity(hif_sc, grp_intr_bitmask,
-						  perf);
+						  cpumask, perf);
 }
 #endif
 

@@ -41,6 +41,10 @@ var := "@$(inc_file)"
 
 EXTRA_CFLAGS+= $(var) $(COPTS) -Wno-unused-function
 
+ifeq ($(QCA_GCC13_0_SUPPORT), 1)
+ccflags-y+= -Wno-enum-conversion
+endif
+
 ifeq ($(strip ${QCA_PARTNER_MAKE_F_SUPPORT}),1)
 MOD_CFLAGS = -D"KBUILD_STR(s)=\#s" -D"KBUILD_BASENAME=KBUILD_STR(qdf.mod)"  -D"KBUILD_MODNAME=KBUILD_STR(qdf)"
 endif

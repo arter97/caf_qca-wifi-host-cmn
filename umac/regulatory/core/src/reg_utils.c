@@ -489,15 +489,9 @@ reg_get_best_6g_power_type(struct wlan_objmgr_psoc *psoc,
 			   enum reg_6g_ap_type ap_pwr_type,
 			   uint32_t chan_freq)
 {
-	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
 	enum channel_enum chan_idx = reg_get_chan_enum_for_freq(chan_freq);
 
 	*pwr_type_6g = ap_pwr_type;
-	pdev_priv_obj = reg_get_pdev_obj(pdev);
-	if (!pdev_priv_obj) {
-		reg_err("pdev priv obj null");
-		return QDF_STATUS_E_FAILURE;
-	}
 
 	/*
 	 * If AP doesn't advertise 6 GHz power type or advertised invalid power
@@ -505,8 +499,9 @@ reg_get_best_6g_power_type(struct wlan_objmgr_psoc *psoc,
 	 * connection channel, if not select LPI power type if LPI rules are
 	 * present for connection channel, otherwise don't connect.
 	 */
-	if (ap_pwr_type < REG_INDOOR_AP ||
-	    ap_pwr_type >= REG_CURRENT_MAX_AP_TYPE) {
+	if ((ap_pwr_type < REG_INDOOR_AP ||
+	     ap_pwr_type >= REG_CURRENT_MAX_AP_TYPE) &&
+	     (ap_pwr_type != REG_INDOOR_SP_AP)) {
 		if (QDF_IS_STATUS_SUCCESS(
 			reg_check_if_6g_pwr_type_supp_for_chan(pdev,
 							REG_VERY_LOW_POWER_AP,
@@ -529,40 +524,37 @@ reg_get_best_6g_power_type(struct wlan_objmgr_psoc *psoc,
 				ap_pwr_type);
 			return QDF_STATUS_E_NOSUPPORT;
 		}
+	} else if (ap_pwr_type == REG_INDOOR_SP_AP) {
+		if (QDF_IS_STATUS_SUCCESS(reg_check_if_6g_pwr_type_supp_for_chan(
+					  pdev, REG_STANDARD_POWER_AP, chan_idx)))
+			*pwr_type_6g = REG_STANDARD_POWER_AP;
+		else if (QDF_IS_STATUS_SUCCESS(reg_check_if_6g_pwr_type_supp_for_chan(
+						pdev, REG_INDOOR_AP, chan_idx)))
+			*pwr_type_6g = REG_INDOOR_AP;
+		else
+			goto vlp_support_check;
+
+		reg_debug("AP power type: %d , is supported by client of power type %d",
+			  ap_pwr_type, *pwr_type_6g);
+		return QDF_STATUS_SUCCESS;
 	}
 
-	if (pdev_priv_obj->reg_rules.num_of_6g_client_reg_rules[ap_pwr_type] &&
-	    QDF_IS_STATUS_SUCCESS(reg_check_if_6g_pwr_type_supp_for_chan(
-						pdev,
-						ap_pwr_type, chan_idx))) {
+	if (QDF_IS_STATUS_SUCCESS(reg_check_if_6g_pwr_type_supp_for_chan(
+							pdev,
+							ap_pwr_type, chan_idx))) {
 		reg_debug("AP power type: %d , is supported by client",
 			  ap_pwr_type);
 		return QDF_STATUS_SUCCESS;
 	}
 
-	if (ap_pwr_type == REG_INDOOR_AP) {
-		if (pdev_priv_obj->reg_rules.num_of_6g_client_reg_rules[REG_VERY_LOW_POWER_AP] &&
-		    QDF_IS_STATUS_SUCCESS(
-			reg_check_if_6g_pwr_type_supp_for_chan(pdev,
+vlp_support_check:
+	if (ap_pwr_type == REG_INDOOR_AP ||
+	    ap_pwr_type == REG_STANDARD_POWER_AP ||
+	    ap_pwr_type == REG_INDOOR_SP_AP) {
+		if (QDF_IS_STATUS_SUCCESS(reg_check_if_6g_pwr_type_supp_for_chan(
+							pdev,
 							REG_VERY_LOW_POWER_AP,
 							chan_idx))) {
-			*pwr_type_6g = REG_VERY_LOW_POWER_AP;
-			reg_debug("AP power type = %d, selected power type = %d",
-				  ap_pwr_type, *pwr_type_6g);
-			return QDF_STATUS_SUCCESS;
-		} else {
-			goto no_support;
-		}
-	} else if (ap_pwr_type == REG_STANDARD_POWER_AP) {
-		if (pdev_priv_obj->reg_rules.num_of_6g_client_reg_rules[REG_VERY_LOW_POWER_AP] &&
-		    QDF_IS_STATUS_SUCCESS(
-			reg_check_if_6g_pwr_type_supp_for_chan(pdev,
-							REG_VERY_LOW_POWER_AP,
-							chan_idx))) {
-			if (wlan_cm_get_disable_vlp_sta_conn_to_sp_ap(psoc)) {
-				reg_debug("AP SP and STA VLP connection disabled");
-				return QDF_STATUS_E_NOSUPPORT;
-			}
 			*pwr_type_6g = REG_VERY_LOW_POWER_AP;
 			reg_debug("AP power type = %d, selected power type = %d",
 				  ap_pwr_type, *pwr_type_6g);
@@ -1346,3 +1338,18 @@ bool reg_ignore_default_country(struct wlan_regulatory_psoc_priv_obj *soc_reg,
 
 	return true;
 }
+
+#if defined(CONFIG_BAND_6GHZ) && defined(CONFIG_REG_CLIENT)
+bool reg_is_vlp_depriority_freq(struct wlan_objmgr_pdev *pdev,
+				qdf_freq_t freq)
+{
+	qdf_freq_t vlp_cutoff_freq;
+
+	vlp_cutoff_freq = wlan_reg_get_thresh_priority_freq(pdev);
+
+	if (wlan_reg_is_6ghz_chan_freq(freq) && freq <= vlp_cutoff_freq)
+		return true;
+
+	return false;
+}
+#endif

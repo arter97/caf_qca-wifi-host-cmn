@@ -39,6 +39,7 @@ extern uint8_t g_instances_added;
 
 #define INTRL_MODE_DISABLE 0xEEEEEEEE
 #define INTRL_MODE_ENABLE 0x27D
+#define INTRL_MODE_RTP_STREAM_FILTER 0x1A7D
 
 #define ipa_fatal(params...) \
 	QDF_TRACE_FATAL(QDF_MODULE_ID_IPA, params)
@@ -125,13 +126,6 @@ ipa_psoc_get_priv_obj(struct wlan_objmgr_psoc *psoc)
 
 	return ipa_obj;
 }
-/**
- * get_ipa_config() - API to get IPAConfig INI
- * @psoc : psoc handle
- *
- * Return: IPA config value
- */
-uint32_t get_ipa_config(struct wlan_objmgr_psoc *psoc);
 
 /**
  * ipa_priv_obj_get_psoc() - API to get psoc from IPA object
@@ -273,6 +267,27 @@ void ipa_uc_info(struct wlan_objmgr_pdev *pdev);
  * Return: None
  */
 void ipa_uc_stat(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * ipa_set_opt_dp_ctrl_flt() - flt add for opt_dp_ctrl
+ * @pdev: pdev obj
+ * @flt: flt params
+ *
+ * Return: None
+ */
+void ipa_set_opt_dp_ctrl_flt(struct wlan_objmgr_pdev *pdev,
+			     struct ipa_wdi_opt_dpath_flt_add_cb_params *flt);
+
+/*
+ * ipa_set_opt_dp_ctrl_flt_rm() - flt del for opt_dp_ctrl
+ * @pdev: pdev obj
+ * @flt: flt params
+ *
+ * Return: None
+ */
+void ipa_set_opt_dp_ctrl_flt_rm(
+			struct wlan_objmgr_pdev *pdev,
+			struct ipa_wdi_opt_dpath_flt_rem_cb_params *flt);
 
 /**
  * ipa_uc_rt_debug_host_dump() - IPA rt debug host dump
@@ -521,6 +536,15 @@ QDF_STATUS ipa_uc_disconnect_ap(struct wlan_objmgr_pdev *pdev,
  */
 void ipa_cleanup_dev_iface(struct wlan_objmgr_pdev *pdev,
 			   qdf_netdev_t net_dev, uint8_t session_id);
+
+/*
+ * ipa_uc_shutdown_opt_dp_ctrl_cleanup() - enables flag to clean filters
+ * in opt_dp_ctrl
+ * @pdev: pdev obj
+ *
+ * Return: None
+ */
+void ipa_uc_shutdown_opt_dp_ctrl_cleanup(struct wlan_objmgr_pdev *pdev);
 
 /**
  * ipa_uc_ssr_cleanup() - handle IPA UC cleanup during SSR

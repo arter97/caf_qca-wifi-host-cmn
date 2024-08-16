@@ -508,6 +508,17 @@ wmi_unified_dbglog_cmd_send(wmi_unified_t wmi_handle,
 qdf_export_symbol(wmi_unified_dbglog_cmd_send);
 
 QDF_STATUS
+wmi_unified_twt_vdev_config_send(wmi_unified_t wmi_handle,
+				 struct twt_vdev_config_params *param)
+{
+	if (wmi_handle->ops->send_twt_vdev_config_cmd)
+		return wmi_handle->ops->send_twt_vdev_config_cmd(wmi_handle,
+				param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
 wmi_unified_vdev_set_param_send(wmi_unified_t wmi_handle,
 				struct vdev_set_params *param)
 {
@@ -4170,6 +4181,25 @@ QDF_STATUS wmi_extract_aux_dev_cap_service_ready_ext2(
 	return QDF_STATUS_E_FAILURE;
 }
 
+QDF_STATUS
+wmi_unified_peer_active_traffic_map_send(wmi_unified_t wmi_handle,
+					 struct peer_active_traffic_map_params *param)
+{
+	if (wmi_handle->ops->send_active_traffic_map_cmd)
+		return wmi_handle->ops->send_active_traffic_map_cmd(wmi_handle,
+								    param);
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+wmi_unified_sap_suspend_cmd_send(wmi_unified_t wmi_handle,
+				 struct vdev_suspend_params *param)
+{
+	if (wmi_handle->ops->send_sap_suspend_cmd)
+		return wmi_handle->ops->send_sap_suspend_cmd(wmi_handle, param);
+	return QDF_STATUS_E_FAILURE;
+}
+
 #ifdef WLAN_VENDOR_EXTN
 QDF_STATUS
 wmi_unified_send_vendor_peer_cmd(wmi_unified_t wmi_handle,
@@ -4246,3 +4276,25 @@ wmi_extract_vendor_pdev_event(wmi_unified_t wmi_handle,
 	return QDF_STATUS_E_FAILURE;
 }
 #endif /* WLAN_VENDOR_EXTN */
+
+#ifdef WLAN_DP_FEATURE_STC
+QDF_STATUS wmi_unified_send_opm_stats_cmd(wmi_unified_t wmi_handle,
+					  uint8_t pdev_id)
+{
+	if (wmi_handle->ops->send_opm_stats_cmd)
+		return wmi_handle->ops->send_opm_stats_cmd(wmi_handle,
+							   pdev_id);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif
+
+QDF_STATUS
+wmi_unified_send_sta_vdev_report_ap_oper_bw_cmd(wmi_unified_t wmi_handle,
+						struct wmi_sta_vdev_report_ap_oper_bw_params *param)
+{
+	if (wmi_handle->ops->send_sta_vdev_report_ap_oper_bw_cmd)
+		return wmi_handle->ops->send_sta_vdev_report_ap_oper_bw_cmd(wmi_handle,
+									    param);
+	return QDF_STATUS_E_FAILURE;
+}

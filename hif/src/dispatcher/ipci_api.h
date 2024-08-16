@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -282,11 +282,13 @@ int hif_ipci_disable_grp_irqs(struct hif_softc *scn);
  *  intrs based on bitmask
  * @scn: hif context
  * @grp_intr_bitmask: group intr bitmask
+ * @cpumask: cpu mask to which grp_intr should be affined
  * @perf: affine to perf or non-perf cluster
  *
  * Return: None
  */
 void hif_ipci_set_grp_intr_affinity(struct hif_softc *scn,
-				    uint32_t grp_intr_bitmask, bool perf);
+				    uint32_t grp_intr_bitmask,
+				    unsigned int cpumask, bool perf);
 #endif
 #endif /* _IPCI_API_H_ */

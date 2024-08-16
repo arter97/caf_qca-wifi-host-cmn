@@ -51,6 +51,10 @@ ifeq ($(WLAN_SUPPORT_GREEN_AP), 1)
 INCS += -I$(obj)/$(DEPTH)/cmn_dev/umac/green_ap/dispatcher/inc
 endif
 
+ifeq ($(QCA_GCC13_0_SUPPORT), 1)
+ccflags-y+= -Wno-enum-conversion
+endif
+
 INCS += -I$(obj)/$(HOST_CMN_CONVG_SRC)/ipa/core/inc \
         -I$(obj)/$(HOST_CMN_CONVG_SRC)/ipa/core/src \
         -I$(obj)/$(HOST_CMN_CONVG_SRC)/ipa/dispatcher/inc \

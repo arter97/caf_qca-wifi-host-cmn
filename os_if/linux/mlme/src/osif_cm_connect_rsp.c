@@ -413,7 +413,8 @@ osif_get_partner_info_from_mlie(struct wlan_cm_connect_resp *connect_rsp,
 	osif_debug("ML IE found length %d", (int)ml_ie_len);
 
 	qdf_status = util_get_bvmlie_persta_partner_info(ml_ie, ml_ie_len,
-							 partner_info);
+							 partner_info,
+							 WLAN_FC0_STYPE_INVALID);
 	if (QDF_IS_STATUS_ERROR(qdf_status)) {
 		osif_err("Unable to find per-sta profile in ML IE");
 		return qdf_status;
@@ -496,6 +497,24 @@ osif_get_chan_bss_from_kernel(struct wlan_objmgr_vdev *vdev,
 }
 #endif
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 2, 0)) && defined(WLAN_FEATURE_11BE_MLO)
+static void
+osif_populate_link_status_code(struct cfg80211_connect_resp_params *conn_rsp_params,
+			       uint8_t link_id,
+			       enum wlan_status_code link_status_code)
+{
+	conn_rsp_params->links[link_id].status = osif_get_statuscode(link_status_code);
+	osif_debug(" conn rsp status code %d", conn_rsp_params->links[link_id].status);
+}
+#else
+static inline void
+osif_populate_link_status_code(struct cfg80211_connect_resp_params *conn_rsp_params,
+			       uint8_t link_id,
+			       enum wlan_status_code link_status_code)
+{
+}
+#endif
+
 #if defined(CFG80211_SINGLE_NETDEV_MULTI_LINK_SUPPORT) && defined(WLAN_FEATURE_11BE_MLO)
 #ifndef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 static struct wlan_objmgr_vdev *osif_get_partner_vdev(
@@ -512,14 +531,15 @@ void osif_populate_connect_response_for_link(struct wlan_objmgr_vdev *vdev,
 					     struct cfg80211_connect_resp_params *conn_rsp_params,
 					     uint8_t link_id,
 					     uint8_t *link_addr,
+					     enum wlan_status_code link_status_code,
 					     struct cfg80211_bss *bss)
 {
 	if (bss) {
-		osif_debug("Link_id :%d", link_id);
 		conn_rsp_params->valid_links |=  BIT(link_id);
 		conn_rsp_params->links[link_id].bssid = bss->bssid;
 		conn_rsp_params->links[link_id].bss = bss;
 		conn_rsp_params->links[link_id].addr = link_addr;
+		osif_populate_link_status_code(conn_rsp_params, link_id, link_status_code);
 	}
 
 	mlo_mgr_osif_update_connect_info(vdev, link_id);
@@ -581,6 +601,7 @@ osif_populate_partner_links_mlo_params(struct wlan_objmgr_vdev *vdev,
 		osif_populate_connect_response_for_link(vdev, conn_rsp_params,
 							link_id,
 							link_vdev->vdev_mlme.macaddr,
+							rsp_partner_info->link_status_code,
 							bss);
 release_ref:
 		wlan_objmgr_vdev_release_ref(link_vdev, WLAN_OSIF_CM_ID);
@@ -610,6 +631,7 @@ static void osif_fill_connect_resp_mlo_params(struct wlan_objmgr_vdev *vdev,
 	osif_populate_connect_response_for_link(vdev, conn_rsp_params,
 						assoc_link_id,
 						vdev->vdev_mlme.macaddr,
+						rsp->status_code,
 						bss);
 	osif_populate_partner_links_mlo_params(vdev, rsp, conn_rsp_params);
 }
@@ -641,6 +663,7 @@ osif_populate_partner_links_mlo_params(struct wlan_objmgr_vdev *vdev,
 		osif_populate_connect_response_for_link(vdev, conn_rsp_params,
 							link_id,
 							link_info->link_addr.bytes,
+							link_info->link_status_code,
 							bss);
 	}
 }
@@ -676,6 +699,7 @@ static void osif_fill_connect_resp_mlo_params(struct wlan_objmgr_vdev *vdev,
 	osif_populate_connect_response_for_link(vdev, conn_rsp_params,
 						assoc_link_id,
 						link_info->link_addr.bytes,
+						rsp->status_code,
 						bss);
 	osif_populate_partner_links_mlo_params(vdev, rsp, conn_rsp_params);
 }
@@ -796,6 +820,7 @@ void osif_populate_connect_response_for_link(
 			struct cfg80211_connect_resp_params *conn_rsp_params,
 			uint8_t link_id,
 			uint8_t *link_addr,
+			enum wlan_status_code link_status_code,
 			struct cfg80211_bss *bss)
 {
 	if (!bss)
@@ -807,6 +832,7 @@ void osif_populate_connect_response_for_link(
 	conn_rsp_params->links[link_id].bssid = bss->bssid;
 	conn_rsp_params->links[link_id].bss = bss;
 	conn_rsp_params->links[link_id].addr = link_addr;
+	osif_populate_link_status_code(conn_rsp_params, link_id, link_status_code);
 }
 
 static QDF_STATUS
@@ -880,7 +906,9 @@ osif_populate_partner_links_mlo_params(
 
 		osif_populate_connect_response_for_link(
 				vdev, conn_rsp_params, link_id,
-				link_vdev->vdev_mlme.macaddr, bss);
+				link_vdev->vdev_mlme.macaddr,
+				rsp_partner_info->link_status_code,
+				bss);
 
 		wlan_objmgr_vdev_release_ref(link_vdev, WLAN_OSIF_CM_ID);
 	}
@@ -928,6 +956,7 @@ static void osif_fill_connect_resp_mlo_params(
 	osif_populate_connect_response_for_link(vdev, conn_rsp_params,
 						assoc_link_id,
 						vdev->vdev_mlme.macaddr,
+						rsp->status_code,
 						bss);
 	osif_populate_partner_links_mlo_params(vdev, rsp, conn_rsp_params);
 }
@@ -938,6 +967,8 @@ static void osif_fill_connect_resp_mlo_params(
 			struct cfg80211_bss *bss,
 			struct cfg80211_connect_resp_params *conn_rsp_params)
 {
+	conn_rsp_params->links[0].bssid = rsp->bssid.bytes;
+	conn_rsp_params->links[0].bss = bss;
 }
 #endif
 static void
@@ -1117,7 +1148,7 @@ static void osif_indcate_connect_results(struct wlan_objmgr_vdev *vdev,
 #else /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 213)) && \
-	(LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0))
+	(LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0))
 /**
  * osif_update_current_bss() - Wrapper API to call cfg80211_update_current_bss
  * @dev: network device

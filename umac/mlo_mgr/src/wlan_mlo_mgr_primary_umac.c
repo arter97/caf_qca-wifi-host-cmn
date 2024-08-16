@@ -1012,6 +1012,9 @@ void mlo_mlme_ptqm_migrate_timer_cb(void *arg)
 			ml_peer = wlan_mlo_get_mlpeer_by_ml_peerid(ml_dev, i);
 			if (ml_peer && ml_peer->primary_umac_migration_in_progress) {
 				ml_peer->primary_umac_migration_in_progress = false;
+				wlan_ptqm_peer_migrate_completion
+					(ml_dev, ml_peer,
+					 PRIMARY_LINK_PEER_MIGRATION_FAIL);
 				mlo_err("Issue disconnect for ml peer with ml peer id:%d", i);
 				wlan_mlo_peer_deauth_init(ml_peer,
 							  NULL, 0);
@@ -1637,7 +1640,7 @@ QDF_STATUS wlan_mlo_set_ptqm_migration(struct wlan_objmgr_vdev *vdev,
 	uint8_t current_primary_link_id = WLAN_LINK_ID_INVALID;
 	uint16_t num_peers_failed = 0;
 	QDF_STATUS status;
-	struct mlo_all_link_rssi rssi_data;
+	struct mlo_all_link_rssi rssi_data = {0};
 
 	if (!vdev) {
 		mlo_err("Vdev is NULL");
@@ -1789,16 +1792,20 @@ struct ptqm_migrate_peer_req_context {
  * @vdev: VDEV object
  * @src_link_id: Source link id
  * @migration_list: Peer list
+ * @rssi_data: RSSI data of all the HW links
  * @begin: Callback to be called at the beginning
  * @end: Callback to be called at the end
  * @user_data: Opaque user data
  * @link_disable: Link disable flag
  * @force_mig: Force migration
+ * @ptqm_link_lock: Spin lock
+ * @link_req_ctx_idx: idx of current link ptqm context ml dev context
  */
 struct ptqm_migrate_link_req_context {
 	struct wlan_objmgr_vdev *vdev;
 	uint8_t src_link_id;
 	struct peer_migrate_ptqm_multi_entries migration_list;
+	struct mlo_all_link_rssi rssi_data;
 	void (*begin)(struct wlan_objmgr_vdev *vdev, void *user_data);
 	void (*end)(struct wlan_objmgr_vdev *vdev,
 		    QDF_STATUS status, void *user_data,
@@ -1811,6 +1818,8 @@ struct ptqm_migrate_link_req_context {
 	uint8_t module_id;
 	struct ptqm_link_migration_rsp_params rsp_params;
 	bool force_mig;
+	qdf_spinlock_t ptqm_link_lock;
+	uint8_t link_req_ctx_idx;
 };
 
 /*
@@ -1825,6 +1834,12 @@ struct ptqm_migrate_peer_context {
 	struct ptqm_migrate_peer_req_context *pending_req_ctx;
 	struct ptqm_migrate_peer_req_context *active_req_ctx;
 };
+
+static QDF_STATUS
+wlan_ptqm_peer_migrate_req_add_internal(struct wlan_objmgr_vdev *vdev,
+					struct wlan_mlo_peer_context *ml_peer,
+					struct ptqm_peer_migrate_params *params,
+					bool is_link_req);
 
 /*
  * Peer context operations
@@ -1969,11 +1984,19 @@ wlan_ptqm_peer_migrate_ctx_free(struct wlan_mlo_peer_context *ml_peer)
 		return;
 
 	if (ptqm_peer_ctx->pending_req_ctx) {
+		mlo_info("clearing pending_req_ctx for ml_peer %u",
+			 ml_peer->mlo_peer_id);
+		wlan_ptqm_notify_end(ml_peer, ptqm_peer_ctx->pending_req_ctx,
+				     PRIMARY_LINK_PEER_MIGRATION_DELETED);
 		wlan_ptqm_peer_req_context_free(ptqm_peer_ctx->pending_req_ctx);
 		ptqm_peer_ctx->pending_req_ctx = NULL;
 	}
 
 	if (ptqm_peer_ctx->active_req_ctx) {
+		mlo_info("clearing active_req_ctx for ml_peer %u",
+			 ml_peer->mlo_peer_id);
+		wlan_ptqm_notify_end(ml_peer, ptqm_peer_ctx->active_req_ctx,
+				     PRIMARY_LINK_PEER_MIGRATION_DELETED);
 		wlan_ptqm_peer_req_context_free(ptqm_peer_ctx->active_req_ctx);
 		ptqm_peer_ctx->active_req_ctx = NULL;
 	}
@@ -2107,10 +2130,12 @@ wlan_ptqm_peer_migration_set(struct wlan_mlo_peer_context *ml_peer)
 	 * Post request to core framework
 	 */
 #ifdef PTQM_LAYER_DEBUG
-	if (ptqm_migration_core_op) {
+	if (!ptqm_migration_core_op) {
 		status = wlan_mlo_set_ptqm_migration(vdev, ml_peer, false,
 						     dst_link_id, force_mig);
 	} else {
+		mlo_info("debug mode is enabled for ml_peer %u",
+			 ml_peer->mlo_peer_id);
 		status = QDF_STATUS_SUCCESS;
 	}
 #else
@@ -2128,6 +2153,7 @@ wlan_ptqm_peer_migration_set(struct wlan_mlo_peer_context *ml_peer)
 		wlan_ptqm_notify_end(ml_peer, active_req_ctx,
 				     PRIMARY_LINK_PEER_MIGRATION_FAIL);
 		wlan_ptqm_peer_req_context_free(active_req_ctx);
+		ptqm_peer_ctx->active_req_ctx = NULL;
 	}
 
 	return;
@@ -2302,32 +2328,60 @@ wlan_ptqm_add_pending_context
 
 static inline struct ptqm_migrate_link_req_context *
 wlan_ptqm_get_mlo_link_context(struct wlan_mlo_dev_context *dev_ctx,
-			       uint8_t vdev_id)
+			       struct wlan_objmgr_vdev *vdev)
 {
-	return dev_ctx->link_ptqm_migrate_ctx[vdev_id];
-}
+	struct ptqm_migrate_link_req_context *link_req_ctx;
+	uint8_t idx;
 
-static inline void
-wlan_ptqm_set_mlo_link_context(struct wlan_mlo_dev_context *dev_ctx,
-			       uint8_t vdev_id,
-			       struct ptqm_migrate_link_req_context *ctx)
-{
-	dev_ctx->link_ptqm_migrate_ctx[vdev_id] = ctx;
+	for (idx = 0; idx < WLAN_UMAC_MLO_MAX_VDEVS; idx++) {
+		link_req_ctx = dev_ctx->link_ptqm_migrate_ctx[idx];
+		if (!link_req_ctx)
+			continue;
+
+		if (vdev == link_req_ctx->vdev)
+			return link_req_ctx;
+	}
+	return NULL;
 }
 
 static inline QDF_STATUS
-wlan_ptqm_migrate_list_init(struct peer_migrate_ptqm_multi_entries *list)
+wlan_ptqm_set_mlo_link_context(struct wlan_mlo_dev_context *dev_ctx,
+			       struct wlan_objmgr_vdev *vdev,
+			       struct ptqm_migrate_link_req_context *ctx)
 {
-	struct mlo_all_link_rssi *rssi_data;
+	struct ptqm_migrate_link_req_context *link_req_ctx;
+	uint8_t idx;
+	uint8_t set_idx = WLAN_UMAC_MLO_MAX_VDEVS;
 
-	rssi_data = qdf_mem_malloc(sizeof(*rssi_data));
-	if (!rssi_data)
-		return QDF_STATUS_E_NOMEM;
+	for (idx = 0; idx < WLAN_UMAC_MLO_MAX_VDEVS; idx++) {
+		link_req_ctx = dev_ctx->link_ptqm_migrate_ctx[idx];
+		if (!link_req_ctx) {
+			if (set_idx == WLAN_UMAC_MLO_MAX_VDEVS)
+				set_idx = idx;
+			continue;
+		}
+		if (link_req_ctx->vdev && link_req_ctx->vdev == vdev) {
+			set_idx = idx;
+			break;
+		}
+	}
 
+	if (set_idx != WLAN_UMAC_MLO_MAX_VDEVS) {
+		if (ctx)
+			ctx->link_req_ctx_idx = set_idx;
+		dev_ctx->link_ptqm_migrate_ctx[set_idx] = ctx;
+		return QDF_STATUS_SUCCESS;
+	}
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+static inline QDF_STATUS
+wlan_ptqm_migrate_list_init(struct peer_migrate_ptqm_multi_entries *list,
+			    struct mlo_all_link_rssi *rssi_data)
+{
 	qdf_mem_zero(list, sizeof(*list));
 	qdf_list_create(&list->peer_list, MAX_MLO_PEER_ID);
-
-	mld_get_link_rssi(rssi_data);
 
 	list->rssi_data = rssi_data;
 
@@ -2356,7 +2410,6 @@ wlan_ptqm_migrate_list_destroy(struct peer_migrate_ptqm_multi_entries *list)
 	/*
 	 * free peers from the peer_list and destroy the peer_list
 	 */
-	qdf_mem_free(list->rssi_data);
 	list->rssi_data = NULL;
 	wlan_mlo_free_ptqm_migrate_list(list);
 }
@@ -2423,6 +2476,8 @@ wlan_ptqm_peer_migration_end_link_cb
 
 	link_req_ctx = (struct ptqm_migrate_link_req_context *)user_data;
 
+	qdf_spin_lock_bh(&link_req_ctx->ptqm_link_lock);
+
 	vdev = link_req_ctx->vdev;
 
 	vdev_id = wlan_vdev_get_id(vdev);
@@ -2437,19 +2492,25 @@ wlan_ptqm_peer_migration_end_link_cb
 	qdf_clear_bit(ml_peer->mlo_peer_id,
 		      link_req_ctx->mlo_peer_id_pending_bmap);
 
-	if (status == PRIMARY_LINK_PEER_MIGRATION_FAIL)
+	if (status != PRIMARY_LINK_PEER_MIGRATION_SUCCESS)
 		++rsp_params->fail_peer_count;
 
 	if (qdf_bitmap_empty(link_req_ctx->mlo_peer_id_pending_bmap,
 			     MAX_MLO_PEER_ID)) {
 		mlo_info("migration completed for vdev %u", vdev_id);
-		wlan_objmgr_vdev_release_ref(link_req_ctx->vdev,
-					     WLAN_MLO_MGR_ID);
 		wlan_ptqm_notify_link_req_end(link_req_ctx);
 		wlan_ptqm_migrate_list_destroy(&link_req_ctx->migration_list);
+		qdf_spin_unlock_bh(&link_req_ctx->ptqm_link_lock);
+		qdf_spinlock_destroy(&link_req_ctx->ptqm_link_lock);
+		wlan_ptqm_set_mlo_link_context(ml_dev, link_req_ctx->vdev,
+					       NULL);
+		wlan_objmgr_vdev_release_ref(link_req_ctx->vdev,
+					     WLAN_MLO_MGR_ID);
 		qdf_mem_free(link_req_ctx);
-		wlan_ptqm_set_mlo_link_context(ml_dev, vdev_id, NULL);
+		return;
 	}
+
+	qdf_spin_unlock_bh(&link_req_ctx->ptqm_link_lock);
 }
 
 static void
@@ -2462,12 +2523,33 @@ wlan_ptqm_schedule_link_migrate_req
 	struct peer_ptqm_migrate_list_entry *peer_entry, *next_entry;
 	uint8_t vdev_id;
 	QDF_STATUS status;
+	uint8_t link_req_ctx_idx;
 
 	vdev_id = wlan_vdev_get_id(vdev);
 
 	ml_dev = vdev->mlo_dev_ctx;
 
+	link_req_ctx_idx = link_req_ctx->link_req_ctx_idx;
+
 	migration_list = &link_req_ctx->migration_list;
+
+	/*
+	 * Iterate through the peer list and set pending bitmask
+	 * before starting peer migration
+	 */
+	qdf_spin_lock_bh(&link_req_ctx->ptqm_link_lock);
+
+	peer_entry = mlo_ptqm_list_peek_head(&migration_list->peer_list);
+	while (peer_entry) {
+		qdf_set_bit(peer_entry->mlo_peer_id,
+			    link_req_ctx->mlo_peer_id_pending_bmap);
+
+		next_entry = mlo_get_next_peer_ctx(&migration_list->peer_list,
+						   peer_entry);
+		peer_entry = next_entry;
+	}
+
+	qdf_spin_unlock_bh(&link_req_ctx->ptqm_link_lock);
 
 	peer_entry = mlo_ptqm_list_peek_head(&migration_list->peer_list);
 	while (peer_entry) {
@@ -2488,17 +2570,24 @@ wlan_ptqm_schedule_link_migrate_req
 		mlo_info("ml_peer %u dst %u", peer_entry->mlo_peer_id,
 			 peer_entry->new_hw_link_id);
 
-		qdf_set_bit(peer_entry->mlo_peer_id,
-			    link_req_ctx->mlo_peer_id_pending_bmap);
-
-		status = wlan_ptqm_peer_migrate_req_add
-			(vdev, peer_entry->peer->mlo_peer_ctx, &params);
+		status = wlan_ptqm_peer_migrate_req_add_internal
+			(vdev, peer_entry->peer->mlo_peer_ctx, &params, true);
 		if (QDF_IS_STATUS_ERROR(status)) {
 			mlo_err("Unable to add peer request for ml_peer %u",
 				peer_entry->mlo_peer_id);
 			qdf_clear_bit(peer_entry->mlo_peer_id,
 				      link_req_ctx->mlo_peer_id_pending_bmap);
 			link_req_ctx->rsp_params.fail_peer_count++;
+			if (qdf_bitmap_empty
+					(link_req_ctx->mlo_peer_id_pending_bmap,
+					 MAX_MLO_PEER_ID)) {
+				goto fail;
+			}
+		}
+
+		if (!ml_dev->link_ptqm_migrate_ctx[link_req_ctx_idx]) {
+			mlo_info("vdev_id %u link_req_ctx is NULL", vdev_id);
+			return;
 		}
 
 		next_entry = mlo_get_next_peer_ctx(&migration_list->peer_list,
@@ -2506,25 +2595,28 @@ wlan_ptqm_schedule_link_migrate_req
 		peer_entry = next_entry;
 	}
 
+	return;
+fail:
 	if (qdf_bitmap_empty(link_req_ctx->mlo_peer_id_pending_bmap,
 			     MAX_MLO_PEER_ID)) {
 		mlo_info("req completed for vdev %u", vdev_id);
-		wlan_objmgr_vdev_release_ref(link_req_ctx->vdev,
-					     WLAN_MLO_MGR_ID);
 		wlan_ptqm_notify_link_req_end(link_req_ctx);
 		wlan_ptqm_migrate_list_destroy(&link_req_ctx->migration_list);
+		qdf_spinlock_destroy(&link_req_ctx->ptqm_link_lock);
+		wlan_ptqm_set_mlo_link_context(ml_dev, link_req_ctx->vdev,
+					       NULL);
+		wlan_objmgr_vdev_release_ref(link_req_ctx->vdev,
+					     WLAN_MLO_MGR_ID);
 		qdf_mem_free(link_req_ctx);
-		wlan_ptqm_set_mlo_link_context(ml_dev, vdev_id, NULL);
+		return;
 	}
 }
 
-/*
- * Public APIs
- */
-QDF_STATUS
-wlan_ptqm_peer_migrate_req_add(struct wlan_objmgr_vdev *vdev,
-			       struct wlan_mlo_peer_context *ml_peer,
-			       struct ptqm_peer_migrate_params *params)
+static QDF_STATUS
+wlan_ptqm_peer_migrate_req_add_internal(struct wlan_objmgr_vdev *vdev,
+					struct wlan_mlo_peer_context *ml_peer,
+					struct ptqm_peer_migrate_params *params,
+					bool is_link_req)
 {
 	struct ptqm_migrate_peer_context *ptqm_peer_ctx;
 	struct ptqm_migrate_peer_req_context *pending_req_ctx;
@@ -2547,7 +2639,7 @@ wlan_ptqm_peer_migrate_req_add(struct wlan_objmgr_vdev *vdev,
 	 */
 	req.module_id = params->module_id;
 	req.priority = params->module_id;
-	req.is_link_req = false;
+	req.is_link_req = is_link_req;
 	req.user_data = params->user_data;
 	req.begin = params->begin;
 	req.end = params->end;
@@ -2604,6 +2696,18 @@ wlan_ptqm_peer_migrate_req_add(struct wlan_objmgr_vdev *vdev,
 	qdf_spin_unlock_bh(&ptqm_peer_ctx->ptqm_peer_lock);
 
 	return QDF_STATUS_SUCCESS;
+}
+
+/*
+ * Public APIs
+ */
+QDF_STATUS
+wlan_ptqm_peer_migrate_req_add(struct wlan_objmgr_vdev *vdev,
+			       struct wlan_mlo_peer_context *ml_peer,
+			       struct ptqm_peer_migrate_params *params)
+{
+	return wlan_ptqm_peer_migrate_req_add_internal(vdev, ml_peer, params,
+						       false);
 }
 
 void
@@ -2686,7 +2790,7 @@ wlan_ptqm_link_migrate_req_add(struct wlan_objmgr_vdev *vdev,
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
-	link_req_ctx = wlan_ptqm_get_mlo_link_context(dev_ctx, vdev_id);
+	link_req_ctx = wlan_ptqm_get_mlo_link_context(dev_ctx, vdev);
 	if (link_req_ctx) {
 		mlo_err("Link request is already active");
 		wlan_objmgr_vdev_release_ref(vdev, WLAN_MLO_MGR_ID);
@@ -2705,7 +2809,13 @@ wlan_ptqm_link_migrate_req_add(struct wlan_objmgr_vdev *vdev,
 
 	qdf_mem_zero(link_req_ctx, sizeof(*link_req_ctx));
 
-	wlan_ptqm_set_mlo_link_context(dev_ctx, vdev_id, link_req_ctx);
+	status = wlan_ptqm_set_mlo_link_context(dev_ctx, vdev, link_req_ctx);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mlo_err("Unable to set link context");
+		qdf_mem_free(link_req_ctx);
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_MLO_MGR_ID);
+		return status;
+	}
 
 	link_req_ctx->vdev = vdev;
 	link_req_ctx->module_id = params->module_id;
@@ -2716,13 +2826,19 @@ wlan_ptqm_link_migrate_req_add(struct wlan_objmgr_vdev *vdev,
 	link_req_ctx->link_disable = params->link_disable;
 	link_req_ctx->force_mig = params->force_mig;
 
+	qdf_spinlock_create(&link_req_ctx->ptqm_link_lock);
+
+	mld_get_link_rssi(&link_req_ctx->rssi_data);
+
 	migrate_list = &link_req_ctx->migration_list;
 
-	status = wlan_ptqm_migrate_list_init(migrate_list);
+	status = wlan_ptqm_migrate_list_init(migrate_list,
+					     &link_req_ctx->rssi_data);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		mlo_err("Unable to initialize peer migrate list");
+		qdf_spinlock_destroy(&link_req_ctx->ptqm_link_lock);
+		wlan_ptqm_set_mlo_link_context(dev_ctx, vdev, NULL);
 		qdf_mem_free(link_req_ctx);
-		wlan_ptqm_set_mlo_link_context(dev_ctx, vdev_id, NULL);
 		wlan_objmgr_vdev_release_ref(vdev, WLAN_MLO_MGR_ID);
 		return status;
 	}
@@ -2741,9 +2857,10 @@ wlan_ptqm_link_migrate_req_add(struct wlan_objmgr_vdev *vdev,
 		wlan_ptqm_notify_link_req_begin(link_req_ctx);
 		wlan_ptqm_notify_link_req_end(link_req_ctx);
 		wlan_ptqm_migrate_list_destroy(migrate_list);
+		wlan_ptqm_set_mlo_link_context(dev_ctx, vdev, NULL);
 		wlan_objmgr_vdev_release_ref(vdev, WLAN_MLO_MGR_ID);
+		qdf_spinlock_destroy(&link_req_ctx->ptqm_link_lock);
 		qdf_mem_free(link_req_ctx);
-		wlan_ptqm_set_mlo_link_context(dev_ctx, vdev_id, NULL);
 		return QDF_STATUS_SUCCESS;
 	}
 

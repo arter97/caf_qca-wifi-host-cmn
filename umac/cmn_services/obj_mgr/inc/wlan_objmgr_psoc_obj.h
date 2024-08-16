@@ -421,6 +421,7 @@ struct wlan_soc_timer {
  * @wsi_remap_add:    WSI remap add is performed
  * @wsi_remap_remove: WSI remap remove is performed
  * @wsi_remap_fw_up_in_progress: Remap FW UP in progress
+ * @wsi_remap_recovery_in_progress: Recovery post wsi remap
  */
 struct wlan_objmgr_psoc {
 	struct wlan_objmgr_psoc_regulatory soc_reg;
@@ -439,6 +440,7 @@ struct wlan_objmgr_psoc {
 	bool wsi_remap_add;
 	bool wsi_remap_remove;
 	bool wsi_remap_fw_up_in_progress;
+	bool wsi_remap_recovery_in_progress;
 };
 
 /**

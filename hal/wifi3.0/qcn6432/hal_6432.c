@@ -1153,19 +1153,6 @@ hal_rx_flow_setup_fse_6432(uint8_t *rx_fst, uint32_t table_offset,
 }
 
 /**
- * hal_rx_peer_meta_data_get_6432() - get peer meta data from rx_pkt_tlvs
- * @buf: start of rx_tlv_hdr
- *
- * Return: peer meta data
- */
-static inline uint32_t hal_rx_peer_meta_data_get_6432(uint8_t *buf)
-{
-	struct rx_pkt_tlvs *rx_pkt_tlvs = (struct rx_pkt_tlvs *)buf;
-
-	return HAL_RX_TLV_MSDU_PEER_META_DATA_GET(rx_pkt_tlvs);
-}
-
-/**
  * hal_rx_msdu_get_keyid_6432() - API to get the key id of the decrypted packet
  *                                from rx_msdu_end
  * @buf: pointer to the start of RX PKT TLV header
@@ -1646,6 +1633,61 @@ static void hal_get_tqm_scratch_reg_qcn6432(hal_soc_handle_t hal_soc_hdl,
 	*value = ((uint64_t)(offset_hi) << 32 | offset_lo);
 }
 
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
+/**
+ * hal_txmon_get_frame_timestamp_qcn6432() - api to get frame timestamp for tx monitor
+ * @tlv_tag: TLV tag
+ * @tx_tlv: pointer to tx tlv information
+ * @ppdu_info: pointer to ppdu_info
+ *
+ * Return: void
+ */
+static inline
+void hal_txmon_get_frame_timestamp_qcn6432(uint32_t tlv_tag, void *tx_tlv,
+					   void *ppdu_info)
+{
+	struct hal_tx_ppdu_info *tx_ppdu_info =
+			(struct hal_tx_ppdu_info *) ppdu_info;
+
+	switch (tlv_tag) {
+	case WIFIRESPONSE_END_STATUS_E:
+	{
+		hal_response_end_status_t *resp_end_status =
+					(hal_response_end_status_t *)tx_tlv;
+
+		TXMON_HAL_STATUS(tx_ppdu_info, ppdu_timestamp) =
+			(resp_end_status->start_of_frame_timestamp_15_0 |
+			 (resp_end_status->start_of_frame_timestamp_31_16 << 16));
+		break;
+	}
+
+	case WIFITX_FES_STATUS_END_E:
+	{
+		hal_tx_fes_status_end_t *tx_fes_end =
+					(hal_tx_fes_status_end_t *)tx_tlv;
+
+		TXMON_HAL_STATUS(tx_ppdu_info, ppdu_timestamp) =
+			(tx_fes_end->start_of_frame_timestamp_15_0 |
+			 tx_fes_end->start_of_frame_timestamp_31_16 <<
+			 HAL_TX_LSB(TX_FES_STATUS_END,
+			 START_OF_FRAME_TIMESTAMP_31_16));
+		break;
+	}
+
+	case WIFITX_FES_STATUS_PROT_E:
+	{
+		hal_tx_fes_status_prot_t *fes_prot =
+					(hal_tx_fes_status_prot_t *)tx_tlv;
+
+		TXMON_HAL_STATUS(tx_ppdu_info, ppdu_timestamp) =
+			(fes_prot->start_of_frame_timestamp_15_0 |
+			fes_prot->start_of_frame_timestamp_31_16 << 15);
+		break;
+	}
+	}
+}
+#endif
+
 static void hal_hw_txrx_ops_attach_qcn6432(struct hal_soc *hal_soc)
 {
 	/* init and setup */
@@ -1742,8 +1784,6 @@ static void hal_hw_txrx_ops_attach_qcn6432(struct hal_soc *hal_soc)
 		hal_rx_get_mpdu_mac_ad4_valid_be;
 	hal_soc->ops->hal_rx_mpdu_start_sw_peer_id_get =
 		hal_rx_mpdu_start_sw_peer_id_get_6432;
-	hal_soc->ops->hal_rx_tlv_peer_meta_data_get =
-		hal_rx_peer_meta_data_get_6432;
 #ifndef CONFIG_WORD_BASED_TLV
 	hal_soc->ops->hal_rx_mpdu_get_addr4 = hal_rx_mpdu_get_addr4_be;
 	hal_soc->ops->hal_rx_mpdu_info_ampdu_flag_get =
@@ -1903,6 +1943,8 @@ static void hal_hw_txrx_ops_attach_qcn6432(struct hal_soc *hal_soc)
 		hal_txmon_status_parse_tlv_generic_be;
 	hal_soc->ops->hal_txmon_status_get_num_users =
 		hal_txmon_status_get_num_users_generic_be;
+	hal_soc->ops->hal_txmon_get_frame_timestamp =
+				hal_txmon_get_frame_timestamp_qcn6432;
 #if defined(TX_MONITOR_WORD_MASK)
 	hal_soc->ops->hal_txmon_get_word_mask =
 				hal_txmon_get_word_mask_qcn6432;
@@ -2306,7 +2348,7 @@ struct hal_hw_srng_config hw_srng_table_6432[] = {
 	{},
 #endif
 	{ /* RXDMA_MONITOR_STATUS */
-		.start_ring_id = HAL_SRNG_WMAC1_SW2RXDMA1_STATBUF,
+		.start_ring_id = HAL_SRNG_WMAC1_SW2RXDMA0_STATBUF,
 		.max_rings = 0,
 		.entry_size = sizeof(struct wbm_buffer_ring) >> 2,
 		.lmac_ring = TRUE,

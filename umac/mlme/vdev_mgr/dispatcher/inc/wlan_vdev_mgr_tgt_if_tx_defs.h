@@ -746,6 +746,18 @@ struct vdev_start_params {
 };
 
 /**
+ * struct twt_vdev_config_params - twt vdev config cmd parameter
+ * @pdev_id: pdev id
+ * @vdev_id: vdev id
+ * @twt_value: twt value
+ */
+struct twt_vdev_config_params {
+	uint32_t pdev_id;
+	uint32_t vdev_id;
+	uint32_t twt_value;
+};
+
+/**
  * struct vdev_set_params - vdev set cmd parameter
  * @vdev_id: vdev id
  * @param_id: parameter id
@@ -755,6 +767,18 @@ struct vdev_set_params {
 	uint32_t vdev_id;
 	uint32_t param_id;
 	uint32_t param_value;
+};
+
+/**
+ * struct vdev_suspend_params - vdev suspend cmd parameter
+ * @vdev_id: vdev id
+ * @mac_addr: mac address, MLD mac where vdev belongs to MLO SAP
+ * @suspend: suspend flag
+ */
+struct vdev_suspend_params {
+	uint32_t vdev_id;
+	uint8_t mac_addr[QDF_MAC_ADDR_SIZE];
+	uint32_t suspend;
 };
 
 /**

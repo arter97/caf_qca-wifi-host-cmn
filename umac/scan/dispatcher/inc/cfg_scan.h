@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -204,7 +204,7 @@ enum scan_mode_6ghz {
  */
 #define CFG_MIN_6G_CHANNEL_TIME CFG_INI_UINT(\
 		"min_dwell_time_6g",\
-		5, 60, 25,\
+		5, 105, PLATFORM_VALUE(25, 104),\
 		CFG_VALUE_OR_DEFAULT, "min dwell time for 6G channels")
 
 /*
@@ -227,7 +227,7 @@ enum scan_mode_6ghz {
  */
 #define CFG_ACTIVE_MAX_6G_CHANNEL_TIME CFG_INI_UINT(\
 		"active_max_channel_time_6g",\
-		0, 10000, 60,\
+		0, 10000, PLATFORM_VALUE(60, 110),\
 		CFG_VALUE_OR_DEFAULT, "max active dwell time for 6G channels")
 
 /*
@@ -249,7 +249,7 @@ enum scan_mode_6ghz {
  */
 #define CFG_PASSIVE_MAX_6G_CHANNEL_TIME CFG_INI_UINT(\
 		"passive_max_channel_time_6g",\
-		0, 10000, 60,\
+		0, 10000, PLATFORM_VALUE(60, 110),\
 		CFG_VALUE_OR_DEFAULT, "max passive dwell time for 6G channels")
 
 /*
@@ -273,7 +273,7 @@ enum scan_mode_6ghz {
  */
 #define CFG_ACTIVE_MAX_6G_CHANNEL_TIME_CONC CFG_INI_UINT(\
 		"active_max_channel_time_6g_conc",\
-		0, 10000, 40,\
+		0, 10000, PLATFORM_VALUE(40, 110),\
 		CFG_VALUE_OR_DEFAULT, "active conc dwell time for 6G channels")
 
 /*
@@ -297,7 +297,7 @@ enum scan_mode_6ghz {
  */
 #define CFG_PASSIVE_MAX_6G_CHANNEL_TIME_CONC CFG_INI_UINT(\
 		"passive_max_channel_time_6g_conc",\
-		0, 10000, 40,\
+		0, 10000, PLATFORM_VALUE(40, 110),\
 		CFG_VALUE_OR_DEFAULT,\
 		"passive conc dwell time for 6G channels")
 

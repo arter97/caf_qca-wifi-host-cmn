@@ -675,6 +675,9 @@ QDF_STATUS
 QDF_STATUS (*send_vdev_set_param_cmd)(wmi_unified_t wmi_handle,
 				struct vdev_set_params *param);
 
+QDF_STATUS (*send_twt_vdev_config_cmd)(wmi_unified_t wmi_handle,
+				       struct twt_vdev_config_params *param);
+
 QDF_STATUS
 (*send_multiple_vdev_param_cmd)(wmi_unified_t wmi_handle,
 				struct set_multiple_pdev_vdev_param *params);
@@ -3259,6 +3262,11 @@ QDF_STATUS (*extract_mlo_link_removal_evt_fixed_param)(
 		void *buf,
 		struct mlo_link_removal_evt_params *params);
 
+QDF_STATUS (*extract_mlo_3_link_tlt_selection_fixed_param)(
+		struct wmi_unified *wmi_handle,
+		void *buf,
+		struct mlo_tlt_selection_evt_params *params);
+
 QDF_STATUS (*extract_mlo_link_removal_tbtt_update)(
 		struct wmi_unified *wmi_handle,
 		void *buf,
@@ -3554,6 +3562,18 @@ QDF_STATUS (*extract_vendor_pdev_event)(wmi_unified_t wmi_handle,
 					uint8_t *evt_buf,
 					void *param, void *subtype);
 #endif /* WLAN_VENDOR_EXTN */
+QDF_STATUS (*send_active_traffic_map_cmd)(wmi_unified_t wmi_handle,
+					  struct peer_active_traffic_map_params *param);
+QDF_STATUS (*send_sap_suspend_cmd)(wmi_unified_t wmi_handle,
+				   struct vdev_suspend_params *param);
+
+#ifdef WLAN_DP_FEATURE_STC
+QDF_STATUS (*send_opm_stats_cmd)(wmi_unified_t wmi_handle, uint8_t pdev_id);
+#endif
+
+QDF_STATUS
+(*send_sta_vdev_report_ap_oper_bw_cmd)(wmi_unified_t wmi_handle,
+				       struct wmi_sta_vdev_report_ap_oper_bw_params *param);
 };
 
 /* Forward declaration for psoc*/

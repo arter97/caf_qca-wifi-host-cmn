@@ -1108,11 +1108,26 @@ struct cdp_delay_stats {
 	uint32_t avg_delay;
 };
 
+#ifdef WLAN_FEATURE_UL_JITTER
+/**
+ * struct cdp_jitter_stats - jitter statistics
+ * @stats: jitter stats in us
+ * @curr_delay: current delay in us
+ * @prev_delay: previous delay in us
+ */
+struct cdp_jitter_stats {
+	struct cdp_delay_stats stats;
+	uint32_t curr_delay;
+	uint32_t prev_delay;
+};
+#endif
+
 /**
  * struct cdp_tid_tx_stats - per-TID statistics
  * @swq_delay: delay between wifi driver entry point and enqueue to HW in tx
  * @hwtx_delay: delay between wifi driver exit (enqueue to HW) and tx completion
  * @intfrm_delay: interframe delay
+ * @jitter_stats: jitter stats
  * @success_cnt: total successful transmit count
  * @comp_fail_cnt: firmware drop found in tx completion path
  * @swdrop_cnt: software drop in tx path
@@ -1123,6 +1138,9 @@ struct cdp_tid_tx_stats {
 	struct cdp_delay_stats swq_delay;
 	struct cdp_delay_stats hwtx_delay;
 	struct cdp_delay_stats intfrm_delay;
+#ifdef WLAN_FEATURE_UL_JITTER
+	struct cdp_jitter_stats jitter_stats;
+#endif
 	uint64_t success_cnt;
 	uint64_t comp_fail_cnt;
 	uint64_t swdrop_cnt[TX_MAX_DROP];
@@ -1222,6 +1240,8 @@ struct cdp_tid_stats_intf {
  * @hw_delay_win_avg: average Wifi HW delay for each window
  * @cur_win_num_pkts: number of packets processed in current window
  * @curr_win_idx: current windows index
+ * @max_window_size: Size of Max window size
+ * @max_pkt_per_window_size: Size of Max packets per window size
  */
 struct cdp_delay_tx_stats {
 	struct cdp_hist_stats    tx_swq_delay;
@@ -1239,6 +1259,9 @@ struct cdp_delay_tx_stats {
 	uint32_t cur_win_num_pkts;
 	uint32_t curr_win_idx;
 #endif
+
+	uint32_t max_window_size;
+	uint32_t max_pkt_per_window_size;
 };
 
 /**
@@ -1460,6 +1483,146 @@ struct protocol_trace_count {
 };
 
 /**
+ * enum cdp_rx_proto_stats_update_level - Rx protocol stats update level
+ * @RX_RECV_FROM_HW: Packets received from Hardware
+ * @RX_SENT_TO_STACK: Packets sent to stack
+ * @RX_UPD_LEVEL_MAX: MAX enumeration
+ */
+enum cdp_rx_proto_stats_update_level {
+	RX_RECV_FROM_HW = 0,
+	RX_SENT_TO_STACK,
+	RX_UPD_LEVEL_MAX,
+};
+
+/**
+ * enum cdp_tx_proto_stats_update_level - Tx protocol stats update level
+ * @TX_RECV_FROM_STACK: Packets received from stack
+ * @TX_RECV_FROM_STACK_FP: Packets received from stack in fastpath
+ * @TX_ENQUEUE_HW: Packets enqueued to Hardware
+ * @TX_ENQUEUE_HW_FP: Packets enqueued to Hardware in Fastpath
+ * @TX_COMP: Packets received in Tx completion
+ * @TX_EXCEPTION: Packets received from stack in exception path
+ * @TX_UPD_LEVEL_MAX: MAX enumeration
+ */
+enum cdp_tx_proto_stats_update_level {
+	TX_RECV_FROM_STACK = 0,
+	TX_RECV_FROM_STACK_FP,
+	TX_ENQUEUE_HW,
+	TX_ENQUEUE_HW_FP,
+	TX_COMP,
+	TX_EXCEPTION,
+	TX_UPD_LEVEL_MAX,
+};
+
+#ifdef QCA_DP_PROTOCOL_STATS
+/**
+ * enum cdp_pkt_l3_proto_type -  L3 Protocols supported by Protocol stats
+ * @CDP_PKT_TYPE_ARP: ARP packets
+ * @CDP_PKT_TYPE_IPV4: IPV4 packets
+ * @CDP_PKT_TYPE_IPV6: IPV6 packets
+ * @CDP_PKT_TYPE_EAPOL: EAPOL packets
+ * @CDP_PKT_TYPE_EAPOL_M1: EAPOL packets - subtype M1
+ * @CDP_PKT_TYPE_EAPOL_M2: EAPOL packets - subtype M2
+ * @CDP_PKT_TYPE_EAPOL_M3: EAPOL packets - subtype M3
+ * @CDP_PKT_TYPE_EAPOL_M4: EAPOL packets - subtype M4
+ * @CDP_PKT_TYPE_EAPOL_G1: EAPOL packets - subtype G1
+ * @CDP_PKT_TYPE_EAPOL_G2: EAPOL packets - subtype G2
+ * @CDP_PKT_TYPE_L3_NS: Protocol Not supported
+ * @CDP_PKT_TYPE_L3_MAX: MAX enumeration
+ */
+enum cdp_pkt_l3_proto_type {
+	CDP_PKT_TYPE_ARP = 0,
+	CDP_PKT_TYPE_IPV4,
+	CDP_PKT_TYPE_IPV6,
+	CDP_PKT_TYPE_EAPOL,
+	CDP_PKT_TYPE_EAPOL_M1,
+	CDP_PKT_TYPE_EAPOL_M2,
+	CDP_PKT_TYPE_EAPOL_M3,
+	CDP_PKT_TYPE_EAPOL_M4,
+	CDP_PKT_TYPE_EAPOL_G1,
+	CDP_PKT_TYPE_EAPOL_G2,
+	CDP_PKT_TYPE_L3_NS,
+	CDP_PKT_TYPE_L3_MAX,
+};
+
+/**
+ * enum cdp_pkt_l4_proto_type -  L4 Protocols supported by Protocol stats
+ * @CDP_PKT_TYPE_TCP: TCP packets
+ * @CDP_PKT_TYPE_UDP: UDP packets
+ * @CDP_PKT_TYPE_ICMP: ICMP packets
+ * @CDP_PKT_TYPE_ICMP_REQ: ICMP request packets
+ * @CDP_PKT_TYPE_ICMP_RSP: ICMP response packets
+ * @CDP_PKT_TYPE_IGMP: IGMP packets
+ * @CDP_PKT_TYPE_L4_NS: Protocol Not supported
+ * @CDP_PKT_TYPE_L4_MAX: MAX enumeration
+ */
+enum cdp_pkt_l4_proto_type {
+	CDP_PKT_TYPE_TCP = 0,
+	CDP_PKT_TYPE_UDP,
+	CDP_PKT_TYPE_ICMP,
+	CDP_PKT_TYPE_ICMP_REQ,
+	CDP_PKT_TYPE_ICMP_RSP,
+	CDP_PKT_TYPE_IGMP,
+	CDP_PKT_TYPE_L4_NS,
+	CDP_PKT_TYPE_L4_MAX,
+};
+
+/**
+ * enum cdp_pkt_l5_proto_type - L5 Protocols
+ * @CDP_PKT_TYPE_DHCP: DHCP packets
+ * @CDP_PKT_TYPE_DHCP_DIS: DHCP discover
+ * @CDP_PKT_TYPE_DHCP_REQ: DHCP Request
+ * @CDP_PKT_TYPE_DHCP_OFR: DHCP Offer
+ * @CDP_PKT_TYPE_DHCP_ACK: DHCP Ack
+ * @CDP_PKT_TYPE_DHCP_NS: DHCP Not supported
+ * @CDP_PKT_TYPE_DNS_QUERY: DNS Query
+ * @CDP_PKT_TYPE_DNS_RSP: DNS Response
+ * @CDP_PKT_TYPE_L5_NS: Protocol Not supported
+ * @CDP_PKT_TYPE_L5_MAX: MAX enumeration
+ */
+enum cdp_pkt_l5_proto_type {
+	CDP_PKT_TYPE_DHCP = 0,
+	CDP_PKT_TYPE_DHCP_DIS,
+	CDP_PKT_TYPE_DHCP_REQ,
+	CDP_PKT_TYPE_DHCP_OFR,
+	CDP_PKT_TYPE_DHCP_ACK,
+	CDP_PKT_TYPE_DHCP_NS,
+	CDP_PKT_TYPE_DNS_QUERY,
+	CDP_PKT_TYPE_DNS_RSP,
+	CDP_PKT_TYPE_L5_NS,
+	CDP_PKT_TYPE_L5_MAX,
+};
+
+/**
+ * struct cdp_proto_stats - DP Protocol stats
+ * @l3: L3 protocol stats
+ * @l4: L4 protocol stats
+ * @l5: L5 protocol stats
+ */
+struct cdp_proto_stats {
+	uint64_t l3[CDP_PKT_TYPE_L3_MAX];
+	uint64_t l4[CDP_PKT_TYPE_L4_MAX];
+	uint64_t l5[CDP_PKT_TYPE_L5_MAX];
+};
+
+/**
+ * struct cdp_rx_proto_stats - DP Protocol stats Updated in Rx path
+ * @rx_proto: DP Protocol stats Updated in Rx path
+ */
+struct cdp_rx_proto_stats {
+	struct cdp_proto_stats rx_proto[RX_UPD_LEVEL_MAX];
+};
+
+/**
+ * struct cdp_tx_proto_stats - DP Protocol stats Updated in Tx path
+ * @tx_proto: DP Protocol stats Updated in Tx path per ring
+ */
+struct cdp_tx_proto_stats {
+	struct cdp_proto_stats tx_proto[CDP_MAX_TX_DATA_RINGS][TX_UPD_LEVEL_MAX];
+};
+#endif /* QCA_DP_PROTOCOL_STATS */
+
+/**
  * struct cdp_tx_stats - tx stats
  * @comp_pkt: Pkt Info for which completions were received
  * @ucast: Unicast Packet Count
@@ -1486,6 +1649,7 @@ struct protocol_trace_count {
  * @rnd_avg_tx_rate: Rounded average tx rate
  * @avg_tx_rate: Average TX rate
  * @last_ack_rssi: RSSI of last acked packet
+ * @avg_ack_rssi: Averaged RSSI of acked packets
  * @tx_bytes_success_last: last Tx success bytes
  * @tx_data_success_last: last Tx success data
  * @tx_byte_rate: Bytes Trasmitted in last one sec
@@ -1533,6 +1697,7 @@ struct protocol_trace_count {
  * @total_mpdu_retries: total number of mpdu retries
  * @failed_retry_count: packets failed due to retry above 802.11 retry limit
  * @retry_count: packets successfully send after one or more retry
+ * @total_msdu_retries: total number of msdu packets retransmittions
  * @multiple_retry_count: packets successfully sent after more than one retry
  * @last_tx_rate_used:
  * @tx_ppdus: ppdus in tx
@@ -1578,6 +1743,8 @@ struct protocol_trace_count {
  * @fragment_count: Fragment packet count
  * @eapol_tx_comp_failures: Eapol Tx completion count
  * @rekey_tx_comp_failures: GroupRekey Tx completion count
+ * @proto: DP protocol stats
+ * @tx_ppdu_duration: Tx PPDU Duration
  */
 struct cdp_tx_stats {
 	struct cdp_pkt_info comp_pkt;
@@ -1607,6 +1774,7 @@ struct cdp_tx_stats {
 	uint64_t rnd_avg_tx_rate;
 	uint64_t avg_tx_rate;
 	uint32_t last_ack_rssi;
+	uint32_t avg_ack_rssi;
 	uint32_t tx_bytes_success_last;
 	uint32_t tx_data_success_last;
 	uint32_t tx_byte_rate;
@@ -1667,6 +1835,7 @@ struct cdp_tx_stats {
 	uint32_t total_mpdu_retries;
 	uint32_t failed_retry_count;
 	uint32_t retry_count;
+	uint32_t total_msdu_retries;
 	uint32_t multiple_retry_count;
 	uint32_t last_tx_rate_used;
 	uint32_t tx_ppdus;
@@ -1708,6 +1877,10 @@ struct cdp_tx_stats {
 	uint32_t fragment_count;
 	uint32_t eapol_tx_comp_failures[MAX_EAPOL_TX_COMP_STATUS];
 	uint32_t rekey_tx_comp_failures[MAX_EAPOL_TX_COMP_STATUS];
+#ifdef QCA_DP_PROTOCOL_STATS
+	struct cdp_tx_proto_stats proto;
+#endif
+	uint64_t tx_ppdu_duration;
 };
 
 /**
@@ -1805,6 +1978,9 @@ struct cdp_tx_stats {
  * @rx_total: Total rx count
  * @duplicate_count: Duplicate packets count
  * @fragment_count: Fragment packet count
+ * @proto: Datapath protocol statistics
+ * @rx_ppdu_duration: Rx PPDU Duration
+ * @retried_msdu_count: retried msdu count
  */
 struct cdp_rx_stats {
 	struct cdp_pkt_info to_stack;
@@ -1906,6 +2082,11 @@ struct cdp_rx_stats {
 #endif
 	uint32_t duplicate_count;
 	uint32_t fragment_count;
+#ifdef QCA_DP_PROTOCOL_STATS
+	struct cdp_rx_proto_stats proto;
+#endif
+	uint64_t rx_ppdu_duration;
+	uint32_t retried_msdu_count;
 };
 
 /**
@@ -2171,6 +2352,7 @@ struct cdp_peer_tid_stats {
  * @rx_byte_count: rx byte count
  * @per: per error rate
  * @ack_rssi: RSSI of the last ack received
+ * @avg_ack_rssi: Average RSSI of the acks received
  * @free_buff: free tx descriptor count
  * @rx_avg_snr: Avg Rx SNR
  */
@@ -2187,6 +2369,7 @@ struct cdp_interface_peer_stats {
 	uint32_t rx_byte_count;
 	uint32_t per;
 	uint32_t ack_rssi;
+	uint32_t avg_ack_rssi;
 	uint32_t free_buff;
 	uint32_t rx_avg_snr;
 };
@@ -3443,6 +3626,18 @@ enum CDP_PEER_MPDU_DESC {
 	PEER_MPDU_DESC_MAX,
 };
 
+/*
+ * List of protocols supported for TX packet Capture classification
+ */
+enum CDP_TX_PKT_CAP_PACKET_TYPE {
+	CDP_TX_PKT_CAP_TYPE_ARP = 1,
+	CDP_TX_PKT_CAP_TYPE_EAPOL,
+	CDP_TX_PKT_CAP_TYPE_DHCP,
+	CDP_TX_PKT_CAP_TYPE_DNS,
+	CDP_TX_PKT_CAP_TYPE_ICMP,
+	CDP_TX_PKT_CAP_TYPE_MAX,
+};
+
 /**
  * struct cdp_tid_q_len - Structure to hold consolidated queue length
  * @defer_msdu_len: Deferred MSDU queue length
@@ -3483,6 +3678,26 @@ struct cdp_peer_tx_capture_stats {
  * @retries_ctl_mgmt_q_len: Control management retries queue length
  * @htt_frame_type: HTT frame type
  * @len_stats: Consolidated msdu, ppdu and pending queue length
+ * @ppdu_id: current ppdu id
+ * @mode: tx monitor core framework current mode
+ * @ppdu_drop_cnt: ppdu drop counter
+ * @mpdu_drop_cnt: mpdu drop counter
+ * @tlv_drop_cnt: tlv drop counter
+ * @pkt_buf_recv: tx monitor packet buffer received
+ * @pkt_buf_free: tx monitor packet buffer free
+ * @pkt_buf_processed: tx monitor packet buffer processed
+ * @pkt_buf_to_stack: tx monitor packet buffer send to stack
+ * @status_buf_recv: tx monitor status buffer received
+ * @status_buf_free: tx monitor status buffer free
+ * @totat_tx_mon_replenish_cnt: tx monitor replenish count
+ * @total_tx_mon_reap_cnt: tx monitor reap count
+ * @tx_mon_stuck: tx monitor stuck count
+ * @total_tx_mon_stuck: tx monitor stuck count
+ * @ppdu_info_drop_th: count ppdu info been dropped due threshold reached
+ * @ppdu_info_drop_flush: count ppdu info been dropped due to flush detected
+ * @ppdu_info_drop_trunc: count ppdu info been dropped due to truncated
+ * @ppdu_drop_sw_filter: count ppdu drop in sw filter
+ * @dp_tx_pkt_cap_stats: stats corresponding to packet classification
  */
 struct cdp_pdev_tx_capture_stats {
 	uint64_t peer_mismatch;
@@ -3498,5 +3713,27 @@ struct cdp_pdev_tx_capture_stats {
 					   [CDP_TXCAP_MAX_SUBTYPE];
 	uint32_t htt_frame_type[CDP_TX_CAP_HTT_MAX_FTYPE];
 	struct cdp_tid_q_len len_stats;
+	uint32_t ppdu_id;
+	uint32_t mode;
+	uint64_t ppdu_drop_cnt;
+	uint64_t mpdu_drop_cnt;
+	uint64_t tlv_drop_cnt;
+	uint64_t pkt_buf_recv;
+	uint64_t pkt_buf_free;
+	uint64_t pkt_buf_processed;
+	uint64_t pkt_buf_to_stack;
+	uint64_t status_buf_recv;
+	uint64_t status_buf_free;
+	uint64_t totat_tx_mon_replenish_cnt;
+	uint64_t total_tx_mon_reap_cnt;
+	uint8_t tx_mon_stuck;
+	uint32_t total_tx_mon_stuck;
+	uint64_t ppdu_info_drop_th;
+	uint64_t ppdu_info_drop_flush;
+	uint64_t ppdu_info_drop_trunc;
+	uint64_t ppdu_drop_sw_filter;
+#ifdef WLAN_TX_PKT_CAPTURE_ENH_BE
+	uint32_t dp_tx_pkt_cap_stats[CDP_TX_PKT_CAP_TYPE_MAX];
+#endif
 };
 #endif

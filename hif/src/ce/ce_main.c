@@ -57,7 +57,7 @@
 
 #if (defined(QCA_WIFI_QCA8074) || defined(QCA_WIFI_QCA6290) || \
 	defined(QCA_WIFI_QCA6018) || defined(QCA_WIFI_QCA5018) || \
-	defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_QCA5332) || \
+	defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_QCA5332) || defined(QCA_WIFI_QCA5424) || \
 	defined(QCA_WIFI_QCA9574)) && !defined(QCA_WIFI_SUPPORT_SRNG) && \
 	!defined(QCA_WIFI_WCN6450)
 #define QCA_WIFI_SUPPORT_SRNG
@@ -879,6 +879,39 @@ static struct service_to_pipe target_service_to_ce_map_qcn9000[] = {
 static struct service_to_pipe target_service_to_ce_map_qcn9000[] = {
 };
 #endif
+#if defined(QCA_WIFI_QCA5424)
+static struct service_to_pipe target_service_to_ce_map_qca5424[] = {
+	{ WMI_DATA_VO_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_VO_SVC, PIPEDIR_IN, 2, },
+	{ WMI_DATA_BK_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_BK_SVC, PIPEDIR_IN, 2, },
+	{ WMI_DATA_BE_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_BE_SVC, PIPEDIR_IN, 2, },
+	{ WMI_DATA_VI_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_VI_SVC, PIPEDIR_IN, 2, },
+	{ WMI_CONTROL_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_CONTROL_SVC, PIPEDIR_IN, 2, },
+	{ HTC_CTRL_RSVD_SVC, PIPEDIR_OUT, 0, },
+	{ HTC_CTRL_RSVD_SVC, PIPEDIR_IN, 1, },
+	{ HTC_RAW_STREAMS_SVC, PIPEDIR_OUT, 0},
+	{ HTC_RAW_STREAMS_SVC, PIPEDIR_IN, 1 },
+	{ HTT_DATA_MSG_SVC, PIPEDIR_OUT, 4, },
+	{ HTT_DATA_MSG_SVC, PIPEDIR_IN, 1, },
+	{ PACKET_LOG_SVC, PIPEDIR_IN, 5, },
+#ifdef WLAN_DIAG_AND_DBR_OVER_SEPARATE_CE
+	{ WMI_CONTROL_DIAG_SVC, PIPEDIR_IN, 9, },
+	{ WMI_CONTROL_DBR_SVC, PIPEDIR_IN, 9, },
+#else
+	{ WMI_CONTROL_DIAG_SVC, PIPEDIR_IN, 2, },
+	{ WMI_CONTROL_DBR_SVC, PIPEDIR_IN, 2, },
+#endif
+	/* (Additions here) */
+	{ 0, 0, 0, },
+};
+#else
+static struct service_to_pipe target_service_to_ce_map_qca5424[] = {
+};
+#endif
 
 #if (defined(QCA_WIFI_QCA5332) || defined(QCA_WIFI_QCN6432))
 static struct service_to_pipe target_service_to_ce_map_qca5332[] = {
@@ -1237,6 +1270,33 @@ static struct service_to_pipe target_service_to_ce_map_wcn7750[] = {
 };
 #endif
 
+#if (defined(QCA_WIFI_QCC2072))
+static struct service_to_pipe target_service_to_ce_map_qcc2072[] = {
+	{ WMI_DATA_VO_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_VO_SVC, PIPEDIR_IN, 2, },
+	{ WMI_DATA_BK_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_BK_SVC, PIPEDIR_IN, 2, },
+	{ WMI_DATA_BE_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_BE_SVC, PIPEDIR_IN, 2, },
+	{ WMI_DATA_VI_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_VI_SVC, PIPEDIR_IN, 2, },
+	{ WMI_CONTROL_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_CONTROL_SVC, PIPEDIR_IN, 2, },
+	{ HTC_CTRL_RSVD_SVC, PIPEDIR_OUT, 0, },
+	{ HTC_CTRL_RSVD_SVC, PIPEDIR_IN, 2, },
+	{ HTT_DATA_MSG_SVC, PIPEDIR_OUT, 4, },
+	{ HTT_DATA_MSG_SVC, PIPEDIR_IN, 1, },
+#ifdef WLAN_FEATURE_WMI_DIAG_OVER_CE7
+	{ WMI_CONTROL_DIAG_SVC, PIPEDIR_IN, 7, },
+#endif
+	/* (Additions here) */
+	{ 0, 0, 0, },
+};
+#else
+static struct service_to_pipe target_service_to_ce_map_qcc2072[] = {
+};
+#endif
+
 static struct service_to_pipe target_service_to_ce_map_ar900b[] = {
 	{
 		WMI_DATA_VO_SVC,
@@ -1514,6 +1574,11 @@ static void hif_select_service_to_pipe_map(struct hif_softc *scn,
 			*sz_tgt_svc_map_to_use =
 				sizeof(target_service_to_ce_map_wcn7750);
 			break;
+		case TARGET_TYPE_QCC2072:
+			*tgt_svc_map_to_use = target_service_to_ce_map_qcc2072;
+			*sz_tgt_svc_map_to_use =
+				sizeof(target_service_to_ce_map_qcc2072);
+			break;
 		case TARGET_TYPE_KIWI:
 		case TARGET_TYPE_MANGO:
 		case TARGET_TYPE_PEACH:
@@ -1564,6 +1629,11 @@ static void hif_select_service_to_pipe_map(struct hif_softc *scn,
 			*tgt_svc_map_to_use = target_service_to_ce_map_qca5332;
 			*sz_tgt_svc_map_to_use =
 				sizeof(target_service_to_ce_map_qca5332);
+			break;
+		case TARGET_TYPE_QCA5424:
+			*tgt_svc_map_to_use = target_service_to_ce_map_qca5424;
+			*sz_tgt_svc_map_to_use =
+				sizeof(target_service_to_ce_map_qca5424);
 			break;
 		case TARGET_TYPE_QCA5018:
 		case TARGET_TYPE_QCN6122:
@@ -1705,11 +1775,13 @@ void hif_ce_print_ring_stats(struct hif_opaque_softc *hif_ctx)
 		if (ce_state->src_ring) {
 			QDF_TRACE(QDF_MODULE_ID_HIF, QDF_TRACE_LEVEL_FATAL,
 				  "ce%d:SW: sw_index %u write_index %u",
+				  ce_state->id,
 				  ce_state->src_ring->sw_index,
 				  ce_state->src_ring->write_index);
 
 			QDF_TRACE(QDF_MODULE_ID_HIF, QDF_TRACE_LEVEL_FATAL,
 				  "ce%d:HW: read_index %u write_index %u",
+				  ce_state->id,
 				  CE_SRC_RING_READ_IDX_GET_FROM_REGISTER(scn, ce_state->ctrl_addr),
 				  CE_SRC_RING_WRITE_IDX_GET_FROM_REGISTER(scn, ce_state->ctrl_addr));
 		}
@@ -1717,11 +1789,13 @@ void hif_ce_print_ring_stats(struct hif_opaque_softc *hif_ctx)
 		if (ce_state->dest_ring) {
 			QDF_TRACE(QDF_MODULE_ID_HIF, QDF_TRACE_LEVEL_FATAL,
 				  "ce%d:SW: sw_index %u write_index %u",
+				  ce_state->id,
 				  ce_state->dest_ring->sw_index,
 				  ce_state->dest_ring->write_index);
 
 			QDF_TRACE(QDF_MODULE_ID_HIF, QDF_TRACE_LEVEL_FATAL,
 				  "ce%d:HW: read_index %u write_index %u",
+				  ce_state->id,
 				  CE_DEST_RING_READ_IDX_GET_FROM_REGISTER(scn, ce_state->ctrl_addr),
 				  CE_DEST_RING_WRITE_IDX_GET_FROM_REGISTER(scn, ce_state->ctrl_addr));
 		}
@@ -1954,6 +2028,8 @@ bool ce_srng_based(struct hif_softc *scn)
 	case TARGET_TYPE_QCA5332:
 	case TARGET_TYPE_QCN6432:
 	case TARGET_TYPE_WCN7750:
+	case TARGET_TYPE_QCA5424:
+	case TARGET_TYPE_QCC2072:
 		return true;
 	default:
 		return false;
@@ -2355,7 +2431,7 @@ static struct hif_ce_desc_event *
 {
 	struct ce_desc_hist *ce_hist = &scn->hif_ce_desc_hist;
 
-	hif_debug("get ce debug buffer ce_id %u, only_ce2/ce3=0x%x, idx=%u",
+	hif_debug("get ce debug buffer ce_id %u, only_ce2/ce3=0x%lx, idx=%u",
 		  ce_id, IS_CE_DEBUG_ONLY_FOR_CRIT_CE,
 		  ce_hist->ce_id_hist_map[ce_id]);
 	if (IS_CE_DEBUG_ONLY_FOR_CRIT_CE &&
@@ -4738,6 +4814,7 @@ int hif_wlan_enable(struct hif_softc *scn)
 	case TARGET_TYPE_PEACH:
 	case TARGET_TYPE_WCN6450:
 	case TARGET_TYPE_WCN7750:
+	case TARGET_TYPE_QCC2072:
 		hif_prepare_hal_shadow_reg_cfg_v3(scn, &cfg);
 		break;
 	default:
@@ -5007,6 +5084,14 @@ void hif_ce_prepare_config(struct hif_softc *scn)
 		scn->ce_count = QCN_6432_CE_COUNT;
 		scn->ini_cfg.disable_wake_irq = 1;
 		break;
+	case TARGET_TYPE_QCA5424:
+		hif_state->host_ce_config = host_ce_config_wlan_qca5424;
+		hif_state->target_ce_config = target_ce_config_wlan_qca5424;
+		hif_state->target_ce_config_sz =
+					sizeof(target_ce_config_wlan_qca5424);
+		scn->ce_count = QCN_5424_CE_COUNT;
+		scn->ini_cfg.disable_wake_irq = 1;
+		break;
 	case TARGET_TYPE_QCA5018:
 		hif_state->host_ce_config = host_ce_config_wlan_qca5018;
 		hif_state->target_ce_config = target_ce_config_wlan_qca5018;
@@ -5052,6 +5137,14 @@ void hif_ce_prepare_config(struct hif_softc *scn)
 
 		scn->ce_count = WCN_7750_CE_COUNT;
 		break;
+	case TARGET_TYPE_QCC2072:
+		hif_state->host_ce_config = host_ce_config_wlan_qcc2072;
+		hif_state->target_ce_config = target_ce_config_wlan_qcc2072;
+		hif_state->target_ce_config_sz =
+					sizeof(target_ce_config_wlan_qcc2072);
+
+		scn->ce_count = QCC_2072_CE_COUNT;
+		break;
 	case TARGET_TYPE_KIWI:
 	case TARGET_TYPE_MANGO:
 	case TARGET_TYPE_PEACH:
@@ -5083,33 +5176,6 @@ void hif_ce_prepare_config(struct hif_softc *scn)
 		break;
 	}
 	QDF_BUG(scn->ce_count <= CE_COUNT_MAX);
-}
-
-/**
- * hif_ce_open() - do ce specific allocations
- * @hif_sc: pointer to hif context
- *
- * return: 0 for success or QDF_STATUS_E_NOMEM
- */
-QDF_STATUS hif_ce_open(struct hif_softc *hif_sc)
-{
-	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(hif_sc);
-
-	qdf_spinlock_create(&hif_state->irq_reg_lock);
-	qdf_spinlock_create(&hif_state->keep_awake_lock);
-	return QDF_STATUS_SUCCESS;
-}
-
-/**
- * hif_ce_close() - do ce specific free
- * @hif_sc: pointer to hif context
- */
-void hif_ce_close(struct hif_softc *hif_sc)
-{
-	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(hif_sc);
-
-	qdf_spinlock_destroy(&hif_state->irq_reg_lock);
-	qdf_spinlock_destroy(&hif_state->keep_awake_lock);
 }
 
 /**
@@ -5275,10 +5341,39 @@ static inline void hif_post_static_buf_to_target(struct hif_softc *scn)
 {
 }
 
-void hif_cleanup_static_buf_to_target(struct hif_softc *scn)
+static inline void hif_cleanup_static_buf_to_target(struct hif_softc *scn)
 {
 }
 #endif
+
+/**
+ * hif_ce_open() - do ce specific allocations
+ * @hif_sc: pointer to hif context
+ *
+ * return: 0 for success or QDF_STATUS_E_NOMEM
+ */
+QDF_STATUS hif_ce_open(struct hif_softc *hif_sc)
+{
+	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(hif_sc);
+
+	qdf_spinlock_create(&hif_state->irq_reg_lock);
+	qdf_spinlock_create(&hif_state->keep_awake_lock);
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * hif_ce_close() - do ce specific free
+ * @hif_sc: pointer to hif context
+ */
+void hif_ce_close(struct hif_softc *hif_sc)
+{
+	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(hif_sc);
+
+	hif_cleanup_static_buf_to_target(hif_sc);
+
+	qdf_spinlock_destroy(&hif_state->irq_reg_lock);
+	qdf_spinlock_destroy(&hif_state->keep_awake_lock);
+}
 
 static int hif_srng_sleep_state_adjust(struct hif_softc *scn, bool sleep_ok,
 				bool wait_for_it)

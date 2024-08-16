@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -80,6 +80,24 @@ cdp_tx_me_convert_ucast(ol_txrx_soc_handle soc, uint8_t vdev_id,
 	return soc->ops->me_ops->tx_me_convert_ucast
 			(soc, vdev_id, wbuf, newmac, newmaccnt, tid, is_igmp,
 			 is_dms_pkt);
+}
+
+static inline bool
+cdp_is_peer_dms_capable(ol_txrx_soc_handle soc, uint8_t vdev_id,
+			uint8_t *mac_addr)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance");
+		QDF_BUG(0);
+		return 0;
+	}
+
+	if (!soc->ops->me_ops ||
+	    !soc->ops->me_ops->is_peer_dms_capable)
+		return 0;
+
+	return soc->ops->me_ops->is_peer_dms_capable
+			(soc, vdev_id, mac_addr);
 }
 
 #endif
