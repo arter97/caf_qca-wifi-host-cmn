@@ -1769,6 +1769,9 @@ static void hif_reg_write_work(void *arg)
 
 	if (hif_prevent_link_low_power_states(GET_HIF_OPAQUE_HDL(scn))) {
 		scn->wstats.prevent_l1_fails++;
+		dp_err_rl("prevent l1 fail %d 0x%llx",
+			  scn->wstats.prevent_l1_fails,
+			  qdf_get_log_timestamp());
 		return;
 	}
 
