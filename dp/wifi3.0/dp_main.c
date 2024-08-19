@@ -3975,6 +3975,7 @@ static void dp_pdev_deinit(struct cdp_pdev *txrx_pdev, int force)
 	dp_rx_pdev_buffers_free(pdev);
 	dp_rx_pdev_desc_pool_deinit(pdev);
 	dp_pdev_bkp_stats_detach(pdev);
+	qdf_event_destroy(&pdev->vdev_tx_nss_stats_event);
 	qdf_event_destroy(&pdev->fw_peer_stats_event);
 	qdf_event_destroy(&pdev->fw_stats_event);
 	qdf_event_destroy(&pdev->fw_obss_stats_event);
@@ -10494,6 +10495,48 @@ dp_fw_stats_process(struct dp_vdev *vdev,
 #define VENDOR_ATTR_NSS_PKT_TX_PACKET_COUNT 0
 #define VENDOR_ATTR_NSS_PKT_RX_PACKET_COUNT 1
 #define SS_COUNT_JITTER 2
+static inline QDF_STATUS
+dp_tx_get_fw_nss_stats(struct dp_soc *soc, uint8_t vdev_id, int **stats_req)
+{
+	QDF_STATUS status;
+	struct cdp_txrx_stats_req req = {0,};
+	struct dp_vdev *vdev;
+	struct dp_pdev *pdev = dp_get_pdev_from_soc_pdev_id_wifi3(soc, 0);
+
+	if (pdev->pending_tx_nss_response)
+		return QDF_STATUS_E_ALREADY;
+
+	vdev = dp_vdev_get_ref_by_id(soc, vdev_id, DP_MOD_ID_CDP);
+	if (!vdev) {
+		dp_err_rl("unable to get vdev for vdev id %d", vdev_id);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	pdev->pending_tx_nss_response = true;
+	req.stats = (enum cdp_stats)HTT_DBG_EXT_STATS_TX_VDEV_NSS;
+	req.param0 = HTT_DBG_EXT_STATS_SET_VDEV_MASK(vdev_id);
+	req.cookie_val = DBG_STATS_COOKIE_HTT_TX_NSS;
+	qdf_event_reset(&pdev->vdev_tx_nss_stats_event);
+	status = dp_h2t_ext_stats_msg_send(pdev, req.stats, req.param0,
+					   req.param1, req.param2,
+					   req.param3, 0, req.cookie_val, 0);
+	if (QDF_IS_STATUS_ERROR(status))
+		goto end;
+
+	status = qdf_wait_single_event(&pdev->vdev_tx_nss_stats_event,
+				       DP_MAX_SLEEP_TIME);
+	if (QDF_IS_STATUS_ERROR(status))
+		goto end;
+
+	for (int i = 0; i < SS_COUNT_JITTER; i++) {
+		stats_req[i][VENDOR_ATTR_NSS_PKT_TX_PACKET_COUNT] =
+			vdev->tx_vdev_nss.tx_nss[i];
+	}
+end:
+	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
+	pdev->pending_tx_nss_response = false;
+	return status;
+}
 /**
  * dp_txrx_nss_request - function to get txrx nss stats
  * @soc_handle: soc handle
@@ -10508,6 +10551,7 @@ QDF_STATUS dp_txrx_nss_request(struct cdp_soc_t *soc_handle,
 			       int **req)
 {
 	QDF_STATUS status;
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_handle);
 	struct cdp_vdev_stats *vdev_stats = qdf_mem_malloc(sizeof(*vdev_stats));
 
 	if (!vdev_stats)
@@ -10524,6 +10568,8 @@ QDF_STATUS dp_txrx_nss_request(struct cdp_soc_t *soc_handle,
 							  vdev_stats->rx.nss[i];
 	}
 
+	if (soc->features.vdev_tx_nss_support)
+		status = dp_tx_get_fw_nss_stats(soc, vdev_id, req);
 end:
 	qdf_mem_free(vdev_stats);
 
@@ -15241,6 +15287,7 @@ static QDF_STATUS dp_pdev_init(struct cdp_soc_t *txrx_soc,
 	qdf_event_create(&pdev->fw_peer_stats_event);
 	qdf_event_create(&pdev->fw_stats_event);
 	qdf_event_create(&pdev->fw_obss_stats_event);
+	qdf_event_create(&pdev->vdev_tx_nss_stats_event);
 
 	pdev->num_tx_allowed = wlan_cfg_get_max_tx_desc_pool(
 							soc->wlan_cfg_ctx);

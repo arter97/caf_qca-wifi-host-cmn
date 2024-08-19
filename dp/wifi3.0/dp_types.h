@@ -4157,6 +4157,12 @@ struct dp_pdev {
 	/* To check if request is already sent for obss stats */
 	bool pending_fw_obss_stats_response;
 
+	/* qdf_event for vdev tx nss stats */
+	qdf_event_t vdev_tx_nss_stats_event;
+
+	/* To check if request is already sent for vdev tx nss stats */
+	bool pending_tx_nss_response;
+
 	/* User configured max number of tx buffers */
 	uint32_t num_tx_allowed;
 
@@ -4674,6 +4680,8 @@ struct dp_vdev {
 	bool eapol_over_control_port_disable;
 	bool dp_proto_stats;
 	bool dp_eapol_stats;
+	/* Tx NSS stats received from FW */
+	struct cdp_htt_stats_tx_vdev_nss_tlv tx_vdev_nss;
 };
 
 enum {

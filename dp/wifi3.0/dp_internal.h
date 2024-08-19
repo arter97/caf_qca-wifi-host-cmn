@@ -111,6 +111,9 @@ struct dp_rx_defrag_cipher {
 /* Reserve for HTT Stats OBSS PD support: 6th bit */
 #define DBG_STATS_COOKIE_HTT_OBSS BIT(6)
 
+/*  Reserve for HTT Stats Tx NSS support: 7th bit*/
+#define DBG_STATS_COOKIE_HTT_TX_NSS BIT(7)
+
 /*
  * Bitmap of HTT PPDU TLV types for Default mode
  */

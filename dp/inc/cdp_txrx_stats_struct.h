@@ -236,6 +236,7 @@
 #define DP_VDEV_XMIT_TYPE 0
 #endif
 
+#define CDP_HTT_TX_VDEV_STATS_NUM_SPATIAL_STREAMS 4
 /**
  * enum cdp_wifi_error_code - Code describing the type of WIFI error detected
  *
@@ -3416,6 +3417,26 @@ struct cdp_telemetry_peer_tx_ext_stats {
 	uint64_t tx_cnt;
 	uint64_t tx_bytes;
 	struct cdp_pkt_type packet_type[DOT11_MAX];
+};
+
+/**
+ * struct cdp_htt_stats_tx_vdev_nss_tlv - Tx NSS stats
+ * @tlv_hdr: tlv header
+ * @vdev_id: Vdev id
+ * @tx_nss: Tx NSS count
+ */
+struct cdp_htt_stats_tx_vdev_nss_tlv {
+	struct cdp_htt_tlv_hdr tlv_hdr;
+	uint32_t vdev_id; /* which vdev produced these per-Nss tx stats */
+	/* tx_nss:
+	 * Count how many MPDUs the vdev has sent using each possible number
+	 * of spatial streams:
+	 * tx_nss[0] -> number of MPDUs transmitted using Nss=1
+	 * tx_nss[1] -> number of MPDUs transmitted using Nss=2
+	 * tx_nss[2] -> number of MPDUs transmitted using Nss=3
+	 * tx_nss[3] -> number of MPDUs transmitted using Nss=4
+	 */
+	uint32_t tx_nss[CDP_HTT_TX_VDEV_STATS_NUM_SPATIAL_STREAMS];
 };
 
 /**

@@ -2182,6 +2182,39 @@ dp_htt_set_pdev_obss_stats(struct dp_pdev *pdev, uint32_t tag_type,
 	qdf_event_set(&pdev->fw_obss_stats_event);
 }
 
+/* dp_htt_set_vdev_nss_stats() - Set tx NSS stats
+ * @pdev: dp pdev handle
+ * @tag_type: HTT TLV tag type
+ * @tag_buf: TLV buffer pointer
+ *
+ * Return: None
+ */
+static inline void
+dp_htt_set_vdev_nss_stats(struct dp_pdev *pdev, uint32_t tag_type,
+			  uint32_t *tag_buf)
+{
+	struct dp_vdev *vdev;
+	struct cdp_htt_stats_tx_vdev_nss_tlv *tx_nss;
+
+	if (tag_type != HTT_STATS_TX_VDEV_NSS_TAG) {
+		dp_err("Tag mismatch, received tag %d", tag_type);
+		return;
+	}
+
+	tx_nss = (struct cdp_htt_stats_tx_vdev_nss_tlv *)tag_buf;
+
+	vdev = dp_vdev_get_ref_by_id(pdev->soc, tx_nss->vdev_id, DP_MOD_ID_HTT);
+	if (!vdev) {
+		dp_err("unable to get vdev for vdev id %d", tx_nss->vdev_id);
+		return;
+	}
+
+	qdf_mem_copy(&vdev->tx_vdev_nss, tag_buf,
+		     sizeof(struct cdp_htt_stats_tx_vdev_nss_tlv));
+	qdf_event_set(&pdev->vdev_tx_nss_stats_event);
+	dp_vdev_unref_delete(pdev->soc, vdev, DP_MOD_ID_HTT);
+}
+
 /**
  * dp_process_htt_stat_msg(): Process the list of buffers of HTT EXT stats
  * @htt_stats: htt stats info
@@ -2316,6 +2349,11 @@ static inline void dp_process_htt_stat_msg(struct htt_stats_context *htt_stats,
 					dp_htt_set_pdev_obss_stats(pdev,
 								   tlv_type,
 								   tlv_start);
+
+				if (cookie_msb & DBG_STATS_COOKIE_HTT_TX_NSS)
+					dp_htt_set_vdev_nss_stats(pdev,
+								  tlv_type,
+								  tlv_start);
 
 				msg_remain_len -= tlv_remain_len;
 
