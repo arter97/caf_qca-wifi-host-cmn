@@ -15264,14 +15264,6 @@ static QDF_STATUS dp_pdev_init(struct cdp_soc_t *txrx_soc,
 		dp_init_err("%pK: dp_monitor_pdev_init failed", soc);
 		goto fail4;
 	}
-	/* WAR: for Allocating TX buffer for IPA ALT TX ring as it has to be
-	 * allocated only when 2 radio are supported under 1 SOC in case.
-	 * for non-split case keeping the same approach using macro as
-	 * they have always single PDEV operation.
-	 */
-	if (1 == pdev->pdev_id)
-		if (dp_ipa_uc_alt_attach(soc, pdev) != QDF_STATUS_SUCCESS)
-			dp_init_err("%pK: dp_ipa_uc_alt_attach failed", soc);
 
 	/* initialize sw rx descriptors */
 	dp_rx_pdev_desc_pool_init(pdev);
