@@ -555,6 +555,41 @@ void qca_sawf_flow_deprioritize_response(struct qca_sawf_flow_deprioritize_resp_
 					    params->service_id, FLOW_DEPRIORITIZE,
 					    params->success_count);
 }
+
+bool qca_sdwf_match_wifi_port_params(struct net_device *netdev,
+				     uint8_t *dest_mac, uint8_t priority,
+				     struct qca_sawf_wifi_port_params *wp)
+{
+	int i = 0;
+
+	if (!netdev || !wp)
+		return false;
+
+	if (!netdev->ieee80211_ptr)
+		return false;
+
+	sawf_err("dev %s ", netdev->name);
+	sawf_err("ssid: %s ssid_len:%d : ", wp->ssid, wp->ssid_len);
+	sawf_err("BSSID: " QDF_MAC_ADDR_FMT,  QDF_MAC_ADDR_REF(wp->bssid));
+	sawf_err("dest_mac: " QDF_MAC_ADDR_FMT, QDF_MAC_ADDR_REF(dest_mac));
+	sawf_err("RA mac_addr: " QDF_MAC_ADDR_FMT, QDF_MAC_ADDR_REF(wp->ra_mac));
+	sawf_err("TA mac_addr: " QDF_MAC_ADDR_FMT, QDF_MAC_ADDR_REF(wp->ta_mac));
+	sawf_err("priority: %u ", wp->priority);
+	sawf_err("OR/AND flags band:%d channel:%d bw:%d ", wp->band.flag,
+		 wp->channel.flag, wp->bw.flag);
+
+	for (i = 0 ; i < MAX_NUM_MLO_VDEV; i++) {
+		sawf_err("band:%s channel: %d bandwidth: %d ",
+			 wp->band.value[i],
+			 wp->channel.value[i],
+			 wp->bw.value[i]);
+	}
+
+	sawf_err("valid_flag: %d dscp:%u pcp: %u access_class: %u ",
+		 wp->valid_flags, wp->dscp, wp->pcp, wp->ac);
+
+	return true;
+}
 #else
 
 #include "qdf_module.h"
@@ -591,6 +626,7 @@ void qca_sawf_config_ul(struct net_device *dst_dev, struct net_device *src_dev,
 
 /* Forward declaration */
 struct qca_sawf_connection_sync_param;
+struct qca_sawf_wifi_port_params;
 typedef struct qca_sawf_connection_sync_param qca_sawf_mcast_sync_param_t;
 struct qca_sawf_flow_deprioritize_params;
 struct qca_sawf_flow_deprioritize_resp_params;
@@ -611,6 +647,13 @@ void qca_sawf_unregister_flow_deprioritize_callback(void)
 
 void qca_sawf_flow_deprioritize_response(struct qca_sawf_flow_deprioritize_resp_params *params)
 {}
+
+bool qca_sdwf_match_wifi_port_params(struct net_device *netdev,
+				     uint8_t *dest_mac, uint8_t priority,
+				     struct qca_sawf_wifi_port_params *wp)
+{
+	return false;
+}
 #endif
 
 uint16_t qca_sawf_get_msdu_queue(struct net_device *netdev,
@@ -630,3 +673,4 @@ qdf_export_symbol(qca_sawf_mcast_connection_sync);
 qdf_export_symbol(qca_sawf_register_flow_deprioritize_callback);
 qdf_export_symbol(qca_sawf_unregister_flow_deprioritize_callback);
 qdf_export_symbol(qca_sawf_flow_deprioritize_response);
+qdf_export_symbol(qca_sdwf_match_wifi_port_params);

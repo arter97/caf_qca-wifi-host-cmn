@@ -29,6 +29,20 @@
 #define QCA_SAWF_MCAST_IF_MAX 16
 #define MAC_ADDR_SIZE 6
 
+#define MAX_NUM_MLO_VDEV 7
+
+enum QCA_VDEV_BAND {
+	QCA_VDEV_BAND_INVALID,	/* Invalid radio band */
+	QCA_VDEV_BAND_2G,	/* 2G Radio Band */
+	QCA_VDEV_BAND_5G,	/* 5G Radio Band */
+	QCA_VDEV_BAND_5GH,	/* 5GH RADIO BAND */
+	QCA_VDEV_BAND_5GL,	/* 5GL RADIO BAND */
+	QCA_VDEV_BAND_6G,	/* 6G RADIO BAND */
+	QCA_VDEV_BAND_6GH,	/* 6GH RADIO BAND */
+	QCA_VDEV_BAND_6GL,	/* 6GL RADIO BAND */
+	QCA_MAX_VDEV_PER_ML,	/* MAX VDEV */
+};
+
 /* qca_sawf_metadata_param
  *
  * @netdev : Netdevice
@@ -146,6 +160,50 @@ struct qca_sawf_flow_deprioritize_resp_params {
 	uint32_t mark_metadata;
 };
 
+/*
+ * qca_sawf_radio_params
+ *
+ * @flag: OR/AND flag
+ * @value: bandwidth/band/channel value
+ */
+struct qca_sawf_radio_params {
+	bool flag;
+	uint8_t value[MAX_NUM_MLO_VDEV];
+};
+
+/*
+ * qca_sawf_wifi_port_params
+ *
+ * @ssid: AP ssid
+ * @ssid_len: ssid length
+ * @bssid: Basic service set identifier
+ * @ra_mac: Receiver mac address
+ * @ta_mac: Transmitter mac address
+ * @ac: access category
+ * @valid_flag: flag to indicate if pcp is valid or not
+ * @priority: Traffic priority set by user
+ * @band: Band 2G/5G/6G
+ * @channel: channel options
+ * @bw: bandwidth options
+ * @dscp: Differentiated Services Code Point
+ * @pcp: pcp value
+ */
+struct qca_sawf_wifi_port_params {
+	uint8_t *ssid;
+	uint8_t ssid_len;
+	uint8_t *bssid;
+	uint8_t *ra_mac;
+	uint8_t *ta_mac;
+	uint8_t ac;
+	uint8_t valid_flags;
+	uint8_t priority;
+	struct qca_sawf_radio_params band;
+	struct qca_sawf_radio_params channel;
+	struct qca_sawf_radio_params bw;
+	uint32_t dscp;
+	uint32_t pcp;
+};
+
 uint16_t qca_sawf_get_msduq(struct net_device *netdev,
 			    uint8_t *peer_mac, uint32_t service_id);
 uint16_t qca_sawf_get_msduq_v2(struct net_device *netdev, uint8_t *peer_mac,
@@ -223,4 +281,19 @@ void qca_sawf_unregister_flow_deprioritize_callback(void);
  * Return: None
  */
 void qca_sawf_flow_deprioritize_response(struct qca_sawf_flow_deprioritize_resp_params *params);
+
+/*
+ * qca_sdwf_match_wifi_port_params() - Check if wifi port params match
+ *
+ * @netdev: Netdevice
+ * @dest_mac: Destination mac address
+ * @priority: Traffic priority set by user
+ * @wp: SWDF wifi parameters parsed and sent by SPM
+ *
+ * Return: true if rule match found else false
+ */
+bool qca_sdwf_match_wifi_port_params(struct net_device *netdev,
+				     uint8_t *dest_mac,
+				     uint8_t priority,
+				     struct qca_sawf_wifi_port_params *wp);
 #endif
