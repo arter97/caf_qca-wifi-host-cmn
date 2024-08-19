@@ -76,6 +76,15 @@ void mlo_get_soc_list(struct wlan_objmgr_psoc **soc_list, uint8_t grp_id,
 		      uint8_t tot_socs, enum MLO_SOC_LIST curr);
 
 /**
+ * mlo_set_soc_list() - API to set the SOC participating in MLO
+ * @grp_id: ID of the required mlo group
+ * @psoc: Soc to be added in the list.
+ *
+ * Return: None
+ */
+void mlo_set_soc_list(uint8_t grp_id, struct wlan_objmgr_psoc *psoc);
+
+/**
  * mlo_setup_update_soc_id_list() - API to update the list of SOCs ids
  *                                  participating in that MLO group
  * @grp_id: ID of the required mlo group
