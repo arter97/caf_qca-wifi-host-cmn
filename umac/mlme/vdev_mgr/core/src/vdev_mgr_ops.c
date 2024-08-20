@@ -46,6 +46,9 @@
 #ifdef WLAN_FEATURE_LL_LT_SAP
 #include "wlan_ll_sap_api.h"
 #endif
+#ifdef WLAN_POLICY_MGR_ENABLE
+#include "wlan_policy_mgr_api.h"
+#endif
 
 #ifdef QCA_VDEV_STATS_HW_OFFLOAD_SUPPORT
 /**
@@ -613,6 +616,26 @@ void vdev_mgr_get_target_tsf(struct vdev_start_params *param,
 	param->target_tsf_us_hi = 0;
 }
 #endif
+
+#ifdef WLAN_POLICY_MGR_ENABLE
+static void vdev_update_dfs_master_state(struct wlan_objmgr_vdev *vdev)
+{
+	enum QDF_OPMODE op_mode;
+
+	op_mode = wlan_vdev_mlme_get_opmode(vdev);
+	if (op_mode == QDF_SAP_MODE || op_mode == QDF_P2P_GO_MODE)
+		policy_mgr_update_dfs_master_dynamic_enabled(
+				wlan_vdev_get_psoc(vdev),
+				true,
+				vdev->vdev_mlme.des_chan);
+}
+#else
+static inline void
+vdev_update_dfs_master_state(struct wlan_objmgr_vdev *vdev)
+{
+}
+#endif
+
 QDF_STATUS vdev_mgr_start_send(
 			struct vdev_mlme_obj *mlme_obj,
 			bool restart)
@@ -634,6 +657,8 @@ QDF_STATUS vdev_mgr_start_send(
 	param.is_restart = restart;
 	if (param.is_restart)
 		vdev_mgr_get_target_tsf(&param, mlme_obj->vdev);
+
+	vdev_update_dfs_master_state(mlme_obj->vdev);
 
 	status = tgt_vdev_mgr_start_send(mlme_obj, &param);
 
