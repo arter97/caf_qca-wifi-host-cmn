@@ -242,6 +242,22 @@ enum wlan_ipa_opt_dp_flt_release_state {
 };
 
 /**
+ * enum wlan_ipa_init_state: ipa init state
+ * @WLAN_IPA_STATE_DEINIT: ipa deinit inprogress
+ * @WLAN_IPA_STATE_INIT: ipa init inprogress
+ * @WLAN_IPA_STATE_SETUP_DONE: ipa pipe setup done
+ * @WLAN_IPA_STATE_PIPE_CONNECTION_DONE: ipa pipe connection done
+ * @WLAN_IPA_STATE_PIPE_ENABLED: ipa pipe enabled
+ */
+enum wlan_ipa_init_state {
+	WLAN_IPA_STATE_DEINIT = 0,
+	WLAN_IPA_STATE_INIT = 1,
+	WLAN_IPA_STATE_SETUP_DONE = 2,
+	WLAN_IPA_STATE_PIPE_CONNECTION_DONE = 3,
+	WLAN_IPA_STATE_PIPE_ENABLED = 4
+};
+
+/**
  * struct llc_snap_hdr - LLC snap header
  * @dsap: Destination service access point
  * @ssap: Source service access point
@@ -965,6 +981,7 @@ struct wlan_ipa_priv {
 	bool opt_dp_ctrl_flt_cleaned;
 	qdf_event_t ipa_ctrl_flt_rm_shutdown_evt;
 	bool ipa_opt_dp_ctrl_debug;
+	uint8_t ipa_init_state;
 #ifdef IPA_OPT_WIFI_DP
 	struct wifi_dp_flt_setup dp_cce_super_rule_flt_param;
 	struct wifi_dp_tx_flt_setup dp_tx_super_rule_flt_param;

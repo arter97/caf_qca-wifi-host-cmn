@@ -205,19 +205,7 @@ void wlan_ipa_init_metering(struct wlan_ipa_priv *ipa_ctx)
 #ifdef IPA_OPT_WIFI_DP
 void wlan_ipa_add_rem_flt_cb_event(struct wlan_ipa_priv *ipa_ctx)
 {
-	struct wifi_dp_tx_flt_setup *dp_flt_params;
-	int i;
-
-	dp_flt_params = &ipa_ctx->dp_tx_super_rule_flt_param;
-	for (i = 0; i < TX_SUPER_RULE_SETUP_NUM; i++) {
-		qdf_event_create(&dp_flt_params->flt_addr_params[i].
-				 ipa_ctrl_flt_rm_evt);
-	}
-
 	qdf_event_create(&ipa_ctx->ipa_flt_evnt);
-	qdf_event_create(&ipa_ctx->ipa_ctrl_flt_evnt);
-	qdf_event_create(&ipa_ctx->ipa_ctrl_flt_rm_shutdown_evt);
-	qdf_spinlock_create(&dp_flt_params->flt_rem_lock);
 }
 #endif
 
