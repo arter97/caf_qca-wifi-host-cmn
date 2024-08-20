@@ -261,8 +261,6 @@ QDF_STATUS dp_reset_monitor_mode_unlock(struct cdp_soc_t *soc_hdl,
 #endif
 	}
 
-	mon_pdev->mvdev = NULL;
-
 	/*
 	 * Lite monitor mode, smart monitor mode and monitor
 	 * mode uses this APIs to filter reset and mode disable
@@ -293,6 +291,7 @@ QDF_STATUS dp_reset_monitor_mode_unlock(struct cdp_soc_t *soc_hdl,
 				   soc);
 	}
 
+	mon_pdev->mvdev = NULL;
 	mon_pdev->monitor_configured = false;
 
 	return QDF_STATUS_SUCCESS;

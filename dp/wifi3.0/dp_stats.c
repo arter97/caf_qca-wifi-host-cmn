@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -8560,7 +8560,7 @@ void dp_print_tso_stats(struct dp_soc *soc,
 		pdev = soc->pdev_list[loop_pdev];
 		DP_PRINT_STATS("TSO Statistics\n");
 		DP_PRINT_STATS(
-			  "From stack: %d | Successful completions: %d | TSO Packets: %d | TSO Completions: %d",
+			  "From stack: %llu | Successful completions: %llu | TSO Packets: %llu | TSO Completions: %d",
 			  pdev->stats.tx_i.rcvd.num,
 			  pdev->stats.tx.tx_success.num,
 			  pdev->stats.tso_stats.num_tso_pkts.num,

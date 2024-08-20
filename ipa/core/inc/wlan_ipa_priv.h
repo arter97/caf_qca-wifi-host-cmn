@@ -779,6 +779,7 @@ struct wlan_ipa_priv {
 	struct wifi_dp_flt_setup dp_cce_super_rule_flt_param;
 	qdf_event_t ipa_flt_evnt;
 	qdf_wake_lock_t opt_dp_wake_lock;
+	qdf_runtime_lock_t opt_dp_runtime_lock;
 #endif
 };
 
