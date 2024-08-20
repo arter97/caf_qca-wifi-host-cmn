@@ -778,9 +778,11 @@ dp_wrap_tx_bridge(struct wlan_objmgr_vdev *vdev, struct dp_wrap_vdev **wvdev,
 		return 1;
 	}
 }
+
 /**
  * dp_wrap_tx_process() - QWRAP TX process
  * @dev: net device object
+ * @osifp: osif_dev pointer
  * @vdev: vdev object manager
  * @skb: skb pointer
  *
@@ -789,8 +791,8 @@ dp_wrap_tx_bridge(struct wlan_objmgr_vdev *vdev, struct dp_wrap_vdev **wvdev,
  * return: QWRAP_TX_SUCCESS - TX pkt on PSTA
  *         QWRAP_TX_FAILURE - TX error, drop pkt on calling function
  */
-int dp_wrap_tx_process(struct net_device **dev, struct wlan_objmgr_vdev *vdev,
-		       struct sk_buff **skb)
+int dp_wrap_tx_process(struct net_device **dev, osif_dev **osifp,
+		       struct wlan_objmgr_vdev *vdev, struct sk_buff **skb)
 {
 	struct dp_wrap_vdev *wvdev = NULL;
 	struct ether_header *eh;
@@ -814,7 +816,7 @@ int dp_wrap_tx_process(struct net_device **dev, struct wlan_objmgr_vdev *vdev,
 				return QWRAP_TX_FAILURE;
 			}
 		}
-		*dev = wvdev->dev;
+
 		vdev = wvdev->vdev;
 
 		if (wlan_vdev_is_up(vdev) != QDF_STATUS_SUCCESS) {
@@ -824,6 +826,17 @@ int dp_wrap_tx_process(struct net_device **dev, struct wlan_objmgr_vdev *vdev,
 				  vdev->vdev_objmgr.vdev_id);
 			return QWRAP_TX_FAILURE;
 		}
+
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+		*osifp = osif_get_osdev_from_vdev(vdev);
+		if (!(*osifp)) {
+			qwrap_err("osifp is NULL");
+			return QWRAP_TX_FAILURE;
+		}
+#else
+		*dev = wvdev->dev;
+		*osifp = ath_netdev_priv(*dev);
+#endif
 	}
 	return QWRAP_TX_SUCCESS;
 }
