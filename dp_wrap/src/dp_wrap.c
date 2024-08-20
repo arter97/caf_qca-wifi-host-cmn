@@ -843,7 +843,7 @@ int dp_wrap_tx_process(struct net_device **dev, osif_dev **osifp,
 qdf_export_symbol(dp_wrap_tx_process);
 
 static inline
-int dp_wrap_rx_bridge(struct wlan_objmgr_vdev *vdev, struct net_device **dev,
+int dp_wrap_rx_bridge(struct wlan_objmgr_vdev *vdev, struct net_device **dev, osif_dev **osifp,
 		      struct dp_wrap_vdev *wvdev, struct sk_buff *skb)
 {
 	/* Assuming native wifi or raw mode is not
@@ -859,7 +859,7 @@ int dp_wrap_rx_bridge(struct wlan_objmgr_vdev *vdev, struct net_device **dev,
 	mpsta_vdev = wpdev->mpsta_vdev;
 	wrap_vdev = wpdev->wrap_vdev;
 	if (isolation == 0) {
-		/* Isolatio mode,Wired and wireless clients connected
+		/* Non-Isolation mode,Wired and wireless clients connected
 		 * to Qwrap Ap can talk through Qwrap bridge
 		 */
 		if ((wvdev->is_mpsta == 0) && (wvdev->is_psta) &&
@@ -869,8 +869,18 @@ int dp_wrap_rx_bridge(struct wlan_objmgr_vdev *vdev, struct net_device **dev,
 				/*get mpsta vap , for qwrap bridge learning
 				 * is always through main proxy sta
 				 */
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+				*osifp = osif_get_osdev_from_vdev(mpsta_vdev);
+				if (!(*osifp)) {
+					qwrap_err("osifp is NULL");
+					return QWRAP_RX_FAILURE;
+				}
+				skb->dev = (*osifp)->rx_dev;
+#else
 				skb->dev = wpdev->mpsta_dev;
 				*dev = skb->dev;
+				*osifp = ath_netdev_priv(*dev);
+#endif
 			}
 			ret = QWRAP_RX_SUCCESS_TO_BRIDGE;
 		}
@@ -893,8 +903,19 @@ int dp_wrap_rx_bridge(struct wlan_objmgr_vdev *vdev, struct net_device **dev,
 			 * bridge.Here qwrap bridge learning for wired
 			 * proxy clients is always through mpsta
 			 */
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+			*osifp = osif_get_osdev_from_vdev(mpsta_vdev);
+			if (!(*osifp)) {
+				qwrap_err("osifp is NULL");
+				return QWRAP_RX_FAILURE;
+			}
+
+			skb->dev = (*osifp)->rx_dev;
+#else
 			skb->dev = wpdev->mpsta_dev;
 			*dev = skb->dev;
+			*osifp = ath_netdev_priv(*dev);
+#endif
 			ret = QWRAP_RX_SUCCESS_TO_BRIDGE;
 		}
 	} else if (wvdev->is_psta && !wvdev->is_mpsta &&
@@ -910,7 +931,17 @@ int dp_wrap_rx_bridge(struct wlan_objmgr_vdev *vdev, struct net_device **dev,
 			return QWRAP_RX_FAILURE;
 		}
 
-		wrap_wvdev->wlan_vdev_xmit_queue(wrap_wvdev->dev, skb);
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+		*osifp = osif_get_osdev_from_vdev(wrap_wvdev->vdev);
+#else
+		*osifp = ath_netdev_priv(wrap_wvdev->dev);
+#endif
+		if (!(*osifp)) {
+			qwrap_err("osifp is NULL");
+			return QWRAP_RX_FAILURE;
+		}
+
+		wrap_wvdev->wlan_vdev_xmit_queue(*osifp, skb);
 		ret = QWRAP_RX_SUCCESS_TO_NON_BRIDGE;
 	} else if ((wvdev->is_wrap &&
 				!(eh->ether_type == htons(ETHERTYPE_PAE))) &&
@@ -925,8 +956,17 @@ int dp_wrap_rx_bridge(struct wlan_objmgr_vdev *vdev, struct net_device **dev,
 			return QWRAP_RX_FAILURE;
 		}
 
-		mpsta_wvdev->wlan_vdev_xmit_queue(
-				mpsta_wvdev->dev, skb);
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+		*osifp = osif_get_osdev_from_vdev(mpsta_wvdev->vdev);
+#else
+		*osifp = ath_netdev_priv(mpsta_wvdev->dev);
+#endif
+		if (!(*osifp)) {
+			qwrap_err("osifp is NULL");
+			return QWRAP_RX_FAILURE;
+		}
+
+		mpsta_wvdev->wlan_vdev_xmit_queue(*osifp, skb);
 		ret = QWRAP_RX_SUCCESS_TO_NON_BRIDGE;
 	} else if (wvdev->is_mpsta &&
 			IEEE80211_IS_MULTICAST(eh->ether_dhost) &&
@@ -938,20 +978,27 @@ int dp_wrap_rx_bridge(struct wlan_objmgr_vdev *vdev, struct net_device **dev,
 			/* Multicast orginated from mpsta/bridge
 			 * should always xmit through wrap AP vap
 			 */
-			wrap_wvdev = dp_wrap_get_vdev_handle(
-					wrap_vdev);
+			wrap_wvdev = dp_wrap_get_vdev_handle(wrap_vdev);
 			if (wrap_wvdev == NULL) {
 				qwrap_err("wvdev is NULL, Drop the pkt");
 				return QWRAP_RX_FAILURE;
 			}
 
-			wrap_wvdev->wlan_vdev_xmit_queue(
-					wrap_wvdev->dev, skb);
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+			*osifp = osif_get_osdev_from_vdev(wrap_wvdev->vdev);
+#else
+			*osifp = ath_netdev_priv(wrap_wvdev->dev);
+#endif
+			if (!(*osifp)) {
+				qwrap_err("osifp is NULL");
+				return QWRAP_RX_FAILURE;
+			}
+
+			wrap_wvdev->wlan_vdev_xmit_queue(*osifp, skb);
 			ret = QWRAP_RX_SUCCESS_TO_NON_BRIDGE;
 		} else {
-			t_wvdev = dp_wrap_wdev_vma_find(
-					&wpdev->wp_devt,
-					eh->ether_shost);
+			t_wvdev = dp_wrap_wdev_vma_find(&wpdev->wp_devt,
+							eh->ether_shost);
 			if (t_wvdev) {
 				if (t_wvdev->is_wired_psta) {
 					/*Multicast received from wired
@@ -966,16 +1013,40 @@ int dp_wrap_rx_bridge(struct wlan_objmgr_vdev *vdev, struct net_device **dev,
 						return QWRAP_RX_FAILURE;
 					}
 
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+					*osifp = osif_get_osdev_from_vdev(
+							wrap_wvdev->vdev);
+#else
+					*osifp = ath_netdev_priv(
+						wrap_wvdev->dev);
+#endif
+					if (!(*osifp)) {
+						qwrap_err("osifp is NULL");
+						return QWRAP_RX_FAILURE;
+					}
+
 					wrap_wvdev->
 						wlan_vdev_xmit_queue
-						(wrap_wvdev->dev, skb);
+						(*osifp, skb);
 					ret = QWRAP_RX_SUCCESS_TO_NON_BRIDGE;
 				} else {
 					/*Multicast received from
 					 *wireless client,fwd to bridge
 					 */
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+					*osifp = osif_get_osdev_from_vdev(
+								mpsta_vdev);
+					if (!(*osifp)) {
+						qwrap_err("osifp is NULL");
+						return QWRAP_RX_FAILURE;
+					}
+
+					skb->dev = (*osifp)->rx_dev;
+#else
 					skb->dev = wpdev->mpsta_dev;
 					*dev = skb->dev;
+					*osifp = ath_netdev_priv(*dev);
+#endif
 					ret = QWRAP_RX_SUCCESS_TO_BRIDGE;
 				}
 			} else  {
@@ -996,14 +1067,37 @@ int dp_wrap_rx_bridge(struct wlan_objmgr_vdev *vdev, struct net_device **dev,
 						return QWRAP_RX_FAILURE;
 					}
 
-					wrap_wvdev->
-						wlan_vdev_xmit_queue(
-								wrap_wvdev->dev, copy);
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+					*osifp = osif_get_osdev_from_vdev(
+							wrap_wvdev->vdev);
+#else
+					*osifp = ath_netdev_priv(
+							wrap_wvdev->dev);
+#endif
+					if (!(*osifp)) {
+						qwrap_err("osifp is NULL");
+						return QWRAP_RX_FAILURE;
+					}
+
+					wrap_wvdev->wlan_vdev_xmit_queue(
+								*osifp, copy);
 				} else {
 					qdf_err("Wrap buf cpy fail");
 				}
+
+#ifdef ENABLE_CFG80211_BACKPORTS_MLO
+				*osifp = osif_get_osdev_from_vdev(mpsta_vdev);
+				if (!(*osifp)) {
+					qwrap_err("osifp is NULL");
+					return QWRAP_RX_FAILURE;
+				}
+
+				skb->dev = (*osifp)->rx_dev;
+#else
 				skb->dev = wpdev->mpsta_dev;
 				*dev = skb->dev;
+				*osifp = ath_netdev_priv(*dev);
+#endif
 				ret = QWRAP_RX_SUCCESS_TO_BRIDGE;
 			}
 		}
@@ -1014,6 +1108,7 @@ int dp_wrap_rx_bridge(struct wlan_objmgr_vdev *vdev, struct net_device **dev,
 /**
  * dp_wrap_rx_process() - QWRAP RX process
  * @dev: net device object
+ * @osifp: osif_dev pointer
  * @vdev: vdev object manager
  * @skb: skb pointer
  *
@@ -1023,7 +1118,7 @@ int dp_wrap_rx_bridge(struct wlan_objmgr_vdev *vdev, struct net_device **dev,
  *         QWRAP_RX_SUCCESS_TO_NON_BRIDGE - Give packet to MPSTA/ WRAP vdev
  *         QWRAP_RX_FAILURE - RX error, free skb on calling function
  */
-int dp_wrap_rx_process(struct net_device **dev, struct wlan_objmgr_vdev *vdev,
+int dp_wrap_rx_process(struct net_device **dev, osif_dev **osifp, struct wlan_objmgr_vdev *vdev,
 		       struct sk_buff *skb)
 {
 	struct dp_wrap_vdev *wvdev;
@@ -1038,7 +1133,7 @@ int dp_wrap_rx_process(struct net_device **dev, struct wlan_objmgr_vdev *vdev,
 	if (qdf_unlikely(wlan_rptr_vdev_is_psta(vdev) ||
 			 wlan_rptr_vdev_is_wrap(vdev))) {
 		dp_wrap_mat_rx(wvdev, (wbuf_t)skb);
-		rv = dp_wrap_rx_bridge(vdev, dev, wvdev, skb);
+		rv = dp_wrap_rx_bridge(vdev, dev, osifp, wvdev, skb);
 	}
 	return rv;
 }
@@ -1100,7 +1195,7 @@ dp_wrap_vdev_get_netdev(struct wlan_objmgr_vdev *vdev)
  */
 void dp_wrap_register_xmit_handler(struct wlan_objmgr_vdev *vdev,
 				    void (*wlan_vdev_xmit_queue)
-				    (struct net_device *dev, wbuf_t wbuf))
+				    (osif_dev *osifp, wbuf_t wbuf))
 {
 	struct dp_wrap_vdev *wrap_vdev;
 

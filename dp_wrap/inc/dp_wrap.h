@@ -305,7 +305,7 @@ void dp_wrap_vdev_set_wrap(struct wlan_objmgr_vdev *vdev);
 void dp_wrap_vdev_clear_wrap(struct wlan_objmgr_vdev *vdev);
 void dp_wrap_dev_remove(struct wlan_objmgr_vdev *vdev);
 void dp_wrap_dev_remove_vma(struct wlan_objmgr_vdev *vdev);
-int dp_wrap_rx_process(struct net_device **dev, struct wlan_objmgr_vdev *vdev,
+int dp_wrap_rx_process(struct net_device **dev, osif_dev **osifp, struct wlan_objmgr_vdev *vdev,
 		       struct sk_buff *skb);
 int dp_wrap_tx_process(struct net_device **dev, osif_dev **osifp,
 		       struct wlan_objmgr_vdev *vdev, struct sk_buff **skb);
@@ -315,7 +315,7 @@ void dp_wrap_vdev_set_netdev(struct wlan_objmgr_vdev *vdev,
 			  struct net_device *dev);
 void dp_wrap_register_xmit_handler(struct wlan_objmgr_vdev *vdev,
 				    void (*wlan_vdev_xmit_queue)
-				    (struct net_device *dev, wbuf_t wbuf));
+				    (osif_dev *osifp, wbuf_t wbuf));
 struct net_device *dp_wrap_vdev_get_netdev(struct wlan_objmgr_vdev *vdev);
 void dp_wrap_mat_params_update(struct wlan_objmgr_vdev *vdev);
 #endif
