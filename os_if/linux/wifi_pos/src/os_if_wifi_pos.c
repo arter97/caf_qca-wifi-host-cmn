@@ -1091,10 +1091,10 @@ os_if_wifi_pos_initiate_pasn_auth(struct wlan_objmgr_vdev *vdev,
 	int index = QCA_NL80211_VENDOR_SUBCMD_PASN_AUTH_STATUS_INDEX;
 	uint16_t record_size;
 	uint32_t len;
-	uint8_t link_id;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	struct wireless_dev *wdev;
 	struct wiphy *wiphy;
+	uint8_t link_id = 0xff;
 
 	osif_priv  = wlan_vdev_get_ospriv(vdev);
 	if (!osif_priv) {
@@ -1154,6 +1154,7 @@ os_if_wifi_pos_initiate_pasn_auth(struct wlan_objmgr_vdev *vdev,
 	/* QCA_WLAN_VENDOR_ATTR_PASN_PEERS nest */
 	len += nla_total_size(num_pasn_peers * record_size);
 
+	/*QCA_WLAN_VENDOR_ATTR_PASN_LINK_ID*/
 	len += nla_total_size(sizeof(u8));
 
 	skb = wlan_cfg80211_vendor_event_alloc(wiphy,
@@ -1168,18 +1169,22 @@ os_if_wifi_pos_initiate_pasn_auth(struct wlan_objmgr_vdev *vdev,
 		 QCA_WLAN_VENDOR_PASN_ACTION_DELETE_SECURE_RANGING_CONTEXT;
 	if (nla_put_u32(skb, QCA_WLAN_VENDOR_ATTR_PASN_ACTION, action)) {
 		osif_err("NLA put failed");
+		status = QDF_STATUS_E_FAILURE;
 		goto nla_put_failure;
 	}
 
-	if (wlan_vdev_mlme_is_link_sta_vdev(vdev)) {
-		link_id = wlan_vdev_get_link_id(vdev);
-		if (nla_put_u8(skb, QCA_WLAN_VENDOR_ATTR_PASN_LINK_ID,
-			       link_id)) {
-			osif_err("NLA put failed");
-			goto nla_put_failure;
+	for (i = 0; i < IEEE80211_MLD_MAX_NUM_LINKS; i++) {
+		if (qdf_is_macaddr_equal(wdev->links[i].addr, vdev->vdev_mlme.macaddr)) {
+			link_id = i;
+			break;
 		}
 	}
 
+	if (nla_put_u8(skb, QCA_WLAN_VENDOR_ATTR_PASN_LINK_ID, link_id)) {
+		osif_err("NLA put failed");
+		status = QDF_STATUS_E_FAILURE;
+		goto nla_put_failure;
+	}
 	attr = nla_nest_start(skb, QCA_WLAN_VENDOR_ATTR_PASN_PEERS);
 	if (!attr) {
 		osif_err("NLA nest failed");
