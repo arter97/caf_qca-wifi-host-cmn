@@ -5031,12 +5031,14 @@ qdf_export_symbol(__qdf_nbuf_dma_map_info);
 void
 __qdf_nbuf_frag_info(struct sk_buff *skb, qdf_sglist_t  *sg)
 {
+	int i;
+
 	qdf_assert(skb);
 	sg->sg_segs[0].vaddr = skb->data;
 	sg->sg_segs[0].len   = skb->len;
 	sg->nsegs            = 1;
 
-	for (int i = 1; i <= sh->nr_frags; i++) {
+	for (i = 1; i <= sh->nr_frags; i++) {
 		skb_frag_t    *f        = &sh->frags[i - 1];
 
 		sg->sg_segs[i].vaddr    = (uint8_t *)(page_address(f->page) +

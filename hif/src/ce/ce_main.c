@@ -5382,7 +5382,7 @@ static void hif_post_static_buf_to_target(struct hif_softc *scn)
  *
  * Return: void
  */
-void hif_cleanup_static_buf_to_target(struct hif_softc *scn)
+static void hif_cleanup_static_buf_to_target(struct hif_softc *scn)
 {
 	void *target_va = scn->vaddr_qmi_bypass;
 	phys_addr_t target_pa = scn->paddr_qmi_bypass;
@@ -5426,7 +5426,7 @@ static void hif_post_static_buf_to_target(struct hif_softc *scn)
  *
  * Return: void
  */
-void hif_cleanup_static_buf_to_target(struct hif_softc *scn)
+static void hif_cleanup_static_buf_to_target(struct hif_softc *scn)
 {
 	void *target_va = scn->vaddr_qmi_bypass;
 	phys_addr_t target_pa = scn->paddr_qmi_bypass;

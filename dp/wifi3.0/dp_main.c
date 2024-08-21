@@ -10772,6 +10772,7 @@ dp_tx_get_fw_nss_stats(struct dp_soc *soc, uint8_t vdev_id, int **stats_req)
 	struct cdp_txrx_stats_req req = {0,};
 	struct dp_vdev *vdev;
 	struct dp_pdev *pdev = dp_get_pdev_from_soc_pdev_id_wifi3(soc, 0);
+	int i;
 
 	if (pdev->pending_tx_nss_response)
 		return QDF_STATUS_E_ALREADY;
@@ -10798,7 +10799,7 @@ dp_tx_get_fw_nss_stats(struct dp_soc *soc, uint8_t vdev_id, int **stats_req)
 	if (QDF_IS_STATUS_ERROR(status))
 		goto end;
 
-	for (int i = 0; i < SS_COUNT_JITTER; i++) {
+	for (i = 0; i < SS_COUNT_JITTER; i++) {
 		stats_req[i][VENDOR_ATTR_NSS_PKT_TX_PACKET_COUNT] =
 			vdev->tx_vdev_nss.tx_nss[i];
 	}
@@ -10823,6 +10824,7 @@ QDF_STATUS dp_txrx_nss_request(struct cdp_soc_t *soc_handle,
 	QDF_STATUS status;
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_handle);
 	struct cdp_vdev_stats *vdev_stats = qdf_mem_malloc(sizeof(*vdev_stats));
+	int i;
 
 	if (!vdev_stats)
 		return QDF_STATUS_E_NOMEM;
@@ -10831,7 +10833,7 @@ QDF_STATUS dp_txrx_nss_request(struct cdp_soc_t *soc_handle,
 	if (QDF_IS_STATUS_ERROR(status))
 		goto end;
 
-	for (int i = 0; i < SS_COUNT_JITTER; i++) {
+	for (i = 0; i < SS_COUNT_JITTER; i++) {
 		req[i][VENDOR_ATTR_NSS_PKT_TX_PACKET_COUNT] =
 							  vdev_stats->tx.nss[i];
 		req[i][VENDOR_ATTR_NSS_PKT_RX_PACKET_COUNT] =
