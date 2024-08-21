@@ -5333,6 +5333,30 @@ static QDF_STATUS dp_vdev_detach_wifi3(struct cdp_soc_t *cdp_soc,
 	return QDF_STATUS_SUCCESS;
 }
 
+#if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
+/**
+ * is_dp_no_unmap_peer_reuse_allow() - check if peer has not received HTT
+ *                                     unmap before, not allow to reuse
+ * @peer: DP peer handle to be checked
+ *
+ * Return: true - allowed, false - not
+ */
+static inline
+bool is_dp_no_unmap_peer_reuse_allow(struct dp_peer *peer)
+{
+	if (peer->peer_id == HTT_INVALID_PEER)
+		return true;
+	else
+		return false;
+}
+#else
+static inline
+bool is_dp_no_unmap_peer_reuse_allow(struct dp_peer *peer)
+{
+	return true;
+}
+#endif
+
 #ifdef WLAN_FEATURE_11BE_MLO
 /**
  * is_dp_peer_can_reuse() - check if the dp_peer match condition to be reused
@@ -5351,6 +5375,7 @@ bool is_dp_peer_can_reuse(struct dp_vdev *vdev,
 {
 	if (peer->bss_peer && (peer->vdev == vdev) &&
 	    (peer->peer_type == peer_type) &&
+	    is_dp_no_unmap_peer_reuse_allow(peer) &&
 	    (qdf_mem_cmp(peer_mac_addr, peer->mac_addr.raw,
 			 QDF_MAC_ADDR_SIZE) == 0))
 		return true;
@@ -5365,6 +5390,7 @@ bool is_dp_peer_can_reuse(struct dp_vdev *vdev,
 			  enum cdp_peer_type peer_type)
 {
 	if (peer->bss_peer && (peer->vdev == vdev) &&
+	    is_dp_no_unmap_peer_reuse_allow(peer) &&
 	    (qdf_mem_cmp(peer_mac_addr, peer->mac_addr.raw,
 			 QDF_MAC_ADDR_SIZE) == 0))
 		return true;
