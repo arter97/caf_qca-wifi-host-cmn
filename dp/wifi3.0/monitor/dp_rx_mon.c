@@ -1788,6 +1788,14 @@ dp_rx_mon_stitch_mpdu(struct dp_mon_mac *mon_mac, qdf_nbuf_t tail)
 			nbuf = next;
 		}
 
+		/*
+		 * Single msdu and total length < 256 bytes, remove extra
+		 * 4 bytes of RX FCS in the tail to avoid parsing issue.
+		 */
+		if (!head_frag_list &&
+		    qdf_nbuf_len(mpdu_buf) < LPC_RX_HDR_DMA_LENGTH)
+			qdf_nbuf_trim_tail(mpdu_buf, HAL_RX_FCS_LEN);
+
 		qdf_nbuf_append_ext_list(mpdu_buf, head_frag_list,
 					 frag_list_sum_len);
 		qdf_nbuf_free(head);
