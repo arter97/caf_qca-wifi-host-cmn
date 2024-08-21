@@ -1258,7 +1258,7 @@ struct wlan_lmac_if_reg_tx_ops {
 				       qdf_freq_t primary_freq,
 				       qdf_freq_t cen320,
 				       uint16_t punc_pattern, uint16_t bw,
-				       int16_t *min_psd);
+				       int16_t *min_psd, bool is_twice_power);
 #endif
 	bool (*is_chip_11be)(struct wlan_objmgr_psoc *psoc,
 			     uint16_t phy_id);

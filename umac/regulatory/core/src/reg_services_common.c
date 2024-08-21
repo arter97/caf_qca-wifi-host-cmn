@@ -9999,7 +9999,7 @@ reg_get_sp_eirp_for_punc_chans(struct wlan_objmgr_pdev *pdev,
 	/* min_psd will be calculated here */
 	status = reg_tx_ops->reg_get_min_psd(pdev, freq, cen320,
 					     in_punc_pattern, bw,
-					     &min_psd);
+					     &min_psd, is_twice_power);
 	if (status != QDF_STATUS_SUCCESS) {
 		reg_debug("Could not derive min_psd power for width %u, freq; %d, cen320: %d, in_punc: 0x%x\n",
 			  bw, freq, cen320, in_punc_pattern);
