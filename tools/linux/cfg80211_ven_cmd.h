@@ -880,6 +880,7 @@ enum {
 #ifdef QCA_SUPPORT_WDS_EXTENDED
 	IEEE80211_PARAM_WDS_EXT_AP_BRIDGE  = 833,  /* Flag to enable/disable wds_ext specific ap bridge */
 #endif
+	IEEE80211_PARAM_HWCTS2SELF_OFDMA = 834, /* User config to enable/disable HWCTS2SELF before DL OFDMA sequence.*/
 };
 
 enum {
@@ -2640,6 +2641,7 @@ struct vendor_commands vap_vendor_cmds[] = {
 #endif
 	{"display_band_chans",
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_DISPLAY_BAND_CHANS, GET_PARAM, 0},
+	{"hwcts2self_enable", IEEE80211_PARAM_HWCTS2SELF_OFDMA, SET_PARAM, 1},
 };
 
 struct vendor_commands radio_vendor_cmds[] = {
