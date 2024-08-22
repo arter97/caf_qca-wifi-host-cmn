@@ -1806,6 +1806,11 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 		frame_iesection_offset = WLAN_REASSOC_REQ_IES_OFFSET;
 	} else if (subtype == WLAN_FC0_STYPE_PROBE_RESP) {
 		frame_iesection_offset = WLAN_PROBE_RESP_IES_OFFSET;
+		if (frame_len < WLAN_TIMESTAMP_LEN) {
+			mlo_err("Frame length %zu is smaller than required timestamp length",
+				frame_len);
+			return QDF_STATUS_E_INVAL;
+		}
 		qdf_mem_copy(&tsf, frame, WLAN_TIMESTAMP_LEN);
 		tsf = qdf_le64_to_cpu(tsf);
 	} else {
