@@ -6775,6 +6775,195 @@ void dp_txrx_peer_unref_delete(dp_txrx_ref_handle handle,
 
 qdf_export_symbol(dp_txrx_peer_unref_delete);
 
+#ifdef DP_PEER_UNMAP_TRACK
+void dp_peer_unmap_track_update(struct dp_soc *soc,
+				struct dp_peer *peer)
+{
+	struct dp_peer_unmap_track_elem *elem;
+	bool timer_start = false;
+
+	/* only if peer still mapped */
+	if (peer->peer_id == HTT_INVALID_PEER)
+		return;
+
+	elem = qdf_mem_malloc(sizeof(*elem));
+	if (!elem) {
+		dp_peer_info("failed to allocate memory for unmap tracking");
+		return;
+	}
+
+	elem->peer = peer;
+	elem->peer_id = peer->peer_id;
+	elem->track_start_time = qdf_get_log_timestamp();
+
+	qdf_spin_lock_bh(&soc->peer_unmap_track_lock);
+	qdf_list_insert_back(&soc->peer_unmap_track_list, &elem->node);
+	if (!soc->peer_unmap_track_timer_start &&
+	    !soc->peer_unmap_track_timer_suspend) {
+		soc->peer_unmap_track_timer_start = true;
+		timer_start = true;
+	}
+	qdf_spin_unlock_bh(&soc->peer_unmap_track_lock);
+
+	/* Start timer if not started */
+	if (timer_start) {
+		dp_info("start timer");
+		qdf_timer_mod(&soc->peer_unmap_track_timer,
+			      DP_PEER_UNMAP_TRACK_TIMEOUT);
+	}
+}
+
+/**
+ * dp_peer_unmap_track_timer() - handler when peer unmap track
+ *                               timer expire
+ * @arg: argument parameter
+ *
+ * If timer expire, check 1st node in list, if it still exists
+ * in peer_id_object table, trigger crash. restart timer by new
+ * timeout value according to 2nd node in list.
+ *
+ * Return: None
+ */
+static void dp_peer_unmap_track_timer(void *arg)
+{
+	struct dp_soc *soc = (struct dp_soc *)arg;
+	struct dp_peer_unmap_track_elem *elem;
+	qdf_list_node_t *node;
+	struct dp_peer *peer;
+	QDF_STATUS status;
+	uint64_t cur_ts, delta_ts;
+	int mod_timeout;
+
+	qdf_spin_lock_bh(&soc->peer_unmap_track_lock);
+	/* check 1st element that timer expires */
+	status = qdf_list_remove_front(&soc->peer_unmap_track_list, &node);
+	if (status != QDF_STATUS_SUCCESS) {
+		dp_err("1st element not found");
+		goto timer_reset;
+	}
+	qdf_spin_unlock_bh(&soc->peer_unmap_track_lock);
+	elem = (struct dp_peer_unmap_track_elem *)node;
+	peer = dp_peer_get_ref_by_id(soc, elem->peer_id,
+				     DP_MOD_ID_MISC);
+	/*
+	 * peer NULL, peer id unmapped but not reused,
+	 * peer not NULL and != elem->peer, new dp_peer has
+	 * used same peer ID.
+	 */
+	if (!peer || (peer != elem->peer)) {
+		qdf_mem_free(elem);
+		if (peer)
+			dp_peer_unref_delete(peer, DP_MOD_ID_MISC);
+	} else {
+		/* same peer still exist in peer_id_object table, no unmap */
+		dp_err("peer %pK(" QDF_MAC_ADDR_FMT ")unmap timeout "
+		       "id %d, delete timestamp 0x%llx",
+		       peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw),
+		       peer->peer_id, elem->track_start_time);
+		qdf_assert_always(0);
+	}
+
+	cur_ts = qdf_get_log_timestamp();
+	/* check 2nd element if restart timer needed */
+	qdf_spin_lock_bh(&soc->peer_unmap_track_lock);
+	status = qdf_list_peek_front(&soc->peer_unmap_track_list, &node);
+	if (status != QDF_STATUS_SUCCESS)
+		goto timer_reset;
+	elem = (struct dp_peer_unmap_track_elem *)node;
+	delta_ts = qdf_log_timestamp_to_usecs(cur_ts) -
+			qdf_log_timestamp_to_usecs(elem->track_start_time);
+	qdf_spin_unlock_bh(&soc->peer_unmap_track_lock);
+	delta_ts /= 1000; /* ms */
+	if (delta_ts >= DP_PEER_UNMAP_TRACK_TIMEOUT)
+		mod_timeout = 1; /* set 1 ms */
+	else
+		mod_timeout = DP_PEER_UNMAP_TRACK_TIMEOUT - delta_ts;
+	qdf_timer_mod(&soc->peer_unmap_track_timer, mod_timeout);
+	return;
+
+timer_reset:
+	soc->peer_unmap_track_timer_start = false;
+	qdf_spin_unlock_bh(&soc->peer_unmap_track_lock);
+}
+
+/**
+ * dp_peer_unmap_track_list_clean() - clean up list node
+ * @soc: DP Soc
+ *
+ * Return: none
+ */
+static void
+dp_peer_unmap_track_list_clean(struct dp_soc *soc)
+{
+	struct dp_peer_unmap_track_elem *elem;
+	qdf_list_node_t *node;
+
+	qdf_spin_lock_bh(&soc->peer_unmap_track_lock);
+	while (qdf_list_remove_front(&soc->peer_unmap_track_list, &node) ==
+	       QDF_STATUS_SUCCESS) {
+		elem = (struct dp_peer_unmap_track_elem *)node;
+		qdf_mem_free(elem);
+	}
+	qdf_spin_unlock_bh(&soc->peer_unmap_track_lock);
+}
+
+void dp_peer_unmap_track_init(struct dp_soc *soc)
+{
+	soc->peer_unmap_track_timer_start = false;
+	soc->peer_unmap_track_timer_suspend = false;
+	qdf_spinlock_create(&soc->peer_unmap_track_lock);
+	qdf_list_create(&soc->peer_unmap_track_list, 128);
+	qdf_timer_init(soc->osdev, &soc->peer_unmap_track_timer,
+		       dp_peer_unmap_track_timer, (void *)soc,
+		       QDF_TIMER_TYPE_WAKE_APPS);
+}
+
+void dp_peer_unmap_track_deinit(struct dp_soc *soc)
+{
+	qdf_timer_stop(&soc->peer_unmap_track_timer);
+	dp_peer_unmap_track_list_clean(soc);
+	qdf_timer_free(&soc->peer_unmap_track_timer);
+	qdf_spinlock_destroy(&soc->peer_unmap_track_lock);
+	qdf_list_destroy(&soc->peer_unmap_track_list);
+}
+
+void dp_peer_unmap_track_suspend(struct dp_soc *soc)
+{
+	/* Set suspend flag firstly to prevent timer start */
+	qdf_spin_lock_bh(&soc->peer_unmap_track_lock);
+	soc->peer_unmap_track_timer_suspend = true;
+	qdf_spin_unlock_bh(&soc->peer_unmap_track_lock);
+
+	/* Cancel the timer */
+	qdf_timer_sync_cancel(&soc->peer_unmap_track_timer);
+
+	qdf_spin_lock_bh(&soc->peer_unmap_track_lock);
+	soc->peer_unmap_track_timer_start = false;
+	qdf_spin_unlock_bh(&soc->peer_unmap_track_lock);
+}
+
+void dp_peer_unmap_track_resume(struct dp_soc *soc)
+{
+	bool restart_timer = false;
+
+	/* trigger timer start if any element pending */
+	qdf_spin_lock_bh(&soc->peer_unmap_track_lock);
+	soc->peer_unmap_track_timer_suspend = false;
+	if (!soc->peer_unmap_track_timer_start &&
+	    !qdf_list_empty(&soc->peer_unmap_track_list)) {
+		soc->peer_unmap_track_timer_start = true;
+		restart_timer = true;
+	}
+	qdf_spin_unlock_bh(&soc->peer_unmap_track_lock);
+
+	if (restart_timer) {
+		dp_info("restart timer");
+		qdf_timer_mod(&soc->peer_unmap_track_timer,
+			      DP_PEER_UNMAP_TRACK_TIMEOUT);
+	}
+}
+#endif
+
 /**
  * dp_peer_delete_wifi3() - Delete txrx peer
  * @soc_hdl: soc handle
@@ -6844,6 +7033,8 @@ static QDF_STATUS dp_peer_delete_wifi3(struct cdp_soc_t *soc_hdl,
 	dp_peer_vdev_list_remove(soc, vdev, peer);
 
 	dp_peer_mlo_delete(peer);
+
+	dp_peer_unmap_track_update(soc, peer);
 
 	qdf_spin_lock_bh(&soc->inactive_peer_list_lock);
 	TAILQ_INSERT_TAIL(&soc->inactive_peer_list, peer,
@@ -13988,6 +14179,8 @@ static QDF_STATUS dp_bus_suspend(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 	if (soc->intr_mode == DP_INTR_POLL)
 		qdf_timer_stop(&soc->int_timer);
 
+	dp_peer_unmap_track_suspend(soc);
+
 	/* Stop monitor reap timer and reap any pending frames in ring */
 	dp_monitor_reap_timer_suspend(soc);
 
@@ -14006,6 +14199,8 @@ static QDF_STATUS dp_bus_resume(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 
 	if (soc->intr_mode == DP_INTR_POLL)
 		qdf_timer_mod(&soc->int_timer, DP_INTR_POLL_TIMER_MS);
+
+	dp_peer_unmap_track_resume(soc);
 
 	/* Start monitor reap timer */
 	dp_monitor_reap_timer_start(soc, CDP_MON_REAP_SOURCE_ANY);

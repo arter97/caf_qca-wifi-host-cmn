@@ -3325,6 +3325,18 @@ struct dp_soc {
 	uint32_t peer_id_mask;
 #endif
 
+#ifdef DP_PEER_UNMAP_TRACK
+	/* flag to indicate if the timer start already */
+	bool peer_unmap_track_timer_start;
+	/* flag to indicate if the timer has to be suspended */
+	bool peer_unmap_track_timer_suspend;
+	/* protect peer_unmap_track_list */
+	qdf_spinlock_t peer_unmap_track_lock;
+	/* list to store dp_peer_unmap_track_elem */
+	qdf_list_t peer_unmap_track_list;
+	/* timer for peer unmap tracking */
+	qdf_timer_t peer_unmap_track_timer;
+#endif
 	/* rx peer metadata field shift and mask configuration */
 	uint8_t htt_peer_id_s;
 	uint32_t htt_peer_id_m;

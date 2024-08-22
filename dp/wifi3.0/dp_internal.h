@@ -68,6 +68,88 @@
 #define DP_VLAN_TAGGED_MULTICAST 1
 #define DP_VLAN_TAGGED_UNICAST 2
 
+#ifdef DP_PEER_UNMAP_TRACK
+/* timer expire in unit ms */
+#define DP_PEER_UNMAP_TRACK_TIMEOUT 3000
+
+/**
+ * struct dp_peer_unmap_track_elem - structure to maintain peer info for
+ *                                   HTT unmap tracking
+ * @node: node in list
+ * @peer: DP peer which waits HTT peer unmap
+ * @peer_id: Peer ID mapped before
+ * @track_start_time: Timestamp that peer unmap tracking start
+ */
+struct dp_peer_unmap_track_elem {
+	/* Do not add new entries here */
+	qdf_list_node_t node;
+	struct dp_peer *peer;
+	uint16_t peer_id;
+	uint64_t track_start_time;
+};
+
+/**
+ * dp_peer_unmap_track_update() - update for peer unmap tracking
+ * @soc: DP Soc
+ * @peer: DP peer handle
+ *
+ * If peer ID is still valid, then it means this peer has not received
+ * unmap before, queue one element into list and start timer to track
+ * peer unmap next.
+ *
+ * Return: None
+ */
+void dp_peer_unmap_track_update(struct dp_soc *soc, struct dp_peer *peer);
+
+/**
+ * dp_peer_unmap_track_init() - Initial DP peer unmap tracking
+ * @soc: DP Soc
+ *
+ * Return: None
+ */
+void dp_peer_unmap_track_init(struct dp_soc *soc);
+
+/**
+ * dp_peer_unmap_track_deinit() - De-initial DP peer unmap tracking
+ * @soc: DP Soc
+ *
+ * Return: None
+ */
+void dp_peer_unmap_track_deinit(struct dp_soc *soc);
+
+/**
+ * dp_peer_unmap_track_suspend() - Suspend dp peer unmap tracking
+ * @soc: DP Soc
+ *
+ * Return: None
+ */
+void dp_peer_unmap_track_suspend(struct dp_soc *soc);
+
+/**
+ * dp_peer_unmap_track_resume() - Resume dp peer unmap tracking
+ * @soc: DP Soc
+ *
+ * Return: None
+ */
+void dp_peer_unmap_track_resume(struct dp_soc *soc);
+#else
+static inline
+void dp_peer_unmap_track_update(struct dp_soc *soc, struct dp_peer *peer)
+{}
+static inline
+void dp_peer_unmap_track_init(struct dp_soc *soc)
+{}
+static inline
+void dp_peer_unmap_track_deinit(struct dp_soc *soc)
+{}
+static inline
+void dp_peer_unmap_track_suspend(struct dp_soc *soc)
+{}
+static inline
+void dp_peer_unmap_track_resume(struct dp_soc *soc)
+{}
+#endif
+
 /**
  * struct htt_dbgfs_cfg - structure to maintain required htt data
  * @msg_word: htt msg sent to upper layer
