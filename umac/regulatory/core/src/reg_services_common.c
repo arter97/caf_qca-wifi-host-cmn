@@ -5256,6 +5256,22 @@ reg_get_320_bonded_chan_array(struct wlan_objmgr_pdev *pdev,
 	(reg_is_state_allowed((_x)) && (_y) < BW_160MHZ)
 #endif
 
+#if defined(WLAN_FEATURE_11BE) && defined(CONFIG_REG_CLIENT)
+uint8_t
+reg_get_bonded_chan_arr_for_320(struct wlan_objmgr_pdev *pdev,
+				qdf_freq_t freq,
+				qdf_freq_t band_center_320,
+				const struct bonded_channel_freq
+				*bonded_chan_ptr[])
+{
+	uint16_t array_size = QDF_ARRAY_SIZE(bonded_chan_320mhz_list_freq);
+
+	return reg_get_320_bonded_chan_array(pdev, freq, band_center_320,
+					     bonded_chan_320mhz_list_freq,
+					     array_size, bonded_chan_ptr);
+}
+#endif
+
 qdf_freq_t
 reg_get_endchan_cen_from_bandstart(qdf_freq_t band_start,
 				   uint16_t bw)

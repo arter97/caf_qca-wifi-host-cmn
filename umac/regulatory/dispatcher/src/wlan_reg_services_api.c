@@ -2023,6 +2023,19 @@ wlan_reg_modify_indoor_concurrency(struct wlan_objmgr_pdev *pdev,
 }
 #endif
 
+#if defined(WLAN_FEATURE_11BE) && defined(CONFIG_REG_CLIENT)
+uint8_t
+wlan_reg_get_320_bonded_chan_array(struct wlan_objmgr_pdev *pdev,
+				   qdf_freq_t freq,
+				   qdf_freq_t band_center_320,
+				   const struct bonded_channel_freq
+				   *bonded_chan_ptr[])
+{
+	return reg_get_bonded_chan_arr_for_320(pdev, freq, band_center_320,
+					       bonded_chan_ptr);
+}
+#endif
+
 void
 wlan_reg_register_is_chan_connected_callback(struct wlan_objmgr_psoc *psoc,
 					     void *cbk)

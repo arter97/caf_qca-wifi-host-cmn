@@ -615,6 +615,29 @@ bool reg_is_freq_indoor_in_secondary_list(struct wlan_objmgr_pdev *pdev,
 					  qdf_freq_t freq);
 #endif
 
+#if defined(WLAN_FEATURE_11BE) && defined(CONFIG_REG_CLIENT)
+/**
+ * reg_get_bonded_chan_arr_for_320() - Wrapper function to the API
+ * reg_get_320_bonded_chan_array. It fetches array size of the constant
+ * structure of 320 MHz bonded pairs bonded_chan_320mhz_list_freq and
+ * passes the array and its size to said API to fetch a list of bonded
+ * channel pointers.
+ *
+ * @pdev: Pointer to struct wlan_objmgr_pdev.
+ * @freq: Input frequency in MHz whose bonded channel pointer must be fetched.
+ * @band_center_320: Channel center frequency of 320MHZ channel.
+ * @bonded_chan_ptr: Pointer to hold the address of bonded_channel_freq index.
+ *
+ * Return: number of bonded channel arrays fetched.
+ */
+uint8_t
+reg_get_bonded_chan_arr_for_320(struct wlan_objmgr_pdev *pdev,
+				qdf_freq_t freq,
+				qdf_freq_t band_center_320,
+				const struct bonded_channel_freq
+				*bonded_chan_ptr[]);
+#endif
+
 #ifdef CONFIG_BAND_6GHZ
 /**
  * reg_is_6ghz_chan_freq() - Check if the given channel frequency is 6GHz

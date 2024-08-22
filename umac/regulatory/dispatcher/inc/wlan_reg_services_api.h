@@ -2352,6 +2352,28 @@ wlan_reg_modify_indoor_concurrency(struct wlan_objmgr_pdev *pdev,
 				   uint8_t vdev_id, uint32_t freq,
 				   enum phy_ch_width width, bool add);
 #endif
+
+#if defined(WLAN_FEATURE_11BE) && defined(CONFIG_REG_CLIENT)
+/**
+ * wlan_reg_get_320_bonded_chan_array() - Fetches a list of bonded channel ptrs
+ * for the given bonded channel array. If 320 band center is specified,
+ * return the bonded channel pointer comprising of given band center else
+ * return list of all available bonded channel pair.
+ *
+ * @pdev: Pointer to struct wlan_objmgr_pdev.
+ * @freq: Input frequency in MHz whose bonded channel pointer must be fetched.
+ * @band_center_320: Channel center frequency of 320 MHz channel.
+ * @bonded_chan_ptr: Pointer to hold the address of bonded_channel_freq index.
+ *
+ * Return: number of bonded channel arrays fetched.
+ */
+uint8_t
+wlan_reg_get_320_bonded_chan_array(struct wlan_objmgr_pdev *pdev,
+				   qdf_freq_t freq,
+				   qdf_freq_t band_center_320,
+				   const struct bonded_channel_freq
+				   *bonded_chan_ptr[]);
+#endif
 /**
  * wlan_reg_recompute_current_chan_list() - Recompute the current channel list
  * based on the regulatory change
