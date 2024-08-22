@@ -5786,7 +5786,7 @@ QDF_STATUS wlan_ipa_uc_ol_init(struct wlan_ipa_priv *ipa_ctx,
 	if (!osdev) {
 		ipa_err("osdev null");
 		status = QDF_STATUS_E_FAILURE;
-		goto fail_return;
+		goto out;
 	}
 
 	for (i = 0; i < WLAN_IPA_MAX_SESSION; i++) {
@@ -5798,7 +5798,7 @@ QDF_STATUS wlan_ipa_uc_ol_init(struct wlan_ipa_priv *ipa_ctx,
 	if (cdp_ipa_get_resource(ipa_ctx->dp_soc, IPA_DEF_PDEV_ID)) {
 		ipa_err("IPA UC resource alloc fail");
 		status = QDF_STATUS_E_FAILURE;
-		goto fail_return;
+		goto out;
 	}
 
 	for (i = 0; i < WLAN_IPA_UC_OPCODE_MAX; i++) {
@@ -5847,7 +5847,7 @@ QDF_STATUS wlan_ipa_uc_ol_init(struct wlan_ipa_priv *ipa_ctx,
 			wlan_ipa_destroy_opt_wifi_flt_cb_event(ipa_ctx);
 			ipa_ctx->uc_loaded = false;
 
-			goto fail_return;
+			goto free_res;
 		}
 
 		/* Setup the Tx buffer SMMU mappings */
@@ -5857,7 +5857,7 @@ QDF_STATUS wlan_ipa_uc_ol_init(struct wlan_ipa_priv *ipa_ctx,
 		if (status) {
 			ipa_err("Failure to map Tx buffers for IPA(status=%d)",
 				status);
-			return status;
+			goto free_res;
 		}
 		ipa_info("TX buffers mapped to IPA");
 
@@ -5869,7 +5869,27 @@ QDF_STATUS wlan_ipa_uc_ol_init(struct wlan_ipa_priv *ipa_ctx,
 
 	cdp_ipa_register_op_cb(ipa_ctx->dp_soc, IPA_DEF_PDEV_ID,
 			       wlan_ipa_uc_op_event_handler, (void *)ipa_ctx);
-fail_return:
+	goto out;
+
+free_res:
+	ipa_debug("failure case: free allocated resources");
+	for (i = 0; i < WLAN_IPA_UC_OPCODE_MAX; i++) {
+		qdf_cancel_work(&ipa_ctx->uc_op_work[i].work);
+		if (i == WLAN_IPA_CTRL_TX_REINJECT ||
+		    i == WLAN_IPA_CTRL_FILTER_DEL_NOTIFY) {
+			if (!ipa_ctx->uc_op_work[i].msg_list) {
+				ipa_err("msg list already freed for work %d",
+					i);
+			} else {
+				qdf_mem_free(ipa_ctx->uc_op_work[i].
+					     msg_list->entries);
+				qdf_spinlock_destroy(&ipa_ctx->uc_op_work[i].
+					     msg_list->lock);
+				qdf_mem_free(ipa_ctx->uc_op_work[i].msg_list);
+			}
+		}
+	}
+out:
 	ipa_debug("exit: status=%d", status);
 	return status;
 }
