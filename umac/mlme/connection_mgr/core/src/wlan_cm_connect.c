@@ -1233,6 +1233,7 @@ cm_handle_connect_start_req(struct wlan_objmgr_vdev *vdev,
 		return QDF_STATUS_E_INVAL;
 
 	if (req->source == CM_OSIF_CONNECT &&
+	    !req->is_non_assoc_link &&
 	    wlan_vdev_mlme_get_opmode(vdev) == QDF_STA_MODE &&
 	    policy_mgr_get_connection_count(psoc) > 1 &&
 	    !policy_mgr_allow_concurrency(psoc, PM_STA_MODE,
