@@ -98,11 +98,21 @@ QDF_STATUS mbss_ap_start_acs_ht40(struct wlan_objmgr_vdev *vdev,
 	}
 
 	if (start_acs) {
-		mbss_debug("Staring ACS with the ACS module");
 		mbss_acs->acs_vdev_id = wlan_vdev_get_id(vdev);
 		mbss_unlock(mbss_pdev);
-		if (mbss_ops->ext_ops.mbss_start_acs)
-			mbss_ops->ext_ops.mbss_start_acs(vdev, mbss_ev->arg);
+		if (mbss_ops->ext_ops.mbss_start_acs) {
+			status = mbss_ops->ext_ops.mbss_start_acs(vdev, mbss_ev->arg);
+			if (status == QDF_STATUS_SUCCESS) {
+				mbss_debug("Started ACS with the ACS module");
+			} else {
+				mbss_info("ACS is already running from other source");
+				mbss_debug("Cancel ACS from other source");
+				if (mbss_ops->ext_ops.mbss_cancel_acs)
+					mbss_ops->ext_ops.mbss_cancel_acs(vdev, NULL);
+				mbss_ops->ext_ops.mbss_start_acs(vdev, mbss_ev->arg);
+				mbss_debug("Re started ACS with the ACS module");
+			}
+		}
 		mbss_lock(mbss_pdev);
 		goto exit;
 	}
@@ -196,9 +206,13 @@ QDF_STATUS mbss_ap_stop_acs_ht40(struct wlan_objmgr_vdev *vdev,
 
 		src_vdev_id = mbss_acs->acs_vdev_id;
 		if (src_vdev_id == vdev_id && mbss_pdev->acs_in_progress) {
+
 			mbss_debug("ACS stop for ACS src vdev:%d", vdev_id);
 			mbss_debug("ACS cancel for src vdev:%d", vdev_id);
-
+			if (!mbss_pdev->acs_in_progress) {
+				mbss_debug("MBSS triggered ACS is not running yet");
+				goto done;
+			}
 			mbss_unlock(mbss_pdev);
 			if (mbss_ops->ext_ops.mbss_cancel_acs)
 				mbss_ops->ext_ops.mbss_cancel_acs(vdev, NULL);
