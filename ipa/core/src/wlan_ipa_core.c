@@ -5353,6 +5353,7 @@ static void wlan_ipa_uc_loaded_handler(struct wlan_ipa_priv *ipa_ctx)
 	qdf_ipa_wlan_event evt;
 	qdf_netdev_t ndev;
 	QDF_STATUS status;
+	uint8_t iface_id;
 	uint8_t sessid;
 	bool alt_pipe;
 	bool ipv6_en;
@@ -5405,12 +5406,19 @@ static void wlan_ipa_uc_loaded_handler(struct wlan_ipa_priv *ipa_ctx)
 	if (QDF_IS_STATUS_ERROR(wlan_ipa_init_perf_level(ipa_ctx)))
 		ipa_err("Failed to init perf level");
 
-	for (i = 0; i < ipa_ctx->num_iface; i++) {
-		iface = &ipa_ctx->iface_context[i];
-		if (qdf_unlikely(!iface))
+	for (i = 0; i < WLAN_IPA_MAX_SESSION; i++) {
+		iface_id = ipa_ctx->vdev_to_iface[i];
+		if (iface_id >= WLAN_IPA_MAX_SESSION)
+			continue;
+
+		iface = &ipa_ctx->iface_context[iface_id];
+		if (qdf_unlikely(iface->session_id >= WLAN_IPA_MAX_SESSION))
 			continue;
 
 		ndev = iface->dev;
+		if (qdf_unlikely(!ndev))
+			continue;
+
 		alt_pipe = wlan_ipa_get_iface_alt_pipe(iface);
 		sessid = wlan_ipa_set_session_id(iface->session_id, alt_pipe);
 		ipv6_en = wlan_ipa_is_ipv6_enabled(ipa_ctx->config);
@@ -5456,9 +5464,13 @@ static void wlan_ipa_uc_loaded_handler(struct wlan_ipa_priv *ipa_ctx)
 	return;
 
 setup_iface_fail:
-	for (i = 0; i < ipa_ctx->num_iface; i++) {
-		iface = &ipa_ctx->iface_context[i];
-		if (qdf_likely(iface))
+	for (i = 0; i < WLAN_IPA_MAX_SESSION; i++) {
+		iface_id = ipa_ctx->vdev_to_iface[i];
+		if (iface_id >= WLAN_IPA_MAX_SESSION)
+			continue;
+
+		iface = &ipa_ctx->iface_context[iface_id];
+		if (qdf_likely(iface->session_id < WLAN_IPA_MAX_SESSION))
 			wlan_ipa_cleanup_iface(iface, iface->mac_addr);
 	}
 
