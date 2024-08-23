@@ -683,11 +683,20 @@ QDF_STATUS osif_update_mlo_partner_info(
 {
 	struct mlo_partner_info partner_info = {0};
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	struct wlan_objmgr_pdev *pdev = NULL;
 	struct wlan_objmgr_psoc *psoc;
 	struct wlan_mlo_dev_context *ml_dev = NULL;
+	uint8_t aplinks = 0;
 
 	if (!vdev || !connect_req || !req)
 		return status;
+
+	pdev = wlan_vdev_get_pdev(vdev);
+
+	if (!pdev) {
+		osif_debug("null pdev");
+		return QDF_STATUS_SUCCESS;
+	}
 
 	psoc = wlan_vdev_get_psoc(vdev);
 	if (!psoc) {
@@ -721,6 +730,19 @@ QDF_STATUS osif_update_mlo_partner_info(
 
 	qdf_mem_copy(&connect_req->ml_parnter_info,
 		     &partner_info, sizeof(struct mlo_partner_info));
+
+	/* Get total number of links in association */
+	aplinks = partner_info.num_partner_links + 1;
+
+	mlo_clear_connect_req_links_bmap(vdev);
+	/* Handle 4 LINK RDP Case*/
+	if (mlo_check_topology(pdev, vdev, aplinks) != QDF_STATUS_SUCCESS) {
+		osif_err("Topology check failed prevent association\n");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (mlo_sta_bridge_exists(vdev))
+		mlo_update_partner_bridge_info(ml_dev, &partner_info);
 
 	mlo_update_connect_req_links(vdev, 1);
 	osif_update_partner_vdev_info(vdev, partner_info);
