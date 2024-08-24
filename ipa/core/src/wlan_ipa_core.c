@@ -177,6 +177,27 @@ static inline bool wlan_ipa_is_sta_only_offload_enabled(void)
 #endif /* IPA_OPT_WIFI_DP */
 #endif /* MDM_PLATFORM */
 
+#ifdef IPA_OPT_WIFI_DP
+static inline
+bool wlan_ipa_sta_last_disconnection(struct wlan_ipa_priv *ipa_ctx)
+{
+	if (!ipa_ctx->sta_connected) {
+		ipa_debug("last STA disconnection, disable pipes");
+		return true;
+	}
+
+	ipa_debug("Multiple STA connected");
+	return false;
+}
+
+#else
+static inline
+bool wlan_ipa_sta_last_disconnection(struct wlan_ipa_priv *ipa_ctx)
+{
+	return true;
+}
+#endif
+
 /**
  * wlan_ipa_msg_free_fn() - Free an IPA message
  * @buff: pointer to the IPA message
@@ -3625,7 +3646,8 @@ static QDF_STATUS __wlan_ipa_wlan_evt(qdf_netdev_t net_dev, uint8_t device_mode,
 			 */
 			if ((ipa_ctx->num_iface == 1 ||
 			     (wlan_ipa_is_sta_only_offload_enabled() &&
-			      !ipa_ctx->sta_connected)) &&
+			      !ipa_ctx->sap_num_connected_sta &&
+			      wlan_ipa_sta_last_disconnection(ipa_ctx))) &&
 			    wlan_ipa_is_fw_wdi_activated(ipa_ctx) &&
 			    !ipa_ctx->ipa_pipes_down &&
 			    (ipa_ctx->resource_unloading == false)) {
@@ -3648,7 +3670,7 @@ static QDF_STATUS __wlan_ipa_wlan_evt(qdf_netdev_t net_dev, uint8_t device_mode,
 		if (wlan_ipa_uc_sta_is_enabled(ipa_ctx->config) &&
 		    (ipa_ctx->sap_num_connected_sta > 0 ||
 		     (wlan_ipa_is_sta_only_offload_enabled() &&
-		      !ipa_ctx->sta_connected))) {
+		      wlan_ipa_sta_last_disconnection(ipa_ctx)))) {
 			qdf_atomic_set(&ipa_ctx->stats_quota, 0);
 			qdf_mutex_release(&ipa_ctx->event_lock);
 			wlan_ipa_uc_offload_enable_disable(ipa_ctx,
