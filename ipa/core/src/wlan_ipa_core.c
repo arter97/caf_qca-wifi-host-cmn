@@ -2110,6 +2110,7 @@ wlan_ipa_uc_disable_pipes(struct wlan_ipa_priv *ipa_ctx, bool force_disable)
 	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS, status;
 	int wait_count = 0;
 	int return_code;
+	bool val = false;
 
 	ipa_debug("enter: force_disable %u autonomy_disabled %u pipes_disabled %u",
 		  force_disable,
@@ -2152,6 +2153,25 @@ wlan_ipa_uc_disable_pipes(struct wlan_ipa_priv *ipa_ctx, bool force_disable)
 			}
 		}
 		ipa_info("opt_dp filt rel done in disable pipe");
+	}
+
+	if (ipa_ctx->opt_dp_active &&
+	    (ipa_ctx->opt_dp_ctrl_wlan_shutdown ||
+	     ipa_ctx->opt_dp_ctrl_ssr)) {
+		ipa_info("opt_dp: IPA notify filter rel_response as success in ssr/shutdown");
+		qdf_ipa_wdi_opt_dpath_notify_flt_rlsd_per_inst(ipa_ctx->hdl,
+							       true);
+		val = cdp_ipa_get_smmu_mapped(ipa_ctx->dp_soc);
+		if (val) {
+			cdp_ipa_set_smmu_mapped(ipa_ctx->dp_soc, 0);
+			ipa_info("opt_dp: IPA smmu pool unmap");
+			cdp_ipa_rx_buf_smmu_pool_mapping(ipa_ctx->dp_soc,
+							 IPA_DEF_PDEV_ID, false,
+							  __func__, __LINE__);
+		}
+
+		ipa_ctx->opt_dp_active = false;
+		ipa_ctx->opt_dp_flt_rel_state = WLAN_IPA_OPT_DP_FLT_REL_DONE;
 	}
 
 	qdf_spin_lock_bh(&ipa_ctx->enable_disable_lock);
@@ -5522,7 +5542,15 @@ static void wlan_ipa_uc_op_cb(struct op_msg_type *op_msg,
 		qdf_mutex_acquire(&ipa_ctx->ipa_lock);
 		qdf_ipa_wdi_opt_dpath_notify_flt_rlsd_per_inst(ipa_ctx->hdl,
 							       msg->rsvd);
-		ipa_ctx->opt_dp_flt_rel_state = WLAN_IPA_OPT_DP_FLT_REL_DONE;
+		/* assigning state to init in case of release failure
+		 * to unblock release retry
+		 */
+		if (msg->rsvd)
+			ipa_ctx->opt_dp_flt_rel_state =
+				WLAN_IPA_OPT_DP_FLT_REL_DONE;
+		else
+			ipa_ctx->opt_dp_flt_rel_state =
+				WLAN_IPA_OPT_DP_FLT_REL_INIT;
 		qdf_mutex_release(&ipa_ctx->ipa_lock);
 	} else if (msg->op_code == WLAN_IPA_CTRL_TX_REINJECT) {
 		ipa_info("opt_dp_ctrl: handle opt_dp_ctrl tx pkt");
@@ -6612,6 +6640,12 @@ void wlan_ipa_wdi_opt_dpath_notify_flt_rlsd(int flt0_rslt, int flt1_rslt)
 	struct uc_op_work_struct *uc_op_work;
 	bool result = false;
 	bool val = false;
+
+	if (ipa_ctx->opt_dp_flt_rel_state ==
+	    WLAN_IPA_OPT_DP_FLT_REL_DONE) {
+		ipa_debug("opt_dp: filter released already");
+		return;
+	}
 
 	ipa_ctx->opt_dp_active = false;
 	dp_flt_params = &(ipa_ctx->dp_cce_super_rule_flt_param);
