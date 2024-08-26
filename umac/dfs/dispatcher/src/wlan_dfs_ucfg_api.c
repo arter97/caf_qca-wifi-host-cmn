@@ -61,6 +61,20 @@ QDF_STATUS ucfg_dfs_getnol(struct wlan_objmgr_pdev *pdev,
 }
 qdf_export_symbol(ucfg_dfs_getnol);
 
+QDF_STATUS ucfg_dfs_getnol_status(struct wlan_objmgr_pdev *pdev,
+				  uint8_t *nchans)
+{
+	struct wlan_dfs *dfs;
+
+	dfs = wlan_pdev_get_dfs_obj(pdev);
+	if (!dfs)
+		return  QDF_STATUS_E_FAILURE;
+
+	dfs_getnol_status(dfs, nchans);
+
+	return QDF_STATUS_SUCCESS;
+}
+
 QDF_STATUS ucfg_dfs_override_cac_timeout(struct wlan_objmgr_pdev *pdev,
 		int cac_timeout,
 		int *status)

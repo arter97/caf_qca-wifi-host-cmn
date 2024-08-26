@@ -359,6 +359,13 @@
 		WLAN_DFSNOL_UNLOCK(dfs);                    \
 	} while (0)
 
+#define DFS_GET_NOL_LOCKED_STATUS(dfs, nchan)   \
+	do {                                          \
+		WLAN_DFSNOL_LOCK(dfs);                      \
+		dfs_get_radar_status(dfs, nchan);           \
+		WLAN_DFSNOL_UNLOCK(dfs);                    \
+	} while (0)
+
 #define DFS_PRINT_NOL_LOCKED(dfs)                           \
 	do {                                                \
 		WLAN_DFSNOL_LOCK(dfs);                      \
@@ -1770,6 +1777,14 @@ void dfs_get_nol(struct wlan_dfs *dfs,
 		int *nchan);
 
 /**
+ * dfs_get_radar_status() - Get the number of radar channels.
+ * @dfs: Pointer to wlan_dfs structure.
+ * @nchans: Pointer to get the number of radar channels.
+ */
+void dfs_get_radar_status(struct wlan_dfs *dfs,
+			  uint8_t *nchans);
+
+/**
  * dfs_set_nol() - Set NOL.
  * @dfs: Pointer to wlan_dfs structure.
  * @dfs_nol: Pointer to dfsreq_nolelem structure.
@@ -2612,6 +2627,13 @@ int dfs_control(struct wlan_dfs *dfs,
  */
 void dfs_getnol(struct wlan_dfs *dfs,
 		void *dfs_nolinfo);
+/**
+ * dfs_getnol_status() - Wrapper function for dfs_get_radar_status()
+ * @dfs: Pointer to wlan_dfs structure.
+ * @nchans: Pointer to get the number of radar channels.
+ */
+void dfs_getnol_status(struct wlan_dfs *dfs,
+		       uint8_t *nchans);
 
 /**
  * dfs_clear_nolhistory() - unmarks WLAN_CHAN_CLR_HISTORY_RADAR flag for

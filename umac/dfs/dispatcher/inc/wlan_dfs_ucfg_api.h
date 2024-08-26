@@ -271,6 +271,17 @@ QDF_STATUS ucfg_dfs_is_ap_cac_timer_running(struct wlan_objmgr_pdev *pdev,
 QDF_STATUS ucfg_dfs_getnol(struct wlan_objmgr_pdev *pdev, void *dfs_nolinfo);
 
 /**
+ * ucfg_dfs_getnol_status() - Wrapper function for dfs_get_radar_status()
+ * @pdev: Pointer to DFS pdev object.
+ * @nchans: Pointer to get the number of radar channels.
+ *
+ * Wrapper function for dfs_getnol_status().
+ * This function called from outside of dfs component.
+ */
+QDF_STATUS ucfg_dfs_getnol_status(struct wlan_objmgr_pdev *pdev,
+				  uint8_t *nchans);
+
+/**
  * ucfg_dfs_override_cac_timeout() -  Override the default CAC timeout.
  * @pdev: Pointer to DFS pdev object.
  * @cac_timeout: CAC timeout value.

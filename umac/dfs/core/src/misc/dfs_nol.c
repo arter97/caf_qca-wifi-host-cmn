@@ -333,6 +333,25 @@ void dfs_get_nol(struct wlan_dfs *dfs,
 	}
 }
 
+void dfs_get_radar_status(struct wlan_dfs *dfs,
+			  uint8_t *nchan)
+{
+	struct dfs_nolelem *nol;
+
+	*nchan = 0;
+
+	if (!dfs) {
+		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS,  "dfs is NULL");
+		return;
+	}
+
+	nol = dfs->dfs_nol;
+	while (nol) {
+		++(*nchan);
+		nol = nol->nol_next;
+	}
+}
+
 #ifdef CONFIG_CHAN_FREQ_API
 void dfs_set_nol(struct wlan_dfs *dfs,
 		 struct dfsreq_nolelem *dfs_nol,
@@ -591,6 +610,11 @@ void dfs_getnol(struct wlan_dfs *dfs, void *dfs_nolinfo)
 	struct dfsreq_nolinfo *nolinfo = (struct dfsreq_nolinfo *)dfs_nolinfo;
 
 	DFS_GET_NOL_LOCKED(dfs, nolinfo->dfs_nol, &(nolinfo->dfs_ch_nchans));
+}
+
+void dfs_getnol_status(struct wlan_dfs *dfs, uint8_t *nchans)
+{
+	DFS_GET_NOL_LOCKED_STATUS(dfs, nchans);
 }
 
 #if !defined(MOBILE_DFS_SUPPORT)
