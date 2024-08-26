@@ -916,7 +916,7 @@ enum {
 #endif
 	IEEE80211_PARAM_4ADDR_EAPOL = 834,
 	IEEE80211_PARAM_DISABLE_LPI_ANT_OPTIMIZATION = 835,
-
+	IEEE80211_PARAM_RECOVERY_STATE = 836,
 
 	IEEE80211_PARAM_LAST,
 	IEEE80211_PARAM_MAX = IEEE80211_PARAM_LAST - 1,
@@ -2739,6 +2739,8 @@ struct vendor_commands vap_vendor_cmds[] = {
 	{"hwcts2self_enable", IEEE80211_PARAM_HWCTS2SELF_OFDMA, SET_PARAM, 1},
 	{"set_4addr_eapol", IEEE80211_PARAM_4ADDR_EAPOL, SET_PARAM, 1},
 	{"get_4addr_eapol", IEEE80211_PARAM_4ADDR_EAPOL, GET_PARAM, 0},
+	{"set_recovery_state", IEEE80211_PARAM_RECOVERY_STATE, SET_PARAM, 1},
+	{"get_recovery_state", IEEE80211_PARAM_RECOVERY_STATE, GET_PARAM, 0},
 };
 
 struct vendor_commands radio_vendor_cmds[] = {
