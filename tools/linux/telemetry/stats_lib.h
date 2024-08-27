@@ -507,7 +507,6 @@ struct stats_command {
 	void (*async_callback)(struct stats_command *cmd, char *if_name);
 };
 
-#ifndef BUILD_PROFILE_OPEN
 /**
  * libstats_get_feature_flag(): Function to parse Feature flags and return value
  * @feat_flags: String holding feature flag names separted by dilimeter '|'
@@ -515,7 +514,6 @@ struct stats_command {
  * Return: Combination of requested feature flag value or 0
  */
 u_int64_t libstats_get_feature_flag(char *feat_flags);
-#endif
 
 /**
  * libstats_request_handle(): Function to send stats request to driver

@@ -262,7 +262,6 @@ static struct object_list *g_curr_sta_obj;
 /* Global context to hold async request data */
 static struct async_context g_async_ctx = {0};
 
-#ifndef BUILD_PROFILE_OPEN
 /**
  * Mapping for Supported Features
  */
@@ -295,7 +294,6 @@ static struct feat_parser_t g_feat[] = {
 	{ "DETER", STATS_FEAT_FLG_DETER },
 	{ NULL, 0 },
 };
-#endif
 
 /* Global nl policy for response attributes */
 struct nla_policy g_policy[QCA_WLAN_VENDOR_ATTR_FEAT_MAX] = {
@@ -3917,7 +3915,6 @@ static void stats_lib_deinit(void)
 	close(g_sock_ctx.sock_fd);
 }
 
-#ifndef BUILD_PROFILE_OPEN
 u_int64_t libstats_get_feature_flag(char *feat_flags)
 {
 	u_int64_t feats = 0;
@@ -3946,7 +3943,6 @@ u_int64_t libstats_get_feature_flag(char *feat_flags)
 
 	return feats;
 }
-#endif
 
 int32_t libstats_request_handle(struct stats_command *cmd)
 {
