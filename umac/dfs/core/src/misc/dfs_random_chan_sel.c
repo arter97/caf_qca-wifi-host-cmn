@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -811,7 +811,6 @@ dfs_mark_leaking_chan_for_freq(struct wlan_dfs *dfs,
 			 */
 			dfs_err(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
 				"Couldn't find target channel matrix!");
-			QDF_ASSERT(0);
 			return QDF_STATUS_E_FAILURE;
 		}
 		/*
