@@ -531,9 +531,14 @@ void dfs_get_bw_expand(struct wlan_dfs *dfs,
 void dfs_set_dfs_puncture(struct wlan_dfs *dfs,
 			  bool is_dfs_punc_en)
 {
-	dfs->dfs_use_puncture = is_dfs_punc_en;
-	dfs_info(dfs, WLAN_DEBUG_DFS_ALWAYS, "DFS Puncturing Feature is %s ",
+	if (dfs_is_11be_supported(dfs)) {
+		dfs->dfs_use_puncture = is_dfs_punc_en;
+		dfs_info(dfs, WLAN_DEBUG_DFS_ALWAYS, "DFS Puncturing Feature is %s ",
 		 (is_dfs_punc_en) ? "enabled" : "disabled");
+	} else {
+		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS,
+			"Puncturing applicable only for 11BE mode\n");
+	}
 }
 
 void dfs_get_dfs_puncture(struct wlan_dfs *dfs,
