@@ -258,6 +258,7 @@
 #include "target_if.h"
 #include "wlan_dfs_init_deinit_api.h"
 #include "../dfs_precac_forest.h"
+#include "../dfs_misc.h"
 #include "dfs_zero_cac.h"
 #include <wlan_reg_channel_api.h>
 
@@ -395,13 +396,6 @@ bool dfs_is_precac_timer_running(struct wlan_dfs *dfs)
 }
 
 #ifdef WLAN_FEATURE_11BE
-/*
- * dfs_is_11be_supported() - Check if 11BE supported chip
- *
- * @dfs: Pointer to dfs structure.
- * return: True if the 11BE supported chip.
- */
-static
 bool dfs_is_11be_supported(struct wlan_dfs *dfs)
 {
 	struct wlan_objmgr_psoc *psoc = dfs->dfs_soc_obj->psoc;
@@ -435,12 +429,6 @@ bool dfs_is_adfs_320mhz_supported(struct wlan_dfs *dfs)
 	return dfs->dfs_fw_adfs_support_320;
 }
 #else
-static inline
-bool dfs_is_11be_supported(struct wlan_dfs *dfs)
-{
-	return false;
-}
-
 static inline
 bool dfs_is_adfs_320mhz_supported(struct wlan_dfs *dfs)
 {
