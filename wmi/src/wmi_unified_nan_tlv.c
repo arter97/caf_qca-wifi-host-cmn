@@ -23,6 +23,29 @@
 #include <nan_public_structs.h>
 #include <wmi_unified_nan_api.h>
 #include <wlan_nan_msg_common_v2.h>
+#include <wlan_nan_msg.h>
+
+/**
+ * wmi_nan_get_tlv_type() - get TLV type from NAN DE event
+ * @ptlv: pointer to TLV header
+ *
+ * Return: 16 bit TLV type
+ */
+static inline uint16_t wmi_nan_get_tlv_type(uint8_t *ptlv)
+{
+	return (uint16_t)((*ptlv & 0xFF) | ((*(ptlv + 1) & 0xFF) << 8));
+}
+
+/**
+ * wmi_nan_get_tlv_len() - get TLV length from NAN DE event
+ * @ptlv: pointer to TLV header
+ *
+ * Return: 16 bit TLV length
+ */
+static inline uint16_t wmi_nan_get_tlv_len(uint8_t *ptlv)
+{
+	return (uint16_t)((*(ptlv + 2) & 0xFF) | ((*(ptlv + 3) & 0xFF) << 8));
+}
 
 static QDF_STATUS
 extract_nan_event_rsp_tlv(wmi_unified_t wmi_handle, void *evt_buf,
@@ -33,6 +56,10 @@ extract_nan_event_rsp_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	wmi_nan_event_hdr *nan_rsp_event_hdr;
 	nan_msg_header_t *nan_msg_hdr;
 	wmi_nan_event_info *nan_evt_info;
+	uint8_t *ptlv;
+	tNanEventIndMsg *nan_evt_msg;
+	uint16_t tlv_type;
+	uint16_t tlv_len;
 
 	/*
 	 * This is how received evt looks like
@@ -73,6 +100,12 @@ extract_nan_event_rsp_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 			 nan_rsp_event_hdr->data_len);
 		return QDF_STATUS_E_INVAL;
 	}
+
+	if (!event->data) {
+		wmi_err("event data is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
 	nan_msg_hdr = (nan_msg_header_t *)event->data;
 
 	switch (nan_msg_hdr->msg_id) {
@@ -101,6 +134,41 @@ extract_nan_event_rsp_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 		break;
 	case NAN_MSG_ID_ERROR_RSP:
 		evt_params->evt_type = nan_event_id_error_rsp;
+		break;
+	case NAN_MSG_ID_DE_EVENT_IND:
+		evt_params->evt_type = nan_event_id_de_ind;
+		nan_evt_msg = (tNanEventIndMsg *)event->data;
+		ptlv = (uint8_t *)nan_evt_msg + sizeof(nan_msg_header_t);
+		if (!ptlv) {
+			wmi_err("DE event TLV is null");
+			return QDF_STATUS_E_NULL_VALUE;
+		}
+
+		tlv_type = wmi_nan_get_tlv_type(ptlv);
+		tlv_len = wmi_nan_get_tlv_len(ptlv);
+
+		if (tlv_len < QDF_MAC_ADDR_SIZE) {
+			wmi_err("TLV len %d is less than MAC addr size",
+				tlv_len);
+			return QDF_STATUS_E_INVAL;
+		}
+
+		if (evt_params->buf_len <
+		    sizeof(nan_msg_header_t) + WMI_TLV_HDR_SIZE + tlv_len) {
+			wmi_err("buf len %d is invalid", evt_params->buf_len);
+			return QDF_STATUS_E_INVAL;
+		}
+
+		switch (tlv_type) {
+		case NAN_TLV_TYPE_SELF_STA_MAC_ADDR:
+			ptlv += WMI_TLV_HDR_SIZE;
+			qdf_mem_copy(evt_params->nan_mac_addr.bytes, ptlv,
+				     QDF_MAC_ADDR_SIZE);
+			break;
+		default:
+			wmi_err("invalid tlv_type %d", tlv_type);
+			return QDF_STATUS_E_INVAL;
+		}
 		break;
 	default:
 		evt_params->evt_type = nan_event_id_generic_rsp;
