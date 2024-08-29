@@ -158,7 +158,7 @@ enum MLO_SOC_LIST {
 /* MLO Bridge link */
 #define MLO_NUM_CHIPS_FOR_BRIDGE_LINK 4
 #define MLO_MAX_BRIDGE_LINKS_PER_MLD 2
-#define MLO_MAX_BRIDGE_LINKS_PER_RADIO 8
+#define MLO_MAX_BRIDGE_LINKS_PER_RADIO WLAN_MAX_PDEV_BRIDGE_VDEVS
 
 /**
  * struct mlo_chip_info: MLO chip info per link

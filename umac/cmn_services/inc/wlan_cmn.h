@@ -59,6 +59,9 @@
 #define WLAN_MAX_PSOC_TEMP_PEERS \
 		(WLAN_MAX_PDEV_TEMP_PEERS * WLAN_UMAC_MAX_PDEVS)
 
+/* Max no. of Bridge Vdevs, a pdev can support */
+#define WLAN_MAX_PDEV_BRIDGE_VDEVS 8
+
 /* Max length of a SSID */
 #define WLAN_SSID_MAX_LEN 32
 

@@ -176,6 +176,9 @@ struct wlan_objmgr_vdev *wlan_objmgr_vdev_obj_create(
 
 	wlan_create_vdev_mlo_lock(vdev);
 
+	/* Set create flags */
+	vdev->vdev_objmgr.c_flags = params->flags;
+
 	wlan_objmgr_vdev_trace_init_lock(vdev);
 	/* Initialize spinlock */
 	qdf_spinlock_create(&vdev->vdev_lock);
@@ -221,8 +224,6 @@ struct wlan_objmgr_vdev *wlan_objmgr_vdev_obj_create(
 	/* set mlo sap vdev sync disabled */
 	wlan_vdev_mlme_set_mlo_sap_sync_disable(
 		vdev, params->mlo_sap_sync_disable);
-	/* Set create flags */
-	vdev->vdev_objmgr.c_flags = params->flags;
 	/* store os-specific pointer */
 	vdev->vdev_nif.osdev = wlan_objmgr_vdev_get_osif_priv(vdev);
 

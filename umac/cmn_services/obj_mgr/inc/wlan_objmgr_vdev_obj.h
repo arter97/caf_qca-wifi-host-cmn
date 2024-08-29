@@ -281,6 +281,9 @@
 /* Invalid VDEV link id*/
 #define WLAN_INVALID_LINK_ID 255
 
+/* VDEV type flag: MLO bridge vap */
+#define WLAN_MLO_BRIDGE_VAP        0x800000
+
 /**
  * struct wlan_vdev_create_params - Create params, HDD/OSIF passes this
  *				    structure While creating VDEV

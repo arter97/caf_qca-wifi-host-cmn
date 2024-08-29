@@ -876,6 +876,7 @@ struct wlan_objmgr_pdev *wlan_objmgr_get_pdev_by_id_no_state(
 
 	return pdev;
 }
+
 QDF_STATUS wlan_objmgr_psoc_vdev_attach(struct wlan_objmgr_psoc *psoc,
 					struct wlan_objmgr_vdev *vdev)
 {
@@ -885,6 +886,12 @@ QDF_STATUS wlan_objmgr_psoc_vdev_attach(struct wlan_objmgr_psoc *psoc,
 
 	wlan_psoc_obj_lock(psoc);
 	objmgr = &psoc->soc_objmgr;
+
+	/* For bridge vdevs allocate vdev ids at the end */
+	if ((vdev->vdev_objmgr.c_flags & WLAN_MLO_BRIDGE_VAP) &&
+	    (objmgr->max_vdev_count > WLAN_MAX_PDEV_BRIDGE_VDEVS))
+		id = objmgr->max_vdev_count - WLAN_MAX_PDEV_BRIDGE_VDEVS;
+
 	/* Find first free vdev id */
 	while ((id < objmgr->max_vdev_count)) {
 		if (qdf_test_bit(id, objmgr->wlan_vdev_id_map)) {
