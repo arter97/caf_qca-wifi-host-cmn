@@ -1337,6 +1337,7 @@ mlo_mgr_ser_link_switch_cb(struct wlan_serialization_command *cmd,
 		if (QDF_IS_STATUS_ERROR(status)) {
 			mlo_mgr_link_switch_trans_abort_state(vdev->mlo_dev_ctx);
 			mlo_mgr_link_switch_notify(vdev, req);
+			mlo_mgr_link_switch_complete(vdev);
 		}
 		break;
 	case WLAN_SER_CB_RELEASE_MEM_CMD:
