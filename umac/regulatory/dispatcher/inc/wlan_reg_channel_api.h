@@ -29,6 +29,8 @@
 #include <reg_services_public_struct.h>
 
 #define SP_AP_AND_CLIENT_POWER_DIFF_IN_DBM 6
+#define SP_AP_AND_CLIENT_POWER_DIFF_IN_SCALE 600
+#define EIRP_PWR_SCALE 100
 #define CONV_20MHZ_EIRP_TO_PSD_IN_DBM 13
 #define IS_HT40_INTOL_MINUS (_bitmap) ((_bitmap) & BIT(HT40_INTOL_MINUS))
 #define IS_HT40_INTOL_PLUS (_bitmap) ((_bitmap) & BIT(HT40_INTOL_PLUS))
