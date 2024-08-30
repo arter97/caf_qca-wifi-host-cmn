@@ -678,9 +678,7 @@ dp_tx_mlo_mcast_multipass_send(struct dp_vdev_be *be_vdev,
 
 
 	if (ptr->vlan_id == MULTIPASS_WITH_VLAN_ID) {
-		msdu_info.tid = HTT_TX_EXT_TID_INVALID;
-		HTT_TX_MSDU_EXT2_DESC_FLAG_VALID_KEY_FLAGS_SET(
-						msdu_info.meta_data[0], 1);
+		qdf_nbuf_set_tx_ftype(nbuf_clone, CB_FTYPE_MPASS);
 	} else {
 		/* return when vlan map is not initialized */
 		if (!ptnr_vdev->iv_vlan_map)
