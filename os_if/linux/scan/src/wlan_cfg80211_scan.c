@@ -435,7 +435,7 @@ int wlan_cfg80211_sched_scan_start(struct wlan_objmgr_vdev *vdev,
 	   SCAN_NOT_IN_PROGRESS) {
 		status = wlan_abort_scan(pdev,
 				wlan_objmgr_pdev_get_pdev_id(pdev),
-				INVAL_VDEV_ID, INVAL_SCAN_ID, true);
+				INVAL_VDEV_ID, CANCEL_HOST_SCAN_ID, true);
 		if (QDF_IS_STATUS_ERROR(status))
 			return -EBUSY;
 	}
