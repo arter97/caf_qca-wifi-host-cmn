@@ -80,7 +80,7 @@ struct psoc_mlme_obj *wlan_psoc_mlme_get_cmpt_obj(struct wlan_objmgr_psoc *psoc)
 qdf_export_symbol(wlan_psoc_mlme_get_cmpt_obj);
 
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
-void wlan_mlme_psoc_peer_trans_hist_remove_back(qdf_list_t *peer_history)
+static void wlan_mlme_psoc_peer_trans_hist_remove_back(qdf_list_t *peer_history)
 {
 	struct wlan_peer_tbl_trans_entry *peer_trans_entry;
 	qdf_list_node_t *node;
@@ -98,6 +98,7 @@ wlan_mlme_psoc_peer_tbl_trans_add_entry(struct wlan_objmgr_psoc *psoc,
 {
 	struct psoc_mlme_obj *psoc_mlme;
 	qdf_list_t *peer_hist_list;
+	QDF_STATUS status;
 
 	psoc_mlme = wlan_psoc_mlme_get_cmpt_obj(psoc);
 	if (!psoc_mlme) {
@@ -105,11 +106,15 @@ wlan_mlme_psoc_peer_tbl_trans_add_entry(struct wlan_objmgr_psoc *psoc,
 		return QDF_STATUS_E_FAILURE;
 	}
 
+	wlan_psoc_obj_lock(psoc);
 	peer_hist_list = &psoc_mlme->peer_history_list;
 	if (qdf_list_size(peer_hist_list) == MAX_PEER_HIST_LIST_SIZE)
 		wlan_mlme_psoc_peer_trans_hist_remove_back(peer_hist_list);
 
-	return qdf_list_insert_front(peer_hist_list, &peer_trans_entry->node);
+	status = qdf_list_insert_front(peer_hist_list, &peer_trans_entry->node);
+	wlan_psoc_obj_unlock(psoc);
+
+	return status;
 }
 
 void wlan_mlme_psoc_flush_peer_trans_history(struct wlan_objmgr_psoc *psoc)
@@ -122,12 +127,13 @@ void wlan_mlme_psoc_flush_peer_trans_history(struct wlan_objmgr_psoc *psoc)
 		mlme_err("PSOC MLME component object is NULL");
 		return;
 	}
-
+	wlan_psoc_obj_lock(psoc);
 	peer_hist_list = &psoc_mlme->peer_history_list;
 	while (qdf_list_size(peer_hist_list))
 		wlan_mlme_psoc_peer_trans_hist_remove_back(peer_hist_list);
 
 	qdf_list_destroy(peer_hist_list);
+	wlan_psoc_obj_unlock(psoc);
 }
 #endif
 

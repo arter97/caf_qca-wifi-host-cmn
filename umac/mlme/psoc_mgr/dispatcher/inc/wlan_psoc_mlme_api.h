@@ -54,16 +54,6 @@ wlan_mlme_psoc_init_peer_trans_history(struct psoc_mlme_obj *psoc_mlme)
 }
 
 /**
- * wlan_mlme_psoc_peer_trans_hist_remove_back() - Remove entry from peer history
- * @peer_history: Peer history list
- *
- * Removes one entry from back in the @peer_history list and free the memory
- *
- * Returns: void
- */
-void wlan_mlme_psoc_peer_trans_hist_remove_back(qdf_list_t *peer_history);
-
-/**
  * wlan_mlme_psoc_peer_tbl_trans_add_entry() - Add entry to peer history table
  * @psoc: PSOC object manager pointer
  * @peer_trans_entry: Entry to add.
