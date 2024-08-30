@@ -763,6 +763,34 @@ static bool scm_mlo_filter_match(struct wlan_objmgr_pdev *pdev,
 				  partner_link->freq);
 			continue;
 		}
+
+		if (partner_link->link_id == db_entry->ml_info.self_link_id) {
+			scm_debug(QDF_MAC_ADDR_FMT " dup link id %d",
+				  QDF_MAC_ADDR_REF(partner_link->link_addr.bytes),
+				  partner_link->link_id);
+			partner_link->is_valid_link = false;
+			continue;
+		}
+
+		if (qdf_is_macaddr_equal(&partner_link->link_addr,
+					 &db_entry->bssid)) {
+			scm_debug(QDF_MAC_ADDR_FMT " link id %d dup mac",
+				  QDF_MAC_ADDR_REF(partner_link->link_addr.bytes),
+				  partner_link->link_id);
+			partner_link->is_valid_link = false;
+			continue;
+		}
+
+		if (db_entry->mbssid_info.profile_num &&
+		    qdf_is_macaddr_equal((struct qdf_mac_addr *)db_entry->mbssid_info.trans_bssid,
+					 &partner_link->link_addr)) {
+			scm_debug(QDF_MAC_ADDR_FMT " link (%d) dup mac with tx mbssid",
+				  QDF_MAC_ADDR_REF(partner_link->link_addr.bytes),
+				  partner_link->freq);
+			partner_link->is_valid_link = false;
+			continue;
+		}
+
 		if (band_bitmap & BIT(band))
 			partner_link->is_valid_link = true;
 	}

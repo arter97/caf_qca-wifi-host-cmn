@@ -3466,30 +3466,6 @@ static void cm_validate_partner_links(struct wlan_objmgr_psoc *psoc,
 			continue;
 		}
 
-		if (partner_info->link_id == entry->ml_info.self_link_id) {
-			mlme_err(QDF_MAC_ADDR_FMT " dup link id %d",
-				 QDF_MAC_ADDR_REF(partner_info->link_addr.bytes),
-				 partner_info->link_id);
-			partner_info->is_valid_link = false;
-		}
-
-		if (qdf_is_macaddr_equal(&partner_info->link_addr,
-					 &entry->bssid)) {
-			mlme_err(QDF_MAC_ADDR_FMT " link id %d dup mac",
-				 QDF_MAC_ADDR_REF(partner_info->link_addr.bytes),
-				 partner_info->link_id);
-			partner_info->is_valid_link = false;
-		}
-
-		if (entry->mbssid_info.profile_num &&
-		    qdf_is_macaddr_equal((struct qdf_mac_addr *)entry->mbssid_info.trans_bssid,
-					 &partner_info->link_addr)) {
-			mlme_debug(QDF_MAC_ADDR_FMT " link (%d) dup mac with tx mbssid",
-				   QDF_MAC_ADDR_REF(partner_info->link_addr.bytes),
-				   partner_info->freq);
-			partner_info->is_valid_link = false;
-		}
-
 		/*
 		 * If partner link is not found in the current candidate list
 		 * don't treat it as failure, it can be removed post ML
