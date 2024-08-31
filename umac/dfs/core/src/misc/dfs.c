@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  * Copyright (c) 2002-2006, Atheros Communications Inc.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -33,6 +33,9 @@
 #include "wlan_dfs_utils_api.h"
 #include "../dfs_process_radar_found_ind.h"
 #include "../dfs_partial_offload_radar.h"
+#ifdef CONFIG_REG_CLIENT
+#include "wlan_mlme_api.h"
+#endif
 
 /* Disable NOL in FW. */
 #define DISABLE_NOL_FW 0
@@ -191,13 +194,18 @@ int dfs_create_object(struct wlan_dfs **dfs)
 #if defined(CONFIG_REG_CLIENT)
 static void dfs_puncture_init(struct wlan_dfs *dfs)
 {
+	struct wlan_objmgr_psoc *psoc = dfs->dfs_soc_obj->psoc;
+	bool is_sap_dfs_punct_enabled;
+
 	/*
-	 * Enable sub chan DFS type if QCA_DFS_BW_PUNCTURE defined, or all
-	 * bonded operation freq will be affected and disabled for nol,
+	 * Enable NOL sub chan marking if SAP DFS puncture enabled, or all
+	 * bonded operation freq will be affected and disabled for NOL,
 	 * puncture can't work, always need to switch freq.
 	 */
-	dfs_set_nol_subchannel_marking(dfs, true);
-	dfs->dfs_use_puncture = true;
+
+	is_sap_dfs_punct_enabled = wlan_mlme_get_sap_dfs_puncture(psoc);
+	dfs_set_nol_subchannel_marking(dfs, is_sap_dfs_punct_enabled);
+	dfs->dfs_use_puncture = is_sap_dfs_punct_enabled;
 }
 #else
 static void dfs_puncture_init(struct wlan_dfs *dfs)
