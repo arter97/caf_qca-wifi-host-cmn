@@ -861,6 +861,7 @@ enum {
 	IEEE80211_PARAM_HW_LINK_ID = 800,
 	IEEE80211_PARAM_IEEE_LINK_ID = 801,
 #endif
+	IEEE80211_PARAM_IGNORE_RSNE_VALIDATION = 802, /*Ignore RSNE Validation */
 };
 
 enum {
@@ -2556,6 +2557,8 @@ struct vendor_commands vap_vendor_cmds[] = {
 	{"get_drop_tx_mcast",  IEEE80211_PARAM_DROP_TX_MCAST, GET_PARAM, 0},
 	{"get_wds_ext",        IEEE80211_PARAM_WDS_EXT_EN, GET_PARAM, 0},
 #endif
+	{"ignore_rsne_validation",      IEEE80211_PARAM_IGNORE_RSNE_VALIDATION, SET_PARAM, 1},
+	{"g_ignore_rsne_validation",    IEEE80211_PARAM_IGNORE_RSNE_VALIDATION, GET_PARAM, 0},
 	{"get_ppevp_type",     IEEE80211_PARAM_PPEVP_TYPE, GET_PARAM, 0},
 #ifdef WLAN_FEATURE_11BE
 	{"set_tpe_common_psd", IEEE80211_PARAM_TPE_COMMON_PSD, SET_PARAM, 1},
