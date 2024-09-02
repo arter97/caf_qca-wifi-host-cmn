@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -1364,14 +1364,15 @@
 
 /*
  * <ini>
- * mlo_weightage - MLO Weightage to calculate best candidate
+ * mlo_weightage - MLO score boost percent by type
  * @Min: 0
- * @Max: 100
- * @Default: 3
+ * @Max: 0xffffffff
+ * @Default: 0x03020100
  *
- * This ini is used to increase/decrease MLO weightage in best candidate
- * selection. If AP supports MLO, AP will get additional weightage with
- * this param.
+ * SLO boost 0%
+ * MLSR boost 1%
+ * EMLSR boost 2%
+ * MLMR boost 3%
  *
  * Related: None
  *
@@ -1384,37 +1385,10 @@
 #define CFG_SCORING_MLO_WEIGHTAGE CFG_INI_UINT( \
 	"mlo_weightage", \
 	0, \
-	100, \
-	3, \
+	0xffffffff, \
+	0x03020100, \
 	CFG_VALUE_OR_DEFAULT, \
 	"MLO Weightage")
-
-/*
- * <ini>
- * emlsr_weightage - eMLSR Weightage to calculate best candidate
- * @Min: 0
- * @Max: 100
- * @Default: 3
- *
- * This ini is used to increase/decrease eMLSR weightage in best candidate
- * selection. If AP supports eMLSR, AP will get additional weightage with
- * this param.
- *
- * Related: None
- *
- * Supported Feature: STA Candidate selection
- *
- * Usage: External
- *
- * </ini>
- */
-#define CFG_SCORING_EMLSR_WEIGHTAGE CFG_INI_UINT( \
-	"emlsr_weightage", \
-	0, \
-	100, \
-	3, \
-	CFG_VALUE_OR_DEFAULT, \
-	"eMLSR Weightage")
 
 /*
  * <ini>
@@ -1904,7 +1878,6 @@
 
 #define CFG_MLO_CONFIG \
 	CFG(CFG_SCORING_EHT_CAPS_WEIGHTAGE) \
-	CFG(CFG_SCORING_EMLSR_WEIGHTAGE) \
 	CFG(CFG_SCORING_JOINT_ESP_ALPHA) \
 	CFG(CFG_SCORING_JOINT_OCE_ALPHA) \
 	CFG(CFG_SCORING_JOINT_RSSI_ALPHA) \

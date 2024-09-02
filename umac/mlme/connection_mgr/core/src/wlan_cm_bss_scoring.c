@@ -1799,8 +1799,6 @@ static uint16_t cm_get_ch_width(struct scan_cache_entry *entry,
 #define CM_MLO_BAD_RSSI_PCT 61
 #define CM_MLO_CONGESTION_PCT_BAD_RSSI 6
 
-static uint8_t mlo_boost_pct[MLO_TYPE_MAX] = {0, 10, 10, CM_MAX_PCT_SCORE};
-
 /**
  * cm_get_mlo_rssi() - Calculate joint rssi for MLO AP
  *
@@ -1820,11 +1818,6 @@ static uint32_t cm_get_mlo_rssi(int8_t link1_rssi, int8_t link2_rssi,
 		   (cw_link1 + cw_link2);
 
 	return rssi_mlo;
-}
-
-static inline int cm_calculate_emlsr_score(struct weight_cfg *weight_config)
-{
-	return weight_config->emlsr_weightage * mlo_boost_pct[MLSR];
 }
 
 struct scan_cache_entry *cm_get_entry(qdf_list_t *scan_list,
@@ -2270,8 +2263,6 @@ static int cm_calculate_mlo_bss_score(struct wlan_objmgr_psoc *psoc,
 		best_total_score += CM_ASSOC_INK_BEST_BOOST;
 	}
 
-	best_total_score += weight_config->mlo_weightage *
-			    mlo_boost_pct[MLMR];
 	entry->ml_info.ml_bss_score = best_total_score;
 
 	/*
@@ -2364,11 +2355,6 @@ static int cm_calculate_mlo_bss_score(struct wlan_objmgr_psoc *psoc,
 }
 
 #else
-static inline int cm_calculate_emlsr_score(struct weight_cfg *weight_config)
-{
-	return 0;
-}
-
 static int cm_calculate_mlo_bss_score(struct wlan_objmgr_psoc *psoc,
 				      struct scan_cache_entry *entry,
 				      struct scoring_cfg *score_params,
@@ -2520,6 +2506,7 @@ static int cm_calculate_ml_scores(struct wlan_objmgr_psoc *psoc,
 	weight_config = &score_config->weight_config;
 	if (IS_LINK_SCORE(ml_flag) || bss_mlo_type == SLO ||
 	    bss_mlo_type == MLSR || bss_mlo_type == EMLSR ||
+	    bss_mlo_type == MLO_TYPE_MAX ||
 	    !wlan_cm_is_eht_allowed_for_current_security(psoc, entry, false)) {
 		rssi_score =
 			cm_calculate_rssi_score(&score_config->rssi_score,
@@ -2546,9 +2533,6 @@ static int cm_calculate_ml_scores(struct wlan_objmgr_psoc *psoc,
 		band_score = cm_get_band_score(entry->channel.chan_freq,
 					       score_config);
 		score += band_score;
-
-		if (bss_mlo_type == MLSR || bss_mlo_type == EMLSR)
-			score += cm_calculate_emlsr_score(weight_config);
 	} else {
 		score += cm_calculate_mlo_bss_score(psoc, entry, score_config,
 						    phy_config, scan_list,
@@ -2632,10 +2616,46 @@ static void cm_vendor_specific_boost(struct wlan_objmgr_psoc *psoc,
 	else
 		entry->bss_score += per_link_boost;
 }
+
+/**
+ * cm_mlo_score_boost() - Add mlo boost to candidates
+ * @weight_config: weight config
+ * @entry: Scan cache entry pointer
+ * @mlo_type: mlo type
+ *
+ * Add score boost for MLO candidates to achieve
+ * priority order: MLMR > eMLSR > MLSR > SLO.
+ *
+ * Return: None
+ */
+static void cm_mlo_score_boost(struct weight_cfg *weight_config,
+			       struct scan_cache_entry *entry,
+			       enum MLO_TYPE mlo_type)
+{
+	uint32_t boost_pct = 0;
+
+	if (mlo_type >= MLO_TYPE_MAX)
+		return;
+
+	if (mlo_type != SLO)
+		boost_pct = LINK_BOOST;
+	boost_pct += CM_GET_SCORE_PERCENTAGE(weight_config->mlo_weightage,
+					     mlo_type);
+	entry->bss_score = entry->bss_score * boost_pct / 100 +
+			   entry->bss_score;
+}
+
 #else
 static void cm_vendor_specific_boost(struct wlan_objmgr_psoc *psoc,
 				     struct scan_cache_entry *entry,
 				     enum MLO_TYPE bss_mlo_type)
+{
+}
+
+static void cm_mlo_score_boost(struct weight_cfg *weight_config,
+			       struct scan_cache_entry *entry,
+			       enum MLO_TYPE mlo_type)
+
 {
 }
 #endif
@@ -2867,11 +2887,8 @@ static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 	score += eht_score;
 
 	if (!(IS_LINK_SCORE(ml_flag))) {
-		/* Add boost of 10% for one partner link MLMR candidate  */
-		if (bss_mlo_type == MLMR)
-			score = score + (score * ONE_LINK_MLMR_BOOST) / 100;
-
 		entry->bss_score = score;
+		cm_mlo_score_boost(weight_config, entry, bss_mlo_type);
 	}
 
 	if (bss_mlo_type == SLO || IS_LINK_SCORE(ml_flag))
@@ -3972,7 +3989,6 @@ cm_limit_max_per_index_score(uint32_t per_index_score)
 #ifdef WLAN_FEATURE_11BE_MLO
 
 #define CM_EHT_CAP_WEIGHTAGE 2
-#define CM_MLO_WEIGHTAGE 3
 #define CM_WLM_INDICATION_WEIGHTAGE 2
 #define CM_EMLSR_WEIGHTAGE 3
 static void cm_init_mlo_score_config(struct wlan_objmgr_psoc *psoc,
@@ -4006,25 +4022,18 @@ static void cm_init_mlo_score_config(struct wlan_objmgr_psoc *psoc,
 	score_cfg->weight_config.low_band_oce_boost =
 				cfg_get(psoc, CFG_SCORING_LOW_BAND_OCE_BOOST);
 
-	score_cfg->weight_config.emlsr_weightage =
-		cfg_get(psoc, CFG_SCORING_EMLSR_WEIGHTAGE);
-
 	score_cfg->mlsr_link_selection =
 		cfg_get(psoc, CFG_SCORING_MLSR_LINK_SELECTION);
 
 	*total_weight += score_cfg->weight_config.eht_caps_weightage +
-			 score_cfg->weight_config.mlo_weightage +
-			 score_cfg->weight_config.wlm_indication_weightage +
-			 score_cfg->weight_config.emlsr_weightage;
+			 score_cfg->weight_config.wlm_indication_weightage;
 }
 
 static void cm_set_default_mlo_weights(struct scoring_cfg *score_cfg)
 {
 	score_cfg->weight_config.eht_caps_weightage = CM_EHT_CAP_WEIGHTAGE;
-	score_cfg->weight_config.mlo_weightage = CM_MLO_WEIGHTAGE;
 	score_cfg->weight_config.wlm_indication_weightage =
 						CM_WLM_INDICATION_WEIGHTAGE;
-	score_cfg->weight_config.emlsr_weightage = CM_EMLSR_WEIGHTAGE;
 }
 
 static void cm_init_bw_weight_per_index(struct wlan_objmgr_psoc *psoc,

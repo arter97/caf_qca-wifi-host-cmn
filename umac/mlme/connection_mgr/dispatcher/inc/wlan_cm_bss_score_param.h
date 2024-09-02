@@ -51,7 +51,6 @@
  * @low_band_oce_boost: Flag to assign higher alpha weightage low band oce
  * @reserved: reserved/unused bits
  * @wlm_indication_weightage: WLM indication weightage
- * @emlsr_weightage: eMLSR weightage
  * @security_weightage: Security weightage
  */
 struct weight_cfg {
@@ -71,7 +70,7 @@ struct weight_cfg {
 	uint8_t sae_pk_ap_weightage;
 #ifdef WLAN_FEATURE_11BE_MLO
 	uint8_t eht_caps_weightage;
-	uint8_t mlo_weightage;
+	uint32_t mlo_weightage;
 	uint8_t joint_rssi_alpha;
 	uint8_t joint_esp_alpha;
 	uint8_t joint_oce_alpha;
@@ -80,7 +79,6 @@ struct weight_cfg {
 		low_band_oce_boost:1,
 		reserved:5;
 	uint8_t wlm_indication_weightage;
-	uint8_t emlsr_weightage;
 #endif
 	uint8_t security_weightage;
 };
