@@ -411,8 +411,9 @@ void dp_rx_buffer_pool_deinit(struct dp_soc *soc, u8 mac_id)
 
 #ifdef DP_FEATURE_RX_BUFFER_RECYCLE
 
-#define DP_RX_PP_PAGE_SIZE_HIGHER_ORDER		32768
-#define DP_RX_PP_PAGE_SIZE_LOWER_ORDER		4096
+#define DP_RX_PP_PAGE_SIZE_HIGHER_ORDER		(2 * DP_RX_PP_PAGE_SIZE_MIDDLE_ORDER)
+#define DP_RX_PP_PAGE_SIZE_MIDDLE_ORDER		(4 * DP_RX_PP_PAGE_SIZE_LOWER_ORDER)
+#define DP_RX_PP_PAGE_SIZE_LOWER_ORDER		PAGE_SIZE
 
 #define DP_RX_PP_POOL_SIZE_THRES	 4096
 #define DP_RX_PP_AUX_POOL_SIZE           2048
@@ -672,9 +673,16 @@ alloc_page_pool:
 			*page_size);
 		qdf_page_pool_destroy(pp);
 		pp = NULL;
-		if (*page_size == DP_RX_PP_PAGE_SIZE_HIGHER_ORDER) {
+
+		switch (*page_size) {
+		case DP_RX_PP_PAGE_SIZE_HIGHER_ORDER:
+			*page_size = DP_RX_PP_PAGE_SIZE_MIDDLE_ORDER;
+			goto alloc_page_pool;
+		case DP_RX_PP_PAGE_SIZE_MIDDLE_ORDER:
 			*page_size = DP_RX_PP_PAGE_SIZE_LOWER_ORDER;
 			goto alloc_page_pool;
+		case DP_RX_PP_PAGE_SIZE_LOWER_ORDER:
+			break;
 		}
 	}
 
