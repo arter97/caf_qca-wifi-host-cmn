@@ -75,6 +75,9 @@ bool wmi_get_action_oui_id(enum action_oui_id action_id,
 	case ACTION_OUI_DISABLE_AUX_LISTEN:
 		*id = WMI_VENDOR_OUI_ACTION_DISABLE_AUXL;
 		return true;
+	case ACTION_OUI_RESTRICT_MAX_MLO_LINKS:
+		*id = WMI_VENDOR_OUI_ACTION_RESTRICT_MAX_MLO_LINKS;
+		return true;
 	default:
 		return false;
 	}
