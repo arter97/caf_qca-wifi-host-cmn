@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1030,6 +1030,7 @@ void print_advance_data_rx_stats(struct advance_data_rx_stats *rx)
 	STATS_32(stdout, "MSDU's Part of AMPDU", rx->ampdu_cnt);
 	STATS_32(stdout, "MSDU's With No MPDU Level Aggregation",
 		 rx->non_ampdu_cnt);
+	STATS_32(stdout, "Rx Retries", rx->rx_retries);
 	if (!g_ipa_mode) {
 		STATS_32(stdout, "MSDU's Part of AMSDU", rx->amsdu_cnt);
 		STATS_32(stdout, "MSDU's With No MSDU Level Aggregation",
@@ -1037,7 +1038,6 @@ void print_advance_data_rx_stats(struct advance_data_rx_stats *rx)
 		STATS_32(stdout, "Rx Multipass Packet Drop",
 			 rx->multipass_rx_pkt_drop);
 		STATS_32(stdout, "Rx BAR Reaceive Count", rx->bar_recv_cnt);
-		STATS_32(stdout, "Rx Retries", rx->rx_retries);
 		print_advance_data_be_stats(rx, "Rx");
 	}
 }
@@ -2853,7 +2853,7 @@ void print_debug_data_tx_stats(struct debug_data_tx_stats *tx)
 
 	STATS_PRINT("\tTx RSSI chain per BW:\n");
 	for (i = 0; i < STATS_IF_RSSI_CHAIN_MAX; i++)
-		STATS_PRINT("\t\t %u\n", tx->rssi_chain[i]);
+		STATS_PRINT("\t\t %d\n", tx->rssi_chain[i]);
 }
 
 void print_debug_data_rx_stats(struct debug_data_rx_stats *rx)
@@ -3579,7 +3579,50 @@ void print_debug_radio_data_mesh(struct debug_pdev_data_mesh *mesh)
 	STATS_32(stdout, "Mesh Rx Stats Alloc fail", mesh->mesh_mem_alloc);
 }
 
-void print_debug_radio_data_txcap(struct debug_pdev_data_txcap *txcap)
+void print_debug_radio_data_txcap_2_0(struct debug_pdev_data_txcap *txcap)
+{
+	/* TX monitor stats needed for monitor version 2.0 */
+
+	STATS_32(stdout, "TX Capture BE stats mode", txcap->stats_2_0.mode);
+	STATS_64(stdout, "replenish count",
+			txcap->stats_2_0.totat_tx_mon_replenish_cnt);
+	STATS_64(stdout, "reap count   ",
+			txcap->stats_2_0.total_tx_mon_reap_cnt);
+	STATS_32(stdout, "monitor stuck", txcap->stats_2_0.total_tx_mon_stuck);
+	STATS_PRINT("Status buffer\n");
+	STATS_64(stdout, "received", txcap->stats_2_0.status_buf_recv);
+	STATS_64(stdout, "free    ", txcap->stats_2_0.status_buf_free);
+	STATS_PRINT("Packet buffer\n");
+	STATS_64(stdout, "received ", txcap->stats_2_0.pkt_buf_recv);
+	STATS_64(stdout, "free     ", txcap->stats_2_0.pkt_buf_free);
+	STATS_64(stdout, "processed", txcap->stats_2_0.pkt_buf_processed);
+	STATS_64(stdout, "to stack ", txcap->stats_2_0.pkt_buf_to_stack);
+	STATS_PRINT("ppdu info\n");
+	STATS_64(stdout, "threshold", txcap->stats_2_0.ppdu_info_drop_th);
+	STATS_64(stdout, "flush    ", txcap->stats_2_0.ppdu_info_drop_flush);
+	STATS_64(stdout, "truncated", txcap->stats_2_0.ppdu_info_drop_trunc);
+	STATS_PRINT("Drop stats\n");
+	STATS_64(stdout, "ppdu drop", txcap->stats_2_0.ppdu_drop_cnt);
+	STATS_64(stdout, "mpdu drop", txcap->stats_2_0.mpdu_drop_cnt);
+	STATS_64(stdout, "tlv drop ", txcap->stats_2_0.tlv_drop_cnt);
+	STATS_PRINT("Packet Classification\n");
+	STATS_32(stdout, "ARP",
+		 txcap->stats_2_0.dp_tx_pkt_cap_stats[STATS_IF_TX_PKT_TYPE_ARP]);
+	STATS_32(stdout, "EAPOL",
+		 txcap->stats_2_0.dp_tx_pkt_cap_stats[STATS_IF_TX_PKT_TYPE_EAPOL]);
+	STATS_32(stdout, "DHCP",
+		 txcap->stats_2_0.dp_tx_pkt_cap_stats[STATS_IF_TX_PKT_TYPE_DHCP]);
+	STATS_32(stdout, "DNS",
+		 txcap->stats_2_0.dp_tx_pkt_cap_stats[STATS_IF_TX_PKT_TYPE_DNS]);
+	STATS_32(stdout, "ICMP",
+		 txcap->stats_2_0.dp_tx_pkt_cap_stats[STATS_IF_TX_PKT_TYPE_ICMP]);
+	STATS_32(stdout, "Invalid Pkt id",
+		 txcap->stats_2_0.dp_tx_pkt_cap_stats[0]);
+	STATS_64(stdout, "Pkt drop sw filter",
+			txcap->stats_2_0.ppdu_drop_sw_filter);
+}
+
+void print_debug_radio_data_txcap_1_0(struct debug_pdev_data_txcap *txcap)
 {
 	uint8_t i, j;
 
@@ -3634,6 +3677,14 @@ void print_debug_radio_data_txcap(struct debug_pdev_data_txcap *txcap)
 	for (i = 0; i < STATS_IF_PPDU_STATS_MAX_TAG; i++)
 		STATS_PRINT("\t\tTag[%u] = %ju\n",
 			    i, txcap->ppdu_stats_counter[i]);
+}
+
+void print_debug_radio_data_txcap(struct debug_pdev_data_txcap *txcap)
+{
+	if (txcap->monitor_version == STATS_IF_TX_MON_VER_2)
+		print_debug_radio_data_txcap_2_0(txcap);
+	else
+		print_debug_radio_data_txcap_1_0(txcap);
 }
 
 void print_debug_radio_data_monitor(struct debug_pdev_data_monitor *monitor)

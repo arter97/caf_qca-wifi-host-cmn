@@ -1569,7 +1569,9 @@ dp_lite_mon_config_nac_rssi_peer(struct cdp_soc_t *soc_hdl,
  * @ppdu_info: ppdu info context
  * @config: lite mon filter config
  * @filter_mode: filter mode
- * @mpdu: mpdu nbuf
+ * @wh: pointer to 802.11 hdr
+ * @type: mpdu type
+ * @sub_type: mpdu sub type
  *
  * Return: QDF_STATUS
  */
@@ -1577,18 +1579,12 @@ static QDF_STATUS
 dp_lite_mon_type_subtype_check(struct hal_rx_ppdu_info *ppdu_info,
 			       struct dp_lite_mon_config *config,
 			       uint8_t filter_mode,
-			       qdf_nbuf_t mpdu)
+			       struct ieee80211_frame *wh,
+			       uint8_t type, uint8_t sub_type)
 {
-	struct ieee80211_frame *wh;
 	uint16_t filter = 0;
-	uint8_t type;
-	uint8_t sub_type;
 	uint8_t is_mcast = 0;
 
-	wh = (struct ieee80211_frame *)qdf_nbuf_get_frag_addr(mpdu, 0);
-	type = (wh->i_fc[0] & IEEE80211_FC0_TYPE_MASK);
-	sub_type = ((wh->i_fc[0] & IEEE80211_FC0_SUBTYPE_MASK) >>
-					IEEE80211_FC0_SUBTYPE_SHIFT);
 	switch (type) {
 	case IEEE80211_FC0_TYPE_MGT:
 		filter = config->mgmt_filter[filter_mode];
@@ -1626,6 +1622,9 @@ dp_lite_mon_rx_filter_check(struct hal_rx_ppdu_info *ppdu_info,
 			    struct dp_lite_mon_rx_config *config,
 			    uint8_t user, qdf_nbuf_t mpdu)
 {
+	struct ieee80211_frame *wh;
+	uint8_t type;
+	uint8_t sub_type;
 	uint8_t filter_category;
 
 	filter_category = ppdu_info->rx_user_status[user].filter_category;
@@ -1634,11 +1633,17 @@ dp_lite_mon_rx_filter_check(struct hal_rx_ppdu_info *ppdu_info,
 		if (config->rx_config.fp_enabled) {
 			if (config->fp_type_subtype_filter_all)
 				return QDF_STATUS_SUCCESS;
-			else
+			else {
+				wh = (struct ieee80211_frame *)qdf_nbuf_get_frag_addr(mpdu, 0);
+				type = (wh->i_fc[0] & IEEE80211_FC0_TYPE_MASK);
+				sub_type = ((wh->i_fc[0] & IEEE80211_FC0_SUBTYPE_MASK) >>
+								IEEE80211_FC0_SUBTYPE_SHIFT);
+
 				return dp_lite_mon_type_subtype_check(ppdu_info,
 								      &config->rx_config,
 								      DP_MON_FRM_FILTER_MODE_FP,
-								      mpdu);
+								      wh, type, sub_type);
+			}
 		}
 		break;
 	case DP_MPDU_FILTER_CATEGORY_MD:
@@ -1646,8 +1651,20 @@ dp_lite_mon_rx_filter_check(struct hal_rx_ppdu_info *ppdu_info,
 			return QDF_STATUS_SUCCESS;
 		break;
 	case DP_MPDU_FILTER_CATEGORY_MO:
-		if (config->rx_config.mo_enabled)
-			return QDF_STATUS_SUCCESS;
+		if (config->rx_config.mo_enabled) {
+			wh = (struct ieee80211_frame *)qdf_nbuf_get_frag_addr(mpdu, 0);
+			type = (wh->i_fc[0] & IEEE80211_FC0_TYPE_MASK);
+			if (type == IEEE80211_FC0_TYPE_CTL) {
+				sub_type = ((wh->i_fc[0] & IEEE80211_FC0_SUBTYPE_MASK) >>
+								IEEE80211_FC0_SUBTYPE_SHIFT);
+				return dp_lite_mon_type_subtype_check(ppdu_info,
+								      &config->rx_config,
+								      DP_MON_FRM_FILTER_MODE_MO,
+								      wh, type, sub_type);
+			} else {
+				return QDF_STATUS_SUCCESS;
+			}
+		}
 		break;
 	case DP_MPDU_FILTER_CATEGORY_FP_MO:
 		if (config->rx_config.fpmo_enabled)
@@ -1883,6 +1900,7 @@ dp_lite_mon_rx_mpdu_process(struct dp_pdev *pdev,
 			    uint8_t user)
 {
 	struct dp_pdev_be *be_pdev;
+	struct dp_soc *soc;
 	struct dp_mon_pdev_be *be_mon_pdev;
 	struct hal_rx_mon_mpdu_info *mpdu_meta;
 	struct dp_lite_mon_rx_config *lite_mon_rx_config;
@@ -1909,6 +1927,7 @@ dp_lite_mon_rx_mpdu_process(struct dp_pdev *pdev,
 		return QDF_STATUS_E_INVAL;
 	}
 
+	soc = pdev->soc;
 	lite_mon_rx_config = be_mon_pdev->lite_mon_rx_config;
 	if (qdf_unlikely(!lite_mon_rx_config)) {
 		dp_mon_debug("lite mon rx config is NULL");
@@ -2009,6 +2028,22 @@ dp_lite_mon_rx_mpdu_process(struct dp_pdev *pdev,
 	lite_mon_vdev = config->lite_mon_vdev;
 	qdf_spin_unlock_bh(&lite_mon_rx_config->lite_mon_rx_lock);
 
+	if (mpdu_meta->full_pkt) {
+		void *hdr_desc;
+		struct ieee80211_frame *wh;
+		/* hdr_desc points to 80211 hdr */
+		hdr_desc = qdf_nbuf_get_frag_addr(mon_mpdu, 0);
+
+		wh = (struct ieee80211_frame *)hdr_desc;
+
+		/* linearize mgmt frames */
+		if ((wh->i_fc[0] & IEEE80211_FC0_TYPE_MASK) == IEEE80211_FC0_TYPE_MGT) {
+			if (qdf_unlikely(wlan_cfg_get_rxmon_mgmt_linearization(soc->wlan_cfg_ctx))) {
+				if (qdf_nbuf_linearize(mon_mpdu) == -ENOMEM)
+					return QDF_STATUS_E_FAILURE;
+			}
+		}
+	}
 	/* If output vap is set send frame to stack else send WDI event */
 	if (lite_mon_vdev && lite_mon_vdev->osif_vdev &&
 	    lite_mon_vdev->monitor_vdev &&
