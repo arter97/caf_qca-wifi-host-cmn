@@ -5375,4 +5375,18 @@ QDF_STATUS
 wmi_unified_sap_suspend_cmd_send(wmi_unified_t wmi_handle,
 				 struct vdev_suspend_params *param);
 
+/**
+ * wmi_unified_send_sta_vdev_report_ap_oper_bw_cmd() - WMI to send STA VDEV associated AP's
+ * reported operating BW to FW
+ *
+ * @wmi_handle: handle to WMI
+ * @param: pointer to ap oper bw params
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS
+wmi_unified_send_sta_vdev_report_ap_oper_bw_cmd(
+					wmi_unified_t wmi_handle,
+					struct wmi_sta_vdev_report_ap_oper_bw_params *param);
+
 #endif /* _WMI_UNIFIED_API_H_ */

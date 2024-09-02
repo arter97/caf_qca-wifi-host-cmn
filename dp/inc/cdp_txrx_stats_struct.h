@@ -2077,9 +2077,7 @@ struct cdp_rx_stats {
 	uint32_t ndpa_cnt;
 	uint32_t inval_link_id_pkt_cnt;
 	uint64_t wme_ac_type_bytes[WME_AC_MAX];
-#ifdef IPA_OFFLOAD
 	struct cdp_pkt_info rx_total;
-#endif
 	uint32_t duplicate_count;
 	uint32_t fragment_count;
 #ifdef QCA_DP_PROTOCOL_STATS
@@ -3345,6 +3343,26 @@ struct cdp_pdev_erp_stats {
 	uint64_t total_rx_data_bytes;
 };
 #endif
+
+/**
+ * struct cdp_telemetry_peer_tx_ext_stats- Structure to hold peer tx ext stats
+ * @avg_ack_rssi: avg ack rssi
+ * @tx_failed: tx failed
+ * @retries: retries
+ * @total_retries: totalretries
+ * @tx_cnt: tx cnt
+ * @tx_bytes: tx bytes
+ * @packet_type: packet mcs type
+ */
+struct cdp_telemetry_peer_tx_ext_stats {
+	uint32_t avg_ack_rssi;
+	uint32_t tx_failed;
+	uint32_t retries;
+	uint32_t total_retries;
+	uint64_t tx_cnt;
+	uint64_t tx_bytes;
+	struct cdp_pkt_type packet_type[DOT11_MAX];
+};
 
 /**
  * struct cdp_pdev_stats - pdev stats

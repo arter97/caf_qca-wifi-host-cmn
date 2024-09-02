@@ -97,23 +97,25 @@ register_dfs_postnol_csa_callback(struct dfs_to_mlme *mlme_callback)
 #endif
 
 /**
- * register_dfs_unpunc_chan_switch_callback() - Register unpuncture channel VDEV
- *                                              restart callback.
- * @mlme_callback:                            Pointer to dfs_to_mlme.
+ * register_dfs_punc_unpunc_callback() - Register Puncture / unpuncture
+ * related callbacks.
+ * @mlme_callback: Pointer to dfs_to_mlme.
  */
 #if defined(QCA_DFS_BW_PUNCTURE) && !defined(CONFIG_REG_CLIENT)
 static inline void
-register_dfs_unpunc_chan_switch_callback(struct dfs_to_mlme *mlme_callback)
+register_dfs_punc_unpunc_callback(struct dfs_to_mlme *mlme_callback)
 {
 	if (!mlme_callback)
 		return;
 
 	mlme_callback->mlme_unpunc_chan_switch =
 		mlme_dfs_unpunc_chan_switch;
+	mlme_callback->mlme_check_punc_sm_sanity =
+		mlme_dfs_check_punc_sm_sanity;
 }
 #else
 static inline void
-register_dfs_unpunc_chan_switch_callback(struct dfs_to_mlme *mlme_callback)
+register_dfs_punc_unpunc_callback(struct dfs_to_mlme *mlme_callback)
 {
 }
 #endif
@@ -217,7 +219,7 @@ void register_dfs_callbacks(void)
 	/* Register freq based callbacks */
 	register_dfs_callbacks_for_freq(tmp_dfs_to_mlme);
 	register_dfs_postnol_csa_callback(tmp_dfs_to_mlme);
-	register_dfs_unpunc_chan_switch_callback(tmp_dfs_to_mlme);
+	register_dfs_punc_unpunc_callback(tmp_dfs_to_mlme);
 }
 #else
 void register_dfs_callbacks(void)

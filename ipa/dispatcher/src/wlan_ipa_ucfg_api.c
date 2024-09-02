@@ -410,6 +410,20 @@ bool ucfg_ipa_is_two_tx_pipes_enabled(void)
 
 qdf_export_symbol(ucfg_ipa_is_two_tx_pipes_enabled);
 
+void ucfg_ipa_set_shared_smmu_enable(bool flag)
+{
+	ipa_set_shared_smmu_enable(flag);
+}
+
+qdf_export_symbol(ucfg_ipa_set_shared_smmu_enable);
+
+bool ucfg_ipa_get_shared_smmu_enable(void)
+{
+	return ipa_get_shared_smmu_enable();
+}
+
+qdf_export_symbol(ucfg_ipa_get_shared_smmu_enable);
+
 #if defined(QCA_IPA_LL_TX_FLOW_CONTROL)
 void ucfg_ipa_event_wq(struct wlan_objmgr_psoc *psoc,
 		       uint8_t *peer_mac_addr,

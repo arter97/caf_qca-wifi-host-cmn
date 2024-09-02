@@ -409,6 +409,8 @@ reg_get_6ghz_cli_pwr_type_per_ap_pwr_type(
 			*cli_pwr_type = REG_CLI_DEF_VLP;
 		else if (ap_pwr_type == REG_STANDARD_POWER_AP)
 			*cli_pwr_type = REG_CLI_DEF_SP;
+		else if (ap_pwr_type == REG_INDOOR_ENABLED_AP)
+			*cli_pwr_type = REG_CLI_DEF_C2C;
 		else
 			return QDF_STATUS_E_FAILURE;
 	} else if (client_type == REG_SUBORDINATE_CLIENT) {
@@ -418,6 +420,8 @@ reg_get_6ghz_cli_pwr_type_per_ap_pwr_type(
 			*cli_pwr_type = REG_CLI_SUB_VLP;
 		else if (ap_pwr_type == REG_STANDARD_POWER_AP)
 			*cli_pwr_type = REG_CLI_SUB_SP;
+		else if (ap_pwr_type == REG_STANDARD_POWER_AP)
+			*cli_pwr_type = REG_CLI_SUB_C2C;
 		else
 			return QDF_STATUS_E_FAILURE;
 	} else {
@@ -548,23 +552,16 @@ reg_get_best_6g_power_type(struct wlan_objmgr_psoc *psoc,
 	}
 
 vlp_support_check:
-	if (ap_pwr_type == REG_INDOOR_AP ||
-	    ap_pwr_type == REG_STANDARD_POWER_AP ||
-	    ap_pwr_type == REG_INDOOR_SP_AP) {
-		if (QDF_IS_STATUS_SUCCESS(reg_check_if_6g_pwr_type_supp_for_chan(
+	if (QDF_IS_STATUS_SUCCESS(reg_check_if_6g_pwr_type_supp_for_chan(
 							pdev,
 							REG_VERY_LOW_POWER_AP,
 							chan_idx))) {
-			*pwr_type_6g = REG_VERY_LOW_POWER_AP;
-			reg_debug("AP power type = %d, selected power type = %d",
-				  ap_pwr_type, *pwr_type_6g);
-			return QDF_STATUS_SUCCESS;
-		} else {
-			goto no_support;
-		}
+		*pwr_type_6g = REG_VERY_LOW_POWER_AP;
+		reg_debug("AP power type = %d, selected power type = %d",
+			  ap_pwr_type, *pwr_type_6g);
+		return QDF_STATUS_SUCCESS;
 	}
 
-no_support:
 	reg_err("AP power type = %d, not supported", ap_pwr_type);
 	return QDF_STATUS_E_NOSUPPORT;
 }
@@ -750,6 +747,7 @@ QDF_STATUS reg_set_band(struct wlan_objmgr_pdev *pdev, uint32_t band_bitmap)
 
 	reg_info("set band bitmap: %d", band_bitmap);
 	pdev_priv_obj->band_capability = band_bitmap;
+	psoc_priv_obj->band_capability = band_bitmap;
 
 	reg_compute_pdev_current_chan_list(pdev_priv_obj);
 
@@ -1128,7 +1126,7 @@ QDF_STATUS reg_set_config_vars(struct wlan_objmgr_psoc *psoc,
 	psoc_priv_obj->indoor_chan_enabled = config_vars.indoor_chan_enabled;
 	psoc_priv_obj->force_ssc_disable_indoor_channel =
 		config_vars.force_ssc_disable_indoor_channel;
-	psoc_priv_obj->band_capability = config_vars.band_capability;
+	psoc_priv_obj->band_capability &= config_vars.band_capability;
 	psoc_priv_obj->restart_beaconing = config_vars.restart_beaconing;
 	psoc_priv_obj->enable_srd_chan_in_master_mode =
 		config_vars.enable_srd_chan_in_master_mode;
@@ -1350,6 +1348,13 @@ bool reg_is_vlp_depriority_freq(struct wlan_objmgr_pdev *pdev,
 	if (wlan_reg_is_6ghz_chan_freq(freq) && freq <= vlp_cutoff_freq)
 		return true;
 
+	return false;
+}
+
+bool reg_is_ap_power_type_c2c(enum reg_6g_ap_type ap_pwr_type)
+{
+	if (ap_pwr_type == REG_INDOOR_ENABLED_AP)
+		return true;
 	return false;
 }
 #endif

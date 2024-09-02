@@ -1539,6 +1539,9 @@ struct dp_mon_ops monitor_ops_2_0 = {
 #endif
 	.mon_rx_pdev_tlv_logger_init = dp_mon_pdev_tlv_logger_init,
 	.mon_rx_pdev_tlv_logger_deinit = dp_mon_pdev_tlv_logger_deinit,
+#ifdef QCA_PEER_EXT_STATS
+	.mon_peer_get_tx_ext_stats = dp_mon_peer_get_tx_ext_stats,
+#endif
 };
 
 struct cdp_mon_ops dp_ops_mon_2_0 = {

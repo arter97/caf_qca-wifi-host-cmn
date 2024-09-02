@@ -1794,13 +1794,13 @@ utils_dfs_convert_wlan_phymode_to_chwidth(enum wlan_phymode phymode)
 }
 #endif
 
-#if defined(WLAN_FEATURE_11BE) && defined(QCA_DFS_BW_EXPAND) && \
+#if defined(WLAN_FEATURE_11BE) && defined(QCA_DFS_BW_PUNCTURE) && \
 	defined(QCA_DFS_RCSA_SUPPORT)
 uint16_t
 utils_dfs_get_radar_bitmap_from_nolie(struct wlan_objmgr_pdev *pdev,
-				      enum wlan_phymode phy_mode,
 				      qdf_freq_t nol_ie_start_freq,
-				      uint8_t nol_ie_bitmap)
+				      uint8_t nol_ie_bitmap,
+				      bool *is_ignore_radar_puncture)
 {
 	struct wlan_dfs *dfs;
 
@@ -1808,7 +1808,23 @@ utils_dfs_get_radar_bitmap_from_nolie(struct wlan_objmgr_pdev *pdev,
 	if (!dfs)
 		return 0;
 
-	return dfs_get_radar_bitmap_from_nolie(dfs, phy_mode, nol_ie_start_freq,
-					       nol_ie_bitmap);
+	return dfs_get_radar_bitmap_from_nolie(dfs, nol_ie_start_freq,
+					       nol_ie_bitmap,
+					       is_ignore_radar_puncture);
+}
+#endif
+
+#if defined(WLAN_FEATURE_11BE) && defined(QCA_DFS_BW_PUNCTURE)
+void utils_dfs_stop_punc_sm(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_dfs *dfs = wlan_pdev_get_dfs_obj(pdev);
+
+	if (!dfs)
+		return;
+
+	if (dfs->dfs_use_puncture)
+		dfs_punc_sm_stop_all(dfs);
+
+	return;
 }
 #endif

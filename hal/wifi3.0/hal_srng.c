@@ -1241,13 +1241,16 @@ void hal_delayed_reg_write(struct hal_soc *hal_soc,
 			   uint32_t value)
 {
 	if (hal_is_reg_write_tput_level_high(hal_soc) ||
-	    pld_is_device_awake(hal_soc->qdf_dev->dev)) {
+	    pld_is_device_awake(hal_soc->qdf_dev->dev) ||
+	    hal_srng_is_delay_reg_force_write(srng)) {
+		hal_srng_delay_reg_record_direct_write(srng, true);
 		qdf_atomic_inc(&hal_soc->stats.wstats.direct);
 		srng->wstats.direct++;
 		hal_write_address_32_mb(hal_soc, addr, value, false);
 		hal_srng_update_last_hptp(srng);
 		hal_srng_reg_his_add(srng, value);
 	} else {
+		hal_srng_delay_reg_record_direct_write(srng, false);
 		hal_reg_write_enqueue(hal_soc, srng, addr, value);
 	}
 

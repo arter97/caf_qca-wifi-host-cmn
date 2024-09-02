@@ -283,6 +283,8 @@ struct tgt_info {
  * @ema_init: Initialize Enhanced MBSSID advertisement feature
  * @mlo_capable: Checks if the SoC is MLO capable
  * @mlo_get_group_id: Get the MLO group id of the SoC
+ * @mlo_get_chip_id: Get the MLO chip id of the SoC
+ * @mlo_is_shmem_capable: Check if the MLO group is SHMEM capable or not
  * @mlo_setup_done_event: MLO setup sequence complete event handler
  * @wifi_radar_support_enable: wifi radar support enable
  */
@@ -351,6 +353,9 @@ struct target_ops {
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 	bool (*mlo_capable)(struct wlan_objmgr_psoc *psoc);
 	uint8_t (*mlo_get_group_id)(struct wlan_objmgr_psoc *psoc);
+	uint8_t (*mlo_get_chip_id)(struct wlan_objmgr_psoc *psoc);
+	bool (*mlo_is_shmem_capable)(struct wlan_objmgr_psoc *psoc,
+				     uint8_t grp_id, uint8_t chip_id);
 	void (*mlo_setup_done_event)(struct wlan_objmgr_psoc *psoc);
 #endif
 	void (*wifi_radar_support_enable)(struct wlan_objmgr_psoc *psoc,

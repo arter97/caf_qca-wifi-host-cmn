@@ -176,6 +176,13 @@
 #define FILTER_DATA_NULL		0x0008
 
 /*
+ * Monitor version 1 for LT chipset
+ * Monitor version 2 for be+ chipsets
+ */
+#define MONITOR_VERSION_1 1
+#define MONITOR_VERSION_2 2
+
+/*
  * Multiply rate by 2 to avoid float point
  * and get rate in units of 500kbps
  */
@@ -1535,6 +1542,8 @@ enum cdp_pdev_param_type {
  * @cdp_reo_rings_mapping: reo rings mapping
  * @cdp_eapol_over_control_port_disable: disable eapol over control port
  * @cdp_scan_radio_support: Set scan radio support capability
+ * @cdp_monitor_version: monitor version
+ * @cdp_tx_vdev_nss_support: Vdev Tx NSS report support
  */
 typedef union cdp_config_param_t {
 	/* peer params */
@@ -1661,6 +1670,8 @@ typedef union cdp_config_param_t {
 	uint32_t cdp_reo_rings_mapping;
 	bool cdp_eapol_over_control_port_disable;
 	bool cdp_scan_radio_support;
+	uint8_t cdp_monitor_version;
+	bool cdp_tx_vdev_nss_support;
 } cdp_config_param_type;
 
 /**
@@ -1849,6 +1860,7 @@ enum cdp_vdev_param_type {
  * @CDP_CFG_REO_RINGS_MAPPING: Reo rings mapping configuration
  * @CDP_SCAN_RADIO_SUPPORT: Scan Radio capability
  * @CDP_SAWF_MSDUQ_RECLAIM_SUPPORT: To initiate msduq reclaim related functions
+ * @CDP_VDEV_TX_NSS_SUPPORT: FW Support vdev Tx NSS command
  */
 enum cdp_psoc_param_type {
 	CDP_ENABLE_RATE_STATS,
@@ -1886,6 +1898,7 @@ enum cdp_psoc_param_type {
 #ifdef CONFIG_SAWF
 	CDP_SAWF_MSDUQ_RECLAIM_SUPPORT,
 #endif
+	CDP_VDEV_TX_NSS_SUPPORT,
 };
 
 #ifdef CONFIG_AP_PLATFORM
@@ -2697,6 +2710,7 @@ struct cdp_tx_completion_msdu {
  * @ast_index: ast index in multi-user case
  * @tid: TID number
  * @num_msdu: Number of MSDUs in PPDU
+ * @enc_type: Encryption type
  * @tcp_msdu_count: Number of TCP MSDUs in PPDU
  * @udp_msdu_count: Number of UDP MSDUs in PPDU
  * @other_msdu_count: Number of MSDUs other than UDP and TCP MSDUs in PPDU
@@ -2738,6 +2752,7 @@ struct cdp_rx_stats_ppdu_user {
 	uint32_t ast_index;
 	uint32_t tid;
 	uint32_t num_msdu;
+	uint8_t enc_type;
 	uint16_t  tcp_msdu_count;
 	uint16_t  udp_msdu_count;
 	uint16_t  other_msdu_count;

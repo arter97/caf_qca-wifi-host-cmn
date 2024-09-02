@@ -101,6 +101,8 @@ struct hif_bus_ops {
 					  uint32_t cpumask, bool perf);
 #endif
 	void (*hif_affinity_mgr_set_affinity)(struct hif_softc *scn);
+	QDF_STATUS (*hif_bus_get_device_handle)(struct hif_softc *hif_ctx,
+						void **handle);
 };
 
 #ifdef HIF_SNOC

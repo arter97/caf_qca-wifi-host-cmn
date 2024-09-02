@@ -106,6 +106,9 @@
 #define RADIOTAP_CCK_CHANNEL 0x0020
 #define RADIOTAP_OFDM_CHANNEL 0x0040
 
+/* Max valid user info supported in EHT */
+#define MAX_NUM_EHT_USER_INFO_VALID 4
+
 #ifdef FEATURE_NBUFF_REPLENISH_TIMER
 #include <qdf_mc_timer.h>
 
@@ -1287,6 +1290,25 @@ void qdf_nbuf_unmap_nbytes_single_debug(qdf_device_t osdev,
 
 qdf_export_symbol(qdf_nbuf_unmap_nbytes_single_debug);
 
+QDF_STATUS qdf_nbuf_track_map_single_debug(qdf_device_t osdev, qdf_nbuf_t buf,
+					   qdf_dma_dir_t dir, const char *func,
+					   uint32_t line)
+{
+	QDF_STATUS status;
+
+	status = qdf_nbuf_track_map(buf, func, line);
+	if (QDF_IS_STATUS_ERROR(status))
+		return status;
+
+	if (!is_initial_mem_debug_disabled)
+		qdf_nbuf_history_add(buf, func, line, QDF_NBUF_MAP);
+	qdf_net_buf_debug_update_map_node(buf, func, line);
+
+	return status;
+}
+
+qdf_export_symbol(qdf_nbuf_track_map_single_debug);
+
 void qdf_nbuf_unmap_nbytes_single_paddr_debug(qdf_device_t osdev,
 					      qdf_nbuf_t buf,
 					      qdf_dma_addr_t phy_addr,
@@ -1394,17 +1416,21 @@ QDF_STATUS
 __qdf_nbuf_map_single(qdf_device_t osdev, qdf_nbuf_t buf, qdf_dma_dir_t dir)
 {
 	qdf_dma_addr_t paddr;
+	QDF_STATUS ret;
 
 	/* assume that the OS only provides a single fragment */
 	QDF_NBUF_CB_PADDR(buf) = paddr =
 		dma_map_single(osdev->dev, buf->data,
 				skb_end_pointer(buf) - buf->data,
 				__qdf_dma_dir_to_os(dir));
-	__qdf_record_nbuf_nbytes(
-		__qdf_nbuf_get_end_offset(buf), dir, true);
-	return dma_mapping_error(osdev->dev, paddr)
+
+	ret = dma_mapping_error(osdev->dev, paddr)
 		? QDF_STATUS_E_FAILURE
 		: QDF_STATUS_SUCCESS;
+	if (QDF_IS_STATUS_SUCCESS(ret))
+		__qdf_record_nbuf_nbytes(
+			__qdf_nbuf_get_end_offset(buf), dir, true);
+	return ret;
 }
 qdf_export_symbol(__qdf_nbuf_map_single);
 #endif
@@ -5529,6 +5555,7 @@ static unsigned int
 qdf_nbuf_update_radiotap_eht_flags(struct mon_rx_status *rx_status,
 				   int8_t *rtap_buf, uint32_t rtap_len)
 {
+	uint32_t user;
 	struct mon_rx_user_status *rx_user_status = rx_status->rx_user_status;
 	/*
 	 * IEEE80211_RADIOTAP_EHT:
@@ -5575,6 +5602,13 @@ qdf_nbuf_update_radiotap_eht_flags(struct mon_rx_status *rx_status,
 	rtap_len += 4;
 
 	if (!rx_user_status) {
+		for (user = 0; user < rx_status->num_eht_user_info_valid;
+		     user++) {
+			put_unaligned_le32(rx_status->eht_user_info[user],
+					   &rtap_buf[rtap_len]);
+			rtap_len += 4;
+		}
+
 		qdf_rl_debug("EHT data %x %x %x %x %x %x %x",
 			     rx_status->eht_known, rx_status->eht_data[0],
 			     rx_status->eht_data[1], rx_status->eht_data[2],
@@ -5970,8 +6004,8 @@ unsigned int qdf_nbuf_update_radiotap(struct mon_rx_status *rx_status,
 							       rtap_buf,
 							       rtap_len);
 
-		if ((rtap_len - length) > RADIOTAP_EHT_FLAGS_LEN) {
-			qdf_print("length is greater than RADIOTAP_EHT_FLAGS_LEN");
+		if ((rtap_len - length) > RADIOTAP_U_SIG_FLAGS_LEN) {
+			qdf_print("length is greater than RADIOTAP_U_SIG_FLAGS_LEN");
 			return 0;
 		}
 	}

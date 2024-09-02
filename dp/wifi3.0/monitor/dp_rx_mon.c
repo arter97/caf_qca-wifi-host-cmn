@@ -485,6 +485,7 @@ dp_rx_populate_cdp_indication_ppdu_user(struct dp_pdev *pdev,
 			rx_stats_peruser->udp_msdu_count +
 			rx_stats_peruser->other_msdu_count;
 
+		rx_stats_peruser->enc_type = rx_user_status->enc_type;
 		rx_stats_peruser->preamble_type =
 				cdp_rx_ppdu->u.preamble;
 		rx_stats_peruser->mpdu_cnt_fcs_ok =
@@ -951,6 +952,8 @@ static void dp_rx_stats_update(struct dp_pdev *pdev,
 	struct dp_soc *soc = NULL;
 	uint8_t mcs, preamble, ac = 0, nss, ppdu_type, res_mcs = 0;
 	uint32_t num_msdu;
+	uint32_t num_mpdu;
+	uint32_t mpdu_overhead;
 	struct dp_peer *peer;
 	struct dp_mon_peer *mon_peer;
 	struct cdp_rx_stats_ppdu_user *ppdu_user;
@@ -960,6 +963,7 @@ static void dp_rx_stats_update(struct dp_pdev *pdev,
 	struct dp_mon_pdev *mon_pdev = NULL;
 	uint64_t byte_count;
 	bool is_preamble_valid = true;
+	uint8_t wifi_hdr_len = 0;
 
 	if (qdf_likely(pdev))
 		soc = pdev->soc;
@@ -1005,8 +1009,24 @@ static void dp_rx_stats_update(struct dp_pdev *pdev,
 		}
 
 		num_msdu = ppdu_user->num_msdu;
-		byte_count = ppdu_user->mpdu_ok_byte_count +
-			ppdu_user->mpdu_err_byte_count;
+		num_mpdu = ppdu_user->mpdu_cnt_fcs_ok;
+		byte_count = ppdu_user->mpdu_ok_byte_count;
+		wifi_hdr_len = dp_mon_get_802_11_hdr_length(ppdu_user);
+		/* mpdu_overhead is calculated as:
+		 * wifi header len * num mpdu + LLC len * num_msdu + FCS len.
+		 */
+		if (num_msdu > 1) {
+			mpdu_overhead = (wifi_hdr_len * num_mpdu) +
+			      ((DP_RX_MON_DECAP_HDR_SIZE + DP_RX_MON_LLC_SIZE +
+				DP_RX_MON_SNAP_SIZE) * num_msdu) + DP_RX_MON_FCS_LEN;
+			mpdu_overhead = mpdu_overhead -
+					(DP_RX_MON_DECAP_HDR_SIZE * num_msdu);
+		} else {
+			mpdu_overhead = wifi_hdr_len + DP_RX_MON_LLC_SIZE +
+					DP_RX_MON_SNAP_SIZE + DP_RX_MON_FCS_LEN - DP_RX_MON_DECAP_HDR_SIZE;
+		}
+		if (qdf_likely(byte_count > mpdu_overhead))
+			byte_count = byte_count - mpdu_overhead;
 
 		DP_STATS_UPD(mon_peer, rx.snr, ppdu->rssi);
 		DP_STATS_INC(mon_peer, rx.retried_msdu_count,
@@ -1053,6 +1073,8 @@ static void dp_rx_stats_update(struct dp_pdev *pdev,
 				     ppdu_user->mpdu_cnt_fcs_err);
 		}
 
+		DP_STATS_INC(mon_peer, rx.rx_total.num, num_msdu);
+		DP_STATS_INC(mon_peer, rx.rx_total.bytes, byte_count);
 		DP_STATS_INC(mon_peer, rx.sgi_count[ppdu->u.gi], num_msdu);
 		DP_STATS_INC(mon_peer, rx.bw[ppdu->u.bw], num_msdu);
 		DP_STATS_INC(mon_peer, rx.reception_type[ppdu->u.ppdu_type],

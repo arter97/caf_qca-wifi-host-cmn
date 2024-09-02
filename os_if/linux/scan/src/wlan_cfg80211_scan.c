@@ -45,6 +45,7 @@
 #include "host_diag_core_event.h"
 #endif
 #include "utils_mlo.h"
+#define INVALID_LINK_ID 255
 
 const struct nla_policy cfg80211_scan_policy[
 			QCA_WLAN_VENDOR_ATTR_SCAN_MAX + 1] = {
@@ -962,13 +963,14 @@ void wlan_cfg80211_scan_done(struct net_device *netdev,
  *
  * @req : Scan request
  * @aborted : true scan aborted false scan success
+ * @link_id : link id of the mld link
  *
  * This function sends scan completed callback event to NL.
  *
  * Return: none
  */
 static void wlan_vendor_scan_callback(struct cfg80211_scan_request *req,
-					bool aborted)
+					bool aborted, int link_id)
 {
 	struct sk_buff *skb;
 	struct nlattr *attr;
@@ -1025,6 +1027,9 @@ static void wlan_vendor_scan_callback(struct cfg80211_scan_request *req,
 	scan_status = (aborted == true) ? VENDOR_SCAN_STATUS_ABORTED :
 		VENDOR_SCAN_STATUS_NEW_RESULTS;
 	if (nla_put_u8(skb, QCA_WLAN_VENDOR_ATTR_SCAN_STATUS, scan_status))
+		goto nla_put_failure;
+
+	if (nla_put_u8(skb, QCA_WLAN_VENDOR_ATTR_SCAN_LINK_ID, link_id))
 		goto nla_put_failure;
 
 	wlan_cfg80211_vendor_event(skb, GFP_ATOMIC);
@@ -1144,6 +1149,7 @@ static void wlan_cfg80211_scan_done_callback(
 	QDF_STATUS status;
 	qdf_time_t scan_start_timestamp = 0;
 	uint32_t unique_bss_count = 0;
+	uint8_t link_id = INVALID_LINK_ID;
 
 	if (!event) {
 		osif_nofl_err("Invalid scan event received");
@@ -1211,6 +1217,8 @@ static void wlan_cfg80211_scan_done_callback(
 		}
 		goto allow_suspend;
 	}
+	/* Link id is required to send vendor scan callback */
+	link_id = wlan_vdev_get_link_id(vdev);
 
 	/*
 	 * Scan can be triggred from NL or vendor scan
@@ -1222,7 +1230,7 @@ static void wlan_cfg80211_scan_done_callback(
 	if (NL_SCAN == source)
 		wlan_cfg80211_scan_done(netdev, req, !success, osif_priv);
 	else
-		wlan_vendor_scan_callback(req, !success);
+		wlan_vendor_scan_callback(req, !success, link_id);
 
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_OSIF_ID);
 
@@ -1410,6 +1418,7 @@ void wlan_cfg80211_cleanup_scan_queue(struct wlan_objmgr_pdev *pdev,
 	struct pdev_osif_priv *osif_priv;
 	qdf_list_t scan_cleanup_q;
 	qdf_list_node_t *node = NULL;
+	int link_id = INVALID_LINK_ID;
 
 	if (!pdev) {
 		osif_err("pdev is Null");
@@ -1440,7 +1449,7 @@ void wlan_cfg80211_cleanup_scan_queue(struct wlan_objmgr_pdev *pdev,
 			wlan_cfg80211_scan_done(scan_req->dev, req,
 						aborted, osif_priv);
 		else
-			wlan_vendor_scan_callback(req, aborted);
+			wlan_vendor_scan_callback(req, aborted, link_id);
 
 		qdf_mem_free(scan_req);
 	}

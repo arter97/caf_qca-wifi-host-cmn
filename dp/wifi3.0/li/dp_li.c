@@ -542,7 +542,8 @@ static QDF_STATUS dp_soc_srng_alloc_li(struct dp_soc *soc)
 
 	soc_cfg_ctx = soc->wlan_cfg_ctx;
 
-	tx_comp_ring_size = wlan_cfg_tx_comp_ring_size(soc_cfg_ctx);
+	tx_comp_ring_size = wlan_cfg_tx_comp_ring_size(soc_cfg_ctx,
+						       DP_RING_NUM_ANY);
 	/* Disable cached desc if NSS offload is enabled */
 	if (wlan_cfg_get_dp_soc_nss_cfg(soc_cfg_ctx))
 		cached = 0;

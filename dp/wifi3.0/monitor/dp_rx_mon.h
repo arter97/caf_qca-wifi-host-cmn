@@ -63,6 +63,10 @@
 #define DP_RX_MON_SNAP_SIZE 4
 #define DP_RX_MON_DECAP_HDR_SIZE 14
 
+#define DP_RX_MON_FCS_LEN 4
+#define DP_RX_MON_QOS_LEN 2
+#define DP_RX_MON_DSTODS_MASK 0xff00
+#define DP_RX_MON_DSTODS_BITS 8
 
 /**
  * enum dp_mon_reap_status - monitor status ring ppdu status

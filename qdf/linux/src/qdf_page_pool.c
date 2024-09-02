@@ -37,7 +37,7 @@ dma_addr_t __qdf_page_pool_get_dma_addr(struct page *page)
 bool __qdf_page_pool_full_bh(__qdf_page_pool_t pp)
 {
 	int i;
-	int count;
+	int count = 0;
 
 	if (!pp->alloc.count)
 		return ptr_ring_full_bh(&pp->ring);

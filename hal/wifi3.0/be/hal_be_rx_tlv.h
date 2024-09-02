@@ -22,6 +22,7 @@
 
 #include "hal_api_mon.h"
 #include "hal_be_rx_compact_tlv.h"
+#include "hal_be_api_mon.h"
 
 /*
  * Structures & Macros to obtain fields from the TLV's in the Rx packet
@@ -2115,6 +2116,16 @@ static inline
 void hal_rx_parse_eht_sig_hdr_be(struct hal_soc *hal_soc, uint8_t *tlv,
 				 void *ppdu_info_handle)
 {
+	struct hal_rx_ppdu_info *ppdu_info  = ppdu_info_handle;
+
+	ppdu_info->rx_status.eht_flags = 1;
+
+	if (hal_rx_is_frame_type_ndp(hal_soc, ppdu_info))
+		hal_rx_parse_eht_sig_ndp(hal_soc, tlv, ppdu_info);
+	else if (hal_rx_is_non_ofdma(hal_soc, ppdu_info))
+		hal_rx_parse_eht_sig_non_ofdma_be(hal_soc, tlv, ppdu_info);
+	else if (hal_rx_is_ofdma(hal_soc, ppdu_info))
+		hal_rx_parse_eht_sig_ofdma_be(hal_soc, tlv, ppdu_info);
 }
 
 static inline

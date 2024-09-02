@@ -209,7 +209,7 @@ static void dp_mlo_soc_drain_rx_buf(struct dp_soc *soc, void *arg, int chip_id)
 	}
 
 	/* make sure dp_service_srngs not running on any of the CPU */
-	for (cpu = 0; cpu < NR_CPUS; cpu++) {
+	for (cpu = 0; cpu < (sizeof(soc->service_rings_running) * 8); cpu++) {
 		while (qdf_atomic_test_bit(cpu,
 					   &soc->service_rings_running))
 			;

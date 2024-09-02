@@ -345,6 +345,25 @@ cdp_get_throughput_stats(ol_txrx_soc_handle soc, void *arg,
 }
 
 static inline QDF_STATUS
+cdp_get_msduq_tx_stats(ol_txrx_soc_handle soc, void *arg,
+		       void *msduq_tx_stats,
+		       uint8_t msduq)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance");
+		QDF_BUG(0);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!soc->ops->sawf_ops ||
+	    !soc->ops->sawf_ops->telemetry_get_msduq_tx_stats)
+		return QDF_STATUS_E_FAILURE;
+
+	return soc->ops->sawf_ops->telemetry_get_msduq_tx_stats(
+			arg, msduq_tx_stats, msduq);
+}
+
+static inline QDF_STATUS
 cdp_get_mpdu_stats(ol_txrx_soc_handle soc, void *arg,
 		   uint64_t *svc_int_pass, uint64_t *svc_int_fail,
 		   uint64_t *burst_pass, uint64_t *burst_fail,

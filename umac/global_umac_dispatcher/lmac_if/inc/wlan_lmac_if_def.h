@@ -783,6 +783,7 @@ struct wlan_lmac_if_fd_tx_ops {
  * @sa_api_set_training_info: Set Smart Antenna training metrics
  * @sa_api_prepare_rateset: Prepare rest set
  * @sa_api_set_node_config_ops: Set Peer config operations structure
+ * @sa_api_set_parallel_mode_gpio_drive: Set gpio drive for parallel mode
  */
 struct wlan_lmac_if_sa_api_tx_ops {
 	void (*sa_api_register_event_handler)(struct wlan_objmgr_psoc *psoc);
@@ -807,6 +808,8 @@ struct wlan_lmac_if_sa_api_tx_ops {
 	void (*sa_api_set_node_config_ops) (struct wlan_objmgr_peer *peer,
 			uint32_t cmd_id, uint16_t args_count,
 			u_int32_t args_arr[]);
+	void (*sa_api_set_parallel_mode_gpio_drive)
+			(struct wlan_objmgr_pdev *pdev, uint32_t value);
 };
 
 #endif

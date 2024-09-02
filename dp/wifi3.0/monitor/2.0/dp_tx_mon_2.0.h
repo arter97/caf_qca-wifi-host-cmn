@@ -415,7 +415,6 @@ enum tx_ppdu_info_type {
  * struct dp_tx_ppdu_info - structure to store tx ppdu info
  * @ppdu_id: current ppdu info ppdu id
  * @frame_type: ppdu info frame type
- * @cur_usr_idx: current user index of ppdu info
  * @ulist: union of linked lists
  * @tx_ppdu_info_dlist_elem: support adding to double linked list
  * @tx_ppdu_info_slist_elem: support adding to single linked list
@@ -424,7 +423,6 @@ enum tx_ppdu_info_type {
 struct dp_tx_ppdu_info {
 	uint32_t ppdu_id;
 	uint8_t frame_type;
-	uint8_t cur_usr_idx;
 
 	union {
 		TAILQ_ENTRY(dp_tx_ppdu_info) tx_ppdu_info_dlist_elem;
@@ -448,6 +446,7 @@ struct dp_tx_ppdu_info {
  * @pkt_buf_processed: tx monitor packet buffer processed
  * @pkt_buf_drop: tx monitor packet buffer dropped due to mpdu incomplete
  * @pkt_buf_to_stack: tx monitor packet buffer send to stack
+ * @pkt_buf_radiotap_err: tx monitor packet buffer dropped due to radiotap err
  * @status_buf_recv: tx monitor status buffer received
  * @status_buf_free: tx monitor status buffer free
  * @totat_tx_mon_replenish_cnt: tx monitor replenish count
@@ -469,6 +468,7 @@ struct dp_tx_monitor_drop_stats {
 	uint64_t pkt_buf_processed;
 	uint64_t pkt_buf_drop;
 	uint64_t pkt_buf_to_stack;
+	uint64_t pkt_buf_radiotap_err;
 
 	uint64_t status_buf_recv;
 	uint64_t status_buf_free;

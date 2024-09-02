@@ -2511,7 +2511,8 @@ uint32_t wmi_critical_events_in_flight(struct wmi_unified *wmi)
 static bool
 wmi_is_event_critical(struct wmi_unified *wmi_handle, uint32_t event_id)
 {
-	if (wmi_handle->wmi_events[wmi_roam_synch_event_id] == event_id)
+	if (wmi_handle->wmi_events[wmi_roam_synch_event_id] == event_id ||
+	    wmi_handle->wmi_events[wmi_csa_handling_event_id] == event_id)
 		return true;
 
 	return false;

@@ -1124,5 +1124,11 @@ uint8_t ucfg_mlo_get_active_vdev_id(struct wlan_objmgr_vdev *vdev)
 {
 	return WLAN_UMAC_VDEV_ID_MAX;
 }
+
+static inline struct wlan_mlo_dev_context *
+wlan_mlo_get_mld_ctx_by_mldaddr(struct qdf_mac_addr *mldaddr)
+{
+	return NULL;
+}
 #endif
 #endif

@@ -88,4 +88,7 @@
 /* Num of tx desc pools */
 #define WLAN_CFG_NUM_POOL 4
 
+/* Num of DP Rings */
+#define WLAN_CFG_NUM_RING 4
+
 #endif /* __WLAN_INIT_CFG_H */

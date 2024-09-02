@@ -1777,12 +1777,13 @@ void dp_free_ppeds_interrupts(struct dp_soc *soc, struct dp_srng *srng,
 }
 
 static
-int dp_register_ppeds_interrupts(struct dp_soc *soc, struct dp_srng *srng,
-				 int vector, int ring_type, int ring_num)
+int dp_ppeds_register_msi_interrupts(struct dp_soc *soc, struct dp_srng *srng,
+				     int vector, int ring_type, int ring_num)
 {
 	int irq = -1, ret = 0;
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
 	int pci_slot = pld_get_pci_slot(soc->osdev->dev);
+	int ds_node_id = be_soc->dp_ppeds_node_id;
 
 	srng->irq = -1;
 	irq = pld_get_msi_irq(soc->osdev->dev, vector);
@@ -1791,7 +1792,7 @@ int dp_register_ppeds_interrupts(struct dp_soc *soc, struct dp_srng *srng,
 	if (ring_type == WBM2SW_RELEASE &&
 	    ring_num == WBM2_SW_PPE_REL_RING_ID) {
 		snprintf(be_soc->irq_name[2], DP_PPE_INTR_STRNG_LEN,
-			 "pci%d_ppe_wbm_rel", pci_slot);
+			 "pci%d_ppe_wbm_rel_%d", pci_slot, ds_node_id);
 
 		ret = pld_pfrm_request_irq(soc->osdev->dev, irq,
 					   dp_ppeds_handle_tx_comp,
@@ -1800,9 +1801,9 @@ int dp_register_ppeds_interrupts(struct dp_soc *soc, struct dp_srng *srng,
 
 		if (ret)
 			goto fail;
-	} else if (ring_type == REO2PPE && be_soc->ppeds_int_mode_enabled) {
+	} else if (ring_type == REO2PPE) {
 		snprintf(be_soc->irq_name[0], DP_PPE_INTR_STRNG_LEN,
-			 "pci%d_reo2ppe", pci_slot);
+			 "pci%d_reo2ppe_%d", pci_slot, ds_node_id);
 		ret = pld_pfrm_request_irq(soc->osdev->dev, irq,
 					   dp_ppe_ds_reo2ppe_irq_handler,
 					   IRQF_SHARED | IRQF_NO_SUSPEND,
@@ -1811,9 +1812,9 @@ int dp_register_ppeds_interrupts(struct dp_soc *soc, struct dp_srng *srng,
 
 		if (ret)
 			goto fail;
-	} else if (ring_type == PPE2TCL && be_soc->ppeds_int_mode_enabled) {
+	} else if (ring_type == PPE2TCL) {
 		snprintf(be_soc->irq_name[1], DP_PPE_INTR_STRNG_LEN,
-			 "pci%d_ppe2tcl", pci_slot);
+			 "pci%d_ppe2tcl_%d", pci_slot, ds_node_id);
 		ret = pld_pfrm_request_irq(soc->osdev->dev, irq,
 					   dp_ppe_ds_ppe2tcl_irq_handler,
 					   IRQF_NO_SUSPEND,
@@ -1837,6 +1838,131 @@ fail:
 	dp_err("Unable to config irq : ring type %d irq %d vector %d",
 	       ring_type, irq, vector);
 	qdf_dev_clear_irq_status_flags(irq, IRQ_DISABLE_UNLAZY);
+	return ret;
+}
+
+static
+int dp_ppeds_register_integrated_interrupts(struct dp_soc *soc,
+					    struct dp_srng *srng,
+					    int ring_type, int ring_num)
+{
+	int irq = -1, ret = 0;
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	void *pfrm_hdl;
+	QDF_STATUS status;
+
+	status = hif_bus_get_device_handle(soc->hif_handle, &pfrm_hdl);
+
+	if (status != QDF_STATUS_SUCCESS) {
+		dp_err("NULL platform dev handle!");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	srng->irq = -1;
+
+	if (ring_type == WBM2SW_RELEASE &&
+	    ring_num == WBM2_SW_PPE_REL_RING_ID) {
+		irq = pld_pfrm_get_irq(soc->osdev->dev, pfrm_hdl,
+				       "ppe_wbm_rel", 0);
+		if (irq < 0) {
+			dp_err("Failed to get irq for 'ppe_wbm_rel'");
+			goto fail;
+		}
+
+		qdf_dev_set_irq_status_flags(irq, IRQ_DISABLE_UNLAZY);
+
+		strlcpy(be_soc->irq_name[2], "pfrm_ppe_wbm_rel",
+			DP_PPE_INTR_STRNG_LEN);
+
+		ret = pld_pfrm_request_irq(soc->osdev->dev, irq,
+					   dp_ppeds_handle_tx_comp,
+					   IRQF_SHARED | IRQF_NO_SUSPEND,
+					   be_soc->irq_name[2], (void *)soc);
+
+		if (ret)
+			goto fail;
+	} else if (ring_type == REO2PPE) {
+		irq = pld_pfrm_get_irq(soc->osdev->dev, pfrm_hdl,
+				       "reo2ppe", 0);
+		if (irq < 0) {
+			dp_err("Failed to get irq for 'reo2ppe'");
+			goto fail;
+		}
+
+		qdf_dev_set_irq_status_flags(irq, IRQ_DISABLE_UNLAZY);
+
+		strlcpy(be_soc->irq_name[0], "pfrm_reo2ppe",
+			DP_PPE_INTR_STRNG_LEN);
+
+		ret = pld_pfrm_request_irq(soc->osdev->dev, irq,
+					   dp_ppe_ds_reo2ppe_irq_handler,
+					   IRQF_SHARED | IRQF_NO_SUSPEND,
+					   be_soc->irq_name[0],
+					   dp_get_ppe_ds_ctxt(soc));
+
+		if (ret)
+			goto fail;
+	} else if (ring_type == PPE2TCL) {
+		irq = pld_pfrm_get_irq(soc->osdev->dev, pfrm_hdl,
+				       "ppe2tcl", 0);
+		if (irq < 0) {
+			dp_err("Failed to get irq for 'ppe2tcl'");
+			goto fail;
+		}
+
+		qdf_dev_set_irq_status_flags(irq, IRQ_DISABLE_UNLAZY);
+
+		strlcpy(be_soc->irq_name[1], "pfrm_ppe2tcl",
+			DP_PPE_INTR_STRNG_LEN);
+
+		ret = pld_pfrm_request_irq(soc->osdev->dev, irq,
+					   dp_ppe_ds_ppe2tcl_irq_handler,
+					   IRQF_NO_SUSPEND,
+					   be_soc->irq_name[1],
+					   dp_get_ppe_ds_ctxt(soc));
+		if (ret)
+			goto fail;
+
+		pld_pfrm_disable_irq_nosync(soc->osdev->dev, irq);
+	} else {
+		return 0;
+	}
+
+	srng->irq = irq;
+
+	dp_info("Registered irq %d for soc %pK ring type %d",
+		irq, soc, ring_type);
+
+	return 0;
+
+fail:
+	dp_err("Unable to config irq: ring type %d ring_num %d irq %d",
+	       ring_type, ring_num, irq);
+	qdf_dev_clear_irq_status_flags(irq, IRQ_DISABLE_UNLAZY);
+	return ret;
+}
+
+static
+int dp_register_ppeds_interrupts(struct dp_soc *soc, struct dp_srng *srng,
+				 int vector, int ring_type, int ring_num)
+{
+	int ret = 0;
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+
+	if (!be_soc->ppeds_int_mode_enabled) {
+		dp_info("ppeds is not enabled for soc %pK", soc);
+	} else if (soc->intr_mode == DP_INTR_INTEGRATED) {
+		ret = dp_ppeds_register_integrated_interrupts(soc, srng,
+							      ring_type,
+							      ring_num);
+	} else if (soc->intr_mode == DP_INTR_MSI) {
+		ret = dp_ppeds_register_msi_interrupts(soc, srng, vector,
+						       ring_type, ring_num);
+	} else {
+		dp_alert("Invalid ppeds interrupt mode! soc %pK intr_mode %d",
+			 soc, soc->intr_mode);
+		ret = QDF_STATUS_E_INVAL;
+	}
 
 	return ret;
 }
@@ -2472,7 +2598,7 @@ static QDF_STATUS dp_soc_ppeds_srng_alloc(struct dp_soc *soc)
 		goto fail;
 	}
 
-	entries = wlan_cfg_tx_comp_ring_size(soc_cfg_ctx);
+	entries = wlan_cfg_tx_comp_ring_size(soc_cfg_ctx, DP_RING_NUM_ANY);
 	if (dp_srng_alloc(soc, &be_soc->ppeds_wbm_release_ring, WBM2SW_RELEASE,
 			  entries, 1)) {
 		dp_err("%pK: dp_srng_alloc failed for ppeds_wbm_release_ring",

@@ -20,6 +20,10 @@
 #include "dp_rx_buffer_pool.h"
 #include "dp_ipa.h"
 
+#ifdef DP_FEATURE_RX_BUFFER_RECYCLE
+#include "qdf_page_pool.h"
+#endif
+
 #ifndef DP_RX_BUFFER_POOL_SIZE
 #define DP_RX_BUFFER_POOL_SIZE 128
 #endif
@@ -404,3 +408,512 @@ void dp_rx_buffer_pool_deinit(struct dp_soc *soc, u8 mac_id)
 	buff_pool->is_initialized = false;
 }
 #endif /* WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL */
+
+#ifdef DP_FEATURE_RX_BUFFER_RECYCLE
+
+#define DP_RX_PP_PAGE_SIZE_HIGHER_ORDER		32768
+#define DP_RX_PP_PAGE_SIZE_LOWER_ORDER		4096
+
+#define DP_RX_PP_POOL_SIZE_THRES	 4096
+#define DP_RX_PP_AUX_POOL_SIZE           2048
+
+static struct dp_rx_pp_params *
+dp_rx_get_base_pp(struct dp_rx_page_pool *rx_pp)
+{
+	struct dp_rx_pp_params *pp_params;
+
+	/* Page Pool at 0th index is base page pool */
+	pp_params = &rx_pp->main_pool[0];
+	if (pp_params->pp && !qdf_page_pool_empty(pp_params->pp))
+		return pp_params;
+
+	pp_params = &rx_pp->aux_pool;
+	if (pp_params->pp && !qdf_page_pool_empty(pp_params->pp))
+		return pp_params;
+
+	return NULL;
+}
+
+static QDF_STATUS
+dp_rx_page_pool_check_pages_availability(qdf_page_pool_t pp,
+					 uint32_t pool_size,
+					 size_t page_size)
+{
+	qdf_page_t *pages_list;
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+	uint32_t offset;
+	int i;
+
+	/*
+	 * Get and put pages from page pool to make sure,
+	 * no map failures will be encountered later during
+	 * actual allocation. This will also make sure memory
+	 * allocation failures will not be encountered.
+	 */
+	if (!pp) {
+		dp_err("Invalid PP params passed");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	pages_list = qdf_mem_malloc(pool_size *
+				    sizeof(qdf_page_t));
+	if (!pages_list)
+		return QDF_STATUS_E_NOMEM;
+
+	for (i = 0; i < pool_size; i++) {
+		pages_list[i] = qdf_page_pool_alloc_frag(pp, &offset,
+							 page_size);
+		if (!pages_list[i]) {
+			dp_err("page alloc failed for idx:%u", i);
+			ret = QDF_STATUS_E_FAILURE;
+			goto out_put_page;
+		}
+	}
+
+out_put_page:
+	for (i = 0; i < pool_size; i++) {
+		if (!pages_list[i])
+			continue;
+
+		qdf_page_pool_put_page(pp,
+				       pages_list[i], false);
+	}
+
+	qdf_mem_free(pages_list);
+
+	return ret;
+}
+
+QDF_STATUS
+dp_rx_page_pool_nbuf_alloc_and_map(struct dp_soc *soc,
+				   struct dp_rx_nbuf_frag_info *nbuf_frag_info,
+				   uint32_t mac_id)
+{
+	struct rx_desc_pool *rx_desc_pool = &soc->rx_desc_buf[mac_id];
+	struct dp_rx_page_pool *rx_pp = &soc->rx_pp[mac_id];
+	struct dp_rx_pp_params *pp_params;
+	qdf_page_t page;
+	qdf_nbuf_t nbuf;
+	uint32_t offset;
+	QDF_STATUS ret;
+	int i;
+
+	if (!wlan_cfg_get_dp_rx_buffer_recycle(soc->wlan_cfg_ctx))
+		return QDF_STATUS_E_FAILURE;
+
+	if (qdf_atomic_read(&rx_pp->update_in_progress)) {
+		pp_params = dp_rx_get_base_pp(rx_pp);
+		if (!pp_params)
+			return QDF_STATUS_E_FAILURE;
+
+		qdf_spin_lock_bh(&rx_pp->pp_lock);
+		goto nbuf_alloc;
+	}
+
+	qdf_spin_lock_bh(&rx_pp->pp_lock);
+
+	pp_params = &rx_pp->main_pool[rx_pp->active_pp_idx];
+	if (pp_params->pp && !qdf_page_pool_empty(pp_params->pp))
+		goto nbuf_alloc;
+
+	for (i = 0; i < DP_PAGE_POOL_MAX; i++) {
+		pp_params = &rx_pp->main_pool[i];
+
+		if (!pp_params->pp ||
+		    qdf_page_pool_empty(pp_params->pp))
+			continue;
+
+		rx_pp->active_pp_idx = i;
+		goto nbuf_alloc;
+	}
+
+	pp_params = &rx_pp->aux_pool;
+	if (pp_params->pp && qdf_page_pool_empty(pp_params->pp)) {
+		ret = QDF_STATUS_E_FAILURE;
+		goto out_fail;
+	}
+
+nbuf_alloc:
+	nbuf = qdf_nbuf_page_pool_alloc(soc->osdev, rx_desc_pool->buf_size,
+					RX_BUFFER_RESERVATION,
+					rx_desc_pool->buf_alignment,
+					pp_params->pp, &offset);
+	if (!nbuf) {
+		ret = QDF_STATUS_E_FAILURE;
+		goto out_fail;
+	}
+
+	page = qdf_virt_to_head_page(nbuf->data);
+	nbuf_frag_info->paddr = QDF_NBUF_CB_PADDR(nbuf) =
+		qdf_page_pool_get_dma_addr(page) + offset +
+		qdf_nbuf_headroom(nbuf);
+
+	(nbuf_frag_info->virt_addr).nbuf = nbuf;
+
+	ret = qdf_nbuf_track_map_single(soc->osdev, nbuf, QDF_DMA_FROM_DEVICE);
+	if (!QDF_IS_STATUS_SUCCESS(ret)) {
+		qdf_nbuf_free(nbuf);
+		goto out_fail;
+	}
+
+	dp_ipa_handle_rx_buf_smmu_mapping(soc, nbuf,
+					  rx_desc_pool->buf_size,
+					  true, __func__, __LINE__,
+					  DP_RX_IPA_SMMU_MAP_REPLENISH);
+
+	dp_audio_smmu_map(soc, nbuf, rx_desc_pool->buf_size);
+
+	qdf_spin_unlock_bh(&rx_pp->pp_lock);
+
+	return QDF_STATUS_SUCCESS;
+
+out_fail:
+	qdf_spin_unlock_bh(&rx_pp->pp_lock);
+	return ret;
+}
+
+void dp_rx_page_pool_deinit(struct dp_soc *soc, uint32_t pool_id)
+{
+	struct dp_rx_page_pool *rx_pp = &soc->rx_pp[pool_id];
+	struct dp_rx_pp_params *pp_params;
+	int i;
+
+	if (!wlan_cfg_get_dp_rx_buffer_recycle(soc->wlan_cfg_ctx))
+		return;
+
+	rx_pp->active_pp_idx = 0;
+
+	qdf_spin_lock(&rx_pp->pp_lock);
+	for (i = 0; i < DP_PAGE_POOL_MAX; i++) {
+		pp_params = &rx_pp->main_pool[i];
+
+		if (!pp_params->pp)
+			continue;
+
+		pp_params->pool_size = 0;
+		pp_params->pp_size = 0;
+	}
+
+	rx_pp->aux_pool.pool_size = 0;
+	rx_pp->aux_pool.pp_size = 0;
+	qdf_spin_unlock(&rx_pp->pp_lock);
+}
+
+QDF_STATUS dp_rx_page_pool_init(struct dp_soc *soc, uint32_t pool_id)
+{
+	struct dp_rx_page_pool *rx_pp = &soc->rx_pp[pool_id];
+
+	if (!wlan_cfg_get_dp_rx_buffer_recycle(soc->wlan_cfg_ctx))
+		return QDF_STATUS_SUCCESS;
+
+	qdf_atomic_init(&rx_pp->update_in_progress);
+	rx_pp->active_pp_idx = 0;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+void dp_rx_page_pool_free(struct dp_soc *soc, uint32_t pool_id)
+{
+	struct dp_rx_page_pool *rx_pp = &soc->rx_pp[pool_id];
+	struct dp_rx_pp_params *pp_params;
+	int i;
+
+	if (!wlan_cfg_get_dp_rx_buffer_recycle(soc->wlan_cfg_ctx))
+		return;
+
+	dp_rx_page_pool_deinit(soc, pool_id);
+	qdf_spin_lock_bh(&rx_pp->pp_lock);
+	for (i = 0; i < DP_PAGE_POOL_MAX; i++) {
+		pp_params = &rx_pp->main_pool[i];
+
+		if (!pp_params->pp)
+			continue;
+
+		qdf_page_pool_destroy(pp_params->pp);
+		pp_params->pp = NULL;
+	}
+
+	if (rx_pp->aux_pool.pp) {
+		qdf_page_pool_destroy(rx_pp->aux_pool.pp);
+		rx_pp->aux_pool.pp = NULL;
+	}
+	qdf_spin_unlock_bh(&rx_pp->pp_lock);
+
+	qdf_spinlock_destroy(&rx_pp->pp_lock);
+}
+
+static qdf_page_pool_t
+__dp_rx_page_pool_create(struct dp_soc *soc, uint32_t pool_size,
+			 size_t buf_size, size_t *page_size,
+			 size_t *pp_size)
+{
+	qdf_page_pool_t pp;
+	size_t bufs_per_page;
+	QDF_STATUS status;
+
+	*page_size = DP_RX_PP_PAGE_SIZE_HIGHER_ORDER;
+alloc_page_pool:
+	bufs_per_page = *page_size / buf_size;
+	*pp_size = pool_size / bufs_per_page;
+	if (pool_size % bufs_per_page)
+		*pp_size = (*pp_size + 1);
+
+	pp = qdf_page_pool_create(soc->osdev, *pp_size,
+				  *page_size);
+	if (!pp) {
+		dp_err("Failed to create page pool");
+		return NULL;
+	}
+
+	status = dp_rx_page_pool_check_pages_availability(pp, *pp_size,
+							  *page_size);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		dp_info("page pool resources not available for page_size:%u",
+			*page_size);
+		qdf_page_pool_destroy(pp);
+		pp = NULL;
+		if (*page_size == DP_RX_PP_PAGE_SIZE_HIGHER_ORDER) {
+			*page_size = DP_RX_PP_PAGE_SIZE_LOWER_ORDER;
+			goto alloc_page_pool;
+		}
+	}
+
+	return pp;
+}
+
+QDF_STATUS dp_rx_page_pool_alloc(struct dp_soc *soc, uint32_t pool_id,
+				 uint32_t pool_size)
+{
+	struct dp_rx_page_pool *rx_pp = &soc->rx_pp[pool_id];
+	struct dp_rx_pp_params *pp_params;
+	uint64_t req_rx_buffers = 0;
+	uint64_t in_use_rx_buffers = 0;
+	size_t page_size;
+	qdf_page_pool_t pp;
+	size_t buf_size;
+	size_t rem_size;
+	size_t pp_size;
+	int pp_count;
+	int i;
+
+	if (!wlan_cfg_get_dp_rx_buffer_recycle(soc->wlan_cfg_ctx)) {
+		dp_err("RX buffer recycle disabled from INI");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	dp_rx_get_num_buff_descs_info((struct cdp_soc_t *)soc,
+				      &req_rx_buffers, &in_use_rx_buffers,
+				      pool_id);
+
+	if (!rx_pp->base_pool_size) {
+		if (req_rx_buffers) {
+			rx_pp->base_pool_size = req_rx_buffers;
+			pool_size = req_rx_buffers;
+		} else {
+			rx_pp->base_pool_size = DP_RX_PP_POOL_SIZE_THRES;
+		}
+	}
+
+	if (pool_size > rx_pp->base_pool_size) {
+		pp_count = pool_size / rx_pp->base_pool_size;
+		rem_size = pool_size % rx_pp->base_pool_size;
+
+		if (rem_size)
+			pp_count++;
+	} else {
+		pp_count = 1;
+		rem_size = pool_size;
+	}
+
+	if (pp_count > DP_PAGE_POOL_MAX) {
+		dp_err("Failed to allocate page pools, invalid pool count %d",
+		       pp_count);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	qdf_spinlock_create(&rx_pp->pp_lock);
+
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
+
+	if (RX_DATA_BUFFER_OPT_ALIGNMENT)
+		buf_size += RX_DATA_BUFFER_OPT_ALIGNMENT - 1;
+	buf_size += QDF_SHINFO_SIZE;
+	buf_size = QDF_NBUF_ALIGN(buf_size);
+
+	for (i = 0; i < pp_count; i++) {
+		pp_params = &rx_pp->main_pool[i];
+		pool_size = DP_RX_PP_POOL_SIZE_THRES;
+
+		if (i == pp_count - 1 && rem_size)
+			pool_size = rem_size;
+
+		pp = __dp_rx_page_pool_create(soc, pool_size,
+					      buf_size, &page_size,
+					      &pp_size);
+		if (!pp)
+			goto out_pp_fail;
+
+		pp_params->pp = pp;
+		pp_params->pool_size = pool_size;
+		pp_params->pp_size = pp_size;
+
+		dp_info("Page pool idx %d pool_size %d pp_size %d", i,
+			pool_size, pp_size);
+	}
+
+	rx_pp->aux_pool.pool_size = DP_RX_PP_AUX_POOL_SIZE;
+	rx_pp->aux_pool.pp = __dp_rx_page_pool_create(soc,
+						      rx_pp->aux_pool.pool_size,
+						      buf_size, &page_size,
+						      &pp_size);
+	if (!rx_pp->aux_pool.pp)
+		goto out_pp_fail;
+
+	rx_pp->aux_pool.pp_size = pp_size;
+	rx_pp->curr_pool_size = pool_size;
+
+	if (QDF_IS_STATUS_ERROR(dp_rx_page_pool_init(soc, pool_id)))
+		goto out_pp_fail;
+
+	return QDF_STATUS_SUCCESS;
+
+out_pp_fail:
+	dp_rx_page_pool_free(soc, pool_id);
+	return QDF_STATUS_E_FAILURE;
+}
+
+static QDF_STATUS
+dp_rx_page_pool_upsize(struct dp_soc *soc, struct dp_rx_page_pool *rx_pp,
+		       size_t new_size)
+{
+	struct dp_rx_pp_params *pp_params;
+	qdf_page_pool_t pp;
+	size_t rem_size;
+	size_t pp_count;
+	size_t buf_size;
+	size_t pp_size;
+	uint16_t upscale_cnt = 1;
+	uint32_t pool_size;
+	size_t page_size;
+	int i;
+
+	pp_count = new_size / rx_pp->base_pool_size;
+	rem_size = new_size % rx_pp->base_pool_size;
+	if (rem_size)
+		pp_count++;
+
+	if (pp_count > DP_PAGE_POOL_MAX) {
+		dp_err("Failed to allocate page pools, invalid pool count %d",
+		       pp_count);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
+
+	if (RX_DATA_BUFFER_OPT_ALIGNMENT)
+		buf_size += RX_DATA_BUFFER_OPT_ALIGNMENT - 1;
+	buf_size += QDF_SHINFO_SIZE;
+	buf_size = QDF_NBUF_ALIGN(buf_size);
+
+	/* Base page pool at 0th index is always present,
+	 * so allocate page pools from 1st index.
+	 */
+	for (i = 1; i < pp_count; i++) {
+		pp_params = &rx_pp->main_pool[i];
+		if (pp_params->pp)
+			continue;
+
+		pool_size = rx_pp->base_pool_size;
+
+		if (i == pp_count - 1 && rem_size)
+			pool_size = rem_size;
+
+		pp = __dp_rx_page_pool_create(soc, pool_size,
+					      buf_size, &page_size,
+					      &pp_size);
+		if (!pp)
+			goto out_pp_fail;
+
+		pp_params->pp = pp;
+		pp_params->pool_size = pool_size;
+		pp_params->pp_size = pp_size;
+		upscale_cnt++;
+
+		dp_info("Page pool idx %d pool_size %d pp_size %d", i,
+			pool_size, pp_size);
+	}
+
+	if (upscale_cnt != pp_count) {
+		dp_err("Failed to upscale RX buffers using page pool");
+		goto out_pp_fail;
+	}
+
+	return QDF_STATUS_SUCCESS;
+
+out_pp_fail:
+	while (i > 1) {
+		pp_params = &rx_pp->main_pool[--i];
+		if (!pp_params->pp)
+			continue;
+		qdf_page_pool_destroy(pp_params->pp);
+		pp_params->pp = NULL;
+	}
+	qdf_spin_unlock_bh(&rx_pp->pp_lock);
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS dp_rx_page_pool_resize(struct dp_soc *soc, uint32_t pool_id,
+				  size_t new_size)
+{
+	struct dp_rx_page_pool *rx_pp = &soc->rx_pp[pool_id];
+	struct dp_rx_pp_params *pp_params;
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	int i;
+
+	if (!wlan_cfg_get_dp_rx_buffer_recycle(soc->wlan_cfg_ctx))
+		return QDF_STATUS_E_FAILURE;
+
+	if (rx_pp->curr_pool_size == new_size) {
+		dp_info("No change in pool size, continue with existing pools");
+		return QDF_STATUS_SUCCESS;
+	}
+
+	if (!rx_pp->curr_pool_size || !new_size)
+		return QDF_STATUS_E_FAILURE;
+
+	qdf_atomic_set(&rx_pp->update_in_progress, 1);
+
+	if (new_size > rx_pp->curr_pool_size) {
+		status = dp_rx_page_pool_upsize(soc, rx_pp, new_size);
+		goto resize_done;
+	}
+
+	qdf_spin_lock_bh(&rx_pp->pp_lock);
+	/* Base page pool at 0th index is always present,
+	 * so destroy page pools from 1st index.
+	 */
+	for (i = 1; i < DP_PAGE_POOL_MAX; i++) {
+		pp_params = &rx_pp->main_pool[i];
+
+		if (!pp_params->pp)
+			continue;
+
+		qdf_page_pool_destroy(pp_params->pp);
+		pp_params->pool_size = 0;
+		pp_params->pp_size = 0;
+		pp_params->pp = NULL;
+	}
+
+	rx_pp->active_pp_idx = 0;
+	qdf_spin_unlock_bh(&rx_pp->pp_lock);
+
+resize_done:
+	if (QDF_IS_STATUS_SUCCESS(status))
+		rx_pp->curr_pool_size = new_size;
+
+	qdf_atomic_set(&rx_pp->update_in_progress, 0);
+
+	return status;
+}
+
+#endif /* DP_FEATURE_RX_BUFFER_RECYCLE */

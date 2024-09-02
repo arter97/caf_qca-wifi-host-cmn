@@ -1140,7 +1140,7 @@ struct per_session_report_info {
 	uint32_t sscan_cfreq1;
 	uint32_t sscan_cfreq2;
 	enum phy_ch_width sscan_bw;
-	uint8_t num_spans;
+	int8_t num_spans;
 	bool valid;
 };
 

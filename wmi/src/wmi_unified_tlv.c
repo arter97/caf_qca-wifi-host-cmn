@@ -448,6 +448,8 @@ static const uint32_t pdev_param_tlv[] = {
 	PARAM_MAP(pdev_param_default_6ghz_rate, PDEV_PARAM_DEFAULT_6GHZ_RATE),
 	PARAM_MAP(pdev_param_scan_blanking_mode,
 		  PDEV_PARAM_SET_SCAN_BLANKING_MODE),
+	PARAM_MAP(pdev_param_sa_parallel_mode_gpio_drive_cfg,
+		  PDEV_PARAM_SA_PARALLEL_MODE_GPIO_DRIVE_CFG),
 	PARAM_MAP(pdev_param_set_conc_low_latency_mode,
 		  PDEV_PARAM_SET_CONC_LOW_LATENCY_MODE),
 	PARAM_MAP(pdev_param_rtt_11az_rsid_range,
@@ -478,6 +480,8 @@ static const uint32_t pdev_param_tlv[] = {
 		  PDEV_PARAM_DSTALL_CONSECUTIVE_TX_NO_ACK_INTERVAL),
 	PARAM_MAP(pdev_param_dstall_consecutive_tx_no_ack_threshold,
 		  PDEV_PARAM_DSTALL_CONSECUTIVE_TX_NO_ACK_THRESHOLD),
+	PARAM_MAP(pdev_param_disable_lpi_ant_optimization,
+		  PDEV_PARAM_DISABLE_LPI_ANT_OPTIMIZATION),
 };
 
 /* Populate vdev_param array whose index is host param, value is target param */
@@ -769,6 +773,8 @@ static const uint32_t vdev_param_tlv[] = {
 		  VDEV_PARAM_MLO_MAX_RECOM_ACTIVE_LINKS),
 	PARAM_MAP(vdev_param_hwcts2self_ofdma,
 		  VDEV_PARAM_HWCTS2SELF_OFDMA),
+	PARAM_MAP(vdev_param_disable_lpi_ant_optimization,
+		  VDEV_PARAM_DISABLE_LPI_ANT_OPTIMIZATION),
 };
 #endif
 
@@ -9387,19 +9393,16 @@ extract_pdev_sscan_fw_cmd_fixed_param_tlv(
 		return QDF_STATUS_E_INVAL;
 	}
 
-	if (!event) {
-		wmi_err("WMI event is null");
-		return QDF_STATUS_E_INVAL;
-	}
-
 	if (!param) {
 		wmi_err("Spectral startscan response params is null");
 		return QDF_STATUS_E_INVAL;
 	}
 
 	param_buf = (WMI_PDEV_SSCAN_FW_PARAM_EVENTID_param_tlvs *)event;
-	if (!param_buf)
+	if (!param_buf) {
+		wmi_err("WMI_PDEV_SSCAN_FW_PARAM event is null");
 		return QDF_STATUS_E_INVAL;
+	}
 
 	ev = param_buf->fixed_param;
 	if (!ev)
@@ -17051,6 +17054,26 @@ static enum cc_setting_code wmi_reg_status_to_reg_status(
 }
 
 #ifdef CONFIG_BAND_6GHZ
+#ifdef CONFIG_REG_CLIENT
+/**
+ * is_ap_power_type_c2c() - Check if power type is C2C
+ * @ap_pwr_type: AP power type
+ *
+ * Return: True if power type is C2C else false.
+ */
+static bool is_ap_power_type_c2c(enum reg_6g_ap_type ap_pwr_type)
+{
+	if (ap_pwr_type == REG_INDOOR_ENABLED_AP)
+		return true;
+	return false;
+}
+#else
+static inline bool is_ap_power_type_c2c(enum reg_6g_ap_type ap_pwr_type)
+{
+	return false;
+}
+#endif
+
 /**
  * reg_print_ap_power_type_6ghz - Prints the AP Power type
  * @ap_type: 6ghz-AP Power type
@@ -17059,6 +17082,11 @@ static enum cc_setting_code wmi_reg_status_to_reg_status(
  */
 static void reg_print_ap_power_type_6ghz(enum reg_6g_ap_type ap_type)
 {
+	if (is_ap_power_type_c2c(ap_type)) {
+		wmi_nofl_debug("AP Power type %s", "INDOOR_ENABLED_AP");
+		return;
+	}
+
 	switch (ap_type) {
 	case REG_INDOOR_AP:
 		wmi_nofl_debug("AP Power type %s", "LOW POWER INDOOR");
@@ -17224,6 +17252,307 @@ static QDF_STATUS extract_reg_fcc_rules_tlv(
 }
 #endif
 
+#ifdef CONFIG_REG_CLIENT
+/**
+ * extract_additional_ap_rules_meta_info() - Extract additional AP
+ *                                           meta info
+ * @meta_data: regulatory meta data pointer
+ * @reg_info: Reg info pointer
+ * @addn_meta_idx: Additional meta index
+ *
+ * Return: None
+ */
+static void extract_additional_ap_rules_meta_info(
+		wmi_regulatory_rule_meta_data *meta_data,
+		struct cur_regulatory_info *reg_info,
+		uint8_t addn_meta_idx)
+{
+	reg_info->num_6g_reg_rules_ap[REG_INDOOR_ENABLED_AP] =
+		meta_data->num_6ghz_reg_rules;
+	reg_info->min_bw_6g_ap[REG_INDOOR_ENABLED_AP] =
+		meta_data->min_bw_6ghz;
+	reg_info->max_bw_6g_ap[REG_INDOOR_ENABLED_AP] =
+		meta_data->max_bw_6ghz;
+	reg_info->domain_code_6g_ap[REG_INDOOR_ENABLED_AP] =
+		meta_data->domain_code_6ghz;
+	reg_info->addn_reg_rule_order[addn_meta_idx] = REG_AP_C2C;
+}
+
+/**
+ * extract_additional_cli_rules_meta_info() - Extract additional client
+ *                                            meta info
+ * @meta_data: regulatory meta data pointer
+ * @reg_info: Reg info pointer
+ * @addn_meta_idx: Additional meta index
+ *
+ * Return: None
+ */
+static void extract_additional_cli_rules_meta_info(
+		wmi_regulatory_rule_meta_data *meta_data,
+		struct cur_regulatory_info *reg_info,
+		uint8_t addn_meta_idx)
+{
+	enum reg_6g_client_type client_type = REG_INVALID_CLIENT_TYPE;
+
+	if (meta_data->reg_rule_type ==
+				WMI_REG_RULE_TYPE_indoor_enabled_def_cli) {
+		client_type = REG_DEFAULT_CLIENT;
+		reg_info->addn_reg_rule_order[addn_meta_idx] = REG_CLI_DEF_C2C;
+	} else if (meta_data->reg_rule_type ==
+				WMI_REG_RULE_TYPE_indoor_enabled_sub_cli) {
+		client_type = REG_SUBORDINATE_CLIENT;
+		reg_info->addn_reg_rule_order[addn_meta_idx] = REG_CLI_SUB_C2C;
+	}
+
+	reg_info->num_6g_reg_rules_client[REG_INDOOR_ENABLED_AP][client_type] =
+		meta_data->num_6ghz_reg_rules;
+	reg_info->min_bw_6g_client[REG_INDOOR_ENABLED_AP][client_type] =
+		meta_data->min_bw_6ghz;
+	reg_info->max_bw_6g_client[REG_INDOOR_ENABLED_AP][client_type] =
+		meta_data->max_bw_6ghz;
+	reg_info->domain_code_6g_client[REG_INDOOR_ENABLED_AP][client_type] =
+		meta_data->domain_code_6ghz;
+}
+
+/**
+ * extract_additional_reg_rules_meta_info - Extract  additional reg rules
+ *                                          meta info
+ * @param_buf: Param buffer pointer
+ * @reg_info: Reg info pointer
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS extract_additional_reg_rules_meta_info(
+	WMI_REG_CHAN_LIST_CC_EXT_EVENTID_param_tlvs *param_buf,
+	struct cur_regulatory_info *reg_info)
+{
+	wmi_reg_chan_list_cc_ext_additional_params *addn_params;
+	wmi_regulatory_rule_meta_data *meta_data;
+	int i;
+
+	addn_params = param_buf->reg_more_data;
+	if (!addn_params || !param_buf->num_reg_more_data)
+		return QDF_STATUS_SUCCESS;
+
+	meta_data = param_buf->reg_meta_data;
+	if (!meta_data || !param_buf->num_reg_meta_data)
+		return QDF_STATUS_SUCCESS;
+
+	if (param_buf->num_reg_meta_data > WMI_REG_RULE_TYPE_MAX) {
+		wmi_err("Num reg meta data : %d, greater than limit %d",
+			param_buf->num_reg_meta_data, WMI_REG_RULE_TYPE_MAX);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (WMI_REG_CAPS_C2C_SUPPORT_GET(
+			addn_params->additional_regulatory_capabilities)) {
+		reg_info->is_c2c_supp = true;
+	} else {
+		wmi_err("Invalid additional rules meta info received.");
+		return QDF_STATUS_SUCCESS;
+	}
+
+	wmi_nofl_debug("Additional cap, C2C :  %u", reg_info->is_c2c_supp);
+	reg_info->addn_reg_rule_order = qdf_mem_malloc(
+			sizeof(enum supported_6g_pwr_types) *
+			param_buf->num_reg_meta_data);
+	if (!reg_info->addn_reg_rule_order)
+		return QDF_STATUS_E_NOMEM;
+
+	reg_info->num_reg_meta_data = param_buf->num_reg_meta_data;
+	for (i = 0; i < param_buf->num_reg_meta_data; i++) {
+		switch (meta_data[i].reg_rule_type) {
+		case WMI_REG_RULE_TYPE_indoor_enabled_ap:
+			extract_additional_ap_rules_meta_info(&meta_data[i],
+							      reg_info, i);
+			break;
+		case WMI_REG_RULE_TYPE_indoor_enabled_def_cli:
+		case WMI_REG_RULE_TYPE_indoor_enabled_sub_cli:
+			extract_additional_cli_rules_meta_info(&meta_data[i],
+							       reg_info, i);
+			break;
+		}
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * extract_additional_ap_reg_rules() - Extract additional AP reg rules
+ * @ext_wmi_reg_rule: Regulatory rules struct pointer
+ * @reg_info: Reg info pointer
+ * @pwr_type: Power type
+ *
+ * Return: Num reg rules extracted
+ */
+static uint32_t extract_additional_ap_reg_rules(
+		wmi_regulatory_rule_ext_struct *ext_wmi_reg_rule,
+		struct cur_regulatory_info *reg_info,
+		enum reg_6g_ap_type pwr_type)
+{
+	uint32_t num_reg_rules;
+	int j;
+
+	num_reg_rules = reg_info->num_6g_reg_rules_ap[pwr_type];
+	reg_info->reg_rules_6g_ap_ptr[pwr_type] =
+			create_ext_reg_rules_from_wmi(num_reg_rules,
+						      ext_wmi_reg_rule);
+	reg_print_ap_power_type_6ghz(pwr_type);
+	for (j = 0; j < num_reg_rules; j++)
+		wmi_nofl_debug("AP 6GHz rule %u start freq %u end freq %u max_bw %u reg_power %u ant_gain %u flags %u psd_flag %u psd_eirp %u",
+			j,
+			reg_info->reg_rules_6g_ap_ptr[pwr_type][j].start_freq,
+			reg_info->reg_rules_6g_ap_ptr[pwr_type][j].end_freq,
+			reg_info->reg_rules_6g_ap_ptr[pwr_type][j].max_bw,
+			reg_info->reg_rules_6g_ap_ptr[pwr_type][j].reg_power,
+			reg_info->reg_rules_6g_ap_ptr[pwr_type][j].ant_gain,
+			reg_info->reg_rules_6g_ap_ptr[pwr_type][j].flags,
+			reg_info->reg_rules_6g_ap_ptr[pwr_type][j].psd_flag,
+			reg_info->reg_rules_6g_ap_ptr[pwr_type][j].psd_eirp);
+
+	return num_reg_rules;
+}
+
+/**
+ * extract_additional_cli_reg_rules() - Extract additional client reg rules
+ * @ext_wmi_reg_rule: Regulatory rules struct pointer
+ * @reg_info: Reg info pointer
+ * @pwr_type: Power type
+ * @cli_type: Client type
+ *
+ * Return: Num reg rules extracted
+ */
+static uint32_t extract_additional_cli_reg_rules(
+		wmi_regulatory_rule_ext_struct *ext_wmi_reg_rule,
+		struct cur_regulatory_info *reg_info,
+		enum reg_6g_ap_type pwr_type,
+		enum reg_6g_client_type cli_type)
+{
+	uint32_t num_reg_rules;
+	int j;
+
+	num_reg_rules = reg_info->num_6g_reg_rules_client[pwr_type][cli_type];
+	reg_info->reg_rules_6g_client_ptr[pwr_type][cli_type] =
+				create_ext_reg_rules_from_wmi(
+					num_reg_rules, ext_wmi_reg_rule);
+	ext_wmi_reg_rule += num_reg_rules;
+	reg_print_ap_power_type_6ghz(pwr_type);
+	reg_print_6ghz_client_type(cli_type);
+	for (j = 0; j < num_reg_rules; j++)
+		wmi_nofl_debug("CLI 6GHz rule %u start freq %u end freq %u max_bw %u reg_power %u ant_gain %u flags %u psd_flag %u psd_eirp %u",
+		j, reg_info->reg_rules_6g_client_ptr[pwr_type][cli_type][j].start_freq,
+		reg_info->reg_rules_6g_client_ptr[pwr_type][cli_type][j].end_freq,
+		reg_info->reg_rules_6g_client_ptr[pwr_type][cli_type][j].max_bw,
+		reg_info->reg_rules_6g_client_ptr[pwr_type][cli_type][j].reg_power,
+		reg_info->reg_rules_6g_client_ptr[pwr_type][cli_type][j].ant_gain,
+		reg_info->reg_rules_6g_client_ptr[pwr_type][cli_type][j].flags,
+		reg_info->reg_rules_6g_client_ptr[pwr_type][cli_type][j].psd_flag,
+		reg_info->reg_rules_6g_client_ptr[pwr_type][cli_type][j].psd_eirp);
+
+	return num_reg_rules;
+}
+
+/**
+ * extract_additional_reg_rules() - Extract additional reg rules
+ * @ext_wmi_reg_rule: Regulatory rules struct pointer
+ * @reg_info: Reg info pointer
+ *
+ * Return: Num reg rules extracted
+ */
+static void extract_additional_reg_rules(
+	wmi_regulatory_rule_ext_struct *ext_wmi_reg_rule,
+	struct cur_regulatory_info *reg_info)
+{
+	int i;
+	uint32_t num_rules;
+
+	if (!reg_info->addn_reg_rule_order)
+		return;
+
+	for (i = 0; i < reg_info->num_reg_meta_data ; i++) {
+		switch (reg_info->addn_reg_rule_order[i]) {
+		case REG_AP_C2C:
+			num_rules = extract_additional_ap_reg_rules(
+					ext_wmi_reg_rule, reg_info,
+					REG_INDOOR_ENABLED_AP);
+			break;
+		case REG_CLI_DEF_C2C:
+			num_rules = extract_additional_cli_reg_rules(
+					ext_wmi_reg_rule, reg_info,
+					REG_INDOOR_ENABLED_AP,
+					REG_DEFAULT_CLIENT);
+			break;
+		case REG_CLI_SUB_C2C:
+			num_rules = extract_additional_cli_reg_rules(
+					ext_wmi_reg_rule, reg_info,
+					REG_INDOOR_ENABLED_AP,
+					REG_SUBORDINATE_CLIENT);
+			break;
+		default:
+			num_rules = 0;
+			break;
+		}
+		ext_wmi_reg_rule += num_rules;
+	}
+}
+
+/**
+ * print_c2c_reg_rules_info() - Print C2C reg rules information
+ * @reg_info: Pointer to reg info
+ *
+ * Return: None
+ */
+static void print_c2c_reg_rules_info(struct cur_regulatory_info *reg_info)
+{
+	if (!reg_info->is_c2c_supp)
+		return;
+
+	wmi_nofl_debug("num C2C rules [AP, DEF CLI, SUB CLI] = [%d, %d, %d]",
+		       reg_info->num_6g_reg_rules_ap[REG_INDOOR_ENABLED_AP],
+		       reg_info->num_6g_reg_rules_client[REG_INDOOR_ENABLED_AP][REG_DEFAULT_CLIENT],
+		       reg_info->num_6g_reg_rules_client[REG_INDOOR_ENABLED_AP][REG_SUBORDINATE_CLIENT]);
+
+	wmi_nofl_debug("AP C2C POWER TYPE-[MIN BW, MAX BW] : [%d, %d]",
+		       reg_info->min_bw_6g_ap[REG_INDOOR_ENABLED_AP],
+		       reg_info->max_bw_6g_ap[REG_INDOOR_ENABLED_AP]);
+
+	wmi_nofl_debug("DEF CLI C2C POWER TYPE-[MIN BW, MAX BW] : [%d, %d]",
+		       reg_info->min_bw_6g_client[REG_INDOOR_ENABLED_AP][REG_DEFAULT_CLIENT],
+		       reg_info->max_bw_6g_client[REG_INDOOR_ENABLED_AP][REG_DEFAULT_CLIENT]);
+
+	wmi_nofl_debug("SUB CLI C2C POWER TYPE-[MIN BW, MAX BW] : [%d, %d]",
+		       reg_info->min_bw_6g_client[REG_INDOOR_ENABLED_AP][REG_SUBORDINATE_CLIENT],
+		       reg_info->max_bw_6g_client[REG_INDOOR_ENABLED_AP][REG_SUBORDINATE_CLIENT]);
+
+	wmi_nofl_debug("C2C NUM REG RULES [AP, DEF CLI, SUB CLI] = [%d, %d, %d]",
+		       reg_info->num_6g_reg_rules_ap[REG_INDOOR_ENABLED_AP],
+		       reg_info->num_6g_reg_rules_client[REG_INDOOR_ENABLED_AP][REG_DEFAULT_CLIENT],
+		       reg_info->num_6g_reg_rules_client[REG_INDOOR_ENABLED_AP][REG_SUBORDINATE_CLIENT]);
+
+	wmi_nofl_debug("C2C DOMAIN CODE [AP, DEF CLI, SUB CLI] = [%d, %d, %d]",
+		       reg_info->domain_code_6g_ap[REG_INDOOR_ENABLED_AP],
+		       reg_info->domain_code_6g_client[REG_INDOOR_ENABLED_AP][REG_DEFAULT_CLIENT],
+		       reg_info->domain_code_6g_client[REG_INDOOR_ENABLED_AP][REG_SUBORDINATE_CLIENT]);
+}
+#else
+static inline void extract_additional_reg_rules(
+	wmi_regulatory_rule_ext_struct *ext_wmi_reg_rule,
+	struct cur_regulatory_info *reg_info)
+{
+}
+
+static inline QDF_STATUS extract_additional_reg_rules_meta_info(
+	WMI_REG_CHAN_LIST_CC_EXT_EVENTID_param_tlvs *param_buf,
+	struct cur_regulatory_info *reg_info)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline void print_c2c_reg_rules_info(struct cur_regulatory_info *reg_info)
+{
+}
+#endif
+
 static QDF_STATUS extract_reg_chan_list_ext_update_event_tlv(
 	wmi_unified_t wmi_handle, uint8_t *evt_buf,
 	struct cur_regulatory_info *reg_info, uint32_t len)
@@ -17263,7 +17592,11 @@ static QDF_STATUS extract_reg_chan_list_ext_update_event_tlv(
 	reg_info->num_6g_reg_rules_ap[REG_VERY_LOW_POWER_AP] =
 		ext_chan_list_event_hdr->num_6g_reg_rules_ap_vlp;
 
-	wmi_debug("num reg rules from fw, AP SP %d, LPI %d, VLP %d",
+	if (QDF_IS_STATUS_ERROR(
+		extract_additional_reg_rules_meta_info(param_buf, reg_info)))
+		return QDF_STATUS_E_FAILURE;
+
+	wmi_debug("num reg rules from fw, AP: SP %d, LPI %d, VLP %d",
 		       reg_info->num_6g_reg_rules_ap[REG_STANDARD_POWER_AP],
 		       reg_info->num_6g_reg_rules_ap[REG_INDOOR_AP],
 		       reg_info->num_6g_reg_rules_ap[REG_VERY_LOW_POWER_AP]);
@@ -17288,33 +17621,21 @@ static QDF_STATUS extract_reg_chan_list_ext_update_event_tlv(
 	for (i = 0; i < REG_CURRENT_MAX_AP_TYPE; i++) {
 		num_6g_reg_rules_ap[i] = reg_info->num_6g_reg_rules_ap[i];
 		if (num_6g_reg_rules_ap[i] > MAX_6G_REG_RULES) {
-			wmi_err_rl("Invalid num_6g_reg_rules_ap: %u",
-				   num_6g_reg_rules_ap[i]);
+			wmi_err_rl("Invalid num_6g_reg_rules_ap: %u, power type: %d",
+				   num_6g_reg_rules_ap[i], i);
 			return QDF_STATUS_E_FAILURE;
 		}
 		total_reg_rules += num_6g_reg_rules_ap[i];
+
 		num_6g_reg_rules_client[i] =
 			reg_info->num_6g_reg_rules_client[i];
-	}
-
-	for (i = 0; i < REG_MAX_CLIENT_TYPE; i++) {
-		total_reg_rules +=
-			num_6g_reg_rules_client[REG_STANDARD_POWER_AP][i];
-		total_reg_rules += num_6g_reg_rules_client[REG_INDOOR_AP][i];
-		total_reg_rules +=
-			num_6g_reg_rules_client[REG_VERY_LOW_POWER_AP][i];
-		if ((num_6g_reg_rules_client[REG_STANDARD_POWER_AP][i] >
-		     MAX_6G_REG_RULES) ||
-		    (num_6g_reg_rules_client[REG_INDOOR_AP][i] >
-		     MAX_6G_REG_RULES) ||
-		    (num_6g_reg_rules_client[REG_VERY_LOW_POWER_AP][i] >
-		     MAX_6G_REG_RULES)) {
-			wmi_err_rl("Invalid num_6g_reg_rules_client_sp: %u, num_6g_reg_rules_client_lpi: %u, num_6g_reg_rules_client_vlp: %u, client %d",
-				num_6g_reg_rules_client[REG_STANDARD_POWER_AP][i],
-				num_6g_reg_rules_client[REG_INDOOR_AP][i],
-				num_6g_reg_rules_client[REG_VERY_LOW_POWER_AP][i],
-				i);
-			return QDF_STATUS_E_FAILURE;
+		for (j = 0; j < REG_MAX_CLIENT_TYPE; j++) {
+			if (num_6g_reg_rules_client[i][j] > MAX_6G_REG_RULES) {
+				wmi_err_rl("Invalid num reg rules %u for client_type : %d, power type : %d",
+					   num_6g_reg_rules_client[i][j], j, i);
+				return QDF_STATUS_E_FAILURE;
+			}
+			total_reg_rules += num_6g_reg_rules_client[i][j];
 		}
 	}
 
@@ -17328,16 +17649,6 @@ static QDF_STATUS extract_reg_chan_list_ext_update_event_tlv(
 	    (num_5g_reg_rules > MAX_REG_RULES)) {
 		wmi_err_rl("Invalid num_2g_reg_rules: %u, num_5g_reg_rules: %u",
 			   num_2g_reg_rules, num_5g_reg_rules);
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	if ((num_6g_reg_rules_ap[REG_STANDARD_POWER_AP] > MAX_6G_REG_RULES) ||
-	    (num_6g_reg_rules_ap[REG_INDOOR_AP] > MAX_6G_REG_RULES) ||
-	    (num_6g_reg_rules_ap[REG_VERY_LOW_POWER_AP] > MAX_6G_REG_RULES)) {
-		wmi_err_rl("Invalid num_6g_reg_rules_ap_sp: %u, num_6g_reg_rules_ap_lpi: %u, num_6g_reg_rules_ap_vlp: %u",
-			   num_6g_reg_rules_ap[REG_STANDARD_POWER_AP],
-			   num_6g_reg_rules_ap[REG_INDOOR_AP],
-			   num_6g_reg_rules_ap[REG_VERY_LOW_POWER_AP]);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -17405,7 +17716,7 @@ static QDF_STATUS extract_reg_chan_list_ext_update_event_tlv(
 		  reg_info->min_bw_2g, reg_info->max_bw_2g, reg_info->min_bw_5g,
 		  reg_info->max_bw_5g);
 
-	wmi_nofl_debug("min_bw_6g_ap_sp %d max_bw_6g_ap_sp %d min_bw_6g_ap_lpi %d max_bw_6g_ap_lpi %d min_bw_6g_ap_vlp %d max_bw_6g_ap_vlp %d",
+	wmi_nofl_debug("AP POWER TYPE-[MIN BW, MAX BW] SP:[%d, %d] LPI:[%d, %d], VLP:[%d, %d]",
 		  reg_info->min_bw_6g_ap[REG_STANDARD_POWER_AP],
 		  reg_info->max_bw_6g_ap[REG_STANDARD_POWER_AP],
 		  reg_info->min_bw_6g_ap[REG_INDOOR_AP],
@@ -17413,7 +17724,7 @@ static QDF_STATUS extract_reg_chan_list_ext_update_event_tlv(
 		  reg_info->min_bw_6g_ap[REG_VERY_LOW_POWER_AP],
 		  reg_info->max_bw_6g_ap[REG_VERY_LOW_POWER_AP]);
 
-	wmi_nofl_debug("min_bw_6g_def_cli_sp %d max_bw_6g_def_cli_sp %d min_bw_6g_def_cli_lpi %d max_bw_6g_def_cli_lpi %d min_bw_6g_def_cli_vlp %d max_bw_6g_def_cli_vlp %d",
+	wmi_nofl_debug("DEF CLI POWER TYPE-[MIN BW, MAX BW] SP:[%d, %d] LPI:[%d, %d], VLP:[%d, %d]",
 		  reg_info->min_bw_6g_client[REG_STANDARD_POWER_AP][REG_DEFAULT_CLIENT],
 		  reg_info->max_bw_6g_client[REG_STANDARD_POWER_AP][REG_DEFAULT_CLIENT],
 		  reg_info->min_bw_6g_client[REG_INDOOR_AP][REG_DEFAULT_CLIENT],
@@ -17421,7 +17732,7 @@ static QDF_STATUS extract_reg_chan_list_ext_update_event_tlv(
 		  reg_info->min_bw_6g_client[REG_VERY_LOW_POWER_AP][REG_DEFAULT_CLIENT],
 		  reg_info->max_bw_6g_client[REG_VERY_LOW_POWER_AP][REG_DEFAULT_CLIENT]);
 
-	wmi_nofl_debug("min_bw_6g_sub_client_sp %d max_bw_6g_sub_client_sp %d min_bw_6g_sub_client_lpi %d max_bw_6g_sub_client_lpi %d min_bw_6g_sub_client_vlp %d max_bw_6g_sub_client_vlp %d",
+	wmi_nofl_debug("SUB CLI POWER TYPE-[MIN BW, MAX BW] SP:[%d, %d] LPI:[%d, %d], VLP:[%d, %d]",
 		  reg_info->min_bw_6g_client[REG_STANDARD_POWER_AP][REG_SUBORDINATE_CLIENT],
 		  reg_info->max_bw_6g_client[REG_STANDARD_POWER_AP][REG_SUBORDINATE_CLIENT],
 		  reg_info->min_bw_6g_client[REG_INDOOR_AP][REG_SUBORDINATE_CLIENT],
@@ -17432,17 +17743,17 @@ static QDF_STATUS extract_reg_chan_list_ext_update_event_tlv(
 	wmi_nofl_debug("num_2g_reg_rules %d num_5g_reg_rules %d",
 		  num_2g_reg_rules, num_5g_reg_rules);
 
-	wmi_nofl_debug("num_6g_ap_sp_reg_rules %d num_6g_ap_lpi_reg_rules %d num_6g_ap_vlp_reg_rules %d",
+	wmi_nofl_debug("AP NUM 6 GHz REG RULES SP[%d] LPI[%d] VLP[%d]",
 		  reg_info->num_6g_reg_rules_ap[REG_STANDARD_POWER_AP],
 		  reg_info->num_6g_reg_rules_ap[REG_INDOOR_AP],
 		  reg_info->num_6g_reg_rules_ap[REG_VERY_LOW_POWER_AP]);
 
-	wmi_nofl_debug("num_6g_def_cli_sp_reg_rules %d num_6g_def_cli_lpi_reg_rules %d num_6g_def_cli_vlp_reg_rules %d",
+	wmi_nofl_debug("DEF CLI NUM 6 GHz REG RULES SP[%d] LPI[%d] VLP[%d]",
 		  reg_info->num_6g_reg_rules_client[REG_STANDARD_POWER_AP][REG_DEFAULT_CLIENT],
 		  reg_info->num_6g_reg_rules_client[REG_INDOOR_AP][REG_DEFAULT_CLIENT],
 		  reg_info->num_6g_reg_rules_client[REG_VERY_LOW_POWER_AP][REG_DEFAULT_CLIENT]);
 
-	wmi_nofl_debug("num_6g_sub_cli_sp_reg_rules %d num_6g_sub_cli_lpi_reg_rules %d num_6g_sub_cli_vlp_reg_rules %d",
+	wmi_nofl_debug("SUB CLI CLI 6 GHz REG RULES SP[%d] LPI[%d] VLP[%d]",
 		  reg_info->num_6g_reg_rules_client[REG_STANDARD_POWER_AP][REG_SUBORDINATE_CLIENT],
 		  reg_info->num_6g_reg_rules_client[REG_INDOOR_AP][REG_SUBORDINATE_CLIENT],
 		  reg_info->num_6g_reg_rules_client[REG_VERY_LOW_POWER_AP][REG_SUBORDINATE_CLIENT]);
@@ -17491,7 +17802,7 @@ static QDF_STATUS extract_reg_chan_list_ext_update_event_tlv(
 			       reg_info->reg_rules_5g_ptr[i].psd_eirp);
 	}
 
-	for (i = 0; i < REG_CURRENT_MAX_AP_TYPE; i++) {
+	for (i = 0; i <= REG_VERY_LOW_POWER_AP; i++) {
 		reg_print_ap_power_type_6ghz(i);
 		reg_info->reg_rules_6g_ap_ptr[i] =
 			create_ext_reg_rules_from_wmi(num_6g_reg_rules_ap[i],
@@ -17515,7 +17826,7 @@ static QDF_STATUS extract_reg_chan_list_ext_update_event_tlv(
 		}
 	}
 
-	for (j = 0; j < REG_CURRENT_MAX_AP_TYPE; j++) {
+	for (j = 0; j <= REG_VERY_LOW_POWER_AP; j++) {
 		reg_print_ap_power_type_6ghz(j);
 		for (i = 0; i < REG_MAX_CLIENT_TYPE; i++) {
 			reg_print_6ghz_client_type(i);
@@ -17543,6 +17854,7 @@ static QDF_STATUS extract_reg_chan_list_ext_update_event_tlv(
 		}
 	}
 
+	extract_additional_reg_rules(ext_wmi_reg_rule, reg_info);
 	reg_info->client_type = ext_chan_list_event_hdr->client_type;
 	reg_info->rnr_tpe_usable = ext_chan_list_event_hdr->rnr_tpe_usable;
 	reg_info->unspecified_ap_usable =
@@ -17568,12 +17880,14 @@ static QDF_STATUS extract_reg_chan_list_ext_update_event_tlv(
 			ext_chan_list_event_hdr->domain_code_6g_client_lpi[i];
 		reg_info->domain_code_6g_client[REG_VERY_LOW_POWER_AP][i] =
 			ext_chan_list_event_hdr->domain_code_6g_client_vlp[i];
-		wmi_nofl_debug("domain code client %d SP %d, LPI %d, VLP %d", i,
+		wmi_nofl_debug("domain code client %d SP %d, LPI %d, VLP %d",
+			i,
 			reg_info->domain_code_6g_client[REG_STANDARD_POWER_AP][i],
 			reg_info->domain_code_6g_client[REG_INDOOR_AP][i],
 			reg_info->domain_code_6g_client[REG_VERY_LOW_POWER_AP][i]);
 	}
 
+	print_c2c_reg_rules_info(reg_info);
 	reg_info->domain_code_6g_super_id =
 		ext_chan_list_event_hdr->domain_code_6g_super_id;
 
@@ -20147,6 +20461,8 @@ wmi_convert_roam_sub_reason(WMI_ROAM_TRIGGER_SUB_REASON_ID subreason)
 		return ROAM_TRIGGER_SUB_REASON_PERIODIC_TIMER_AFTER_INACTIVITY_CU;
 	case WMI_ROAM_TRIGGER_SUB_REASON_INACTIVITY_TIMER_CU:
 		return ROAM_TRIGGER_SUB_REASON_INACTIVITY_TIMER_CU;
+	case WMI_ROAM_TRIGGER_SUB_REASON_MLD_EXTRA_PARTIAL_SCAN:
+		return ROAM_TRIGGER_SUB_REASON_MLD_EXTRA_PARTIAL_SCAN;
 	default:
 		break;
 	}
@@ -22388,6 +22704,49 @@ extract_vendor_pdev_event_tlv(wmi_unified_t wmi_handle,
 }
 #endif /* WLAN_VENDOR_EXTN */
 
+/**
+ * send_sta_vdev_report_ap_oper_bw_cmd_tlv() - Send root AP's reported operating BW to STA VDEV
+ * @wmi_handle: wmi handle
+ * @param: pointer to ap oper bw params
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+static QDF_STATUS
+send_sta_vdev_report_ap_oper_bw_cmd_tlv(wmi_unified_t wmi_handle,
+					struct wmi_sta_vdev_report_ap_oper_bw_params *param)
+{
+	wmi_vdev_report_ap_oper_bw_cmd_fixed_param *cmd;
+	QDF_STATUS ret;
+	int len = sizeof(*cmd);
+	wmi_buf_t wmi_buf;
+
+	/* Allocate the memory */
+	wmi_buf = wmi_buf_alloc(wmi_handle, len);
+
+	if (!wmi_buf)
+		return QDF_STATUS_E_NOMEM;
+
+	cmd = (wmi_vdev_report_ap_oper_bw_cmd_fixed_param *)wmi_buf_data(wmi_buf);
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		       WMITLV_TAG_STRUC_wmi_vdev_report_ap_oper_bw_cmd_fixed_param,
+		       WMITLV_GET_STRUCT_TLVLEN(wmi_vdev_report_ap_oper_bw_cmd_fixed_param));
+
+	cmd->vdev_id = param->vdev_id;
+	cmd->ap_phymode = wmi_host_to_fw_phymode(param->ap_phymode);
+
+	wmi_debug("vdev_id %u ap_phymode %u", cmd->vdev_id, cmd->ap_phymode);
+	wmi_mtrace(WMI_VDEV_REPORT_AP_OPER_BW_CMDID, cmd->vdev_id, cmd->ap_phymode);
+
+	ret = wmi_unified_cmd_send(wmi_handle, wmi_buf,
+				   len, WMI_VDEV_REPORT_AP_OPER_BW_CMDID);
+
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		wmi_err("Failed to send ap operating bandwidth: %d", ret);
+		wmi_buf_free(wmi_buf);
+	}
+	return ret;
+}
+
 struct wmi_ops tlv_ops =  {
 	.send_vdev_create_cmd = send_vdev_create_cmd_tlv,
 	.send_vdev_delete_cmd = send_vdev_delete_cmd_tlv,
@@ -22911,6 +23270,7 @@ struct wmi_ops tlv_ops =  {
 #ifdef WLAN_DP_FEATURE_STC
 	.send_opm_stats_cmd = send_opm_stats_cmd_tlv,
 #endif
+	.send_sta_vdev_report_ap_oper_bw_cmd = send_sta_vdev_report_ap_oper_bw_cmd_tlv,
 };
 
 #ifdef WLAN_FEATURE_11BE_MLO

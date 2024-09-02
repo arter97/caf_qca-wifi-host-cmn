@@ -32,6 +32,7 @@
 #ifdef CONN_MGR_ADV_FEATURE
 #include "wlan_mlme_api.h"
 #include "wlan_wfa_tgt_if_tx_api.h"
+#include "wlan_action_oui_main.h"
 #endif
 #include "wlan_cm_main_api.h"
 #include "wlan_cm_public_struct.h"
@@ -1405,7 +1406,7 @@ cm_calculate_etp_score(struct wlan_objmgr_psoc *psoc,
 				 entry->rssi_raw,
 				 phy_config,
 				 ml_flag);
-	if (bss_mlo_type == SLO)
+	if (bss_mlo_type == SLO || bss_mlo_type == MLO_TYPE_MAX)
 		return score;
 	wlan_mlme_get_mlo_prefer_percentage(psoc, &mlo_prefer_percentage);
 	if (mlo_prefer_percentage) {
@@ -1930,7 +1931,10 @@ enum MLO_TYPE cm_bss_mlo_type(struct wlan_objmgr_psoc *psoc,
 	bool is_hw_emlsr_cap = false;
 
 	mlo_link_num = cm_get_sta_mlo_conn_max_num(psoc);
-	if (!ml_ie || !entry->ml_info.num_links || mlo_link_num == 1)
+	if (!ml_ie)
+		return MLO_TYPE_MAX;
+
+	if (!entry->ml_info.num_links || mlo_link_num == 1)
 		return SLO;
 
 	is_hw_emlsr_cap = is_cm_hw_emlsr_capable(psoc);
@@ -2597,9 +2601,11 @@ static void cm_vendor_specific_boost(struct wlan_objmgr_psoc *psoc,
 	int per_link_boost;
 	int32_t score = entry->bss_score;
 
-	if (!entry->ie_list.multi_link_bv)
+	if (!entry->ie_list.multi_link_bv) {
+		mlme_debug(QDF_MAC_ADDR_FMT "entry with mlo type %d",
+			   QDF_MAC_ADDR_REF(entry->bssid.bytes), bss_mlo_type);
 		return;
-
+	}
 	switch (bss_mlo_type) {
 	case MLMR:
 		/* Add boost of 15% per link for MLMR candidate */
@@ -3188,6 +3194,11 @@ cm_add_11_ax_candidate(struct wlan_objmgr_pdev *pdev,
 	struct scan_cache_entry *tmp_scan_entry = NULL;
 
 	tmp_scan_entry = util_scan_copy_cache_entry(scan_entry->entry);
+	if (!tmp_scan_entry) {
+		mlme_err("Copy cache entry failed");
+		return;
+	}
+
 	/* Add 11AX entry for MLO Candidate */
 	if (!tmp_scan_entry->ie_list.multi_link_bv) {
 		util_scan_free_cache_entry(tmp_scan_entry);
@@ -3219,6 +3230,25 @@ cm_add_11_ax_candidate(struct wlan_objmgr_pdev *pdev,
 		       struct scan_cache_node *scan_entry)
 {};
 #endif
+
+static bool cm_is_slo_candidate_allowed(struct wlan_objmgr_psoc *psoc,
+					struct scan_cache_entry *scan_entry)
+{
+	struct action_oui_search_attr attr = {0};
+
+	attr.ie_data = util_scan_entry_ie_data(scan_entry);
+	attr.ie_length = util_scan_entry_ie_len(scan_entry);
+
+	if (wlan_action_oui_search(psoc, &attr,
+				   ACTION_OUI_RESTRICT_MAX_MLO_LINKS)) {
+		mlme_debug("IoT AP " QDF_MAC_ADDR_FMT
+			   " slo candidate not allowed",
+			   QDF_MAC_ADDR_REF(scan_entry->bssid.bytes));
+		return false;
+	}
+
+	return true;
+}
 
 /**
  * cm_mlo_generate_candidate_list() - generate candidate list
@@ -3259,6 +3289,14 @@ static void cm_mlo_generate_candidate_list(struct wlan_objmgr_pdev *pdev,
 	uint32_t num_link = 0;
 	uint32_t i = 0;
 	uint32_t j = 0;
+	struct wlan_objmgr_psoc *psoc;
+	bool is_slo_candidate_allowed = true;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		mlme_err("psoc NULL");
+		return;
+	}
 
 	if (qdf_list_peek_front(candidate_list, &cur_node) !=
 	    QDF_STATUS_SUCCESS) {
@@ -3272,6 +3310,11 @@ static void cm_mlo_generate_candidate_list(struct wlan_objmgr_pdev *pdev,
 		scan_entry = qdf_container_of(cur_node, struct scan_cache_node,
 					      node);
 		num_link = scan_entry->entry->ml_info.num_links;
+
+		is_slo_candidate_allowed =
+			cm_is_slo_candidate_allowed(psoc, scan_entry->entry);
+		if (!is_slo_candidate_allowed)
+			goto next;
 
 		for (i = 0; i < num_link; i++) {
 			tmp_scan_entry = util_scan_copy_cache_entry(

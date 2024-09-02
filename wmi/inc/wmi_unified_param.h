@@ -10570,4 +10570,14 @@ struct wmi_host_mu_on_off_params {
 	uint32_t mu_off_duration;
 };
 
+/**
+ * struct wmi_sta_vdev_report_ap_oper_bw_params - AP's reported operating BW params
+ * @vdev_id: vdev ID
+ * @ap_phymode: Current Operating AP's phymode
+ */
+struct wmi_sta_vdev_report_ap_oper_bw_params {
+	uint8_t vdev_id;
+	enum wlan_phymode ap_phymode;
+};
+
 #endif /* _WMI_UNIFIED_PARAM_H_ */

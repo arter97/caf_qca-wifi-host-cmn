@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -346,6 +346,11 @@ void wlan_vdev_mlme_notify_set_mac_addr_response(struct wlan_objmgr_vdev *vdev,
 {
 	if (wlan_vdev_mlme_is_mlo_link_switch_in_progress(vdev)) {
 		wlan_mlo_mgr_link_switch_set_mac_addr_resp(vdev, resp_status);
+		return;
+	}
+
+	if (wlan_vdev_mlme_is_mlo_link_rejection_in_progress(vdev)) {
+		wlan_mlo_mgr_link_rej_set_mac_addr_resp(vdev, resp_status);
 		return;
 	}
 

@@ -30,6 +30,7 @@
 static struct wlan_ipa_config *g_ipa_config;
 static bool g_ipa_hw_support;
 static bool g_ipa_pld_enable = true;
+static bool g_ipa_shared_smmu_enable;
 static bool g_ipa_cap_offload = true;
 
 void ipa_set_cap_offload(bool flag)
@@ -45,6 +46,16 @@ void ipa_set_pld_enable(bool flag)
 bool ipa_get_pld_enable(void)
 {
 	return (g_ipa_pld_enable && g_ipa_cap_offload);
+}
+
+void ipa_set_shared_smmu_enable(bool flag)
+{
+	g_ipa_shared_smmu_enable = flag;
+}
+
+bool ipa_get_shared_smmu_enable(void)
+{
+	return g_ipa_shared_smmu_enable;
 }
 
 bool ipa_check_hw_present(void)

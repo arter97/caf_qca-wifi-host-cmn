@@ -519,6 +519,12 @@ QDF_STATUS dp_srng_init_idx(struct dp_soc *soc, struct dp_srng *srng,
 		dp_srng_set_msi2_ring_params(soc, &ring_params, 0, 0);
 		dp_verbose_debug("Skipping MSI for ring_type: %d, ring_num %d",
 				 ring_type, ring_num);
+		if (soc->arch_ops.dp_register_ppeds_interrupts)
+			if (soc->arch_ops.dp_register_ppeds_interrupts
+								(soc, srng, 0,
+								 ring_type,
+								 ring_num))
+				return QDF_STATUS_E_FAILURE;
 	}
 
 	dp_srng_configure_interrupt_thresholds(soc, &ring_params,
@@ -1013,6 +1019,17 @@ QDF_STATUS dp_soc_interrupt_attach(struct cdp_soc_t *txrx_soc)
 #define AVG_MSDUS_PER_FLOW 128
 #define AVG_MSDUS_PER_MPDU 4
 
+#ifdef DP_FTM_MODE_SKIP_WBM_RING_INIT
+bool dp_skip_ftm_mode_wbm_ring_init(struct dp_soc *soc)
+{
+	if (soc->cdp_soc.ol_ops->get_con_mode &&
+	    soc->cdp_soc.ol_ops->get_con_mode() == QDF_GLOBAL_FTM_MODE)
+		return true;
+
+	return false;
+}
+#endif
+
 void dp_hw_link_desc_pool_banks_free(struct dp_soc *soc, uint32_t mac_id)
 {
 	struct qdf_mem_multi_page_t *pages;
@@ -1151,6 +1168,9 @@ void dp_hw_link_desc_ring_free(struct dp_soc *soc)
 	void *vaddr = soc->wbm_idle_link_ring.base_vaddr_unaligned;
 	qdf_dma_addr_t paddr;
 
+	if (dp_skip_ftm_mode_wbm_ring_init(soc))
+		return;
+
 	if (soc->wbm_idle_scatter_buf_base_vaddr[0]) {
 		for (i = 0; i < MAX_IDLE_SCATTER_BUFS; i++) {
 			vaddr = soc->wbm_idle_scatter_buf_base_vaddr[i];
@@ -1184,6 +1204,9 @@ QDF_STATUS dp_hw_link_desc_ring_alloc(struct dp_soc *soc)
 	uint32_t ring_type;
 	uint32_t max_alloc_size = wlan_cfg_max_alloc_size(soc->wlan_cfg_ctx);
 	uint32_t tlds;
+
+	if (dp_skip_ftm_mode_wbm_ring_init(soc))
+		return QDF_STATUS_SUCCESS;
 
 	ring_type = WBM_IDLE_LINK;
 	dp_srng = &soc->wbm_idle_link_ring;
@@ -2201,7 +2224,7 @@ static QDF_STATUS dp_alloc_tx_ring_pair_by_index(struct dp_soc *soc,
 	}
 
 	dp_debug("index %u", index);
-	tx_ring_size = wlan_cfg_tx_ring_size(soc_cfg_ctx);
+	tx_ring_size = wlan_cfg_tx_ring_size(soc_cfg_ctx, index);
 	dp_ipa_get_tx_ring_size(index, &tx_ring_size, soc_cfg_ctx);
 
 	if (dp_srng_alloc(soc, &soc->tcl_data_ring[index], TCL_DATA,
@@ -2210,7 +2233,7 @@ static QDF_STATUS dp_alloc_tx_ring_pair_by_index(struct dp_soc *soc,
 		goto fail1;
 	}
 
-	tx_comp_ring_size = wlan_cfg_tx_comp_ring_size(soc_cfg_ctx);
+	tx_comp_ring_size = wlan_cfg_tx_comp_ring_size(soc_cfg_ctx, index);
 	dp_ipa_get_tx_comp_ring_size(index, &tx_comp_ring_size, soc_cfg_ctx);
 	/* Enable cached TCL desc if NSS offload is disabled */
 	if (!wlan_cfg_get_dp_soc_nss_cfg(soc_cfg_ctx))
@@ -4412,8 +4435,6 @@ QDF_STATUS dp_soc_srng_alloc(struct dp_soc *soc)
 		goto fail1;
 	}
 
-	reo_dst_ring_size = wlan_cfg_get_reo_dst_ring_size(soc_cfg_ctx);
-
 	/* Disable cached desc if NSS offload is enabled */
 	if (wlan_cfg_get_dp_soc_nss_cfg(soc_cfg_ctx))
 		cached = 0;
@@ -4434,6 +4455,8 @@ QDF_STATUS dp_soc_srng_alloc(struct dp_soc *soc)
 
 	for (i = 0; i < soc->num_reo_dest_rings; i++) {
 		/* Setup REO destination ring */
+		reo_dst_ring_size = wlan_cfg_get_reo_dst_ring_size(soc_cfg_ctx,
+								   i);
 		if (dp_srng_alloc(soc, &soc->reo_dest_ring[i], REO_DST,
 				  reo_dst_ring_size, cached)) {
 			dp_init_err("%pK: dp_srng_alloc failed for reo_dest_ring", soc);

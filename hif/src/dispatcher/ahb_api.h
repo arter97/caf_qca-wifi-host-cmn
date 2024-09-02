@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2018,2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -48,4 +48,5 @@ void hif_ahb_deconfigure_grp_irq(struct hif_softc *scn);
 bool hif_ahb_needs_bmi(struct hif_softc *scn);
 void hif_ahb_display_stats(struct hif_softc *scn);
 void hif_ahb_clear_stats(struct hif_softc *scn);
+QDF_STATUS hif_ahb_get_device_handle(struct hif_softc *hif_ctx, void **handle);
 #endif

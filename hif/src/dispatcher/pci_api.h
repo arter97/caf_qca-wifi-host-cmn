@@ -109,4 +109,13 @@ void hif_pci_set_grp_intr_affinity(struct hif_softc *scn,
 				   uint32_t grp_intr_bitmask,
 				   uint32_t cpumask, bool perf);
 #endif
+
+/*
+ * hif_pci_get_device_handle() - Returns the pci device handle
+ * @hif_ctx: hif context
+ * @handle: placeholder to carry the device pointer
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS hif_pci_get_device_handle(struct hif_softc *hif_ctx, void **handle);
 #endif /* _PCI_API_H_ */

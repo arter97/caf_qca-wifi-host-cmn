@@ -1833,7 +1833,7 @@ static uint16_t reg_compute_chan_to_freq(struct wlan_objmgr_pdev *pdev,
 	 * power mode's master channel list.
 	 */
 	input_6g_pwr_mode = REG_AP_LPI;
-	while (input_6g_pwr_mode <= REG_CLI_SUB_VLP) {
+	while (input_6g_pwr_mode < REG_MAX_POWER_MODE) {
 		chan_list = reg_get_reg_maschan_lst_frm_6g_pwr_mode(
 							input_6g_pwr_mode,
 							pdev_priv_obj, 0);
@@ -2783,7 +2783,8 @@ static QDF_STATUS reg_get_max_psd(qdf_freq_t freq,
 				  uint8_t *tx_power)
 {
 	if (reg_ap == REG_INDOOR_AP ||
-	    reg_ap == REG_VERY_LOW_POWER_AP) {
+	    reg_ap == REG_VERY_LOW_POWER_AP ||
+	    reg_is_ap_power_type_c2c(reg_ap)) {
 		switch (reg_client) {
 		case REG_DEFAULT_CLIENT:
 			*tx_power = REG_PSD_MAX_TXPOWER_FOR_DEFAULT_CLIENT;
@@ -2820,7 +2821,8 @@ static QDF_STATUS reg_get_max_eirp(struct wlan_objmgr_pdev *pdev,
 				   uint8_t *tx_power)
 {
 	if (reg_ap == REG_INDOOR_AP ||
-	    reg_ap == REG_VERY_LOW_POWER_AP) {
+	    reg_ap == REG_VERY_LOW_POWER_AP ||
+	    reg_is_ap_power_type_c2c(reg_ap)) {
 		switch (reg_client) {
 		case REG_DEFAULT_CLIENT:
 			*tx_power = reg_get_channel_reg_power_for_freq(pdev,
@@ -3922,6 +3924,10 @@ reg_skip_invalid_chan_freq(struct wlan_objmgr_pdev *pdev,
 	bool include_indoor_channel, dfs_master_capable;
 	uint8_t enable_srd_chan, srd_mask = 0;
 	struct wlan_objmgr_psoc *psoc;
+	enum reg_6g_ap_type ap_pwr_type;
+	enum supported_6g_pwr_types ap_pwr_mode;
+	enum channel_state chan_state;
+
 	psoc = wlan_pdev_get_psoc(pdev);
 	if (!psoc) {
 		reg_err("invalid psoc");
@@ -3948,6 +3954,17 @@ reg_skip_invalid_chan_freq(struct wlan_objmgr_pdev *pdev,
 		return status;
 	}
 
+	wlan_reg_get_cur_6g_ap_pwr_type(pdev, &ap_pwr_type);
+
+	if (ap_pwr_type == REG_INDOOR_AP)
+		ap_pwr_mode = REG_AP_LPI;
+	else if (ap_pwr_type == REG_STANDARD_POWER_AP)
+		ap_pwr_mode = REG_AP_SP;
+	else if (ap_pwr_type == REG_VERY_LOW_POWER_AP)
+		ap_pwr_mode = REG_AP_VLP;
+	else
+		ap_pwr_mode = REG_INVALID_PWR_MODE;
+
 	while (iface_mode_mask) {
 		if (iface_mode_mask & (1 << IFTYPE_AP)) {
 			srd_mask = 1;
@@ -3960,6 +3977,7 @@ reg_skip_invalid_chan_freq(struct wlan_objmgr_pdev *pdev,
 		} else {
 			break;
 		}
+
 		for (chan_enum = 0; chan_enum < *no_usable_channels;
 		     chan_enum++) {
 			if (iface_mode_mask & (1 << IFTYPE_NAN)) {
@@ -3970,9 +3988,13 @@ reg_skip_invalid_chan_freq(struct wlan_objmgr_pdev *pdev,
 				if (!res_msg[chan_enum].iface_mode_mask)
 					reg_remove_freq(res_msg, chan_enum);
 			} else {
-				if (wlan_reg_is_freq_indoor(
+				chan_state = reg_get_channel_state_for_pwrmode(
+						pdev, res_msg[chan_enum].freq,
+						ap_pwr_mode);
+				if (!reg_is_state_allowed(chan_state) ||
+				    (wlan_reg_is_freq_indoor(
 					pdev, res_msg[chan_enum].freq) &&
-					!include_indoor_channel) {
+					!include_indoor_channel)) {
 					res_msg[chan_enum].iface_mode_mask &=
 							~(iface_mode);
 					if (!res_msg[chan_enum].iface_mode_mask)
@@ -6007,6 +6029,90 @@ static void reg_copy_ch_params(struct ch_params *ch_params,
 
 #ifdef CONFIG_REG_6G_PWRMODE
 #ifdef WLAN_FEATURE_11BE
+
+#ifdef CONFIG_REG_CLIENT
+static bool reg_apply_punct_and_update_chan_width(qdf_freq_t primary_freq,
+						  struct ch_params *ch_params)
+{
+	enum phy_ch_width ch_width;
+	qdf_freq_t center_freq_320, center_freq_160, center_freq_80;
+
+	if (!primary_freq || !ch_params->get_max_non_eht_params ||
+	    reg_get_bw_value(ch_params->ch_width) < 80)
+		return false;
+
+	if (reg_is_ch_width_320(ch_params->ch_width)) {
+		center_freq_320 = ch_params->mhz_freq_seg1;
+		center_freq_160 = ch_params->mhz_freq_seg0;
+		center_freq_80 = primary_freq > center_freq_160 ?
+					(center_freq_160 + BW_40_MHZ) :
+					(center_freq_160 - BW_40_MHZ);
+	} else {
+		center_freq_160 = ch_params->mhz_freq_seg1;
+		center_freq_80 = ch_params->mhz_freq_seg0;
+	}
+
+	ch_width = ch_params->ch_width;
+	switch (ch_params->ch_width) {
+	case CH_WIDTH_320MHZ:
+		ch_width = CH_WIDTH_160MHZ;
+
+		ch_params->input_punc_bitmap &= WLAN_REG_PUNCT_MASK_320;
+		if (!ch_params->input_punc_bitmap)
+			break;
+
+		if (center_freq_160 > center_freq_320)
+			ch_params->input_punc_bitmap >>= BW_160_MHZ / BW_20_MHZ;
+
+		fallthrough;
+	case CH_WIDTH_160MHZ:
+		ch_params->input_punc_bitmap &= WLAN_REG_PUNCT_MASK_160;
+		if (!ch_params->input_punc_bitmap)
+			break;
+
+		ch_width = CH_WIDTH_80MHZ;
+		if (center_freq_80 > center_freq_160)
+			ch_params->input_punc_bitmap >>= BW_80_MHZ / BW_20_MHZ;
+
+		fallthrough;
+	case CH_WIDTH_80MHZ:
+		ch_params->input_punc_bitmap &= WLAN_REG_PUNCT_MASK_80;
+		if (!ch_params->input_punc_bitmap)
+			break;
+
+		ch_width = CH_WIDTH_40MHZ;
+		if (primary_freq > center_freq_80)
+			ch_params->input_punc_bitmap >>= BW_40_MHZ / BW_20_MHZ;
+
+		ch_params->input_punc_bitmap &=
+			(WLAN_REG_PUNCT_MASK_80 >> BW_40_MHZ / BW_20_MHZ);
+		if (!ch_params->input_punc_bitmap)
+			break;
+
+		ch_width = CH_WIDTH_20MHZ;
+		break;
+	default:
+		break;
+	}
+
+	ch_params->input_punc_bitmap = NO_SCHANS_PUNC;
+
+	if (ch_width == ch_params->ch_width)
+		ch_params->get_max_non_eht_params = false;
+	else
+		ch_params->ch_width = ch_width;
+
+	return ch_params->get_max_non_eht_params;
+}
+#else
+static inline bool
+reg_apply_punct_and_update_chan_width(qdf_freq_t primary_freq,
+				      struct ch_params *ch_params)
+{
+	return false;
+}
+#endif
+
 void
 reg_set_channel_params_for_pwrmode(struct wlan_objmgr_pdev *pdev,
 				   qdf_freq_t freq,
@@ -6015,7 +6121,16 @@ reg_set_channel_params_for_pwrmode(struct wlan_objmgr_pdev *pdev,
 				   enum supported_6g_pwr_types in_6g_pwr_mode,
 				   bool is_treat_nol_dis)
 {
-	if (reg_is_5ghz_ch_freq(freq) || reg_is_6ghz_chan_freq(freq)) {
+	if  (reg_is_24ghz_ch_freq(freq)) {
+		reg_set_2g_channel_params_for_freq(pdev, freq, ch_params,
+						   sec_ch_2g_freq);
+		return;
+	}
+
+	if (!(reg_is_5ghz_ch_freq(freq) || reg_is_6ghz_chan_freq(freq)))
+		return;
+
+	do {
 		if (reg_is_ch_width_320(ch_params->ch_width)) {
 			struct reg_channel_list chan_list;
 			uint8_t i;
@@ -6024,7 +6139,7 @@ reg_set_channel_params_for_pwrmode(struct wlan_objmgr_pdev *pdev,
 
 			for (i = 0; i < MAX_NUM_CHAN_PARAM; i++) {
 				chan_list.chan_param[i].input_punc_bitmap =
-					ch_params->input_punc_bitmap;
+						ch_params->input_punc_bitmap;
 			}
 			reg_fill_channel_list_for_pwrmode(pdev, freq,
 							  sec_ch_2g_freq,
@@ -6040,10 +6155,7 @@ reg_set_channel_params_for_pwrmode(struct wlan_objmgr_pdev *pdev,
 							      in_6g_pwr_mode,
 							      is_treat_nol_dis);
 		}
-	} else if  (reg_is_24ghz_ch_freq(freq)) {
-		reg_set_2g_channel_params_for_freq(pdev, freq, ch_params,
-						   sec_ch_2g_freq);
-	}
+	} while (reg_apply_punct_and_update_chan_width(freq, ch_params));
 }
 #else
 void
@@ -9254,6 +9366,32 @@ bool reg_is_6g_ap_type_invalid(enum reg_6g_ap_type ap_pwr_type)
 		(ap_pwr_type > REG_MAX_SUPP_AP_TYPE));
 }
 
+#ifdef CONFIG_REG_CLIENT
+/**
+ * reg_conv_6g_ap_type_to_addn_supported_6g_pwr_types() - Convert additional
+ * AP power types to supported_6g_pwr_type
+ * @ap_pwr_type: AP power type
+ *
+ * Return: supported_6g_pwr_types enum.
+ */
+static enum supported_6g_pwr_types
+reg_conv_6g_ap_type_to_addn_supported_6g_pwr_types(
+			enum reg_6g_ap_type ap_pwr_type)
+{
+	if (ap_pwr_type == REG_INDOOR_ENABLED_AP)
+		return REG_AP_C2C;
+
+	return REG_INVALID_PWR_MODE;
+}
+#else
+static inline enum supported_6g_pwr_types
+reg_conv_6g_ap_type_to_addn_supported_6g_pwr_types(
+			enum reg_6g_ap_type ap_pwr_type)
+{
+	return REG_INVALID_PWR_MODE;
+}
+#endif
+
 enum supported_6g_pwr_types
 reg_conv_6g_ap_type_to_supported_6g_pwr_types(enum reg_6g_ap_type ap_pwr_type)
 {
@@ -9262,9 +9400,14 @@ reg_conv_6g_ap_type_to_supported_6g_pwr_types(enum reg_6g_ap_type ap_pwr_type)
 		[REG_STANDARD_POWER_AP] = REG_AP_SP,
 		[REG_VERY_LOW_POWER_AP] = REG_AP_VLP,
 	};
+	enum supported_6g_pwr_types additional_pwr_mode;
 
 	if (reg_is_6g_ap_type_invalid(ap_pwr_type))
 		return REG_INVALID_PWR_MODE;
+
+	additional_pwr_mode = reg_conv_6g_ap_type_to_addn_supported_6g_pwr_types(ap_pwr_type);
+	if (additional_pwr_mode != REG_INVALID_PWR_MODE)
+		return additional_pwr_mode;
 
 	return reg_enum_conv[ap_pwr_type];
 }
@@ -10111,6 +10254,131 @@ int16_t reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
 					       client_type, is_twice_power);
 }
 
+#if defined(CONFIG_AFC_SUPPORT) && defined(CONFIG_BAND_6GHZ)
+/**
+ * reg_validate_freq_in_afc_punc_chans() - Validate the given frequency,
+ * bandwidth and puncture pattern to check if it is present in the AFC
+ * response. This is done by checking all the unpunctured sub-channels if they
+ * are part of the 20MHz AFC channel object.
+ *
+ * @pdev: pdev pointer.
+ * @freq: Input frequency.
+ * @cen320: Frequency center of 320MHz.
+ * @bw: banwidth in MHz.
+ * @in_punc_pattern: Input puncture pattern.
+ * Return: true if present in AFC response, false otherwise.
+ */
+static bool
+reg_validate_freq_in_afc_punc_chans(struct wlan_objmgr_pdev *pdev,
+				    qdf_freq_t freq,
+				    qdf_freq_t cen320,
+				    uint16_t bw,
+				    uint16_t in_punc_pattern)
+{
+	const struct bonded_channel_freq *bonded_chan_ptr = NULL;
+	qdf_freq_t start_freq;
+	qdf_freq_t end_freq;
+	uint16_t unpunctured_bw = reg_find_non_punctured_bw(bw,
+							    in_punc_pattern);
+	uint8_t unpunctured_chan_count = unpunctured_bw / BW_20_MHZ;
+	uint8_t valid_sp_sub_chan = 0;
+	uint8_t i;
+	enum phy_ch_width chwidth = reg_find_chwidth_from_bw(bw);
+
+	if (!reg_is_chan_punc(in_punc_pattern, bw))
+		return false;
+
+	bonded_chan_ptr = reg_get_bonded_chan_entry(freq, chwidth, cen320);
+	if (!bonded_chan_ptr)
+		return false;
+
+	start_freq = bonded_chan_ptr->start_freq;
+	end_freq = bonded_chan_ptr->end_freq;
+	for (freq = start_freq, i = 0; freq <= end_freq;
+	     freq += BW_20_MHZ, i++) {
+		bool is_sub_chan_punctured =
+				reg_is_chan_bit_punctured(in_punc_pattern, i);
+
+		if (!is_sub_chan_punctured)
+			if (reg_validate_freq_in_afc_chan_obj(pdev, freq, 0,
+							      BW_20_MHZ))
+				valid_sp_sub_chan++;
+	}
+
+	if (valid_sp_sub_chan == unpunctured_chan_count)
+		return true;
+
+	return false;
+}
+
+/**
+ * reg_handle_invalid_best_power_mode() - If best power mode is
+ * REG_MAX_SUPP_AP_TYPE, there is a possibility that it is SP power mode if the
+ * deployment type is outdoor and the given frequency and bandwidth is present
+ * in the AFC response. Even if the EIRP value is 0 dBm, the power mode can
+ * still be SP.
+ *
+ * @pdev: pdev pointer.
+ * @freq: Input frequency.
+ * @cen320: Frequency center of 320MHz.
+ * @bw: banwidth in MHz.
+ * @best_pwr_mode: Output bestpower mode.
+ * @eirp_list: EIRP array for various power modes.
+ * @in_punc_pattern: Input puncture pattern.
+ * Return: void.
+ */
+static void
+reg_handle_invalid_best_power_mode(struct wlan_objmgr_pdev *pdev,
+				   qdf_freq_t freq,
+				   qdf_freq_t cen320,
+				   uint16_t bw,
+				   enum reg_6g_ap_type *best_pwr_mode,
+				   int16_t *eirp_list,
+				   uint16_t in_punc_pattern)
+{
+	enum reg_afc_dev_deploy_type reg_afc_dev_type;
+	QDF_STATUS status;
+
+	/*
+	 * If the best power mode is REG_MAX_SUPP_AP_TYPE then there is a
+	 * possibility that it is SP power mode provided the following
+	 * conditions are met,
+	 * - if the deployment type is Outdoor and,
+	 * - if the AFC power event is received and,
+	 * - if the input frequency and bandwidth is part of channel object of
+	 * the AFC response or if the frequency within the bandwidth is
+	 * punctured and it forms a valid punctured SP channel and,
+	 * - if the EIRP of the channel is 0 dBm.
+	 */
+
+	status = reg_get_afc_dev_deploy_type(pdev, &reg_afc_dev_type);
+	if (QDF_IS_STATUS_ERROR(status))
+		return;
+
+	if (reg_afc_dev_type != AFC_DEPLOYMENT_OUTDOOR)
+		return;
+
+	if (!reg_validate_freq_in_afc_chan_obj(pdev, freq, cen320, bw) &&
+	    !reg_validate_freq_in_afc_punc_chans(pdev, freq, cen320, bw,
+						 in_punc_pattern))
+		return;
+
+	if (!eirp_list[REG_STANDARD_POWER_AP])
+		*best_pwr_mode = REG_STANDARD_POWER_AP;
+}
+#else
+static inline void
+reg_handle_invalid_best_power_mode(struct wlan_objmgr_pdev *pdev,
+				   qdf_freq_t freq,
+				   qdf_freq_t cen320,
+				   uint16_t bw,
+				   enum reg_6g_ap_type *best_pwr_mode,
+				   int16_t *eirp_list,
+				   uint16_t in_punc_pattern)
+{
+}
+#endif
+
 enum reg_6g_ap_type reg_get_best_pwr_mode(struct wlan_objmgr_pdev *pdev,
 					  qdf_freq_t freq,
 					  qdf_freq_t cen320,
@@ -10119,6 +10387,7 @@ enum reg_6g_ap_type reg_get_best_pwr_mode(struct wlan_objmgr_pdev *pdev,
 {
 	int16_t eirp_list[REG_MAX_SUPP_AP_TYPE + 1];
 	enum reg_6g_ap_type ap_pwr_type;
+	enum reg_6g_ap_type best_pwr_mode;
 
 	for (ap_pwr_type = REG_INDOOR_AP; ap_pwr_type <= REG_VERY_LOW_POWER_AP;
 	     ap_pwr_type++)
@@ -10128,8 +10397,17 @@ enum reg_6g_ap_type reg_get_best_pwr_mode(struct wlan_objmgr_pdev *pdev,
 						 false,
 						 REG_MAX_CLIENT_TYPE, false);
 
-	return reg_get_best_pwr_mode_from_eirp_list(eirp_list,
-						    REG_MAX_SUPP_AP_TYPE + 1);
+	best_pwr_mode = reg_get_best_pwr_mode_from_eirp_list(
+						eirp_list,
+						REG_MAX_SUPP_AP_TYPE + 1);
+	if (best_pwr_mode != REG_CURRENT_MAX_AP_TYPE)
+		return best_pwr_mode;
+
+	reg_handle_invalid_best_power_mode(pdev, freq, cen320, bw,
+					   &best_pwr_mode, eirp_list,
+					   in_punc_pattern);
+
+	return best_pwr_mode;
 }
 #endif
 
@@ -10210,7 +10488,7 @@ reg_display_super_chan_list(struct wlan_objmgr_pdev *pdev)
 			  "Best power mode = 0x%x\n",
 			  cur_chan_list.center_freq, chan_info->power_types,
 			  chan_info->best_power_mode);
-		for (j = REG_AP_LPI; j <= REG_CLI_SUB_VLP; j++) {
+		for (j = REG_AP_LPI; j < REG_MAX_POWER_MODE; j++) {
 			bool afc_not_done_bit;
 
 			afc_not_done_bit = chan_info->chan_flags_arr[j] &

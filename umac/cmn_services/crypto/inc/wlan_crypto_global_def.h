@@ -244,11 +244,15 @@ enum wlan_crypto_vdev_11az_security_capab {
  * @WLAN_CRYPTO_URNM_MFPR: URNM MFP required in RSNXE
  * @WLAN_CRYPTO_MFPC: MFP capable bit from RSN IE
  * @WLAN_CRYPTO_MFPR: MFP required from RSNIE
+ * @WLAN_CRYPTO_URNM_MFPR_X20: URNM_MFPR_X20 in RSNXE
+ * @WLAN_CRYPTO_I2R_LMR_FB: I2R LMR feedback policy in extended capabilities
  */
 enum wlan_crypto_vdev_pasn_caps {
 	WLAN_CRYPTO_URNM_MFPR = BIT(0),
 	WLAN_CRYPTO_MFPC = BIT(1),
 	WLAN_CRYPTO_MFPR = BIT(2),
+	WLAN_CRYPTO_URNM_MFPR_X20 = BIT(3),
+	WLAN_CRYPTO_I2R_LMR_FB = BIT(4),
 };
 
 typedef enum wlan_crypto_key_mgmt {

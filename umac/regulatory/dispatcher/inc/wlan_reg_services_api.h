@@ -173,6 +173,45 @@ bool wlan_reg_is_freq_indoor_in_secondary_list(struct wlan_objmgr_pdev *pdev,
 					       qdf_freq_t freq);
 #endif
 
+#ifdef CONFIG_REG_CLIENT
+/**
+ * wlan_reg_get_reg_punc_bitmap() - Return the reg_punct_bitmap field value
+ * @ch_params: chan params to fetch
+ *
+ * Return: Puncture bitmap from regulatory
+ */
+uint16_t wlan_reg_get_reg_punc_bitmap(struct ch_params *ch_params);
+
+/**
+ * wlan_reg_get_input_punc_bitmap() - Return the input_punc_bitmap field value
+ * @ch_params: chan params to fetch
+ *
+ * Return: Puncture bitmap input
+ */
+uint16_t wlan_reg_get_input_punc_bitmap(struct ch_params *ch_params);
+
+/**
+ * wlan_reg_set_input_punc_bitmap() - Set puncture bitmap in chan params as
+ * input
+ * @ch_params: chan params to set the input puncturing
+ * @punc_bitmap: puncturing bitmap
+ *
+ * Return: void
+ */
+void wlan_reg_set_input_punc_bitmap(struct ch_params *ch_params,
+				    uint16_t punc_bitmap);
+
+/**
+ * wlan_reg_set_non_eht_ch_params() - Set the value of get non-eht bw
+ * field
+ * @ch_params: chan params pointer
+ * @val: value to set
+ *
+ * Return: void
+ */
+void wlan_reg_set_non_eht_ch_params(struct ch_params *ch_params, bool val);
+#endif
+
 #ifdef CONFIG_BAND_6GHZ
 /**
  * wlan_reg_is_6ghz_chan_freq() - Check if the given channel frequency is 6GHz

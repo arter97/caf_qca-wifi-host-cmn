@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021, 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -284,6 +284,8 @@ QDF_STATUS wbuff_module_deinit(void)
 						&mod->handle);
 		qdf_spinlock_destroy(&mod->lock);
 	}
+
+	qdf_frag_cache_drain(&wbuff.pf_cache);
 
 	return QDF_STATUS_SUCCESS;
 }

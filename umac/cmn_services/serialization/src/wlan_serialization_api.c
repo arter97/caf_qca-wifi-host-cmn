@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022,2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -473,8 +473,12 @@ wlan_serialization_vdev_scan_status(struct wlan_objmgr_vdev *vdev)
 	struct wlan_ser_pdev_obj *ser_pdev_obj =
 		wlan_serialization_get_pdev_obj(pdev);
 	struct wlan_serialization_pdev_queue *pdev_q;
-	enum wlan_serialization_cmd_status status;
+	enum wlan_serialization_cmd_status status = WLAN_SER_CMD_NOT_FOUND;
 
+	if (!ser_pdev_obj) {
+		ser_err("invalid ser_pdev_obj");
+		goto error;
+	}
 	pdev_q = &ser_pdev_obj->pdev_q[SER_PDEV_QUEUE_COMP_SCAN];
 
 	wlan_serialization_acquire_lock(&pdev_q->pdev_queue_lock);
@@ -492,7 +496,9 @@ wlan_serialization_vdev_scan_status(struct wlan_objmgr_vdev *vdev)
 
 	wlan_serialization_release_lock(&pdev_q->pdev_queue_lock);
 
+error:
 	return status;
+
 }
 
 enum wlan_serialization_cmd_status
@@ -1052,9 +1058,15 @@ enum scm_scan_status
 wlan_get_vdev_status(struct wlan_objmgr_vdev *vdev)
 {
 	enum wlan_serialization_cmd_status status;
+	struct wlan_objmgr_pdev *pdev = NULL;
 
 	if (!vdev) {
 		ser_err("null vdev");
+		return SCAN_NOT_IN_PROGRESS;
+	}
+	pdev = wlan_vdev_get_pdev(vdev);
+	if (!pdev) {
+		ser_err("null pdev");
 		return SCAN_NOT_IN_PROGRESS;
 	}
 	status = wlan_serialization_vdev_scan_status(vdev);

@@ -1609,6 +1609,7 @@ dp_tx_hw_enqueue_be(struct dp_soc *soc, struct dp_vdev *vdev,
 	uint8_t num_desc_bytes = HAL_TX_DESC_LEN_BYTES;
 	uint16_t ast_idx = vdev->bss_ast_idx;
 	uint16_t ast_hash = vdev->bss_ast_hash;
+	uint32_t hp;
 
 	be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
 
@@ -1726,6 +1727,11 @@ dp_tx_hw_enqueue_be(struct dp_soc *soc, struct dp_vdev *vdev,
 
 	coalesce = dp_tx_attempt_coalescing(soc, vdev, tx_desc, tid,
 					    msdu_info, ring_id);
+
+	if (qdf_unlikely(dp_tx_pkt_tracepoints_enabled())) {
+		hp = hal_srng_src_get_hp(hal_ring_hdl);
+		qdf_trace_dp_tx_enqueue(tx_desc->nbuf, hp, ring_id, coalesce);
+	}
 
 	DP_STATS_INC_PKT(vdev, tx_i[msdu_info->xmit_type].processed, 1,
 			 dp_tx_get_pkt_len(tx_desc));

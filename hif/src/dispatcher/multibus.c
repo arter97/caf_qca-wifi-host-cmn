@@ -74,6 +74,8 @@ static void hif_initialize_default_ops(struct hif_softc *hif_sc)
 #endif
 	bus_ops->hif_affinity_mgr_set_affinity =
 		&hif_dummy_affinity_mgr_set_affinity;
+	bus_ops->hif_bus_get_device_handle =
+		&hif_dummy_bus_get_device_handle;
 }
 
 #define NUM_OPS (sizeof(struct hif_bus_ops) / sizeof(void *))
@@ -740,3 +742,20 @@ void hif_affinity_mgr_set_affinity(struct hif_opaque_softc *scn)
 
 	hif_sc->bus_ops.hif_affinity_mgr_set_affinity(hif_sc);
 }
+
+QDF_STATUS hif_bus_get_device_handle(struct hif_opaque_softc *hif_ctx,
+				     void **handle)
+{
+	struct hif_softc *hif_sc = HIF_GET_SOFTC(hif_ctx);
+
+	if (!hif_sc || !handle)
+		return QDF_STATUS_E_NULL_VALUE;
+
+	if (hif_sc->bus_ops.hif_bus_get_device_handle)
+		return hif_sc->bus_ops.hif_bus_get_device_handle(hif_sc,
+								 handle);
+	return QDF_STATUS_E_FAILURE;
+}
+
+qdf_export_symbol(hif_bus_get_device_handle);
+

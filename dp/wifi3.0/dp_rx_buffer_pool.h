@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -222,4 +222,157 @@ dp_rx_buffer_pool_nbuf_map(struct dp_soc *soc,
 static inline void dp_rx_schedule_refill_thread(struct dp_soc *soc) { }
 
 #endif /* WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL */
+
+#ifdef DP_FEATURE_RX_BUFFER_RECYCLE
+/**
+ * dp_rx_page_pool_resize() - Resize page pool dynamically
+ *
+ * @soc: SoC handle
+ * @pool_id: page pool id
+ * @new_size: new size of the page pool
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_rx_page_pool_resize(struct dp_soc *soc, uint32_t pool_id,
+				  size_t new_size);
+
+/**
+ * dp_rx_page_pool_nbuf_alloc_and_map() - Allocate and map NBUF from page pool
+ *
+ * @soc: SoC handle
+ * @nbuf_frag_info: NBUF frag info reference
+ * @mac_id: Pool ID
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+dp_rx_page_pool_nbuf_alloc_and_map(struct dp_soc *soc,
+				   struct dp_rx_nbuf_frag_info *nbuf_frag_info,
+				   uint32_t mac_id);
+/**
+ * dp_rx_page_pool_deinit() - Deinit page pool parameters for @pool_id
+ * @soc: SoC handle
+ * @pool_id: Pool ID representing the RX desc pool
+ *
+ * Return: void
+ */
+void dp_rx_page_pool_deinit(struct dp_soc *soc, uint32_t pool_id);
+
+/**
+ * dp_rx_page_pool_init() - Init page pool parameters for @pool_id
+ * @soc: SoC handle
+ * @pool_id: Pool ID representing the RX desc pool
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_rx_page_pool_init(struct dp_soc *soc, uint32_t pool_id);
+
+/**
+ * dp_rx_page_pool_free() - Free RX Page Pools
+ *
+ * @soc: SoC handle
+ * @pool_id: Pool ID representing the RX desc pool
+ *
+ * Return: void
+ */
+void dp_rx_page_pool_free(struct dp_soc *soc, uint32_t pool_id);
+
+/**
+ * dp_rx_page_pool_alloc() - Allocate Page Pools for RX buffers
+ *
+ * @soc: SoC handle
+ * @pool_id: Pool ID representing the RX desc pool
+ * @pool_size: Size of the buffer pool, not to be confused with page pool size
+ *
+ * Return: QDF_STATUS_SUCCESS for successful page pool creation
+ *	   QDF_STATUS_E_FAILURE for failed page pool creation
+ */
+QDF_STATUS dp_rx_page_pool_alloc(struct dp_soc *soc, uint32_t pool_id,
+				 uint32_t pool_size);
+#else
+/**
+ * dp_rx_page_pool_resize() - Resize page pool dynamically
+ *
+ * @soc: SoC handle
+ * @pool_id: page pool id
+ * @new_size: new size of the page pool
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS
+dp_rx_page_pool_resize(struct dp_soc *soc, uint32_t pool_id,
+		       size_t new_size)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+/**
+ * dp_rx_page_pool_nbuf_alloc_and_map() - Allocate and map NBUF from page pool
+ *
+ * @soc: SoC handle
+ * @nbuf_frag_info: NBUF frag info reference
+ * @mac_id: Pool ID
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS
+dp_rx_page_pool_nbuf_alloc_and_map(struct dp_soc *soc,
+				   struct dp_rx_nbuf_frag_info *nbuf_frag_info,
+				   uint8_t mac_id)
+{
+	return QDF_STATUS_E_FAILURE;
+}
+
+/**
+ * dp_rx_page_pool_deinit() - Deinit page pool parameters for @pool_id
+ * @soc: SoC handle
+ * @pool_id: Pool ID representing the RX desc pool
+ *
+ * Return: void
+ */
+static inline void dp_rx_page_pool_deinit(struct dp_soc *soc, uint32_t pool_id)
+{
+}
+
+/**
+ * dp_rx_page_pool_init() - Init page pool parameters for @pool_id
+ * @soc: SoC handle
+ * @pool_id: Pool ID representing the RX desc pool
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS
+dp_rx_page_pool_init(struct dp_soc *soc, uint32_t pool_id)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * dp_rx_page_pool_free() - Free RX Page Pools
+ *
+ * @soc: SoC handle
+ * @pool_id: Pool ID representing the RX desc pool
+ *
+ * Return: void
+ */
+static inline void dp_rx_page_pool_free(struct dp_soc *soc, uint32_t pool_id)
+{
+}
+
+/**
+ * dp_rx_page_pool_alloc() - Allocate Page Pools for RX buffers
+ *
+ * @soc: SoC handle
+ * @pool_id: Pool ID representing the RX desc pool
+ * @pool_size: Size of the buffer pool, not to be confused with page pool size
+ *
+ * Return: QDF_STATUS_SUCCESS for successful page pool creation
+ *	   QDF_STATUS_E_FAILURE for failed page pool creation
+ */
+static inline QDF_STATUS
+dp_rx_page_pool_alloc(struct dp_soc *soc, uint32_t pool_id, uint32_t pool_size)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* DP_FEATURE_RX_BUFFER_RECYCLE */
 #endif /* _DP_RX_BUFFER_POOL_H_ */

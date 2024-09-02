@@ -937,16 +937,6 @@ static struct afc_resp_extracted *extract_afc_resp(struct nlattr **attr)
 		return NULL;
 	}
 
-	if (!attr[QCA_WLAN_VENDOR_ATTR_AFC_RESP_FREQ_PSD_INFO]) {
-		osif_err("ATTR AFC RESP FREQ PSD INFO is required");
-		return NULL;
-	}
-
-	if (!attr[QCA_WLAN_VENDOR_ATTR_AFC_RESP_OPCLASS_CHAN_EIRP_INFO]) {
-		osif_err("ATTR AFC RESP OPCLASS CHAN EIRP INFO is required");
-		return NULL;
-	}
-
 	afc_rsp = qdf_mem_malloc(sizeof(*afc_rsp));
 	if (!afc_rsp)
 		return NULL;
@@ -976,16 +966,20 @@ static struct afc_resp_extracted *extract_afc_resp(struct nlattr **attr)
 	afc_rsp->afc_serv_resp_code =
 		nla_get_s32(attr[QCA_WLAN_VENDOR_ATTR_AFC_RESP_AFC_SERVER_RESP_CODE]);
 
-	if (wlan_parse_afc_rsp_freq_psd(attr[QCA_WLAN_VENDOR_ATTR_AFC_RESP_FREQ_PSD_INFO],
-					afc_rsp) <= 0) {
-		osif_err("parse freq psd err");
-		goto fail;
+	if (attr[QCA_WLAN_VENDOR_ATTR_AFC_RESP_FREQ_PSD_INFO]) {
+		if (wlan_parse_afc_rsp_freq_psd(attr[QCA_WLAN_VENDOR_ATTR_AFC_RESP_FREQ_PSD_INFO],
+						afc_rsp) <= 0) {
+			osif_err("parse freq psd err");
+			goto fail;
+		}
 	}
 
-	if (wlan_parse_afc_rsp_opclass_eirp(attr[QCA_WLAN_VENDOR_ATTR_AFC_RESP_OPCLASS_CHAN_EIRP_INFO],
-					    afc_rsp) <= 0) {
-		osif_err("parse opclass eirp err");
-		goto fail;
+	if (attr[QCA_WLAN_VENDOR_ATTR_AFC_RESP_OPCLASS_CHAN_EIRP_INFO]) {
+		if (wlan_parse_afc_rsp_opclass_eirp(attr[QCA_WLAN_VENDOR_ATTR_AFC_RESP_OPCLASS_CHAN_EIRP_INFO],
+						    afc_rsp) <= 0) {
+			osif_err("parse opclass eirp err");
+			goto fail;
+		}
 	}
 
 	return afc_rsp;

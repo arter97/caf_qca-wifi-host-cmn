@@ -55,6 +55,8 @@
  *                                     Switch Announcement.
  * @mlme_unpunc_chan_switch:           After DFS unpuncture occurs send VDEV
  *                                     restart.
+ * @mlme_check_punc_sm_sanity:         MLME cb to check if puncturing SM can
+ *                                     be initialized.
  * @mlme_nol_timeout_notification:     NOL timeout notification.
  * @mlme_clist_update:                 Updates the channel list.
  * @mlme_is_opmode_sta:                Check if pdev opmode is STA.
@@ -176,6 +178,7 @@ struct dfs_to_mlme {
 	QDF_STATUS
 	    (*mlme_unpunc_chan_switch)(struct wlan_objmgr_pdev *pdev,
 				       uint16_t new_punc_pattern);
+	bool (*mlme_check_punc_sm_sanity)(struct wlan_objmgr_pdev *pdev);
 #endif
 	QDF_STATUS (*mlme_nol_timeout_notification)(
 			struct wlan_objmgr_pdev *pdev);
