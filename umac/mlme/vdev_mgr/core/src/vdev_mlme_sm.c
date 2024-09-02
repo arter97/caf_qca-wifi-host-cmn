@@ -189,8 +189,10 @@ static bool mlme_vdev_state_init_event(void *ctx, uint16_t event,
 		}
 		break;
 
-	case WLAN_VDEV_SM_EV_DOWN_COMPLETE:
 	case WLAN_VDEV_SM_EV_DOWN:
+		mlme_vdev_init_down(vdev_mlme);
+		fallthrough;
+	case WLAN_VDEV_SM_EV_DOWN_COMPLETE:
 	case WLAN_VDEV_SM_EV_START_REQ_FAIL:
 		/* already in down state, notify DOWN command is completed */
 		/* NOTE: Keep this function call always at the end, to allow

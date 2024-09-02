@@ -624,6 +624,19 @@ static inline QDF_STATUS mlme_vdev_chan_switch_disable_notify_dfs(
 {
 	return utils_dfs_radar_enable(wlan_vdev_get_pdev(vdev_mlme->vdev));
 }
+
+/*
+ * mlme_vdev_init_down() - Notifies Event down received on INIT state
+ * @vdev_mlme: VDEV MLME comp object
+ *
+ * Return: None
+ */
+static inline void mlme_vdev_init_down(struct vdev_mlme_obj *vdev_mlme)
+{
+	if (vdev_mlme->ops && vdev_mlme->ops->mlme_vdev_init_down)
+		vdev_mlme->ops->mlme_vdev_init_down(vdev_mlme);
+}
+
 #ifdef WLAN_FEATURE_11BE_MLO
 /**
  * mlme_vdev_up_notify_mlo_mgr() - notify mlo link is ready to up
