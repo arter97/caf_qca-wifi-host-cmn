@@ -4695,7 +4695,7 @@ static QDF_STATUS dp_vdev_attach_wifi3(struct cdp_soc_t *cdp_soc,
 	if (!pdev) {
 		dp_init_err("%pK: DP PDEV is Null for pdev id %d",
 			    cdp_soc, pdev_id);
-		qdf_mem_vfree(vdev);
+		qdf_mem_common_free(vdev);
 		goto fail0;
 	}
 
@@ -6338,7 +6338,7 @@ free_vdev:
 				     vdev);
 	wlan_minidump_remove(vdev, sizeof(*vdev), soc->ctrl_psoc,
 			     WLAN_MD_DP_VDEV, "dp_vdev");
-	qdf_mem_vfree(vdev);
+	qdf_mem_common_free(vdev);
 	vdev = NULL;
 
 	if (vdev_delete_cb)
@@ -6909,7 +6909,7 @@ void dp_aggregate_pdev_stats(struct dp_pdev *pdev)
 		dp_update_pdev_ingress_stats(pdev, vdev);
 	}
 	qdf_spin_unlock_bh(&pdev->vdev_list_lock);
-	qdf_mem_vfree(vdev_stats);
+	qdf_mem_common_free(vdev_stats);
 
 #if defined(FEATURE_PERPKT_INFO) && WDI_EVENT_ENABLE
 	dp_wdi_event_handler(WDI_EVENT_UPDATE_DP_STATS, pdev->soc, &pdev->stats,
