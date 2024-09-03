@@ -25,10 +25,10 @@
 #ifdef CONNECTION_ROAMING_CFG
 #define RoamAPScore_RSSIWeight_min 0
 #define RoamAPScore_RSSIWeight_max 100
-#define RoamAPScore_RSSIWeight_default 65
+#define RoamAPScore_RSSIWeight_default 70
 # define ROAMAPSCORE_CUWEIGHT_MIN 0
 # define ROAMAPSCORE_CUWEIGHT_MAX 100
-# define ROAMAPSCORE_CUWEIGHT_DEFAULT 35
+# define ROAMAPSCORE_CUWEIGHT_DEFAULT 30
 #else
 #define RoamAPScore_RSSIWeight_min 0
 #define RoamAPScore_RSSIWeight_max 100
