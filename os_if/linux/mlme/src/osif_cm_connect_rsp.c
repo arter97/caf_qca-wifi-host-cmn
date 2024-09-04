@@ -603,6 +603,8 @@ osif_populate_partner_links_mlo_params(struct wlan_objmgr_vdev *vdev,
 							link_vdev->vdev_mlme.macaddr,
 							rsp_partner_info->link_status_code,
 							bss);
+
+		mlo_mlme_set_ieee_link_id(link_vdev);
 release_ref:
 		wlan_objmgr_vdev_release_ref(link_vdev, WLAN_OSIF_CM_ID);
 	}
@@ -633,6 +635,9 @@ static void osif_fill_connect_resp_mlo_params(struct wlan_objmgr_vdev *vdev,
 						vdev->vdev_mlme.macaddr,
 						rsp->status_code,
 						bss);
+
+	mlo_mlme_set_ieee_link_id(vdev);
+
 	osif_populate_partner_links_mlo_params(vdev, rsp, conn_rsp_params);
 }
 #else

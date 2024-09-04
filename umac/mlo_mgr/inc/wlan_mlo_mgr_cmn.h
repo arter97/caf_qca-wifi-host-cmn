@@ -220,6 +220,14 @@ QDF_STATUS
 mlo_mlme_connect_get_partner_info(struct wlan_objmgr_vdev *vdev,
 				  const struct cfg80211_connect_params *req,
 				  struct mlo_partner_info *partner_info);
+
+/**
+ * mlo_mlme_set_ieee_link_id() - Update ieee_link_id in vap
+ * @vdev: Object manager vdev
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlo_mlme_set_ieee_link_id(struct wlan_objmgr_vdev *vdev);
 #endif
 
 /**

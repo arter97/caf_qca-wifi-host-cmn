@@ -360,6 +360,22 @@ mlo_mlme_connect_get_partner_info(struct wlan_objmgr_vdev *vdev,
 
 	return status;
 }
+
+QDF_STATUS
+mlo_mlme_set_ieee_link_id(struct wlan_objmgr_vdev *vdev)
+{
+	struct mlo_mgr_context *mlo_ctx = wlan_objmgr_get_mlo_ctx();
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	struct mlo_mlme_ext_ops *ops = mlo_ctx->mlme_ops;
+
+	if (!mlo_ctx || !mlo_ctx->mlme_ops)
+		return QDF_STATUS_E_FAILURE;
+
+	if (mlo_ctx->mlme_ops->mlo_mlme_ext_set_ieee_link_id)
+		status = ops->mlo_mlme_ext_set_ieee_link_id(vdev);
+
+	return status;
+}
 #endif
 
 uint8_t mlo_get_link_vdev_ix(struct wlan_mlo_dev_context *ml_dev,
