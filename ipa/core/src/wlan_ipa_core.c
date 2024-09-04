@@ -7043,18 +7043,21 @@ int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb_wrapper(
 			   void *ipa_ctx,
 			   struct ipa_wdi_opt_dpath_flt_rem_cb_params *in)
 {
-	struct wlan_ipa_priv *ipa_obj = (struct wlan_ipa_priv *)ipa_ctx;
+	struct qdf_op_sync *op_sync;
+	int code;
 
-	if (ipa_obj->opt_dp_ctrl_ssr ||
-	    ipa_obj->opt_dp_ctrl_wlan_shutdown) {
-		ipa_debug("opt_dp_ctrl, flt del requested while ssr or shutdown");
+	if (qdf_op_protect(&op_sync)) {
+		ipa_debug("opt_dp_ctrl: driver operation inprogress!");
 		return WLAN_IPA_WDI_OPT_DPATH_RESP_SUCCESS;
 	}
 
-	ipa_debug("opt_dp_ctrl, flt del requested from ipa");
-	return wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
+	code = wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
 						ipa_ctx, in,
 						WLAN_IPA_CTRL_FLT_DEL_SRC_IPA);
+	ipa_debug("opt_dp_ctrl: flt del requested from ipa, return code - %d",
+		  code);
+	qdf_op_unprotect(op_sync);
+	return code;
 }
 
 int wlan_ipa_wdi_opt_dpath_ctrl_flt_rem_cb(
