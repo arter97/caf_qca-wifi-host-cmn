@@ -180,6 +180,10 @@ static void scm_add_rnr_channel_db(struct wlan_objmgr_pdev *pdev,
 			wlan_reg_chan_opclass_to_freq_prefer_global(pdev, cc,
 								    rnr_bss->channel_number,
 								    rnr_bss->operating_class);
+		if (!chan_freq)
+			scm_debug_rl("Invalid op_class %d",
+				     rnr_bss->operating_class);
+
 		channel = scm_get_chan_meta(psoc, chan_freq);
 		if (!channel) {
 			scm_debug("Failed to get chan Meta freq %d", chan_freq);
