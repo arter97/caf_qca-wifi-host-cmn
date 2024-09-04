@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -723,8 +723,12 @@ int hif_get_fw_diag_ce_id(struct hif_softc *scn, uint8_t *ce_id);
 #if defined(HIF_CONFIG_SLUB_DEBUG_ON) || defined(HIF_CE_DEBUG_DATA_BUF)
 
 #ifndef HIF_CE_HISTORY_MAX
+#if defined(CONFIG_SLUB_DEBUG_ON)
 #define HIF_CE_HISTORY_MAX 1024
-#endif
+#else
+#define HIF_CE_HISTORY_MAX 768
+#endif /* CONFIG_SLUB_DEBUG_ON */
+#endif /* !HIF_CE_HISTORY_MAX */
 
 #define CE_DEBUG_MAX_DATA_BUF_SIZE 64
 

@@ -262,7 +262,7 @@ typedef __qdf_nbuf_queue_t qdf_nbuf_queue_t;
 #define RADIOTAP_HE_MU_FLAGS_LEN (8 + 1)
 #define RADIOTAP_HE_MU_OTHER_FLAGS_LEN (18 + 1)
 #define RADIOTAP_U_SIG_FLAGS_LEN (12 + 3)
-#define RADIOTAP_EHT_FLAGS_LEN (32 + 3)
+#define RADIOTAP_EHT_FLAGS_LEN (58 + 3)
 #define RADIOTAP_FIXED_HEADER_LEN 17
 #define RADIOTAP_HT_FLAGS_LEN 3
 #define RADIOTAP_AMPDU_STATUS_LEN (8 + 3)
@@ -334,6 +334,8 @@ typedef __qdf_nbuf_queue_t qdf_nbuf_queue_t;
  * @ltf_size: ltf size
  * @tx_status: packet tx status
  * @mu_dl_ul: MU down or up link, 0 downlink, 1 uplink
+ * @ul_mu_type: MU type
+ * @user_info_skip: user information skip
  * @rx_antenna: rx antenna
  * @vht_flag_values6: VHT flag value6
  * @he_mu_other_flags: HE MU other flag
@@ -342,6 +344,7 @@ typedef __qdf_nbuf_queue_t qdf_nbuf_queue_t;
  * @l_sig_a_info: L_SIG_A value coming in Rx descriptor
  * @l_sig_b_info: L_SIG_B value coming in Rx descriptor
  * @num_eht_user_info_valid: Number of valid EHT user info
+ * @num_eht_all_user_info_valid: Number of all valid EHT user info
  * @rate: Rate in terms 500Kbps
  * @rtap_flags: Bit map of available fields in the radiotap
  * @ant_signal_db: Rx packet RSSI
@@ -395,6 +398,7 @@ typedef __qdf_nbuf_queue_t qdf_nbuf_queue_t;
  * @usig_mask: U-SIG property of received frame
  * @eht_known: EHT property of received frame
  * @eht_data: EHT property of received frame
+ * @eht_all_user_num: EHT all user number
  * @eht_user_info: EHT USER property of received frame
  * @phyrx_abort: phy aborted undecoded frame indication
  * @phyrx_abort_reason: abort reason in phyrx_abort_request_info
@@ -453,7 +457,9 @@ struct mon_rx_status {
 		 reception_type : 4,
 		 ltf_size : 2,
 		 tx_status : 4,
-		 mu_dl_ul : 1;
+		 mu_dl_ul : 1,
+		 ul_mu_type : 4,
+		 user_info_skip : 1;
 	uint32_t rx_antenna : 24;
 	uint16_t vht_flag_values6;
 	uint16_t he_mu_other_flags;
@@ -462,6 +468,7 @@ struct mon_rx_status {
 	uint32_t l_sig_a_info;
 	uint32_t l_sig_b_info;
 	uint8_t  num_eht_user_info_valid;
+	uint8_t  num_eht_all_user_info_valid;
 	uint8_t  rate;
 	uint8_t  rtap_flags;
 	uint8_t  ant_signal_db;
@@ -513,7 +520,8 @@ struct mon_rx_status {
 	uint32_t usig_value;
 	uint32_t usig_mask;
 	uint32_t eht_known;
-	uint32_t eht_data[6];
+	uint32_t eht_data[9];
+	uint32_t eht_all_user_num;
 	uint32_t eht_user_info[EHT_USER_INFO_LEN];
 #ifdef QCA_UNDECODED_METADATA_SUPPORT
 	uint32_t phyrx_abort:1,
@@ -547,6 +555,11 @@ struct mon_rx_status {
  * @ofdma_ru_width: OFDMA total RU width
  * @ofdma_ru_size: OFDMA RU size index
  * @is_ampdu: AMPDU flag
+ * @sta_id: STA id
+ * @ldpc: LDPC
+ * @dcm: DCM
+ * @is_stbc: STBC
+ * @beamformed: Beamformed
  * @mu_ul_user_v0_word0: MU UL user info word 0
  * @mu_ul_user_v0_word1: MU UL user info word 1
  * @ast_index: AST table hash index
@@ -584,6 +597,9 @@ struct mon_rx_status {
  * @he_per_user_2: HE per user info2
  * @he_per_user_position: HE per user position info
  * @he_per_user_known: HE per user known info
+ * @eht_known: EHT known
+ * @eht_data: EHT data
+ * @eht_user_info: EHT user info
  * @rtap_flags: Bit map of available fields in the radiotap
  * @rs_flags: Flags to indicate AMPDU or AMSDU aggregation
  * @mpdu_cnt_fcs_ok: mpdu count received with fcs ok
@@ -606,6 +622,11 @@ struct mon_rx_user_status {
 		 ofdma_ru_width:7,
 		 ofdma_ru_size:8,
 		 is_ampdu:1;
+	uint32_t sta_id : 12,
+		 ldpc : 1,
+		 dcm : 1,
+		 is_stbc : 1,
+		 beamformed : 1;
 	uint32_t mu_ul_user_v0_word0;
 	uint32_t mu_ul_user_v0_word1;
 	uint32_t ast_index : 16,
@@ -643,6 +664,9 @@ struct mon_rx_user_status {
 	uint8_t he_per_user_2;
 	uint8_t he_per_user_position;
 	uint8_t he_per_user_known;
+	uint32_t eht_known;
+	uint32_t eht_data[9];
+	uint32_t eht_user_info;
 	uint8_t rtap_flags;
 	uint8_t rs_flags;
 	uint16_t mpdu_cnt_fcs_ok;
@@ -989,20 +1013,80 @@ struct qdf_radiotap_ext2 {
 /* EHT data1 Mask/SHIFT */
 #define QDF_MON_STATUS_EHT_RU_MRU_SIZE_SHIFT			0
 #define QDF_MON_STATUS_EHT_RU_MRU_INDEX_SHIFT			5
-#define QDF_MON_STATUS_EHT_RU_ALLOCATION1_1_SHIFT		13
-#define QDF_MON_STATUS_EHT_RU_ALLOCATION1_2_SHIFT		22
+#define QDF_MON_STATUS_EHT_RU_ALLOC_FIELD1_1_SHIFT		13
+#define QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN1_1_SHIFT		22
+
+/* Keeping this as part of Tx Old Code
+ * needs refactor and cleanup later
+ */
+#define QDF_MON_STATUS_EHT_RU_ALLOCATION1_1_SHIFT               13
+#define QDF_MON_STATUS_EHT_RU_ALLOCATION1_2_SHIFT               22
 
 /* EHT data2 Mask/SHIFT */
-#define QDF_MON_STATUS_EHT_RU_ALLOCATION2_1_SHIFT		0
-#define QDF_MON_STATUS_EHT_RU_ALLOCATION2_2_SHIFT		9
-#define QDF_MON_STATUS_EHT_RU_ALLOCATION2_3_SHIFT		18
+#define QDF_MON_STATUS_EHT_RU_ALLOC_FIELD2_1_SHIFT		0
+#define QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN2_1_SHIFT		9
+
+#define QDF_MON_STATUS_EHT_RU_ALLOC_FIELD1_2_SHIFT		10
+#define QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN1_2_SHIFT		19
+
+#define QDF_MON_STATUS_EHT_RU_ALLOC_FIELD2_2_SHIFT		20
+#define QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN2_2_SHIFT		29
+
+/* Keeping this as part of Tx Old Code
+ * needs refactor and cleanup later
+ */
+#define QDF_MON_STATUS_EHT_RU_ALLOCATION2_1_SHIFT               0
+#define QDF_MON_STATUS_EHT_RU_ALLOCATION2_2_SHIFT               9
+#define QDF_MON_STATUS_EHT_RU_ALLOCATION2_3_SHIFT               18
 
 /* EHT data3 Mask/SHIFT */
-#define QDF_MON_STATUS_EHT_RU_ALLOCATION2_4_SHIFT		0
-#define QDF_MON_STATUS_EHT_RU_ALLOCATION2_5_SHIFT		9
-#define QDF_MON_STATUS_EHT_RU_ALLOCATION2_6_SHIFT		18
+#define QDF_MON_STATUS_EHT_RU_ALLOC_FIELD1_3_SHIFT		0
+#define QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN1_3_SHIFT		9
+
+#define QDF_MON_STATUS_EHT_RU_ALLOC_FIELD2_3_SHIFT		10
+#define QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN2_3_SHIFT		19
+
+#define QDF_MON_STATUS_EHT_RU_ALLOC_FIELD1_4_SHIFT		20
+#define QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN1_4_SHIFT		29
+
+/* Keeping this as part of Tx Old Code
+ * needs refactor and cleanup later
+ */
+#define QDF_MON_STATUS_EHT_RU_ALLOCATION2_4_SHIFT               0
+#define QDF_MON_STATUS_EHT_RU_ALLOCATION2_5_SHIFT               9
+#define QDF_MON_STATUS_EHT_RU_ALLOCATION2_6_SHIFT               18
 
 /* EHT data4 Mask/SHIFT */
+#define QDF_MON_STATUS_EHT_RU_ALLOC_FIELD2_4_SHIFT		0
+#define QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN2_4_SHIFT		9
+
+#define QDF_MON_STATUS_EHT_RU_ALLOC_FIELD1_5_SHIFT		10
+#define QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN1_5_SHIFT		19
+
+#define QDF_MON_STATUS_EHT_RU_ALLOC_FIELD2_5_SHIFT		20
+#define QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN2_5_SHIFT		29
+
+/* EHT data5 Mask/SHIFT */
+#define QDF_MON_STATUS_EHT_RU_ALLOC_FIELD1_6_SHIFT		0
+#define QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN1_6_SHIFT		9
+
+#define QDF_MON_STATUS_EHT_RU_ALLOC_FIELD2_6_SHIFT		10
+#define QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN2_6_SHIFT		19
+
+#define QDF_MON_STATUS_EHT_RU_ALLOC_FIELD1_7_SHIFT		20
+#define QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN1_7_SHIFT		29
+
+/* EHT data6 Mask/SHIFT */
+#define QDF_MON_STATUS_EHT_RU_ALLOC_FIELD2_7_SHIFT		0
+#define QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN2_7_SHIFT		9
+
+#define QDF_MON_STATUS_EHT_RU_ALLOC_FIELD1_8_SHIFT		10
+#define QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN1_8_SHIFT		19
+
+#define QDF_MON_STATUS_EHT_RU_ALLOC_FIELD2_8_SHIFT		20
+#define QDF_MON_STATUS_EHT_RU_ALLOC_KNOWN2_8_SHIFT		29
+
+/* EHT data7 Mask/SHIFT */
 #define QDF_MON_STATUS_EHT_CRC2_SHIFT				0
 #define QDF_MON_STATUS_EHT_TAIL2_SHIFT				4
 #define QDF_MON_STATUS_EHT_NDP_NSS_SHIFT			12
@@ -1011,7 +1095,7 @@ struct qdf_radiotap_ext2 {
 #define QDF_MON_STATUS_EHT_USER_ENC_BLOCK_CRC_SHIFT		20
 #define QDF_MON_STATUS_EHT_USER_ENC_BLOCK_TAIL_SHIFT		24
 
-/* EHT data5 Mask/SHIFT */
+/* EHT data8 Mask/SHIFT */
 #define QDF_MON_STATUS_EHT_TB_RU_PS160_SHIFT			0
 #define QDF_MON_STATUS_EHT_TB_RU_PS80_SHIFT			1
 #define QDF_MON_STATUS_EHT_TB_RU_B7_B1_SHIFT			2

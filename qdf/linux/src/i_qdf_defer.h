@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -116,12 +116,12 @@ __qdf_queue_work(__qdf_workqueue_t *wqueue, __qdf_work_t *work)
 /**
  * __qdf_sched_work - Schedule a deferred task on non-interrupt context
  * @work: pointer to work
- * Return: none
+ *
+ * Return: false if work was already on a global queue, true otherwise
  */
-static inline QDF_STATUS __qdf_sched_work(__qdf_work_t *work)
+static inline bool __qdf_sched_work(__qdf_work_t *work)
 {
-	schedule_work(&work->work);
-	return QDF_STATUS_SUCCESS;
+	return schedule_work(&work->work);
 }
 
 /**

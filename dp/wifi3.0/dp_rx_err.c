@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -2057,6 +2057,8 @@ dp_rx_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
 	uint16_t peer_id;
 	struct dp_txrx_peer *txrx_peer = NULL;
 	dp_txrx_ref_handle txrx_ref_handle = NULL;
+	uint32_t num_pending, num_entries;
+	bool near_full;
 
 	/* Debug -- Remove later */
 	qdf_assert(soc && hal_ring_hdl);
@@ -2065,7 +2067,9 @@ dp_rx_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
 
 	/* Debug -- Remove later */
 	qdf_assert(hal_soc);
+	num_entries = hal_srng_get_num_entries(hal_soc, hal_ring_hdl);
 
+more_data:
 	if (qdf_unlikely(dp_srng_access_start(int_ctx, soc, hal_ring_hdl))) {
 
 		/* TODO */
@@ -2360,6 +2364,30 @@ done:
 						&dp_pdev->free_list_tail,
 						false);
 			rx_bufs_used += rx_bufs_reaped[mac_id];
+		}
+		rx_bufs_reaped[mac_id] = 0;
+	}
+
+	if (dp_rx_enable_eol_data_check(soc) && rx_bufs_used) {
+		if (quota) {
+			num_pending =
+				dp_rx_srng_get_num_pending(hal_soc,
+							   hal_ring_hdl,
+							   num_entries,
+							   &near_full);
+
+			if (num_pending) {
+				DP_STATS_INC(soc, rx.err.hp_oos2, 1);
+
+				if (!hif_exec_should_yield(soc->hif_handle,
+							   int_ctx->dp_intr_id))
+					goto more_data;
+
+				if (qdf_unlikely(near_full)) {
+					DP_STATS_INC(soc, rx.err.near_full, 1);
+					goto more_data;
+				}
+			}
 		}
 	}
 

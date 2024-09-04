@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -23,11 +23,13 @@
  * This file provide public API definitions for other accessing other UMAC
  * components
  */
+#include <cfg_ucfg_api.h>
 #include "../../core/src/wlan_cp_stats_defs.h"
 #include "../../core/src/wlan_cp_stats_obj_mgr_handler.h"
 #include "../../core/src/wlan_cp_stats_comp_handler.h"
 #include <wlan_cp_stats_utils_api.h>
 #include <wlan_cp_stats_ucfg_api.h>
+#include <wlan_cp_stats_chipset_stats.h>
 
 QDF_STATUS wlan_cp_stats_init(void)
 {

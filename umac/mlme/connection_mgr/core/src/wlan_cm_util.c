@@ -837,7 +837,8 @@ bool cm_is_cm_id_current_candidate_single_pmk(struct cnx_mgr *cm_ctx,
 		return is_single_pmk;
 
 	akm = wlan_crypto_get_param(cm_ctx->vdev, WLAN_CRYPTO_PARAM_KEY_MGMT);
-	if (!QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_SAE))
+	if (!(QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_SAE) ||
+	      QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY)))
 		return is_single_pmk;
 
 	cm_req_lock_acquire(cm_ctx);
@@ -2291,3 +2292,28 @@ void cm_store_n_send_failed_candidate(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id)
 	mlme_cm_osif_failed_candidate_ind(cm_ctx->vdev, &resp);
 }
 #endif /* CONN_MGR_ADV_FEATURE */
+
+#ifdef WLAN_CHIPSET_STATS
+void
+cm_cp_stats_cstats_log_connecting_event(struct wlan_objmgr_vdev *vdev,
+					struct wlan_cm_vdev_connect_req *req,
+					struct cm_req *cm_req)
+{
+	struct cstats_sta_connect_req stat = {0};
+
+	stat.cmn.hdr.evt_id = WLAN_CHIPSET_STATS_STA_CONNECTING_EVENT_ID;
+	stat.cmn.hdr.length = sizeof(struct cstats_sta_connect_req) -
+			      sizeof(struct cstats_hdr);
+	stat.cmn.opmode = wlan_vdev_mlme_get_opmode(vdev);
+	stat.cmn.vdev_id = wlan_vdev_get_id(vdev);
+	stat.cmn.timestamp_us = qdf_get_time_of_the_day_us();
+	stat.cmn.time_tick = qdf_get_log_timestamp();
+	stat.freq = req->bss->entry->channel.chan_freq;
+	stat.ssid_len = cm_req->connect_req.req.ssid.length;
+	qdf_mem_copy(&stat.ssid, cm_req->connect_req.req.ssid.ssid,
+		     cm_req->connect_req.req.ssid.length);
+	CSTATS_MAC_COPY(stat.bssid, req->bss->entry->bssid.bytes);
+
+	wlan_cstats_host_stats(sizeof(struct cstats_sta_connect_req), &stat);
+}
+#endif /* WLAN_CHIPSET_STATS */

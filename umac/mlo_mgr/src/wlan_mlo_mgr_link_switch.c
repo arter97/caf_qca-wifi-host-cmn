@@ -25,6 +25,7 @@
 #include <wlan_crypto_def_i.h>
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 #include "wlan_cm_roam_api.h"
+#include <wlan_mlo_mgr_roam.h>
 #endif
 #include "host_diag_core_event.h"
 
@@ -83,6 +84,7 @@ void mlo_mgr_update_ap_link_info(struct wlan_objmgr_vdev *vdev, uint8_t link_id,
 	qdf_mem_copy(link_info->link_chan_info, &channel, sizeof(channel));
 	link_info->link_status_flags = 0;
 	link_info->link_id = link_id;
+	link_info->is_link_active = false;
 
 	mlo_debug("Update AP Link info for link_id: %d, vdev_id:%d, link_addr:" QDF_MAC_ADDR_FMT,
 		  link_info->link_id, link_info->vdev_id,
@@ -560,18 +562,31 @@ mlo_mgr_link_switch_notification(struct wlan_objmgr_vdev *vdev,
 {
 	QDF_STATUS status;
 
-	if ((notify_reason == MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_PRE_SER ||
-	     notify_reason ==
-		MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_POST_SER) &&
-		mlo_is_chan_switch_in_progress(vdev)) {
-		mlo_debug("CSA is in progress on one of ML vdevs, abort link switch");
-		return QDF_STATUS_E_AGAIN;
+	switch (notify_reason) {
+	case MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_PRE_SER:
+	case MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_POST_SER:
+		if (!mlo_check_if_all_vdev_up(vdev)) {
+			mlo_debug("Not all VDEVs up");
+			return QDF_STATUS_E_AGAIN;
+		}
+
+		if (mlo_is_chan_switch_in_progress(vdev)) {
+			mlo_debug("CSA is in progress on one of ML vdevs, abort link switch");
+			return QDF_STATUS_E_AGAIN;
+		}
+
+		if (notify_reason ==
+		    MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_PRE_SER) {
+			return QDF_STATUS_SUCCESS;
+		}
+
+		break;
+	default:
+		break;
 	}
 
-	if (notify_reason == MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_PRE_SER)
-		return QDF_STATUS_SUCCESS;
-
 	status = mlo_mgr_link_switch_osif_notification(vdev, lswitch_req);
+
 	return status;
 }
 
@@ -1000,6 +1015,15 @@ void mlo_mgr_remove_link_switch_cmd(struct wlan_objmgr_vdev *vdev)
 	req = &vdev->mlo_dev_ctx->link_ctx->last_req;
 	mlo_mgr_link_switch_notify(vdev, req);
 
+	/* Force queue disconnect on failure */
+	if (cur_state != MLO_LINK_SWITCH_STATE_COMPLETE_SUCCESS &&
+	    cur_state >= MLO_LINK_SWITCH_STATE_DISCONNECT_CURR_LINK &&
+	    !wlan_cm_is_vdev_connected(vdev)) {
+		mlo_mgr_link_switch_defer_disconnect_req(vdev,
+							 CM_MLME_DISCONNECT,
+							 REASON_HOST_TRIGGERED_LINK_DELETE);
+	}
+
 	/* Handle any pending disconnect */
 	mlo_handle_pending_disconnect(vdev);
 
@@ -1219,20 +1243,16 @@ QDF_STATUS mlo_mgr_link_switch_request_params(struct wlan_objmgr_psoc *psoc,
 static void mlo_mgr_update_link_state(struct wlan_mlo_dev_context *mld_ctx,
 				      uint32_t active_link_bitmap)
 {
+	uint8_t i;
 	struct mlo_link_info *link_info;
-	uint8_t link_iter;
 
-	for (link_iter = 0; link_iter < MAX_MLO_LINK_ID; link_iter++) {
-		if (IS_LINK_SET(active_link_bitmap, link_iter)) {
-			link_info = mlo_mgr_get_ap_link_by_link_id(mld_ctx,
-								   link_iter);
-			if (!link_info) {
-				mlo_err("link: %d info does not exist",
-					link_iter);
-				return;
-			}
+	for (i = 0; i < WLAN_MAX_ML_BSS_LINKS; i++) {
+		link_info = &mld_ctx->link_ctx->links_info[i];
+
+		if (IS_LINK_SET(active_link_bitmap, link_info->link_id))
 			link_info->is_link_active = true;
-		}
+		else
+			link_info->is_link_active = false;
 	}
 }
 

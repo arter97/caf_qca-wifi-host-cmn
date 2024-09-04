@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1201,18 +1201,20 @@ enum ieee80211_eht_ru_size {
 				 (HAL_EHT_RU_996x3 << HAL_RU_SHIFT(HAL_80_2, 0)) |	\
 				 (HAL_EHT_RU_484 << HAL_RU_SHIFT(HAL_80_3, 0)))
 
-#define HAL_RX_MON_MAX_AGGR_SIZE	128
+#define HAL_RX_MON_MAX_AGGR_SIZE	192
 
 /**
  * struct hal_rx_tlv_aggr_info - Data structure to hold
  *		metadata for aggregatng repeated TLVs
  * @in_progress: Flag to indicate if TLV aggregation is in progress
+ * @rd_idx: idx to current section of TLV
  * @cur_len: Total length of currently aggregated TLV
  * @tlv_tag: TLV tag which is currently being aggregated
  * @buf: Buffer containing aggregated TLV data
  */
 struct hal_rx_tlv_aggr_info {
 	uint8_t in_progress;
+	uint8_t rd_idx;
 	uint16_t cur_len;
 	uint32_t tlv_tag;
 	uint8_t buf[HAL_RX_MON_MAX_AGGR_SIZE];
@@ -1369,6 +1371,23 @@ hal_rx_status_get_next_tlv(uint8_t *rx_tlv, bool is_tlv_hdr_64_bit) {
 							  tlv_len +
 							  tlv_hdr_size),
 					       tlv_hdr_size);
+}
+
+/**
+ * hal_rx_parse_eht_sig_hdr()
+ *				    - process eht sig header
+ * @hal_soc: HAL soc handle
+ * @tlv: pointer to EHT SIG TLV buffer
+ * @ppdu_info: pointer to ppdu_info
+ *
+ * Return: None
+ */
+static inline void hal_rx_parse_eht_sig_hdr(struct hal_soc *hal_soc,
+					    uint8_t *tlv,
+					    struct hal_rx_ppdu_info
+					    *ppdu_info)
+{
+	hal_soc->ops->hal_rx_parse_eht_sig_hdr(hal_soc, tlv, (void *)ppdu_info);
 }
 
 /**

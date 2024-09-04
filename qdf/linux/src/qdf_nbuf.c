@@ -5089,26 +5089,53 @@ qdf_nbuf_update_radiotap_he_flags(struct mon_rx_status *rx_status,
 	 * IEEE80211_RADIOTAP_HE u16, u16, u16, u16, u16, u16
 	 * Enable all "known" HE radiotap flags for now
 	 */
+	struct mon_rx_user_status *rx_user_status = rx_status->rx_user_status;
 
 	rtap_len = qdf_align(rtap_len, 2);
 
-	put_unaligned_le16(rx_status->he_data1, &rtap_buf[rtap_len]);
-	rtap_len += 2;
+	if (!rx_user_status) {
+		put_unaligned_le16(rx_status->he_data1, &rtap_buf[rtap_len]);
+		rtap_len += 2;
 
-	put_unaligned_le16(rx_status->he_data2, &rtap_buf[rtap_len]);
-	rtap_len += 2;
+		put_unaligned_le16(rx_status->he_data2, &rtap_buf[rtap_len]);
+		rtap_len += 2;
 
-	put_unaligned_le16(rx_status->he_data3, &rtap_buf[rtap_len]);
-	rtap_len += 2;
+		put_unaligned_le16(rx_status->he_data3, &rtap_buf[rtap_len]);
+		rtap_len += 2;
 
-	put_unaligned_le16(rx_status->he_data4, &rtap_buf[rtap_len]);
-	rtap_len += 2;
+		put_unaligned_le16(rx_status->he_data4, &rtap_buf[rtap_len]);
+		rtap_len += 2;
 
-	put_unaligned_le16(rx_status->he_data5, &rtap_buf[rtap_len]);
-	rtap_len += 2;
+		put_unaligned_le16(rx_status->he_data5, &rtap_buf[rtap_len]);
+		rtap_len += 2;
 
-	put_unaligned_le16(rx_status->he_data6, &rtap_buf[rtap_len]);
-	rtap_len += 2;
+		put_unaligned_le16(rx_status->he_data6, &rtap_buf[rtap_len]);
+		rtap_len += 2;
+	} else {
+		put_unaligned_le16(rx_user_status->he_data1 |
+				   rx_status->he_data1, &rtap_buf[rtap_len]);
+		rtap_len += 2;
+
+		put_unaligned_le16(rx_user_status->he_data2 |
+				   rx_status->he_data2, &rtap_buf[rtap_len]);
+		rtap_len += 2;
+
+		put_unaligned_le16(rx_user_status->he_data3 |
+				   rx_status->he_data3, &rtap_buf[rtap_len]);
+		rtap_len += 2;
+
+		put_unaligned_le16(rx_user_status->he_data4 |
+				   rx_status->he_data4, &rtap_buf[rtap_len]);
+		rtap_len += 2;
+
+		put_unaligned_le16(rx_user_status->he_data5 |
+				   rx_status->he_data5, &rtap_buf[rtap_len]);
+		rtap_len += 2;
+
+		put_unaligned_le16(rx_user_status->he_data6 |
+				   rx_status->he_data6, &rtap_buf[rtap_len]);
+		rtap_len += 2;
+	}
 
 	return rtap_len;
 }
@@ -5292,22 +5319,38 @@ static unsigned int
 qdf_nbuf_update_radiotap_eht_flags(struct mon_rx_status *rx_status,
 				   int8_t *rtap_buf, uint32_t rtap_len)
 {
-	uint32_t user;
-
+	struct mon_rx_user_status *rx_user_status = rx_status->rx_user_status;
 	/*
 	 * IEEE80211_RADIOTAP_EHT:
 	 *		u32, u32, u32, u32, u32, u32, u32, u16, [u32, u32, u32]
 	 */
 	rtap_len = qdf_align(rtap_len, 4);
 
-	put_unaligned_le32(rx_status->eht_known, &rtap_buf[rtap_len]);
-	rtap_len += 4;
+	if (!rx_user_status) {
+		put_unaligned_le32(rx_status->eht_known, &rtap_buf[rtap_len]);
+		rtap_len += 4;
 
-	put_unaligned_le32(rx_status->eht_data[0], &rtap_buf[rtap_len]);
-	rtap_len += 4;
+		put_unaligned_le32(rx_status->eht_data[0], &rtap_buf[rtap_len]);
+		rtap_len += 4;
 
-	put_unaligned_le32(rx_status->eht_data[1], &rtap_buf[rtap_len]);
-	rtap_len += 4;
+		put_unaligned_le32(rx_status->eht_data[1], &rtap_buf[rtap_len]);
+		rtap_len += 4;
+	} else {
+		put_unaligned_le32(rx_status->eht_known |
+				   rx_user_status->eht_known,
+				   &rtap_buf[rtap_len]);
+		rtap_len += 4;
+
+		put_unaligned_le32(rx_status->eht_data[0] |
+				   rx_user_status->eht_data[0],
+				   &rtap_buf[rtap_len]);
+		rtap_len += 4;
+
+		put_unaligned_le32(rx_status->eht_data[1] |
+				   rx_user_status->eht_data[1],
+				   &rtap_buf[rtap_len]);
+		rtap_len += 4;
+	}
 
 	put_unaligned_le32(rx_status->eht_data[2], &rtap_buf[rtap_len]);
 	rtap_len += 4;
@@ -5321,19 +5364,25 @@ qdf_nbuf_update_radiotap_eht_flags(struct mon_rx_status *rx_status,
 	put_unaligned_le32(rx_status->eht_data[5], &rtap_buf[rtap_len]);
 	rtap_len += 4;
 
-	for (user = 0; user < EHT_USER_INFO_LEN &&
-	     rx_status->num_eht_user_info_valid &&
-	     user < rx_status->num_eht_user_info_valid; user++) {
-		put_unaligned_le32(rx_status->eht_user_info[user],
-				   &rtap_buf[rtap_len]);
+	if (!rx_user_status) {
+		qdf_rl_debug("EHT data %x %x %x %x %x %x %x",
+			     rx_status->eht_known, rx_status->eht_data[0],
+			     rx_status->eht_data[1], rx_status->eht_data[2],
+			     rx_status->eht_data[3], rx_status->eht_data[4],
+			     rx_status->eht_data[5]);
+	} else {
+		put_unaligned_le32(rx_user_status->eht_user_info, &rtap_buf[rtap_len]);
 		rtap_len += 4;
-	}
 
-	qdf_rl_debug("EHT data %x %x %x %x %x %x %x",
-		     rx_status->eht_known, rx_status->eht_data[0],
-		     rx_status->eht_data[1], rx_status->eht_data[2],
-		     rx_status->eht_data[3], rx_status->eht_data[4],
-		     rx_status->eht_data[5]);
+		qdf_rl_debug("EHT data %x %x %x %x %x %x %x",
+			     rx_status->eht_known | rx_user_status->eht_known,
+			     rx_status->eht_data[0] |
+			     rx_user_status->eht_data[0],
+			     rx_status->eht_data[1] |
+			     rx_user_status->eht_data[1],
+			     rx_status->eht_data[2], rx_status->eht_data[3],
+			     rx_status->eht_data[4], rx_status->eht_data[5]);
+	}
 
 	return rtap_len;
 }

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -365,6 +365,16 @@ wlan_scan_process_bcn_probe_rx_sync(struct wlan_objmgr_psoc *psoc,
 
 	bcn->psoc = psoc;
 	bcn->buf = buf;
+
+	/*
+	 * Save the rnr entries from the frame into rnr db.
+	 * The RNR entry would have the partner links as well.
+	 * If the partner link is a non-tx profile, and if there
+	 * is no MBSSID info for that partner link, then look up
+	 * into the rnr db will help to identify if that partner
+	 * is a non-tx profile.
+	 */
+	bcn->save_rnr_info = true;
 	qdf_mem_copy(bcn->rx_data, rx_param, sizeof(*rx_param));
 
 	return __scm_handle_bcn_probe(bcn);

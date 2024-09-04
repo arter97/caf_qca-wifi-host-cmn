@@ -1109,6 +1109,7 @@ void wlan_mlo_t2lm_timer_expiry_handler(void *vdev)
 
 }
 
+#ifndef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 /**
  * wlan_mlo_t2lm_update_peer_to_peer_negotiation() - API to update peer-to-peer
  * level T2LM negotiation data structure on mapping switch time expiry and
@@ -1190,6 +1191,7 @@ QDF_STATUS wlan_mlo_t2lm_register_link_update_notify_handler(
 
 	return QDF_STATUS_SUCCESS;
 }
+#endif
 
 QDF_STATUS
 wlan_mlo_t2lm_timer_init(struct wlan_objmgr_vdev *vdev)
