@@ -334,11 +334,13 @@ static inline void
 hal_txmon_parse_tx_fes_setup(void *tx_tlv,
 			     struct hal_tx_ppdu_info *tx_ppdu_info)
 {
+	uint8_t num_users;
 	hal_tx_fes_setup_t *tx_fes_setup = (hal_tx_fes_setup_t *)tx_tlv;
 
-	tx_ppdu_info->num_users = tx_fes_setup->number_of_users;
-	if (tx_ppdu_info->num_users == 0)
-		tx_ppdu_info->num_users = 1;
+	num_users = tx_fes_setup->number_of_users;
+	if (num_users && num_users != tx_ppdu_info->num_users)
+		hal_err_rl("mismatched num_users %d with tx_ppdu_info %d",
+			   num_users, tx_ppdu_info->num_users);
 
 	TXMON_HAL(tx_ppdu_info, ppdu_id) = tx_fes_setup->schedule_id;
 	TXMON_HAL_STATUS(tx_ppdu_info, ppdu_id) = tx_fes_setup->schedule_id;
@@ -1649,9 +1651,11 @@ hal_txmon_status_parse_tlv_generic_be(hal_soc_handle_t hal_soc_hdl,
 		TXMON_HAL(ppdu_info, ppdu_id) = ppdu_id;
 		TXMON_HAL_STATUS(ppdu_info, ppdu_id) = ppdu_id;
 
-		if (response_sta_count == 0)
-			response_sta_count = 1;
-		TXMON_HAL(ppdu_info, num_users) = response_sta_count;
+		if (response_sta_count && response_sta_count !=
+		    TXMON_HAL(ppdu_info, num_users))
+			hal_err_rl("mismatched response_sta_count %d with tx_ppdu_info %d",
+				   response_sta_count,
+				   TXMON_HAL(ppdu_info, num_users));
 
 		if (!reception_type)
 			TXMON_STATUS_INFO(tx_status_info,
