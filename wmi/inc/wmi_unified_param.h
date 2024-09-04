@@ -6764,6 +6764,9 @@ typedef enum {
 #ifdef FEATURE_MGMT_RX_OVER_SRNG
 	wmi_service_mgmt_rx_srng_support,
 #endif
+#ifdef FEATURE_WLAN_SUPPORT_USD
+	wmi_service_usd_support,
+#endif
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
