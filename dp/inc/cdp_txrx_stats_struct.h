@@ -1413,10 +1413,12 @@ struct cdp_vdev_stats {
 };
 
 /* struct cdp_peer_stats - peer stats structure
+ * @mac_addr peer mac address
  * @tx: cdp tx stats
  * @rx: cdp rx stats
  */
 struct cdp_peer_stats {
+	struct qdf_mac_addr mac_addr;
 	/* CDP Tx Stats */
 	struct cdp_tx_stats tx;
 	/* CDP Rx Stats */

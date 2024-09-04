@@ -539,6 +539,26 @@ cdp_host_get_peer_stats(ol_txrx_soc_handle soc, uint8_t vdev_id,
 							     peer_mac,
 							     peer_stats);
 }
+/**
+ * @brief Call to update son peer stats
+ *
+ * @param soc - soc handle
+ * @param vdev_id - vdev_id of vdev object
+ * @param cdp_peer_stats - stats from cdp to update peer stats
+ * @return - QDF_STATUS
+ */
+static inline QDF_STATUS
+cdp_son_update_peer_stats(ol_txrx_soc_handle soc, uint8_t vdev_id,
+			  struct cdp_peer_stats *peer_stats)
+{
+	if (!soc->ops->host_stats_ops ||
+		    !soc->ops->host_stats_ops->son_txrx_update_peer_stats)
+			return QDF_STATUS_E_FAILURE;
+
+	return soc->ops->host_stats_ops->son_txrx_update_peer_stats(soc,
+								    vdev_id,
+								    peer_stats);
+}
 
 /**
  * @brief Call to reset ald stats

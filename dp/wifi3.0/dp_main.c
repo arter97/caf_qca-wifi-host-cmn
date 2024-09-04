@@ -9595,6 +9595,51 @@ dp_txrx_get_peer_stats(struct cdp_soc_t *soc, uint8_t vdev_id,
 	return status;
 }
 
+#ifdef WIFI_MONITOR_SUPPORT
+/* dp_son_update_peer_stats - will update peer stats from cdp_peer_stats
+ * @soc: soc handle
+ * @vdev_id: id of vdev handle
+ * @peer_stats: stats for updating to stats in peer
+ * return : status success/failure
+ */
+static QDF_STATUS
+dp_son_update_peer_stats(struct cdp_soc_t *soc, uint8_t vdev_id,
+			 struct cdp_peer_stats *peer_stats)
+{
+	QDF_STATUS status = QDF_STATUS_E_FAILURE;
+	int ring;
+	struct dp_pdev *pdev = NULL;
+
+	struct dp_peer *peer = dp_peer_find_hash_find((struct dp_soc *)soc,
+						       peer_stats->mac_addr.bytes,
+						       0, vdev_id,
+						       DP_MOD_ID_CDP);
+	if (!peer)
+		return status;
+
+	DP_STATS_UPD(peer, rx.snr, peer_stats->rx.last_snr);
+	DP_STATS_UPD(peer, tx.tx_rate, peer_stats->tx.last_tx_rate);
+
+	for (ring = 0 ; ring < MAX_NUM_LMAC_HW; ring++) {
+		pdev = dp_get_pdev_for_lmac_id((struct dp_soc *)soc, ring);
+		if (!pdev)
+			continue;
+		status = dp_peer_stats_notify(pdev, peer);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			dp_err("peer stats notify fail, status=%d, ring=%d",
+			       status, ring);
+			dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
+			return status;
+		}
+	}
+
+	DP_STATS_UPD(peer, rx.last_snr, peer_stats->rx.last_snr);
+	DP_STATS_UPD(peer, tx.last_tx_rate, peer_stats->tx.last_tx_rate);
+	dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
+	return status;
+}
+#endif
+
 /* dp_txrx_get_peer_stats_param - will return specified cdp_peer_stats
  * @param soc - soc handle
  * @param vdev_id - vdev_id of vdev object
@@ -11251,6 +11296,9 @@ static struct cdp_host_stats_ops dp_ops_host_stats = {
 	.txrx_stats_publish = dp_txrx_stats_publish,
 	.txrx_get_vdev_stats  = dp_txrx_get_vdev_stats,
 	.txrx_get_peer_stats = dp_txrx_get_peer_stats,
+#ifdef WIFI_MONITOR_SUPPORT
+	.son_txrx_update_peer_stats = dp_son_update_peer_stats,
+#endif
 	.txrx_get_soc_stats = dp_txrx_get_soc_stats,
 	.txrx_get_peer_stats_param = dp_txrx_get_peer_stats_param,
 	.txrx_reset_peer_stats = dp_txrx_reset_peer_stats,
