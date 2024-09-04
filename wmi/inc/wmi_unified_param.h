@@ -6767,6 +6767,7 @@ typedef enum {
 #ifdef FEATURE_WLAN_SUPPORT_USD
 	wmi_service_usd_support,
 #endif
+	wmi_service_use_sta_vdev_for_p2p_device,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF

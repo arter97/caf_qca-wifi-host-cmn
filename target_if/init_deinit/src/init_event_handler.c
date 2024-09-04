@@ -493,6 +493,10 @@ static int init_deinit_service_ready_event_handler(ol_scn_t scn_handle,
 			wmi_service_vdev_param_chwidth_with_notify_support))
 		wlan_psoc_nif_fw_ext2_cap_set(psoc,
 				WLAN_VDEV_PARAM_CHWIDTH_WITH_NOTIFY_SUPPORT);
+	if (wmi_service_enabled(wmi_handle,
+			wmi_service_use_sta_vdev_for_p2p_device))
+		wlan_psoc_nif_fw_ext2_cap_set(psoc,
+				WLAN_SOC_USE_STA_VDEV_FOR_P2P_DEVICE);
 
 	if (wmi_service_enabled(wmi_handle, wmi_service_ext_msg)) {
 		target_if_debug("Wait for EXT message");

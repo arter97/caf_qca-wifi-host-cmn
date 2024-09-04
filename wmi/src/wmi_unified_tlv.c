@@ -24549,6 +24549,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 #ifdef FEATURE_WLAN_SUPPORT_USD
 	wmi_service[wmi_service_usd_support] = WMI_SERVICE_USD_SUPPORT;
 #endif
+	wmi_service[wmi_service_use_sta_vdev_for_p2p_device] =
+				WMI_SERVICE_USE_STA_VDEV_FOR_P2P_DEVICE;
 }
 
 /**

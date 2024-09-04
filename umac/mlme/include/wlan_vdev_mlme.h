@@ -827,6 +827,14 @@ struct vdev_mlme_ops {
 };
 
 /**
+ * struct p2p_device_mode_data - p2p device mode data
+ * @p2p_dev_addr: p2p device mac address
+ */
+struct p2p_device_mode_data {
+	struct qdf_mac_addr p2p_dev_addr;
+};
+
+/**
  * struct vdev_mlme_obj - VDEV MLME component object
  * @proto: VDEV MLME proto substructure
  * @mgmt: VDEV MLME mgmt substructure
@@ -840,6 +848,7 @@ struct vdev_mlme_ops {
  * @reg_tpc_obj:          Regulatory transmit power info
  * @ml_reconfig_timer: VDEV ml reconfig timer
  * @ml_reconfig_started:  Flag to indicate reconfig status for vdev
+ * @p2p_dev_data: STA vdev support for p2p device
  */
 struct vdev_mlme_obj {
 	struct vdev_mlme_proto proto;
@@ -858,6 +867,9 @@ struct vdev_mlme_obj {
 	struct reg_tpc_power_info reg_tpc_obj;
 	qdf_timer_t ml_reconfig_timer;
 	bool ml_reconfig_started;
+#ifdef CONVERGED_P2P_ENABLE
+	struct p2p_device_mode_data p2p_dev_data;
+#endif
 };
 
 /**

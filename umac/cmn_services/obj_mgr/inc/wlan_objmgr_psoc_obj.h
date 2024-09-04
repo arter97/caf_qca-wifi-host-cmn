@@ -264,6 +264,9 @@
 /* ch width notify support */
 #define WLAN_VDEV_PARAM_CHWIDTH_WITH_NOTIFY_SUPPORT    0x00000800
 
+/* Firmware capability to use STA vdev for P2P device */
+#define WLAN_SOC_USE_STA_VDEV_FOR_P2P_DEVICE   0x00001000
+
 /* PSOC op flags */
 
 	/* Invalid VHT cap */
