@@ -3924,3 +3924,10 @@ int __wmi_validate_handle(wmi_unified_t wmi_handle, const char *func)
 
         return 0;
 }
+
+#ifdef FEATURE_MGMT_RX_OVER_SRNG
+void wmi_rx_buf_srng(wmi_unified_t wmi_handle, wmi_buf_t evt_buf)
+{
+	wmi_process_control_rx(wmi_handle, evt_buf);
+}
+#endif
