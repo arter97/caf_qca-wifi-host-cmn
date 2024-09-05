@@ -5876,6 +5876,17 @@ void dp_destroy_direct_link_refill_ring(struct cdp_soc_t *soc_hdl,
 }
 #endif
 
+#ifdef FEATURE_MGMT_RX_OVER_SRNG
+QDF_STATUS
+dp_send_htt_mgmt_rx_buf_refil_srng_setup(struct cdp_soc_t *soc_hdl, void *srng);
+#else
+static inline QDF_STATUS
+dp_send_htt_mgmt_rx_buf_refil_srng_setup(struct cdp_soc_t *soc_hdl, void *srng)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 #ifdef WLAN_FEATURE_DP_CFG_EVENT_HISTORY
 static inline
 void dp_cfg_event_record(struct dp_soc *soc,
