@@ -123,7 +123,7 @@ bool mlo_is_ml_soc(struct wlan_objmgr_psoc *psoc, uint8_t grp_id)
 
 qdf_export_symbol(mlo_is_ml_soc);
 
-static void mlo_set_soc_list(uint8_t grp_id, struct wlan_objmgr_psoc *psoc)
+void mlo_set_soc_list(uint8_t grp_id, struct wlan_objmgr_psoc *psoc)
 {
 	struct mlo_mgr_context *mlo_ctx = wlan_objmgr_get_mlo_ctx();
 	uint8_t idx;
@@ -148,6 +148,8 @@ static void mlo_set_soc_list(uint8_t grp_id, struct wlan_objmgr_psoc *psoc)
 		}
 	}
 }
+
+qdf_export_symbol(mlo_set_soc_list);
 
 void mlo_get_soc_list(struct wlan_objmgr_psoc **soc_list,
 		      uint8_t grp_id,
