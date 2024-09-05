@@ -78,7 +78,6 @@
  * @QDF_STATUS_E_RESTART: return error code for wait_event_interruptible
  * @QDF_STATUS_FILT_REQ_ERROR: return error code cee filter rule request
  * @QDF_STATUS_TDLS_MLO_SYNC: tdls mlo sync
- * @QDF_STATUS_HTC_READY_TIMEOUT: return code for htc ready event timeout
  * @QDF_STATUS_MAX: not a real value just a place holder for max
  */
 typedef enum {
@@ -133,7 +132,6 @@ typedef enum {
 	QDF_STATUS_E_RESTART,
 	QDF_STATUS_FILT_REQ_ERROR,
 	QDF_STATUS_TDLS_MLO_SYNC,
-	QDF_STATUS_HTC_READY_TIMEOUT,
 	QDF_STATUS_MAX
 } QDF_STATUS;
 
