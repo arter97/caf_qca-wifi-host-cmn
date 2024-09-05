@@ -4277,6 +4277,18 @@ wmi_extract_vendor_pdev_event(wmi_unified_t wmi_handle,
 }
 #endif /* WLAN_VENDOR_EXTN */
 
+#ifdef FEATURE_MGMT_RX_OVER_SRNG
+QDF_STATUS wmi_unified_extract_mgmt_srng_reap_event(
+				wmi_unified_t wmi_handle, uint8_t *buf,
+				struct mgmt_srng_reap_event_params *params)
+{
+	if (wmi_handle->ops->extract_mgmt_srng_reap_event)
+		return wmi_handle->ops->extract_mgmt_srng_reap_event(wmi_handle,
+				buf, params);
+	return QDF_STATUS_E_FAILURE;
+}
+#endif
+
 #ifdef WLAN_DP_FEATURE_STC
 QDF_STATUS wmi_unified_send_opm_stats_cmd(wmi_unified_t wmi_handle,
 					  uint8_t pdev_id)
