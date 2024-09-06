@@ -611,8 +611,11 @@ wlan_serialization_timer_cb_mc_ctx(struct wlan_serialization_command *cmd)
 
 	status = wlan_objmgr_vdev_try_get_ref(cmd->vdev, WLAN_SERIALIZATION_ID);
 	if (QDF_IS_STATUS_ERROR(status)) {
-		ser_err("unable to get reference for vdev %d",
-			 wlan_vdev_get_id(cmd->vdev));
+		if (!cmd->vdev)
+			ser_err("vdev is NULL");
+		else
+			ser_err("unable to get reference for vdev %d",
+				 wlan_vdev_get_id(cmd->vdev));
 		return;
 	}
 
