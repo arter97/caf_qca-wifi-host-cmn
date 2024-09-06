@@ -388,6 +388,7 @@ wlan_objmgr_vdev_mlo_dev_ctxt_attach(struct wlan_objmgr_vdev *vdev)
 	psoc = wlan_vdev_get_psoc(vdev);
 	if (!psoc) {
 		obj_mgr_err("Failed to get psoc");
+		wlan_objmgr_vdev_obj_delete(vdev);
 		return QDF_STATUS_E_FAILURE;
 	}
 
