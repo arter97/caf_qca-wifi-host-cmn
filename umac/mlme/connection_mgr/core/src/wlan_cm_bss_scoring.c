@@ -3480,6 +3480,15 @@ static void cm_validate_partner_links(struct wlan_objmgr_psoc *psoc,
 			partner_info->is_valid_link = false;
 		}
 
+		if (entry->mbssid_info.profile_num &&
+		    qdf_is_macaddr_equal((struct qdf_mac_addr *)entry->mbssid_info.trans_bssid,
+					 &partner_info->link_addr)) {
+			mlme_debug(QDF_MAC_ADDR_FMT " link (%d) dup mac with tx mbssid",
+				   QDF_MAC_ADDR_REF(partner_info->link_addr.bytes),
+				   partner_info->freq);
+			partner_info->is_valid_link = false;
+		}
+
 		/*
 		 * If partner link is not found in the current candidate list
 		 * don't treat it as failure, it can be removed post ML
