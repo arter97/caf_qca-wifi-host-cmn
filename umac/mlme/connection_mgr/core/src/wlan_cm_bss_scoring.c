@@ -2841,6 +2841,7 @@ static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 	 * Consider OCE WAN score score only if
 	 * congestion_pct is greater than CONGESTION_THRSHOLD_FOR_BAND_OCE_SCORE
 	 */
+	congestion_pct = cm_get_congestion_pct(entry);
 	if (congestion_pct < CM_CONGESTION_THRSHOLD_FOR_BAND_OCE_SCORE) {
 		oce_wan_score = cm_calculate_oce_wan_score(entry, score_config);
 		score += oce_wan_score;
