@@ -1002,7 +1002,8 @@ struct wlan_mlo_sta {
 
 /**
  * struct wlan_mlo_ap - MLO AP related info
- * @num_ml_vdevs: number of vdevs to form MLD
+ * @vdev_up_candidate_count: Number of vdevs in the MLD to be transitioned to UP
+ *                           state.
  * @ml_aid_mgr: ML AID mgr
  * @mlo_ap_lock: lock to sync VDEV SM event
  * @mlo_vdev_quiet_bmap: Bitmap of vdevs for which quiet ie needs to enabled
@@ -1011,7 +1012,7 @@ struct wlan_mlo_sta {
  * @mlo_link_reject: Enum to indicate if MLO link rejection configuration
  */
 struct wlan_mlo_ap {
-	uint8_t num_ml_vdevs;
+	uint8_t vdev_up_candidate_count;
 	struct wlan_ml_vdev_aid_mgr *ml_aid_mgr;
 #ifdef WLAN_MLO_USE_SPINLOCK
 	qdf_spinlock_t mlo_ap_lock;
