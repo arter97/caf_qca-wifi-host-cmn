@@ -396,6 +396,8 @@ void mlo_peer_get_vdev_list(struct wlan_objmgr_peer *peer,
 	mlo_peer_lock_release(peer->mlo_peer_ctx);
 }
 
+qdf_export_symbol(mlo_peer_get_vdev_list);
+
 void mlo_ap_get_vdev_list(struct wlan_objmgr_vdev *vdev,
 			  uint16_t *vdev_count,
 			  struct wlan_objmgr_vdev **wlan_vdev_list)
@@ -430,6 +432,8 @@ void mlo_ap_get_vdev_list(struct wlan_objmgr_vdev *vdev,
 	}
 	mlo_dev_lock_release(dev_ctx);
 }
+
+qdf_export_symbol(mlo_ap_get_vdev_list);
 
 void mlo_ap_get_active_vdev_list(struct wlan_objmgr_vdev *vdev,
 				 uint16_t *vdev_count,
