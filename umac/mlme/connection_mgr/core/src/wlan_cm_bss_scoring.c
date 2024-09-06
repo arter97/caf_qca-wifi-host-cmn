@@ -2249,6 +2249,7 @@ static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 	 * Consider OCE WAN score and band preference score only if
 	 * congestion_pct is greater than CONGESTION_THRSHOLD_FOR_BAND_OCE_SCORE
 	 */
+	congestion_pct = cm_get_congestion_pct(entry);
 	if (congestion_pct < CM_CONGESTION_THRSHOLD_FOR_BAND_OCE_SCORE) {
 		/*
 		 * If AP is on 5/6 GHZ channel , extra weigtage is added to BSS
