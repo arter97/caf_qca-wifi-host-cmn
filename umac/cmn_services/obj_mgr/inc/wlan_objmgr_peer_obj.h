@@ -1224,7 +1224,7 @@ static inline bool wlan_peer_mlme_get_auth_state(
 
 /**
  * wlan_peer_mlme_get_next_seq_num() - get peer mlme next sequence number
- * @peer: PEER object
+ * @seq_num: Current sequence number
  *
  * API to get mlme peer next sequence number
  *
@@ -1232,16 +1232,17 @@ static inline bool wlan_peer_mlme_get_auth_state(
  *
  * Return: peer mlme next sequence number
  */
-static inline uint32_t wlan_peer_mlme_get_next_seq_num(
-				struct wlan_objmgr_peer *peer)
+static inline uint16_t wlan_peer_mlme_get_next_seq_num(uint16_t *seq_num)
 {
-	/* This API is invoked with lock acquired, do not add log prints */
-	if (peer->peer_mlme.seq_num < WLAN_MAX_SEQ_NUM)
-		peer->peer_mlme.seq_num++;
-	else
-		peer->peer_mlme.seq_num = 0;
+	uint16_t cur_seq_num = *seq_num;
 
-	return peer->peer_mlme.seq_num;
+	/* This API is invoked with lock acquired, do not add log prints */
+	if (*seq_num < WLAN_MAX_SEQ_NUM)
+		*seq_num = ++cur_seq_num;
+	else
+		*seq_num = 0;
+
+	return *seq_num;
 }
 
 /**

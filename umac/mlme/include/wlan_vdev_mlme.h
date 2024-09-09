@@ -829,9 +829,11 @@ struct vdev_mlme_ops {
 /**
  * struct p2p_device_mode_data - p2p device mode data
  * @p2p_dev_addr: p2p device mac address
+ * @seq_num: sequence number used for p2p device frames when it's using STA vdev
  */
 struct p2p_device_mode_data {
 	struct qdf_mac_addr p2p_dev_addr;
+	uint16_t seq_num;
 };
 
 /**
