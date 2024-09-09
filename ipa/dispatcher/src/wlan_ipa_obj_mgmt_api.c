@@ -202,9 +202,6 @@ static void ipa_register_ready_cb(void *user_data)
 	if (QDF_IS_STATUS_ERROR(status)) {
 		g_ipa_is_ready = false;
 		ipa_err("Failed to ipa_obj_setup");
-		wlan_objmgr_psoc_component_obj_detach(psoc, WLAN_UMAC_COMP_IPA,
-						      ipa_obj);
-		qdf_mem_free(ipa_obj);
 		goto out;
 	}
 	if (ucfg_ipa_uc_ol_init(psoc, qdf_dev)) {
