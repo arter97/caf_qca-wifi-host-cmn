@@ -4189,6 +4189,7 @@ static struct dp_peer *dp_peer_get_ref_by_ast(struct dp_soc *soc,
 	return peer;
 }
 
+#ifndef FEATURE_WDS_AST_LEARNING
 /**
  * dp_ipa_peer_check() - Check for peer for given mac
  * @soc: dp soc object
@@ -4215,6 +4216,68 @@ static bool dp_ipa_peer_check(struct dp_soc *soc,
 		return false;
 	}
 }
+#else /* FEATURE_WDS_AST_LEARNING */
+/**
+ * dp_ipa_peer_check() - Check for peer for given mac
+ * @soc: dp soc object
+ * @peer_mac_addr: peer mac address
+ * @vdev_id: vdev id
+ *
+ * This branch applies to FEATURE_WDS_AST_LEARNING=y, which is enabled with
+ * CONFIG_FEATURE_WDS=y, CONFIG_FEATURE_AST=n and CONFIG_AST_OFFLOAD_ENABLE=n.
+ *
+ * Under such configurations, wds peers are maintained only in the WDS Hash
+ * table. With that, two levels of search are done. First direct connected
+ * peers are checked against the peer hash table. If not found, wds peers
+ * are checked against the WDS Hash table.
+ *
+ * Note that with CONFIG_FEATURE_AST=n, peers are not maintained in the AST
+ * hash table.
+ *
+ * Return: true if peer is found, else false
+ */
+static bool dp_ipa_peer_check(struct dp_soc *soc,
+			      uint8_t *peer_mac_addr, uint8_t vdev_id)
+{
+	struct dp_wds_entry *wds_entry;
+	struct dp_vdev *vdev;
+	struct dp_peer *peer;
+	bool check_result;
+	uint16_t peer_id;
+
+	/* First check againest direct connected peers */
+	peer_id = dp_get_peer_id((ol_txrx_soc_handle)soc, vdev_id,
+				 peer_mac_addr);
+	if (peer_id != HTT_INVALID_PEER)
+		return true;
+
+	/* Next check againest wds peers */
+	wds_entry = dp_wds_hash_find_wds_entry(soc, peer_mac_addr);
+	if (!wds_entry || !wds_entry->is_mapped)
+		return false;
+
+	peer = dp_peer_get_ref_by_id(soc, wds_entry->peer_id, DP_MOD_ID_IPA);
+	if (!peer)
+		return false;
+
+	vdev = peer->vdev;
+	if (!vdev) {
+		check_result = false;
+		goto check_exit;
+	}
+
+	if (vdev->vdev_id != vdev_id) {
+		check_result = false;
+		goto check_exit;
+	}
+
+	check_result = true;
+
+check_exit:
+	dp_peer_unref_delete(peer, DP_MOD_ID_IPA);
+	return check_result;
+}
+#endif /* FEATURE_WDS_AST_LEARNING */
 #else
 static bool dp_ipa_peer_check(struct dp_soc *soc,
 			      uint8_t *peer_mac_addr, uint8_t vdev_id)
