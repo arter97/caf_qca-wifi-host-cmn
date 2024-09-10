@@ -43,6 +43,17 @@ enum QCA_VDEV_BAND {
 	QCA_MAX_VDEV_PER_ML,	/* MAX VDEV */
 };
 
+enum QCA_VDEV_BW {
+	SAWF_BW_BW_INVALID,	/* Invalid radio band */
+	SAWF_BW_20MHZ,
+	SAWF_BW_40MHZ,
+	SAWF_BW_80MHZ,
+	SAWF_BW_160MHZ,
+	SAWF_BW_80_80MHZ,
+	SAWF_BW_320MHZ,
+	SAWF_BW_MAX,		/* Maximum bandwidth */
+};
+
 /* qca_sawf_metadata_param
  *
  * @netdev : Netdevice

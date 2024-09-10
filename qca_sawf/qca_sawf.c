@@ -24,22 +24,55 @@
 #include <qca_scs_if.h>
 #endif
 #include <cdp_txrx_ctrl.h>
+#include <wlan_mlo_mgr_ap.h>
+#include <wlan_mlo_mgr_peer.h>
+
+uint8_t channel_list_2g[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14};
+uint8_t channel_list_5g_lo[] = {36, 40, 44, 48, 52, 56, 60, 64};
+uint8_t channel_list_5g_hi[] = {100, 104, 108, 112, 116, 120, 124, 128, 132,
+				136, 140, 144, 149, 153, 157, 161, 165, 169,
+				173, 177};
+uint8_t channel_list_5g[] = {36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108,
+			     112, 116, 120, 124, 128, 132, 136, 140, 144,
+			     149, 153, 157, 161, 165, 169, 173, 177};
+uint8_t channel_list_6g[] = {1, 2, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57,
+			     61, 65, 69, 73, 77, 81, 85, 89, 93, 97, 101, 105, 109, 113,
+			     117, 121, 125, 129, 133, 137, 141, 145, 149, 153, 157, 161,
+			     165, 169, 173, 177, 181, 185, 189, 193, 197, 201, 205, 209,
+			     213, 217, 221, 225, 229, 233};
+
+uint8_t bw_list_2g[] = {SAWF_BW_20MHZ, SAWF_BW_40MHZ};
+uint8_t bw_list_5g[] = {SAWF_BW_20MHZ, SAWF_BW_40MHZ, SAWF_BW_80MHZ,
+			SAWF_BW_160MHZ, SAWF_BW_80_80MHZ};
+uint8_t bw_list_6g[] = {SAWF_BW_20MHZ, SAWF_BW_40MHZ, SAWF_BW_80MHZ,
+			SAWF_BW_160MHZ, SAWF_BW_80_80MHZ, SAWF_BW_320MHZ};
+
+struct wifi_params {
+	uint8_t channel;
+	uint8_t bandwidth;
+};
+
+bool wlan_dessired_ssid_found(struct wlan_objmgr_vdev *vdev, u_int8_t *ssid, u_int8_t ssid_len);
 
 /* qca_sawf_get_vdev() - Fetch vdev from netdev
  *
  * @netdev : Netdevice
  * @mac_addr: MAC address
+ * @peer_mac: Actual peer address
  *
  * Return: Pointer to struct wlan_objmgr_vdev
  */
-static struct wlan_objmgr_vdev *qca_sawf_get_vdev(struct net_device *netdev,
-						  uint8_t *mac_addr)
+static struct wlan_objmgr_vdev *
+qca_sawf_get_vdev(struct net_device *netdev,
+		  uint8_t *mac_addr, uint8_t *peer_mac)
 {
 	struct wlan_objmgr_vdev *vdev = NULL;
 	osif_dev *osdev = NULL;
 
 	osdev = ath_netdev_priv(netdev);
 
+	if (peer_mac && mac_addr)
+		qdf_mem_copy(peer_mac, mac_addr, QDF_MAC_ADDR_SIZE);
 #ifdef QCA_SUPPORT_WDS_EXTENDED
 	if (osdev->dev_type == OSIF_NETDEV_TYPE_WDS_EXT) {
 		osif_peer_dev *osifp = NULL;
@@ -47,6 +80,11 @@ static struct wlan_objmgr_vdev *qca_sawf_get_vdev(struct net_device *netdev,
 
 		osifp = ath_netdev_priv(netdev);
 		parent_osdev = osif_wds_ext_get_parent_osif(osifp);
+
+		if (peer_mac)
+			qdf_mem_copy(peer_mac, osifp->peer_mac_addr,
+				     QDF_MAC_ADDR_SIZE);
+
 		if (!parent_osdev)
 			return NULL;
 
@@ -94,7 +132,7 @@ uint16_t qca_sawf_get_msduq(struct net_device *netdev, uint8_t *peer_mac,
 	    !wlan_service_id_configured(service_id))
 		return DP_SAWF_PEER_Q_INVALID;
 
-	vdev = qca_sawf_get_vdev(netdev, peer_mac);
+	vdev = qca_sawf_get_vdev(netdev, peer_mac, NULL);
 	if (!vdev) {
 		sawf_err("Invalid vdev");
 		return DP_SAWF_PEER_Q_INVALID;
@@ -150,7 +188,7 @@ static uint16_t qca_sawf_get_default_msduq(struct net_device *netdev,
 	struct wlan_objmgr_psoc *psoc = NULL;
 	uint16_t queue_id = DP_SAWF_PEER_Q_INVALID;
 
-	vdev = qca_sawf_get_vdev(netdev, peer_mac);
+	vdev = qca_sawf_get_vdev(netdev, peer_mac, NULL);
 	if (vdev) {
 		psoc = wlan_vdev_get_psoc(vdev);
 
@@ -197,7 +235,7 @@ uint32_t qca_sawf_get_peer_msduq(struct net_device *netdev, uint8_t *peer_mac,
 	if (!netdev->ieee80211_ptr)
 		return DP_SAWF_PEER_Q_INVALID;
 
-	vdev = qca_sawf_get_vdev(netdev, peer_mac);
+	vdev = qca_sawf_get_vdev(netdev, peer_mac, NULL);
 	if (!vdev)
 		return DP_SAWF_PEER_Q_INVALID;
 
@@ -268,7 +306,7 @@ void qca_sawf_3_link_peer_dl_flow_count(struct net_device *netdev, uint8_t *mac_
 	if (!netdev || !netdev->ieee80211_ptr)
 		return;
 
-	vdev = qca_sawf_get_vdev(netdev, mac_addr);
+	vdev = qca_sawf_get_vdev(netdev, mac_addr, NULL);
 	if (!vdev)
 		return;
 	psoc = wlan_vdev_get_psoc(vdev);
@@ -388,7 +426,7 @@ void qca_sawf_peer_config_ul(struct net_device *netdev, uint8_t *mac_addr,
 	if (!netdev->ieee80211_ptr)
 		return;
 
-	vdev = qca_sawf_get_vdev(netdev, mac_addr);
+	vdev = qca_sawf_get_vdev(netdev, mac_addr, NULL);
 	if (!vdev)
 		return;
 	psoc = wlan_vdev_get_psoc(vdev);
@@ -433,7 +471,7 @@ void qca_sawf_peer_dl_flow_count(struct net_device *netdev, uint8_t *mac_addr,
 	if (!netdev || !netdev->ieee80211_ptr)
 		return;
 
-	vdev = qca_sawf_get_vdev(netdev, mac_addr);
+	vdev = qca_sawf_get_vdev(netdev, mac_addr, NULL);
 	if (!vdev)
 		return;
 	psoc = wlan_vdev_get_psoc(vdev);
@@ -556,40 +594,415 @@ void qca_sawf_flow_deprioritize_response(struct qca_sawf_flow_deprioritize_resp_
 					    params->success_count);
 }
 
-bool qca_sdwf_match_wifi_port_params(struct net_device *netdev,
-				     uint8_t *dest_mac, uint8_t priority,
-				     struct qca_sawf_wifi_port_params *wp)
+static inline bool is_present(uint8_t array[], uint8_t value, uint8_t size)
 {
+	uint8_t i;
+
+	if (!value)
+		return true;
+
+	for (i = 0; i < size; i++) {
+		if (value == array[i])
+			return true;
+	}
+
+	return false;
+}
+
+static inline bool
+qca_sawf_validate_index_input_params(struct qca_sawf_wifi_port_params *wp, uint8_t i)
+{
+	uint8_t channel = wp->channel.value[i];
+	uint8_t size = 0;
+
+	switch (i) {
+	case QCA_VDEV_BAND_2G:
+		size = sizeof(channel_list_2g)/sizeof(channel_list_2g[0]);
+		return is_present(channel_list_2g, channel, size);
+	case QCA_VDEV_BAND_5GL:
+		size = sizeof(channel_list_5g_lo)/sizeof(channel_list_5g_lo[0]);
+		return is_present(channel_list_5g_lo, channel, size);
+	case QCA_VDEV_BAND_5GH:
+		size = sizeof(channel_list_5g_hi)/sizeof(channel_list_5g_hi[0]);
+		return is_present(channel_list_5g_hi, channel, size);
+	case QCA_VDEV_BAND_5G:
+		size = sizeof(channel_list_5g)/sizeof(channel_list_5g[0]);
+		return is_present(channel_list_5g, channel, size);
+	case QCA_VDEV_BAND_6G:
+		size = sizeof(channel_list_6g)/sizeof(channel_list_6g[0]);
+		return is_present(channel_list_6g, channel, size);
+	default:
+		return false;
+	}
+
+	return false;
+}
+
+static inline bool
+qca_sawf_check_index_params(struct net_device *netdev,
+			    struct qca_sawf_wifi_port_params *wp,
+			    struct wifi_params *user_params)
+{
+
+	bool match = false;
 	int i = 0;
 
-	if (!netdev || !wp)
+	for (i = 1; i < MAX_NUM_MLO_VDEV; i++) {
+		if (wp->band.value[i] == 0)
+			continue;
+		match = qca_sawf_validate_index_input_params(wp, i);
+
+		if (!match)
+			return false;
+		user_params[i].channel = wp->channel.value[i];
+		user_params[i].bandwidth = wp->bw.value[i];
+	}
+
+	return true;
+}
+
+bool get_channel_bw_band_from_vdev(struct net_device *netdev,
+				   struct wlan_objmgr_vdev *vdev,
+				   struct wifi_params exist_params[])
+{
+	struct wlan_channel *bss_chan;
+	enum QCA_VDEV_BAND band;
+	uint8_t channel = 0;
+	uint32_t freq = 0;
+
+	bss_chan = wlan_vdev_mlme_get_bss_chan(vdev);
+	channel = bss_chan->ch_ieee;
+	freq = bss_chan->ch_freq;
+
+	if (freq >= 2412 && freq <= 2484) {
+		band = QCA_VDEV_BAND_2G;
+	} else if (freq >= 5180 && freq <= 5980) {
+		band = QCA_VDEV_BAND_5G;
+	} else if (freq >= 5935 && freq <= 7115) {
+		band = QCA_VDEV_BAND_6G;
+	} else {
+		band = QCA_VDEV_BAND_INVALID;
+		return false;
+	}
+
+	exist_params[band].channel = channel;
+	exist_params[band].bandwidth = bss_chan->ch_width + 1;
+
+	return true;
+}
+
+bool qca_sawf_match_input_output_params(struct net_device *netdev,
+					struct qca_sawf_wifi_port_params *wp,
+					struct wifi_params *input_p,
+					struct wifi_params *exist_p)
+
+{
+	bool band_flag = wp->band.flag;
+	bool channel_flag = wp->channel.flag;
+	bool bw_flag = wp->bw.flag;
+	bool band_match = true;
+	bool channel_match = true;
+	bool bw_match = true;
+	int i = 0;
+
+	/*
+	 * flag 1 = AND
+	 * flag 0 = OR
+	 */
+
+	/*
+	 * Band check
+	 */
+	for (i = 0; i < MAX_NUM_MLO_VDEV; i++) {
+		if (band_flag == 1) {
+			band_match = true;
+			/*
+			 * 2G and 5G- user
+			 * 2G, 5G, 6G - APDUT
+			 * RESULT- true
+			 *
+			 * 6G - user
+			 * 2G, 5G - APDUT
+			 * RESULT- false
+			 */
+			if (!!input_p[i].channel & !exist_p[i].channel) {
+				band_match = false;
+				break;
+			}
+		} else {
+			band_match = false;
+			/*
+			 * 2G or 5G- user
+			 * 5G, 6G - APDUT
+			 * RESULT- true
+			 *
+			 * 2G or 6G - user
+			 * 5G - APDUT
+			 * RESULT- false
+			 */
+			if (!!input_p[i].channel & !!exist_p[i].channel) {
+				band_match = false;
+				break;
+			}
+		}
+	}
+
+	if (!band_match)
 		return false;
 
-	if (!netdev->ieee80211_ptr)
+	/*
+	 * Channel check
+	 */
+	for (i = 0; i < MAX_NUM_MLO_VDEV; i++) {
+		if (channel_flag == 1) {
+			channel_match = true;
+			if (input_p[i].channel != 0 && exist_p[i].channel != input_p[i].channel) {
+				channel_match = false;
+				break;
+			}
+		} else {
+			channel_match = false;
+			if (input_p[i].channel != 0 && exist_p[i].channel == input_p[i].channel) {
+				channel_match = true;
+				break;
+			}
+		}
+	}
+
+	if (!channel_match)
 		return false;
 
-	sawf_err("dev %s ", netdev->name);
-	sawf_err("ssid: %s ssid_len:%d : ", wp->ssid, wp->ssid_len);
-	sawf_err("BSSID: " QDF_MAC_ADDR_FMT,  QDF_MAC_ADDR_REF(wp->bssid));
-	sawf_err("dest_mac: " QDF_MAC_ADDR_FMT, QDF_MAC_ADDR_REF(dest_mac));
-	sawf_err("RA mac_addr: " QDF_MAC_ADDR_FMT, QDF_MAC_ADDR_REF(wp->ra_mac));
-	sawf_err("TA mac_addr: " QDF_MAC_ADDR_FMT, QDF_MAC_ADDR_REF(wp->ta_mac));
-	sawf_err("priority: %u ", wp->priority);
-	sawf_err("OR/AND flags band:%d channel:%d bw:%d ", wp->band.flag,
+	/*
+	 * Bandwidth check
+	 */
+	for (i = 0; i < MAX_NUM_MLO_VDEV; i++) {
+		if (bw_flag == 1) {
+			bw_match = true;
+			if (input_p[i].bandwidth != 0 &&
+			    exist_p[i].bandwidth != input_p[i].bandwidth) {
+				bw_match = false;
+				break;
+			}
+		} else {
+			bw_match = false;
+			if (input_p[i].bandwidth != 0 &&
+			    exist_p[i].bandwidth == input_p[i].bandwidth) {
+				bw_match = true;
+				break;
+			}
+		}
+	}
+
+	if (!bw_match)
+		return false;
+
+	return true;
+}
+
+#ifdef WLAN_FEATURE_11BE_MLO
+bool qca_sawf_check_mlo_params(struct net_device *netdev,
+			       uint8_t *mld_peer,
+			       struct wlan_objmgr_vdev *vdev,
+				struct qca_sawf_wifi_port_params *wp,
+				struct wifi_params exist_params[])
+{
+	uint16_t vdev_count = 0;
+	struct wlan_objmgr_vdev *wlan_vdev_list[WLAN_UMAC_MLO_MAX_VDEVS] = {NULL};
+	int i = 0;
+	struct wlan_objmgr_peer *peer = NULL;
+	struct mlo_partner_info ml_links = {0};
+	bool bssid_match = false;
+	bool ra_match = false;
+	bool ta_match = false;
+	uint8_t *vdev_mac;
+
+	peer = wlan_objmgr_get_peer_by_mac(wlan_vdev_get_psoc(vdev), mld_peer,
+					   WLAN_SAWF_ID);
+
+	if (!peer)
+		return false;
+
+	if (!wp->ra_mac)
+		ra_match = true;
+
+	if (!wp->ta_mac)
+		ta_match = true;
+
+	if (peer) {
+		mlo_peer_get_vdev_list(peer, &vdev_count, wlan_vdev_list);
+		wlan_mlo_peer_get_partner_links_info(peer, &ml_links);
+	} else {
+		return false;
+	}
+
+	for (i = 0; i < vdev_count; i++) {
+		vdev_mac = wlan_vdev_mlme_get_macaddr(wlan_vdev_list[i]);
+		if (!WLAN_ADDR_EQ(vdev_mac, wp->bssid))
+			bssid_match = true;
+
+		if (!WLAN_ADDR_EQ(vdev_mac, wp->ta_mac))
+			ta_match = true;
+
+		get_channel_bw_band_from_vdev(netdev, wlan_vdev_list[i], exist_params);
+		wlan_objmgr_vdev_release_ref(wlan_vdev_list[i], WLAN_MLO_MGR_ID);
+	}
+
+	for (i = 0; i < ml_links.num_partner_links; i++) {
+		if (!WLAN_ADDR_EQ(&ml_links.partner_link_info[i].link_addr, wp->ra_mac))
+			ra_match = true;
+	}
+
+	if (peer)
+		wlan_objmgr_peer_release_ref(peer, WLAN_SAWF_ID);
+
+	if (!bssid_match || !ta_match || !ra_match)
+		return false;
+
+	return true;
+}
+#endif
+
+static inline
+bool qca_sawf_check_slo_params(struct net_device *netdev,
+				uint8_t *peer_mac,
+			       struct wlan_objmgr_vdev *vdev,
+				struct qca_sawf_wifi_port_params *wp,
+				struct wifi_params exist_params[])
+{
+	uint8_t *vdev_mac = wlan_vdev_mlme_get_macaddr(vdev);
+
+	/* mismatch if bssid do not match */
+	if (wp->bssid && WLAN_ADDR_EQ(vdev_mac, wp->bssid))
+		return false;
+
+	/*
+	 * peer mac should match ra mac in both
+	 * 1. 3 address: because RA and DA match
+	 * 2. 4 address: In wds ext mode this is RA mac
+	 */
+	if (wp->ra_mac && WLAN_ADDR_EQ(peer_mac, wp->ra_mac))
+	       return false;
+
+
+	if (wp->ta_mac && WLAN_ADDR_EQ(vdev_mac, wp->ta_mac))
+	       return false;
+
+	get_channel_bw_band_from_vdev(netdev, vdev, exist_params);
+
+	return true;
+}
+
+/*
+ * qca_sawf_print_wifi_params
+ *
+ * @netdev: netdevice
+ * @dest_mac: destination mac address
+ * @priority: Traffic priority set by user
+ * @wp: sdwf wifi parameters parsed and sent by spm
+ */
+static inline
+void qca_sawf_print_wifi_params(struct net_device *netdev,
+				uint8_t *dest_mac,
+				uint8_t priority,
+				struct qca_sawf_wifi_port_params *wp)
+{
+	uint8_t i = 0;
+
+	sawf_debug("dev %s ", netdev->name);
+	sawf_debug(" ssid: %s ssid_len:%d : ", wp->ssid, wp->ssid_len);
+	sawf_debug(" BSSID: " QDF_MAC_ADDR_FMT,  QDF_MAC_ADDR_REF(wp->bssid));
+	sawf_debug(" dest_mac: " QDF_MAC_ADDR_FMT, QDF_MAC_ADDR_REF(dest_mac));
+	sawf_debug(" RA mac_addr: " QDF_MAC_ADDR_FMT, QDF_MAC_ADDR_REF(wp->ra_mac));
+	sawf_debug("TA mac_addr: " QDF_MAC_ADDR_FMT, QDF_MAC_ADDR_REF(wp->ta_mac));
+	sawf_debug("priority: %u ", wp->priority);
+	sawf_debug("OR/AND flags band:%d channel:%d bw:%d ", wp->band.flag,
 		 wp->channel.flag, wp->bw.flag);
 
 	for (i = 0 ; i < MAX_NUM_MLO_VDEV; i++) {
-		sawf_err("band:%s channel: %d bandwidth: %d ",
+		sawf_debug("band:%d channel: %d bandwidth: %d ",
 			 wp->band.value[i],
 			 wp->channel.value[i],
 			 wp->bw.value[i]);
 	}
 
-	sawf_err("valid_flag: %d dscp:%u pcp: %u access_class: %u ",
+	sawf_debug("valid_flag: %d dscp:%u pcp: %u access_class: %u ",
 		 wp->valid_flags, wp->dscp, wp->pcp, wp->ac);
+}
+
+/*
+ * qca_sdwf_match_wifi_port_params
+ *
+ * @netdev: netdevice
+ * @dest_mac: destination mac address
+ * @priority: Traffic priority set by user
+ * @wp: sdwf wifi parameters parsed and sent by spm
+ *
+ * Return: true if rule match found else false
+ */
+bool qca_sdwf_match_wifi_port_params(struct net_device *netdev,
+				     uint8_t *dest_mac,
+				     uint8_t priority,
+				     struct qca_sawf_wifi_port_params *wp)
+{
+	struct wlan_objmgr_vdev *vdev;
+	struct wifi_params user_p[MAX_NUM_MLO_VDEV] = {0};
+	struct wifi_params present_p[MAX_NUM_MLO_VDEV] = {0};
+	uint8_t access_category = 0;
+	uint8_t peer_mac[QDF_MAC_ADDR_SIZE];
+
+	if (!netdev || !wp) {
+		sawf_err("Null netdev/wifi params");
+		return false;
+	}
+
+	if (!netdev->ieee80211_ptr) {
+		sawf_debug("Netdevice is not Wi-Fi");
+		return false;
+	}
+
+	qca_sawf_print_wifi_params(netdev, dest_mac, priority, wp);
+
+	/*
+	 * Validate parameters and store only valid param in user_p array
+	 * If parameters are invalid, return false;
+	 */
+	if (!qca_sawf_check_index_params(netdev, wp, user_p))
+		return false;
+
+	vdev = qca_sawf_get_vdev(netdev, dest_mac, peer_mac);
+
+	if (!vdev) {
+		sawf_err("Invalid vdev");
+		return false;
+	}
+
+	/*
+	 * Return false in the first mismatch
+	 */
+	if (!wp->ssid_len && !wlan_dessired_ssid_found(vdev,
+	     wp->ssid, wp->ssid_len))
+		return false;
+
+#ifdef WLAN_FEATURE_11BE_MLO
+	if (vdev->mlo_dev_ctx) {
+		if (!qca_sawf_check_mlo_params(netdev, peer_mac, vdev, wp, present_p))
+			return false;
+	} else
+#endif
+		if (!qca_sawf_check_slo_params(netdev, peer_mac, vdev, wp, present_p))
+			return false;
+
+	if (!qca_sawf_match_input_output_params(netdev, wp, user_p, present_p))
+		return false;
+
+	access_category = TID_TO_WME_AC(dscp_tid_map[wp->dscp]);
+
+	if (wp->ac && access_category != wp->ac)
+		return false;
 
 	return true;
 }
+
 #else
 
 #include "qdf_module.h"
