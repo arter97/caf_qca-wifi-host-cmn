@@ -915,6 +915,10 @@ enum {
 	IEEE80211_PARAM_WDS_EXT_AP_BRIDGE  = 833,  /* Flag to enable/disable wds_ext specific ap bridge */
 #endif
 	IEEE80211_PARAM_4ADDR_EAPOL = 834,
+
+	IEEE80211_PARAM_LAST,
+	IEEE80211_PARAM_MAX = IEEE80211_PARAM_LAST - 1,
+	/* Customer enums */
 };
 
 enum {
@@ -1551,6 +1555,10 @@ enum _ol_ath_param_t {
 	OL_ATH_PARAM_ACS_ADJ_CHAN_INTERFERENCE_BLOCKING = 555,
 #endif /* UMAC_SUPPORT_ACS */
 	OL_ATH_PARAM_START_AID = 556,
+
+	OL_ATH_PARAM_LAST,
+	OL_ATH_PARAM_MAX = OL_ATH_PARAM_LAST - 1,
+	/* Customer enums */
 };
 
 #ifdef CONFIG_SUPPORT_VENCMDTABLE
