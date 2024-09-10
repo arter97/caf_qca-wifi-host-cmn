@@ -181,3 +181,20 @@ void dfs_get_cac_nol_time(struct wlan_dfs *dfs, int8_t index,
 			  qdf_freq_t freq);
 
 #endif
+
+#ifdef WLAN_FEATURE_11BE
+/*
+ * dfs_is_11be_supported() - Check if 11BE supported chip
+ *
+ * @dfs: Pointer to dfs structure.
+ * return: True if the 11BE supported chip.
+ */
+bool dfs_is_11be_supported(struct wlan_dfs *dfs);
+#else
+static inline
+bool dfs_is_11be_supported(struct wlan_dfs *dfs)
+{
+	return false;
+}
+#endif
+
