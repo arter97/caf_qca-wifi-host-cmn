@@ -504,6 +504,24 @@ QDF_STATUS telemetry_sawf_get_rate(void *telemetry_ctx, uint8_t tid,
 
 qdf_export_symbol(telemetry_sawf_get_rate);
 
+QDF_STATUS telemetry_sawf_get_tx_rate(void *telemetry_ctx, uint8_t tid,
+				   uint8_t queue,
+				   uint32_t *min_tput, uint32_t *max_tput,
+				   uint32_t *avg_tput, uint32_t *per)
+{
+	if (g_agent_ops) {
+		if (g_agent_ops->sawf_pull_tx_rate(telemetry_ctx, tid, queue,
+						min_tput, max_tput,
+						avg_tput,
+						per))
+			return QDF_STATUS_E_FAILURE;
+	}
+	return QDF_STATUS_SUCCESS;
+}
+
+qdf_export_symbol(telemetry_sawf_get_tx_rate);
+
+
 QDF_STATUS telemetry_sawf_get_mov_avg(void *telemetry_ctx, uint8_t tid,
 				      uint8_t queue, uint32_t *nwdelay_avg,
 				      uint32_t *swdelay_avg,

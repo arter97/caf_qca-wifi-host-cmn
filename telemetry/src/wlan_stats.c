@@ -1718,6 +1718,10 @@ fill_advance_peer_sawftx_stats(struct advance_peer_data_sawftx *data,
 					tx_stats->throughput;
 			data->tx[tidx][queues].ingress_rate =
 					tx_stats->ingress_rate;
+			data->tx[tidx][queues].min_throughput = tx_stats->min_throughput;
+			data->tx[tidx][queues].max_throughput = tx_stats->max_throughput;
+			data->tx[tidx][queues].avg_throughput = tx_stats->avg_throughput;
+			data->tx[tidx][queues].per = tx_stats->per;
 			tx_stats++;
 		}
 	}
@@ -2066,6 +2070,10 @@ get_advance_peer_data_sawftx(struct sawf_tx_stats *sawf_tx_stats,
 		data->tid = sawf_tx_stats->tid;
 		data->msduq = sawf_tx_stats->msduq;
 		data->tx[0][0].throughput = sawf_tx_stats->throughput;
+		data->tx[0][0].min_throughput = sawf_tx_stats->min_throughput;
+		data->tx[0][0].max_throughput = sawf_tx_stats->max_throughput;
+		data->tx[0][0].avg_throughput = sawf_tx_stats->avg_throughput;
+		data->tx[0][0].per = sawf_tx_stats->per;
 		data->tx[0][0].ingress_rate = sawf_tx_stats->ingress_rate;
 	}
 

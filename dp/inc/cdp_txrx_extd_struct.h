@@ -268,6 +268,10 @@ struct sawf_tx_stats {
 	uint32_t tx_failed;
 	uint32_t queue_depth;
 	uint32_t throughput;
+	uint32_t min_throughput;
+	uint32_t max_throughput;
+	uint32_t avg_throughput;
+	uint32_t per;
 	uint32_t ingress_rate;
 	uint32_t total_retries_count;
 	uint32_t retry_count;
