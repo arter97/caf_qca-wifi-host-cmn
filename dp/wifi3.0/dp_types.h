@@ -3125,7 +3125,9 @@ struct dp_soc {
 
 	/*cce disable*/
 	bool cce_disable;
-
+#ifdef QCA_DP_PROTOCOL_STATS
+	bool dp_proto_stats_en;
+#endif
 	/* WLAN config context */
 	struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx;
 
@@ -4601,6 +4603,8 @@ struct dp_vdev {
 	/* Capture timestamp of previous rx packet delivered */
 	uint64_t prev_rx_deliver_tstamp;
 
+	bool dp_proto_stats;
+
 	/* VDEV Stats */
 	struct dp_vdev_stats stats;
 
@@ -4742,7 +4746,6 @@ struct dp_vdev {
 	struct dp_tx_latency_config tx_latency_cfg;
 #endif
 	bool eapol_over_control_port_disable;
-	bool dp_proto_stats;
 	bool dp_eapol_stats;
 	/* Tx NSS stats received from FW */
 	struct cdp_htt_stats_tx_vdev_nss_tlv tx_vdev_nss;

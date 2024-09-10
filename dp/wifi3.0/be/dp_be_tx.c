@@ -2201,12 +2201,12 @@ qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	desc_pool_id = qdf_nbuf_get_queue_mapping(nbuf) & DP_TX_QUEUE_MASK;
 
 	pkt_len = qdf_nbuf_headlen(nbuf);
+	dp_tx_update_proto_stats(vdev, nbuf, desc_pool_id,
+				 TX_RECV_FROM_STACK_FP);
+
 	DP_STATS_INC_PKT(vdev, tx_i[xmit_type].rcvd, 1, pkt_len);
 	DP_STATS_INC(vdev, tx_i[xmit_type].rcvd_in_fast_xmit_flow, 1);
 	DP_STATS_INC(vdev, tx_i[xmit_type].rcvd_per_core[desc_pool_id], 1);
-
-	dp_tx_update_proto_stats(vdev, nbuf, desc_pool_id,
-				 TX_RECV_FROM_STACK_FP);
 
 	pdev = vdev->pdev;
 	if (dp_tx_limit_check(vdev, nbuf))
@@ -2310,14 +2310,14 @@ qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 		goto ring_access_fail;
 	}
 
-	dp_tx_update_proto_stats(vdev, tx_desc->nbuf, desc_pool_id,
-				 TX_ENQUEUE_HW_FP);
-
 	tx_desc->flags |= DP_TX_DESC_FLAG_QUEUED_TX;
 
 	/* Sync cached descriptor with HW */
 	qdf_mem_copy(hal_tx_desc, hal_tx_desc_cached, DP_TX_FAST_DESC_SIZE);
 	qdf_dsb();
+
+	dp_tx_update_proto_stats(vdev, tx_desc->nbuf, desc_pool_id,
+				 TX_ENQUEUE_HW_FP);
 
 	DP_STATS_INC_PKT(vdev, tx_i[xmit_type].processed, 1, tx_desc->length);
 	DP_STATS_INC(soc, tx.tcl_enq[desc_pool_id], 1);
@@ -2357,6 +2357,9 @@ dp_tx_comp_proto_stats_update(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 			      uint8_t ring_id)
 {
 	struct dp_vdev *vdev = NULL;
+
+	if (qdf_likely(!soc->dp_proto_stats_en))
+		return;
 
 	if (tx_desc->vdev_id != DP_INVALID_VDEV_ID) {
 		vdev = dp_vdev_get_ref_by_id(soc, tx_desc->vdev_id,

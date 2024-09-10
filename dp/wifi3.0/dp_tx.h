@@ -2588,7 +2588,7 @@ void dp_tx_dump_tx_desc(struct dp_tx_desc_s *tx_desc)
 static inline
 struct dp_tx_desc_pool_s *dp_get_tx_desc_pool_wrapper(struct dp_soc *soc)
 {
-	return dp_get_tx_desc_pool(soc, qdf_get_cpu());
+	return dp_get_tx_desc_pool(soc, qdf_get_smp_processor_id());
 }
 #else
 static inline

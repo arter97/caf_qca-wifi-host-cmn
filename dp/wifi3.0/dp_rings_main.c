@@ -3694,6 +3694,19 @@ void dp_ipa_rx_desc_freelist_create(struct dp_soc *soc)
 }
 #endif
 
+#ifdef QCA_DP_PROTOCOL_STATS
+static inline
+void dp_soc_set_proto_stats_enable(struct dp_soc *soc)
+{
+	soc->dp_proto_stats_en = wlan_cfg_get_dp_proto_stats(soc->wlan_cfg_ctx);
+}
+#else
+static inline
+void dp_soc_set_proto_stats_enable(struct dp_soc *soc)
+{
+}
+#endif
+
 /**
  * dp_soc_init() - Initialize txrx SOC
  * @soc: Opaque DP SOC handle
@@ -3804,6 +3817,7 @@ void *dp_soc_init(struct dp_soc *soc, HTC_HANDLE htc_handle,
 	if (dp_ipa_uc_attach(soc, NULL) != QDF_STATUS_SUCCESS)
 		dp_init_err("%pK: dp_ipa_uc_attach failed", soc);
 
+	dp_soc_set_proto_stats_enable(soc);
 	wlan_cfg_set_rx_hash(soc->wlan_cfg_ctx,
 			     cfg_get(soc->ctrl_psoc, CFG_DP_RX_HASH));
 #ifdef WLAN_SUPPORT_RX_FLOW_TAG
