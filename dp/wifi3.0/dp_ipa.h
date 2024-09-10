@@ -675,10 +675,11 @@ dp_ipa_txrx_get_peer_stats_based_on_peer_type(struct cdp_soc_t *soc,
  * @buf: buffer to hold vdev stats
  * @is_aggregate: for aggregation
  *
- * Return: int
+ * Return: status success/failure
  */
-int dp_ipa_txrx_get_vdev_stats(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
-			       void *buf, bool is_aggregate);
+QDF_STATUS
+dp_ipa_txrx_get_vdev_stats(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+			   void *buf, bool is_aggregate);
 
 /**
  * dp_ipa_txrx_get_pdev_stats() - fetch pdev stats

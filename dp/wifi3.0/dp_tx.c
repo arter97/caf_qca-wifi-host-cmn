@@ -31,7 +31,7 @@
 #include "qdf_module.h"
 #include <wlan_cfg.h>
 #include "dp_ipa.h"
-#if defined(MESH_MODE_SUPPORT) || defined(FEATURE_PERPKT_INFO)
+#if defined(MESH_MODE_SUPPORT)
 #include "if_meta_hdr.h"
 #endif
 #include "enet.h"
