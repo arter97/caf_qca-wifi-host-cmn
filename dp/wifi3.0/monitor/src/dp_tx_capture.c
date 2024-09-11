@@ -1324,10 +1324,11 @@ void dp_deliver_mgmt_frm(struct dp_pdev *pdev, qdf_nbuf_t nbuf)
 				     WDI_NO_VAL, pdev->pdev_id);
 		return;
 	}
-	if ((mon_pdev->tx_capture_enabled ==
-	     CDP_TX_ENH_CAPTURE_ENABLE_ALL_PEERS) ||
-	    (mon_pdev->tx_capture_enabled ==
-	     CDP_TX_ENH_CAPTURE_ENDIS_PER_PEER)) {
+	if (mon_pdev->mon_version == MONITOR_VERSION_1 &&
+	    ((mon_pdev->tx_capture_enabled ==
+	      CDP_TX_ENH_CAPTURE_ENABLE_ALL_PEERS) ||
+	     (mon_pdev->tx_capture_enabled ==
+	      CDP_TX_ENH_CAPTURE_ENDIS_PER_PEER))) {
 		/* invoke WDI event handler here send mgmt pkt here */
 		struct ieee80211_frame *wh;
 		uint8_t type, subtype;
