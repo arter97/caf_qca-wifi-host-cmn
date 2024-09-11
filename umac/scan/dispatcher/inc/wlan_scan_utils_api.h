@@ -1663,6 +1663,12 @@ util_scan_entry_bw_ind(struct scan_cache_entry *scan_entry)
 
 #ifdef WLAN_FEATURE_11BE_MLO
 static inline uint8_t*
+util_scan_entry_bv_ml_ie(struct scan_cache_entry *scan_entry)
+{
+	return scan_entry->ie_list.multi_link_bv;
+}
+
+static inline uint8_t*
 util_scan_entry_t2lm(struct scan_cache_entry *scan_entry)
 {
 	return scan_entry->ie_list.t2lm[0];
@@ -1676,6 +1682,12 @@ util_scan_entry_t2lm(struct scan_cache_entry *scan_entry)
  */
 uint32_t util_scan_entry_t2lm_len(struct scan_cache_entry *scan_entry);
 #else
+static inline uint8_t*
+util_scan_entry_bv_ml_ie(struct scan_cache_entry *scan_entry)
+{
+	return NULL;
+}
+
 static inline uint8_t*
 util_scan_entry_t2lm(struct scan_cache_entry *scan_entry)
 {
@@ -1959,6 +1971,7 @@ util_scan_get_6g_oper_channel(uint8_t *he_op_ie)
 	return 0;
 }
 #endif
+
 /*
  * util_is_bssid_non_tx() - Is the given BSSID a non-tx neighbor
  * entry in the RNR db
@@ -1970,4 +1983,15 @@ util_scan_get_6g_oper_channel(uint8_t *he_op_ie)
  */
 bool util_is_bssid_non_tx(struct wlan_objmgr_psoc *psoc,
 			  struct qdf_mac_addr *bssid, qdf_freq_t freq);
+
+/**
+ * util_scan_get_phymode() - function to get phy mode
+ * @pdev : pdev object
+ * @scan_params: scan entry
+ *
+ * Return: phy mode.
+ */
+enum wlan_phymode
+util_scan_get_phymode(struct wlan_objmgr_pdev *pdev,
+		      struct scan_cache_entry *scan_params);
 #endif

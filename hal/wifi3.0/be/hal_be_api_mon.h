@@ -31,6 +31,81 @@ defined(WLAN_PKT_CAPTURE_RX_2_0)
 #include <hal_generic_api.h>
 #include <hal_api_mon.h>
 
+#define HAL_RX_PPDU_START_PHY_PPDU_ID_OFFSET                        0x00000000
+#define HAL_RX_PPDU_START_PHY_PPDU_ID_LSB                           0
+#define HAL_RX_PPDU_START_PHY_PPDU_ID_MSB                           15
+#define HAL_RX_PPDU_START_PHY_PPDU_ID_MASK                          0x0000ffff
+
+#define HAL_RX_PPDU_START_SW_PHY_META_DATA_OFFSET                   0x00000004
+#define HAL_RX_PPDU_START_SW_PHY_META_DATA_LSB                      0
+#define HAL_RX_PPDU_START_SW_PHY_META_DATA_MSB                      31
+#define HAL_RX_PPDU_START_SW_PHY_META_DATA_MASK                     0xffffffff
+
+#define HAL_RX_PPDU_START_PPDU_START_TIMESTAMP_31_0_OFFSET          0x00000008
+#define HAL_RX_PPDU_START_PPDU_START_TIMESTAMP_31_0_LSB             0
+#define HAL_RX_PPDU_START_PPDU_START_TIMESTAMP_31_0_MSB             31
+#define HAL_RX_PPDU_START_PPDU_START_TIMESTAMP_31_0_MASK            0xffffffff
+
+#define HAL_RXPCU_PPDU_END_INFO_WB_TIMESTAMP_LOWER_32_OFFSET        0x00000000
+#define HAL_RXPCU_PPDU_END_INFO_WB_TIMESTAMP_LOWER_32_LSB           0
+#define HAL_RXPCU_PPDU_END_INFO_WB_TIMESTAMP_LOWER_32_MSB           31
+#define HAL_RXPCU_PPDU_END_INFO_WB_TIMESTAMP_LOWER_32_MASK          0xffffffff
+
+#define HAL_RXPCU_PPDU_END_INFO_WB_TIMESTAMP_UPPER_32_OFFSET        0x00000004
+#define HAL_RXPCU_PPDU_END_INFO_WB_TIMESTAMP_UPPER_32_LSB           0
+#define HAL_RXPCU_PPDU_END_INFO_WB_TIMESTAMP_UPPER_32_MSB           31
+#define HAL_RXPCU_PPDU_END_INFO_WB_TIMESTAMP_UPPER_32_MASK          0xffffffff
+
+#define HAL_RXPCU_PPDU_END_INFO_RX_ANTENNA_OFFSET                   0x00000008
+#define HAL_RXPCU_PPDU_END_INFO_RX_ANTENNA_LSB                      0
+#define HAL_RXPCU_PPDU_END_INFO_RX_ANTENNA_MSB                      23
+#define HAL_RXPCU_PPDU_END_INFO_RX_ANTENNA_MASK                     0x00ffffff
+
+#define HAL_RX_PPDU_END_USER_STATS_EXT_FCS_OK_BITMAP_95_64_OFFSET   0x00000004
+#define HAL_RX_PPDU_END_USER_STATS_EXT_FCS_OK_BITMAP_95_64_LSB      0
+#define HAL_RX_PPDU_END_USER_STATS_EXT_FCS_OK_BITMAP_95_64_MSB      31
+#define HAL_RX_PPDU_END_USER_STATS_EXT_FCS_OK_BITMAP_95_64_MASK     0xffffffff
+
+#define HAL_RX_PPDU_END_USER_STATS_EXT_FCS_OK_BITMAP_127_96_OFFSET  0x00000008
+#define HAL_RX_PPDU_END_USER_STATS_EXT_FCS_OK_BITMAP_127_96_LSB     0
+#define HAL_RX_PPDU_END_USER_STATS_EXT_FCS_OK_BITMAP_127_96_MSB     31
+#define HAL_RX_PPDU_END_USER_STATS_EXT_FCS_OK_BITMAP_127_96_MASK    0xffffffff
+
+#define HAL_RX_PPDU_END_USER_STATS_EXT_FCS_OK_BITMAP_159_128_OFFSET 0x0000000c
+#define HAL_RX_PPDU_END_USER_STATS_EXT_FCS_OK_BITMAP_159_128_LSB    0
+#define HAL_RX_PPDU_END_USER_STATS_EXT_FCS_OK_BITMAP_159_128_MSB    31
+#define HAL_RX_PPDU_END_USER_STATS_EXT_FCS_OK_BITMAP_159_128_MASK   0xffffffff
+
+#define HAL_RX_PPDU_END_USER_STATS_EXT_FCS_OK_BITMAP_191_160_OFFSET 0x00000010
+#define HAL_RX_PPDU_END_USER_STATS_EXT_FCS_OK_BITMAP_191_160_LSB    0
+#define HAL_RX_PPDU_END_USER_STATS_EXT_FCS_OK_BITMAP_191_160_MSB    31
+#define HAL_RX_PPDU_END_USER_STATS_EXT_FCS_OK_BITMAP_191_160_MASK   0xffffffff
+
+#define HAL_RX_PPDU_END_USER_STATS_EXT_FCS_OK_BITMAP_223_192_OFFSET 0x00000014
+#define HAL_RX_PPDU_END_USER_STATS_EXT_FCS_OK_BITMAP_223_192_LSB    0
+#define HAL_RX_PPDU_END_USER_STATS_EXT_FCS_OK_BITMAP_223_192_MSB    31
+#define HAL_RX_PPDU_END_USER_STATS_EXT_FCS_OK_BITMAP_223_192_MASK   0xffffffff
+
+#define HAL_RX_PPDU_END_USER_STATS_EXT_FCS_OK_BITMAP_255_224_OFFSET 0x00000018
+#define HAL_RX_PPDU_END_USER_STATS_EXT_FCS_OK_BITMAP_255_224_LSB    0
+#define HAL_RX_PPDU_END_USER_STATS_EXT_FCS_OK_BITMAP_255_224_MSB    31
+#define HAL_RX_PPDU_END_USER_STATS_EXT_FCS_OK_BITMAP_255_224_MASK   0xffffffff
+
+#define HAL_RXPCU_PPDU_END_INFO_RX_PPDU_DURATION_OFFSET             0x00000024
+#define HAL_RXPCU_PPDU_END_INFO_RX_PPDU_DURATION_LSB                0
+#define HAL_RXPCU_PPDU_END_INFO_RX_PPDU_DURATION_MSB                23
+#define HAL_RXPCU_PPDU_END_INFO_RX_PPDU_DURATION_MASK               0x00ffffff
+
+#define HAL_PHYRX_RSSI_LEGACY_RECEPTION_TYPE_OFFSET                 0x00000000
+#define HAL_PHYRX_RSSI_LEGACY_RECEPTION_TYPE_LSB                    0
+#define HAL_PHYRX_RSSI_LEGACY_RECEPTION_TYPE_MSB                    3
+#define HAL_PHYRX_RSSI_LEGACY_RECEPTION_TYPE_MASK                   0x0000000f
+
+#define HAL_RX_MPDU_END_FCS_ERR_OFFSET                              0x00000004
+#define HAL_RX_MPDU_END_FCS_ERR_LSB                                 19
+#define HAL_RX_MPDU_END_FCS_ERR_MSB                                 19
+#define HAL_RX_MPDU_END_FCS_ERR_MASK                                0x00080000
+
 #if defined(WLAN_PKT_CAPTURE_TX_2_0) || \
 defined(WLAN_PKT_CAPTURE_RX_2_0) || \
 defined(QCA_SINGLE_WIFI_3_0)
@@ -78,11 +153,11 @@ defined(QCA_SINGLE_WIFI_3_0)
 #endif
 
 #define UNIFIED_RXPCU_PPDU_END_INFO_8_RX_PPDU_DURATION_OFFSET \
-	RXPCU_PPDU_END_INFO_RX_PPDU_DURATION_OFFSET
+	HAL_RXPCU_PPDU_END_INFO_RX_PPDU_DURATION_OFFSET
 #define UNIFIED_RXPCU_PPDU_END_INFO_8_RX_PPDU_DURATION_MASK \
-	RXPCU_PPDU_END_INFO_RX_PPDU_DURATION_MASK
+	HAL_RXPCU_PPDU_END_INFO_RX_PPDU_DURATION_MASK
 #define UNIFIED_RXPCU_PPDU_END_INFO_8_RX_PPDU_DURATION_LSB \
-	RXPCU_PPDU_END_INFO_RX_PPDU_DURATION_LSB
+	HAL_RXPCU_PPDU_END_INFO_RX_PPDU_DURATION_LSB
 #define UNIFIED_PHYRX_HT_SIG_0_HT_SIG_INFO_PHYRX_HT_SIG_INFO_DETAILS_OFFSET \
 	PHYRX_HT_SIG_PHYRX_HT_SIG_INFO_DETAILS_MCS_OFFSET
 #define UNIFIED_PHYRX_L_SIG_B_0_L_SIG_B_INFO_PHYRX_L_SIG_B_INFO_DETAILS_OFFSET \
@@ -2657,21 +2732,21 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 	case WIFIRX_PPDU_START_E:
 	{
 		if (qdf_unlikely(ppdu_info->com_info.last_ppdu_id ==
-		    HAL_RX_GET_64(rx_tlv, RX_PPDU_START, PHY_PPDU_ID)))
+		    HAL_RX_GET(rx_tlv, HAL_RX_PPDU_START, PHY_PPDU_ID)))
 			hal_err("Matching ppdu_id(%u) detected",
 				ppdu_info->com_info.last_ppdu_id);
 
 		ppdu_info->com_info.last_ppdu_id =
 			ppdu_info->com_info.ppdu_id =
-				HAL_RX_GET_64(rx_tlv, RX_PPDU_START,
-					      PHY_PPDU_ID);
+				HAL_RX_GET(rx_tlv, HAL_RX_PPDU_START,
+					   PHY_PPDU_ID);
 
 		/* channel number is set in PHY meta data */
 		ppdu_info->rx_status.chan_num =
-			(HAL_RX_GET_64(rx_tlv, RX_PPDU_START,
+			(HAL_RX_GET(rx_tlv, HAL_RX_PPDU_START,
 				       SW_PHY_META_DATA) & 0x0000FFFF);
 		ppdu_info->rx_status.chan_freq =
-			(HAL_RX_GET_64(rx_tlv, RX_PPDU_START,
+			(HAL_RX_GET(rx_tlv, HAL_RX_PPDU_START,
 				       SW_PHY_META_DATA) & 0xFFFF0000) >> 16;
 		if (ppdu_info->rx_status.chan_num &&
 		    ppdu_info->rx_status.chan_freq) {
@@ -2682,8 +2757,8 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 		}
 
 		ppdu_info->com_info.ppdu_timestamp =
-			HAL_RX_GET_64(rx_tlv, RX_PPDU_START,
-				      PPDU_START_TIMESTAMP_31_0);
+			HAL_RX_GET(rx_tlv, HAL_RX_PPDU_START,
+				   PPDU_START_TIMESTAMP_31_0);
 		ppdu_info->rx_status.ppdu_timestamp =
 			ppdu_info->com_info.ppdu_timestamp;
 		ppdu_info->rx_state = HAL_RX_MON_PPDU_START;
@@ -2706,16 +2781,16 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 
 	case WIFIRXPCU_PPDU_END_INFO_E:
 		ppdu_info->rx_status.rx_antenna =
-			HAL_RX_GET_64(rx_tlv, RXPCU_PPDU_END_INFO, RX_ANTENNA);
+			HAL_RX_GET(rx_tlv, HAL_RXPCU_PPDU_END_INFO, RX_ANTENNA);
 		ppdu_info->rx_status.tsft =
-			HAL_RX_GET_64(rx_tlv, RXPCU_PPDU_END_INFO,
-				      WB_TIMESTAMP_UPPER_32);
+			HAL_RX_GET(rx_tlv, HAL_RXPCU_PPDU_END_INFO,
+				   WB_TIMESTAMP_UPPER_32);
 		ppdu_info->rx_status.tsft = (ppdu_info->rx_status.tsft << 32) |
-			HAL_RX_GET_64(rx_tlv, RXPCU_PPDU_END_INFO,
-				      WB_TIMESTAMP_LOWER_32);
+			HAL_RX_GET(rx_tlv, HAL_RXPCU_PPDU_END_INFO,
+				   WB_TIMESTAMP_LOWER_32);
 		ppdu_info->rx_status.duration =
-			HAL_RX_GET_64(rx_tlv, UNIFIED_RXPCU_PPDU_END_INFO_8,
-				      RX_PPDU_DURATION);
+			HAL_RX_GET(rx_tlv, UNIFIED_RXPCU_PPDU_END_INFO_8,
+				   RX_PPDU_DURATION);
 		hal_rx_get_bb_info(hal_soc_hdl, rx_tlv, ppdu_info);
 		break;
 
@@ -2829,28 +2904,28 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 
 	case WIFIRX_PPDU_END_USER_STATS_EXT_E:
 		ppdu_info->com_info.mpdu_fcs_ok_bitmap[2] =
-			HAL_RX_GET_64(rx_tlv, RX_PPDU_END_USER_STATS_EXT,
-				      FCS_OK_BITMAP_95_64);
+			HAL_RX_GET(rx_tlv, HAL_RX_PPDU_END_USER_STATS_EXT,
+				   FCS_OK_BITMAP_95_64);
 
 		ppdu_info->com_info.mpdu_fcs_ok_bitmap[3] =
-			 HAL_RX_GET_64(rx_tlv, RX_PPDU_END_USER_STATS_EXT,
-				       FCS_OK_BITMAP_127_96);
+			 HAL_RX_GET(rx_tlv, HAL_RX_PPDU_END_USER_STATS_EXT,
+				    FCS_OK_BITMAP_127_96);
 
 		ppdu_info->com_info.mpdu_fcs_ok_bitmap[4] =
-			HAL_RX_GET_64(rx_tlv, RX_PPDU_END_USER_STATS_EXT,
-				      FCS_OK_BITMAP_159_128);
+			HAL_RX_GET(rx_tlv, HAL_RX_PPDU_END_USER_STATS_EXT,
+				   FCS_OK_BITMAP_159_128);
 
 		ppdu_info->com_info.mpdu_fcs_ok_bitmap[5] =
-			 HAL_RX_GET_64(rx_tlv, RX_PPDU_END_USER_STATS_EXT,
-				       FCS_OK_BITMAP_191_160);
+			 HAL_RX_GET(rx_tlv, HAL_RX_PPDU_END_USER_STATS_EXT,
+				    FCS_OK_BITMAP_191_160);
 
 		ppdu_info->com_info.mpdu_fcs_ok_bitmap[6] =
-			HAL_RX_GET_64(rx_tlv, RX_PPDU_END_USER_STATS_EXT,
-				      FCS_OK_BITMAP_223_192);
+			HAL_RX_GET(rx_tlv, HAL_RX_PPDU_END_USER_STATS_EXT,
+				   FCS_OK_BITMAP_223_192);
 
 		ppdu_info->com_info.mpdu_fcs_ok_bitmap[7] =
-			 HAL_RX_GET_64(rx_tlv, RX_PPDU_END_USER_STATS_EXT,
-				       FCS_OK_BITMAP_255_224);
+			 HAL_RX_GET(rx_tlv, HAL_RX_PPDU_END_USER_STATS_EXT,
+				    FCS_OK_BITMAP_255_224);
 		break;
 
 	case WIFIRX_PPDU_END_STATUS_DONE_E:
@@ -3544,9 +3619,8 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 		ppdu_info->rx_status.bw = hal->ops->hal_rx_get_tlv(rx_tlv);
 		ppdu_info->rx_status.he_re = 0;
 
-		reception_type = HAL_RX_GET_64(rx_tlv,
-					       PHYRX_RSSI_LEGACY,
-					       RECEPTION_TYPE);
+		reception_type = HAL_RX_GET(rx_tlv, HAL_PHYRX_RSSI_LEGACY,
+					    RECEPTION_TYPE);
 		switch (reception_type) {
 		case QDF_RECEPTION_TYPE_ULOFMDA:
 			ppdu_info->rx_status.ulofdma_flag = 1;
@@ -3564,46 +3638,38 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 		ppdu_info->rx_status.ul_mu_type = reception_type;
 
 		hal_rx_update_rssi_chain(ppdu_info, rssi_info_tlv);
-		rssi_value = HAL_RX_GET_64(rssi_info_tlv,
-					   RECEIVE_RSSI_INFO,
-					   RSSI_PRI20_CHAIN0);
+		rssi_value = HAL_RX_GET(rssi_info_tlv, RECEIVE_RSSI_INFO,
+					RSSI_PRI20_CHAIN0);
 		ppdu_info->rx_status.rssi[0] = rssi_value;
 
-		rssi_value = HAL_RX_GET_64(rssi_info_tlv,
-					   RECEIVE_RSSI_INFO,
-					   RSSI_PRI20_CHAIN1);
+		rssi_value = HAL_RX_GET(rssi_info_tlv, RECEIVE_RSSI_INFO,
+					RSSI_PRI20_CHAIN1);
 		ppdu_info->rx_status.rssi[1] = rssi_value;
 
-		rssi_value = HAL_RX_GET_64(rssi_info_tlv,
-					   RECEIVE_RSSI_INFO,
-					   RSSI_PRI20_CHAIN2);
+		rssi_value = HAL_RX_GET(rssi_info_tlv, RECEIVE_RSSI_INFO,
+					RSSI_PRI20_CHAIN2);
 		ppdu_info->rx_status.rssi[2] = rssi_value;
 
-		rssi_value = HAL_RX_GET_64(rssi_info_tlv,
-					   RECEIVE_RSSI_INFO,
-					   RSSI_PRI20_CHAIN3);
+		rssi_value = HAL_RX_GET(rssi_info_tlv, RECEIVE_RSSI_INFO,
+					RSSI_PRI20_CHAIN3);
 		ppdu_info->rx_status.rssi[3] = rssi_value;
 
 #ifdef DP_BE_NOTYET_WAR
 		// TODO - this is not preset for kiwi
-		rssi_value = HAL_RX_GET_64(rssi_info_tlv,
-					   RECEIVE_RSSI_INFO,
-					   RSSI_PRI20_CHAIN4);
+		rssi_value = HAL_RX_GET(rssi_info_tlv, RECEIVE_RSSI_INFO,
+					RSSI_PRI20_CHAIN4);
 		ppdu_info->rx_status.rssi[4] = rssi_value;
 
-		rssi_value = HAL_RX_GET_64(rssi_info_tlv,
-					   RECEIVE_RSSI_INFO,
-					   RSSI_PRI20_CHAIN5);
+		rssi_value = HAL_RX_GET(rssi_info_tlv, RECEIVE_RSSI_INFO,
+					RSSI_PRI20_CHAIN5);
 		ppdu_info->rx_status.rssi[5] = rssi_value;
 
-		rssi_value = HAL_RX_GET_64(rssi_info_tlv,
-					   RECEIVE_RSSI_INFO,
-					   RSSI_PRI20_CHAIN6);
+		rssi_value = HAL_RX_GET(rssi_info_tlv, RECEIVE_RSSI_INFO,
+					RSSI_PRI20_CHAIN6);
 		ppdu_info->rx_status.rssi[6] = rssi_value;
 
-		rssi_value = HAL_RX_GET_64(rssi_info_tlv,
-					   RECEIVE_RSSI_INFO,
-					   RSSI_PRI20_CHAIN7);
+		rssi_value = HAL_RX_GET(rssi_info_tlv, RECEIVE_RSSI_INFO,
+					RSSI_PRI20_CHAIN7);
 		ppdu_info->rx_status.rssi[7] = rssi_value;
 #endif
 		break;
@@ -3720,8 +3786,7 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 	case WIFIRX_MPDU_END_E:
 		ppdu_info->user_id = user_id;
 		ppdu_info->fcs_err =
-			HAL_RX_GET_64(rx_tlv, RX_MPDU_END,
-				      FCS_ERR);
+			HAL_RX_GET(rx_tlv, HAL_RX_MPDU_END, FCS_ERR);
 
 		ppdu_info->mpdu_info[user_id].fcs_err = ppdu_info->fcs_err;
 		hal_rx_record_tlv_info(ppdu_info, tlv_tag);

@@ -962,7 +962,7 @@ util_scan_get_phymode_2g(struct scan_cache_entry *scan_params)
 	return phymode;
 }
 
-static enum wlan_phymode
+enum wlan_phymode
 util_scan_get_phymode(struct wlan_objmgr_pdev *pdev,
 		      struct scan_cache_entry *scan_params)
 {
@@ -3073,7 +3073,7 @@ static uint32_t util_gen_new_ie(struct wlan_objmgr_pdev *pdev,
 
 	if (extn_elem && extn_elem[TAG_LEN_POS] >= VALID_ELEM_LEAST_LEN) {
 		if (((extn_elem + extn_elem[1] + MIN_IE_LEN) - sub_copy)
-		    < subie_len)
+		    <= subie_len)
 			util_parse_noninheritance_list(extn_elem, &elem_list,
 						       &extn_elem_list, &ninh);
 	}

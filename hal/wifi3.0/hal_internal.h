@@ -1687,6 +1687,7 @@ void hal_qca8074_attach(struct hal_soc *hal_soc);
  * @hal_soc: HAL soc
  */
 void hal_kiwi_attach(struct hal_soc *hal_soc);
+void hal_peach_attach(struct hal_soc *hal_soc);
 
 void hal_qcn9224v2_attach(struct hal_soc *hal_soc);
 void hal_wcn6450_attach(struct hal_soc *hal_soc);
