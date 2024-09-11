@@ -166,8 +166,9 @@ extract_nan_event_rsp_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 				     QDF_MAC_ADDR_SIZE);
 			break;
 		default:
-			wmi_err("invalid tlv_type %d", tlv_type);
-			return QDF_STATUS_E_INVAL;
+			wmi_debug("not parsed tlv_type %d", tlv_type);
+			evt_params->evt_type = nan_event_id_generic_rsp;
+			break;
 		}
 		break;
 	default:
