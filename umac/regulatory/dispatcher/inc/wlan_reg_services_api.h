@@ -708,7 +708,7 @@ QDF_STATUS wlan_reg_read_current_country(struct wlan_objmgr_psoc *psoc,
  * @pwr_type_6g: pointer to 6G power type
  * @ap_pwr_type: AP's power type for 6G as advertised in HE ops IE
  * @chan_freq: Connection channel frequency
- * @rf_test_mode: RF test mode value
+ * @rf_mode_force_pwr_type: RF mode force power type value
  *
  * Return: QDF_STATUS
  */
@@ -718,7 +718,7 @@ wlan_reg_get_best_6g_power_type(struct wlan_objmgr_psoc *psoc,
 				enum reg_6g_ap_type *pwr_type_6g,
 				enum reg_6g_ap_type ap_pwr_type,
 				uint32_t chan_freq,
-				uint32_t rf_test_mode);
+				int8_t rf_mode_force_pwr_type);
 #endif
 
 #ifdef CONFIG_CHAN_FREQ_API

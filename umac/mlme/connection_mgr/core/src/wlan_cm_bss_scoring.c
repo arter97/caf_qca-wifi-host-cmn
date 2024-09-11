@@ -1522,13 +1522,13 @@ bool wlan_cm_is_eht_allowed_for_current_security(struct wlan_objmgr_psoc *psoc,
 						 struct scan_cache_entry *entry,
 						 bool is_mlo_connect)
 {
-	uint32_t rf_test_mode = false;
+	bool rf_test_mode = false;
 	QDF_STATUS status;
 	struct security_info *neg_sec_info;
 	uint32_t oem_eht_cfg = 0x0;
 	bool mlie_present;
 
-	status = wlan_mlme_get_rf_test_mode(psoc, &rf_test_mode);
+	status = wlan_mlme_is_rf_test_mode_enabled(psoc, &rf_test_mode);
 	if (!QDF_IS_STATUS_SUCCESS(status)) {
 		mlme_err("Get rf test mode failed");
 		return false;

@@ -449,18 +449,20 @@ no_support:
 
 /**
  * reg_get_best_6g_power_type_for_rf_test() - Get best 6 GHz power type as per
- * RF test mode
+ * RF test mode force power type
  * @pdev: PDEV pointer
  * @pwr_type_6g: 6 GHz power type pointer
  * @chan_idx: Channel index
- * @rf_test_mode: RF test mode value
+ * @rf_mode_force_pwr_type: Force power type for RF mode enabled
  *
- * Force connection power type per RF test mode as below. Force REG_INDOOR_AP
- * power type if forced power type is not supported for connection frequency.
- * RF test mode -> Power type
- * 2 -> REG_INDOOR_AP
- * 3 -> REG_VERY_LOW_POWER_AP
- * 4 -> REG_STANDARD_POWER_AP
+ * Force connection power type for RF test mode enabled case as below.
+ * RF test mode force power type value-> Reg power type
+ * 0 -> REG_INDOOR_AP
+ * 1 -> REG_STANDARD_POWER_AP
+ * 2 -> REG_VERY_LOW_POWER_AP
+ *
+ * Force REG_INDOOR_AP power type if forced power type is not
+ * supported for connection frequency
  *
  * Return: Return QDF_STATUS_SUCCESS if connection power type found else
  * return QDF_STATUS_E_NOSUPPORT.
@@ -470,36 +472,36 @@ QDF_STATUS reg_get_best_6g_power_type_for_rf_test(
 			struct wlan_objmgr_pdev *pdev,
 			enum reg_6g_ap_type *pwr_type_6g,
 			enum channel_enum chan_idx,
-			uint32_t rf_test_mode)
+			int8_t rf_mode_force_pwr_type)
 {
-	enum reg_6g_ap_type rf_force_power_type;
+	enum reg_6g_ap_type force_reg_pwr_type;
 
-	if (rf_test_mode == 2)
-		rf_force_power_type = REG_INDOOR_AP;
-	else if (rf_test_mode == 3)
-		rf_force_power_type = REG_VERY_LOW_POWER_AP;
-	else if (rf_test_mode == 4)
-		rf_force_power_type = REG_STANDARD_POWER_AP;
+	if (rf_mode_force_pwr_type == 0)
+		force_reg_pwr_type = REG_INDOOR_AP;
+	else if (rf_mode_force_pwr_type == 1)
+		force_reg_pwr_type = REG_STANDARD_POWER_AP;
+	else if (rf_mode_force_pwr_type == 2)
+		force_reg_pwr_type = REG_VERY_LOW_POWER_AP;
 	else
 		return QDF_STATUS_E_NOSUPPORT;
 
 	if (QDF_IS_STATUS_SUCCESS(reg_check_if_6g_pwr_type_supp_for_chan(
-				pdev, rf_force_power_type, chan_idx))) {
-		reg_debug("RF test mode: %u, selected power type: %d",
-			  rf_test_mode, rf_force_power_type);
-		*pwr_type_6g = rf_force_power_type;
+				pdev, force_reg_pwr_type, chan_idx))) {
+		reg_debug("RF test mode force power type: %d, selected power type: %d",
+			  rf_mode_force_pwr_type, force_reg_pwr_type);
+		*pwr_type_6g = force_reg_pwr_type;
 		return QDF_STATUS_SUCCESS;
-	} else if (rf_test_mode != 2 && QDF_IS_STATUS_SUCCESS(
+	} else if (rf_mode_force_pwr_type && QDF_IS_STATUS_SUCCESS(
 			reg_check_if_6g_pwr_type_supp_for_chan(
 					pdev, REG_INDOOR_AP, chan_idx))) {
-		reg_info("RF test mode: %u, force power type: %d, selected power type: %d",
-			 rf_test_mode, rf_force_power_type, REG_INDOOR_AP);
+		reg_info("RF test mode force power type: %d, selected power type: %d",
+			 rf_mode_force_pwr_type, REG_INDOOR_AP);
 		*pwr_type_6g = REG_INDOOR_AP;
 		return QDF_STATUS_SUCCESS;
 	}
 
-	reg_err("For RF test mode: %u, no suitable power mode present.",
-		rf_test_mode);
+	reg_err("For RF test mode force power type : %d, no suitable power mode present.",
+		rf_mode_force_pwr_type);
 	return QDF_STATUS_E_NOSUPPORT;
 }
 
@@ -509,13 +511,14 @@ reg_get_best_6g_power_type(struct wlan_objmgr_psoc *psoc,
 			   enum reg_6g_ap_type *pwr_type_6g,
 			   enum reg_6g_ap_type ap_pwr_type,
 			   uint32_t chan_freq,
-			   uint32_t rf_test_mode)
+			   int8_t rf_mode_force_pwr_type)
 {
 	enum channel_enum chan_idx = reg_get_chan_enum_for_freq(chan_freq);
 
-	if (rf_test_mode >= 2 && rf_test_mode <= 4)
-		return reg_get_best_6g_power_type_for_rf_test(pdev, pwr_type_6g,
-							chan_idx, rf_test_mode);
+	if (rf_mode_force_pwr_type > -1)
+		return reg_get_best_6g_power_type_for_rf_test(
+						pdev, pwr_type_6g, chan_idx,
+						rf_mode_force_pwr_type);
 
 	*pwr_type_6g = ap_pwr_type;
 
@@ -594,7 +597,7 @@ reg_get_best_6g_power_type(struct wlan_objmgr_psoc *psoc,
 			   enum reg_6g_ap_type *pwr_type_6g,
 			   enum reg_6g_ap_type ap_pwr_type,
 			   uint32_t chan_freq,
-			   uint32_t rf_test_mode)
+			   int8_t rf_mode_force_pwr_type)
 {
 	return QDF_STATUS_SUCCESS;
 }

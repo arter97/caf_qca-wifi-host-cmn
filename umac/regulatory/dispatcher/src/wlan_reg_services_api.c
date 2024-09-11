@@ -114,11 +114,11 @@ wlan_reg_get_best_6g_power_type(struct wlan_objmgr_psoc *psoc,
 				enum reg_6g_ap_type *pwr_type_6g,
 				enum reg_6g_ap_type ap_pwr_type,
 				uint32_t chan_freq,
-				uint32_t rf_test_mode)
+				int8_t rf_mode_force_pwr_type)
 {
 	return reg_get_best_6g_power_type(psoc, pdev, pwr_type_6g,
 					  ap_pwr_type, chan_freq,
-					  rf_test_mode);
+					  rf_mode_force_pwr_type);
 }
 #endif
 
