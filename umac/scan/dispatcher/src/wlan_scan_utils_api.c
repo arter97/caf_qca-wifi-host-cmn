@@ -2520,6 +2520,7 @@ util_scan_gen_scan_entry(struct wlan_objmgr_pdev *pdev,
 	scan_entry->pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
 
 	recv_freq = rx_param->chan_freq;
+	scan_entry->recv_freq = recv_freq;
 	/* Copy per chain rssi to scan entry */
 	qdf_mem_copy(scan_entry->per_chain_rssi, rx_param->rssi_ctl,
 		     WLAN_MGMT_TXRX_HOST_MAX_ANTENNA);

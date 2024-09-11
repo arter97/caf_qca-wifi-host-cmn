@@ -855,7 +855,7 @@ scm_copy_info_from_dup_entry(struct wlan_objmgr_pdev *pdev,
 	 */
 	if ((scan_params->frm_subtype == MGMT_SUBTYPE_BEACON ||
 	     scan_params->frm_subtype == MGMT_SUBTYPE_PROBE_RESP) &&
-	     (scan_params->channel.chan_freq !=
+	     (scan_params->recv_freq !=
 	      scan_entry->channel.chan_freq) &&
 	     (time_gap < WLAN_RSSI_AVERAGING_TIME)) {
 		he_ops = util_scan_entry_heop(scan_params);

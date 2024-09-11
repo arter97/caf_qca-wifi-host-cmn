@@ -617,6 +617,7 @@ enum number_of_partner_link {
  * @raw_frame: contain raw frame and the length of the raw frame
  * @pdev_id: pdev id
  * @ml_info: Multi link information
+ * @recv_freq: Frequency on which the frame is received
  */
 struct scan_cache_entry {
 	uint8_t frm_subtype;
@@ -670,6 +671,7 @@ struct scan_cache_entry {
 #ifdef WLAN_FEATURE_11BE_MLO
 	struct ml_info ml_info;
 #endif
+	uint32_t recv_freq;
 };
 
 #define MAX_FAVORED_BSSID 16
