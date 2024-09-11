@@ -3125,6 +3125,10 @@ static void dp_sawf_dump_tx_stats(struct sawf_tx_stats *tx_stats)
 	dp_sawf_print_stats("failed_retry_count = %u", tx_stats->failed_retry_count);
 	dp_sawf_print_stats("queue_depth = %u", tx_stats->queue_depth);
 	dp_sawf_print_stats("throughput = %u", tx_stats->throughput);
+	dp_sawf_print_stats("min throughput = %u", tx_stats->min_throughput);
+	dp_sawf_print_stats("max throughput = %u", tx_stats->max_throughput);
+	dp_sawf_print_stats("avg throughput = %u", tx_stats->avg_throughput);
+	dp_sawf_print_stats("per = %u", tx_stats->per);
 	dp_sawf_print_stats("ingress rate = %u", tx_stats->ingress_rate);
 	dp_sawf_print_stats("reinject packet = %u", tx_stats->reinject_pkt);
 }
@@ -3171,6 +3175,10 @@ dp_sawf_copy_tx_stats(struct sawf_tx_stats *dst, struct sawf_tx_stats *src)
 	dst->ingress_rate = src->ingress_rate;
 	dst->total_retries_count = src->total_retries_count;
 	dst->retry_count = src->retry_count;
+	dst->min_throughput = src->min_throughput;
+	dst->max_throughput = src->max_throughput;
+	dst->avg_throughput = src->avg_throughput;
+	dst->per = src->per;
 	dst->multiple_retry_count = src->multiple_retry_count;
 	dst->failed_retry_count = src->failed_retry_count;
 	for (pream_type = 0; pream_type <  DOT11_MAX; pream_type++) {
@@ -3384,6 +3392,7 @@ dp_sawf_get_peer_tx_stats(struct cdp_soc_t *soc,
 	uint8_t tid, q_idx;
 	uint16_t host_q_id, host_q_idx;
 	uint32_t throughput, ingress_rate;
+	uint32_t min_tput, max_tput, avg_tput, per;
 	QDF_STATUS status;
 	uint8_t stats_cfg;
 
@@ -3462,8 +3471,17 @@ dp_sawf_get_peer_tx_stats(struct cdp_soc_t *soc,
 							tid, host_q_idx,
 							&throughput,
 							&ingress_rate);
+				telemetry_sawf_get_tx_rate(
+						sawf_ctx->telemetry_ctx,
+						tid, host_q_idx,
+						&min_tput, &max_tput,
+						&avg_tput, &per);
 				src->throughput = throughput;
 				src->ingress_rate = ingress_rate;
+				src->min_throughput = min_tput;
+				src->max_throughput = max_tput;
+				src->avg_throughput = avg_tput;
+				src->per = per;
 
 				dp_sawf_print_stats("-- TID: %u MSDUQ: %u --",
 						    tid, q_idx);
@@ -3506,8 +3524,17 @@ dp_sawf_get_peer_tx_stats(struct cdp_soc_t *soc,
 		telemetry_sawf_get_rate(sawf_ctx->telemetry_ctx,
 					tid, host_q_idx,
 					&throughput, &ingress_rate);
+		telemetry_sawf_get_tx_rate(
+					sawf_ctx->telemetry_ctx,
+					tid, host_q_idx,
+					&min_tput, &max_tput,
+					&avg_tput, &per);
 		src->throughput = throughput;
 		src->ingress_rate = ingress_rate;
+		src->min_throughput = min_tput;
+		src->max_throughput = max_tput;
+		src->avg_throughput = avg_tput;
+		src->per = per;
 
 		dp_sawf_print_stats("----TID: %u MSDUQ: %u ----",
 				    tid, q_idx);

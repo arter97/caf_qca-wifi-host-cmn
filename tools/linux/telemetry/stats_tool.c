@@ -1617,6 +1617,14 @@ print_advance_sta_data_sawf_tx(struct advance_peer_data_sawftx *data,
 			    data->tx[0][0].tx_ingress.bytes);
 		STATS_PRINT("Tx_info_Throughput         = %u\n",
 			    data->tx[0][0].throughput);
+		STATS_PRINT("Tx_info_Min_Throughput     = %u\n",
+			    data->tx[0][0].min_throughput);
+		STATS_PRINT("Tx_info_Max_Throughput     = %u\n",
+			    data->tx[0][0].max_throughput);
+		STATS_PRINT("Tx_info_Avg_Throughput     = %u\n",
+			    data->tx[0][0].avg_throughput);
+		STATS_PRINT("Tx_info_PER                = %u\n",
+			    data->tx[0][0].per);
 		STATS_PRINT("Tx_info_ingress_rate       = %u\n",
 			    data->tx[0][0].ingress_rate);
 

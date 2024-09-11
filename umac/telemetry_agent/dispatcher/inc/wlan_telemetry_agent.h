@@ -289,6 +289,24 @@ QDF_STATUS telemetry_sawf_get_rate(void *telemetry_ctx, uint8_t tid,
 				   uint32_t *ingress_rate);
 
 /**
+ * telemetry_sawf_get_tx_rate - Fetch rate stats from upper-layer
+ * @telemetry_ctx: opaque telemetry peer ctx
+ * @tid: tid no
+ * @queue: queue-id
+ * @min_tput: pointer to memory to fill min throughput
+ * @max_tput: pointer to memory to fill max throughput
+ * @avg_tput: pointer to memory to fill avg throughput
+ * @per: pointer to memory to fill PER
+ *
+ * Return: QDF_STATUS_SUCCESS on success
+ */
+QDF_STATUS telemetry_sawf_get_tx_rate(void *telemetry_ctx, uint8_t tid,
+				   uint8_t queue,
+				   uint32_t *min_tput, uint32_t *max_tput,
+				   uint32_t *avg_tput, uint32_t *per);
+
+
+/**
  * telemetry_sawf_get_mov_avg - Fetch moving avg stats from upper-layer
  * @telemetry_ctx: opaque telemetry peer ctx
  * @tid: tid no
@@ -500,6 +518,14 @@ QDF_STATUS telemetry_sawf_get_rate(void *telemetry_ctx, uint8_t tid,
 				   uint8_t queue, uint32_t *egress_rate,
 				   uint32_t *ingress_rate)
 {
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS telemetry_sawf_get_tx_rate(void *telemetry_ctx, uint8_t tid,
+				   uint8_t queue,
+				   uint32_t *min_tput, uint32_t *max_tput,
+				   uint32_t *avg_tput, uint32_t *per) {
 	return QDF_STATUS_SUCCESS;
 }
 
