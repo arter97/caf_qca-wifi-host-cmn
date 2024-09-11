@@ -35,6 +35,18 @@ typedef QDF_STATUS (*qdf_thread_func)(void *context);
 
 void qdf_sleep(uint32_t ms_interval);
 
+/**
+ *  qdf_sleep_uninterruptible() - QDF wrapper for msleep() Kernel API
+ *  @ms_interval : Number of milliseconds to suspend the current thread.
+ *  A value of 0 may or may not cause the current thread to yield.
+ *
+ *  This function suspends the execution of the current thread
+ *  until the specified time out interval elapses.
+ *
+ *  Return: none
+ */
+void qdf_sleep_uninterruptible(uint32_t ms_interval);
+
 void qdf_sleep_us(uint32_t us_interval);
 
 void qdf_busy_wait(uint32_t us_interval);

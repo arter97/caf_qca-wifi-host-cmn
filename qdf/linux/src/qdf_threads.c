@@ -51,12 +51,12 @@
 typedef int (*qdf_thread_os_func)(void *data);
 
 /**
- *  qdf_sleep() - sleep
+ *  qdf_sleep() - QDF wrapper for msleep_interruptible() Kernel API
  *  @ms_interval : Number of milliseconds to suspend the current thread.
  *  A value of 0 may or may not cause the current thread to yield.
  *
  *  This function suspends the execution of the current thread
- *  until the specified time out interval elapses.
+ *  until the specified time out interval elapses or interrupted by a signal.
  *
  *  Return: none
  */
@@ -71,6 +71,29 @@ void qdf_sleep(uint32_t ms_interval)
 	msleep_interruptible(ms_interval);
 }
 qdf_export_symbol(qdf_sleep);
+
+/**
+ *  qdf_sleep_uninterruptible() - QDF wrapper for msleep() Kernel API
+ *  @ms_interval : Number of milliseconds to suspend the current thread.
+ *  A value of 0 may or may not cause the current thread to yield.
+ *
+ *  This function suspends the execution of the current thread
+ *  until the specified time out interval elapses.
+ *
+ *  Return: none
+ */
+void qdf_sleep_uninterruptible(uint32_t ms_interval)
+{
+	if (in_interrupt()) {
+		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
+			  "%s cannot be called from interrupt context!!!",
+			  __func__);
+		return;
+	}
+	msleep(ms_interval);
+}
+
+qdf_export_symbol(qdf_sleep_uninterruptible);
 
 /**
  *  qdf_sleep_us() - sleep

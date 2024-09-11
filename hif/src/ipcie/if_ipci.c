@@ -929,7 +929,7 @@ int hif_force_wake_request(struct hif_opaque_softc *hif_handle)
 		if (qdf_in_interrupt())
 			qdf_mdelay(FORCE_WAKE_DELAY_MS);
 		else
-			qdf_sleep(FORCE_WAKE_DELAY_MS);
+			qdf_sleep_uninterruptible(FORCE_WAKE_DELAY_MS);
 
 		timeout += FORCE_WAKE_DELAY_MS;
 	}
