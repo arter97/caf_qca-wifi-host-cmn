@@ -1405,6 +1405,8 @@ enum cdp_peer_param_type {
  * @CDP_CONFIG_DELAY_STATS: set/get delay stats
  * @CDP_CONFIG_MON_FCS_CAP: Set FCS monitor capture
  * @CDP_CONFIG_MON_VERSION: SET monitor version
+ * @CDP_CONFIG_CUST_BEGIN: Customer enum begin
+ * @CDP_CONFIG_CUST_END: Customer enum end
  * @CDP_CONFIG_LAST: Last enum
  * @CDP_CONFIG_MAX: Max enum
  */
@@ -1444,9 +1446,12 @@ enum cdp_pdev_param_type {
 	CDP_CONFIG_DELAY_STATS,
 	CDP_CONFIG_MON_FCS_CAP,
 	CDP_CONFIG_MON_VERSION,
+
+	/* Add QCA enums above this */
+	CDP_CONFIG_CUST_BEGIN,
+	CDP_CONFIG_CUST_END,
 	CDP_CONFIG_LAST,
 	CDP_CONFIG_MAX = CDP_CONFIG_LAST - 1,
-	/* Customer specific enums */
 };
 
 /**
