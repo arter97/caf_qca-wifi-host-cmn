@@ -22,6 +22,7 @@
 #define QCA_SAWF_SVID_VALID 0x1
 #define QCA_SAWF_DSCP_VALID 0x2
 #define QCA_SAWF_PCP_VALID  0x4
+#define QCA_SAWF_AC_VALID   0x8
 #define QCA_SAWF_SVC_ID_INVALID 0xFF
 #define FLOW_START 1
 #define FLOW_STOP  2
@@ -211,8 +212,8 @@ struct qca_sawf_wifi_port_params {
 	struct qca_sawf_radio_params band;
 	struct qca_sawf_radio_params channel;
 	struct qca_sawf_radio_params bw;
-	uint32_t dscp;
-	uint32_t pcp;
+	uint8_t dscp;
+	uint8_t pcp;
 };
 
 uint16_t qca_sawf_get_msduq(struct net_device *netdev,
@@ -307,4 +308,14 @@ bool qca_sdwf_match_wifi_port_params(struct net_device *netdev,
 				     uint8_t *dest_mac,
 				     uint8_t priority,
 				     struct qca_sawf_wifi_port_params *wp);
+
+/*
+ * qca_sdwf_validate_wifi_port_params() - Check if wifi port params are valid
+ *
+ * @wp: SWDF wifi parameters parsed and sent by SPM
+ *
+ * Return: true if parameters are valid, false if invalid
+ */
+bool qca_sdwf_validate_wifi_port_params(struct qca_sawf_wifi_port_params *wp);
+
 #endif

@@ -613,53 +613,50 @@ static inline bool
 qca_sawf_validate_index_input_params(struct qca_sawf_wifi_port_params *wp, uint8_t i)
 {
 	uint8_t channel = wp->channel.value[i];
-	uint8_t size = 0;
+	uint8_t band = wp->band.value[i];
+	uint8_t size_ch = 0;
+	uint8_t size_band = 0;
+	bool ch_valid = true;
+	bool band_valid = true;
 
 	switch (i) {
 	case QCA_VDEV_BAND_2G:
-		size = sizeof(channel_list_2g)/sizeof(channel_list_2g[0]);
-		return is_present(channel_list_2g, channel, size);
+		size_ch = QDF_ARRAY_SIZE(channel_list_2g);
+		size_band = QDF_ARRAY_SIZE(bw_list_2g);
+		ch_valid = is_present(channel_list_2g, channel, size_ch);
+		band_valid = is_present(bw_list_2g, band, size_band);
+		break;
 	case QCA_VDEV_BAND_5GL:
-		size = sizeof(channel_list_5g_lo)/sizeof(channel_list_5g_lo[0]);
-		return is_present(channel_list_5g_lo, channel, size);
+		size_ch = QDF_ARRAY_SIZE(channel_list_5g_lo);
+		size_band = QDF_ARRAY_SIZE(bw_list_5g);
+		ch_valid = is_present(channel_list_5g_lo, channel, size_ch);
+		band_valid = is_present(bw_list_5g, band, size_band);
+		break;
 	case QCA_VDEV_BAND_5GH:
-		size = sizeof(channel_list_5g_hi)/sizeof(channel_list_5g_hi[0]);
-		return is_present(channel_list_5g_hi, channel, size);
+		size_ch = QDF_ARRAY_SIZE(channel_list_5g_hi);
+		size_band = QDF_ARRAY_SIZE(bw_list_5g);
+		ch_valid = is_present(channel_list_5g_hi, channel, size_ch);
+		band_valid = is_present(bw_list_5g, band, size_band);
+		break;
 	case QCA_VDEV_BAND_5G:
-		size = sizeof(channel_list_5g)/sizeof(channel_list_5g[0]);
-		return is_present(channel_list_5g, channel, size);
+		size_ch = QDF_ARRAY_SIZE(channel_list_5g);
+		size_band = QDF_ARRAY_SIZE(bw_list_5g);
+		ch_valid = is_present(channel_list_5g, channel, size_ch);
+		band_valid = is_present(bw_list_5g, band, size_band);
+		break;
 	case QCA_VDEV_BAND_6G:
-		size = sizeof(channel_list_6g)/sizeof(channel_list_6g[0]);
-		return is_present(channel_list_6g, channel, size);
+		size_ch = QDF_ARRAY_SIZE(channel_list_6g);
+		size_band = QDF_ARRAY_SIZE(bw_list_6g);
+		ch_valid = is_present(channel_list_6g, channel, size_ch);
+		band_valid = is_present(bw_list_6g, band, size_band);
+		break;
 	default:
 		return false;
 	}
 
-	return false;
+	return (ch_valid & band_valid);
 }
 
-static inline bool
-qca_sawf_check_index_params(struct net_device *netdev,
-			    struct qca_sawf_wifi_port_params *wp,
-			    struct wifi_params *user_params)
-{
-
-	bool match = false;
-	int i = 0;
-
-	for (i = 1; i < MAX_NUM_MLO_VDEV; i++) {
-		if (wp->band.value[i] == 0)
-			continue;
-		match = qca_sawf_validate_index_input_params(wp, i);
-
-		if (!match)
-			return false;
-		user_params[i].channel = wp->channel.value[i];
-		user_params[i].bandwidth = wp->bw.value[i];
-	}
-
-	return true;
-}
 
 bool get_channel_bw_band_from_vdev(struct net_device *netdev,
 				   struct wlan_objmgr_vdev *vdev,
@@ -892,6 +889,21 @@ bool qca_sawf_check_slo_params(struct net_device *netdev,
 	return true;
 }
 
+static inline void
+qca_sawf_store_input_params(struct qca_sawf_wifi_port_params *wp,
+			    struct wifi_params *user_params)
+{
+	int i = 0;
+
+	for (i = 1; i < MAX_NUM_MLO_VDEV; i++) {
+		if (wp->band.value[i] == 0)
+			continue;
+
+		user_params[i].channel = wp->channel.value[i];
+		user_params[i].bandwidth = wp->bw.value[i];
+	}
+}
+
 /*
  * qca_sawf_print_wifi_params
  *
@@ -929,6 +941,43 @@ void qca_sawf_print_wifi_params(struct net_device *netdev,
 		 wp->valid_flags, wp->dscp, wp->pcp, wp->ac);
 }
 
+bool qca_sdwf_validate_wifi_port_params(struct qca_sawf_wifi_port_params *wp)
+{
+	bool match = false;
+	int i = 0;
+
+	/*
+	 * Validate channel and bandwidth corresponding to
+	 * each band. If any of them do not match, return
+	 * false.
+	 */
+	for (i = 1; i < MAX_NUM_MLO_VDEV; i++) {
+		if (wp->band.value[i] == 0)
+			continue;
+		match = qca_sawf_validate_index_input_params(wp, i);
+		if (!match)
+			return false;
+	}
+
+	/*
+	 * Max access category can be 3
+	 */
+	if (wp->valid_flags & QCA_SAWF_AC_VALID) {
+		if (wp->ac >= WME_AC_MAX)
+			return false;
+	}
+
+	if (wp->valid_flags & QCA_SAWF_DSCP_VALID) {
+		if (wp->dscp >= WMI_HOST_DSCP_MAP_MAX)
+			return false;
+	}
+
+	if (wp->ssid_len > ACFG_MAX_SSID_LEN)
+		return false;
+
+	return true;
+}
+
 /*
  * qca_sdwf_match_wifi_port_params
  *
@@ -963,11 +1012,15 @@ bool qca_sdwf_match_wifi_port_params(struct net_device *netdev,
 	qca_sawf_print_wifi_params(netdev, dest_mac, priority, wp);
 
 	/*
-	 * Validate parameters and store only valid param in user_p array
 	 * If parameters are invalid, return false;
 	 */
-	if (!qca_sawf_check_index_params(netdev, wp, user_p))
+	if (!qca_sdwf_validate_wifi_port_params(wp))
 		return false;
+
+	/*
+	 * Store only valid params in user_p array
+	 */
+	qca_sawf_store_input_params(wp, user_p);
 
 	vdev = qca_sawf_get_vdev(netdev, dest_mac, peer_mac);
 
@@ -977,7 +1030,7 @@ bool qca_sdwf_match_wifi_port_params(struct net_device *netdev,
 	}
 
 	/*
-	 * Return false in the first mismatch
+	 * if ssid_len is 0, ssid match is ignored.
 	 */
 	if (!wp->ssid_len && !wlan_dessired_ssid_found(vdev,
 	     wp->ssid, wp->ssid_len))
@@ -995,10 +1048,12 @@ bool qca_sdwf_match_wifi_port_params(struct net_device *netdev,
 	if (!qca_sawf_match_input_output_params(netdev, wp, user_p, present_p))
 		return false;
 
-	access_category = TID_TO_WME_AC(dscp_tid_map[wp->dscp]);
-
-	if (wp->ac && access_category != wp->ac)
-		return false;
+	if (wp->valid_flags & QCA_SAWF_AC_VALID &&
+	    wp->valid_flags & QCA_SAWF_DSCP_VALID) {
+		access_category = TID_TO_WME_AC(dscp_tid_map[wp->dscp]);
+		if (access_category != wp->ac)
+			return false;
+	}
 
 	return true;
 }
@@ -1061,11 +1116,16 @@ void qca_sawf_unregister_flow_deprioritize_callback(void)
 void qca_sawf_flow_deprioritize_response(struct qca_sawf_flow_deprioritize_resp_params *params)
 {}
 
+bool qca_sdwf_validate_wifi_port_params(struct qca_sawf_wifi_port_params *wp)
+{
+	return true;
+}
+
 bool qca_sdwf_match_wifi_port_params(struct net_device *netdev,
 				     uint8_t *dest_mac, uint8_t priority,
 				     struct qca_sawf_wifi_port_params *wp)
 {
-	return false;
+	return true;
 }
 #endif
 
@@ -1087,3 +1147,4 @@ qdf_export_symbol(qca_sawf_register_flow_deprioritize_callback);
 qdf_export_symbol(qca_sawf_unregister_flow_deprioritize_callback);
 qdf_export_symbol(qca_sawf_flow_deprioritize_response);
 qdf_export_symbol(qca_sdwf_match_wifi_port_params);
+qdf_export_symbol(qca_sdwf_validate_wifi_port_params);
