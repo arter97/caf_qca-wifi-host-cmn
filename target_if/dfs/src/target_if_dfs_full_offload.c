@@ -393,7 +393,7 @@ QDF_STATUS target_send_agile_ch_cfg_cmd(struct wlan_objmgr_pdev *pdev,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	vdev = wlan_objmgr_pdev_get_first_vdev(pdev, WLAN_DFS_ID);
+	vdev = wlan_objmgr_pdev_get_first_active_vdev(pdev, WLAN_DFS_ID);
 
 	if (!vdev) {
 		target_if_err("null vdev");
@@ -416,7 +416,8 @@ QDF_STATUS target_send_agile_ch_cfg_cmd(struct wlan_objmgr_pdev *pdev,
 	param.chan_width = adfs_param->precac_chwidth;
 	param.center_freq1 = adfs_param->precac_center_freq_1;
 	param.center_freq2 = adfs_param->precac_center_freq_2;
-
+	target_if_debug("Sending WMI_VDEV_ADFS_CH_CFG_CMDID on vdev_id: %u "
+			"freq: %u\n", param.vdev_id, param.chan_freq);
 	status = wmi_unified_send_vdev_adfs_ch_cfg_cmd(wmi_handle, &param);
 	if (QDF_IS_STATUS_ERROR(status))
 		target_if_err("dfs: unit_test_cmd send failed %d", status);
