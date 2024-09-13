@@ -668,12 +668,11 @@ mlo_mgr_link_switch_get_assoc_vdev(struct wlan_objmgr_vdev *vdev)
 bool mlo_mgr_is_link_switch_in_progress(struct wlan_objmgr_vdev *vdev)
 {
 	enum mlo_link_switch_req_state state;
-	struct wlan_mlo_dev_context *mlo_dev_ctx = vdev->mlo_dev_ctx;
 
-	if (!mlo_dev_ctx)
+	if (!vdev || !vdev->mlo_dev_ctx)
 		return false;
 
-	state = mlo_mgr_link_switch_get_curr_state(mlo_dev_ctx);
+	state = mlo_mgr_link_switch_get_curr_state(vdev->mlo_dev_ctx);
 	return (state > MLO_LINK_SWITCH_STATE_INIT);
 }
 
