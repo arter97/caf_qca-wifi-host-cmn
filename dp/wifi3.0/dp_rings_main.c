@@ -2450,6 +2450,8 @@ void dp_soc_deinit(void *txrx_soc)
 
 	dp_monitor_soc_deinit(soc);
 
+	dp_peer_unmap_track_deinit(soc);
+
 	/* free peer tables & AST tables allocated during peer_map_attach */
 	if (soc->peer_map_attach_success) {
 		dp_peer_find_detach(soc);
@@ -2476,8 +2478,6 @@ void dp_soc_deinit(void *txrx_soc)
 	dp_peer_mec_spinlock_destroy(soc);
 
 	dp_soc_sawf_deinit(soc);
-
-	dp_peer_unmap_track_deinit(soc);
 
 	qdf_nbuf_queue_free(&soc->htt_stats.msg);
 
