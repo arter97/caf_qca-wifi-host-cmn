@@ -1850,6 +1850,7 @@ int dp_ppeds_register_integrated_interrupts(struct dp_soc *soc,
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
 	void *pfrm_hdl;
 	QDF_STATUS status;
+	int ds_node_id = be_soc->dp_ppeds_node_id;
 
 	status = hif_bus_get_device_handle(soc->hif_handle, &pfrm_hdl);
 
@@ -1871,8 +1872,8 @@ int dp_ppeds_register_integrated_interrupts(struct dp_soc *soc,
 
 		qdf_dev_set_irq_status_flags(irq, IRQ_DISABLE_UNLAZY);
 
-		strlcpy(be_soc->irq_name[2], "pfrm_ppe_wbm_rel",
-			DP_PPE_INTR_STRNG_LEN);
+		snprintf(be_soc->irq_name[2], DP_PPE_INTR_STRNG_LEN,
+			 "pfrm_ppe_wbm_rel_%d", ds_node_id);
 
 		ret = pld_pfrm_request_irq(soc->osdev->dev, irq,
 					   dp_ppeds_handle_tx_comp,
@@ -1891,8 +1892,8 @@ int dp_ppeds_register_integrated_interrupts(struct dp_soc *soc,
 
 		qdf_dev_set_irq_status_flags(irq, IRQ_DISABLE_UNLAZY);
 
-		strlcpy(be_soc->irq_name[0], "pfrm_reo2ppe",
-			DP_PPE_INTR_STRNG_LEN);
+		snprintf(be_soc->irq_name[0], DP_PPE_INTR_STRNG_LEN,
+			 "pfrm_reo2ppe_%d", ds_node_id);
 
 		ret = pld_pfrm_request_irq(soc->osdev->dev, irq,
 					   dp_ppe_ds_reo2ppe_irq_handler,
@@ -1912,8 +1913,8 @@ int dp_ppeds_register_integrated_interrupts(struct dp_soc *soc,
 
 		qdf_dev_set_irq_status_flags(irq, IRQ_DISABLE_UNLAZY);
 
-		strlcpy(be_soc->irq_name[1], "pfrm_ppe2tcl",
-			DP_PPE_INTR_STRNG_LEN);
+		snprintf(be_soc->irq_name[1], DP_PPE_INTR_STRNG_LEN,
+			 "pfrm_ppe2tcl_%d", ds_node_id);
 
 		ret = pld_pfrm_request_irq(soc->osdev->dev, irq,
 					   dp_ppe_ds_ppe2tcl_irq_handler,
