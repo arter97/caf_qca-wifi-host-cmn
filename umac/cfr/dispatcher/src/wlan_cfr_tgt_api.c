@@ -154,6 +154,7 @@ int tgt_cfr_validate_period(struct wlan_objmgr_psoc *psoc, u_int32_t period)
 	    target_type == TARGET_TYPE_QCA8074V2 ||
 	    target_type == TARGET_TYPE_QCA5018 ||
 	    target_type == TARGET_TYPE_QCA5332 ||
+	    target_type == TARGET_TYPE_QCA5424 ||
 	    target_type == TARGET_TYPE_QCN9224 ||
 	    target_type == TARGET_TYPE_QCN6432) {
 		/* No additional check required for these targets */
