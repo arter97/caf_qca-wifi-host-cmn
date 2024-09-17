@@ -1566,7 +1566,7 @@ cm_connect_fetch_candidates(struct wlan_objmgr_pdev *pdev,
 			    struct cnx_mgr *cm_ctx,
 			    struct cm_connect_req *cm_req,
 			    qdf_list_t **fetched_candidate_list,
-			    uint32_t *num_bss_found, bool calculate_bss_score)
+			    uint32_t *num_bss_found)
 {
 	struct scan_filter *filter;
 	uint32_t num_bss = 0;
@@ -1618,7 +1618,7 @@ cm_connect_fetch_candidates(struct wlan_objmgr_pdev *pdev,
 		cm_remove_mbssid_links_without_scan_entry(candidate_list);
 
 	op_mode = wlan_vdev_mlme_get_opmode(cm_ctx->vdev);
-	if (calculate_bss_score && num_bss && op_mode == QDF_STA_MODE &&
+	if (num_bss && op_mode == QDF_STA_MODE &&
 	    !cm_req->req.is_non_assoc_link)
 		cm_calculate_scores(cm_ctx, pdev, filter, candidate_list);
 	qdf_mem_free(filter);
@@ -1643,7 +1643,7 @@ static QDF_STATUS cm_connect_get_candidates(struct wlan_objmgr_pdev *pdev,
 	QDF_STATUS status;
 
 	status = cm_connect_fetch_candidates(pdev, cm_ctx, cm_req,
-					     &candidate_list, &num_bss, true);
+					     &candidate_list, &num_bss);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		if (candidate_list)
 			wlan_scan_purge_results(candidate_list);
@@ -1701,7 +1701,7 @@ static void cm_update_candidate_list(struct cnx_mgr *cm_ctx,
 	}
 
 	status = cm_connect_fetch_candidates(pdev, cm_ctx, cm_req,
-					     &candidate_list, &num_bss, false);
+					     &candidate_list, &num_bss);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		mlme_debug(CM_PREFIX_FMT "failed to fetch bss: %d",
 			   CM_PREFIX_REF(vdev_id, cm_req->cm_id), num_bss);

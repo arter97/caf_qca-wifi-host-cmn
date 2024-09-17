@@ -3746,6 +3746,17 @@ void cm_update_dlm_mlo_score(struct wlan_objmgr_pdev *pdev,
 			}
 			qdf_list_insert_back(scan_list, &scan_entry->node);
 			*dlm_entry_updated = true;
+		} else if(denylist_action == CM_DLM_REMOVE ||
+			  denylist_action == CM_DLM_FORCE_REMOVE){
+			/* Remove node from list as it is added to DLM list */
+			status = qdf_list_remove_node(scan_list, cur_node);
+			if (QDF_IS_STATUS_ERROR(status)) {
+				mlme_err("failed to remove node for BSS "QDF_MAC_ADDR_FMT" from scan list",
+					 QDF_MAC_ADDR_REF(
+					 scan_entry->entry->bssid.bytes));
+				return;
+			}
+			*dlm_entry_updated = true;
 		}
 		cur_node = next_node;
 		next_node = NULL;
