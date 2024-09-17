@@ -100,7 +100,7 @@ int htt_command_record(struct htt_logger *h, uint8_t msg_type,
 	    ((1ULL << msg_type) & h->log_info.htt_cmd_disable_list))
 		return 0;
 
-	qdf_spin_lock(&cmd_log_buf->record_lock);
+	qdf_spin_lock_bh(&cmd_log_buf->record_lock);
 	if (!msg_data) {
 		/* if msg_data is NULL then fill 0xFF in data field */
 		qdf_mem_set(tdata, HTT_COMMAND_DEBUG_ENTRY_MAX_LENGTH, 0xFF);
@@ -122,7 +122,7 @@ int htt_command_record(struct htt_logger *h, uint8_t msg_type,
 
 	(*p_buf_tail_idx)++;
 	h->log_info.htt_command_log_buf_info.length++;
-	qdf_spin_unlock(&cmd_log_buf->record_lock);
+	qdf_spin_unlock_bh(&cmd_log_buf->record_lock);
 	return 0;
 }
 qdf_export_symbol(htt_command_record);
