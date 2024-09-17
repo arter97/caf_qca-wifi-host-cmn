@@ -1856,6 +1856,10 @@ enum qca_wlan_auth_type {
  * type for remote channel width greater than 160 MHz.
  * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_EHT_OPERATION: Attribute type for
  * sending EHT operation info.
+ * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_ASSOCIATED_BW: Attribute type of u32
+ *  for sending the associated bandwidth.
+ *  Example: The driver will send an enum value of type nl80211_chan_width,
+ *  such as NL80211_CHAN_WIDTH_20_NOHT.
  * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_AFTER_LAST: After last
  *
  */
@@ -1902,6 +1906,7 @@ enum qca_wlan_vendor_attr_get_station_info {
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_HE_OPERATION,
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_CH_WIDTH_V2,
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_EHT_OPERATION,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_ASSOCIATED_BW,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_AFTER_LAST,
