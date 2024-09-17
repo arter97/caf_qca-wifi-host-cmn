@@ -7443,7 +7443,8 @@ mgmt_rx_reo_flush_list(struct mgmt_rx_reo_list *reo_list)
 
 	qdf_list_for_each_del(&reo_list->list, cur_entry, temp, node) {
 		free_mgmt_rx_event_params(cur_entry->rx_params);
-
+		/* Remove the node from the list */
+		qdf_list_remove_node(&reo_list->list, &cur_entry->node);
 		/**
 		 * Release the reference taken when the entry is inserted into
 		 * the reorder list.
