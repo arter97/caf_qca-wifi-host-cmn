@@ -5785,6 +5785,7 @@ void wlan_ipa_wdi_opt_dpath_notify_flt_rlsd(int flt0_rslt, int flt1_rslt)
 		qdf_sched_work(0, &uc_op_work->work);
 	} else {
 		ipa_err("IPA SMMU not mapped!!");
+		qdf_mem_free(smmu_msg);
 	}
 
 	notify_msg = qdf_mem_malloc(sizeof(*notify_msg));
