@@ -915,7 +915,7 @@ enum {
 	IEEE80211_PARAM_WDS_EXT_AP_BRIDGE  = 833,  /* Flag to enable/disable wds_ext specific ap bridge */
 #endif
 	IEEE80211_PARAM_4ADDR_EAPOL = 834,
-
+	IEEE80211_PARAM_DISABLE_LPI_ANT_OPTIMIZATION = 835,
 	IEEE80211_PARAM_LAST,
 	IEEE80211_PARAM_MAX = IEEE80211_PARAM_LAST - 1,
 	/* Customer enums */
@@ -1555,6 +1555,7 @@ enum _ol_ath_param_t {
 	OL_ATH_PARAM_ACS_ADJ_CHAN_INTERFERENCE_BLOCKING = 555,
 #endif /* UMAC_SUPPORT_ACS */
 	OL_ATH_PARAM_START_AID = 556,
+	OL_ATH_PARAM_DISABLE_LPI_ANT = 557,
 
 	OL_ATH_PARAM_LAST,
 	OL_ATH_PARAM_MAX = OL_ATH_PARAM_LAST - 1,
@@ -2266,6 +2267,8 @@ struct vendor_commands vap_vendor_cmds[] = {
 	{"g_pmf_assoc",         IEEE80211_PARAM_PMF_ASSOC, GET_PARAM, 0},
 	{"enable_fils",         IEEE80211_PARAM_ENABLE_FILS, SET_PARAM, 2},
 	{"g_enable_fils",       IEEE80211_PARAM_ENABLE_FILS, GET_PARAM, 0},
+	{"dis_lpi_ant_optimize",
+		IEEE80211_PARAM_DISABLE_LPI_ANT_OPTIMIZATION, SET_PARAM, 1},
 #if ATH_ACS_DEBUG_SUPPORT
 	{"acs_debug_enable",    IEEE80211_PARAM_ACS_DEBUG_SUPPORT, SET_PARAM, 1},
 #endif
@@ -4060,6 +4063,8 @@ struct vendor_commands radio_vendor_cmds[] = {
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_DISABLE_EML, GET_PARAM, 0},
 
 #endif
+	{"dis_lpi_ant_optimize",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_DISABLE_LPI_ANT, SET_PARAM, 1},
 	{"dp_debug_log",
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_DP_DEBUG_LOG, SET_PARAM, 1},
 	{"g_dp_debug_log",
