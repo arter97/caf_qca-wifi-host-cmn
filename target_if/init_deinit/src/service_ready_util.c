@@ -249,7 +249,7 @@ static int get_sar_flag(wmi_unified_t handle, uint8_t *evt,
 	status = wmi_extract_sar_cap_service_ready_ext2(handle,
 							evt, ext2_param);
 	if (QDF_IS_STATUS_ERROR(status)) {
-		target_if_err("failed to parse sar flag");
+		target_if_debug("failed to parse sar flag");
 		return qdf_status_to_os_return(status);
 	}
 
