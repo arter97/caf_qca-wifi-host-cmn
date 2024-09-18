@@ -3785,19 +3785,19 @@ void dp_aggregate_pdev_stats(struct dp_pdev *pdev);
 
 /**
  * dp_print_rx_rates(): Print Rx rate stats
- * @vdev: DP_VDEV handle
+ * @pdev: DP_PDEV handle
  *
  * Return:void
  */
-void dp_print_rx_rates(struct dp_vdev *vdev);
+void dp_print_rx_rates(struct dp_pdev *pdev);
 
 /**
  * dp_print_tx_rates(): Print tx rates
- * @vdev: DP_VDEV handle
+ * @pdev: DP_PDEV handle
  *
  * Return:void
  */
-void dp_print_tx_rates(struct dp_vdev *vdev);
+void dp_print_tx_rates(struct dp_pdev *pdev);
 
 /**
  * dp_print_peer_stats():print peer stats

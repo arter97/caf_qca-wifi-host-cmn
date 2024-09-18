@@ -8484,10 +8484,10 @@ dp_print_host_stats(struct dp_vdev *vdev,
 		dp_txrx_host_stats_clr(vdev, soc);
 		break;
 	case TXRX_RX_RATE_STATS:
-		dp_print_rx_rates(vdev);
+		dp_print_rx_rates(pdev);
 		break;
 	case TXRX_TX_RATE_STATS:
-		dp_print_tx_rates(vdev);
+		dp_print_tx_rates(pdev);
 		break;
 	case TXRX_TX_HOST_STATS:
 		dp_print_pdev_tx_stats(pdev);

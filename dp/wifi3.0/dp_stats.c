@@ -7106,9 +7106,8 @@ static inline void dp_print_tx_bw_stats(struct dp_pdev *pdev)
 }
 #endif
 
-void dp_print_rx_rates(struct dp_vdev *vdev)
+void dp_print_rx_rates(struct dp_pdev *pdev)
 {
-	struct dp_pdev *pdev = (struct dp_pdev *)vdev->pdev;
 	uint8_t i;
 	uint8_t index = 0;
 	char nss[DP_NSS_LENGTH];
@@ -7176,10 +7175,8 @@ void dp_print_tx_nss_stats(struct dp_pdev *pdev)
 }
 #endif
 
-void dp_print_tx_rates(struct dp_vdev *vdev)
+void dp_print_tx_rates(struct dp_pdev *pdev)
 {
-	struct dp_pdev *pdev = (struct dp_pdev *)vdev->pdev;
-
 	DP_PRINT_STATS("Tx Rate Info:\n");
 	dp_print_common_rates_info(pdev->stats.tx.pkt_type);
 
@@ -8408,42 +8405,6 @@ void dp_print_per_ring_stats(struct dp_soc *soc)
 	}
 }
 
-static void dp_pdev_print_tx_rx_rates(struct dp_pdev *pdev)
-{
-	struct dp_vdev *vdev;
-	struct dp_vdev **vdev_array = NULL;
-	int index = 0, num_vdev = 0;
-
-	if (!pdev) {
-		dp_err("pdev is NULL");
-		return;
-	}
-
-	vdev_array =
-		qdf_mem_malloc(sizeof(struct dp_vdev *) * WLAN_PDEV_MAX_VDEVS);
-	if (!vdev_array)
-		return;
-
-	qdf_spin_lock_bh(&pdev->vdev_list_lock);
-	DP_PDEV_ITERATE_VDEV_LIST(pdev, vdev) {
-		if (dp_vdev_get_ref(pdev->soc, vdev, DP_MOD_ID_GENERIC_STATS))
-			continue;
-		vdev_array[index] = vdev;
-		index = index + 1;
-	}
-	qdf_spin_unlock_bh(&pdev->vdev_list_lock);
-
-	num_vdev = index;
-
-	for (index = 0; index < num_vdev; index++) {
-		vdev = vdev_array[index];
-		dp_print_rx_rates(vdev);
-		dp_print_tx_rates(vdev);
-		dp_vdev_unref_delete(pdev->soc, vdev, DP_MOD_ID_GENERIC_STATS);
-	}
-	qdf_mem_free(vdev_array);
-}
-
 void dp_txrx_path_stats(struct dp_soc *soc)
 {
 	uint8_t error_code;
@@ -8627,7 +8588,8 @@ void dp_txrx_path_stats(struct dp_soc *soc)
 			       pdev->soc->wlan_cfg_ctx
 			       ->tx_flow_start_queue_offset);
 #endif
-		dp_pdev_print_tx_rx_rates(pdev);
+		dp_print_rx_rates(pdev);
+		dp_print_tx_rates(pdev);
 	}
 }
 
