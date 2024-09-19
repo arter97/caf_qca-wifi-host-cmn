@@ -1782,6 +1782,7 @@ struct rx_refill_buff_pool {
 #define DP_PAGE_POOL_MAX 4
 
 struct dp_rx_pp_params {
+	qdf_list_node_t node;
 	qdf_page_pool_t pp;
 	size_t pool_size;
 	size_t pp_size;
@@ -1795,6 +1796,8 @@ struct dp_rx_page_pool {
 	size_t curr_pool_size;
 	size_t base_pool_size;
 	qdf_atomic_t update_in_progress;
+	qdf_timer_t pool_inactivity_timer;
+	qdf_list_t inactive_list;
 };
 #endif
 

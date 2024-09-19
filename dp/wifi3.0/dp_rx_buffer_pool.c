@@ -22,6 +22,7 @@
 
 #ifdef DP_FEATURE_RX_BUFFER_RECYCLE
 #include "qdf_page_pool.h"
+#include "qdf_list.h"
 #endif
 
 #ifndef DP_RX_BUFFER_POOL_SIZE
@@ -417,6 +418,7 @@ void dp_rx_buffer_pool_deinit(struct dp_soc *soc, u8 mac_id)
 
 #define DP_RX_PP_POOL_SIZE_THRES	 4096
 #define DP_RX_PP_AUX_POOL_SIZE           2048
+#define DP_RX_PP_INACTIVE_TIMER_MS	10000
 
 static struct dp_rx_pp_params *
 dp_rx_get_base_pp(struct dp_rx_page_pool *rx_pp)
@@ -573,14 +575,35 @@ out_fail:
 	return ret;
 }
 
+static void dp_rx_page_pool_inactive_timer(void *arg)
+{
+	struct dp_rx_page_pool *rx_pp = (struct dp_rx_page_pool *)arg;
+	struct dp_rx_pp_params *curr, *next;
+
+	qdf_spin_lock_bh(&rx_pp->pp_lock);
+	qdf_list_for_each_del(&rx_pp->inactive_list, curr, next, node) {
+		if (!curr->pp)
+			continue;
+
+		if (!qdf_page_pool_full_bh(curr->pp))
+			continue;
+
+		qdf_page_pool_destroy(curr->pp);
+		qdf_list_remove_node(&rx_pp->inactive_list, &curr->node);
+		qdf_mem_free(curr);
+	}
+	qdf_spin_unlock_bh(&rx_pp->pp_lock);
+
+	if (!qdf_list_empty(&rx_pp->inactive_list))
+		qdf_timer_mod(&rx_pp->pool_inactivity_timer,
+			      DP_RX_PP_INACTIVE_TIMER_MS);
+}
+
 void dp_rx_page_pool_deinit(struct dp_soc *soc, uint32_t pool_id)
 {
 	struct dp_rx_page_pool *rx_pp = &soc->rx_pp[pool_id];
 	struct dp_rx_pp_params *pp_params;
 	int i;
-
-	if (!wlan_cfg_get_dp_rx_buffer_recycle(soc->wlan_cfg_ctx))
-		return;
 
 	rx_pp->active_pp_idx = 0;
 
@@ -598,6 +621,8 @@ void dp_rx_page_pool_deinit(struct dp_soc *soc, uint32_t pool_id)
 	rx_pp->aux_pool.pool_size = 0;
 	rx_pp->aux_pool.pp_size = 0;
 	qdf_spin_unlock(&rx_pp->pp_lock);
+
+	qdf_timer_free(&rx_pp->pool_inactivity_timer);
 }
 
 QDF_STATUS dp_rx_page_pool_init(struct dp_soc *soc, uint32_t pool_id)
@@ -610,6 +635,11 @@ QDF_STATUS dp_rx_page_pool_init(struct dp_soc *soc, uint32_t pool_id)
 	qdf_atomic_init(&rx_pp->update_in_progress);
 	rx_pp->active_pp_idx = 0;
 
+	qdf_timer_init(soc->osdev, &rx_pp->pool_inactivity_timer,
+		       dp_rx_page_pool_inactive_timer, (void *)rx_pp,
+		       QDF_TIMER_TYPE_WAKE_APPS);
+	qdf_list_create(&rx_pp->inactive_list, 0);
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -617,6 +647,7 @@ void dp_rx_page_pool_free(struct dp_soc *soc, uint32_t pool_id)
 {
 	struct dp_rx_page_pool *rx_pp = &soc->rx_pp[pool_id];
 	struct dp_rx_pp_params *pp_params;
+	struct dp_rx_pp_params *curr, *next;
 	int i;
 
 	if (!wlan_cfg_get_dp_rx_buffer_recycle(soc->wlan_cfg_ctx))
@@ -637,6 +668,15 @@ void dp_rx_page_pool_free(struct dp_soc *soc, uint32_t pool_id)
 	if (rx_pp->aux_pool.pp) {
 		qdf_page_pool_destroy(rx_pp->aux_pool.pp);
 		rx_pp->aux_pool.pp = NULL;
+	}
+
+	qdf_list_for_each_del(&rx_pp->inactive_list, curr, next, node) {
+		if (!curr->pp)
+			continue;
+
+		qdf_page_pool_destroy(curr->pp);
+		qdf_list_remove_node(&rx_pp->inactive_list, &curr->node);
+		qdf_mem_free(curr);
 	}
 	qdf_spin_unlock_bh(&rx_pp->pp_lock);
 
@@ -790,6 +830,32 @@ out_pp_fail:
 	return QDF_STATUS_E_FAILURE;
 }
 
+static bool
+dp_rx_page_pool_reattach(struct dp_rx_page_pool *rx_pp,
+			 struct dp_rx_pp_params *pp_params, size_t pool_size)
+{
+	struct dp_rx_pp_params *curr, *next;
+	bool attach = false;
+
+	qdf_spin_lock_bh(&rx_pp->pp_lock);
+	qdf_list_for_each_del(&rx_pp->inactive_list, curr, next, node) {
+		if (!curr->pp)
+			continue;
+
+		if (curr->pool_size != pool_size)
+			continue;
+
+		qdf_list_remove_node(&rx_pp->inactive_list, &curr->node);
+		qdf_mem_copy(pp_params, curr, sizeof(*curr));
+		qdf_mem_free(curr);
+		attach = true;
+		break;
+	}
+	qdf_spin_unlock_bh(&rx_pp->pp_lock);
+
+	return attach;
+}
+
 static QDF_STATUS
 dp_rx_page_pool_upsize(struct dp_soc *soc, struct dp_rx_page_pool *rx_pp,
 		       size_t new_size)
@@ -836,6 +902,14 @@ dp_rx_page_pool_upsize(struct dp_soc *soc, struct dp_rx_page_pool *rx_pp,
 		if (i == pp_count - 1 && rem_size)
 			pool_size = rem_size;
 
+		/* Try to rettach pools which are inactive first
+		 * before allocating new pools.
+		 */
+		if (dp_rx_page_pool_reattach(rx_pp, pp_params, pool_size)) {
+			upscale_cnt++;
+			continue;
+		}
+
 		pp = __dp_rx_page_pool_create(soc, pool_size,
 					      buf_size, &page_size,
 					      &pp_size);
@@ -866,7 +940,6 @@ out_pp_fail:
 		qdf_page_pool_destroy(pp_params->pp);
 		pp_params->pp = NULL;
 	}
-	qdf_spin_unlock_bh(&rx_pp->pp_lock);
 	return QDF_STATUS_E_FAILURE;
 }
 
@@ -875,6 +948,7 @@ QDF_STATUS dp_rx_page_pool_resize(struct dp_soc *soc, uint32_t pool_id,
 {
 	struct dp_rx_page_pool *rx_pp = &soc->rx_pp[pool_id];
 	struct dp_rx_pp_params *pp_params;
+	struct dp_rx_pp_params *inactive_pp;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	int i;
 
@@ -906,11 +980,32 @@ QDF_STATUS dp_rx_page_pool_resize(struct dp_soc *soc, uint32_t pool_id,
 		if (!pp_params->pp)
 			continue;
 
-		qdf_page_pool_destroy(pp_params->pp);
-		pp_params->pool_size = 0;
-		pp_params->pp_size = 0;
-		pp_params->pp = NULL;
+		/* Immediately destroy the page pool if there
+		 * are no inflight pages.
+		 */
+		if (qdf_page_pool_full_bh(pp_params->pp)) {
+			qdf_page_pool_destroy(pp_params->pp);
+			qdf_mem_set(pp_params, sizeof(*pp_params), 0);
+			continue;
+		}
+
+		inactive_pp = qdf_mem_malloc(sizeof(*inactive_pp));
+		if (!inactive_pp) {
+			dp_info("Failed to alloc inactive pp node for %pK",
+				pp_params);
+			qdf_page_pool_destroy(pp_params->pp);
+			qdf_mem_set(pp_params, sizeof(*pp_params), 0);
+			continue;
+		}
+
+		qdf_mem_copy(inactive_pp, pp_params, sizeof(*pp_params));
+		qdf_mem_set(pp_params, sizeof(*pp_params), 0);
+		qdf_list_insert_back(&rx_pp->inactive_list, &inactive_pp->node);
 	}
+
+	if (!qdf_list_empty(&rx_pp->inactive_list))
+		qdf_timer_mod(&rx_pp->pool_inactivity_timer,
+			      DP_RX_PP_INACTIVE_TIMER_MS);
 
 	rx_pp->active_pp_idx = 0;
 	qdf_spin_unlock_bh(&rx_pp->pp_lock);
