@@ -616,6 +616,16 @@ QDF_STATUS cm_disconnect_complete(struct cnx_mgr *cm_ctx,
 	if (resp->req.cm_id == cm_ctx->active_cm_id && !is_link_switch_cmd)
 		cm_flush_pending_request(cm_ctx, DISCONNECT_REQ_PREFIX, false);
 
+	if (cm_ctx->disconnect_count == 1 && !is_link_switch_cmd) {
+		/*
+		 * Clear MLO cap only when it is the last disconnect req
+		 * For 1x/owe roaming, link vdev mlo flags are not cleared
+		 * as connect req is queued on link vdev after this.
+		 */
+		if (!wlan_cm_check_mlo_roam_auth_status(cm_ctx->vdev))
+			cm_clear_vdev_mlo_cap(cm_ctx->vdev, resp);
+	}
+
 	cm_remove_cmd(cm_ctx, &resp->req.cm_id);
 	mlme_debug(CM_PREFIX_FMT "disconnect count %d connect count %d",
 		   CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev),
@@ -628,16 +638,8 @@ QDF_STATUS cm_disconnect_complete(struct cnx_mgr *cm_ctx,
 	}
 
 	/* Set the disconnect wait event once all disconnect are completed */
-	if (!cm_ctx->disconnect_count && !is_link_switch_cmd) {
-		/*
-		 * Clear MLO cap only when it is the last disconnect req
-		 * For 1x/owe roaming, link vdev mlo flags are not cleared
-		 * as connect req is queued on link vdev after this.
-		 */
-		if (!wlan_cm_check_mlo_roam_auth_status(cm_ctx->vdev))
-			cm_clear_vdev_mlo_cap(cm_ctx->vdev, resp);
+	if (!cm_ctx->disconnect_count && !is_link_switch_cmd)
 		qdf_event_set(&cm_ctx->disconnect_complete);
-	}
 
 	if (is_link_switch_cmd) {
 		cm_reset_active_cm_id(cm_ctx->vdev, resp->req.cm_id);
