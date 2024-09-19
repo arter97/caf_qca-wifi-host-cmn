@@ -1359,7 +1359,7 @@ mlo_mgr_ser_link_switch_cb(struct wlan_serialization_command *cmd,
 
 void mlo_mgr_remove_link_switch_cmd(struct wlan_objmgr_vdev *vdev)
 {
-	struct wlan_serialization_queued_cmd_info cmd_info;
+	struct wlan_serialization_queued_cmd_info cmd_info = {0};
 	enum mlo_link_switch_req_state cur_state;
 	uint8_t vdev_id = wlan_vdev_get_id(vdev);
 	struct wlan_mlo_link_switch_req *req;
@@ -1396,6 +1396,7 @@ void mlo_mgr_remove_link_switch_cmd(struct wlan_objmgr_vdev *vdev)
 	cmd_info.cmd_type = WLAN_SER_CMD_MLO_VDEV_LINK_SWITCH;
 	cmd_info.vdev = vdev;
 	cmd_info.queue_type = WLAN_SERIALIZATION_ACTIVE_QUEUE;
+	cmd_info.requestor = WLAN_UMAC_COMP_MLO_MGR;
 
 	wlan_serialization_remove_cmd(&cmd_info);
 }
