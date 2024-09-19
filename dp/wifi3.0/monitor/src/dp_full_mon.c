@@ -1063,7 +1063,7 @@ uint32_t dp_rx_mon_process(struct dp_soc *soc, struct dp_intr *int_ctx,
 		 * RxDMA Monitor buffer ring
 		 */
 		if (rx_bufs_reaped) {
-			status = dp_rx_buffers_replenish(soc, mac_id,
+			status = dp_rx_mon_buffers_replenish(soc, mac_id,
 							 dp_rxdma_get_mon_buf_ring(pdev,
 										   mac_for_pdev),
 							 dp_rx_get_mon_desc_pool(soc, mac_id,
