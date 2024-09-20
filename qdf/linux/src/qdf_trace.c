@@ -1810,7 +1810,9 @@ void qdf_fill_wlan_connectivity_log(enum qdf_proto_type type,
 	wlan_diag_event.diag_cmn.ktime_us = qdf_ktime_to_us(qdf_ktime_get());
 	wlan_diag_event.diag_cmn.vdev_id = vdev_id;
 
-	wlan_diag_event.version = DIAG_MGMT_VERSION_V2;
+	wlan_diag_event.tx_fail_reason = wlan_get_qdf_to_diag_txrx_status(
+					 qdf_tx_status);
+	wlan_diag_event.version = DIAG_MGMT_VERSION_V3;
 
 	if (type == QDF_PROTO_TYPE_DHCP) {
 		wlan_diag_event.subtype =
