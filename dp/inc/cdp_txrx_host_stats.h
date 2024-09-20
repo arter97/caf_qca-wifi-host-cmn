@@ -577,6 +577,73 @@ cdp_host_get_peer_stats_based_on_peer_type(ol_txrx_soc_handle soc, uint8_t vdev_
 								peer_type);
 }
 
+#ifdef QCA_PEER_EXT_STATS
+#ifdef CONFIG_SAWF
+/**
+ * cdp_pull_tx_peer_stats - pull tx peer stats
+ * @soc: soc
+ * @peer_mac: peer mac addr
+ * @min_tput: pointer to min threshold
+ * @max_tput: pointer to max threshold
+ * @avg_tput: pointer to average threshold
+ * @per: packet pointer to error rate
+ * @retries_pct: pointer to retries percentage
+ *
+ * Return: QDF_STATUS_SUCCESS on success
+ */
+static inline QDF_STATUS
+cdp_pull_tx_peer_stats(ol_txrx_soc_handle soc,
+		       uint8_t *peer_mac,
+		       uint32_t *min_tput,
+		       uint32_t *max_tput,
+		       uint32_t *avg_tput,
+		       uint32_t *per,
+		       uint32_t *retries_pct)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance");
+		QDF_BUG(0);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!soc->ops->sawf_ops ||
+	    !soc->ops->sawf_ops->txrx_pull_tx_peer_stats)
+		return QDF_STATUS_E_FAILURE;
+
+	return soc->ops->sawf_ops->txrx_pull_tx_peer_stats(peer_mac,
+							   min_tput,
+							   max_tput,
+							   avg_tput,
+							   per,
+							   retries_pct);
+}
+#else
+/**
+ * cdp_pull_tx_peer_stats - pull tx peer stats
+ * @soc: soc
+ * @peer_mac: peer mac addr
+ * @min_tput: pointer to min threshold
+ * @max_tput: pointer to max threshold
+ * @avg_tput: pointer to average threshold
+ * @per: packet pointer to error rate
+ * @retries_pct: pointer to retries percentage
+ *
+ * Return: QDF_STATUS_SUCCESS on success
+ */
+static inline QDF_STATUS
+cdp_pull_tx_peer_stats(ol_txrx_soc_handle soc,
+		       uint8_t *peer_mac,
+		       uint32_t *min_tput,
+		       uint32_t *max_tput,
+		       uint32_t *avg_tput,
+		       uint32_t *per,
+		       uint32_t *retries_pct)
+{
+	return QDF_STATUS_E_FAILURE;
+}
+#endif
+#endif
+
 /**
  * cdp_host_get_per_link_peer_stats() - Call to get peer stats
  * @soc: soc handle

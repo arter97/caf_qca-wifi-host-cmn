@@ -13662,6 +13662,9 @@ static struct cdp_sawf_ops dp_ops_sawf = {
 	.peer_config_ul = dp_sawf_peer_config_ul,
 	.swaf_peer_sla_configuration = dp_swaf_peer_sla_configuration,
 	.sawf_peer_flow_count = dp_sawf_peer_flow_count,
+#ifdef QCA_PEER_EXT_STATS
+	.txrx_pull_tx_peer_stats = dp_txrx_pull_tx_peer_stats,
+#endif
 #ifdef SAWF_ADMISSION_CONTROL
 	.txrx_get_peer_sawf_admctrl_stats = dp_sawf_get_peer_admctrl_stats,
 #endif

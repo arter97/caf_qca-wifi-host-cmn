@@ -2656,6 +2656,10 @@ struct cdp_sawf_ops {
 				uint8_t start_or_stop, uint8_t *peer_mac,
 				uint16_t peer_id, uint16_t flow_count);
 	QDF_STATUS
+	(*txrx_pull_tx_peer_stats)(uint8_t *peer_mac, uint32_t *min_tput,
+				   uint32_t *max_tput, uint32_t *avg_tput,
+				   uint32_t *per, uint32_t *retries_pct);
+	QDF_STATUS
 	(*txrx_get_peer_sawf_admctrl_stats)(struct cdp_soc_t *soc, uint8_t *mac,
 					    void *data,
 					    enum cdp_peer_type peer_type);
