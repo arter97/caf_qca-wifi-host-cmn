@@ -1339,6 +1339,10 @@ static QDF_STATUS cm_update_mlo_filter(struct wlan_objmgr_pdev *pdev,
 		 */
 		filter->match_mld_addr = true;
 		qdf_copy_macaddr(&filter->mld_addr, &cm_req->req.mld_addr);
+
+		/* Add link ID to the scan filter for partner link */
+		filter->match_link_id = true;
+		filter->link_id = cm_req->req.link_id;
 	}
 	mlme_debug("band bitmap: 0x%x", filter->band_bitmap);
 
