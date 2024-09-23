@@ -11211,12 +11211,14 @@ static QDF_STATUS dp_txrx_dump_stats(struct cdp_soc_t *psoc, uint16_t value,
 
 #ifdef WLAN_SYSFS_DP_STATS
 static
-void dp_sysfs_get_stat_type(struct dp_soc *soc, uint32_t *mac_id,
-			    uint32_t *stat_type)
+void dp_sysfs_get_stat_type(struct dp_soc *soc, uint32_t *stat_type,
+			    int32_t *mac_id, uint8_t *vdev_id)
+
 {
 	qdf_spinlock_acquire(&soc->sysfs_config->rw_stats_lock);
 	*stat_type = soc->sysfs_config->stat_type_requested;
-	*mac_id   = soc->sysfs_config->mac_id;
+	*mac_id = soc->sysfs_config->mac_id;
+	*vdev_id = soc->sysfs_config->vdev_id;
 
 	qdf_spinlock_release(&soc->sysfs_config->rw_stats_lock);
 }
@@ -11239,28 +11241,53 @@ static
 QDF_STATUS dp_sysfs_fill_stats(ol_txrx_soc_handle soc_hdl,
 			       char *buf, uint32_t buf_size)
 {
-	uint32_t mac_id = 0;
-	uint32_t stat_type = 0;
-	uint32_t fw_stats = 0;
-	uint32_t host_stats = 0;
+	uint32_t stat_type, mac_id;
+	uint8_t vdev_id;
+	uint32_t fw_stats, host_stats;
 	enum cdp_stats stats;
 	struct cdp_txrx_stats_req req;
 	uint32_t num_stats;
 	struct dp_soc *soc = NULL;
+	struct dp_pdev *pdev = NULL;
+	struct dp_vdev *vdev = NULL;
 
 	if (!soc_hdl) {
-		dp_cdp_err("%pK: soc_hdl is NULL", soc_hdl);
+		dp_cdp_err("soc_hdl is NULL");
 		return QDF_STATUS_E_INVAL;
 	}
 
 	soc = cdp_soc_t_to_dp_soc(soc_hdl);
 
 	if (!soc) {
-		dp_cdp_err("%pK: soc is NULL", soc);
+		dp_cdp_err("soc is NULL");
 		return QDF_STATUS_E_INVAL;
 	}
 
-	dp_sysfs_get_stat_type(soc, &mac_id, &stat_type);
+	dp_sysfs_get_stat_type(soc, &stat_type, &mac_id, &vdev_id);
+
+	if (vdev_id == INVALID_VDEV_ID) {
+		/* The user did not specify vdev_id,
+		 * so get pdev from soc, get vdev from pdev.
+		 * Typically for MCL, there only 1 PDEV.
+		 */
+		pdev = dp_get_pdev_for_lmac_id(soc, mac_id);
+
+		if (!pdev) {
+			dp_cdp_err("pdev is NULL");
+			return QDF_STATUS_E_INVAL;
+		}
+
+		qdf_spin_lock_bh(&pdev->vdev_list_lock);
+		if (!TAILQ_EMPTY(&pdev->vdev_list))
+			vdev = TAILQ_FIRST(&pdev->vdev_list);
+		if (!vdev) {
+			dp_cdp_err("vdev is NULL");
+			qdf_spin_unlock_bh(&pdev->vdev_list_lock);
+			return QDF_STATUS_E_INVAL;
+		}
+		vdev_id = vdev->vdev_id;
+		qdf_spin_unlock_bh(&pdev->vdev_list_lock);
+	}
 
 	stats = stat_type;
 	if (stats >= CDP_TXRX_MAX_STATS) {
@@ -11303,7 +11330,7 @@ QDF_STATUS dp_sysfs_fill_stats(ol_txrx_soc_handle soc_hdl,
 
 	dp_sysfs_update_config_buf_params(soc, 0, buf_size, buf);
 
-	dp_txrx_stats_request(soc_hdl, mac_id, &req);
+	dp_txrx_stats_request(soc_hdl, vdev_id, &req);
 	soc->sysfs_config->process_id = 0;
 	soc->sysfs_config->printing_mode = PRINTING_MODE_DISABLED;
 
@@ -11315,7 +11342,10 @@ QDF_STATUS dp_sysfs_fill_stats(ol_txrx_soc_handle soc_hdl,
 
 static
 QDF_STATUS dp_sysfs_set_stat_type(ol_txrx_soc_handle soc_hdl,
-				  uint32_t stat_type, uint32_t mac_id)
+				  uint32_t stat_type,
+				  uint32_t mac_id,
+				  uint8_t vdev_id)
+
 {
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
 
@@ -11328,6 +11358,7 @@ QDF_STATUS dp_sysfs_set_stat_type(ol_txrx_soc_handle soc_hdl,
 
 	soc->sysfs_config->stat_type_requested = stat_type;
 	soc->sysfs_config->mac_id = mac_id;
+	soc->sysfs_config->vdev_id = vdev_id;
 
 	qdf_spinlock_release(&soc->sysfs_config->rw_stats_lock);
 

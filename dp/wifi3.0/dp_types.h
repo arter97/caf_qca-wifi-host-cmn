@@ -2940,6 +2940,7 @@ typedef void (*notify_pre_reset_fw_callback)(struct dp_soc *soc);
  * @sysfs_txrx_fw_request_done: Event to wait for firmware response.
  * @stat_type_requested: stat type requested.
  * @mac_id: mac id for which stat type are requested.
+ * @vdev_id: vdev id for which stat type are request.
  * @printing_mode: Should a print go through.
  * @process_id: Process allowed to write to buffer.
  * @curr_buffer_length: Curr length of buffer written
@@ -2954,6 +2955,7 @@ struct sysfs_stats_config {
 	qdf_event_t sysfs_txrx_fw_request_done;
 	uint32_t stat_type_requested;
 	uint32_t mac_id;
+	uint8_t vdev_id;
 	enum sysfs_printing_mode printing_mode;
 	int process_id;
 	uint16_t curr_buffer_length;
