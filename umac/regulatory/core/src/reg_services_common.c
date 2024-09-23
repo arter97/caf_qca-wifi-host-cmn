@@ -4924,7 +4924,7 @@ static void reg_update_5g_bonded_channel_state_punc_for_pwrmode(
 	/* Validate puncture bitmap. Update channel state. */
 	final_bitmap = reg_find_nearest_puncture_pattern(ch_params->ch_width,
 							 puncture_bitmap);
-	if (final_bitmap) {
+	if (!puncture_bitmap || final_bitmap) {
 		*chan_state = update_state;
 		ch_params->reg_punc_bitmap = final_bitmap;
 	}
