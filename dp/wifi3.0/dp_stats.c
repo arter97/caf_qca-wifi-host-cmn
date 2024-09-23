@@ -4530,6 +4530,38 @@ static void dp_print_rx_pdev_fw_stats_phy_err_tlv(uint32_t *tag_buf)
 	DP_PRINT_STATS("phy_errs: %s\n",  phy_errs);
 }
 
+#ifdef CONFIG_AP_PLATFORM
+static inline void dp_print_phy_counters_tlv(uint32_t *tag_buf)
+{
+}
+#else
+/*
+ * dp_print_phy_counters_tlv() - Accounts for per_blk_err_cnt
+ *
+ * tag_buf - Buffer
+ * Return - void
+ */
+static inline void dp_print_phy_counters_tlv(uint32_t *tag_buf)
+{
+	htt_phy_counters_tlv *dp_stats_buf =
+		(htt_phy_counters_tlv *)tag_buf;
+
+	uint8_t i;
+	uint16_t index = 0;
+	char per_blk_err_cnt[DP_MAX_STRING_LEN];
+
+	DP_PRINT_STATS("HTT_PHY_COUNTERS_TLV");
+
+	for (i = 0; i < HTT_MAX_PER_BLK_ERR_CNT; i++) {
+		index += snprintf(&per_blk_err_cnt[index],
+				DP_MAX_STRING_LEN - index,
+				" %u:%u,", i, dp_stats_buf->per_blk_err_cnt[i]);
+	}
+
+	DP_PRINT_STATS("per_blk_err_cnt: %s\n", per_blk_err_cnt);
+}
+#endif /* CONFIG_AP_PLATFORM */
+
 void dp_htt_stats_print_tag(struct dp_pdev *pdev,
 			    uint8_t tag_type, uint32_t *tag_buf)
 {
@@ -4831,6 +4863,10 @@ void dp_htt_stats_print_tag(struct dp_pdev *pdev,
 
 	case HTT_STATS_RX_PDEV_FW_STATS_PHY_ERR_TAG:
 		dp_print_rx_pdev_fw_stats_phy_err_tlv(tag_buf);
+		break;
+
+	case HTT_STATS_PHY_COUNTERS_TAG:
+		dp_print_phy_counters_tlv(tag_buf);
 		break;
 
 	default:
