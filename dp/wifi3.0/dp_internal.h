@@ -1176,6 +1176,10 @@ dp_mon_rx_config_packet_type_subtype(struct dp_soc *soc,
 				     uint32_t htt_ring_id)
 {
 }
+
+static inline void
+dp_set_monitor_version(struct dp_pdev *pdev, uint8_t version) {
+}
 #endif /* !WIFI_MONITOR_SUPPORT */
 
 /**

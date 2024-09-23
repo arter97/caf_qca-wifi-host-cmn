@@ -5271,6 +5271,21 @@ dp_mon_rx_ppdu_status_reset(struct dp_mon_mac *mon_mac)
 		     sizeof(mon_mac->ppdu_info.rx_status));
 }
 
+/**
+ * dp_set_monitor_version() - Set monitor version
+ * @pdev: pointer to dp pdev
+ * @version: monitor version
+ *
+ * Return: none
+ */
+static inline void
+dp_set_monitor_version(struct dp_pdev *pdev, uint8_t version) {
+	if (!pdev || !pdev->monitor_pdev)
+		return;
+
+	pdev->monitor_pdev->mon_version = version;
+}
+
 #else
 void
 dp_check_and_dump_full_mon_info(struct dp_soc *soc, struct dp_pdev *pdev,
