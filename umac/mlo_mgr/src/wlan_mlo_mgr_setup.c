@@ -18,6 +18,7 @@
  */
 #include "wlan_mlo_mgr_cmn.h"
 #include "wlan_mlo_mgr_main.h"
+#include <target_type.h>
 #ifdef WLAN_MLO_MULTI_CHIP
 #include "wlan_lmac_if_def.h"
 #include <cdp_txrx_mlo.h>
@@ -513,6 +514,95 @@ void mlo_setup_deinit(void)
 }
 
 qdf_export_symbol(mlo_setup_deinit);
+
+static uint32_t mlo_get_psoc_target_type(struct wlan_objmgr_psoc *psoc)
+{
+	struct wlan_lmac_if_tx_ops *tx_ops;
+	uint32_t target_type = 0;
+
+	if (!psoc)
+		return target_type;
+
+	tx_ops = wlan_psoc_get_lmac_if_txops(psoc);
+
+	if (tx_ops && tx_ops->mops.target_if_get_psoc_target_type) {
+		tx_ops->mops.target_if_get_psoc_target_type(
+				psoc,
+				&target_type);
+	}
+
+	return target_type;
+}
+
+QDF_STATUS mlo_set_3_link_forced_primary_umac(
+		struct wlan_mlo_peer_context *ml_peer,
+		struct wlan_objmgr_vdev *link_vdevs[],
+		uint8_t *psoc_id)
+{
+	struct wlan_objmgr_psoc *psoc;
+	uint32_t target_type;
+	bool found_qca5332 = false;
+	bool found_qcn6432 = false;
+	bool found_qcn9224 = false;
+	bool found_qca5424 = false;
+	uint8_t forced_psoc_id = 0;
+	int i = 0;
+
+	if (ml_peer->max_links != 3)
+		return QDF_STATUS_E_FAILURE;
+
+	for (i = 0; i < 3; i++) {
+		psoc = wlan_vdev_get_psoc(link_vdevs[i]);
+		if (!psoc) {
+			mlo_err("psoc is Null");
+			return QDF_STATUS_E_FAILURE;
+		}
+		target_type = mlo_get_psoc_target_type(psoc);
+
+		switch (target_type) {
+		case TARGET_TYPE_QCA5332:
+			found_qca5332 = true;
+			break;
+
+		case TARGET_TYPE_QCN9224:
+			found_qcn9224 = true;
+			break;
+
+		case TARGET_TYPE_QCN6432:
+			found_qcn6432 = true;
+			forced_psoc_id = wlan_psoc_get_id(psoc);
+			break;
+
+		case TARGET_TYPE_QCA5424:
+			found_qca5424 = true;
+			forced_psoc_id = wlan_psoc_get_id(psoc);
+			break;
+
+		default:
+			return QDF_STATUS_E_FAILURE;
+		}
+	}
+
+	/* In Miami-Pebble-Waikiki platforms (MWP and MPW)
+	 * Pebble will be chosen a primary-umac
+	 */
+	if (found_qca5332 && found_qcn6432 && found_qcn9224) {
+		*psoc_id = forced_psoc_id;
+		return QDF_STATUS_SUCCESS;
+	}
+
+	/* In Marina-Waikiki platform, Marina will be chosen as
+	 * the primary-umac
+	 */
+	if (found_qca5424) {
+		*psoc_id = forced_psoc_id;
+		return QDF_STATUS_SUCCESS;
+	}
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+qdf_export_symbol(mlo_set_3_link_forced_primary_umac);
 
 void mlo_setup_update_chip_info(struct wlan_objmgr_psoc *psoc,
 				uint8_t chip_id, uint8_t *adj_chip_id)

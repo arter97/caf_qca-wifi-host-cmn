@@ -3070,6 +3070,16 @@ QDF_STATUS target_if_mlo_ready(struct wlan_objmgr_pdev **pdev,
 QDF_STATUS target_if_mlo_teardown_req(struct wlan_objmgr_pdev *pdev,
 				      uint32_t reason, bool reset,
 				      bool standby_active);
+
+/**
+ * target_if_get_psoc_target_type() - API to get the target type
+ * @psoc: psoc object
+ * @target_type: Variable to get target type
+ *
+ * Return: QDF_STATUS codes
+ */
+QDF_STATUS target_if_get_psoc_target_type(struct wlan_objmgr_psoc *psoc,
+					  uint32_t *target_type);
 #endif /*WLAN_FEATURE_11BE_MLO && WLAN_MLO_MULTI_CHIP*/
 
 /**

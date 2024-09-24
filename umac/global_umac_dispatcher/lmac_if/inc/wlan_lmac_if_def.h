@@ -514,6 +514,7 @@ enum wlan_mlme_cfg_id;
  * @target_if_mlo_setup_req: MLO setup request
  * @target_if_mlo_ready: MLO ready event
  * @target_if_mlo_teardown_req: MLO teardown
+ * @target_if_get_psoc_target_type: API to get Target type
  * @vdev_send_set_mac_addr: API to send set MAC address request to FW
  * @vdev_peer_set_param_send: API to send peer param to FW
  * @sap_suspend_param_send: API to send SAP vdev suspend param
@@ -612,6 +613,10 @@ struct wlan_lmac_if_mlme_tx_ops {
 	QDF_STATUS (*target_if_mlo_teardown_req)(struct wlan_objmgr_pdev *pdev,
 						 uint32_t grp_id, bool reset,
 						 bool standby_active);
+	QDF_STATUS (*target_if_get_psoc_target_type)(
+						struct wlan_objmgr_psoc *psoc,
+						uint32_t *target_type);
+
 #endif
 #ifdef WLAN_FEATURE_DYNAMIC_MAC_ADDR_UPDATE
 QDF_STATUS (*vdev_send_set_mac_addr)(struct qdf_mac_addr mac_addr,

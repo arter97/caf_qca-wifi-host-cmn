@@ -1285,4 +1285,27 @@ target_if_mlo_teardown_req(struct wlan_objmgr_pdev *pdev,
 
 	return wmi_mlo_teardown_cmd_send(wmi_handle, &params);
 }
+
+QDF_STATUS
+target_if_get_psoc_target_type(struct wlan_objmgr_psoc *psoc,
+			       uint32_t *target_type)
+{
+	struct target_psoc_info *tgt_psoc_info;
+
+	if (!psoc) {
+		target_if_err("psoc is null");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	tgt_psoc_info = wlan_psoc_get_tgt_if_handle(psoc);
+
+	if (!tgt_psoc_info) {
+		target_if_err("null tgt_psoc_info");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	*target_type = target_psoc_get_target_type(tgt_psoc_info);
+
+	return QDF_STATUS_SUCCESS;
+}
 #endif /*WLAN_FEATURE_11BE_MLO && WLAN_MLO_MULTI_CHIP*/

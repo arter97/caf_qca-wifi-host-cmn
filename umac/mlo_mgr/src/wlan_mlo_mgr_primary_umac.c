@@ -843,6 +843,15 @@ static QDF_STATUS mlo_set_3_link_primary_umac(
 {
 	return QDF_STATUS_E_FAILURE;
 }
+
+static inline
+QDF_STATUS mlo_set_3_link_forced_primary_umac(
+		struct wlan_mlo_peer_context *ml_peer,
+		struct wlan_objmgr_vdev *link_vdevs[],
+		uint8_t *psoc_id)
+{
+	return QDF_STATUS_E_FAILURE;
+}
 #endif
 
 QDF_STATUS mlo_peer_allocate_primary_umac(
@@ -940,6 +949,21 @@ QDF_STATUS mlo_peer_allocate_primary_umac(
 			 QDF_MAC_ADDR_REF(ml_peer->peer_mld_addr.bytes),
 			 ml_peer->primary_umac_psoc_id);
 
+		return QDF_STATUS_SUCCESS;
+	}
+
+	if (mlo_set_3_link_forced_primary_umac(ml_peer, link_vdevs, &psoc_id) ==
+	    QDF_STATUS_SUCCESS) {
+		/* If success then the primary umac is restricted and assigned.
+		 * if not, there is no restriction, so just fallthrough
+		 */
+		ml_peer->primary_umac_psoc_id = psoc_id;
+		mlo_peer_assign_primary_umac(ml_peer, peer_entry);
+		mlo_info("MLD ID %d ML Peer " QDF_MAC_ADDR_FMT
+			 " forced primary umac soc %d ",
+			 ml_dev->mld_id,
+			 QDF_MAC_ADDR_REF(ml_peer->peer_mld_addr.bytes),
+			 ml_peer->primary_umac_psoc_id);
 		return QDF_STATUS_SUCCESS;
 	}
 
