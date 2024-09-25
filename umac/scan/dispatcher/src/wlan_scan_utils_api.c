@@ -4282,6 +4282,11 @@ util_scan_entry_renew_timestamp(struct wlan_objmgr_pdev *pdev,
 	scan_entry->boottime_ns = qdf_get_bootbased_boottime_ns();
 
 	scan_obj = wlan_psoc_get_scan_obj(wlan_pdev_get_psoc(pdev));
+	if (!scan_obj) {
+		scm_err("scan_obj is NULL");
+		return;
+	}
+
 	if (scan_obj->cb.inform_beacon)
 		scan_obj->cb.inform_beacon(pdev, scan_entry);
 }
