@@ -3613,7 +3613,7 @@ wlan_cfg_mask_assignment(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
 		int_host2rxdma_mon_ring_mask =
 			mask_assignment->host2rxdma_mon_ring_mask[i];
 		if (int_host2rxdma_mon_ring_mask && !host2rxmon_mask_set) {
-			wlan_cfg_ctx->int_host2rxdma_mon_ring_mask[interrupt_index] =
+			wlan_cfg_ctx->int_host2rxdma_mon_ring_mask[i] =
 				mask_assignment->host2rxdma_mon_ring_mask[i];
 			host2rxmon_mask_set = true;
 		}
