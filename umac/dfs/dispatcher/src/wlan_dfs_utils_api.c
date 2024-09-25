@@ -1545,7 +1545,6 @@ utils_dfs_precac_status_for_channel(struct wlan_objmgr_pdev *pdev,
 }
 #endif
 
-#if defined(WLAN_DISP_CHAN_INFO)
 #define FIRST_DFS_CHAN_NUM  52
 #define CHAN_NUM_SPACING     4
 #define INVALID_INDEX     (-1)
@@ -1561,6 +1560,7 @@ void utils_dfs_convert_freq_to_index(qdf_freq_t freq, int8_t *index)
 		  tmp_index : INVALID_INDEX;
 }
 
+#if defined(WLAN_DISP_CHAN_INFO)
 /**
  * utils_dfs_update_chan_state_array_element() - Update the per dfs channel
  * state array element indexed by the frequency with the new state.
