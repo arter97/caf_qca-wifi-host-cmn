@@ -284,6 +284,7 @@ struct wlan_cm_vdev_connect_req {
  * @bssid: bssid given
  * @prev_bssid: prev AP bssid, given in case supplican want to roam to new BSSID
  * @chan_freq: channel of the AP
+ * @crypto: crypto related info
  */
 struct wlan_cm_roam_req {
 	uint8_t forced_roaming:1,
@@ -293,6 +294,7 @@ struct wlan_cm_roam_req {
 	struct qdf_mac_addr bssid;
 	struct qdf_mac_addr prev_bssid;
 	uint32_t chan_freq;
+	struct wlan_cm_connect_crypto_info crypto;
 };
 
 /**

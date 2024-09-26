@@ -1154,4 +1154,27 @@ void cm_set_candidate_custom_sort_cb(
 
 #endif
 
+/**
+ * cm_update_per_peer_key_mgmt_crypto_params() - Update vdev key mgmt
+ * based on negotiated security
+ * @vdev: Objmgr vdev
+ * @neg_sec_info: negotiated security
+ *
+ * Return: void
+ */
+void
+cm_update_per_peer_key_mgmt_crypto_params(struct wlan_objmgr_vdev *vdev,
+				struct security_info *neg_sec_info);
+
+/**
+ * cm_update_per_peer_ucastcipher_crypto_params() - Update vdev unicast
+ * cipher based on negotiated security
+ * @vdev: Objmgr vdev
+ * @neg_sec_info: negotiated security
+ *
+ * Return: void
+ */
+void
+cm_update_per_peer_ucastcipher_crypto_params(struct wlan_objmgr_vdev *vdev,
+				struct security_info *neg_sec_info);
 #endif /* __WLAN_CM_MAIN_API_H__ */

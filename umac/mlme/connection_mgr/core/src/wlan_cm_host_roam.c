@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2011-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -297,6 +298,40 @@ QDF_STATUS cm_host_roam_start_fail(struct cnx_mgr *cm_ctx,
 	cm_send_preauth_start_fail(cm_ctx, cm_req->cm_id, reason);
 
 	return QDF_STATUS_SUCCESS;
+}
+
+void
+cm_update_per_peer_crypto_params_for_roam(struct wlan_objmgr_vdev *vdev,
+					  struct cm_roam_req *roam_req)
+{
+	struct security_info *neg_sec_info;
+	uint16_t rsn_caps;
+
+	/* Do only for WPA/WPA2/WPA3 */
+	if (!roam_req->req.crypto.wpa_versions)
+		return;
+
+	/*
+	 * Some non PMF AP misbehave if in assoc req RSN IE contain PMF capable
+	 * bit set. Thus only if AP and self are capable, try PMF connection
+	 * else set PMF as 0. The PMF filtering is already taken care in
+	 * get scan results.
+	 */
+	neg_sec_info = &roam_req->cur_candidate->entry->neg_sec_info;
+	rsn_caps = roam_req->req.crypto.rsn_caps;
+	if (!(neg_sec_info->rsn_caps & WLAN_CRYPTO_RSN_CAP_MFP_ENABLED &&
+	     rsn_caps & WLAN_CRYPTO_RSN_CAP_MFP_ENABLED)) {
+		rsn_caps &= ~WLAN_CRYPTO_RSN_CAP_MFP_ENABLED;
+		rsn_caps &= ~WLAN_CRYPTO_RSN_CAP_MFP_REQUIRED;
+		rsn_caps &= ~WLAN_CRYPTO_RSN_CAP_OCV_SUPPORTED;
+	}
+
+	/* Update the new rsn caps */
+	wlan_crypto_set_vdev_param(vdev, WLAN_CRYPTO_PARAM_RSN_CAP,
+				   rsn_caps);
+
+	cm_update_per_peer_key_mgmt_crypto_params(vdev, neg_sec_info);
+	cm_update_per_peer_ucastcipher_crypto_params(vdev, neg_sec_info);
 }
 #else
 static QDF_STATUS cm_host_roam_start(struct cnx_mgr *cm_ctx,

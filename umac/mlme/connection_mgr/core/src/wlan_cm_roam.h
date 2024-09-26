@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2011-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -285,6 +286,18 @@ QDF_STATUS cm_send_preauth_start_fail(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id,
  * Return: QDF status
  */
 QDF_STATUS cm_handle_reassoc_timer(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id);
+
+/**
+ * cm_update_per_peer_crypto_params_for_roam() - Update vdev crypto
+ * parameters for roam case based on negotiated security
+ * @vdev: vdev
+ * @roam_req: roam req
+ *
+ * Return: void
+ */
+void
+cm_update_per_peer_crypto_params_for_roam(struct wlan_objmgr_vdev *vdev,
+					  struct cm_roam_req *roam_req);
 #endif /* WLAN_FEATURE_PREAUTH_ENABLE */
 #else /* WLAN_FEATURE_HOST_ROAM */
 
