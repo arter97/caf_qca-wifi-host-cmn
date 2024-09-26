@@ -2415,8 +2415,7 @@ dp_tx_nbuf_dev_queue_free(qdf_nbuf_queue_head_t *nbuf_queue_head,
 	qdf_nbuf_t nbuf = NULL;
 
 	nbuf = desc->nbuf;
-	if (qdf_likely(nbuf->is_from_recycler) &&
-	    qdf_likely(nbuf->fast_xmit))
+	if (qdf_likely(desc->flags & DP_TX_DESC_FLAG_FAST))
 		qdf_nbuf_dev_queue_head(nbuf_queue_head, nbuf);
 	else
 		qdf_nbuf_free(nbuf);
