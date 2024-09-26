@@ -361,12 +361,14 @@ static ssize_t ath_procfs_diag_read_ext(struct file *file, char __user *buf,
 	tgt_info = hif_get_target_info_handle(GET_HIF_OPAQUE_HDL(hif_hdl));
 	switch (scn->bus_type) {
 	case QDF_BUS_TYPE_PCI:
+	case QDF_BUS_TYPE_IPCI:
 		switch (tgt_info->target_type) {
 		case TARGET_TYPE_QCA6390:
 		case TARGET_TYPE_QCA6490:
 		case TARGET_TYPE_KIWI:
 		case TARGET_TYPE_PEACH:
 		case TARGET_TYPE_MANGO:
+		case TARGET_TYPE_WCN7750:
 			if (op_type == OP_TYPE_EXT_DIRECT)
 				rv = ath_procfs_direct_read(scn,
 							    offset,
@@ -438,12 +440,14 @@ static ssize_t ath_procfs_diag_write_ext(struct file *file,
 
 	switch (scn->bus_type) {
 	case QDF_BUS_TYPE_PCI:
+	case QDF_BUS_TYPE_IPCI:
 		switch (tgt_info->target_type) {
 		case TARGET_TYPE_QCA6390:
 		case TARGET_TYPE_QCA6490:
 		case TARGET_TYPE_KIWI:
 		case TARGET_TYPE_MANGO:
 		case TARGET_TYPE_PEACH:
+		case TARGET_TYPE_WCN7750:
 			if (op_type == OP_TYPE_EXT_DIRECT)
 				rv = ath_procfs_direct_write(scn,
 							     offset,
