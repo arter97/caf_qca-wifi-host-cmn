@@ -578,6 +578,7 @@ QDF_STATUS dp_ipa_tx_buf_smmu_unmapping(struct cdp_soc_t *soc_hdl,
 					uint32_t line);
 QDF_STATUS dp_ipa_rx_buf_pool_smmu_mapping(struct cdp_soc_t *soc_hdl,
 					   uint8_t pdev_id,
+					   bool is_ipa_deinit,
 					   bool create,
 					   const char *func,
 					   uint32_t line);
@@ -808,6 +809,7 @@ static inline QDF_STATUS dp_ipa_tx_buf_smmu_unmapping(struct cdp_soc_t *soc_hdl,
 static inline QDF_STATUS dp_ipa_rx_buf_pool_smmu_mapping(
 						      struct cdp_soc_t *soc_hdl,
 						      uint8_t pdev_id,
+						      bool is_ipa_deinit,
 						      bool create,
 						      const char *func,
 						      uint32_t line)

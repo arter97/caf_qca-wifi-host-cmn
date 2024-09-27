@@ -2167,8 +2167,9 @@ wlan_ipa_uc_disable_pipes(struct wlan_ipa_priv *ipa_ctx, bool force_disable)
 			cdp_ipa_set_smmu_mapped(ipa_ctx->dp_soc, 0);
 			ipa_info("opt_dp: IPA smmu pool unmap");
 			cdp_ipa_rx_buf_smmu_pool_mapping(ipa_ctx->dp_soc,
-							 IPA_DEF_PDEV_ID, false,
-							  __func__, __LINE__);
+							 IPA_DEF_PDEV_ID,
+							 false, false,
+							 __func__, __LINE__);
 		}
 
 		ipa_ctx->opt_dp_active = false;
@@ -5008,6 +5009,7 @@ void wlan_ipa_opt_dp_deinit(struct wlan_ipa_priv *ipa_ctx)
 		cdp_ipa_set_smmu_mapped(ipa_ctx->dp_soc, 0);
 		cdp_ipa_rx_buf_smmu_pool_mapping(ipa_ctx->dp_soc,
 						 IPA_DEF_PDEV_ID,
+						 true,
 						 false, __func__, __LINE__);
 	}
 }
@@ -5646,15 +5648,15 @@ static void wlan_ipa_uc_op_cb(struct op_msg_type *op_msg,
 		ipa_info("opt_dp: IPA smmu pool map");
 		qdf_mutex_acquire(&ipa_ctx->ipa_lock);
 		cdp_ipa_rx_buf_smmu_pool_mapping(ipa_ctx->dp_soc,
-						 IPA_DEF_PDEV_ID, true,
-						 __func__, __LINE__);
+						 IPA_DEF_PDEV_ID, false,
+						 true, __func__, __LINE__);
 		qdf_mutex_release(&ipa_ctx->ipa_lock);
 	} else if (msg->op_code == WLAN_IPA_SMMU_UNMAP) {
 		ipa_info("opt_dp: IPA smmu pool unmap");
 		qdf_mutex_acquire(&ipa_ctx->ipa_lock);
 		cdp_ipa_rx_buf_smmu_pool_mapping(ipa_ctx->dp_soc,
 						 IPA_DEF_PDEV_ID, false,
-						 __func__, __LINE__);
+						 false, __func__, __LINE__);
 		qdf_mutex_release(&ipa_ctx->ipa_lock);
 	} else if (wlan_ipa_uc_op_metering(ipa_ctx, op_msg)) {
 		ipa_err("Invalid message: op_code=%d, reason=%d",

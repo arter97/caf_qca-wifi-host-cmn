@@ -774,6 +774,7 @@ cdp_ipa_tx_buf_smmu_unmapping(ol_txrx_soc_handle soc, uint8_t pdev_id,
  * cdp_ipa_rx_buf_smmu_pool_mapping() - Create SMMU mappings for Rx pool
  * @soc: data path soc handle
  * @pdev_id: pdev id
+ * @is_ipa_deinit: called from ipa deinit
  * @create: Map/unmap
  * @line: line number
  * @func: function name
@@ -784,7 +785,8 @@ cdp_ipa_tx_buf_smmu_unmapping(ol_txrx_soc_handle soc, uint8_t pdev_id,
  */
 static inline QDF_STATUS
 cdp_ipa_rx_buf_smmu_pool_mapping(ol_txrx_soc_handle soc, uint8_t pdev_id,
-				 bool create, const char *func, uint32_t line)
+				 bool is_ipa_deinit, bool create,
+				 const char *func, uint32_t line)
 {
 	if (!soc || !soc->ops || !soc->ops->ipa_ops) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
@@ -794,7 +796,7 @@ cdp_ipa_rx_buf_smmu_pool_mapping(ol_txrx_soc_handle soc, uint8_t pdev_id,
 
 	if (soc->ops->ipa_ops->ipa_rx_buf_smmu_pool_mapping)
 		return soc->ops->ipa_ops->ipa_rx_buf_smmu_pool_mapping(soc,
-						pdev_id, create, func, line);
+				pdev_id, is_ipa_deinit, create, func, line);
 
 	return QDF_STATUS_SUCCESS;
 }

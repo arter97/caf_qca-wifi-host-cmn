@@ -2444,6 +2444,7 @@ struct cdp_ipa_ops {
 	QDF_STATUS (*ipa_rx_buf_smmu_pool_mapping)(
 					      struct cdp_soc_t *soc_hdl,
 					      uint8_t pdev_id,
+					      bool is_ipa_deinit,
 					      bool create,
 					      const char *func,
 					      uint32_t line);

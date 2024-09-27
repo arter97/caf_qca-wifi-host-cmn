@@ -154,6 +154,7 @@ struct dp_rx_desc_dbg_info {
  *			reuse_nbuf field
  * @msdu_done_fail:	this particular rx_desc was dequeued from REO with
  *			msdu_done bit not set in data buffer.
+ * @is_ctrl_pkt:	opt_dp_ctrl packet
  */
 struct dp_rx_desc {
 	qdf_nbuf_t nbuf;
@@ -175,7 +176,8 @@ struct dp_rx_desc {
 		unmapped:1,
 		in_err_state:1,
 		has_reuse_nbuf:1,
-		msdu_done_fail:1;
+		msdu_done_fail:1,
+		is_ctrl_pkt:1;
 };
 
 #ifndef QCA_HOST_MODE_WIFI_DISABLED
@@ -3160,7 +3162,11 @@ void dp_rx_nbuf_unmap(struct dp_soc *soc,
 
 	dp_ipa_handle_rx_buf_smmu_mapping(soc, rx_desc->nbuf,
 					  rx_desc_pool->buf_size,
-					  false, __func__, __LINE__, 0);
+					  false, __func__,
+					  __LINE__, 0);
+	if (qdf_unlikely(rx_desc->is_ctrl_pkt))
+		rx_desc->is_ctrl_pkt = 0;
+
 	qdf_nbuf_unmap_nbytes_single(soc->osdev, rx_desc->nbuf,
 				     QDF_DMA_FROM_DEVICE,
 				     rx_desc_pool->buf_size);
