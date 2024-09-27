@@ -97,6 +97,7 @@ struct dp_tx_queue;
 #define MAX_TXDESC_POOLS 4
 #endif
 #define DP_TXDESC_POOL_ANY 0xffff
+#define DP_RING_NUM_ANY 0xffff
 
 /* Max no of descriptors to handle special frames like EAPOL */
 #define MAX_TX_SPL_DESC 1024
@@ -2893,6 +2894,7 @@ struct dp_arch_ops {
  * @multi_rx_reorder_q_setup_support: multi rx reorder q setup at a time support
  * @fw_support_ml_monitor: FW support ML monitor mode
  * @dp_ipa_opt_dp_ctrl_refill: opt_dp_ctrl refill support
+ * @vdev_tx_nss_support: FW supports vdev Tx NSS report.
  */
 struct dp_soc_features {
 	uint8_t pn_in_reo_dest:1,
@@ -2905,6 +2907,7 @@ struct dp_soc_features {
 #ifdef IPA_OPT_WIFI_DP_CTRL
 	bool dp_ipa_opt_dp_ctrl_refill;
 #endif
+	bool vdev_tx_nss_support;
 };
 
 enum sysfs_printing_mode {
@@ -3676,6 +3679,16 @@ struct dp_soc {
 	struct dp_rx_page_pool rx_pp[MAX_RXDESC_POOLS];
 #endif
 };
+
+/*
+ * cpu id is used as an index to set bits in service_rings_running
+ * in the service srng API. We need to make sure that the size of
+ * service_rings_running variable is big enough
+ */
+#ifndef CONFIG_X86
+QDF_COMPILE_TIME_ASSERT(num_cpu_check,
+	NR_CPUS <= (sizeof(((struct dp_soc *)0)->service_rings_running) * 8));
+#endif
 
 #define MAX_RX_MAC_RINGS 2
 /* Same as NAC_MAX_CLENT */
@@ -4660,6 +4673,7 @@ struct dp_vdev {
 #endif
 	bool eapol_over_control_port_disable;
 	bool dp_proto_stats;
+	bool dp_eapol_stats;
 };
 
 enum {
@@ -5267,6 +5281,7 @@ struct dp_peer_per_pkt_rx_stats {
  * @wme_ac_type_bytes: Wireless Multimedia type Bytes Count
  * @rx_ppdu_duration: Rx PPDU Duration
  * @retried_msdu_count: rx msdu retries count
+ * @rx_total: total rx count
  */
 struct dp_peer_extd_rx_stats {
 	struct cdp_pkt_type pkt_type[DOT11_MAX];
@@ -5317,6 +5332,7 @@ struct dp_peer_extd_rx_stats {
 	uint64_t wme_ac_type_bytes[WME_AC_MAX];
 	uint64_t rx_ppdu_duration;
 	uint32_t retried_msdu_count;
+	struct cdp_pkt_info rx_total;
 };
 
 /**

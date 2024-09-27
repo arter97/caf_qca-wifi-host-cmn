@@ -5027,6 +5027,7 @@ static QDF_STATUS dp_vdev_attach_wifi3(struct cdp_soc_t *cdp_soc,
 	vdev->dp_proto_stats = wlan_cfg_get_dp_proto_stats(soc->wlan_cfg_ctx);
 	if (vdev->tx_encap_type == htt_cmn_pkt_type_raw)
 		vdev->dp_proto_stats = 0;
+	vdev->dp_eapol_stats = wlan_cfg_get_dp_eapol_stats(soc->wlan_cfg_ctx);
 
 	dp_tx_vdev_traffic_end_indication_attach(vdev);
 
@@ -8713,9 +8714,7 @@ static QDF_STATUS dp_set_pdev_param(struct cdp_soc_t *cdp_soc, uint8_t pdev_id,
 		return dp_monitor_config_enh_rx_capture(pdev,
 						val.cdp_pdev_param_en_rx_cap);
 	case CDP_CONFIG_ENH_TX_CAPTURE:
-		return dp_monitor_config_enh_tx_capture(pdev,
-						val.cdp_pdev_param_en_tx_cap,
-						0);
+		return dp_mon_enh_tx_capt_wrapper(pdev, val);
 	case CDP_CONFIG_HMMC_TID_OVERRIDE:
 		pdev->hmmc_tid_override_en = val.cdp_pdev_param_hmmc_tid_ovrd;
 		break;
@@ -9494,6 +9493,11 @@ dp_set_psoc_param(struct cdp_soc_t *cdp_soc,
 		}
 		break;
 #endif
+	case CDP_VDEV_TX_NSS_SUPPORT:
+		soc->features.vdev_tx_nss_support = val.cdp_tx_vdev_nss_support;
+		dp_info("FW supports Tx Vdev NSS report: %d",
+			soc->features.vdev_tx_nss_support);
+		break;
 	default:
 		break;
 	}
@@ -9567,11 +9571,13 @@ static QDF_STATUS dp_get_psoc_param(struct cdp_soc_t *cdp_soc,
 			wlan_cfg_get_num_tx_ext_desc(wlan_cfg_ctx);
 		break;
 	case CDP_CFG_TX_RING_SIZE:
-		val->cdp_tx_ring_size = wlan_cfg_tx_ring_size(wlan_cfg_ctx);
+		val->cdp_tx_ring_size = wlan_cfg_tx_ring_size(wlan_cfg_ctx,
+							      DP_RING_NUM_ANY);
 		break;
 	case CDP_CFG_TX_COMPL_RING_SIZE:
 		val->cdp_tx_comp_ring_size =
-			wlan_cfg_tx_comp_ring_size(wlan_cfg_ctx);
+			wlan_cfg_tx_comp_ring_size(wlan_cfg_ctx,
+						   DP_RING_NUM_ANY);
 		break;
 	case CDP_CFG_RX_SW_DESC_NUM:
 		val->cdp_rx_sw_desc_num =
@@ -9579,7 +9585,8 @@ static QDF_STATUS dp_get_psoc_param(struct cdp_soc_t *cdp_soc,
 		break;
 	case CDP_CFG_REO_DST_RING_SIZE:
 		val->cdp_reo_dst_ring_size =
-			wlan_cfg_get_reo_dst_ring_size(wlan_cfg_ctx);
+			wlan_cfg_get_reo_dst_ring_size(wlan_cfg_ctx,
+						       DP_RING_NUM_ANY);
 		break;
 	case CDP_CFG_RXDMA_REFILL_RING_SIZE:
 		val->cdp_rxdma_refill_ring_size =
@@ -9621,6 +9628,10 @@ static QDF_STATUS dp_get_psoc_param(struct cdp_soc_t *cdp_soc,
 		break;
 	case CDP_MONITOR_FLAG:
 		val->cdp_monitor_flag = soc->mon_flags;
+		break;
+	case CDP_VDEV_TX_NSS_SUPPORT:
+		val->cdp_tx_vdev_nss_support =
+					soc->features.vdev_tx_nss_support;
 		break;
 	default:
 		dp_warn("Invalid param: %u", param);
@@ -10480,9 +10491,8 @@ dp_fw_stats_process(struct dp_vdev *vdev,
 }
 
 #ifdef WLAN_FEATURE_UL_JITTER
-#define VENDOR_ATTR_NSS_PKT_NSS_VALUE 0
-#define VENDOR_ATTR_NSS_PKT_TX_PACKET_COUNT 1
-#define VENDOR_ATTR_NSS_PKT_RX_PACKET_COUNT 2
+#define VENDOR_ATTR_NSS_PKT_TX_PACKET_COUNT 0
+#define VENDOR_ATTR_NSS_PKT_RX_PACKET_COUNT 1
 #define SS_COUNT_JITTER 2
 /**
  * dp_txrx_nss_request - function to get txrx nss stats
@@ -10497,17 +10507,27 @@ QDF_STATUS dp_txrx_nss_request(struct cdp_soc_t *soc_handle,
 			       uint8_t vdev_id,
 			       int **req)
 {
-	struct dp_pdev *pdev = dp_get_pdev_from_soc_pdev_id_wifi3(
-						(struct dp_soc *)soc_handle, 0);
+	QDF_STATUS status;
+	struct cdp_vdev_stats *vdev_stats = qdf_mem_malloc(sizeof(*vdev_stats));
+
+	if (!vdev_stats)
+		return QDF_STATUS_E_NOMEM;
+
+	status = dp_txrx_get_vdev_stats(soc_handle, vdev_id, vdev_stats, true);
+	if (QDF_IS_STATUS_ERROR(status))
+		goto end;
 
 	for (int i = 0; i < SS_COUNT_JITTER; i++) {
-		req[i][VENDOR_ATTR_NSS_PKT_NSS_VALUE] = i + 1;
 		req[i][VENDOR_ATTR_NSS_PKT_TX_PACKET_COUNT] =
-							  pdev->stats.tx.nss[i];
+							  vdev_stats->tx.nss[i];
 		req[i][VENDOR_ATTR_NSS_PKT_RX_PACKET_COUNT] =
-							  pdev->stats.rx.nss[i];
+							  vdev_stats->rx.nss[i];
 	}
-	return QDF_STATUS_SUCCESS;
+
+end:
+	qdf_mem_free(vdev_stats);
+
+	return status;
 }
 
 /**
@@ -13030,6 +13050,9 @@ static struct cdp_host_stats_ops dp_ops_host_stats = {
 	.txrx_peer_stats_deter = dp_get_peer_stats_deter,
 	.txrx_update_pdev_chan_util_stats = dp_update_pdev_chan_util_stats,
 	.txrx_pdev_erp_stats = dp_get_pdev_erp_stats,
+#ifdef QCA_PEER_EXT_STATS
+	.txrx_get_peer_tx_ext_stats = dp_get_peer_tx_ext_stats,
+#endif
 #endif
 	.txrx_get_peer_extd_rate_link_stats =
 					dp_get_peer_extd_rate_link_stats,
@@ -13107,6 +13130,7 @@ static struct cdp_sawf_ops dp_ops_sawf = {
 	.txrx_sawf_set_sla_params = dp_sawf_set_sla_params,
 	.txrx_sawf_init_telemtery_params = dp_sawf_init_telemetry_params,
 	.telemetry_get_throughput_stats = dp_sawf_get_tx_stats,
+	.telemetry_get_msduq_tx_stats = dp_sawf_get_msduq_tx_stats,
 	.telemetry_get_mpdu_stats = dp_sawf_get_mpdu_sched_stats,
 	.telemetry_get_drop_stats = dp_sawf_get_drop_stats,
 	.peer_config_ul = dp_sawf_peer_config_ul,

@@ -342,6 +342,16 @@ enum protected_dual_actioncode {
 };
 
 /**
+ * enum chan_usage_mode - Channel usage mode types
+ * @CHAN_USAGE_AIDABLE_BSS_CSA_REQ: Channel usage aided BSS CSA request.
+ * @CHAN_USAGE_CAPABILITY_NOTIFY: Channel usage capability notification.
+ */
+enum chan_usage_mode {
+	CHAN_USAGE_AIDABLE_BSS_CSA_REQ = 4,
+	CHAN_USAGE_CAPABILITY_NOTIFY = 5,
+};
+
+/**
  * enum wnm_actioncode - wnm action frames
  * @WNM_BSS_TM_QUERY: wnm bss tm query frame
  * @WNM_BSS_TM_REQUEST: wnm bss tm request frame
@@ -355,6 +365,8 @@ enum protected_dual_actioncode {
  * @WNM_SLEEP_RESP: wnm sleep response frame
  * @WNM_TIM_REQ: wnm Tim broadcast request frame
  * @WNM_TIM_RESP: wnm Tim broadcast response frame
+ * @WNM_CHAN_USAGE_REQ: wnm channel usage request frame
+ * @WNM_CHAN_USAGE_RESP: wnm channel usage response frame
  * @WNM_NOTIF_REQUEST: wnm notify request frame
  * @WNM_NOTIF_RESPONSE: wnm notify response frame
  */
@@ -371,6 +383,8 @@ enum wnm_actioncode {
 	WNM_SLEEP_RESP = 17,
 	WNM_TIM_REQ = 18,
 	WNM_TIM_RESP = 19,
+	WNM_CHAN_USAGE_REQ = 21,
+	WNM_CHAN_USAGE_RESP = 22,
 	WNM_NOTIF_REQUEST = 26,
 	WNM_NOTIF_RESPONSE = 27,
 };
@@ -629,6 +643,8 @@ struct action_frm_hdr {
  * @MGMT_ACTION_WNM_SLEEP_RESP: wnm sleep response frame
  * @MGMT_ACTION_WNM_TIM_REQ:    wnm Tim broadcast request frame
  * @MGMT_ACTION_WNM_TIM_RESP:   wnm Tim broadcast response frame
+ * @MGMT_ACTION_WNM_CHAN_USAGE_REQ: wnm channel usage request frame
+ * @MGMT_ACTION_WNM_CHAN_USAGE_RESP: wnm channel usage response frame
  * @MGMT_ACTION_TDLS_SETUP_REQ:     tdls setup request action frame
  * @MGMT_ACTION_TDLS_SETUP_RSP:     tdls setup response frame
  * @MGMT_ACTION_TDLS_SETUP_CNF:     tdls setup confirm frame
@@ -767,6 +783,8 @@ enum mgmt_frame_type {
 	MGMT_ACTION_WNM_SLEEP_RESP,
 	MGMT_ACTION_WNM_TIM_REQ,
 	MGMT_ACTION_WNM_TIM_RESP,
+	MGMT_ACTION_WNM_CHAN_USAGE_REQ,
+	MGMT_ACTION_WNM_CHAN_USAGE_RESP,
 	MGMT_ACTION_TDLS_SETUP_REQ,
 	MGMT_ACTION_TDLS_SETUP_RSP,
 	MGMT_ACTION_TDLS_SETUP_CNF,

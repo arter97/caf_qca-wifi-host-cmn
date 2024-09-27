@@ -553,6 +553,23 @@ void ucfg_ipa_event_wq(struct wlan_objmgr_psoc *psoc,
 		       struct wlan_objmgr_vdev *vdev,
 		       enum wlan_ipa_wlan_event wlan_event);
 #endif
+
+/**
+ * ucfg_ipa_set_shared_smmu_enable() - set g_ipa_shared_smmu_enable
+ * @flag: flag to set g_ipa_shared_smmu_enable
+ *
+ * Return: None
+ */
+void ucfg_ipa_set_shared_smmu_enable(bool flag);
+
+/**
+ * ucfg_ipa_get_shared_smmu_enable() - check if IPA shared SMMU is disabled
+ *                                     in pld
+ *
+ * Return: g_ipa_shared_smmu_enable
+ */
+bool ucfg_ipa_get_shared_smmu_enable(void);
+
 #else
 static inline void ucfg_ipa_set_pld_enable(bool flag)
 {
@@ -838,5 +855,15 @@ static inline bool ucfg_ipa_is_two_tx_pipes_enabled(void)
 {
 	return false;
 }
+
+static inline void ucfg_ipa_set_shared_smmu_enable(bool flag)
+{
+}
+
+static inline bool ucfg_ipa_get_shared_smmu_enable(void)
+{
+	return false;
+}
+
 #endif /* IPA_OFFLOAD */
 #endif /* _WLAN_IPA_UCFG_API_H_ */

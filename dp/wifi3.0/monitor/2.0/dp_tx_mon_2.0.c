@@ -622,7 +622,9 @@ void dp_print_pdev_tx_monitor_stats_2_0(struct dp_pdev *pdev)
 		     sizeof(struct dp_tx_monitor_drop_stats));
 
 	/* TX monitor stats needed for beryllium */
-	DP_PRINT_STATS("\n\tTX Capture BE stats mode[%d]:", tx_mon_be->mode);
+	DP_PRINT_STATS("\tTX Capture BE stats mode[%d]:", tx_mon_be->mode);
+	DP_PRINT_STATS("\tTx lite_mon enabled : %u",
+		       dp_lite_mon_is_tx_enabled(mon_pdev));
 	DP_PRINT_STATS("\tbuffer pending : %u", tx_mon_be->last_frag_q_idx);
 	DP_PRINT_STATS("\treplenish count: %llu",
 		       stats.totat_tx_mon_replenish_cnt);
@@ -636,6 +638,7 @@ void dp_print_pdev_tx_monitor_stats_2_0(struct dp_pdev *pdev)
 	DP_PRINT_STATS("\t\tfree      : %llu", stats.pkt_buf_free);
 	DP_PRINT_STATS("\t\tprocessed : %llu", stats.pkt_buf_processed);
 	DP_PRINT_STATS("\t\tdrop      : %llu", stats.pkt_buf_drop);
+	DP_PRINT_STATS("\t\tradiotap err  : %llu", stats.pkt_buf_radiotap_err);
 	DP_PRINT_STATS("\t\tto stack  : %llu", stats.pkt_buf_to_stack);
 	DP_PRINT_STATS("\tppdu info");
 	DP_PRINT_STATS("\t\tthreshold : %llu", stats.ppdu_info_drop_th);
@@ -1436,6 +1439,9 @@ dp_tx_mon_generate_cts_rx_frm(struct dp_pdev *pdev,
 	usr_mpdu_q = &TXMON_PPDU_USR(ppdu_info, 0, mpdu_q);
 
 	nbuf = qdf_nbuf_queue_first(usr_mpdu_q);
+	if (qdf_unlikely(!nbuf))
+		return NULL;
+
 	if (dp_tx_mon_nbuf_get_num_frag(nbuf)) {
 		wh = (struct ieee80211_frame *)qdf_nbuf_get_frag_addr(nbuf, 0);
 	} else {
@@ -1511,9 +1517,13 @@ dp_tx_mon_generate_cts_rx_frm(struct dp_pdev *pdev,
 
 		dp_tx_mon_update_rx_status(&rx_ppdu_info->hal_txmon.rx_status,
 					   ppdu_info);
-		qdf_nbuf_update_radiotap(&rx_ppdu_info->hal_txmon.rx_status,
-					 rtap_nbuf,
-					 qdf_nbuf_headroom(rtap_nbuf));
+		if (!qdf_nbuf_update_radiotap
+				(&rx_ppdu_info->hal_txmon.rx_status,
+				 rtap_nbuf,
+				 qdf_nbuf_headroom(rtap_nbuf))) {
+			qdf_nbuf_free(rtap_nbuf);
+			return NULL;
+		}
 
 		return rtap_nbuf;
 	}
@@ -1552,6 +1562,9 @@ dp_tx_mon_generate_ack_rx_frm(struct dp_pdev *pdev,
 	usr_mpdu_q = &TXMON_PPDU_USR(ppdu_info, 0, mpdu_q);
 
 	nbuf = qdf_nbuf_queue_first(usr_mpdu_q);
+	if (qdf_unlikely(!nbuf))
+		return NULL;
+
 	if (dp_tx_mon_nbuf_get_num_frag(nbuf)) {
 		wh = (struct ieee80211_frame *)qdf_nbuf_get_frag_addr(nbuf, 0);
 	} else {
@@ -1624,9 +1637,13 @@ dp_tx_mon_generate_ack_rx_frm(struct dp_pdev *pdev,
 		dp_tx_mon_update_rx_status(&rx_ppdu_info->hal_txmon.rx_status,
 					   ppdu_info);
 
-		qdf_nbuf_update_radiotap(&rx_ppdu_info->hal_txmon.rx_status,
-					 rtap_nbuf,
-					 qdf_nbuf_headroom(rtap_nbuf));
+		if (!qdf_nbuf_update_radiotap
+				(&rx_ppdu_info->hal_txmon.rx_status,
+				 rtap_nbuf,
+				 qdf_nbuf_headroom(rtap_nbuf))) {
+			qdf_nbuf_free(rtap_nbuf);
+			return NULL;
+		}
 
 		return rtap_nbuf;
 	}
@@ -1712,6 +1729,12 @@ dp_tx_mon_send_per_usr_mpdu(struct dp_pdev *pdev,
 	qdf_nbuf_t rx_nbuf = NULL;
 	uint8_t mpdu_count = 0;
 	struct dp_tx_ppdu_info *rx_ppdu_info = NULL;
+	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	struct dp_mon_pdev_be *mon_pdev_be =
+			dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
+	struct dp_pdev_tx_monitor_be *tx_mon_be =
+			dp_mon_pdev_get_tx_mon(mon_pdev_be, mac_id);
+
 
 	usr_mpdu_q = &TXMON_PPDU_USR(ppdu_info, user_idx, mpdu_q);
 
@@ -1747,11 +1770,16 @@ dp_tx_mon_send_per_usr_mpdu(struct dp_pdev *pdev,
 					     ++mpdu_count) ||
 		    dp_tx_mon_lpc_type_filtering(pdev, ppdu_info, buf)) {
 			qdf_nbuf_free(buf);
+			tx_mon_be->stats.pkt_buf_drop += num_frag;
 			continue;
 		}
 
-		qdf_nbuf_update_radiotap(&ppdu_info->hal_txmon.rx_status,
-					 buf, qdf_nbuf_headroom(buf));
+		if (!qdf_nbuf_update_radiotap(&ppdu_info->hal_txmon.rx_status,
+					      buf, qdf_nbuf_headroom(buf))) {
+			qdf_nbuf_free(buf);
+			tx_mon_be->stats.pkt_buf_radiotap_err += num_frag;
+			continue;
+		}
 
 		dp_tx_mon_send_to_stack(pdev, buf, num_frag,
 					TXMON_PPDU(ppdu_info, ppdu_id),

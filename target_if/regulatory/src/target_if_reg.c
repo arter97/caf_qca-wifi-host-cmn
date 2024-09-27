@@ -371,8 +371,27 @@ static void tgt_reg_mem_free_fcc_rules(struct cur_regulatory_info *reg_info)
 {
 	qdf_mem_free(reg_info->fcc_rules_ptr);
 }
+
+/**
+ * tgt_reg_mem_free_addn_reg_rules_order() - Free addn_reg_rules_order
+ * @reg_info: Pointer to regulatory info
+ *
+ * Return: None
+ */
+static void tgt_reg_mem_free_addn_reg_rules_order(
+		struct cur_regulatory_info *reg_info)
+{
+	if (reg_info->addn_reg_rule_order)
+		qdf_mem_free(reg_info->addn_reg_rule_order);
+}
 #else
-static void tgt_reg_mem_free_fcc_rules(struct cur_regulatory_info *reg_info)
+static inline void tgt_reg_mem_free_fcc_rules(
+		struct cur_regulatory_info *reg_info)
+{
+}
+
+static inline void tgt_reg_mem_free_addn_reg_rules_order(
+		 struct cur_regulatory_info *reg_info)
 {
 }
 #endif
@@ -454,6 +473,7 @@ clean:
 	qdf_mem_free(reg_info->reg_rules_2g_ptr);
 	qdf_mem_free(reg_info->reg_rules_5g_ptr);
 	tgt_reg_mem_free_fcc_rules(reg_info);
+	tgt_reg_mem_free_addn_reg_rules_order(reg_info);
 
 	for (i = 0; i < REG_CURRENT_MAX_AP_TYPE; i++) {
 		qdf_mem_free(reg_info->reg_rules_6g_ap_ptr[i]);

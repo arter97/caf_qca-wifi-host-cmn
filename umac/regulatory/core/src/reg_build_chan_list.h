@@ -245,7 +245,7 @@ QDF_STATUS reg_eirp_2_psd(struct wlan_objmgr_pdev *pdev,
 static inline bool
 reg_is_supp_pwr_mode_invalid(enum supported_6g_pwr_types supp_pwr_mode)
 {
-	return (supp_pwr_mode < REG_AP_LPI || supp_pwr_mode > REG_CLI_SUB_VLP);
+	return (supp_pwr_mode < REG_AP_LPI || supp_pwr_mode >= REG_MAX_POWER_MODE);
 }
 
 /**

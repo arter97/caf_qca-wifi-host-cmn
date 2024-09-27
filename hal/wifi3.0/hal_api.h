@@ -838,6 +838,88 @@ static inline void hal_write32_mb_confirm_retry(struct hal_soc *hal_soc,
 }
 #endif /* GENERIC_SHADOW_REGISTER_ACCESS_ENABLE */
 
+#if defined(FEATURE_HAL_DELAYED_REG_WRITE) && defined(DELAYED_REG_FORCE_WRITE)
+#define HAL_DELAY_REG_FORCE_WRITE_HANG_THRESH 50
+/**
+ * hal_srng_delay_reg_force_write_detect() - Detect if force register direct
+ *                                           writing needed
+ * @hal_ring_hdl: Ring pointer (Source or Destination ring)
+ *
+ * When attempt to write srng register, if register writing is still
+ * pending in delayed register work and no direct register writing happen,
+ * once this hit with threshold HAL_DELAY_REG_FORCE_WRITE_HANG_THRESH
+ * times, then likely register writing is stuck, need to issue a force
+ * direct write next.
+ *
+ * Retuen: None
+ */
+static inline
+void hal_srng_delay_reg_force_write_detect(hal_ring_handle_t hal_ring_hdl)
+{
+	struct hal_srng *srng = (struct hal_srng *)hal_ring_hdl;
+
+	if (!srng->is_last_reg_direct_write && srng->reg_write_in_progress)
+		srng->delay_reg_write_hang_cnt++;
+	else
+		srng->delay_reg_write_hang_cnt = 0;
+
+	if (qdf_unlikely(srng->delay_reg_write_hang_cnt >
+			 HAL_DELAY_REG_FORCE_WRITE_HANG_THRESH)) {
+		srng->force_reg_direct_write = true;
+		srng->wstats.force_direct_write++;
+		hal_err_rl("force write triggered, cnt %u",
+			   srng->wstats.force_direct_write);
+	} else {
+		srng->force_reg_direct_write = false;
+	}
+}
+
+/**
+ * hal_srng_is_delay_reg_force_write() - Get the flag to show if force
+ *                                       register direct writing needed
+ * @srng: Ring pointer (Source or Destination ring)
+ *
+ * Return: true - need force register writing, false - not
+ */
+static inline
+bool hal_srng_is_delay_reg_force_write(struct hal_srng *srng)
+{
+	return  srng->force_reg_direct_write;
+}
+
+/**
+ * hal_srng_delay_reg_record_direct_write() - Record if current register
+ *                                            update by direct writing or not
+ * @srng: Ring pointer (Source or Destination ring)
+ * @is_direct_write: direct register writes or not
+ *
+ * Return: None
+ */
+static inline
+void hal_srng_delay_reg_record_direct_write(struct hal_srng *srng,
+					    bool is_direct_write)
+{
+	srng->is_last_reg_direct_write = is_direct_write;
+}
+#else
+static inline
+void hal_srng_delay_reg_force_write_detect(hal_ring_handle_t hal_ring_hdl)
+{
+}
+
+static inline
+bool hal_srng_is_delay_reg_force_write(struct hal_srng *srng)
+{
+	return false;
+}
+
+static inline
+void hal_srng_delay_reg_record_direct_write(struct hal_srng *srng,
+					    bool is_direct_write)
+{
+}
+#endif
+
 #if defined(FEATURE_HAL_DELAYED_REG_WRITE)
 /**
  * hal_dump_reg_write_srng_stats() - dump SRNG reg write stats

@@ -549,10 +549,10 @@ dp_rx_buffers_is_skip_replenish(struct dp_soc *soc,
 	uint64_t required_count, in_use_count, reclaim_count;
 	uint32_t num_alloc_buffers = *num_req_buffers;
 
-	if (rx_desc_pool->desc_type != QDF_DP_RX_DESC_BUF_TYPE)
+	required_count = qdf_atomic_read(&rx_desc_pool->required_count);
+	if (!required_count)
 		return false;
 
-	required_count = qdf_atomic_read(&rx_desc_pool->required_count);
 	in_use_count = qdf_atomic_read(&rx_desc_pool->in_use_count);
 
 	if (in_use_count > required_count) {

@@ -1530,6 +1530,57 @@ dp_peer_get_tx_rx_stats(struct dp_peer *peer,
 }
 #endif
 
+static uint8_t dp_mon_get_802_11_sec_hdr_len(uint8_t enc_type)
+{
+	switch (enc_type) {
+	case cdp_sec_type_wep40:
+	case cdp_sec_type_wep104:
+	case cdp_sec_type_wep128:
+		return (dp_f_wep.ic_header + dp_f_wep.ic_trailer +
+			dp_f_wep.ic_miclen);
+	case cdp_sec_type_tkip:
+		return (dp_f_tkip.ic_header + dp_f_tkip.ic_trailer +
+			dp_f_tkip.ic_miclen);
+	case cdp_sec_type_aes_ccmp:
+		return (dp_f_ccmp.ic_header + dp_f_ccmp.ic_trailer +
+			dp_f_ccmp.ic_miclen);
+	case cdp_sec_type_wapi:
+	case cdp_sec_type_aes_ccmp_256:
+	case cdp_sec_type_aes_gcmp:
+	case cdp_sec_type_aes_gcmp_256:
+		return (dp_f_gcmp.ic_header + dp_f_gcmp.ic_trailer +
+			dp_f_gcmp.ic_miclen);
+	default:
+		return 0;
+	}
+}
+
+uint8_t
+dp_mon_get_802_11_hdr_length(struct cdp_rx_stats_ppdu_user *ppdu_user)
+{
+	uint8_t wifi_hdr_len = 0;
+	uint16_t fc = 0;
+
+	wifi_hdr_len = sizeof(struct ieee80211_frame);
+
+	if (!ppdu_user->frame_control_info_valid)
+		return wifi_hdr_len;
+
+	fc = ppdu_user->frame_control;
+
+	if ((((fc & DP_RX_MON_DSTODS_MASK) >> DP_RX_MON_DSTODS_BITS) &
+		IEEE80211_FC1_DIR_MASK) == IEEE80211_FC1_DIR_DSTODS) {
+		wifi_hdr_len += QDF_MAC_ADDR_SIZE;
+	}
+
+	if (fc & QDF_IEEE80211_FC0_SUBTYPE_QOS)
+		wifi_hdr_len += DP_RX_MON_QOS_LEN;
+
+	wifi_hdr_len += dp_mon_get_802_11_sec_hdr_len(ppdu_user->enc_type);
+
+	return wifi_hdr_len;
+}
+
 QDF_STATUS dp_peer_stats_notify(struct dp_pdev *dp_pdev, struct dp_peer *peer)
 {
 	struct cdp_interface_peer_stats peer_stats_intf = {0};
@@ -3348,7 +3399,7 @@ dp_tx_stats_update(struct dp_pdev *pdev, struct dp_peer *peer,
 	num_msdu = ppdu->num_msdu;
 	num_mpdu = ppdu->mpdu_success;
 	mpdu_tried = ppdu->mpdu_tried_ucast + ppdu->mpdu_tried_mcast;
-	mpdu_failed = mpdu_tried - num_mpdu;
+	mpdu_failed = ppdu->mpdu_failed;
 	tx_byte_count = ppdu->success_bytes;
 
 	/* If the peer statistics are already processed as part of
@@ -6708,6 +6759,25 @@ dp_mon_peer_get_stats_param(struct dp_peer *peer, enum cdp_peer_stats_type type,
 
 	return ret;
 }
+
+#ifdef QCA_PEER_EXT_STATS
+void dp_mon_peer_get_tx_ext_stats(struct dp_peer *peer,
+				  struct cdp_telemetry_peer_tx_ext_stats *stats)
+{
+	uint8_t pkt_type_index, mcs_index;
+
+	if (!peer->monitor_peer)
+		return;
+
+	stats->avg_ack_rssi = CDP_SNR_OUT(peer->monitor_peer->stats.tx.avg_ack_rssi);
+	for (pkt_type_index = 0; pkt_type_index < DOT11_MAX; pkt_type_index++) {
+		for (mcs_index = 0; mcs_index < MAX_MCS; mcs_index++) {
+			stats->packet_type[pkt_type_index].mcs_count[mcs_index] =
+			peer->monitor_peer->stats.tx.pkt_type[pkt_type_index].mcs_count[mcs_index];
+		}
+	}
+}
+#endif
 #endif
 
 void dp_mon_ops_register(struct dp_soc *soc)

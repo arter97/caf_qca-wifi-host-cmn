@@ -98,6 +98,21 @@ void ipa_set_pld_enable(bool flag);
 bool ipa_get_pld_enable(void);
 
 /**
+ * ipa_set_shared_smmu_enable() - set g_ipa_shared_smmu_enable
+ * @flag: flag to set g_ipa_shared_smmu_enable
+ *
+ * Return: None
+ */
+void ipa_set_shared_smmu_enable(bool flag);
+
+/**
+ * ipa_get_shared_smmu_enable() - check if IPA shared smmu is disabled in pld
+ *
+ * Return: g_ipa_shared_smmu_enable
+ */
+bool ipa_get_shared_smmu_enable(void);
+
+/**
  * ipa_check_hw_present() - get IPA hw status
  *
  * ipa_uc_reg_rdyCB is not directly designed to check

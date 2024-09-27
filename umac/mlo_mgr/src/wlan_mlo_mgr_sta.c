@@ -302,7 +302,7 @@ mlo_send_link_disconnect(struct wlan_objmgr_vdev *vdev,
 	return QDF_STATUS_SUCCESS;
 }
 
-static void mlo_free_copied_conn_req(struct wlan_mlo_sta *sta_ctx)
+void mlo_free_copied_conn_req(struct wlan_mlo_sta *sta_ctx)
 {
 	if (sta_ctx) {
 		mlo_debug("enter");
@@ -1087,7 +1087,7 @@ static void mlo_send_link_connect(struct wlan_objmgr_vdev *vdev,
 					     ml_parnter_info,
 					     &valid_idx)) {
 			if (valid_idx == WLAN_UMAC_MLO_MAX_VDEVS) {
-				mlo_debug("Valid link not found", valid_idx);
+				mlo_debug("Valid link not found");
 				mlo_release_vdev_ref(wlan_vdev_list[i]);
 				continue;
 			}

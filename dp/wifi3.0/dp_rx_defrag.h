@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -35,19 +35,6 @@
 
 #define UNI_DESC_OWNER_SW 0x1
 #define UNI_DESC_BUF_TYPE_RX_MSDU_LINK 0x6
-/**
- * struct dp_rx_defrag_cipher: structure to indicate cipher header
- * @ic_name: Name
- * @ic_header: header length
- * @ic_trailer: trail length
- * @ic_miclen: MIC length
- */
-struct dp_rx_defrag_cipher {
-	const char *ic_name;
-	uint16_t ic_header;
-	uint8_t ic_trailer;
-	uint8_t ic_miclen;
-};
 
 #ifndef WLAN_SOFTUMAC_SUPPORT /* WLAN_SOFTUMAC_SUPPORT */
 /**

@@ -1307,6 +1307,29 @@ wlan_reg_get_bonded_chan_entry(qdf_freq_t freq, enum phy_ch_width chwidth,
 	return reg_get_bonded_chan_entry(freq, chwidth, cen320_freq);
 }
 
+#ifdef CONFIG_REG_CLIENT
+uint16_t wlan_reg_get_reg_punc_bitmap(struct ch_params *ch_params)
+{
+	return reg_get_reg_punc_bitmap(ch_params);
+}
+
+uint16_t wlan_reg_get_input_punc_bitmap(struct ch_params *ch_params)
+{
+	return reg_get_input_punc_bitmap(ch_params);
+}
+
+void wlan_reg_set_input_punc_bitmap(struct ch_params *ch_params,
+				    uint16_t punc_bitmap)
+{
+	return reg_set_input_punc_bitmap(ch_params, punc_bitmap);
+}
+
+void wlan_reg_set_non_eht_ch_params(struct ch_params *ch_params, bool val)
+{
+	return reg_set_non_eht_ch_params(ch_params, val);
+}
+#endif
+
 #ifdef WLAN_FEATURE_11BE
 #ifdef CONFIG_REG_6G_PWRMODE
 void

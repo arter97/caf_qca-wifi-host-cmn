@@ -3045,4 +3045,6 @@ void hif_get_wlan_rx_time_stats(struct hif_opaque_softc *hif_ctx,
 void hif_check_and_apply_irq_affinity(struct hif_opaque_softc *hif_ctx,
 				      uint8_t grp_id, uint32_t cpu_id);
 #endif
+QDF_STATUS hif_bus_get_device_handle(struct hif_opaque_softc *hif_ctx,
+				     void **handle);
 #endif /* _HIF_H_ */

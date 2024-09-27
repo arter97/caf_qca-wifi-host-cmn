@@ -1428,6 +1428,7 @@ static QDF_STATUS mlo_dev_ctx_deinit(struct wlan_objmgr_vdev *vdev)
 			connect_req = ml_dev->sta_ctx->connect_req;
 			wlan_cm_free_connect_req(connect_req);
 
+			mlo_free_copied_conn_req(ml_dev->sta_ctx);
 			if (ml_dev->sta_ctx->disconn_req)
 				qdf_mem_free(ml_dev->sta_ctx->disconn_req);
 

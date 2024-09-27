@@ -131,8 +131,8 @@ QDF_STATUS if_mgr_deliver_event(struct wlan_objmgr_vdev *vdev,
 	if (!psoc)
 		return QDF_STATUS_E_FAILURE;
 
-	ifmgr_debug("IF MGR event received: %s(%d)",
-		    if_mgr_get_event_str(event), event);
+	ifmgr_debug("vdev %d event: %s(%d)",
+		    wlan_vdev_get_id(vdev), if_mgr_get_event_str(event), event);
 
 	switch (event) {
 	case WLAN_IF_MGR_EV_CONNECT_START:

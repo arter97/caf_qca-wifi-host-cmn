@@ -1111,6 +1111,35 @@ static inline QDF_STATUS cdp_get_peer_telemetry_stats(
 					soc, addr, stats);
 }
 
+#ifdef QCA_PEER_EXT_STATS
+/**
+ * cdp_get_peer_tx_ext_stats() - function to get peer tx ext stats
+ * @soc: soc handle
+ * @addr: peer address
+ * @stats: pointer to peer tx stats
+ *
+ * Return: status
+ */
+static inline QDF_STATUS cdp_get_peer_tx_ext_stats(
+				ol_txrx_soc_handle soc,
+				uint8_t *addr,
+				void *stats)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance");
+		QDF_BUG(0);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!soc->ops->host_stats_ops ||
+	    !soc->ops->host_stats_ops->txrx_get_peer_tx_ext_stats)
+		return QDF_STATUS_E_FAILURE;
+
+	return soc->ops->host_stats_ops->txrx_get_peer_tx_ext_stats(
+					soc, addr, stats);
+}
+#endif
+
 /**
  * cdp_get_pdev_stats_deter(): function to get pdev deterministic stats pointer
  * @soc: soc handle

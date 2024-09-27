@@ -85,6 +85,8 @@
 #define dp_rx_err_err(params...) \
 	QDF_TRACE_ERROR(QDF_MODULE_ID_DP_RX_ERROR, params)
 
+#define CRITICAL_BUFFER_THRESHOLD	64
+
 /**
  * enum dp_rx_desc_state
  *
@@ -876,7 +878,7 @@ static inline bool dp_rx_is_sw_cookie_valid(struct dp_soc *soc,
 static inline void
 dp_rx_desc_inc_in_use_count(struct rx_desc_pool *rx_desc_pool, uint32_t count)
 {
-	if (rx_desc_pool->desc_type == QDF_DP_RX_DESC_BUF_TYPE)
+	if (qdf_atomic_read(&rx_desc_pool->required_count))
 		qdf_atomic_add(count, &rx_desc_pool->in_use_count);
 }
 
@@ -893,7 +895,7 @@ static inline void
 dp_rx_desc_dec_in_use_count(struct rx_desc_pool *rx_desc_pool,
 			    uint32_t num_req, uint32_t num_alloc)
 {
-	if (rx_desc_pool->desc_type == QDF_DP_RX_DESC_BUF_TYPE)
+	if (qdf_atomic_read(&rx_desc_pool->required_count))
 		qdf_atomic_sub((num_req - num_alloc),
 			       &rx_desc_pool->in_use_count);
 }
@@ -910,14 +912,20 @@ dp_rx_buffers_is_critical_threshold(struct rx_desc_pool *rx_desc_pool)
 {
 	uint64_t required_count, in_use_count;
 
-	if (rx_desc_pool->desc_type != QDF_DP_RX_DESC_BUF_TYPE)
+	required_count = qdf_atomic_read(&rx_desc_pool->required_count);
+	/*check if required count is set as part of resource mgr attach*/
+	if (!required_count)
 		return true;
 
-	required_count = qdf_atomic_read(&rx_desc_pool->required_count);
 	in_use_count = qdf_atomic_read(&rx_desc_pool->in_use_count);
 
-	if (required_count > in_use_count)
-		return ((required_count - in_use_count) > (required_count/3)) ? true : false;
+	/*
+	 * If debt is created because of memory alloc failures,
+	 * this will help to replenish additional buffers.
+	 */
+	if (required_count > in_use_count &&
+	    (required_count - in_use_count >= CRITICAL_BUFFER_THRESHOLD))
+		return true;
 
 	return false;
 }
@@ -1852,7 +1860,6 @@ dp_rx_update_flow_tag(struct dp_soc *soc, struct dp_vdev *vdev,
 }
 #endif /* WLAN_SUPPORT_RX_FLOW_TAG */
 
-#define CRITICAL_BUFFER_THRESHOLD	64
 /**
  * __dp_rx_buffers_replenish() - replenish rxdma ring with rx nbufs
  *			       called during dp rx initialization

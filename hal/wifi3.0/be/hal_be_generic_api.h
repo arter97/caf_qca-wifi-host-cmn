@@ -1215,11 +1215,11 @@ hal_txmon_parse_user_desc_common(void *tx_tlv, uint32_t user_id,
 	usr_common.num_users = TXMON_HAL(ppdu_info, num_users);
 	hal_txmon_get_user_desc_common(tx_tlv, &usr_common);
 
-	TXMON_HAL_STATUS(ppdu_info,
-			 he_mu_flags) = IS_MULTI_USERS(usr_common.num_users);
-
 	switch (TXMON_HAL_STATUS(ppdu_info, preamble_type)) {
 	case TXMON_PKT_TYPE_11AX:
+		TXMON_HAL_STATUS(ppdu_info, he_mu_flags) =
+					IS_MULTI_USERS(usr_common.num_users);
+
 		if (TXMON_HAL_STATUS(ppdu_info, he_flags))
 			hal_txmon_populate_he_data_common(&usr_common,
 							  user_id, ppdu_info);

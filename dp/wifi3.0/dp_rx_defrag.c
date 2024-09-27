@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -43,6 +43,8 @@ const struct dp_rx_defrag_cipher dp_f_ccmp = {
 	0,
 };
 
+qdf_export_symbol(dp_f_ccmp);
+
 const struct dp_rx_defrag_cipher dp_f_tkip = {
 	"TKIP",
 	IEEE80211_WEP_IVLEN + IEEE80211_WEP_KIDLEN + IEEE80211_WEP_EXTIVLEN,
@@ -50,12 +52,16 @@ const struct dp_rx_defrag_cipher dp_f_tkip = {
 	IEEE80211_WEP_MICLEN,
 };
 
+qdf_export_symbol(dp_f_tkip);
+
 const struct dp_rx_defrag_cipher dp_f_wep = {
 	"WEP",
 	IEEE80211_WEP_IVLEN + IEEE80211_WEP_KIDLEN,
 	IEEE80211_WEP_CRCLEN,
 	0,
 };
+
+qdf_export_symbol(dp_f_wep);
 
 /*
  * The header and mic length are same for both
@@ -67,6 +73,8 @@ const struct dp_rx_defrag_cipher dp_f_gcmp = {
 	WLAN_IEEE80211_GCMP_MICLEN,
 	WLAN_IEEE80211_GCMP_MICLEN,
 };
+
+qdf_export_symbol(dp_f_gcmp);
 
 /**
  * dp_rx_defrag_frames_free() - Free fragment chain

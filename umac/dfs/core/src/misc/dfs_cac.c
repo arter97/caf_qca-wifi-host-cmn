@@ -2,7 +2,7 @@
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  * Copyright (c) 2007-2008 Sam Leffler, Errno Consulting
  * All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -324,11 +324,13 @@ void dfs_send_dfs_events_for_chan(struct wlan_dfs *dfs,
 	 * After NOL timeout, WLAN_EV_CAC_RESET should be posted.
 	 */
 	for (i = 0; i < nchannels; i++) {
+		enum WLAN_DFS_EVENTS curr_event = event;
+
 		if (wlan_reg_is_nol_for_freq(dfs->dfs_pdev_obj, freq_list[i]))
-			event = WLAN_EV_NOL_STARTED;
+			curr_event = WLAN_EV_NOL_STARTED;
 		utils_dfs_deliver_event(dfs->dfs_pdev_obj,
 					freq_list[i],
-					event);
+					curr_event);
 	}
 }
 

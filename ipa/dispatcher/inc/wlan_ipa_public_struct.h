@@ -85,15 +85,17 @@ enum wlan_ipa_wlan_event {
 };
 
 /**
- * enum wlan_ipa_bw_level -ipa bandwidth level
+ * enum wlan_ipa_bw_level - IPA bandwidth level
  * @WLAN_IPA_BW_LEVEL_LOW: vote for low bandwidth
  * @WLAN_IPA_BW_LEVEL_MEDIUM: vote for medium bandwidth
  * @WLAN_IPA_BW_LEVEL_HIGH: vote for high bandwidth
+ * @WLAN_IPA_BW_LEVEL_MAX: Max value for the enum
  */
 enum wlan_ipa_bw_level {
 	WLAN_IPA_BW_LEVEL_LOW,
 	WLAN_IPA_BW_LEVEL_MEDIUM,
 	WLAN_IPA_BW_LEVEL_HIGH,
+	WLAN_IPA_BW_LEVEL_MAX
 };
 
 #ifdef IPA_OPT_WIFI_DP

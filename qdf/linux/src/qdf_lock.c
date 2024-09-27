@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -262,7 +262,13 @@ const char *qdf_wake_lock_name(qdf_wake_lock_t *lock)
 #endif
 qdf_export_symbol(qdf_wake_lock_name);
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 110)) || \
+#if defined(QDF_NO_WAKE_LOCK_SUPPORT)
+QDF_STATUS __qdf_wake_lock_create(qdf_wake_lock_t *lock, const char *name,
+				  const char *func, uint32_t line)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 110)) || \
 	defined(WAKEUP_SOURCE_DEV)
 QDF_STATUS __qdf_wake_lock_create(qdf_wake_lock_t *lock, const char *name,
 				  const char *func, uint32_t line)
@@ -308,7 +314,12 @@ QDF_STATUS __qdf_wake_lock_create(qdf_wake_lock_t *lock, const char *name,
 #endif
 qdf_export_symbol(__qdf_wake_lock_create);
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
+#if defined(QDF_NO_WAKE_LOCK_SUPPORT)
+QDF_STATUS qdf_wake_lock_acquire(qdf_wake_lock_t *lock, uint32_t reason)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
 QDF_STATUS qdf_wake_lock_acquire(qdf_wake_lock_t *lock, uint32_t reason)
 {
 	host_diag_log_wlock(reason, qdf_wake_lock_name(lock),
@@ -326,7 +337,12 @@ QDF_STATUS qdf_wake_lock_acquire(qdf_wake_lock_t *lock, uint32_t reason)
 #endif
 qdf_export_symbol(qdf_wake_lock_acquire);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0)
+#if defined(QDF_NO_WAKE_LOCK_SUPPORT)
+QDF_STATUS qdf_wake_lock_timeout_acquire(qdf_wake_lock_t *lock, uint32_t msec)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0)
 QDF_STATUS qdf_wake_lock_timeout_acquire(qdf_wake_lock_t *lock, uint32_t msec)
 {
 	pm_wakeup_ws_event(lock->priv, msec, true);
@@ -349,7 +365,12 @@ QDF_STATUS qdf_wake_lock_timeout_acquire(qdf_wake_lock_t *lock, uint32_t msec)
 #endif /* LINUX_VERSION_CODE */
 qdf_export_symbol(qdf_wake_lock_timeout_acquire);
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
+#if defined(QDF_NO_WAKE_LOCK_SUPPORT)
+QDF_STATUS qdf_wake_lock_release(qdf_wake_lock_t *lock, uint32_t reason)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
 QDF_STATUS qdf_wake_lock_release(qdf_wake_lock_t *lock, uint32_t reason)
 {
 	host_diag_log_wlock(reason, qdf_wake_lock_name(lock),
@@ -367,7 +388,12 @@ QDF_STATUS qdf_wake_lock_release(qdf_wake_lock_t *lock, uint32_t reason)
 #endif
 qdf_export_symbol(qdf_wake_lock_release);
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 110)) || \
+#if defined(QDF_NO_WAKE_LOCK_SUPPORT)
+void __qdf_wake_lock_destroy(qdf_wake_lock_t *lock,
+			     const char *func, uint32_t line)
+{
+}
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 110)) || \
 	defined(WAKEUP_SOURCE_DEV)
 void __qdf_wake_lock_destroy(qdf_wake_lock_t *lock,
 			     const char *func, uint32_t line)

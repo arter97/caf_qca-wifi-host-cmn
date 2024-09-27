@@ -467,6 +467,12 @@ mgmt_get_wnm_action_subtype(uint8_t action_code)
 	case WNM_TIM_RESP:
 		frm_type = MGMT_ACTION_WNM_TFS_RESP;
 		break;
+	case WNM_CHAN_USAGE_REQ:
+		frm_type = MGMT_ACTION_WNM_CHAN_USAGE_REQ;
+		break;
+	case WNM_CHAN_USAGE_RESP:
+		frm_type = MGMT_ACTION_WNM_CHAN_USAGE_RESP;
+		break;
 	default:
 		frm_type = MGMT_FRM_UNSPECIFIED;
 		break;

@@ -1121,6 +1121,10 @@ QDF_STATUS __dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 				 (unsigned long long)(nbuf_frag_info.paddr),
 				 (*desc_list)->rx_desc.cookie);
 
+		if (qdf_likely(!rx_desc_pool->rx_mon_dest_frag_enable))
+			qdf_assert_always(nbuf_frag_info.paddr ==
+				QDF_NBUF_CB_PADDR((*desc_list)->rx_desc.nbuf));
+
 		hal_rxdma_buff_addr_info_set(dp_soc->hal_soc, rxdma_ring_entry,
 					     nbuf_frag_info.paddr,
 						(*desc_list)->rx_desc.cookie,
@@ -3809,7 +3813,15 @@ dp_rx_set_req_buff_descs(struct cdp_soc_t *cdp_soc,
 		return QDF_STATUS_E_INVAL;
 	}
 
+	if (rx_desc_pool->desc_type != QDF_DP_RX_DESC_BUF_TYPE) {
+		dp_err("Rx descriptor pool is not of buffer type");
+		return QDF_STATUS_E_INVAL;
+	}
+
 	qdf_atomic_set(&rx_desc_pool->required_count, req_rx_buff_descs);
+
+	dp_rx_page_pool_resize(soc, pdev_id, req_rx_buff_descs);
+
 	dp_info("Req RX buffer descriptors set to %u", req_rx_buff_descs);
 	return QDF_STATUS_SUCCESS;
 }
@@ -3825,6 +3837,11 @@ dp_rx_get_num_buff_descs_info(struct cdp_soc_t *cdp_soc,
 	rx_desc_pool = &soc->rx_desc_buf[pdev_id];
 	if (!rx_desc_pool) {
 		dp_err("Rx descriptor pool not initialized pool_id:%u", pdev_id);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (rx_desc_pool->desc_type != QDF_DP_RX_DESC_BUF_TYPE) {
+		dp_err("Rx descriptor pool is not of buffer type");
 		return QDF_STATUS_E_INVAL;
 	}
 

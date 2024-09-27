@@ -398,6 +398,7 @@ struct wlan_regulatory_psoc_priv_obj {
  * from firmware
  * @indoor_list: List of current indoor station interfaces
  * @keep_6ghz_sta_cli_connection: Keep current STA/P2P client connection
+ * @is_c2c_supp: Flag to check C2C support.
  */
 struct wlan_regulatory_pdev_priv_obj {
 	struct regulatory_channel cur_chan_list[NUM_CHANNELS];
@@ -481,6 +482,7 @@ struct wlan_regulatory_pdev_priv_obj {
 	struct cur_fcc_rule fcc_rules_ptr[MAX_NUM_FCC_RULES];
 	struct indoor_concurrency_list indoor_list[MAX_INDOOR_LIST_SIZE];
 	bool keep_6ghz_sta_cli_connection;
+	bool is_c2c_supp;
 #endif
 };
 

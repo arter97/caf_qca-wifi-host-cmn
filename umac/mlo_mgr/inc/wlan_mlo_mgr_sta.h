@@ -355,6 +355,15 @@ static inline
 void mlo_clear_bridge_sta_ctx(struct wlan_objmgr_vdev *vdev)
 { }
 #endif
+
+/**
+ * mlo_free_copied_conn_req() - API to free copied conn request
+ * @sta_ctx: mlo sta context
+ *
+ * Return: Free copied connect request
+ */
+void mlo_free_copied_conn_req(struct wlan_mlo_sta *sta_ctx);
+
 /**
  * wlan_mlo_get_tdls_link_vdev() - API to get tdls link vdev
  * @vdev: vdev object

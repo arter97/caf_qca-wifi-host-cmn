@@ -887,3 +887,20 @@ void hif_ahb_clear_stats(struct hif_softc *scn)
 	}
 	hif_clear_ce_stats(hif_state);
 }
+
+/**
+ * hif_ahb_get_device_handle()
+ * @hif_ctx: hif context
+ * @handle: placeholder to carry the device pointer
+ *
+ * This callback provides the underlying AHB device handle
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS hif_ahb_get_device_handle(struct hif_softc *hif_ctx, void **handle)
+{
+	struct hif_pci_softc *sc = HIF_GET_PCI_SOFTC(hif_ctx);
+
+	*handle = sc->pdev;
+	return QDF_STATUS_SUCCESS;
+}

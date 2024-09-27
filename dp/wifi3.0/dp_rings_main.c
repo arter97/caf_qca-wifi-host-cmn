@@ -519,6 +519,12 @@ QDF_STATUS dp_srng_init_idx(struct dp_soc *soc, struct dp_srng *srng,
 		dp_srng_set_msi2_ring_params(soc, &ring_params, 0, 0);
 		dp_verbose_debug("Skipping MSI for ring_type: %d, ring_num %d",
 				 ring_type, ring_num);
+		if (soc->arch_ops.dp_register_ppeds_interrupts)
+			if (soc->arch_ops.dp_register_ppeds_interrupts
+								(soc, srng, 0,
+								 ring_type,
+								 ring_num))
+				return QDF_STATUS_E_FAILURE;
 	}
 
 	dp_srng_configure_interrupt_thresholds(soc, &ring_params,
@@ -2218,7 +2224,7 @@ static QDF_STATUS dp_alloc_tx_ring_pair_by_index(struct dp_soc *soc,
 	}
 
 	dp_debug("index %u", index);
-	tx_ring_size = wlan_cfg_tx_ring_size(soc_cfg_ctx);
+	tx_ring_size = wlan_cfg_tx_ring_size(soc_cfg_ctx, index);
 	dp_ipa_get_tx_ring_size(index, &tx_ring_size, soc_cfg_ctx);
 
 	if (dp_srng_alloc(soc, &soc->tcl_data_ring[index], TCL_DATA,
@@ -2227,7 +2233,7 @@ static QDF_STATUS dp_alloc_tx_ring_pair_by_index(struct dp_soc *soc,
 		goto fail1;
 	}
 
-	tx_comp_ring_size = wlan_cfg_tx_comp_ring_size(soc_cfg_ctx);
+	tx_comp_ring_size = wlan_cfg_tx_comp_ring_size(soc_cfg_ctx, index);
 	dp_ipa_get_tx_comp_ring_size(index, &tx_comp_ring_size, soc_cfg_ctx);
 	/* Enable cached TCL desc if NSS offload is disabled */
 	if (!wlan_cfg_get_dp_soc_nss_cfg(soc_cfg_ctx))
@@ -4429,8 +4435,6 @@ QDF_STATUS dp_soc_srng_alloc(struct dp_soc *soc)
 		goto fail1;
 	}
 
-	reo_dst_ring_size = wlan_cfg_get_reo_dst_ring_size(soc_cfg_ctx);
-
 	/* Disable cached desc if NSS offload is enabled */
 	if (wlan_cfg_get_dp_soc_nss_cfg(soc_cfg_ctx))
 		cached = 0;
@@ -4451,6 +4455,8 @@ QDF_STATUS dp_soc_srng_alloc(struct dp_soc *soc)
 
 	for (i = 0; i < soc->num_reo_dest_rings; i++) {
 		/* Setup REO destination ring */
+		reo_dst_ring_size = wlan_cfg_get_reo_dst_ring_size(soc_cfg_ctx,
+								   i);
 		if (dp_srng_alloc(soc, &soc->reo_dest_ring[i], REO_DST,
 				  reo_dst_ring_size, cached)) {
 			dp_init_err("%pK: dp_srng_alloc failed for reo_dest_ring", soc);

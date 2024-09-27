@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022,2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -104,4 +104,41 @@ QDF_STATUS wmi_extract_p2p_lo_stop_ev_param(wmi_unified_t wmi_handle,
 					    struct p2p_lo_event *param);
 #endif /* FEATURE_P2P_LISTEN_OFFLOAD */
 
+#ifdef FEATURE_WLAN_SUPPORT_USD
+/**
+ * wmi_unified_send_p2p_usd_req_cmd() - send P2P USD request command to target
+ * @wmi_handle: WMI handle
+ * @param: P2P USd attributes parameter
+ *
+ * Return: QDF status
+ */
+QDF_STATUS
+wmi_unified_send_p2p_usd_req_cmd(wmi_unified_t wmi_handle,
+				 struct p2p_usd_attr_params *param);
+#endif /* FEATURE_WLAN_SUPPORT_USD */
+
+/**
+ * wmi_unified_p2p_send_ap_assist_dfs_group_params() - Send P2P assisted AP
+ * DFS group params.
+ * @wmi_handle: wmi handle
+ * @params: Params of assisted AP to send to FW to monitor
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS
+wmi_unified_p2p_send_ap_assist_dfs_group_params(wmi_unified_t wmi_handle,
+						struct p2p_ap_assist_dfs_group_params *params);
+
+/**
+ * wmi_extract_p2p_ap_assist_dfs_group_bmiss() - Extract P2P assisted AP DFS
+ * group bmiss event data
+ * @wmi_handle: wmi handle
+ * @ev_buf: Pointer to event buffer
+ * @data: Pointer to save extracted data
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS
+wmi_extract_p2p_ap_assist_dfs_group_bmiss(wmi_unified_t wmi_handle,
+					  void *ev_buf, uint8_t *data);
 #endif /* _WMI_UNIFIED_P2P_API_H_ */

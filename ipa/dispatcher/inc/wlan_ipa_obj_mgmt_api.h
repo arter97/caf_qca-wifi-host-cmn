@@ -137,6 +137,13 @@ bool wlan_ipa_config_is_opt_wifi_dp_enabled(void);
  * Return: IPA config value
  */
 uint32_t get_ipa_config(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * wlan_ipa_is_shared_smmu_enabled() - Is IPA WLAN shared smmu enabled?
+ *
+ * Return: true if IPA WLAN shared smmu is enabled in PLD
+ */
+bool wlan_ipa_is_shared_smmu_enabled(void);
 #else
 
 static inline QDF_STATUS ipa_init(void)
@@ -170,6 +177,11 @@ static inline bool wlan_ipa_config_is_enabled(void)
 }
 
 static inline bool wlan_ipa_is_vlan_enabled(void)
+{
+	return false;
+}
+
+static inline bool wlan_ipa_is_shared_smmu_enabled(void)
 {
 	return false;
 }

@@ -161,6 +161,13 @@ void wlan_ipa_set_perf_level_bw(struct wlan_ipa_priv *ipa_ctx,
 	if (!wlan_ipa_set_perf_level_bw_enabled(ipa_ctx))
 		return;
 
+	ipa_ctx->curr_bw_level = lvl;
+
+	if (!ipa_ctx->uc_loaded) {
+		ipa_info_rl("current bw level %u", ipa_ctx->curr_bw_level);
+		return;
+	}
+
 	ipa_debug("Set perf level to %d", lvl);
 
 	if (lvl == WLAN_IPA_BW_LEVEL_HIGH)

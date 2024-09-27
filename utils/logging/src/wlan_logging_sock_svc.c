@@ -482,7 +482,8 @@ int wlan_log_to_user(QDF_TRACE_LEVEL log_level, char *to_be_sent, int length)
 
 	/* Wakeup logger thread */
 	if (wake_up_thread) {
-		qdf_set_bit(HOST_LOG_DRIVER_MSG, gwlan_logging.event_flag);
+		qdf_atomic_set_bit(HOST_LOG_DRIVER_MSG,
+				   gwlan_logging.event_flag);
 		wake_up_interruptible(&gwlan_logging.wait_queue);
 	}
 
@@ -897,14 +898,15 @@ static int wlan_logging_thread(void *Arg)
 		ret_wait_status =
 			wait_event_interruptible(gwlan_logging.wait_queue,
 				(!list_empty(&gwlan_logging.filled_list) ||
-				 qdf_test_bit(HOST_LOG_DRIVER_MSG,
-					      gwlan_logging.event_flag) ||
-				 qdf_test_bit(HOST_LOG_PER_PKT_STATS,
-					      gwlan_logging.event_flag) ||
-				 qdf_test_bit(HOST_LOG_FW_FLUSH_COMPLETE,
-					      gwlan_logging.event_flag) ||
-				 qdf_test_bit(HOST_LOG_DRIVER_CONNECTIVITY_MSG,
-					      gwlan_logging.event_flag) ||
+				 qdf_atomic_test_bit(HOST_LOG_DRIVER_MSG,
+						gwlan_logging.event_flag) ||
+				 qdf_atomic_test_bit(HOST_LOG_PER_PKT_STATS,
+						gwlan_logging.event_flag) ||
+				 qdf_atomic_test_bit(HOST_LOG_FW_FLUSH_COMPLETE,
+						gwlan_logging.event_flag) ||
+				 qdf_atomic_test_bit(
+					HOST_LOG_DRIVER_CONNECTIVITY_MSG,
+					gwlan_logging.event_flag) ||
 				 gwlan_logging.exit));
 
 		if (ret_wait_status == -ERESTARTSYS) {
@@ -916,8 +918,8 @@ static int wlan_logging_thread(void *Arg)
 			break;
 
 
-		if (qdf_test_and_clear_bit(HOST_LOG_DRIVER_MSG,
-					   gwlan_logging.event_flag)) {
+		if (qdf_atomic_test_and_clear_bit(HOST_LOG_DRIVER_MSG,
+						  gwlan_logging.event_flag)) {
 			ret = send_filled_buffers_to_user();
 			if (-ENOMEM == ret)
 				msleep(200);
@@ -930,18 +932,18 @@ static int wlan_logging_thread(void *Arg)
 #endif
 		}
 
-		if (qdf_test_and_clear_bit(HOST_LOG_PER_PKT_STATS,
-					   gwlan_logging.event_flag)) {
+		if (qdf_atomic_test_and_clear_bit(HOST_LOG_PER_PKT_STATS,
+						  gwlan_logging.event_flag)) {
 			ret = pktlog_send_per_pkt_stats_to_user();
 			if (-ENOMEM == ret)
 				msleep(200);
 		}
 
-		if (qdf_test_bit(HOST_LOG_CHIPSET_STATS,
-				 gwlan_logging.event_flag) &&
+		if (qdf_atomic_test_bit(HOST_LOG_CHIPSET_STATS,
+					gwlan_logging.event_flag) &&
 		    gwlan_logging.is_flush_complete) {
-			qdf_test_and_clear_bit(HOST_LOG_CHIPSET_STATS,
-					       gwlan_logging.event_flag);
+			qdf_atomic_test_and_clear_bit(HOST_LOG_CHIPSET_STATS,
+						      gwlan_logging.event_flag);
 			ret = wlan_logging_cstats_send_host_buf_to_usr();
 			if (-ENOMEM == ret) {
 				QDF_TRACE_ERROR(QDF_MODULE_ID_QDF,
@@ -950,11 +952,11 @@ static int wlan_logging_thread(void *Arg)
 			}
 		}
 
-		if (qdf_test_bit(FW_LOG_CHIPSET_STATS,
-				 gwlan_logging.event_flag) &&
+		if (qdf_atomic_test_bit(FW_LOG_CHIPSET_STATS,
+					gwlan_logging.event_flag) &&
 		    gwlan_logging.is_flush_complete) {
-			qdf_test_and_clear_bit(FW_LOG_CHIPSET_STATS,
-					       gwlan_logging.event_flag);
+			qdf_atomic_test_and_clear_bit(FW_LOG_CHIPSET_STATS,
+						      gwlan_logging.event_flag);
 			ret = wlan_logging_cstats_send_fw_buf_to_usr();
 			if (-ENOMEM == ret) {
 				QDF_TRACE_ERROR(QDF_MODULE_ID_QDF,
@@ -963,8 +965,8 @@ static int wlan_logging_thread(void *Arg)
 			}
 		}
 
-		if (qdf_test_and_clear_bit(HOST_LOG_FW_FLUSH_COMPLETE,
-					   gwlan_logging.event_flag)) {
+		if (qdf_atomic_test_and_clear_bit(HOST_LOG_FW_FLUSH_COMPLETE,
+						  gwlan_logging.event_flag)) {
 			/* Flush bit could have been set while we were mid
 			 * way in the logging thread. So, need to check other
 			 * buffers like log messages, per packet stats again
@@ -985,12 +987,12 @@ static int wlan_logging_thread(void *Arg)
 				wlan_queue_logmsg_for_app();
 				spin_unlock_irqrestore(&gwlan_logging.spin_lock,
 					flags);
-				qdf_set_bit(HOST_LOG_DRIVER_MSG,
-					    gwlan_logging.event_flag);
-				qdf_set_bit(HOST_LOG_PER_PKT_STATS,
-					    gwlan_logging.event_flag);
-				qdf_set_bit(HOST_LOG_FW_FLUSH_COMPLETE,
-					    gwlan_logging.event_flag);
+				qdf_atomic_set_bit(HOST_LOG_DRIVER_MSG,
+						   gwlan_logging.event_flag);
+				qdf_atomic_set_bit(HOST_LOG_PER_PKT_STATS,
+						   gwlan_logging.event_flag);
+				qdf_atomic_set_bit(HOST_LOG_FW_FLUSH_COMPLETE,
+						   gwlan_logging.event_flag);
 				wake_up_interruptible(
 						&gwlan_logging.wait_queue);
 			}
@@ -998,8 +1000,8 @@ static int wlan_logging_thread(void *Arg)
 
 		/* Dequeue the connectivity_log */
 		wlan_logging_send_connectivity_event();
-		qdf_clear_bit(HOST_LOG_DRIVER_CONNECTIVITY_MSG,
-			      gwlan_logging.event_flag);
+		qdf_atomic_clear_bit(HOST_LOG_DRIVER_CONNECTIVITY_MSG,
+				     gwlan_logging.event_flag);
 	}
 
 	gwlan_logging.exit_ts = qdf_get_log_timestamp();
@@ -1272,13 +1274,14 @@ int wlan_logging_sock_init_svc(void)
 
 	init_waitqueue_head(&gwlan_logging.wait_queue);
 	gwlan_logging.exit = false;
-	qdf_clear_bit(HOST_LOG_DRIVER_MSG, gwlan_logging.event_flag);
-	qdf_clear_bit(HOST_LOG_PER_PKT_STATS, gwlan_logging.event_flag);
-	qdf_clear_bit(HOST_LOG_FW_FLUSH_COMPLETE, gwlan_logging.event_flag);
-	qdf_clear_bit(HOST_LOG_DRIVER_CONNECTIVITY_MSG,
-		      gwlan_logging.event_flag);
-	qdf_clear_bit(HOST_LOG_CHIPSET_STATS, gwlan_logging.event_flag);
-	qdf_clear_bit(FW_LOG_CHIPSET_STATS, gwlan_logging.event_flag);
+	qdf_atomic_clear_bit(HOST_LOG_DRIVER_MSG, gwlan_logging.event_flag);
+	qdf_atomic_clear_bit(HOST_LOG_PER_PKT_STATS, gwlan_logging.event_flag);
+	qdf_atomic_clear_bit(HOST_LOG_FW_FLUSH_COMPLETE,
+			     gwlan_logging.event_flag);
+	qdf_atomic_clear_bit(HOST_LOG_DRIVER_CONNECTIVITY_MSG,
+			     gwlan_logging.event_flag);
+	qdf_atomic_clear_bit(HOST_LOG_CHIPSET_STATS, gwlan_logging.event_flag);
+	qdf_atomic_clear_bit(FW_LOG_CHIPSET_STATS, gwlan_logging.event_flag);
 
 	init_completion(&gwlan_logging.shutdown_comp);
 	gwlan_logging.thread = kthread_create(wlan_logging_thread, NULL,
@@ -1344,13 +1347,14 @@ int wlan_logging_sock_deinit_svc(void)
 	cds_set_multicast_logging(0);
 #endif
 	gwlan_logging.is_flush_complete = false;
-	qdf_clear_bit(HOST_LOG_DRIVER_MSG, gwlan_logging.event_flag);
-	qdf_clear_bit(HOST_LOG_PER_PKT_STATS, gwlan_logging.event_flag);
-	qdf_clear_bit(HOST_LOG_FW_FLUSH_COMPLETE, gwlan_logging.event_flag);
-	qdf_clear_bit(HOST_LOG_DRIVER_CONNECTIVITY_MSG,
+	qdf_atomic_clear_bit(HOST_LOG_DRIVER_MSG, gwlan_logging.event_flag);
+	qdf_atomic_clear_bit(HOST_LOG_PER_PKT_STATS, gwlan_logging.event_flag);
+	qdf_atomic_clear_bit(HOST_LOG_FW_FLUSH_COMPLETE,
+			     gwlan_logging.event_flag);
+	qdf_atomic_clear_bit(HOST_LOG_DRIVER_CONNECTIVITY_MSG,
 		      gwlan_logging.event_flag);
-	qdf_clear_bit(HOST_LOG_CHIPSET_STATS, gwlan_logging.event_flag);
-	qdf_clear_bit(FW_LOG_CHIPSET_STATS, gwlan_logging.event_flag);
+	qdf_atomic_clear_bit(HOST_LOG_CHIPSET_STATS, gwlan_logging.event_flag);
+	qdf_atomic_clear_bit(FW_LOG_CHIPSET_STATS, gwlan_logging.event_flag);
 	wake_up_interruptible(&gwlan_logging.wait_queue);
 	wait_for_completion(&gwlan_logging.shutdown_comp);
 
@@ -1392,7 +1396,7 @@ void wlan_logging_set_per_pkt_stats(void)
 	if (gwlan_logging.is_active == false)
 		return;
 
-	qdf_set_bit(HOST_LOG_PER_PKT_STATS, gwlan_logging.event_flag);
+	qdf_atomic_set_bit(HOST_LOG_PER_PKT_STATS, gwlan_logging.event_flag);
 	wake_up_interruptible(&gwlan_logging.wait_queue);
 }
 
@@ -1401,7 +1405,8 @@ void wlan_logging_set_connectivity_log(void)
 	if (gwlan_logging.is_active == false)
 		return;
 
-	qdf_set_bit(HOST_LOG_DRIVER_CONNECTIVITY_MSG, gwlan_logging.event_flag);
+	qdf_atomic_set_bit(HOST_LOG_DRIVER_CONNECTIVITY_MSG,
+			   gwlan_logging.event_flag);
 	wake_up_interruptible(&gwlan_logging.wait_queue);
 }
 
@@ -1419,7 +1424,8 @@ void wlan_logging_set_fw_flush_complete(void)
 	if (!gwlan_logging.is_active)
 		return;
 
-	qdf_set_bit(HOST_LOG_FW_FLUSH_COMPLETE, gwlan_logging.event_flag);
+	qdf_atomic_set_bit(HOST_LOG_FW_FLUSH_COMPLETE,
+			   gwlan_logging.event_flag);
 	wake_up_interruptible(&gwlan_logging.wait_queue);
 }
 
@@ -1440,7 +1446,7 @@ void wlan_flush_host_logs_for_fatal(void)
 	spin_lock_irqsave(&gwlan_logging.spin_lock, flags);
 	wlan_queue_logmsg_for_app();
 	spin_unlock_irqrestore(&gwlan_logging.spin_lock, flags);
-	qdf_set_bit(HOST_LOG_DRIVER_MSG, gwlan_logging.event_flag);
+	qdf_atomic_set_bit(HOST_LOG_DRIVER_MSG, gwlan_logging.event_flag);
 	wake_up_interruptible(&gwlan_logging.wait_queue);
 }
 
@@ -1570,7 +1576,8 @@ void wlan_pkt_stats_to_logger_thread(void *pl_hdr, void *pkt_dump, void *data)
 
 	/* Wakeup logger thread */
 	if (true == wake_up_thread) {
-		qdf_set_bit(HOST_LOG_PER_PKT_STATS, gwlan_logging.event_flag);
+		qdf_atomic_set_bit(HOST_LOG_PER_PKT_STATS,
+				   gwlan_logging.event_flag);
 		wake_up_interruptible(&gwlan_logging.wait_queue);
 	}
 }
@@ -1863,8 +1870,8 @@ void wlan_register_txrx_packetdump(uint8_t pdev_id)
 #ifdef WLAN_CHIPSET_STATS
 void wlan_set_chipset_stats_bit(void)
 {
-	qdf_set_bit(HOST_LOG_CHIPSET_STATS, gwlan_logging.event_flag);
-	qdf_set_bit(FW_LOG_CHIPSET_STATS, gwlan_logging.event_flag);
+	qdf_atomic_set_bit(HOST_LOG_CHIPSET_STATS, gwlan_logging.event_flag);
+	qdf_atomic_set_bit(FW_LOG_CHIPSET_STATS, gwlan_logging.event_flag);
 }
 #endif /* WLAN_CHIPSET_STATS */
 #endif /* WLAN_LOGGING_SOCK_SVC_ENABLE */

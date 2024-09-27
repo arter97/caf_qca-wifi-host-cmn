@@ -823,16 +823,17 @@ void osif_populate_connect_response_for_link(
 			enum wlan_status_code link_status_code,
 			struct cfg80211_bss *bss)
 {
-	if (!bss)
-		return;
 
-	osif_debug("Link_id :%d freq:%u", link_id,
-		   bss->channel->center_freq);
+	osif_debug("Link_id :%d", link_id);
 	conn_rsp_params->valid_links |=  BIT(link_id);
-	conn_rsp_params->links[link_id].bssid = bss->bssid;
-	conn_rsp_params->links[link_id].bss = bss;
-	conn_rsp_params->links[link_id].addr = link_addr;
 	osif_populate_link_status_code(conn_rsp_params, link_id, link_status_code);
+	conn_rsp_params->links[link_id].addr = link_addr;
+
+	if (bss) {
+		osif_debug("freq:%u", bss->channel->center_freq);
+		conn_rsp_params->links[link_id].bssid = bss->bssid;
+		conn_rsp_params->links[link_id].bss = bss;
+	}
 }
 
 static QDF_STATUS

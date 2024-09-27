@@ -747,6 +747,10 @@ QDF_STATUS (*send_set_p2pgo_oppps_req_cmd)(wmi_unified_t wmi_handle,
 
 QDF_STATUS (*send_set_p2pgo_noa_req_cmd)(wmi_unified_t wmi_handle,
 			struct p2p_ps_params *noa);
+#ifdef FEATURE_WLAN_SUPPORT_USD
+QDF_STATUS (*send_p2p_usd_req_cmd)(wmi_unified_t wmi_handle,
+				   struct p2p_usd_attr_params *param);
+#endif /* FEATURE_WLAN_SUPPORT_USD */
 
 #ifdef FEATURE_P2P_LISTEN_OFFLOAD
 QDF_STATUS (*send_p2p_lo_start_cmd)(wmi_unified_t wmi_handle,
@@ -2106,6 +2110,14 @@ QDF_STATUS
 (*extract_mac_addr_rx_filter_evt_param)(wmi_unified_t wmi_handle,
 					void *evt_buf,
 					struct p2p_set_mac_filter_evt *param);
+
+QDF_STATUS (*send_p2p_ap_assist_dfs_group_params)
+				(wmi_unified_t wmi_handle,
+				 struct p2p_ap_assist_dfs_group_params *params);
+
+QDF_STATUS
+(*extract_p2p_ap_assist_dfs_group_bmiss)(wmi_unified_t wmi_handle,
+					 void *ev_buf, uint8_t *data);
 #endif
 
 QDF_STATUS (*set_mac_addr_rx_filter)(wmi_unified_t wmi_handle,

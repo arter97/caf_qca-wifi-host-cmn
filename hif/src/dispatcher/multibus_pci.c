@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -101,6 +101,7 @@ QDF_STATUS hif_initialize_pci_ops(struct hif_softc *hif_sc)
 #ifdef WLAN_FEATURE_AFFINITY_MGR
 	bus_ops->hif_affinity_mgr_set_affinity = &hif_affinity_mgr_affine_irq;
 #endif
+	bus_ops->hif_bus_get_device_handle = &hif_pci_get_device_handle;
 	return QDF_STATUS_SUCCESS;
 }
 

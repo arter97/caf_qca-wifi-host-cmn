@@ -235,6 +235,12 @@ enum wlan_ipa_opt_dp_ctrl_add_resp {
 	WLAN_IPA_CTRL_FLT_ADD_FAILURE = 2
 };
 
+enum wlan_ipa_opt_dp_flt_release_state {
+	WLAN_IPA_OPT_DP_FLT_REL_INIT = 1,
+	WLAN_IPA_OPT_DP_FLT_REL_INPROGRESS = 2,
+	WLAN_IPA_OPT_DP_FLT_REL_DONE = 3
+};
+
 /**
  * struct llc_snap_hdr - LLC snap header
  * @dsap: Destination service access point
@@ -945,6 +951,7 @@ struct wlan_ipa_priv {
 	/* Flag to notify whether optional wifi dp feature is enabled or not */
 	bool opt_wifi_datapath;
 	bool opt_dp_active;
+	uint8_t opt_dp_flt_rel_state;
 	bool opt_wifi_datapath_ctrl;
 	bool fw_cap_opt_dp_ctrl;
 	qdf_atomic_t stats_quota;

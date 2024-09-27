@@ -78,6 +78,20 @@ struct htt_dbgfs_cfg {
 	qdf_debugfs_file_t m;
 };
 
+/**
+ * struct dp_rx_defrag_cipher: structure to indicate cipher header
+ * @ic_name: Name
+ * @ic_header: header length
+ * @ic_trailer: trail length
+ * @ic_miclen: MIC length
+ */
+struct dp_rx_defrag_cipher {
+	const char *ic_name;
+	uint16_t ic_header;
+	uint8_t ic_trailer;
+	uint8_t ic_miclen;
+};
+
 /* Cookie MSB bits assigned for different use case.
  * Note: User can't use last 3 bits, as it is reserved for pdev_id.
  * If in future number of pdev are more than 3.
@@ -419,6 +433,14 @@ void dp_monitor_peer_get_stats(struct dp_soc *soc, struct dp_peer *peer,
 {
 }
 
+#ifdef QCA_PEER_EXT_STATS
+static inline
+void dp_monitor_get_peer_tx_stats(struct dp_soc *soc, struct dp_peer *peer,
+				  struct cdp_telemetry_peer_tx_ext_stats *stats)
+{
+}
+#endif
+
 static inline
 void dp_monitor_invalid_peer_update_pdev_stats(struct dp_soc *soc,
 					       struct dp_pdev *pdev)
@@ -565,6 +587,12 @@ static inline void dp_monitor_print_pdev_rx_mon_stats(struct dp_pdev *pdev)
 static inline QDF_STATUS dp_monitor_config_enh_tx_capture(struct dp_pdev *pdev,
 							  uint32_t val,
 							  uint8_t mac_id)
+{
+	return QDF_STATUS_E_INVAL;
+}
+
+static inline QDF_STATUS dp_mon_enh_tx_capt_wrapper(struct dp_pdev *pdev,
+						    cdp_config_param_type val)
 {
 	return QDF_STATUS_E_INVAL;
 }
@@ -2385,6 +2413,8 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		_tgtobj->tx.tx_ppdu_duration += _srcobj->tx.tx_ppdu_duration; \
 		_tgtobj->rx.mpdu_cnt_fcs_ok += _srcobj->rx.mpdu_cnt_fcs_ok; \
 		_tgtobj->rx.mpdu_cnt_fcs_err += _srcobj->rx.mpdu_cnt_fcs_err; \
+		_tgtobj->rx.rx_total.num += _srcobj->rx.rx_total.num; \
+		_tgtobj->rx.rx_total.bytes += _srcobj->rx.rx_total.bytes; \
 		_tgtobj->rx.non_ampdu_cnt += _srcobj->rx.non_ampdu_cnt; \
 		_tgtobj->rx.ampdu_cnt += _srcobj->rx.ampdu_cnt; \
 		_tgtobj->rx.rx_mpdus += _srcobj->rx.rx_mpdus; \
@@ -4258,6 +4288,7 @@ dp_hal_srng_access_start(hal_soc_handle_t soc, hal_ring_handle_t hal_ring_hdl)
 static inline void
 dp_hal_srng_access_end(hal_soc_handle_t soc, hal_ring_handle_t hal_ring_hdl)
 {
+	hal_srng_delay_reg_force_write_detect(hal_ring_hdl);
 	hal_srng_access_end_unlocked(soc, hal_ring_hdl);
 }
 
@@ -4271,6 +4302,7 @@ dp_hal_srng_access_start(hal_soc_handle_t soc, hal_ring_handle_t hal_ring_hdl)
 static inline void
 dp_hal_srng_access_end(hal_soc_handle_t soc, hal_ring_handle_t hal_ring_hdl)
 {
+	hal_srng_delay_reg_force_write_detect(hal_ring_hdl);
 	hal_srng_access_end(soc, hal_ring_hdl);
 }
 #endif
@@ -5547,6 +5579,35 @@ dp_update_pdev_chan_util_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 QDF_STATUS
 dp_get_pdev_erp_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 		      struct cdp_pdev_erp_stats *stats);
+
+#ifdef QCA_PEER_EXT_STATS
+/**
+ * dp_get_peer_tx_ext_stats() - API to get peer tx stats
+ * @soc_hdl: soc handle
+ * @addr: mac addr
+ * @stats: pointer to stats
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+dp_get_peer_tx_ext_stats(struct cdp_soc_t *soc_hdl, uint8_t *addr,
+			 void *stats);
+#else
+/**
+ * dp_get_peer_tx_ext_stats() - API to get peer tx stats
+ * @soc_hdl: soc handle
+ * @addr: mac addr
+ * @stats: pointer to stats
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS
+dp_get_peer_tx_ext_stats(struct cdp_soc_t *soc_hdl, uint8_t *addr,
+			 void *stats);
+{
+	return QDF_STATUS_E_FAILURE;
+}
+#endif
 #endif /* WLAN_CONFIG_TELEMETRY_AGENT */
 
 #ifdef CONNECTIVITY_PKTLOG
