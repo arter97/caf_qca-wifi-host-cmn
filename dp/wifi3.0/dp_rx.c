@@ -3841,7 +3841,7 @@ dp_rx_set_req_buff_descs(struct cdp_soc_t *cdp_soc,
 
 	dp_rx_page_pool_resize(soc, pdev_id, req_rx_buff_descs);
 
-	dp_info("Req RX buffer descriptors set to %u", req_rx_buff_descs);
+	dp_info("Req RX buffer descriptors set to %llu", req_rx_buff_descs);
 	return QDF_STATUS_SUCCESS;
 }
 

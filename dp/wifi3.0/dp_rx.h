@@ -944,7 +944,8 @@ dp_rx_get_num_buffers_required(struct rx_desc_pool *rx_desc_pool,
 {
 	uint64_t required_count = qdf_atomic_read(&rx_desc_pool->required_count);
 
-	dp_info("required:%u, type:%u", required_count, rx_desc_pool->desc_type);
+	dp_info("required:%llu, type:%u", required_count,
+		rx_desc_pool->desc_type);
 	if ((rx_desc_pool->desc_type != QDF_DP_RX_DESC_BUF_TYPE) ||
 	    !required_count ||
 	    required_count == rxdma_entries)
