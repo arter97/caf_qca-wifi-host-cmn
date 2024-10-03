@@ -67,6 +67,17 @@ void __qdf_page_pool_put_page(__qdf_page_pool_t pp, struct page *page,
 	return page_pool_put_full_page(pp, page, direct_recycle);
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0))
+static void set_page_param_frag_flag(struct page_pool_params *pp_params)
+{
+	pp_params->flags |= PP_FLAG_PAGE_FRAG;
+}
+#else
+static void set_page_param_frag_flag(struct page_pool_params *pp_params)
+{
+}
+#endif
+
 __qdf_page_pool_t __qdf_page_pool_create(qdf_device_t osdev, size_t pool_size,
 					 size_t pp_page_size)
 {
@@ -82,7 +93,7 @@ __qdf_page_pool_t __qdf_page_pool_create(qdf_device_t osdev, size_t pool_size,
 	pp_params.offset = 0,
 	pp_params.max_len = pp_page_size;
 	pp_params.pool_size = pool_size;
-	pp_params.flags |= PP_FLAG_PAGE_FRAG;
+	set_page_param_frag_flag(&pp_params);
 
 	pp = page_pool_create(&pp_params);
 	if (IS_ERR(pp)) {
