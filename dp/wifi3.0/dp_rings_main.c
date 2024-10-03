@@ -519,6 +519,13 @@ QDF_STATUS dp_srng_init_idx(struct dp_soc *soc, struct dp_srng *srng,
 		dp_srng_set_msi2_ring_params(soc, &ring_params, 0, 0);
 		dp_verbose_debug("Skipping MSI for ring_type: %d, ring_num %d",
 				 ring_type, ring_num);
+
+	/*
+	 * During umac reset ppeds interrupts free is not called.
+	 * Avoid registering interrupts again.
+	 *
+	 */
+	if (!dp_check_umac_reset_in_progress(soc))
 		if (soc->arch_ops.dp_register_ppeds_interrupts)
 			if (soc->arch_ops.dp_register_ppeds_interrupts
 								(soc, srng, 0,
