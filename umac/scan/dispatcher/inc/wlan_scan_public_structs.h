@@ -92,7 +92,7 @@ typedef uint32_t wlan_scan_id;
  * length + atleast 1 byte of datai
  * @BSS_INDEX_POS: Position of BSSID index field in Multiple BSSID index tag
  * @MIN_VENDOR_TAG_LEN: Minimum length of a vendor specific tag
- * @OUI_LEN: OUI + OUI Type + Min DATA
+ * @OUI_LEN: OUI + OUI Type
  * @ELEM_ID_EXTN_POS: Position of element ID extension in an extension element
  * @ELEM_ID_LIST_LEN_POS: Position of length field in list of element IDs
  * @ELEM_ID_LIST_POS: Position to the start of element ID list
@@ -114,7 +114,7 @@ typedef uint32_t wlan_scan_id;
 #define SPLIT_PROF_DATA_LEAST_LEN 3
 #define BSS_INDEX_POS 2
 #define MIN_VENDOR_TAG_LEN 7
-#define OUI_LEN 5
+#define OUI_LEN 4
 #define ELEM_ID_EXTN_POS 2
 #define ELEM_ID_LIST_LEN_POS 3
 #define ELEM_ID_LIST_POS 4
@@ -546,6 +546,7 @@ struct partner_link_info {
  * @self_link_id: Link id of the scan entry
  * @link_info: Array containing partner links information
  * @ml_bss_score: Multi link BSS score
+ * @link_score: MLO link score
  */
 struct ml_info {
 	struct qdf_mac_addr mld_mac_addr;
@@ -553,6 +554,21 @@ struct ml_info {
 	uint8_t self_link_id;
 	struct partner_link_info link_info[MLD_MAX_LINKS - 1];
 	uint16_t ml_bss_score;
+	uint16_t link_score;
+};
+
+/**
+ * enum number_of_partner_link: Enumeration for number of partner links
+ * @NO_LINK:    Default value
+ * @ONE_LINK:   Single Link
+ * @TWO_LINK:   2 Links
+ * @THREE_LINK: 3 Links
+ */
+enum number_of_partner_link {
+	NO_LINK,
+	ONE_LINK,
+	TWO_LINK,
+	THREE_LINK,
 };
 #endif
 
@@ -601,6 +617,7 @@ struct ml_info {
  * @raw_frame: contain raw frame and the length of the raw frame
  * @pdev_id: pdev id
  * @ml_info: Multi link information
+ * @recv_freq: Frequency on which the frame is received
  */
 struct scan_cache_entry {
 	uint8_t frm_subtype;
@@ -654,6 +671,7 @@ struct scan_cache_entry {
 #ifdef WLAN_FEATURE_11BE_MLO
 	struct ml_info ml_info;
 #endif
+	uint32_t recv_freq;
 };
 
 #define MAX_FAVORED_BSSID 16

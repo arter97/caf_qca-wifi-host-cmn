@@ -35,10 +35,14 @@
 #include "wlan_t2lm_api.h"
 #endif
 #include <wlan_utility.h>
+#ifdef WLAN_FEATURE_11BE_MLO
+#include <wlan_mlo_mgr_peer.h>
+#endif
 #include <wlan_mlo_mgr_sta.h>
 #include "wlan_mlo_mgr_op.h"
 #include <wlan_objmgr_vdev_obj.h>
 #include "wlan_psoc_mlme_api.h"
+#include "wlan_scan_public_structs.h"
 
 void
 cm_fill_failure_resp_from_cm_id(struct cnx_mgr *cm_ctx,
@@ -899,6 +903,54 @@ cm_inform_dlm_connect_complete(struct wlan_objmgr_vdev *vdev,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO
+static bool
+cm_update_mlo_links_for_retry_with_same_candidate(struct wlan_objmgr_psoc *psoc,
+						  struct cm_connect_req *cm_req)
+{
+	uint8_t mlo_link_num;
+	struct scan_cache_entry *entry;
+
+	if (!cm_req->req.ml_parnter_info.num_partner_links)
+		return false;
+
+	entry = cm_req->cur_candidate->entry;
+
+	mlo_link_num = wlan_mlme_get_sta_mlo_conn_max_num(psoc);
+	if (cm_req->req.ml_parnter_info.num_partner_links > mlo_link_num)
+		cm_req->req.ml_parnter_info.num_partner_links = mlo_link_num;
+
+	/*
+	 * Try next candidate for non-ML AP
+	 */
+	if (!entry->ie_list.multi_link_bv || !entry->ml_info.num_links) {
+		cm_req->req.ml_parnter_info.num_partner_links = NO_LINK;
+		return false;
+	}
+
+	if (cm_req->req.ml_parnter_info.num_partner_links > NO_LINK) {
+		/*
+		 * Try to same AP exhaustively till single link ML connection
+		 * is tried with the AP
+		 */
+		cm_req->req.ml_parnter_info.num_partner_links--;
+	}
+
+	mlme_debug(CM_PREFIX_FMT "try ML connection with %d partner links",
+		   CM_PREFIX_REF(cm_req->req.vdev_id, cm_req->cm_id),
+		   cm_req->req.ml_parnter_info.num_partner_links);
+
+	return true;
+}
+#else
+static inline bool
+cm_update_mlo_links_for_retry_with_same_candidate(struct wlan_objmgr_psoc *psoc,
+						  struct cm_connect_req *cm_req)
+{
+	return false;
+}
+#endif
+
 /**
  * cm_is_retry_with_same_candidate() - This API check if reconnect attempt is
  * required with the same candidate again
@@ -920,14 +972,25 @@ static bool cm_is_retry_with_same_candidate(struct cnx_mgr *cm_ctx,
 	bool sae_connection;
 	QDF_STATUS status;
 	qdf_freq_t freq;
+	struct scoring_cfg *score_config;
+	struct psoc_mlme_obj *mlme_psoc_obj;
 
 	psoc = wlan_pdev_get_psoc(wlan_vdev_get_pdev(cm_ctx->vdev));
+	mlme_psoc_obj = wlan_psoc_mlme_get_cmpt_obj(psoc);
+	if (!mlme_psoc_obj)
+		return false;
+
+	score_config = &mlme_psoc_obj->psoc_cfg.score_config;
 	key_mgmt = req->cur_candidate->entry->neg_sec_info.key_mgmt;
 	freq = req->cur_candidate->entry->channel.chan_freq;
 
 	/* Try once again for the invalid PMKID case without PMKID */
-	if (resp->status_code == STATUS_INVALID_PMKID)
+	if (resp->status_code == STATUS_INVALID_PMKID) {
+		if (score_config->vendor_roam_score_algorithm)
+			cm_update_mlo_links_for_retry_with_same_candidate(psoc,
+									  req);
 		goto use_same_candidate;
+	}
 
 	/* Try again for the JOIN timeout if only one candidate */
 	if (resp->reason == CM_JOIN_TIMEOUT &&
@@ -942,6 +1005,9 @@ static bool cm_is_retry_with_same_candidate(struct cnx_mgr *cm_ctx,
 			return false;
 
 		wlan_mlme_get_sae_assoc_retry_count(psoc, &max_retry_count);
+		if (score_config->vendor_roam_score_algorithm)
+			cm_update_mlo_links_for_retry_with_same_candidate(psoc,
+									  req);
 		goto use_same_candidate;
 	}
 
@@ -959,8 +1025,28 @@ static bool cm_is_retry_with_same_candidate(struct cnx_mgr *cm_ctx,
 		if (sae_connection)
 			wlan_mlme_get_sae_assoc_retry_count(psoc,
 							    &max_retry_count);
+
+		if (score_config->vendor_roam_score_algorithm)
+			cm_update_mlo_links_for_retry_with_same_candidate(psoc,
+									  req);
 		goto use_same_candidate;
 	}
+
+	/*
+	 * When vendor roam score algorithm is enabled and association failure
+	 * happens while trying MLO connection with multiple link, then
+	 * retry with same candidate with same primary link and other band as
+	 * secondary link. If still failure happens, then try standlone single
+	 * link MLO mode with the same candidate AP. Ex:
+	 * Priority 1(candidate AP’s 6 GHz case) – 6 GHz (Associating link) +
+	 *                                         5 GHz + 2.4 GHz
+	 * Priority 2(candidate AP’s 6 GHz case) – 6 GHz (Associating link) +
+	 *                                         2.4 GHz
+	 * Priority 3(AP’s 6 GHz case) – 6 GHz (single Link)
+	 */
+	if (resp->status_code && score_config->vendor_roam_score_algorithm &&
+	    cm_update_mlo_links_for_retry_with_same_candidate(psoc, req))
+		goto use_same_candidate;
 
 	return false;
 
@@ -1758,6 +1844,40 @@ connect_err:
 	return cm_send_connect_start_fail(cm_ctx, cm_req, reason);
 }
 
+#if defined(CONN_MGR_ADV_FEATURE) && defined(WLAN_FEATURE_11BE_MLO)
+static void
+cm_connect_req_update_ml_partner_info(struct cnx_mgr *cm_ctx,
+				      struct cm_req *cm_req,
+				      bool same_candidate_used)
+{
+	bool eht_capable = false;
+	struct cm_connect_req *conn_req = &cm_req->connect_req;
+	struct wlan_objmgr_pdev *pdev;
+	uint8_t cur_vdev_id = wlan_vdev_get_id(cm_ctx->vdev);
+
+	pdev = wlan_vdev_get_pdev(cm_ctx->vdev);
+	if (!pdev) {
+		mlme_err(CM_PREFIX_FMT "Failed to find pdev",
+			 CM_PREFIX_REF(cur_vdev_id, cm_req->cm_id));
+		return;
+	}
+
+	wlan_psoc_mlme_get_11be_capab(wlan_vdev_get_psoc(cm_ctx->vdev),
+				      &eht_capable);
+	if (!same_candidate_used && eht_capable &&
+	    cm_bss_peer_is_assoc_peer(conn_req))
+		cm_get_ml_partner_info(pdev,
+				       conn_req->cur_candidate->entry,
+				       &conn_req->req.ml_parnter_info);
+}
+#else
+static void
+cm_connect_req_update_ml_partner_info(struct cnx_mgr *cm_ctx,
+				      struct cm_req *cm_req,
+				      bool same_candidate_used)
+{}
+#endif
+
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_FEATURE_11BE_MLO_ADV_FEATURE)
 static void
 cm_override_partner_link_akm(struct cnx_mgr *cm_ctx, struct cm_req *cm_req)
@@ -1941,6 +2061,8 @@ try_same_candidate:
 	cm_req->connect_req.connect_attempts++;
 	cm_req->connect_req.cur_candidate = new_candidate;
 
+	cm_connect_req_update_ml_partner_info(cm_ctx, cm_req,
+					      use_same_candidate);
 	if (!use_same_candidate &&
 	    wlan_vdev_mlme_is_mlo_link_vdev(cm_ctx->vdev)) {
 		cm_override_partner_link_akm(cm_ctx, cm_req);
@@ -2216,17 +2338,21 @@ static inline void cm_set_fils_connection(struct cnx_mgr *cm_ctx,
 
 #ifdef WLAN_FEATURE_11BE_MLO
 static inline
-void cm_update_ml_partner_info(struct wlan_cm_connect_req *req,
+void cm_update_ml_partner_info(struct wlan_objmgr_vdev *vdev,
+			       struct wlan_cm_connect_req *req,
 			       struct wlan_cm_vdev_connect_req *connect_req)
 {
-	if (req->ml_parnter_info.num_partner_links)
-		qdf_mem_copy(&connect_req->ml_parnter_info,
-			     &req->ml_parnter_info,
-			     sizeof(struct mlo_partner_info));
+	if (!wlan_vdev_mlme_is_mlo_vdev(vdev))
+		return;
+
+	qdf_mem_copy(&connect_req->ml_parnter_info,
+		     &req->ml_parnter_info,
+		     sizeof(struct mlo_partner_info));
 }
 #else
 static inline
-void cm_update_ml_partner_info(struct wlan_cm_connect_req *req,
+void cm_update_ml_partner_info(struct wlan_objmgr_vdev *vdev,
+			       struct wlan_cm_connect_req *req,
 			       struct wlan_cm_vdev_connect_req *connect_req)
 {
 }
@@ -2366,7 +2492,7 @@ cm_resume_connect_after_peer_create(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 	req.vht_caps = cm_req->connect_req.req.vht_caps;
 	req.vht_caps_mask = cm_req->connect_req.req.vht_caps_mask;
 	req.is_non_assoc_link = cm_req->connect_req.req.is_non_assoc_link;
-	cm_update_ml_partner_info(&cm_req->connect_req.req, &req);
+	cm_update_ml_partner_info(cm_ctx->vdev, &cm_req->connect_req.req, &req);
 
 	neg_sec_info = &cm_req->connect_req.cur_candidate->entry->neg_sec_info;
 	if (util_scan_entry_is_hidden_ap(req.bss->entry) &&
@@ -2818,6 +2944,44 @@ post_err:
 	return qdf_status;
 }
 
+#if defined(CONN_MGR_ADV_FEATURE) && defined(WLAN_FEATURE_11BE_MLO)
+QDF_STATUS cm_bss_peer_create_resp_mlo_attach(struct wlan_objmgr_vdev *vdev,
+					      struct qdf_mac_addr *peer_mac)
+{
+	QDF_STATUS status;
+	struct wlan_objmgr_psoc *psoc;
+	struct wlan_objmgr_peer *link_peer;
+	struct mlo_partner_info partner_info;
+
+	if (!wlan_vdev_mlme_is_mlo_vdev(vdev))
+		return QDF_STATUS_SUCCESS;
+
+	psoc = wlan_vdev_get_psoc(vdev);
+	if (!psoc)
+		return QDF_STATUS_E_NULL_VALUE;
+
+	link_peer = wlan_objmgr_get_peer_by_mac(psoc, (uint8_t *)peer_mac,
+						WLAN_MLME_CM_ID);
+	if (!link_peer)
+		return QDF_STATUS_E_NULL_VALUE;
+
+	partner_info.num_partner_links = 1;
+	qdf_mem_copy(partner_info.partner_link_info[0].link_addr.bytes,
+		     vdev->vdev_mlme.macaddr, QDF_MAC_ADDR_SIZE);
+	partner_info.partner_link_info[0].link_id = wlan_vdev_get_link_id(vdev);
+
+	status = wlan_mlo_peer_create(vdev, link_peer, &partner_info, NULL, 0);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mlme_err("Failed to attach MLO peer " QDF_MAC_ADDR_FMT,
+			 QDF_MAC_ADDR_REF(peer_mac->bytes));
+	}
+
+	wlan_objmgr_peer_release_ref(link_peer, WLAN_MLME_CM_ID);
+
+	return status;
+}
+#endif
+
 QDF_STATUS cm_bss_peer_create_rsp(struct wlan_objmgr_vdev *vdev,
 				  QDF_STATUS status,
 				  struct qdf_mac_addr *peer_mac)
@@ -2843,6 +3007,12 @@ QDF_STATUS cm_bss_peer_create_rsp(struct wlan_objmgr_vdev *vdev,
 	}
 
 	if (QDF_IS_STATUS_SUCCESS(status)) {
+		qdf_status = cm_bss_peer_create_resp_mlo_attach(vdev, peer_mac);
+		if (QDF_IS_STATUS_ERROR(qdf_status)) {
+			mlme_cm_bss_peer_delete_req(vdev);
+			goto next_candidate;
+		}
+
 		qdf_status =
 			cm_sm_deliver_event(vdev,
 					  WLAN_CM_SM_EV_BSS_CREATE_PEER_SUCCESS,
@@ -2854,6 +3024,7 @@ QDF_STATUS cm_bss_peer_create_rsp(struct wlan_objmgr_vdev *vdev,
 		goto post_err;
 	}
 
+next_candidate:
 	/* In case of failure try with next candidate */
 	resp = qdf_mem_malloc(sizeof(*resp));
 	if (!resp) {

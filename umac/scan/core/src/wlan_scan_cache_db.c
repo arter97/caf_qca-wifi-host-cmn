@@ -122,14 +122,21 @@ static bool scm_is_rnr_present(struct meta_rnr_channel *chan,
 	return false;
 }
 
-static void scm_add_rnr_channel_db(struct wlan_objmgr_psoc *psoc,
+static void scm_add_rnr_channel_db(struct wlan_objmgr_pdev *pdev,
 				   struct scan_cache_entry *entry)
 {
 	uint32_t chan_freq;
 	uint8_t is_6g_bss, i;
+	uint8_t *cc;
 	struct meta_rnr_channel *channel;
 	struct rnr_bss_info *rnr_bss;
 	struct scan_rnr_node *rnr_node;
+	struct wlan_country_ie *cc_ie;
+	struct wlan_objmgr_psoc *psoc;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc)
+		return;
 
 	chan_freq = entry->channel.chan_freq;
 	is_6g_bss = wlan_reg_is_6ghz_chan_freq(chan_freq);
@@ -157,14 +164,23 @@ static void scm_add_rnr_channel_db(struct wlan_objmgr_psoc *psoc,
 	if (!entry->ie_list.rnrie)
 		return;
 
+	cc_ie = util_scan_entry_country(entry);
+	if (cc_ie && cc_ie->len)
+		cc = cc_ie->cc;
+	else
+		cc = NULL;
+
 	for (i = 0; i < MAX_RNR_BSS; i++) {
 		rnr_bss = &entry->rnr.bss_info[i];
 		/* Skip if entry is not valid */
 		if (!rnr_bss->channel_number)
 			continue;
-		chan_freq = wlan_reg_chan_opclass_to_freq(rnr_bss->channel_number,
-							  rnr_bss->operating_class,
-							  true);
+
+		chan_freq =
+			wlan_reg_chan_opclass_to_freq_prefer_global(pdev, cc,
+								    rnr_bss->channel_number,
+								    rnr_bss->operating_class);
+
 		channel = scm_get_chan_meta(psoc, chan_freq);
 		if (!channel) {
 			scm_debug("Failed to get chan Meta freq %d", chan_freq);
@@ -754,6 +770,8 @@ scm_copy_info_from_dup_entry(struct wlan_objmgr_pdev *pdev,
 {
 	struct scan_cache_entry *scan_entry;
 	uint64_t time_gap;
+	uint8_t *he_ops;
+	struct he_oper_6g_param *he_6g_params;
 
 	scan_entry = scan_node->entry;
 
@@ -824,6 +842,32 @@ scm_copy_info_from_dup_entry(struct wlan_objmgr_pdev *pdev,
 	    (scan_params->rssi_raw  < ADJACENT_CHANNEL_RSSI_THRESHOLD)) {
 		scan_params->channel.chan_freq = scan_entry->channel.chan_freq;
 		scan_params->channel_mismatch = true;
+	}
+
+	/*
+	 * An AP that is transmitting Beacon frame as non-HT DUP PPDU, will be
+	 * transmitting the Beacon across the BW on the AP.
+	 * Case where duplicate beacon is received on a different channel can
+	 * have fluctuation in RSSI values. Considering best RSSI in this case.
+	 * Check RSSI reported in the scan result and mark mismatch if RSSI
+	 * reported is lower than RSSI stored in scan entry for the same BSS.
+	 * This is done considering this scan result is because of leaked signal
+	 */
+	if ((scan_params->frm_subtype == MGMT_SUBTYPE_BEACON ||
+	     scan_params->frm_subtype == MGMT_SUBTYPE_PROBE_RESP) &&
+	     (scan_params->recv_freq !=
+	      scan_entry->channel.chan_freq) &&
+	     (time_gap < WLAN_RSSI_AVERAGING_TIME)) {
+		he_ops = util_scan_entry_heop(scan_params);
+		if (he_ops) {
+			he_6g_params = util_scan_get_he_6g_params(he_ops);
+			if (he_6g_params && he_6g_params->duplicate_beacon &&
+			    (scan_params->rssi_raw < scan_entry->rssi_raw)) {
+				scan_params->channel.chan_freq =
+					scan_entry->channel.chan_freq;
+				scan_params->channel_mismatch = true;
+			}
+		}
 	}
 
 	/* Use old value for rssi if beacon was heard on adjacent channel. */
@@ -2021,7 +2065,7 @@ void scm_update_rnr_from_scan_cache(struct wlan_objmgr_pdev *pdev)
 					     &scan_db->scan_hash_tbl[i], NULL);
 		while (cur_node) {
 			entry = cur_node->entry;
-			scm_add_rnr_channel_db(psoc, entry);
+			scm_add_rnr_channel_db(pdev, entry);
 			next_node =
 				scm_get_next_node(scan_db,
 						  &scan_db->scan_hash_tbl[i],
