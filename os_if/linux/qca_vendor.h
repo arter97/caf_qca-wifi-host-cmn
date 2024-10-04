@@ -1057,6 +1057,19 @@
  *	It is applicable for P2P Group Owner only. This command is used before
  *	starting the GO.
  *
+ * @QCA_NL80211_VENDOR_SUBCMD_IDLE_SHUTDOWN: If there are no active Wi-Fi
+ *	interfaces for a certain duration, the host driver might trigger idle
+ *	shutdown. The host driver rejects the user space commands between start
+ *	and completion of the idle shutdown. If a command is rejected, user
+ *	space can use this event to determine when to retry the specific
+ *	command.
+ *
+ *	This is a wiphy specific vendor event and it indicates user space that
+ *	the host driver has reached the idle timer and has started or completed
+ *	idle shutdown procedure.
+ *
+ *	The attributes used with this event are defined in
+ *	enum qca_wlan_vendor_attr_idle_shutdown.
  */
 
 enum qca_nl80211_vendor_subcmds {
@@ -1336,6 +1349,7 @@ enum qca_nl80211_vendor_subcmds {
 	QCA_NL80211_VENDOR_SUBCMD_CLASSIFIED_FLOW_REPORT = 248,
 	QCA_NL80211_VENDOR_SUBCMD_USD = 249,
 	QCA_NL80211_VENDOR_SUBCMD_SET_P2P_MODE = 251,
+	QCA_NL80211_VENDOR_SUBCMD_IDLE_SHUTDOWN = 254,
 };
 
 enum qca_wlan_vendor_tos {
@@ -18959,4 +18973,35 @@ enum qca_wlan_vendor_attr_set_p2p_mode {
 	QCA_WLAN_VENDOR_ATTR_SET_P2P_MODE_MAX =
 	QCA_WLAN_VENDOR_ATTR_SET_P2P_MODE_AFTER_LAST - 1,
 };
+
+/*
+ * enum qca_wlan_idle_shutdown_status: Represents idle shutdown status.
+ *
+ * @QCA_WLAN_IDLE_SHUTDOWN_STARTED: Indicates idle shutdown is started in the
+ * host driver.
+ * @QCA_WLAN_IDLE_SHUTDOWN_COMPLETED: Indicates idle shutdown is completed in
+ * the host driver.
+ */
+enum qca_wlan_idle_shutdown_status {
+	QCA_WLAN_IDLE_SHUTDOWN_STARTED = 0,
+	QCA_WLAN_IDLE_SHUTDOWN_COMPLETED = 1,
+};
+
+/*
+ * enum qca_wlan_vendor_attr_idle_shutdown: Attributes used by vendor event
+ * %QCA_NL80211_VENDOR_SUBCMD_IDLE_SHUTDOWN.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_IDLE_SHUTDOWN_STATUS: Required u8 attribute. Indicates
+ * the status of the idle shutdown from one of the values in enum
+ * qca_wlan_idle_shutdown_status.
+ */
+enum qca_wlan_vendor_attr_idle_shutdown {
+	QCA_WLAN_VENDOR_ATTR_IDLE_SHUTDOWN_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_IDLE_SHUTDOWN_STATUS = 1,
+
+	QCA_WLAN_VENDOR_ATTR_IDLE_SHUTDOWN_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_IDLE_SHUTDOWN_MAX =
+	QCA_WLAN_VENDOR_ATTR_IDLE_SHUTDOWN_AFTER_LAST - 1,
+};
+
 #endif

@@ -202,6 +202,7 @@
  * the flow report sent for classified flow
  * @QCA_NL80211_VENDOR_SUBCMD_ASYNC_GET_STATION_INDEX: Event index for async
  * get station sent for ucast cmd
+ * @QCA_NL80211_VENDOR_SUBCMD_IDLE_SHUTDOWN_INDEX: Idle shutdown event index
  */
 
 enum qca_nl80211_vendor_subcmds_index {
@@ -348,6 +349,7 @@ enum qca_nl80211_vendor_subcmds_index {
 	QCA_NL80211_VENDOR_SUBCMD_CLASSIFIED_FLOW_REPORT_INDEX,
 #endif
 	QCA_NL80211_VENDOR_SUBCMD_ASYNC_GET_STATION_INDEX,
+	QCA_NL80211_VENDOR_SUBCMD_IDLE_SHUTDOWN_INDEX,
 };
 
 #if !defined(SUPPORT_WDEV_CFG80211_VENDOR_EVENT_ALLOC) && \
