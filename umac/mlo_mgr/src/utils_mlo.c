@@ -1399,7 +1399,7 @@ QDF_STATUS util_validate_reportingsta_ie(const uint8_t *reportingsta_ie,
 
 	if ((reportingsta_ie[ID_POS] == WLAN_ELEMID_VENDOR) &&
 	    (reportingsta_ie_size < (PAYLOAD_START_POS + OUI_LEN))) {
-		mlo_err_rl("Total length %zu of element for reporting STA is smaller than minimum required to access vendor EID %u",
+		mlo_err_rl("Total length %zu of element for reporting STA is smaller than minimum required of %u to access vendor EID",
 			   reportingsta_ie_size, PAYLOAD_START_POS + OUI_LEN);
 		return QDF_STATUS_E_PROTO;
 	}

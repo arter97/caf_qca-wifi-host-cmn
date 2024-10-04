@@ -209,9 +209,21 @@ bool wlan_cm_get_active_connect_req(struct wlan_objmgr_vdev *vdev,
 	return cm_get_active_connect_req(vdev, req);
 }
 
+QDF_STATUS
+wlan_cm_get_active_connect_req_param(struct wlan_objmgr_vdev *vdev,
+				     struct wlan_cm_connect_req *req)
+{
+	return cm_get_active_connect_req_param(vdev, req);
+}
+
 cm_ext_t *wlan_cm_get_ext_hdl(struct wlan_objmgr_vdev *vdev)
 {
 	return cm_get_ext_hdl(vdev);
+}
+
+bool wlan_cm_is_first_candidate_connect_attempt(struct wlan_objmgr_vdev *vdev)
+{
+	return cm_is_first_candidate_connect_attempt(vdev);
 }
 
 #ifdef WLAN_FEATURE_HOST_ROAM

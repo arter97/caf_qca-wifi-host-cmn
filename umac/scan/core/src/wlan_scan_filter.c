@@ -726,6 +726,15 @@ static bool util_mlo_filter_match(struct wlan_objmgr_pdev *pdev,
 		}
 	}
 
+	if (filter->match_link_id && filter->link_id != WLAN_INVALID_LINK_ID &&
+	    filter->link_id != util_scan_entry_self_linkid(db_entry)) {
+		scm_debug(QDF_MAC_ADDR_FMT " link id %d mismatch filter link id %d",
+			  QDF_MAC_ADDR_REF(db_entry->bssid.bytes),
+			  util_scan_entry_self_linkid(db_entry),
+			  filter->link_id);
+		return false;
+	}
+
 	if (!db_entry->ie_list.multi_link_bv)
 		return true;
 	if (!filter->band_bitmap)
