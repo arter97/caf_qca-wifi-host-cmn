@@ -768,6 +768,19 @@ void wlan_dcs_disable_timer_fn(void *dcs_timer_args)
 	wlan_dcs_set_algorithm_process(psoc, pdev_id, true);
 }
 
+#ifdef WLAN_POLICY_MGR_ENABLE
+static bool wlan_dcs_is_vdev_ll_lt_sap(struct wlan_objmgr_psoc *psoc,
+				       uint32_t vdev_id)
+{
+	return policy_mgr_is_vdev_ll_lt_sap(psoc, vdev_id);
+}
+#else
+static bool wlan_dcs_is_vdev_ll_lt_sap(struct wlan_objmgr_psoc *psoc,
+				       uint32_t vdev_id)
+{
+	return false;
+}
+#endif
 /**
  * wlan_dcs_frequency_control() - dcs frequency control handling
  * @psoc: psoc pointer
@@ -801,8 +814,9 @@ static void wlan_dcs_frequency_control(struct wlan_objmgr_psoc *psoc,
 	}
 
 	current_time = qdf_get_system_timestamp();
-	if (dcs_freq_ctrl_params->dcs_happened_count >=
-		dcs_freq_ctrl_params->disable_threshold_per_5mins) {
+	if ((dcs_freq_ctrl_params->dcs_happened_count >=
+		dcs_freq_ctrl_params->disable_threshold_per_5mins) &&
+	     !wlan_dcs_is_vdev_ll_lt_sap(psoc, event->dcs_param.vdev_id)) {
 		delta_pos =
 			dcs_freq_ctrl_params->dcs_happened_count -
 			dcs_freq_ctrl_params->disable_threshold_per_5mins;
