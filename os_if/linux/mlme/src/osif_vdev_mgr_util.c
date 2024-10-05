@@ -46,11 +46,13 @@ static void osif_vdev_mgr_send_scan_done_complete_cb(uint8_t vdev_id)
 								vdev_id);
 }
 
-void osif_vdev_mgr_get_p2p_wdev(struct wireless_dev *wdev)
+struct wireless_dev *osif_vdev_mgr_get_p2p_wdev(void)
 {
-	if (osif_vdev_mgr_legacy_ops &&
-	    osif_vdev_mgr_legacy_ops->osif_vdev_mgr_get_p2p_wdev_cb)
-		osif_vdev_mgr_legacy_ops->osif_vdev_mgr_get_p2p_wdev_cb(wdev);
+	if (!osif_vdev_mgr_legacy_ops ||
+	    !osif_vdev_mgr_legacy_ops->osif_vdev_mgr_get_p2p_wdev_cb)
+		return NULL;
+
+	return osif_vdev_mgr_legacy_ops->osif_vdev_mgr_get_p2p_wdev_cb();
 }
 
 static struct mlme_vdev_mgr_ops vdev_mgr_ops = {

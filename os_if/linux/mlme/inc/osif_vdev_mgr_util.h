@@ -29,7 +29,7 @@
  *                                       response from FW
  * @osif_vdev_mgr_send_scan_done_complete_cb: send scan done indication to
  * upper layer
- * @osif_vdev_mgr_get_p2p_wdev_cb: Get p2p wdev
+ * @osif_vdev_mgr_get_p2p_wdev_cb: Get p2p wdev ptr
  */
 struct osif_vdev_mgr_ops {
 #ifdef WLAN_FEATURE_DYNAMIC_MAC_ADDR_UPDATE
@@ -37,7 +37,7 @@ struct osif_vdev_mgr_ops {
 						    uint8_t resp_status);
 #endif
 	void (*osif_vdev_mgr_send_scan_done_complete_cb)(uint8_t vdev_id);
-	void (*osif_vdev_mgr_get_p2p_wdev_cb)(struct wireless_dev *wdev);
+	struct wireless_dev *(*osif_vdev_mgr_get_p2p_wdev_cb)(void);
 };
 
 /**
@@ -71,10 +71,9 @@ void osif_vdev_mgr_reset_legacy_cb(void);
 QDF_STATUS osif_vdev_mgr_register_cb(void);
 
 /**
- * osif_vdev_mgr_get_p2p_wdev() - Get P2P wdev
- * @wdev: pointer to wdev
+ * osif_vdev_mgr_get_p2p_wdev() - Get P2P-device wdev
  *
- * Return: None
+ * Return: p2p-device wdev ptr
  */
-void osif_vdev_mgr_get_p2p_wdev(struct wireless_dev *wdev);
+struct wireless_dev *osif_vdev_mgr_get_p2p_wdev(void);
 #endif /* __OSIF_CM_UTIL_H */
