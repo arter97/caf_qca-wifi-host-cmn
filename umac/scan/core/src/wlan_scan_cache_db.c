@@ -122,14 +122,21 @@ static bool scm_is_rnr_present(struct meta_rnr_channel *chan,
 	return false;
 }
 
-static void scm_add_rnr_channel_db(struct wlan_objmgr_psoc *psoc,
+static void scm_add_rnr_channel_db(struct wlan_objmgr_pdev *pdev,
 				   struct scan_cache_entry *entry)
 {
 	uint32_t chan_freq;
 	uint8_t is_6g_bss, i;
+	uint8_t *cc;
 	struct meta_rnr_channel *channel;
 	struct rnr_bss_info *rnr_bss;
 	struct scan_rnr_node *rnr_node;
+	struct wlan_country_ie *cc_ie;
+	struct wlan_objmgr_psoc *psoc;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc)
+		return;
 
 	chan_freq = entry->channel.chan_freq;
 	is_6g_bss = wlan_reg_is_6ghz_chan_freq(chan_freq);
@@ -157,14 +164,23 @@ static void scm_add_rnr_channel_db(struct wlan_objmgr_psoc *psoc,
 	if (!entry->ie_list.rnrie)
 		return;
 
+	cc_ie = util_scan_entry_country(entry);
+	if (cc_ie && cc_ie->len)
+		cc = cc_ie->cc;
+	else
+		cc = NULL;
+
 	for (i = 0; i < MAX_RNR_BSS; i++) {
 		rnr_bss = &entry->rnr.bss_info[i];
 		/* Skip if entry is not valid */
 		if (!rnr_bss->channel_number)
 			continue;
-		chan_freq = wlan_reg_chan_opclass_to_freq(rnr_bss->channel_number,
-							  rnr_bss->operating_class,
-							  true);
+
+		chan_freq =
+			wlan_reg_chan_opclass_to_freq_prefer_global(pdev, cc,
+								    rnr_bss->channel_number,
+								    rnr_bss->operating_class);
+
 		channel = scm_get_chan_meta(psoc, chan_freq);
 		if (!channel) {
 			scm_debug("Failed to get chan Meta freq %d", chan_freq);
@@ -2021,7 +2037,7 @@ void scm_update_rnr_from_scan_cache(struct wlan_objmgr_pdev *pdev)
 					     &scan_db->scan_hash_tbl[i], NULL);
 		while (cur_node) {
 			entry = cur_node->entry;
-			scm_add_rnr_channel_db(psoc, entry);
+			scm_add_rnr_channel_db(pdev, entry);
 			next_node =
 				scm_get_next_node(scan_db,
 						  &scan_db->scan_hash_tbl[i],
