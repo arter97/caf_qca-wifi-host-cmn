@@ -489,7 +489,8 @@ mlo_mgr_restore_rso_upon_link_switch_failure(struct wlan_objmgr_vdev *vdev)
 
 static QDF_STATUS
 mlo_mgr_link_switch_osif_notification(struct wlan_objmgr_vdev *vdev,
-				      struct wlan_mlo_link_switch_req *lswitch_req)
+				      struct wlan_mlo_link_switch_req *lswitch_req,
+				      enum wlan_mlo_link_switch_notify_reason notify_reason)
 {
 	uint8_t idx;
 	uint16_t vdev_count;
@@ -499,7 +500,8 @@ mlo_mgr_link_switch_osif_notification(struct wlan_objmgr_vdev *vdev,
 	QDF_STATUS status = QDF_STATUS_E_INVAL;
 	struct mlo_mgr_context *g_mlo_ctx = wlan_objmgr_get_mlo_ctx();
 	QDF_STATUS(*cb)(struct wlan_objmgr_vdev *vdev,
-			uint8_t non_trans_vdev_id);
+			uint8_t non_trans_vdev_id, bool is_switch_start_notify);
+	bool is_start_notify;
 
 	if (!vdev->mlo_dev_ctx)
 		return status;
@@ -512,37 +514,46 @@ mlo_mgr_link_switch_osif_notification(struct wlan_objmgr_vdev *vdev,
 	if (!assoc_vdev)
 		return status;
 
+	if (notify_reason <= MLO_LINK_SWITCH_NOTIFY_REASON_PRE_START_POST_SER)
+		is_start_notify = true;
+	else
+		is_start_notify = false;
+
 	cb = g_mlo_ctx->osif_ops->mlo_mgr_osif_link_switch_notification;
 
 	if (lswitch_req->restore_vdev_flag) {
-		wlan_vdev_mlme_clear_mlo_link_vdev(vdev);
-		wlan_vdev_mlme_set_mlo_link_vdev(assoc_vdev);
-		mlo_mgr_reset_roam_state_for_link_vdev(vdev, assoc_vdev);
-
-		lswitch_req->restore_vdev_flag = false;
-
-		status = cb(assoc_vdev, wlan_vdev_get_id(vdev));
-		if (QDF_IS_STATUS_ERROR(status))
+		status = cb(assoc_vdev, wlan_vdev_get_id(vdev),
+			    is_start_notify);
+		if (QDF_IS_STATUS_SUCCESS(status)) {
+			wlan_vdev_mlme_clear_mlo_link_vdev(vdev);
+			wlan_vdev_mlme_set_mlo_link_vdev(assoc_vdev);
+			lswitch_req->restore_vdev_flag = false;
+		} else {
 			mlo_debug("OSIF deflink restore failed");
+		}
 
+		mlo_mgr_reset_roam_state_for_link_vdev(vdev, assoc_vdev);
 		return status;
 	}
 
-	if (wlan_vdev_get_id(assoc_vdev) != lswitch_req->vdev_id) {
-		mlo_debug("Not on assoc VDEV no need to swap");
-		return QDF_STATUS_SUCCESS;
+	if (!is_start_notify ||
+	    wlan_vdev_get_id(assoc_vdev) != lswitch_req->vdev_id) {
+		status = cb(assoc_vdev, WLAN_INVALID_VDEV_ID, is_start_notify);
+		return status;
 	}
 
 	mlo_sta_get_vdev_list(vdev, &vdev_count, vdev_list);
 	for (idx = 0; idx < vdev_count; idx++) {
 		if (wlan_vdev_get_id(vdev_list[idx]) != lswitch_req->vdev_id &&
 		    qdf_test_bit(idx, sta_ctx->wlan_connected_links)) {
-			wlan_vdev_mlme_clear_mlo_link_vdev(vdev_list[idx]);
-			wlan_vdev_mlme_set_mlo_link_vdev(assoc_vdev);
-			lswitch_req->restore_vdev_flag = true;
-
 			status = cb(assoc_vdev,
-				    wlan_vdev_get_id(vdev_list[idx]));
+				    wlan_vdev_get_id(vdev_list[idx]),
+				    is_start_notify);
+			if (QDF_IS_STATUS_SUCCESS(status)) {
+				wlan_vdev_mlme_clear_mlo_link_vdev(vdev_list[idx]);
+				wlan_vdev_mlme_set_mlo_link_vdev(assoc_vdev);
+				lswitch_req->restore_vdev_flag = true;
+			}
 			break;
 		}
 
@@ -585,7 +596,8 @@ mlo_mgr_link_switch_notification(struct wlan_objmgr_vdev *vdev,
 		break;
 	}
 
-	status = mlo_mgr_link_switch_osif_notification(vdev, lswitch_req);
+	status = mlo_mgr_link_switch_osif_notification(vdev, lswitch_req,
+						       notify_reason);
 
 	return status;
 }
@@ -982,10 +994,10 @@ mlo_mgr_ser_link_switch_cb(struct wlan_serialization_command *cmd,
 		if (QDF_IS_STATUS_ERROR(status)) {
 			mlo_mgr_link_switch_trans_abort_state(vdev->mlo_dev_ctx);
 			mlo_mgr_link_switch_notify(vdev, req);
+			mlo_mgr_link_switch_complete(vdev);
 		}
 		break;
 	case WLAN_SER_CB_RELEASE_MEM_CMD:
-		mlo_mgr_link_switch_complete(vdev);
 		break;
 	case WLAN_SER_CB_CANCEL_CMD:
 		mlo_err("Link switch cmd cancelled");
@@ -1029,9 +1041,10 @@ void mlo_mgr_remove_link_switch_cmd(struct wlan_objmgr_vdev *vdev)
 	/* Handle any pending disconnect */
 	mlo_handle_pending_disconnect(vdev);
 
+	mlo_mgr_link_switch_complete(vdev);
+
 	if (req->reason == MLO_LINK_SWITCH_REASON_HOST_FORCE) {
 		mlo_debug("Link switch not serialized");
-		mlo_mgr_link_switch_complete(vdev);
 		return;
 	}
 
@@ -1079,7 +1092,7 @@ QDF_STATUS mlo_mgr_ser_link_switch_cmd(struct wlan_objmgr_vdev *vdev,
 		status = mlo_mgr_start_link_switch(vdev, &cmd);
 		if (QDF_IS_STATUS_ERROR(status)) {
 			mlo_mgr_link_switch_trans_abort_state(vdev->mlo_dev_ctx);
-			mlo_mgr_link_switch_notify(vdev, req);
+			mlo_mgr_link_switch_notify(vdev, &link_ctx->last_req);
 		}
 		return status;
 	}

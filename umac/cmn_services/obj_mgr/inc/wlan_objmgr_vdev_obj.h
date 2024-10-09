@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -289,6 +289,7 @@
  * @macaddr:        MAC address
  * @mataddr:        MAT address
  * @mldaddr:        MLD address
+ * @mlo_sap_sync_disable:  flag for disable mlo sap sync between vdevs
  */
 struct wlan_vdev_create_params {
 	enum QDF_OPMODE opmode;
@@ -298,6 +299,7 @@ struct wlan_vdev_create_params {
 	uint8_t macaddr[QDF_MAC_ADDR_SIZE];
 	uint8_t mataddr[QDF_MAC_ADDR_SIZE];
 	uint8_t mldaddr[QDF_MAC_ADDR_SIZE];
+	bool mlo_sap_sync_disable;
 };
 
 /**
@@ -356,6 +358,7 @@ struct wlan_channel {
  * @wlan_vdev_mlo_lock: lock to protect the set/clear of
  * @skip_pumac_cnt: Counter to skip vdev to be selected as pumac
  * WLAN_VDEV_FEXT2_MLO feature flag in vdev MLME
+ * @mlo_sap_sync_disable: flag to disable mlo sap vdev sync
  */
 struct wlan_objmgr_vdev_mlme {
 	enum QDF_OPMODE vdev_opmode;
@@ -385,7 +388,11 @@ struct wlan_objmgr_vdev_mlme {
 #ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
 	qdf_atomic_t skip_pumac_cnt;
 #endif
+#ifdef WLAN_FEATURE_MULTI_LINK_SAP
+	bool mlo_sap_sync_disable;
 #endif
+#endif
+
 };
 
 /**
@@ -832,6 +839,49 @@ static inline enum QDF_OPMODE wlan_vdev_mlme_get_opmode(
 {
 	return vdev->vdev_mlme.vdev_opmode;
 }
+
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_FEATURE_MULTI_LINK_SAP)
+/**
+ * wlan_vdev_mlme_set_mlo_sap_sync_disable() - set mlo sap sync disable flag
+ * @vdev: VDEV object
+ * @value: mlo_ap_sync_disable
+ *
+ * API to disable vdev sync of multi link sap
+ *
+ * Return: void
+ */
+static inline void wlan_vdev_mlme_set_mlo_sap_sync_disable(
+				struct wlan_objmgr_vdev *vdev,
+				bool value)
+{
+	vdev->vdev_mlme.mlo_sap_sync_disable = value;
+}
+
+/**
+ * wlan_vdev_mlme_get_mlo_sap_sync_disable() - get mlo sap sync disable flag
+ * @vdev: VDEV object
+ *
+ * API to get if vdev sync of multi link sap is disabled.
+ *
+ * Return: bool
+ */
+static inline bool
+wlan_vdev_mlme_get_mlo_sap_sync_disable(struct wlan_objmgr_vdev *vdev)
+{
+	return vdev->vdev_mlme.mlo_sap_sync_disable;
+}
+#else
+static inline void wlan_vdev_mlme_set_mlo_sap_sync_disable(
+				struct wlan_objmgr_vdev *vdev,
+				bool value)
+{}
+
+static inline bool
+wlan_vdev_mlme_get_mlo_sap_sync_disable(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
+#endif
 
 /**
  * wlan_vdev_mlme_set_macaddr() - set vdev macaddr
@@ -1735,6 +1785,38 @@ static inline bool wlan_vdev_mlme_is_mlo_ap(struct wlan_objmgr_vdev *vdev)
 		wlan_vdev_mlme_is_mlo_vdev(vdev);
 }
 
+#ifdef WLAN_FEATURE_MULTI_LINK_SAP
+/**
+ * wlan_vdev_mlme_is_mlo_ap_sync_disabled() - check if vdev up sync between
+ * vdev disabled for multi link sap
+ * @vdev: VDEV object
+ *
+ * if vdev up sync is enabled for mlo sap, vdev up and beacon template update
+ * of all vdevs will depend on last vdev start response. otherwise, each vdev
+ * will up and set beacon template separately.
+ *
+ * Return: True if vdev sync disabled.
+ */
+static inline bool wlan_vdev_mlme_is_mlo_ap_sync_disabled(
+				struct wlan_objmgr_vdev *vdev)
+{
+	return (wlan_vdev_mlme_get_opmode(vdev) == QDF_SAP_MODE) &&
+			wlan_vdev_mlme_get_mlo_sap_sync_disable(vdev);
+}
+#elif defined(WLAN_FEATURE_11BE_MLO_ADV_FEATURE)
+static inline bool wlan_vdev_mlme_is_mlo_ap_sync_disabled(
+					struct wlan_objmgr_vdev *vdev)
+{
+	return true;
+}
+#else
+static inline bool wlan_vdev_mlme_is_mlo_ap_sync_disabled(
+				struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
+#endif
+
 /**
  * wlan_vdev_mlme_set_epcs_flag() - Set epcs flag for vdev
  * @vdev: VDEV object
@@ -1963,6 +2045,12 @@ wlan_vdev_mlme_is_mlo_bridge_vdev(struct wlan_objmgr_vdev *vdev)
 }
 
 static inline bool wlan_vdev_mlme_is_mlo_ap(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
+
+static inline bool wlan_vdev_mlme_is_mlo_ap_sync_disabled(
+				struct wlan_objmgr_vdev *vdev)
 {
 	return false;
 }

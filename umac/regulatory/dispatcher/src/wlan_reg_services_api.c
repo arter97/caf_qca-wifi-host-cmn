@@ -1578,6 +1578,15 @@ wlan_reg_country_chan_opclass_to_freq(struct wlan_objmgr_pdev *pdev,
 	return reg_country_chan_opclass_to_freq(pdev, country, chan, op_class,
 						strict);
 }
+
+qdf_freq_t
+wlan_reg_chan_opclass_to_freq_prefer_global(struct wlan_objmgr_pdev *pdev,
+					    const uint8_t *country,
+					    uint8_t chan_num, uint8_t opclass)
+{
+	return reg_chan_opclass_to_freq_prefer_global(pdev, country,
+						      chan_num, opclass);
+}
 #endif
 
 uint16_t wlan_reg_chan_opclass_to_freq(uint8_t chan,

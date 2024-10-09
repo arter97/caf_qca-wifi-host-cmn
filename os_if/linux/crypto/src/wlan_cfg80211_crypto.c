@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -184,8 +184,7 @@ int wlan_cfg80211_store_link_key(struct wlan_objmgr_psoc *psoc,
 	return 0;
 }
 
-int wlan_cfg80211_store_key(struct wlan_objmgr_vdev *vdev,
-			    uint8_t key_index,
+int wlan_cfg80211_store_key(struct wlan_objmgr_vdev *vdev, uint8_t key_index,
 			    enum wlan_crypto_key_type key_type,
 			    const u8 *mac_addr, struct key_params *params)
 {
@@ -229,7 +228,7 @@ int wlan_cfg80211_store_key(struct wlan_objmgr_vdev *vdev,
 	 * update it.
 	 */
 	wlan_crypto_aquire_lock();
-	crypto_key = wlan_crypto_get_key(vdev, key_index);
+	crypto_key = wlan_crypto_get_key(vdev, mac_addr, key_index);
 	if (!crypto_key) {
 		wlan_crypto_release_lock();
 		crypto_key = qdf_mem_malloc(sizeof(*crypto_key));
@@ -241,7 +240,7 @@ int wlan_cfg80211_store_key(struct wlan_objmgr_vdev *vdev,
 	wlan_cfg80211_translate_key(vdev, key_index, key_type, mac_addr,
 				    params, crypto_key);
 
-	status = wlan_crypto_save_key(vdev, key_index, crypto_key);
+	status = wlan_crypto_save_key(vdev, mac_addr, key_index, crypto_key);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		wlan_crypto_release_lock();
 		osif_err("Failed to save key");
@@ -274,6 +273,7 @@ wlan_cfg80211_crypto_add_key_cb(void *context,
 }
 
 int wlan_cfg80211_crypto_add_key(struct wlan_objmgr_vdev *vdev,
+				 const uint8_t *peer_mac,
 				 enum wlan_crypto_key_type key_type,
 				 uint8_t key_index, bool sync)
 {
@@ -289,7 +289,7 @@ int wlan_cfg80211_crypto_add_key(struct wlan_objmgr_vdev *vdev,
 	};
 
 	wlan_crypto_aquire_lock();
-	crypto_key = wlan_crypto_get_key(vdev, key_index);
+	crypto_key = wlan_crypto_get_key(vdev, peer_mac, key_index);
 	if (!crypto_key) {
 		wlan_crypto_release_lock();
 		osif_err("Crypto KEY is NULL");

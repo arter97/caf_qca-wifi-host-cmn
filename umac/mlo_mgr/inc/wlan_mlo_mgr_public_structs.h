@@ -694,6 +694,7 @@ struct mlnawds_config {
  * @ap_link_addr: Associated link BSSID
  * @link_chan_info: Associated link channel info
  * @is_link_active: link state
+ * @link_status_code: wlan status code for link
  */
 struct mlo_link_info {
 	struct qdf_mac_addr link_addr;
@@ -713,6 +714,7 @@ struct mlo_link_info {
 	struct wlan_channel *link_chan_info;
 #endif
 	bool is_link_active;
+	enum wlan_status_code link_status_code;
 };
 
 /**
@@ -1321,7 +1323,8 @@ struct mlo_osif_ext_ops {
 
 	QDF_STATUS
 	(*mlo_mgr_osif_link_switch_notification)(struct wlan_objmgr_vdev *vdev,
-						 uint8_t non_trans_vdev_id);
+						 uint8_t non_trans_vdev_id,
+						 bool is_start_notify);
 };
 
 /* maximum size of vdev bitmap array for MLO link set active command */

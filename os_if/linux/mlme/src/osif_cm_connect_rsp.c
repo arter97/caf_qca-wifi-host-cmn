@@ -413,7 +413,8 @@ osif_get_partner_info_from_mlie(struct wlan_cm_connect_resp *connect_rsp,
 	osif_debug("ML IE found length %d", (int)ml_ie_len);
 
 	qdf_status = util_get_bvmlie_persta_partner_info(ml_ie, ml_ie_len,
-							 partner_info);
+							 partner_info,
+							 WLAN_FC0_STYPE_INVALID);
 	if (QDF_IS_STATUS_ERROR(qdf_status)) {
 		osif_err("Unable to find per-sta profile in ML IE");
 		return qdf_status;

@@ -45,6 +45,7 @@
 #define WLAN_FC0_TYPE_DATA        2
 
 /* Definitions for management frame subtypes in Frame Control field */
+#define WLAN_FC0_STYPE_INVALID       -1
 #define WLAN_FC0_STYPE_ASSOC_REQ      0
 #define WLAN_FC0_STYPE_ASSOC_RESP     1
 #define WLAN_FC0_STYPE_REASSOC_REQ    2
@@ -82,6 +83,7 @@
 #define WLAN_FC0_STYPE_QOS_NULL           12
 #define WLAN_FC0_STYPE_QOS_CFPOLL         14
 #define WLAN_FC0_STYPE_QOS_CFACKPOLL      15
+
 
 /* Get Type/Subtype subfields in Frame Control field */
 #define WLAN_FC0_GET_TYPE(fc)    (((fc) & 0x0c) >> 2)
