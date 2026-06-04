@@ -2441,7 +2441,11 @@ void free_mem_ce_debug_hist_data(struct hif_softc *scn, uint32_t ce_id)
 #ifndef HIF_CE_DEBUG_DATA_DYNAMIC_BUF
 #ifdef RECORD_DP_CE_EVTS
 #define CE_DP_HISTORY_BUFF_CNT 3
+#ifdef QCA_WIFI_WCN6450
 #define IS_CE_DEBUG_FOR_DP_ENABLED (BIT(1) | BIT(10) | BIT(11))
+#else
+#define IS_CE_DEBUG_FOR_DP_ENABLED (BIT(1) | BIT(9) | BIT(10))
+#endif
 #define HIF_CE_ALL_EVENT_MASK  0xFFFFFFFFFFFFFFFF
 #else
 #define CE_DP_HISTORY_BUFF_CNT 0
