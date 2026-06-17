@@ -114,6 +114,92 @@ _target_if_vdev_mgr_rsp_timer_stop(struct wlan_objmgr_psoc *psoc,
 }
 
 /**
+ * _target_if_vdev_mgr_send_pending_response() - Send simulated response for
+ * pending request
+ * @psoc: pointer to psoc object
+ * @vdev_rsp: vdev response timer
+ * @pending_bit: the pending response bit
+ *
+ * This function sends a simulated failure response for the pending request.
+ * It is called when a new request conflicts with a pending one.
+ *
+ * Return: QDF_STATUS_SUCCESS on success, QDF_STATUS_E_** on error
+ */
+static QDF_STATUS
+_target_if_vdev_mgr_send_pending_response(struct wlan_objmgr_psoc *psoc,
+					  struct vdev_response_timer *vdev_rsp,
+					  enum wlan_vdev_mgr_tgt_if_rsp_bit pending_bit)
+{
+	struct wlan_lmac_if_mlme_rx_ops *rx_ops;
+	struct vdev_start_response start_rsp = {0};
+	uint8_t vdev_id = vdev_rsp->vdev_id;
+
+	rx_ops = target_if_vdev_mgr_get_rx_ops(psoc);
+	if (!rx_ops || !rx_ops->vdev_mgr_start_response) {
+		mlme_err("VDEV %d: No Rx Ops", vdev_id);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	start_rsp.vdev_id = vdev_id;
+	start_rsp.status = WLAN_MLME_HOST_VDEV_START_TIMEOUT;
+	start_rsp.resp_type = (pending_bit == START_RESPONSE_BIT) ?
+		WMI_HOST_VDEV_START_RESP_EVENT :
+		WMI_HOST_VDEV_RESTART_RESP_EVENT;
+
+	rx_ops->vdev_mgr_start_response(psoc, &start_rsp);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * _target_if_vdev_mgr_handle_pending_response() - Handle pending response
+ * when a new request conflicts with an existing one
+ * @psoc: pointer to psoc object
+ * @vdev_rsp: vdev response timer
+ * @pending_bit: the pending response bit
+ * @new_bit: the new request bit
+ *
+ * This function handles the case where a new request arrives while another
+ * response is pending. It always stops the pending timer first. If the timer
+ * stop is successful and the new request is RSO_STOP with RESTART pending,
+ * it sends a simulated failure response. For other combinations, it just
+ * stops the timer without sending any response.
+ *
+ * Return: QDF_STATUS_SUCCESS on success, QDF_STATUS_E_** on error
+ */
+static QDF_STATUS
+_target_if_vdev_mgr_handle_pending_response(struct wlan_objmgr_psoc *psoc,
+					    struct vdev_response_timer *vdev_rsp,
+					    enum wlan_vdev_mgr_tgt_if_rsp_bit pending_bit,
+					    enum wlan_vdev_mgr_tgt_if_rsp_bit new_bit)
+{
+	QDF_STATUS status;
+
+	/* Always stop the pending timer first */
+	status = target_if_vdev_mgr_rsp_timer_stop(psoc, vdev_rsp, pending_bit);
+
+	/* Early return if timer stop failed */
+	if (QDF_IS_STATUS_ERROR(status))
+		return status;
+
+	/* Send response only for RSO_STOP + RESTART conflict */
+	if (new_bit != RSO_STOP_RESPONSE_BIT)
+		return status;
+
+	if (pending_bit != RESTART_RESPONSE_BIT)
+		return status;
+
+	status = _target_if_vdev_mgr_send_pending_response(psoc, vdev_rsp,
+							   pending_bit);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mlme_err("VDEV %d: Failed to send pending response for bit %s",
+			 vdev_rsp->vdev_id, string_from_rsp_bit(pending_bit));
+	}
+
+	return status;
+}
+
+/**
  * _target_if_vdev_mgr_rsp_timer_start() - API to start response timer for
  * vdev manager operations
  * @psoc: pointer to psoc object
@@ -142,9 +228,8 @@ _target_if_vdev_mgr_rsp_timer_start(struct wlan_objmgr_psoc *psoc,
 					 string_from_rsp_bit(rsp_pos));
 				target_if_vdev_mgr_assert_mgmt(psoc,
 							       vdev_id);
-				target_if_vdev_mgr_rsp_timer_stop(psoc,
-								  vdev_rsp,
-								  rsp_pos);
+				_target_if_vdev_mgr_handle_pending_response(
+					psoc, vdev_rsp, rsp_pos, set_bit);
 			}
 		}
 	}
