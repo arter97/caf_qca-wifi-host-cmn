@@ -89,14 +89,13 @@ void hif_display_ctrl_traffic_pipes_state(struct hif_opaque_softc *hif_ctx)
 	hal_get_sw_hptp(scn->hal_soc,
 			CE_state->status_ring->srng_ctx,
 			&tp, &hp);
-	hif_info_high("CE-2 Dest status ring current snapshot HP:%u TP:%u",
-		      hp, tp);
+	hif_err("CE-2 Dest status ring current snapshot HP:%u TP:%u", hp, tp);
 
 	hp = 0;
 	tp = 0;
 	CE_state = scn->ce_id_to_state[3];
 	hal_get_sw_hptp(scn->hal_soc, CE_state->src_ring->srng_ctx, &tp, &hp);
-	hif_info_high("CE-3 Source ring current snapshot HP:%u TP:%u", hp, tp);
+	hif_err("CE-3 Source ring current snapshot HP:%u TP:%u", hp, tp);
 }
 
 #if defined(HIF_CONFIG_SLUB_DEBUG_ON) || defined(HIF_CE_DEBUG_DATA_BUF)
