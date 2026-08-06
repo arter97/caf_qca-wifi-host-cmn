@@ -198,6 +198,13 @@ bool ipa_config_is_enabled(void);
 bool ipa_config_is_uc_enabled(void);
 
 /**
+ * ipa_get_l3_hdr_padding_len() - Get IPA l3 header padding length
+ *
+ * Return: l3 header padding length, 0 if IPA context is not available
+ */
+uint32_t ipa_get_l3_hdr_padding_len(void);
+
+/**
  * ipa_config_is_opt_wifi_dp_enabled() - Is IPA optional wifi dp enabled?
  *
  * Return: true if IPA opt wifi dp is enabled in IPA config
@@ -254,6 +261,17 @@ QDF_STATUS ipa_send_uc_offload_enable_disable(struct wlan_objmgr_psoc *psoc,
 QDF_STATUS
 ipa_send_intrabss_enable_disable(struct wlan_objmgr_psoc *psoc,
 				 struct ipa_intrabss_control_params *req);
+
+/**
+ * ipa_send_l3_hdr_padding_cfg() - wdi l3 header padding enable/disable notify
+ *				   to fw
+ * @psoc: objmgr psoc object
+ * @enable: ipa l3 header padding config value
+ *
+ * Return: QDF status success or failure
+ */
+QDF_STATUS ipa_send_l3_hdr_padding_cfg(struct wlan_objmgr_psoc *psoc,
+				       bool enable);
 
 /**
  * ipa_set_dp_handle() - set dp soc handle

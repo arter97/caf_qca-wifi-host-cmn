@@ -213,6 +213,12 @@ static QDF_STATUS wifi_pos_process_data_req(struct wlan_objmgr_psoc *psoc,
 	if (req->field_info_buf)
 		for (idx = 0; idx < req->field_info_buf->count; idx++) {
 			offset = req->field_info_buf->fields[idx].offset;
+			if (req->buf_len < sizeof(uint32_t) ||
+			    offset > req->buf_len - sizeof(uint32_t)) {
+				wifi_pos_err("field offset out of bounds: %u",
+					     offset);
+				return QDF_STATUS_E_INVAL;
+			}
 			/*
 			 * replace following reads with read_api based on
 			 * length

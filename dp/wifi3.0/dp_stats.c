@@ -10651,7 +10651,7 @@ QDF_STATUS dp_txrx_get_soc_stats(struct cdp_soc_t *soc_hdl,
 					soc->stats.rx.msdu_scatter_wait_break;
 	soc_stats->rx.rx_sw_route_drop = soc->stats.rx.rxdma2rel_route_drop;
 	soc_stats->rx.rx_hw_route_drop = soc->stats.rx.reo2rel_route_drop;
-	soc_stats->rx.rx_packets.num_cpus = qdf_min((uint32_t)CDP_NR_CPUS,
+	soc_stats->rx.rx_packets.num_cpus = qdf_min((uint32_t)QDF_MAX_AVAILABLE_CPU,
 						    num_possible_cpus());
 	for (cpus = 0; cpus < soc_stats->rx.rx_packets.num_cpus; cpus++) {
 		for (inx = 0; inx < CDP_MAX_RX_DEST_RINGS; inx++)

@@ -1679,7 +1679,7 @@ struct dp_soc_stats {
 		} err;
 
 		/* packet count per core - per ring */
-		uint64_t ring_packets[NR_CPUS][MAX_REO_DEST_RINGS];
+		uint64_t ring_packets[QDF_MAX_AVAILABLE_CPU][MAX_REO_DEST_RINGS];
 #ifdef WLAN_DP_LOAD_BALANCE_SUPPORT
 		/* packet count per ring */
 		struct dp_rx_pkt_cnt_stats rx_pkt_cnt[MAX_REO_DEST_RINGS];
@@ -3640,6 +3640,7 @@ struct dp_soc {
 	struct dp_ipa_resources ipa_resource;
 	ipa_uc_op_cb_type ipa_uc_op_cb;
 	void *usr_ctxt;
+	uint32_t l3_header_padding_len;
 #endif /* IPA_OFFLOAD */
 
 #if defined(IPA_OFFLOAD) || defined(FEATURE_DIRECT_LINK)
@@ -3909,7 +3910,8 @@ struct dp_soc {
  */
 #ifndef CONFIG_X86
 QDF_COMPILE_TIME_ASSERT(num_cpu_check,
-	NR_CPUS <= (sizeof(((struct dp_soc *)0)->service_rings_running) * 8));
+	WLAN_MAX_CPUS <=
+	(sizeof(((struct dp_soc *)0)->service_rings_running) * 8));
 #endif
 
 #define MAX_RX_MAC_RINGS 2

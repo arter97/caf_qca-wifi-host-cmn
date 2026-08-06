@@ -1668,7 +1668,7 @@ util_scan_populate_bcn_ie_list(struct wlan_objmgr_pdev *pdev,
 			scan_params->ie_list.wapi = (uint8_t *)ie;
 			break;
 		case WLAN_ELEMID_XCAPS:
-			if (ie->ie_len > WLAN_EXTCAP_IE_MAX_LEN)
+			if (ie->ie_len > WLAN_EXTCAP_IE_MAX_PAYLOAD_LEN)
 				goto err;
 			scan_params->ie_list.extcaps = (uint8_t *)ie;
 			break;

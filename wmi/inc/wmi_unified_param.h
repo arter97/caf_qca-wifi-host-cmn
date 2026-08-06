@@ -6071,6 +6071,8 @@ typedef enum {
 		   PDEV_PARAM_DSTALL_CONSECUTIVE_TX_NO_ACK_THRESHOLD),
 	PDEV_PARAM(pdev_param_mgmt_srng_reap_event_threshold,
 		   PDEV_PARAM_MGMT_SRNG_REAP_EVENT_THRESHOLD),
+	PDEV_PARAM(pdev_param_l3_header_padding_enable,
+		   PDEV_PARAM_L3_HEADER_PADDING_ENABLE),
 	pdev_param_max,
 } wmi_conv_pdev_params_id;
 
@@ -6864,6 +6866,7 @@ typedef enum {
 	wmi_service_mlo_sap_link_removal_support,
 #endif
 	wmi_service_delete_all_peer_bitmap_support,
+	wmi_service_l3_header_padding_enable,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF

@@ -1523,7 +1523,7 @@ void hif_napi_stats(struct qca_napi_data *napid)
 	qdf_debug("NAPI CPU TABLE");
 	qdf_debug("lilclhead=%d, bigclhead=%d",
 		  napid->lilcl_head, napid->bigcl_head);
-	for (i = 0; i < NR_CPUS; i++) {
+	for (i = 0; i < QDF_MAX_AVAILABLE_CPU; i++) {
 		qdf_debug("CPU[%02d]: state:%d crid=%02d clid=%02d crmk:0x%0lx thmk:0x%0lx frq:%d napi = 0x%08x lnk:%d",
 			  i,
 			  cpu[i].state, cpu[i].core_id, cpu[i].cluster_id,
@@ -1590,7 +1590,7 @@ static int hnc_link_clusters(struct qca_napi_data *napid)
 	do {
 		more = 0;
 		it++; curcl = -1;
-		for (i = 0; i < NR_CPUS; i++) {
+		for (i = 0; i < QDF_MAX_AVAILABLE_CPU; i++) {
 			cl = cpus[i].cluster_id;
 			NAPI_DEBUG("Processing cpu[%d], cluster=%d\n",
 				   i, cl);
@@ -1668,7 +1668,7 @@ static void hnc_cpu_online_cb(void *context, uint32_t cpu)
 	struct hif_softc *hif = context;
 	struct qca_napi_data *napid = &hif->napi_data;
 
-	if (cpu >= NR_CPUS)
+	if (cpu >= QDF_MAX_AVAILABLE_CPU)
 		return;
 
 	NAPI_DEBUG("-->%s(act=online, cpu=%u)", __func__, cpu);
@@ -1695,7 +1695,7 @@ static void hnc_cpu_before_offline_cb(void *context, uint32_t cpu)
 	struct hif_softc *hif = context;
 	struct qca_napi_data *napid = &hif->napi_data;
 
-	if (cpu >= NR_CPUS)
+	if (cpu >= QDF_MAX_AVAILABLE_CPU)
 		return;
 
 	NAPI_DEBUG("-->%s(act=before_offline, cpu=%u)", __func__, cpu);
@@ -1847,7 +1847,7 @@ lab_err_hotplug:
 	hnc_tput_hook(0);
 	hnc_hotplug_unregister(HIF_GET_SOFTC(hif));
 lab_err_topology:
-	memset(napid->napi_cpu, 0, sizeof(struct qca_napi_cpu) * NR_CPUS);
+	memset(napid->napi_cpu, 0, sizeof(napid->napi_cpu));
 lab_rss_init:
 	NAPI_DEBUG("<-- [rc=%d]", rc);
 	return rc;
@@ -1876,7 +1876,7 @@ int hif_napi_cpu_deinit(struct hif_opaque_softc *hif)
 	hnc_hotplug_unregister(HIF_GET_SOFTC(hif));
 
 	/* clear the topology table */
-	memset(napid->napi_cpu, 0, sizeof(struct qca_napi_cpu) * NR_CPUS);
+	memset(napid->napi_cpu, 0, sizeof(napid->napi_cpu));
 
 	NAPI_DEBUG("<--%s[rc=%d]", __func__, rc);
 
@@ -2045,7 +2045,7 @@ int hif_napi_cpu_migrate(struct qca_napi_data *napid, int cpu, int action)
 		else
 			napis = cpup[cpu].napis;
 		/* then clear the napi bitmap on each CPU */
-		for (i = 0; i < NR_CPUS; i++)
+		for (i = 0; i < QDF_MAX_AVAILABLE_CPU; i++)
 			cpup[i].napis = 0;
 		/* then for each of the NAPIs to disperse: */
 		for (i = 0; i < CE_COUNT_MAX; i++)

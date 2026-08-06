@@ -1612,6 +1612,8 @@ struct wlan_lmac_if_ipa_tx_ops {
 	QDF_STATUS (*ipa_intrabss_control_req)(
 				struct wlan_objmgr_psoc *psoc,
 				struct ipa_intrabss_control_params *req);
+	QDF_STATUS (*ipa_l3_hdr_padding_cfg_req)(struct wlan_objmgr_psoc *psoc,
+						 bool enable);
 };
 #endif
 /**

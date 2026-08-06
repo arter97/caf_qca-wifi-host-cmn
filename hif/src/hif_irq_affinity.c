@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -395,7 +395,7 @@ int hif_exec_cpu_migrate(struct qca_napi_data *napid, int cpu, int action)
 		else
 			napis = cpup[cpu].napis;
 		/* then clear the napi bitmap on each CPU */
-		for (i = 0; i < NR_CPUS; i++)
+		for (i = 0; i < QDF_MAX_AVAILABLE_CPU; i++)
 			cpup[i].napis = 0;
 		/* then for each of the NAPIs to disperse: */
 		for (i = 0; i < HIF_MAX_GROUP; i++)

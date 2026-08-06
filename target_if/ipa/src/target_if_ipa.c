@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018, 2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -71,6 +71,39 @@ target_if_ipa_intrabss_control_req(struct wlan_objmgr_psoc *psoc,
 	return wmi_unified_vdev_set_param_send(wmi_handle, &param);
 }
 
+/**
+ * target_if_ipa_l3_hdr_padding_cfg_req() - Send IPA l3 hdr padding disable
+ *					    request
+ * @psoc: psoc object
+ * @enable: IPA l3 header padding enable/disable config
+ *
+ * Return: QDF_STATUS_SUCCESS on success
+ */
+static QDF_STATUS
+target_if_ipa_l3_hdr_padding_cfg_req(struct wlan_objmgr_psoc *psoc, bool enable)
+{
+	struct pdev_params pparam;
+	wmi_unified_t wmi_handle;
+	/* wildcard pdev id */
+	uint8_t pdev_id = 0;
+
+	wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
+	if (!wmi_handle) {
+		target_if_err("wmi_handle is null");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!wmi_service_enabled(wmi_handle,
+				 wmi_service_l3_header_padding_enable))
+		return QDF_STATUS_E_NOSUPPORT;
+
+	qdf_mem_set(&pparam, sizeof(pparam), 0);
+	pparam.param_id = WMI_PDEV_PARAM_L3_HEADER_PADDING_ENABLE;
+	pparam.param_value = enable;
+
+	return wmi_unified_pdev_param_send(wmi_handle, &pparam, pdev_id);
+}
+
 QDF_STATUS
 target_if_ipa_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 {
@@ -86,6 +119,8 @@ target_if_ipa_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 	ipa_ops->ipa_uc_offload_control_req =
 			target_if_ipa_uc_offload_control_req;
 	ipa_ops->ipa_intrabss_control_req = target_if_ipa_intrabss_control_req;
+	ipa_ops->ipa_l3_hdr_padding_cfg_req =
+					target_if_ipa_l3_hdr_padding_cfg_req;
 
 	return QDF_STATUS_SUCCESS;
 }

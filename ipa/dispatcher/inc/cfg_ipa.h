@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -242,6 +242,27 @@
 		CFG_INI_BOOL("gIPAVlanEnable", \
 		false, "Ctrl to enable vlan support with IPA Offload")
 
+/*
+ * <ini>
+ * gIPAL3HdrPadding - Enable/Disable l3 header padding in fw
+ * @Min: 0
+ * @Max: 1
+ * @Default: 1
+ *
+ * This ini is used to enable/disable l3 header padding in fw
+ *
+ * Related: None
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_DP_IPA_L3_HDR_PADDING \
+		CFG_INI_BOOL( \
+		"gIPAL3HdrPadding", \
+		1, \
+		"l3 header padding enable or disable flag")
+
 #define CFG_IPA \
 	CFG(CFG_DP_IPA_OFFLOAD_CONFIG) \
 	CFG(CFG_DP_IPA_DESC_SIZE) \
@@ -251,5 +272,6 @@
 	CFG(CFG_DP_IPA_ENABLE_FORCE_VOTING) \
 	CFG(CFG_DP_IPA_UC_TX_BUF_COUNT) \
 	CFG(CFG_DP_IPA_WDS_STATUS) \
-	CFG(CFG_DP_IPA_ENABLE_VLAN_SUPPORT)
+	CFG(CFG_DP_IPA_ENABLE_VLAN_SUPPORT) \
+	CFG(CFG_DP_IPA_L3_HDR_PADDING)
 #endif /* _CFG_IPA_H_ */

@@ -370,6 +370,18 @@ QDF_STATUS reg_save_new_11d_country(struct wlan_objmgr_psoc *psoc,
 	}
 
 	/*
+	 * Secondary defense-in-depth check: num_phy should have been
+	 * validated before being stored in psoc_priv_obj. Guard here
+	 * against future call-path changes to prevent out-of-bounds
+	 * write into new_11d_ctry_pending[PSOC_MAX_PHY_REG_CAP].
+	 */
+	if (psoc_priv_obj->num_phy > PSOC_MAX_PHY_REG_CAP) {
+		reg_err("psoc %u: num_phy %u exceeds PSOC_MAX_PHY_REG_CAP",
+			wlan_psoc_get_id(psoc), psoc_priv_obj->num_phy);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	/*
 	 * Need firmware to send channel list event
 	 * for all phys. Therefore set pdev_id to 0xFF
 	 */

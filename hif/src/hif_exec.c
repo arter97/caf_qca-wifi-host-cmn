@@ -671,6 +671,8 @@ hif_exec_update_soft_irq_time(struct hif_exec_context *hif_ext_group)
 		return;
 
 	cpu = qdf_get_cpu();
+	if (cpu >= QDF_MAX_AVAILABLE_CPU)
+		return;
 	time = qdf_time_sched_clock() - hif_ext_group->poll_start_time;
 	if (qdf_get_current() != qdf_this_cpu_ksoftirqd())
 		hif_ext_group->total_irq_time[cpu] += time;
@@ -712,6 +714,8 @@ hif_update_irq_handle_time(struct hif_exec_context *hif_ext_group)
 
 	cur_time = qdf_time_sched_clock();
 	cpu = qdf_get_cpu();
+	if (cpu >= QDF_MAX_AVAILABLE_CPU)
+		return;
 	hif_ext_group->total_irq_time[cpu] += cur_time -
 					hif_ext_group->irq_start_time;
 }

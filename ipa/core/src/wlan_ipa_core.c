@@ -566,6 +566,39 @@ drop_pkt:
 	return ret;
 }
 
+/**
+ * wlan_ipa_l3_hdr_padding_cfg() - wdi l3 header padding disable notify to fw
+ *
+ * @ipa_ctx: global IPA context
+ *
+ * Return: return SUCCESS if cmd is successfully sent to fw, else failure code.
+ */
+static QDF_STATUS wlan_ipa_l3_hdr_padding_cfg(struct wlan_ipa_priv *ipa_ctx)
+{
+	QDF_STATUS ret;
+	bool l3_hdr_padding_cfg = ipa_ctx->config->l3_hdr_padding_support;
+
+	ipa_ctx->l3_hdr_padding_len = L3_HEADER_PADDING_LEN;
+
+	/* FW default is padding=2; WMI only needed when INI disables it */
+	if (l3_hdr_padding_cfg)
+		return QDF_STATUS_SUCCESS;
+
+	ret = ipa_send_l3_hdr_padding_cfg(ipa_ctx->psoc, l3_hdr_padding_cfg);
+	if (QDF_IS_STATUS_SUCCESS(ret))
+		ipa_ctx->l3_hdr_padding_len = 0;
+	else if (ret == QDF_STATUS_E_NOSUPPORT)
+		/**
+		 * Return SUCCESS if fw does not support l3 header
+		 * padding enable/disable feature.
+		 */
+		ret = QDF_STATUS_SUCCESS;
+	else
+		ipa_err("l3 hdr padding set to fw failed");
+
+	return ret;
+}
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)) || \
 	defined(CONFIG_IPA_WDI_UNIFIED_API)
 /*
@@ -678,6 +711,9 @@ wlan_ipa_wdi_setup(struct wlan_ipa_priv *ipa_ctx,
 		return QDF_STATUS_E_NOMEM;
 
 	wlan_ipa_setup_sys_params(sys_in, ipa_ctx);
+
+	if (QDF_STATUS_SUCCESS != wlan_ipa_l3_hdr_padding_cfg(ipa_ctx))
+		ipa_err("l3 hdr padding set to fw failed");
 
 	qdf_status = cdp_ipa_setup(ipa_ctx->dp_soc, IPA_DEF_PDEV_ID,
 				   wlan_ipa_i2w_cb, wlan_ipa_w2i_cb,
@@ -1129,6 +1165,9 @@ static inline int wlan_ipa_wdi_is_smmu_enabled(struct wlan_ipa_priv *ipa_ctx,
 static inline QDF_STATUS wlan_ipa_wdi_setup(struct wlan_ipa_priv *ipa_ctx,
 					    qdf_device_t osdev)
 {
+	if (QDF_STATUS_SUCCESS != wlan_ipa_l3_hdr_padding_cfg(ipa_ctx))
+		ipa_err("l3 hdr padding set to fw failed");
+
 	return cdp_ipa_setup(ipa_ctx->dp_soc, IPA_DEF_PDEV_ID,
 			     wlan_ipa_i2w_cb, wlan_ipa_w2i_cb,
 			     wlan_ipa_wdi_meter_notifier_cb,
@@ -1269,6 +1308,7 @@ wlan_ipa_rx_intrabss_fwd(struct wlan_ipa_priv *ipa_ctx,
  * wlan_ipa_send_sta_eapol_to_nw() - Send Rx EAPOL pkt for STA to Kernel
  * @skb: network buffer
  * @ipa_ctx: IPA_CTX object
+ * @session_id: session id
  *
  * Called when a EAPOL packet is received via IPA Exception path
  * before wlan_ipa_setup_iface is done for STA.
@@ -1276,7 +1316,8 @@ wlan_ipa_rx_intrabss_fwd(struct wlan_ipa_priv *ipa_ctx,
  * Return: 0 on success, err_code for failure.
  */
 static int wlan_ipa_send_sta_eapol_to_nw(qdf_nbuf_t skb,
-					 struct wlan_ipa_priv *ipa_ctx)
+					 struct wlan_ipa_priv *ipa_ctx,
+					 uint8_t session_id)
 {
 	struct ethhdr *eh;
 	struct wlan_objmgr_vdev *vdev = NULL;
@@ -1297,8 +1338,18 @@ static int wlan_ipa_send_sta_eapol_to_nw(qdf_nbuf_t skb,
 			break;
 	}
 
+	if (!vdev && session_id < WLAN_IPA_MAX_SESSION) {
+		vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, session_id,
+							    WLAN_IPA_ID);
+		if (vdev)
+			ipa_debug_rl("EAPOL: found vdev by session_id %u",
+				     session_id);
+	}
+
 	if (!vdev) {
-		ipa_err_rl("Invalid vdev");
+		ipa_err_rl("Invalid vdev for EAPOL, DA: " QDF_MAC_ADDR_FMT
+			   " session_id: %u",
+			   QDF_MAC_ADDR_REF(eh->h_dest), session_id);
 		return -EINVAL;
 	}
 
@@ -1889,7 +1940,7 @@ static void __wlan_ipa_w2i_cb(void *priv, qdf_ipa_dp_evt_type_t evt,
 			if (qdf_nbuf_is_ipv4_eapol_pkt(skb)) {
 				ipa_err_rl("EAPOL pkt. Sending to NW!");
 				if (!wlan_ipa_send_sta_eapol_to_nw(
-						skb, ipa_ctx))
+						skb, ipa_ctx, session_id))
 					break;
 			}
 			ipa_err_rl("Pkt Dropped!");
@@ -3989,14 +4040,15 @@ static QDF_STATUS __wlan_ipa_wlan_evt(qdf_netdev_t net_dev, uint8_t device_mode,
 		 * This is Roaming scenario, so do not need to reset ipa for
 		 * roaming scenario.
 		 */
-		if (ipa_ctx->sta_connected) {
+		if (ipa_ctx->sta_connected &&
+		    ipa_ctx->vdev_to_iface[session_id] != WLAN_IPA_MAX_SESSION) {
+			ipa_ctx->vdev_to_iface[session_id] =
+					wlan_ipa_get_ifaceid(ipa_ctx, session_id);
 			ipa_info("IPA Roaming event detected from BSSID: "QDF_MAC_ADDR_FMT
 				 " -> BSSID: "QDF_MAC_ADDR_FMT,
 				 QDF_MAC_ADDR_REF(ipa_ctx->iface_context[wlan_ipa_get_ifaceid(
 						  ipa_ctx, session_id)].bssid.bytes),
 				 QDF_MAC_ADDR_REF(mac_addr));
-			ipa_ctx->vdev_to_iface[session_id] =
-				 wlan_ipa_get_ifaceid(ipa_ctx, session_id);
 			wlan_ipa_save_bssid_iface_ctx(ipa_ctx,
 						      ipa_ctx->vdev_to_iface[session_id],
 						      mac_addr);

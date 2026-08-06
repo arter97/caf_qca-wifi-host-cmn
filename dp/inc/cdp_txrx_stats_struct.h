@@ -74,13 +74,6 @@
 #define CDP_MAX_RX_DEST_RINGS 8
 #define CDP_MAX_TX_DATA_RINGS 5
 #define CDP_MAX_WIFI_INT_ERROR_REASONS 5
-/*
- * This header file is being accessed in userspace applications.
- * NR_CPUS is a linux kernel macro and cannot be accessible by user space apps.
- * Defining maximum possible cpu count locally.
- */
-#define CDP_NR_CPUS 8
-
 #define MAX_TRANSMIT_TYPES	9
 
 #define MAX_USER_POS		8
@@ -3088,7 +3081,7 @@ struct cdp_cfr_rcc_stats {
  */
 struct cdp_per_cpu_packets {
 	uint8_t num_cpus;
-	uint64_t pkts[CDP_NR_CPUS][CDP_MAX_RX_DEST_RINGS];
+	uint64_t pkts[QDF_MAX_AVAILABLE_CPU][CDP_MAX_RX_DEST_RINGS];
 };
 
 /**

@@ -1032,6 +1032,7 @@ struct wlan_ipa_priv {
 	/* callback to get if vdev is mlo vdev by vdev id */
 	wlan_ipa_is_mlo_vdev is_mlo_vdev;
 #endif
+	uint32_t l3_hdr_padding_len;
 };
 
 #define WLAN_IPA_WLAN_FRAG_HEADER        sizeof(struct frag_header)

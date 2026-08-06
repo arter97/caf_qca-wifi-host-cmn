@@ -28,9 +28,15 @@
 #include <i_qdf_util.h>
 
 #ifdef QCA_CONFIG_SMP
-#define QDF_MAX_AVAILABLE_CPU	NR_CPUS
+/*
+ * WLAN_MAX_CPUS is configured via Kconfig (CONFIG_WLAN_MAX_CPUS)
+ * with a default of 8. It caps NR_CPUS to avoid excessive static
+ * memory allocation when NR_CPUS is large on upstream kernels.
+ */
+#define QDF_MAX_AVAILABLE_CPU \
+	(NR_CPUS < WLAN_MAX_CPUS ? NR_CPUS : WLAN_MAX_CPUS)
 #else
-#define QDF_MAX_AVAILABLE_CPU	1
+#define QDF_MAX_AVAILABLE_CPU 1
 #endif
 
 typedef __qdf_wait_queue_head_t qdf_wait_queue_head_t;

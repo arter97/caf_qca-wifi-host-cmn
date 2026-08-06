@@ -113,6 +113,13 @@ bool ipa_config_is_uc_enabled(void)
 	return g_ipa_config ? wlan_ipa_uc_is_enabled(g_ipa_config) : 0;
 }
 
+uint32_t ipa_get_l3_hdr_padding_len(void)
+{
+	struct wlan_ipa_priv *ipa_ctx = wlan_ipa_get_obj_context();
+
+	return ipa_ctx ? ipa_ctx->l3_hdr_padding_len : L3_HEADER_PADDING_LEN;
+}
+
 bool ipa_config_is_opt_wifi_dp_enabled(void)
 {
 	return g_ipa_config ? wlan_ipa_is_opt_wifi_dp_enabled(g_ipa_config) : 0;
@@ -154,6 +161,12 @@ ipa_send_intrabss_enable_disable(struct wlan_objmgr_psoc *psoc,
 				 struct ipa_intrabss_control_params *req)
 {
 	return tgt_ipa_intrabss_enable_disable(psoc, req);
+}
+
+QDF_STATUS
+ipa_send_l3_hdr_padding_cfg(struct wlan_objmgr_psoc *psoc, bool enable)
+{
+	return tgt_ipa_l3_hdr_padding_cfg(psoc, enable);
 }
 
 void ipa_set_dp_handle(struct wlan_objmgr_psoc *psoc, void *dp_soc)
@@ -988,6 +1001,8 @@ void ipa_component_config_update(struct wlan_objmgr_psoc *psoc)
 		cfg_get(psoc, CFG_DP_IPA_WDS_STATUS);
 	g_ipa_config->ipa_vlan_support =
 		cfg_get(psoc, CFG_DP_IPA_ENABLE_VLAN_SUPPORT);
+	g_ipa_config->l3_hdr_padding_support =
+		cfg_get(psoc, CFG_DP_IPA_L3_HDR_PADDING);
 }
 
 void ipa_component_config_free(void)

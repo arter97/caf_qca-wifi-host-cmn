@@ -370,7 +370,7 @@ struct qca_napi_info {
 	uint8_t              cpu;
 	int                  irq;
 	cpumask_t            cpumask;
-	struct qca_napi_stat stats[NR_CPUS];
+	struct qca_napi_stat stats[QDF_MAX_AVAILABLE_CPU];
 #ifdef RECEIVE_OFFLOAD
 	/* will only be present for data rx CE's */
 	void (*offld_flush_cb)(void *);
@@ -461,7 +461,7 @@ struct qca_napi_data {
 	uint32_t             exec_map;
 	uint32_t             user_cpu_affin_mask;
 	struct qca_napi_info *napis[CE_COUNT_MAX];
-	struct qca_napi_cpu  napi_cpu[NR_CPUS];
+	struct qca_napi_cpu  napi_cpu[QDF_MAX_AVAILABLE_CPU];
 	int                  lilcl_head, bigcl_head;
 	enum qca_napi_tput_state napi_mode;
 	struct qdf_cpuhp_handler *cpuhp_handler;

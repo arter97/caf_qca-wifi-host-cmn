@@ -2592,9 +2592,6 @@ QDF_STATUS dp_ipa_disable_autonomy(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 	return QDF_STATUS_SUCCESS;
 }
 
-/* This should be configurable per H/W configuration enable status */
-#define L3_HEADER_PADDING	2
-
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)) || \
 	defined(CONFIG_IPA_WDI_UNIFIED_API)
 
@@ -2700,7 +2697,7 @@ static void dp_ipa_wdi_rx_params(struct dp_soc *soc,
 	QDF_IPA_WDI_SETUP_INFO_IS_EVT_RN_DB_PCIE_ADDR(rx) = false;
 
 	QDF_IPA_WDI_SETUP_INFO_PKT_OFFSET(rx) =
-		soc->rx_pkt_tlv_size + L3_HEADER_PADDING;
+		soc->rx_pkt_tlv_size + soc->l3_header_padding_len;
 
 	/* Set Chip ID, extract chip id from be_soc and pass to IPA */
 	dp_ipa_set_rx_chip_id(soc, rx);
@@ -2808,7 +2805,7 @@ dp_ipa_wdi_rx_smmu_params(struct dp_soc *soc,
 	QDF_IPA_WDI_SETUP_INFO_SMMU_IS_EVT_RN_DB_PCIE_ADDR(rx_smmu) = false;
 
 	QDF_IPA_WDI_SETUP_INFO_SMMU_PKT_OFFSET(rx_smmu) =
-		soc->rx_pkt_tlv_size + L3_HEADER_PADDING;
+		soc->rx_pkt_tlv_size + soc->l3_header_padding_len;
 
 	/* Set Chip ID, extract chip id from be_soc and pass to IPA */
 	dp_ipa_set_rx_smmu_chip_id(soc, rx_smmu);
@@ -2876,7 +2873,7 @@ dp_ipa_wdi_rx_alt_pipe_smmu_params(struct dp_soc *soc,
 	QDF_IPA_WDI_SETUP_INFO_SMMU_IS_EVT_RN_DB_PCIE_ADDR(rx_smmu) = false;
 
 	QDF_IPA_WDI_SETUP_INFO_SMMU_PKT_OFFSET(rx_smmu) =
-		soc->rx_pkt_tlv_size + L3_HEADER_PADDING;
+		soc->rx_pkt_tlv_size + soc->l3_header_padding_len;
 
 	/* Set Chip ID, extract chip id from be_soc and pass to IPA */
 	dp_ipa_set_rx_smmu_chip_id(soc, rx_smmu);
@@ -2943,7 +2940,7 @@ static void dp_ipa_wdi_rx_alt_pipe_params(struct dp_soc *soc,
 	QDF_IPA_WDI_SETUP_INFO_IS_EVT_RN_DB_PCIE_ADDR(rx) = false;
 
 	QDF_IPA_WDI_SETUP_INFO_PKT_OFFSET(rx) =
-		soc->rx_pkt_tlv_size + L3_HEADER_PADDING;
+		soc->rx_pkt_tlv_size + soc->l3_header_padding_len;
 
 	/* Set Chip ID, extract chip id from be_soc and pass to IPA */
 	dp_ipa_set_rx_chip_id(soc, rx);
@@ -3059,6 +3056,8 @@ QDF_STATUS dp_ipa_setup(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	ipa_res = &soc->ipa_resource;
 	if (!wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx))
 		return QDF_STATUS_SUCCESS;
+
+	soc->l3_header_padding_len = wlan_ipa_get_l3_hdr_padding_len();
 
 	pipe_in = qdf_mem_malloc(sizeof(*pipe_in));
 	if (!pipe_in)
@@ -3478,6 +3477,8 @@ QDF_STATUS dp_ipa_setup(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	if (!wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx))
 		return QDF_STATUS_SUCCESS;
 
+	soc->l3_header_padding_len = wlan_ipa_get_l3_hdr_padding_len();
+
 	qdf_mem_zero(&tx, sizeof(qdf_ipa_wdi_pipe_setup_info_t));
 	qdf_mem_zero(&rx, sizeof(qdf_ipa_wdi_pipe_setup_info_t));
 	qdf_mem_zero(&pipe_in, sizeof(pipe_in));
@@ -3562,7 +3563,7 @@ QDF_STATUS dp_ipa_setup(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	QDF_IPA_WDI_SETUP_INFO_EVENT_RING_DOORBELL_PA(rx) =
 				soc->ipa_uc_rx_rsc.ipa_rx_refill_buf_hp_paddr;
 	QDF_IPA_WDI_SETUP_INFO_PKT_OFFSET(rx) = soc->rx_pkt_tlv_size +
-						L3_HEADER_PADDING;
+						soc->l3_header_padding_len;
 	QDF_IPA_WDI_CONN_IN_PARAMS_NOTIFY(&pipe_in) = ipa_w2i_cb;
 	QDF_IPA_WDI_CONN_IN_PARAMS_PRIV(&pipe_in) = ipa_priv;
 
@@ -4039,7 +4040,7 @@ dp_ipa_rx_buf_alloc_opt_dp_ctrl(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	}
 
 	dst_addr = qdf_nbuf_data(rx_desc->nbuf) + soc->curr_rx_pkt_tlv_size +
-						L3_HEADER_PADDING;
+						soc->l3_header_padding_len;
 	qdf_mem_copy(dst_addr, qdf_nbuf_data(nbuf), qdf_nbuf_len(nbuf));
 	qdf_nbuf_set_pktlen(rx_desc->nbuf, qdf_nbuf_len(nbuf));
 	rx_desc->in_use = 1;
@@ -4722,7 +4723,7 @@ static qdf_nbuf_t dp_ipa_frag_nbuf_linearize(struct dp_soc *soc,
 		return NULL;
 	}
 
-	if ((nbuf_len + L3_HEADER_PADDING) > buf_size) {
+	if ((nbuf_len + soc->l3_header_padding_len) > buf_size) {
 		qdf_nbuf_free(dst_nbuf);
 		dp_err_rl("nbuf is jumbo data");
 		return NULL;
@@ -4736,9 +4737,9 @@ static qdf_nbuf_t dp_ipa_frag_nbuf_linearize(struct dp_soc *soc,
 		if (is_nbuf_head) {
 			qdf_mem_copy(dst_nbuf_data, src_nbuf_data,
 				     soc->rx_pkt_tlv_size);
-			/* leave extra 2 bytes L3_HEADER_PADDING */
+			/* leave extra g_l3_header_padding_len bytes */
 			dst_nbuf_data += (soc->rx_pkt_tlv_size +
-					  L3_HEADER_PADDING);
+					  soc->l3_header_padding_len);
 			src_nbuf_data += soc->rx_pkt_tlv_size;
 			copy_len = qdf_nbuf_headlen(temp_nbuf) -
 						soc->rx_pkt_tlv_size;

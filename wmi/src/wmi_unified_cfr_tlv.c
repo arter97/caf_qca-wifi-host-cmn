@@ -347,15 +347,28 @@ extract_cfr_enh_phase_fixed_param_tlv
 static QDF_STATUS
 populate_enhanced_aoa_data(uint32_t *dst_array, uint32_t *src_array,
 			   wmi_enhanced_aoa_gain_phase_data_hdr *data_hdr,
-			   uint32_t offset, uint32_t dst_size)
+			   uint32_t offset, uint32_t dst_size,
+			   uint32_t src_buf_entries)
 {
-	uint32_t src_size = WMI_AOA_NUM_ENTIRES_GET(data_hdr->data_info) *
-				sizeof(uint32_t);
+	uint32_t num_entries = WMI_AOA_NUM_ENTIRES_GET(data_hdr->data_info);
+	uint32_t src_size;
 
-	if (src_size > dst_size) {
+	/* offset and num_entries are element counts; src_buf_entries is also
+	 * an element count (num_aoa_data_buf from the TLV array header).
+	 */
+	if (offset > src_buf_entries ||
+	    num_entries > src_buf_entries - offset) {
+		wmi_err("src OOB: offset %u num_entries %u src_buf_entries %u",
+			offset, num_entries, src_buf_entries);
+		return QDF_STATUS_E_RANGE;
+	}
+
+	if (num_entries > dst_size / sizeof(uint32_t)) {
 		wmi_err("the amount of data can not fit in the host array");
 		return QDF_STATUS_E_RANGE;
 	}
+
+	src_size = num_entries * sizeof(uint32_t);
 
 	qdf_mem_copy(dst_array, src_array + offset, src_size);
 
@@ -406,7 +419,8 @@ extract_cfr_enh_phase_data_tlv(wmi_unified_t wmi_handle,
 
 		status = populate_enhanced_aoa_data
 				(dst_array, ev_buf->aoa_data_buf,
-				 data_hdr, offset, param->array_size);
+				 data_hdr, offset, param->array_size,
+				 ev_buf->num_aoa_data_buf);
 		if (status) {
 			wmi_err("error in populating aoa data");
 			return status;

@@ -70,6 +70,16 @@ static inline bool wlan_ipa_config_is_enabled(void)
 	return ipa_config_is_enabled();
 }
 
+/**
+ * wlan_ipa_get_l3_hdr_padding_len() - api to get IPA l3 header padding length
+ *
+ * Return: l3 header padding length, 0 if IPA context is not available
+ */
+static inline uint32_t wlan_ipa_get_l3_hdr_padding_len(void)
+{
+	return ipa_get_l3_hdr_padding_len();
+}
+
 #ifdef IPA_OPT_WIFI_DP_CTRL
 /**
  * ipa_tx_pkt_opt_dp_ctrl() - Handle opt_dp_ctrl tx pkt
@@ -174,6 +184,11 @@ static inline bool wlan_ipa_config_is_opt_wifi_dp_enabled(void)
 static inline bool wlan_ipa_config_is_enabled(void)
 {
 	return false;
+}
+
+static inline uint32_t wlan_ipa_get_l3_hdr_padding_len(void)
+{
+	return 0;
 }
 
 static inline bool wlan_ipa_is_vlan_enabled(void)

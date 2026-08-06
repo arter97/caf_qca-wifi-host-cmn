@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018, 2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -78,4 +78,14 @@ void wlan_ipa_fw_log_received_stats(void)
 {
 }
 #endif /* IPA_OPT_WIFI_DP_LOGGING */
+
+/**
+ * tgt_ipa_l3_hdr_padding_cfg() - send l3 header padding cfg to target_if
+ * @psoc: objmgr psoc object
+ * @enable: l3 header padding config value
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+tgt_ipa_l3_hdr_padding_cfg(struct wlan_objmgr_psoc *psoc, bool enable);
 #endif /* _WLAN_IPA_TGT_API_H_ */

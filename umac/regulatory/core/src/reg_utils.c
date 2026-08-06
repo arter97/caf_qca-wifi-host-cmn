@@ -1314,6 +1314,13 @@ QDF_STATUS reg_set_curr_country(struct wlan_regulatory_psoc_priv_obj *soc_reg,
 	struct set_country country_code;
 	QDF_STATUS status;
 
+	/* Validate firmware num_phy to prevent out-of-bounds writes. */
+	if (regulat_info->num_phy > PSOC_MAX_PHY_REG_CAP) {
+		reg_err("psoc %u: num_phy %u exceeds PSOC_MAX_PHY_REG_CAP",
+			wlan_psoc_get_id(psoc), regulat_info->num_phy);
+		return QDF_STATUS_E_INVAL;
+	}
+
 	/*
 	 * During SSR/WLAN restart ignore master channel list
 	 * for all events and in the last event handling if

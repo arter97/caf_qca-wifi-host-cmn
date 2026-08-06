@@ -342,6 +342,7 @@ enum rsn_element_identifier {
 #define WLAN_EXT_SUPPORTED_RATES_IE_MAX_LEN      12
 
 #define WLAN_EXTCAP_IE_MAX_LEN                   15
+#define WLAN_EXTCAP_IE_MAX_PAYLOAD_LEN           255
 #define WLAN_FILS_INDICATION_IE_MIN_LEN          2
 #define WLAN_MOBILITY_DOMAIN_IE_MAX_LEN          3
 #define WLAN_OPMODE_IE_MAX_LEN                   1
@@ -404,7 +405,7 @@ enum rsn_element_identifier {
 #define WLAN_MAX_CHAN_SWITCH_TIME_IE_LEN         4
 
 #define WLAN_MAX_SRP_IE_LEN                      21
-#define WLAN_MAX_MUEDCA_IE_LEN                   14
+#define WLAN_MAX_MUEDCA_IE_LEN                   255
 #define WLAN_MIN_HECAP_IE_LEN                    22
 #define WLAN_MAX_HECAP_IE_LEN                    55
 #define WLAN_MAX_HE_6G_CAP_IE_LEN                7
