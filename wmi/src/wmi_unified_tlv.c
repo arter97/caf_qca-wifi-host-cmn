@@ -15261,9 +15261,20 @@ static QDF_STATUS extract_profile_data_tlv(wmi_unified_t wmi_handle,
 	WMI_WLAN_PROFILE_DATA_EVENTID_param_tlvs *param_buf;
 	wmi_wlan_profile_t *ev;
 
+	if (!profile_data) {
+		wmi_err("Null profile_data");
+		return QDF_STATUS_E_INVAL;
+	}
+
 	param_buf = (WMI_WLAN_PROFILE_DATA_EVENTID_param_tlvs *)evt_buf;
 	if (!param_buf) {
 		wmi_err("Invalid profile data event buf");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (idx >= param_buf->num_profile_data) {
+		wmi_err("Invalid profile data index: %u, max: %u",
+			idx, param_buf->num_profile_data);
 		return QDF_STATUS_E_INVAL;
 	}
 

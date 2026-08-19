@@ -242,11 +242,11 @@ void hif_display_latest_desc_hist(struct hif_opaque_softc *hif_ctx)
 
 		for (j = 0; j < HIF_CE_MAX_LATEST_EVTS; j++) {
 			evt = &ce_hist->latest_evts[i][j];
-			hif_info_high("CE_id:%d event_idx:%d cpu_id:%d irq_entry:0x%llx tasklet_entry:0x%llx tasklet_resched:0x%llx tasklet_exit:0x%llx ce_work:0x%llx hp:%x tp:%x",
-				      (i + HIF_CE_MAX_LATEST_HIST), j, evt->cpu_id,
-				      evt->irq_entry_ts, evt->bh_entry_ts,
-				      evt->bh_resched_ts, evt->bh_exit_ts,
-				      evt->bh_work_ts, evt->ring_hp, evt->ring_tp);
+			hif_err("CE_id:%d event_idx:%d cpu_id:%d irq_entry:0x%llx tasklet_entry:0x%llx tasklet_resched:0x%llx tasklet_exit:0x%llx ce_work:0x%llx hp:%x tp:%x",
+				(i + HIF_CE_MAX_LATEST_HIST), j, evt->cpu_id,
+				evt->irq_entry_ts, evt->bh_entry_ts,
+				evt->bh_resched_ts, evt->bh_exit_ts,
+				evt->bh_work_ts, evt->ring_hp, evt->ring_tp);
 		}
 	}
 }

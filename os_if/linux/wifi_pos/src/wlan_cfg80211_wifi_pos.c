@@ -29,8 +29,36 @@
 
 #if defined(WIFI_POS_CONVERGED) && defined(WLAN_FEATURE_RTT_11AZ_SUPPORT)
 
-u8 wlan_extended_caps_iface[WLAN_EXTCAP_IE_MAX_LEN] = {0};
-u8 wlan_extended_caps_iface_mask[WLAN_EXTCAP_IE_MAX_LEN] = {0};
+/*
+ * wlan_extended_caps_iface[]/_mask[] carry the AP-iftype Extended
+ * Capabilities element bytes advertised to cfg80211 via
+ * wiphy->iftype_ext_capab (struct wiphy_iftype_ext_capab, see
+ * include/net/cfg80211.h). The Extended Capabilities element itself,
+ * and its per-byte/per-bit numbering, is defined in IEEE Std
+ * 802.11-2020, 9.4.2.26 (Extended Capabilities element).
+ *
+ * The only bits driver ever sets in these arrays are the 802.11az
+ * ranging-responder capability bits:
+ *   - Bit 90 (byte 11, bit 2): NTB Ranging Responder
+ *     -> WLAN_EXT_CAPA11_NTB_RANGING_RESPONDER
+ *   - Bit 91 (byte 11, bit 3): TB Ranging Responder
+ *     -> WLAN_EXT_CAPA11_TB_RANGING_RESPONDER
+ * (see WLAN_EXT_RANGING_CAP_IDX below for the byte offset, and
+ * wlan_cmn_ieee80211.h for the bit definitions, per IEEE 802.11az
+ * D4.0 - 9.4.2.26).
+ *
+ * Extended Capabilities element bytes are numbered 0-31 (bits 0-255)
+ * per Table 9-153 of 802.11-2020; byte 11 covers capability bits
+ * 88-95. Since only bits 2 and 3 of byte 11 (global bits 90, 91) are
+ * populated here, WIFI_POS_EXT_CAPS_LEN only needs to cover
+ * bytes 0-11 (index 0..WLAN_EXT_RANGING_CAP_IDX inclusive) - it must
+ * NOT be tied to WLAN_EXTCAP_IE_MAX_LEN, which instead bounds the
+ * separate over-the-air Extended Capabilities IE parsed from peer
+ * beacons/probe responses/assoc frames (see wlan_scan_utils_api.c).
+ */
+#define WIFI_POS_EXT_CAPS_LEN  12
+u8 wlan_extended_caps_iface[WIFI_POS_EXT_CAPS_LEN] = {0};
+u8 wlan_extended_caps_iface_mask[WIFI_POS_EXT_CAPS_LEN] = {0};
 
 struct wiphy_iftype_ext_capab iftype_ext_cap;
 
