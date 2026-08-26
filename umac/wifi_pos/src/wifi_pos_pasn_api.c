@@ -644,6 +644,12 @@ wifi_pos_send_pasn_auth_status(struct wlan_objmgr_psoc *psoc,
 
 	pasn_context = &vdev_pos_obj->pasn_context;
 	total_peers_to_fill = data->num_peers + pasn_context->num_failed_peers;
+	if (total_peers_to_fill > WLAN_MAX_11AZ_PEERS) {
+		wifi_pos_err("auth and failed peers %d exceeds max %d",
+			     total_peers_to_fill, WLAN_MAX_11AZ_PEERS);
+		total_peers_to_fill = WLAN_MAX_11AZ_PEERS;
+	}
+
 	for (i = data->num_peers; i < total_peers_to_fill; i++) {
 		data->auth_status[i].peer_mac =
 			pasn_context->failed_peer_list[failed_peers_counter];
